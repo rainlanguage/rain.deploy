@@ -39,10 +39,7 @@ library LibRainDeploy {
     string constant FLARE = "flare";
 
     /// Config name for Polygon network.
-    string constant MATIC = "matic";
-
-    /// Environment name for deployed address.
-    string constant ENV_DEPLOYED_ADDRESS = "RAIN_DEPLOY_DEPLOYED_ADDRESS";
+    string constant POLYGON = "polygon";
 
     /// Deploys the given creation code via the Zoltu factory.
     /// Handles the return data and errors appropriately.
@@ -68,7 +65,7 @@ library LibRainDeploy {
         networks[0] = ARBITRUM_ONE;
         networks[1] = BASE;
         networks[2] = FLARE;
-        networks[3] = MATIC;
+        networks[3] = POLYGON;
         return networks;
     }
 
@@ -84,6 +81,7 @@ library LibRainDeploy {
         string[] memory networks,
         uint256 deployerPrivateKey,
         bytes memory creationCode,
+        string memory contractPath,
         address expectedAddress,
         bytes32 expectedCodeHash,
         address[] memory dependencies
@@ -135,12 +133,9 @@ library LibRainDeploy {
 
             console2.log("manual verficiation command:");
             console2.log(
-                string.concat(
-                    "forge verify-contract --chain ",
-                    networks[i],
-                    " ",
-                    vm.toString(deployedAddress)
-                )
+                string.concat("forge verify-contract --chain ", networks[i], " ", vm.toString(deployedAddress)),
+                " ",
+                contractPath
             );
         }
     }
