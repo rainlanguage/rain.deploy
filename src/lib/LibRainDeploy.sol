@@ -138,8 +138,6 @@ library LibRainDeploy {
                 string.concat(
                     "forge verify-contract --chain ",
                     networks[i],
-                    " --verifier etherscan --constructor-args ",
-                    vm.toString(creationCode),
                     " ",
                     vm.toString(deployedAddress)
                 )
