@@ -145,7 +145,5 @@ library LibRainDeploy {
                 )
             );
         }
-
-        vm.setEnv(ENV_DEPLOYED_ADDRESS, vm.toString(deployedAddress));
     }
 }
