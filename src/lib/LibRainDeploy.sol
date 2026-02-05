@@ -16,12 +16,25 @@ library LibRainDeploy {
     /// results in the deployed address being empty somehow.
     error DeployFailed(bool success, address deployedAddress);
 
+    /// Thrown when a dependency is missing on a network before deployment.
+    error MissingDependency(string network, address dependency);
+
+    /// Thrown when the deployed address does not match the expected address.
+    error UnexpectedDeployedAddress(address expected, address actual);
+
     /// Zoltu proxy is the same on every network.
     address constant ZOLTU_FACTORY = 0x7A0D94F55792C434d74a40883C6ed8545E406D12;
 
+    /// Config name for Arbitrum One network.
     string constant ARBITRUM_ONE = "arbitrum-one";
+
+    /// Config name for Base network.
     string constant BASE = "base";
+
+    /// Config name for Flare network.
     string constant FLARE = "flare";
+
+    /// Config name for Polygon network.
     string constant MATIC = "matic";
 
     /// Deploys the given creation code via the Zoltu factory.
@@ -52,15 +65,40 @@ library LibRainDeploy {
         return networks;
     }
 
-    function deployAndBroadcastToSupportedNetworks(Vm vm, uint256 deployerPrivateKey, bytes memory creationCode)
-        internal
-        returns (address deployedAddress)
-    {
+    /// Deploys the given creation code via the Zoltu factory to all supported
+    /// networks, broadcasting the deployment transaction using the given private
+    /// key.
+    /// @param vm The Vm instance to use for forking and broadcasting.
+    /// @param deployerPrivateKey The private key to use for broadcasting.
+    /// @param creationCode The creation code to deploy.
+    /// @return deployedAddress The address of the deployed contract on the last network.
+    function deployAndBroadcastToSupportedNetworks(
+        Vm vm,
+        uint256 deployerPrivateKey,
+        bytes memory creationCode,
+        address expectedAddress,
+        address[] memory dependencies
+    ) internal returns (address deployedAddress) {
         string[] memory networks = supportedNetworks();
+
+        /// Check dependencies exist on each network before deploying.
+        for (uint256 i = 0; i < networks.length - 1; i++) {
+            vm.createSelectFork(networks[i]);
+            for (uint256 j = 0; j < dependencies.length; j++) {
+                if (dependencies[j].code.length == 0) {
+                    revert MissingDependency(networks[i], dependencies[j]);
+                }
+            }
+        }
+
+        /// Deploy to each network.
         for (uint256 i = 0; i < networks.length - 1; i++) {
             vm.createSelectFork(networks[i]);
             vm.startBroadcast(deployerPrivateKey);
             deployedAddress = deployZoltu(creationCode);
+            if (deployedAddress != expectedAddress) {
+                revert UnexpectedDeployedAddress(expectedAddress, deployedAddress);
+            }
             vm.stopBroadcast();
         }
     }
