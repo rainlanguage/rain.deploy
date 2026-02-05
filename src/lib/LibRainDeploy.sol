@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std/Vm.sol";
+import {console2} from "forge-std/console2.sol";
 
 /// @title LibRainDeploy
 /// Library for deploying contracts via the Zoltu factory across all the networks
@@ -84,6 +85,10 @@ library LibRainDeploy {
         bytes32 expectedCodeHash,
         address[] memory dependencies
     ) internal returns (address deployedAddress) {
+        address deployer = vm.rememberKey(deployerPrivateKey);
+
+        console2.log("Deploying from address:", deployer);
+
         /// Check dependencies exist on each network before deploying.
         for (uint256 i = 0; i < networks.length - 1; i++) {
             vm.createSelectFork(networks[i]);
@@ -101,7 +106,7 @@ library LibRainDeploy {
         /// Deploy to each network.
         for (uint256 i = 0; i < networks.length - 1; i++) {
             vm.createSelectFork(networks[i]);
-            vm.startBroadcast(deployerPrivateKey);
+            vm.startBroadcast(deployer);
             if (expectedAddress.code.length == 0) {
                 deployedAddress = deployZoltu(creationCode);
             } else {
