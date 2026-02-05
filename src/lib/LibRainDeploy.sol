@@ -84,6 +84,10 @@ library LibRainDeploy {
         /// Check dependencies exist on each network before deploying.
         for (uint256 i = 0; i < networks.length - 1; i++) {
             vm.createSelectFork(networks[i]);
+            // Zoltu factory must exist always.
+            if (ZOLTU_FACTORY.code.length == 0) {
+                revert MissingDependency(networks[i], ZOLTU_FACTORY);
+            }
             for (uint256 j = 0; j < dependencies.length; j++) {
                 if (dependencies[j].code.length == 0) {
                     revert MissingDependency(networks[i], dependencies[j]);
