@@ -132,6 +132,18 @@ library LibRainDeploy {
                 revert UnexpectedDeployedCodeHash(expectedCodeHash, deployedAddress.codehash);
             }
             vm.stopBroadcast();
+
+            console2.log("manual verficiation command:");
+            console2.log(
+                string.concat(
+                    "forge verify-contract --chain ",
+                    networks[i],
+                    " --verifier etherscan --constructor-args ",
+                    vm.toString(creationCode),
+                    " ",
+                    vm.toString(deployedAddress)
+                )
+            );
         }
 
         vm.setEnv(ENV_DEPLOYED_ADDRESS, vm.toString(deployedAddress));
