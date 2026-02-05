@@ -41,6 +41,9 @@ library LibRainDeploy {
     /// Config name for Polygon network.
     string constant MATIC = "matic";
 
+    /// Environment name for deployed address.
+    string constant ENV_DEPLOYED_ADDRESS = "RAIN_DEPLOY_DEPLOYED_ADDRESS";
+
     /// Deploys the given creation code via the Zoltu factory.
     /// Handles the return data and errors appropriately.
     /// @param creationCode The creation code to deploy.
@@ -130,5 +133,7 @@ library LibRainDeploy {
             }
             vm.stopBroadcast();
         }
+
+        vm.setEnv(ENV_DEPLOYED_ADDRESS, vm.toString(deployedAddress));
     }
 }
