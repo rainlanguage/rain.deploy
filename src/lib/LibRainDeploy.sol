@@ -133,9 +133,9 @@ library LibRainDeploy {
 
             console2.log("manual verficiation command:");
             console2.log(
-                string.concat("forge verify-contract --chain ", networks[i], " ", vm.toString(deployedAddress)),
-                " ",
-                contractPath
+                string.concat(
+                    "forge verify-contract --chain ", networks[i], " ", vm.toString(deployedAddress), " ", contractPath
+                )
             );
         }
     }
