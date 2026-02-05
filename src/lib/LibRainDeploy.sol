@@ -30,7 +30,7 @@ library LibRainDeploy {
     address constant ZOLTU_FACTORY = 0x7A0D94F55792C434d74a40883C6ed8545E406D12;
 
     /// Config name for Arbitrum One network.
-    string constant ARBITRUM_ONE = "arbitrum-one";
+    string constant ARBITRUM_ONE = "arbitrum";
 
     /// Config name for Base network.
     string constant BASE = "base";
