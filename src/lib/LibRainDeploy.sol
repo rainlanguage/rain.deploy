@@ -74,13 +74,12 @@ library LibRainDeploy {
     /// @return deployedAddress The address of the deployed contract on the last network.
     function deployAndBroadcastToSupportedNetworks(
         Vm vm,
+        string[] memory networks,
         uint256 deployerPrivateKey,
         bytes memory creationCode,
         address expectedAddress,
         address[] memory dependencies
     ) internal returns (address deployedAddress) {
-        string[] memory networks = supportedNetworks();
-
         /// Check dependencies exist on each network before deploying.
         for (uint256 i = 0; i < networks.length - 1; i++) {
             vm.createSelectFork(networks[i]);
