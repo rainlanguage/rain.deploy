@@ -22,6 +22,9 @@ library LibRainDeploy {
     /// Thrown when the deployed address does not match the expected address.
     error UnexpectedDeployedAddress(address expected, address actual);
 
+    /// Thrown when the deployed code hash does not match the expected code hash.
+    error UnexpectedDeployedCodeHash(bytes32 expected, bytes32 actual);
+
     /// Zoltu proxy is the same on every network.
     address constant ZOLTU_FACTORY = 0x7A0D94F55792C434d74a40883C6ed8545E406D12;
 
@@ -78,6 +81,7 @@ library LibRainDeploy {
         uint256 deployerPrivateKey,
         bytes memory creationCode,
         address expectedAddress,
+        bytes32 expectedCodeHash,
         address[] memory dependencies
     ) internal returns (address deployedAddress) {
         /// Check dependencies exist on each network before deploying.
@@ -98,9 +102,16 @@ library LibRainDeploy {
         for (uint256 i = 0; i < networks.length - 1; i++) {
             vm.createSelectFork(networks[i]);
             vm.startBroadcast(deployerPrivateKey);
-            deployedAddress = deployZoltu(creationCode);
+            if (expectedAddress.code.length == 0) {
+                deployedAddress = deployZoltu(creationCode);
+            } else {
+                deployedAddress = expectedAddress;
+            }
             if (deployedAddress != expectedAddress) {
                 revert UnexpectedDeployedAddress(expectedAddress, deployedAddress);
+            }
+            if (expectedCodeHash != deployedAddress.codehash) {
+                revert UnexpectedDeployedCodeHash(expectedCodeHash, deployedAddress.codehash);
             }
             vm.stopBroadcast();
         }
