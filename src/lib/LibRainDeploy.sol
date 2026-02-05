@@ -91,7 +91,7 @@ library LibRainDeploy {
         console2.log("Deploying from address:", deployer);
 
         /// Check dependencies exist on each network before deploying.
-        for (uint256 i = 0; i < networks.length - 1; i++) {
+        for (uint256 i = 0; i < networks.length; i++) {
             vm.createSelectFork(networks[i]);
             console2.log("Checking dependencies on network:", networks[i]);
 
@@ -110,7 +110,7 @@ library LibRainDeploy {
         }
 
         /// Deploy to each network.
-        for (uint256 i = 0; i < networks.length - 1; i++) {
+        for (uint256 i = 0; i < networks.length; i++) {
             console2.log("Deploying to network:", networks[i]);
             vm.createSelectFork(networks[i]);
             vm.startBroadcast(deployer);
