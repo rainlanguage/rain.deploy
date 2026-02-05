@@ -14,15 +14,7 @@ jobs:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        task: []
-        include:
-          # Solidity doesn't need to be tested on multiple platforms
-          - os: ubuntu-latest
-            task: rainix-sol-legal
-          - os: ubuntu-latest
-            task: rainix-sol-test
-          - os: ubuntu-latest
-            task: rainix-sol-static
+        task: [rainix-sol-legal, rainix-sol-test, rainix-sol-static]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     env:
