@@ -92,11 +92,16 @@ library LibRainDeploy {
         /// Check dependencies exist on each network before deploying.
         for (uint256 i = 0; i < networks.length - 1; i++) {
             vm.createSelectFork(networks[i]);
+            console2.log("Checking dependencies on network:", networks[i]);
+
+            console2.log(" - Zoltu Factory:", ZOLTU_FACTORY);
             // Zoltu factory must exist always.
             if (ZOLTU_FACTORY.code.length == 0) {
                 revert MissingDependency(networks[i], ZOLTU_FACTORY);
             }
+
             for (uint256 j = 0; j < dependencies.length; j++) {
+                console2.log(" - Dependency:", dependencies[j]);
                 if (dependencies[j].code.length == 0) {
                     revert MissingDependency(networks[i], dependencies[j]);
                 }
@@ -105,16 +110,21 @@ library LibRainDeploy {
 
         /// Deploy to each network.
         for (uint256 i = 0; i < networks.length - 1; i++) {
+            console2.log("Deploying to network:", networks[i]);
             vm.createSelectFork(networks[i]);
             vm.startBroadcast(deployer);
             if (expectedAddress.code.length == 0) {
+                console2.log(" - Deploying via Zoltu");
                 deployedAddress = deployZoltu(creationCode);
             } else {
+                console2.log(" - Code already exists at expected address, skipping deployment");
                 deployedAddress = expectedAddress;
             }
+            console2.log(" - Final Address:", deployedAddress);
             if (deployedAddress != expectedAddress) {
                 revert UnexpectedDeployedAddress(expectedAddress, deployedAddress);
             }
+            console2.log(" - Verifying code hash");
             if (expectedCodeHash != deployedAddress.codehash) {
                 revert UnexpectedDeployedCodeHash(expectedCodeHash, deployedAddress.codehash);
             }
