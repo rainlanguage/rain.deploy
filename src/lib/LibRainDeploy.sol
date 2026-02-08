@@ -54,6 +54,10 @@ library LibRainDeploy {
             deployedAddress := mload(0)
         }
         if (!success || deployedAddress == address(0) || deployedAddress.code.length == 0) {
+            console2.log("Zoltu deployment failed. Success:", success, "Deployed Address:", deployedAddress);
+            console2.log("Code length at Deployed Address:", deployedAddress.code.length);
+            console2.log("Codehash at Deployed Address:");
+            console2.logBytes32(deployedAddress.codehash);
             revert DeployFailed(success, deployedAddress);
         }
     }
