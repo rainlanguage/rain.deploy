@@ -6,6 +6,7 @@ path = [
     ".github/**/",
     ".gitignore",
     ".gitmodules",
+    "audit/**/",
     "README.md",
     "flake.lock",
     "flake.nix",
