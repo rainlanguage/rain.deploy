@@ -97,6 +97,7 @@ library LibRainDeploy {
         /// Check dependencies exist on each network before deploying.
         for (uint256 i = 0; i < networks.length; i++) {
             vm.createSelectFork(networks[i]);
+            console2.log("Block number:", block.number);
             console2.log("Checking dependencies on network:", networks[i]);
 
             console2.log(" - Zoltu Factory:", ZOLTU_FACTORY);
@@ -117,6 +118,7 @@ library LibRainDeploy {
         for (uint256 i = 0; i < networks.length; i++) {
             console2.log("Deploying to network:", networks[i]);
             vm.createSelectFork(networks[i]);
+            console2.log("Block number:", block.number);
             vm.startBroadcast(deployer);
             if (expectedAddress.code.length == 0) {
                 console2.log(" - Deploying via Zoltu");
