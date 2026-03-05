@@ -1,0 +1,4 @@
+{
+  "filter_paths": "lib/forge-std",
+  "detectors_to_exclude": "assembly"
+}

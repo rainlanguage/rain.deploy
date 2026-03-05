@@ -73,7 +73,15 @@ contract LibRainDeployTest is Test {
         address[] memory dependencies
     ) external returns (address deployedAddress) {
         deployedAddress = LibRainDeploy.deployAndBroadcast(
-            vm, networks, deployerPrivateKey, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies, sDepCodeHashes
+            vm,
+            networks,
+            deployerPrivateKey,
+            creationCode,
+            contractPath,
+            expectedAddress,
+            expectedCodeHash,
+            dependencies,
+            sDepCodeHashes
         );
     }
 
@@ -89,10 +97,7 @@ contract LibRainDeployTest is Test {
     /// works at the correct call depth.
     /// @param networks The list of network names to check.
     /// @param dependencies The dependency addresses to check.
-    function externalCheckDependencies(
-        string[] memory networks,
-        address[] memory dependencies
-    ) external {
+    function externalCheckDependencies(string[] memory networks, address[] memory dependencies) external {
         LibRainDeploy.checkDependencies(vm, networks, dependencies, sDepCodeHashes);
     }
 
@@ -116,7 +121,15 @@ contract LibRainDeployTest is Test {
         address[] memory dependencies
     ) external returns (address deployedAddress) {
         deployedAddress = LibRainDeploy.deployToNetworks(
-            vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies, sDepCodeHashes
+            vm,
+            networks,
+            deployer,
+            creationCode,
+            contractPath,
+            expectedAddress,
+            expectedCodeHash,
+            dependencies,
+            sDepCodeHashes
         );
     }
 
@@ -152,7 +165,11 @@ contract LibRainDeployTest is Test {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         vm.expectRevert(
-            abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, address(0xdead), 0xC24016f209562fc151e5Ab7F88694ED5775feb36)
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedAddress.selector,
+                address(0xdead),
+                0xC24016f209562fc151e5Ab7F88694ED5775feb36
+            )
         );
         this.externalDeployToNetworks(
             networks, address(this), type(MockDeployable).creationCode, "", address(0xdead), bytes32(0), dependencies
@@ -169,7 +186,11 @@ contract LibRainDeployTest is Test {
         address expectedAddress = 0xC24016f209562fc151e5Ab7F88694ED5775feb36;
         bytes32 wrongCodeHash = bytes32(uint256(1));
         vm.expectRevert(
-            abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedCodeHash.selector, wrongCodeHash, 0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483)
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedCodeHash.selector,
+                wrongCodeHash,
+                0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483
+            )
         );
         this.externalDeployToNetworks(
             networks, address(this), type(MockDeployable).creationCode, "", expectedAddress, wrongCodeHash, dependencies
@@ -216,7 +237,9 @@ contract LibRainDeployTest is Test {
         dependencies[0] = address(0xdead);
 
         vm.expectRevert(
-            abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdead))
+            abi.encodeWithSelector(
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdead)
+            )
         );
         this.externalCheckDependencies(networks, dependencies);
     }
@@ -240,9 +263,7 @@ contract LibRainDeployTest is Test {
         // The actual codehash comes from the fork, so we cannot hardcode it.
         // Instead, just verify the revert happens with any DependencyChanged.
         vm.expectRevert();
-        this.externalDeployToNetworks(
-            networks, address(this), hex"", "", address(0), bytes32(0), dependencies
-        );
+        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
     }
 
     /// `deployToNetworks` MUST revert with `DependencyChanged` when a
@@ -260,8 +281,6 @@ contract LibRainDeployTest is Test {
         sDepCodeHashes[LibRainDeploy.ARBITRUM_ONE][address(0xdead)] = bytes32(uint256(1));
 
         vm.expectRevert();
-        this.externalDeployToNetworks(
-            networks, address(this), hex"", "", address(0), bytes32(0), dependencies
-        );
+        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
     }
 }

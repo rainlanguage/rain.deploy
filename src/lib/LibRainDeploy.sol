@@ -106,7 +106,8 @@ library LibRainDeploy {
         mapping(string => mapping(address => bytes32)) storage depCodeHashes
     ) internal {
         for (uint256 i = 0; i < networks.length; i++) {
-            vm.createSelectFork(networks[i]);
+            uint256 forkId = vm.createSelectFork(networks[i]);
+            (forkId);
             console2.log("Block number:", block.number);
             console2.log("Checking dependencies on network:", networks[i]);
 
@@ -151,13 +152,22 @@ library LibRainDeploy {
     ) internal returns (address deployedAddress) {
         for (uint256 i = 0; i < networks.length; i++) {
             console2.log("Deploying to network:", networks[i]);
-            vm.createSelectFork(networks[i]);
+            uint256 forkId = vm.createSelectFork(networks[i]);
+            (forkId);
             console2.log("Block number:", block.number);
 
             // Re-verify dependencies have not changed since the check phase.
             for (uint256 j = 0; j < dependencies.length; j++) {
-                if (dependencies[j].code.length == 0 || dependencies[j].codehash != depCodeHashes[networks[i]][dependencies[j]]) {
-                    revert DependencyChanged(networks[i], dependencies[j], depCodeHashes[networks[i]][dependencies[j]], dependencies[j].codehash);
+                if (
+                    dependencies[j].code.length == 0
+                        || dependencies[j].codehash != depCodeHashes[networks[i]][dependencies[j]]
+                ) {
+                    revert DependencyChanged(
+                        networks[i],
+                        dependencies[j],
+                        depCodeHashes[networks[i]][dependencies[j]],
+                        dependencies[j].codehash
+                    );
                 }
             }
 
@@ -220,6 +230,16 @@ library LibRainDeploy {
         console2.log("Deploying from address:", deployer);
 
         checkDependencies(vm, networks, dependencies, depCodeHashes);
-        deployedAddress = deployToNetworks(vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies, depCodeHashes);
+        deployedAddress = deployToNetworks(
+            vm,
+            networks,
+            deployer,
+            creationCode,
+            contractPath,
+            expectedAddress,
+            expectedCodeHash,
+            dependencies,
+            depCodeHashes
+        );
     }
 }
