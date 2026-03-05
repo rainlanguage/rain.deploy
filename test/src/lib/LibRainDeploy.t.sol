@@ -12,6 +12,15 @@ contract MockDeployable {
     uint256 public value = 42;
 }
 
+/// @title MockReverter
+/// Contract whose constructor always reverts, used to test DeployFailed with
+/// success=false.
+contract MockReverter {
+    constructor() {
+        revert();
+    }
+}
+
 /// @title LibRainDeployTest
 /// Tests for `LibRainDeploy`. External wrappers are used for library functions
 /// that need `vm.expectRevert` at the correct call depth, and for functions
@@ -93,6 +102,24 @@ contract LibRainDeployTest is Test {
         this.externalDeployAndBroadcast(networks, 1, hex"", "", address(0), bytes32(0), dependencies);
     }
 
+    /// `checkDependencies` MUST revert with `NoNetworks` when given an empty
+    /// networks array.
+    function testCheckDependenciesNoNetworksReverts() external {
+        string[] memory networks = new string[](0);
+        address[] memory dependencies = new address[](0);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        this.externalCheckDependencies(networks, dependencies);
+    }
+
+    /// `deployToNetworks` MUST revert with `NoNetworks` when given an empty
+    /// networks array.
+    function testDeployToNetworksNoNetworksReverts() external {
+        string[] memory networks = new string[](0);
+        address[] memory dependencies = new address[](0);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
+    }
+
     /// External wrapper for `checkDependencies` so that `vm.expectRevert`
     /// works at the correct call depth.
     /// @param networks The list of network names to check.
@@ -157,6 +184,14 @@ contract LibRainDeployTest is Test {
         this.externalDeployZoltu(type(MockDeployable).creationCode);
     }
 
+    /// `deployZoltu` MUST revert with `DeployFailed` when the creation code
+    /// has a reverting constructor (success=false from factory call).
+    function testDeployZoltuRevertsRevertingConstructor() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, false, address(0)));
+        this.externalDeployZoltu(type(MockReverter).creationCode);
+    }
+
     /// `deployToNetworks` MUST revert with `UnexpectedDeployedAddress` when the
     /// deployed address does not match the expected address.
     function testUnexpectedDeployedAddressReverts() external {
@@ -215,6 +250,32 @@ contract LibRainDeployTest is Test {
         assertEq(deployed, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
     }
 
+    /// `deployToNetworks` MUST skip deployment and return the expected address
+    /// when code already exists there, provided the codehash matches.
+    function testDeployToNetworksSkipsWhenAlreadyDeployed() external {
+        vm.makePersistent(address(this));
+
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        address deployed = this.externalDeployZoltu(type(MockDeployable).creationCode);
+        assertEq(deployed, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+        vm.makePersistent(deployed);
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        address result = this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "test/src/lib/LibRainDeploy.t.sol:MockDeployable",
+            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
+            0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483,
+            dependencies
+        );
+        assertEq(result, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+    }
+
     /// `checkDependencies` MUST record the codehash of each dependency in the
     /// storage mapping after verifying it exists.
     function testCheckDependenciesRecordsCodehash() external {
@@ -226,6 +287,48 @@ contract LibRainDeployTest is Test {
         this.externalCheckDependencies(networks, dependencies);
 
         assertTrue(sDepCodeHashes[LibRainDeploy.ARBITRUM_ONE][LibRainDeploy.ZOLTU_FACTORY] != bytes32(0));
+    }
+
+    /// `checkDependencies` MUST revert with `MissingDependency` when the
+    /// Zoltu factory has no code on the network.
+    function testCheckDependenciesMissingZoltuFactoryReverts() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        vm.makePersistent(LibRainDeploy.ZOLTU_FACTORY);
+        vm.etch(LibRainDeploy.ZOLTU_FACTORY, hex"");
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.ZOLTU_FACTORY
+            )
+        );
+        this.externalCheckDependencies(networks, dependencies);
+    }
+
+    /// `checkDependencies` MUST revert with `DependencyChanged` when the
+    /// Zoltu factory exists but has a wrong codehash.
+    function testCheckDependenciesZoltuFactoryCodehashChangedReverts() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        vm.makePersistent(LibRainDeploy.ZOLTU_FACTORY);
+        vm.etch(LibRainDeploy.ZOLTU_FACTORY, hex"00");
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                LibRainDeploy.ZOLTU_FACTORY,
+                LibRainDeploy.ZOLTU_FACTORY_CODEHASH,
+                keccak256(hex"00")
+            )
+        );
+        this.externalCheckDependencies(networks, dependencies);
     }
 
     /// `checkDependencies` MUST revert with `MissingDependency` when a
@@ -242,6 +345,54 @@ contract LibRainDeployTest is Test {
             )
         );
         this.externalCheckDependencies(networks, dependencies);
+    }
+
+    /// `deployToNetworks` MUST revert with `MissingDependency` when the
+    /// Zoltu factory has been removed since the check phase.
+    function testDeployToNetworksZoltuFactoryMissingReverts() external {
+        vm.makePersistent(address(this));
+
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        vm.makePersistent(LibRainDeploy.ZOLTU_FACTORY);
+        vm.etch(LibRainDeploy.ZOLTU_FACTORY, hex"");
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.MissingDependency.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                LibRainDeploy.ZOLTU_FACTORY
+            )
+        );
+        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
+    }
+
+    /// `deployToNetworks` MUST revert with `DependencyChanged` when the
+    /// Zoltu factory has a wrong codehash at deploy time.
+    function testDeployToNetworksZoltuFactoryCodehashChangedReverts() external {
+        vm.makePersistent(address(this));
+
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        vm.makePersistent(LibRainDeploy.ZOLTU_FACTORY);
+        vm.etch(LibRainDeploy.ZOLTU_FACTORY, hex"00");
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                LibRainDeploy.ZOLTU_FACTORY,
+                LibRainDeploy.ZOLTU_FACTORY_CODEHASH,
+                keccak256(hex"00")
+            )
+        );
+        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
     }
 
     /// `deployToNetworks` MUST revert with `DependencyChanged` when a
@@ -272,9 +423,9 @@ contract LibRainDeployTest is Test {
         this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
     }
 
-    /// `deployToNetworks` MUST revert with `DependencyChanged` when a
+    /// `deployToNetworks` MUST revert with `MissingDependency` when a
     /// dependency has been destroyed (code.length == 0) since the check phase.
-    function testDependencyChangedCodeLengthReverts() external {
+    function testDependencyMissingAtDeployTimeReverts() external {
         // Make the test contract persistent so storage survives fork switches.
         vm.makePersistent(address(this));
 
@@ -288,11 +439,9 @@ contract LibRainDeployTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.MissingDependency.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                address(0xdead),
-                bytes32(uint256(1)),
-                0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
+                address(0xdead)
             )
         );
         this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);

@@ -55,4 +55,6 @@ jobs:
           CI_DEPLOY_SEPOLIA_RPC_URL: ${{ secrets.CI_DEPLOY_SEPOLIA_RPC_URL || vars.CI_DEPLOY_SEPOLIA_RPC_URL }}
           ARBITRUM_RPC_URL: ${{ secrets.RPC_URL_ARBITRUM_FORK || vars.RPC_URL_ARBITRUM_FORK }}
           BASE_RPC_URL: ${{ secrets.RPC_URL_BASE_FORK || vars.RPC_URL_BASE_FORK }}
+          FLARE_RPC_URL: ${{ secrets.RPC_URL_FLARE_FORK || vars.RPC_URL_FLARE_FORK }}
+          POLYGON_RPC_URL: ${{ secrets.RPC_URL_POLYGON_FORK || vars.RPC_URL_POLYGON_FORK }}
         run: nix develop -c ${{ matrix.task }}

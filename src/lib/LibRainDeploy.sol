@@ -26,14 +26,13 @@ library LibRainDeploy {
     /// Thrown when the deployed code hash does not match the expected code hash.
     error UnexpectedDeployedCodeHash(bytes32 expected, bytes32 actual);
 
-    /// Thrown when a dependency's code hash or size changed between the
-    /// dependency check and the deployment.
+    /// Thrown when a dependency's code hash does not match the expected value.
     error DependencyChanged(string network, address dependency, bytes32 expectedCodeHash, bytes32 actualCodeHash);
 
     /// Thrown when no networks are provided for deployment.
     error NoNetworks();
 
-    /// Zoltu proxy is the same on every network.
+    /// Zoltu factory is the same on every network.
     address constant ZOLTU_FACTORY = 0x7A0D94F55792C434d74a40883C6ed8545E406D12;
 
     /// Expected codehash of the Zoltu factory contract.
@@ -69,7 +68,11 @@ library LibRainDeploy {
         address zoltuFactory = ZOLTU_FACTORY;
         bool success;
         assembly ("memory-safe") {
+            // Zero scratch space so mload(0) reads a clean 32-byte word.
             mstore(0, 0)
+            // The Zoltu factory returns a raw 20-byte address (not ABI-encoded).
+            // Writing 20 bytes at offset 12 (= 32 - 20) right-aligns the address
+            // in scratch space so that mload(0) produces a correctly padded value.
             success := call(gas(), zoltuFactory, 0, add(creationCode, 0x20), mload(creationCode), 12, 20)
             deployedAddress := mload(0)
         }
@@ -105,7 +108,11 @@ library LibRainDeploy {
         address[] memory dependencies,
         mapping(string => mapping(address => bytes32)) storage depCodeHashes
     ) internal {
+        if (networks.length == 0) {
+            revert NoNetworks();
+        }
         for (uint256 i = 0; i < networks.length; i++) {
+            // Capture return value to suppress slither unused-return warning.
             uint256 forkId = vm.createSelectFork(networks[i]);
             (forkId);
             console2.log("Block number:", block.number);
@@ -153,23 +160,31 @@ library LibRainDeploy {
         address[] memory dependencies,
         mapping(string => mapping(address => bytes32)) storage depCodeHashes
     ) internal returns (address deployedAddress) {
+        if (networks.length == 0) {
+            revert NoNetworks();
+        }
         for (uint256 i = 0; i < networks.length; i++) {
             console2.log("Deploying to network:", networks[i]);
+            // Capture return value to suppress slither unused-return warning.
             uint256 forkId = vm.createSelectFork(networks[i]);
             (forkId);
             console2.log("Block number:", block.number);
 
+            // Re-verify Zoltu factory exists.
+            if (ZOLTU_FACTORY.code.length == 0) {
+                revert MissingDependency(networks[i], ZOLTU_FACTORY);
+            }
             // Re-verify Zoltu factory codehash.
-            if (ZOLTU_FACTORY.code.length == 0 || ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {
+            if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {
                 revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);
             }
 
             // Re-verify dependencies have not changed since the check phase.
             for (uint256 j = 0; j < dependencies.length; j++) {
-                if (
-                    dependencies[j].code.length == 0
-                        || dependencies[j].codehash != depCodeHashes[networks[i]][dependencies[j]]
-                ) {
+                if (dependencies[j].code.length == 0) {
+                    revert MissingDependency(networks[i], dependencies[j]);
+                }
+                if (dependencies[j].codehash != depCodeHashes[networks[i]][dependencies[j]]) {
                     revert DependencyChanged(
                         networks[i],
                         dependencies[j],
