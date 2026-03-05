@@ -4,7 +4,7 @@ This file provides guidance to Claude Code (claude.ai/code) when working with co
 
 ## Project Overview
 
-rain.deploy is a Solidity library for deploying Rain Protocol contracts via the Zoltu deterministic deployment proxy to multiple EVM networks. It ensures identical contract addresses across all supported chains (Arbitrum, Base, Flare, Polygon) by using CREATE2-style deterministic deployments.
+rain.deploy is a Solidity library for deploying Rain Protocol contracts via the Zoltu deterministic deployment proxy to multiple EVM networks. It ensures identical contract addresses across all supported chains (Arbitrum, Base, Flare, Polygon) because the Zoltu proxy is deployed at the same address on every chain and uses CREATE with a predictable nonce.
 
 ## Build & Development
 
