@@ -1,0 +1,15 @@
+# SPDX-License-Identifier: LicenseRef-DCL-1.0
+# SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+
+[profile.default]
+src = "src"
+out = "out"
+libs = ["lib"]
+cbor_metadata = false
+bytecode_hash = "none"
+
+[rpc_endpoints]
+arbitrum = "${ARBITRUM_RPC_URL}"
+base = "${BASE_RPC_URL}"
+flare = "${FLARE_RPC_URL}"
+polygon = "${POLYGON_RPC_URL}"
