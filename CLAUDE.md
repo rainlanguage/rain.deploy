@@ -38,7 +38,7 @@ CI runs three matrix tasks: `rainix-sol-legal`, `rainix-sol-test`, `rainix-sol-s
 ## RPC Configuration
 
 Fork tests require RPC endpoints defined in `.env` (gitignored):
-```
+```bash
 ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
 BASE_RPC_URL=https://mainnet.base.org
 FLARE_RPC_URL=https://flare-api.flare.network/ext/C/rpc

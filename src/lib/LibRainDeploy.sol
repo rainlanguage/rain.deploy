@@ -96,8 +96,9 @@ library LibRainDeploy {
         return networks;
     }
 
-    /// Checks that the Zoltu factory and all dependencies have code on each
-    /// network. Records each dependency's codehash in the provided mapping.
+    /// Checks that the Zoltu factory has the expected codehash and all
+    /// dependencies have code on each network. Records each dependency's
+    /// codehash in the provided mapping.
     /// @param vm The Vm instance to use for forking.
     /// @param networks The list of network names to check.
     /// @param dependencies The addresses that must have code on each network.
@@ -138,7 +139,8 @@ library LibRainDeploy {
     }
 
     /// Verifies that dependencies have not changed since the check phase,
-    /// then deploys to each network via the Zoltu factory.
+    /// then deploys to each network via the Zoltu factory. If code already
+    /// exists at `expectedAddress`, deployment is skipped for that network.
     /// @param vm The Vm instance to use for forking and broadcasting.
     /// @param networks The list of network names to deploy to.
     /// @param deployer The deployer address.

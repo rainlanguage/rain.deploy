@@ -1,6 +1,7 @@
 # Pass 0: Process Review — 2026-03-05-02
 
 ## Documents Reviewed
+
 - `CLAUDE.md`
 - `foundry.toml`
 - `slither.config.json`

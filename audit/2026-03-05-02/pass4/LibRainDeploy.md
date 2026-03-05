@@ -1,7 +1,7 @@
 # Pass 4 (Code Quality) - LibRainDeploy.sol
 
 **Agent:** A01
-**File:** `/Users/thedavidmeister/Code/rain.deploy/src/lib/LibRainDeploy.sol` (253 lines)
+**File:** `src/lib/LibRainDeploy.sol` (253 lines)
 
 ## Evidence of Thorough Reading
 
