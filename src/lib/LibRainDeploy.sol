@@ -36,6 +36,12 @@ library LibRainDeploy {
     /// Zoltu proxy is the same on every network.
     address constant ZOLTU_FACTORY = 0x7A0D94F55792C434d74a40883C6ed8545E406D12;
 
+    /// Expected codehash of the Zoltu factory contract.
+    bytes32 constant ZOLTU_FACTORY_CODEHASH = 0x5acaad953250bec20933f7c72a25bb03bfa54767ebd3a750396276512c46a79c;
+
+    /// Runtime bytecode of the Zoltu factory, for use with `vm.etch`.
+    bytes constant ZOLTU_FACTORY_BYTECODE = hex"60003681823780368234f58015156014578182fd5b80825250506014600cf3";
+
     /// Config name for Arbitrum One network.
     string constant ARBITRUM_ONE = "arbitrum";
 
@@ -47,6 +53,13 @@ library LibRainDeploy {
 
     /// Config name for Polygon network.
     string constant POLYGON = "polygon";
+
+    /// Etches the Zoltu factory bytecode into the factory address. Useful for
+    /// networks where the factory is not yet deployed.
+    /// @param vm The Vm instance to use for etching.
+    function etchZoltuFactory(Vm vm) internal {
+        vm.etch(ZOLTU_FACTORY, ZOLTU_FACTORY_BYTECODE);
+    }
 
     /// Deploys the given creation code via the Zoltu factory.
     /// Handles the return data and errors appropriately.

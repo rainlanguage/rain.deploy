@@ -30,6 +30,29 @@ contract LibRainDeployTest is Test {
         assertEq(networks[3], LibRainDeploy.POLYGON);
     }
 
+    /// `ZOLTU_FACTORY_CODEHASH` MUST match the actual codehash of the Zoltu
+    /// factory on a forked network.
+    function testZoltuFactoryCodehash() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
+    }
+
+    /// `ZOLTU_FACTORY_BYTECODE` MUST match the actual runtime bytecode of the
+    /// Zoltu factory on a forked network.
+    function testZoltuFactoryBytecode() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.code, LibRainDeploy.ZOLTU_FACTORY_BYTECODE);
+    }
+
+    /// `etchZoltuFactory` MUST place the correct bytecode and codehash at the
+    /// Zoltu factory address.
+    function testEtchZoltuFactory() external {
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+        LibRainDeploy.etchZoltuFactory(vm);
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.code, LibRainDeploy.ZOLTU_FACTORY_BYTECODE);
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
+    }
+
     /// External wrapper for `deployAndBroadcast` so that
     /// `vm.expectRevert` works at the correct call depth.
     /// @param networks The list of network names to deploy to.
