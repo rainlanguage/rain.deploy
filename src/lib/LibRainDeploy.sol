@@ -112,9 +112,12 @@ library LibRainDeploy {
             console2.log("Checking dependencies on network:", networks[i]);
 
             console2.log(" - Zoltu Factory:", ZOLTU_FACTORY);
-            // Zoltu factory must exist always.
+            // Zoltu factory must exist with the expected codehash.
             if (ZOLTU_FACTORY.code.length == 0) {
                 revert MissingDependency(networks[i], ZOLTU_FACTORY);
+            }
+            if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {
+                revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);
             }
 
             for (uint256 j = 0; j < dependencies.length; j++) {
@@ -155,6 +158,11 @@ library LibRainDeploy {
             uint256 forkId = vm.createSelectFork(networks[i]);
             (forkId);
             console2.log("Block number:", block.number);
+
+            // Re-verify Zoltu factory codehash.
+            if (ZOLTU_FACTORY.code.length == 0 || ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {
+                revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);
+            }
 
             // Re-verify dependencies have not changed since the check phase.
             for (uint256 j = 0; j < dependencies.length; j++) {

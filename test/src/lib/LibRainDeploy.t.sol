@@ -260,9 +260,15 @@ contract LibRainDeployTest is Test {
         // the check and deploy phases.
         sDepCodeHashes[LibRainDeploy.ARBITRUM_ONE][LibRainDeploy.ZOLTU_FACTORY] = bytes32(uint256(1));
 
-        // The actual codehash comes from the fork, so we cannot hardcode it.
-        // Instead, just verify the revert happens with any DependencyChanged.
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                LibRainDeploy.ZOLTU_FACTORY,
+                bytes32(uint256(1)),
+                LibRainDeploy.ZOLTU_FACTORY_CODEHASH
+            )
+        );
         this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
     }
 
@@ -280,7 +286,15 @@ contract LibRainDeployTest is Test {
         // Pre-populate as if the dependency existed during the check phase.
         sDepCodeHashes[LibRainDeploy.ARBITRUM_ONE][address(0xdead)] = bytes32(uint256(1));
 
-        vm.expectRevert();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                address(0xdead),
+                bytes32(uint256(1)),
+                0xc5d2460186f7233c927e7db2dcc703c0e500b653ca82273b7bfad8045d85a470
+            )
+        );
         this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
     }
 }

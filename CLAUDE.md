@@ -35,14 +35,28 @@ nix develop -c rainix-sol-legal
 
 CI runs three matrix tasks: `rainix-sol-legal`, `rainix-sol-test`, `rainix-sol-static`.
 
+## RPC Configuration
+
+Fork tests require RPC endpoints defined in `.env` (gitignored):
+```
+ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
+BASE_RPC_URL=https://mainnet.base.org
+FLARE_RPC_URL=<flare rpc url>
+POLYGON_RPC_URL=<polygon rpc url>
+```
+These are referenced in `foundry.toml` under `[rpc_endpoints]`.
+
 ## Architecture
 
 The entire library is a single file: `src/lib/LibRainDeploy.sol`.
 
 **LibRainDeploy** provides:
+- `etchZoltuFactory(Vm)` — etches the Zoltu factory bytecode at the factory address (for networks where it isn't deployed)
 - `deployZoltu(bytes creationCode)` — deploys creation code via the Zoltu factory (`0x7A0D94F55792C434d74a40883C6ed8545E406D12`) using low-level `call`, returns the deployed address
 - `supportedNetworks()` — returns the list of Rain-supported network names (used as foundry RPC config aliases)
-- `deployAndBroadcastToSupportedNetworks(...)` — the main entry point: forks each network, checks dependencies exist, deploys via Zoltu, verifies the deployed address and code hash match expectations
+- `checkDependencies(...)` — forks each network, verifies dependencies and Zoltu factory exist with expected codehashes
+- `deployToNetworks(...)` — re-verifies dependencies, deploys via Zoltu, verifies address and code hash
+- `deployAndBroadcast(...)` — the main entry point: derives deployer from private key, calls `checkDependencies` then `deployToNetworks`
 
 The library is designed to be called from Foundry scripts (`forge script`) in consuming repos, not directly. Consuming repos provide their own creation code, expected addresses, expected code hashes, and dependency lists.
 
