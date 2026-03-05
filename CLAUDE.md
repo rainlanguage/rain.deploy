@@ -1,3 +1,6 @@
+<!-- SPDX-License-Identifier: LicenseRef-DCL-1.0 -->
+<!-- SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd -->
+
 # CLAUDE.md
 
 This file provides guidance to Claude Code (claude.ai/code) when working with code in this repository.
