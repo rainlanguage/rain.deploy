@@ -28,15 +28,16 @@ contract MockReverter {
 contract LibRainDeployTest is Test {
     mapping(string => mapping(address => bytes32)) internal sDepCodeHashes;
 
-    /// `supportedNetworks` MUST return exactly 4 networks in the expected
+    /// `supportedNetworks` MUST return exactly 5 networks in the expected
     /// order matching the library constants.
     function testSupportedNetworks() external pure {
         string[] memory networks = LibRainDeploy.supportedNetworks();
-        assertEq(networks.length, 4);
+        assertEq(networks.length, 5);
         assertEq(networks[0], LibRainDeploy.ARBITRUM_ONE);
         assertEq(networks[1], LibRainDeploy.BASE);
-        assertEq(networks[2], LibRainDeploy.FLARE);
-        assertEq(networks[3], LibRainDeploy.POLYGON);
+        assertEq(networks[2], LibRainDeploy.BASE_SEPOLIA);
+        assertEq(networks[3], LibRainDeploy.FLARE);
+        assertEq(networks[4], LibRainDeploy.POLYGON);
     }
 
     /// `ZOLTU_FACTORY_CODEHASH` MUST match the actual codehash of the Zoltu
@@ -362,9 +363,7 @@ contract LibRainDeployTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.MissingDependency.selector,
-                LibRainDeploy.ARBITRUM_ONE,
-                LibRainDeploy.ZOLTU_FACTORY
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.ZOLTU_FACTORY
             )
         );
         this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
@@ -439,9 +438,7 @@ contract LibRainDeployTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.MissingDependency.selector,
-                LibRainDeploy.ARBITRUM_ONE,
-                address(0xdead)
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdead)
             )
         );
         this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);

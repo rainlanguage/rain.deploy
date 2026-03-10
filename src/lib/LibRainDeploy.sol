@@ -47,6 +47,9 @@ library LibRainDeploy {
     /// Config name for Base network.
     string constant BASE = "base";
 
+    /// Config name for Base Sepolia testnet.
+    string constant BASE_SEPOLIA = "base_sepolia";
+
     /// Config name for Flare network.
     string constant FLARE = "flare";
 
@@ -88,11 +91,12 @@ library LibRainDeploy {
     /// Returns the list of networks currently supported by Rain deployments.
     /// @return networks The list of supported network names.
     function supportedNetworks() internal pure returns (string[] memory) {
-        string[] memory networks = new string[](4);
+        string[] memory networks = new string[](5);
         networks[0] = ARBITRUM_ONE;
         networks[1] = BASE;
-        networks[2] = FLARE;
-        networks[3] = POLYGON;
+        networks[2] = BASE_SEPOLIA;
+        networks[3] = FLARE;
+        networks[4] = POLYGON;
         return networks;
     }
 
