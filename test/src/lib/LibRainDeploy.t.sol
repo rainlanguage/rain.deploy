@@ -79,11 +79,12 @@ contract LibRainDeployTest is Test {
     /// actual Zoltu factory deploy block found by `findDeployBlock`.
     function testIsStartBlockAtDeployBlock() external {
         vm.createSelectFork(LibRainDeploy.BASE);
-        uint256 deployBlock = LibRainDeploy.findDeployBlock(
-            vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, 0
-        );
+        uint256 deployBlock =
+            LibRainDeploy.findDeployBlock(vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, 0);
         assertTrue(
-            LibRainDeploy.isStartBlock(vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, deployBlock)
+            LibRainDeploy.isStartBlock(
+                vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, deployBlock
+            )
         );
     }
 
@@ -110,9 +111,7 @@ contract LibRainDeployTest is Test {
         bytes32 wrongHash = bytes32(uint256(1));
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.UnexpectedDeployedCodeHash.selector,
-                wrongHash,
-                LibRainDeploy.ZOLTU_FACTORY_CODEHASH
+                LibRainDeploy.UnexpectedDeployedCodeHash.selector, wrongHash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH
             )
         );
         this.externalFindDeployBlock(LibRainDeploy.ZOLTU_FACTORY, wrongHash, 0);
@@ -140,16 +139,17 @@ contract LibRainDeployTest is Test {
         vm.createSelectFork(LibRainDeploy.BASE);
         uint256 originalBlock = block.number;
 
-        uint256 deployBlock = LibRainDeploy.findDeployBlock(
-            vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, 0
-        );
+        uint256 deployBlock =
+            LibRainDeploy.findDeployBlock(vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, 0);
 
         // Fork must be restored to the original block.
         assertEq(block.number, originalBlock);
 
         // The result must be a valid start block.
         assertTrue(
-            LibRainDeploy.isStartBlock(vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, deployBlock)
+            LibRainDeploy.isStartBlock(
+                vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, deployBlock
+            )
         );
     }
 
