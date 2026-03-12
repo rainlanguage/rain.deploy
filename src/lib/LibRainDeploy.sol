@@ -32,6 +32,14 @@ library LibRainDeploy {
     /// Thrown when no networks are provided for deployment.
     error NoNetworks();
 
+    /// Thrown when attempting to find the deploy block of a contract that has
+    /// no code at the current block.
+    error NotDeployed(address target);
+
+    /// Thrown when the target already has code at the start block, meaning
+    /// the deploy may have happened before the search range.
+    error DeployedBeforeStartBlock(address target, uint256 startBlock);
+
     /// Zoltu factory is the same on every network.
     address constant ZOLTU_FACTORY = 0x7A0D94F55792C434d74a40883C6ed8545E406D12;
 
@@ -55,6 +63,82 @@ library LibRainDeploy {
 
     /// Config name for Polygon network.
     string constant POLYGON = "polygon";
+
+    /// Checks whether a block is the first block where a contract with the
+    /// expected code hash exists. True when the target has the expected code
+    /// hash at `blockNumber` and does NOT have it at `blockNumber - 1`. At
+    /// block 0, only the first condition is checked. The fork is restored to
+    /// its original block number after checking.
+    /// @param vm The Vm instance for fork manipulation.
+    /// @param target The contract address to check.
+    /// @param expectedCodeHash The code hash to look for.
+    /// @param blockNumber The block number to check.
+    /// @return isStart True if the contract first appears at this block.
+    function isStartBlock(Vm vm, address target, bytes32 expectedCodeHash, uint256 blockNumber)
+        internal
+        returns (bool isStart)
+    {
+        uint256 originalBlock = block.number;
+        vm.rollFork(blockNumber);
+        isStart = target.codehash == expectedCodeHash;
+        if (isStart && blockNumber > 0) {
+            vm.rollFork(blockNumber - 1);
+            isStart = target.codehash != expectedCodeHash;
+        }
+        vm.rollFork(originalBlock);
+    }
+
+    /// Finds the block number at which a contract was first deployed by binary
+    /// searching the fork history. Requires an active fork with archive access
+    /// back to `startBlock`. The fork is restored to its original block
+    /// number before returning. The target's code hash is verified against the
+    /// expected value before searching. The result is validated via
+    /// `isStartBlock`.
+    /// @param vm The Vm instance for fork manipulation.
+    /// @param target The contract address to search for.
+    /// @param expectedCodeHash The expected code hash of the target contract.
+    /// @param startBlock The earliest block to search from. The target MUST
+    /// NOT have the expected code hash at this block.
+    /// @return deployBlock The first block number where `target` has the
+    /// expected code hash.
+    function findDeployBlock(Vm vm, address target, bytes32 expectedCodeHash, uint256 startBlock)
+        internal
+        returns (uint256 deployBlock)
+    {
+        if (target.code.length == 0) {
+            revert NotDeployed(target);
+        }
+        if (target.codehash != expectedCodeHash) {
+            revert UnexpectedDeployedCodeHash(expectedCodeHash, target.codehash);
+        }
+
+        uint256 originalBlock = block.number;
+
+        // Verify the target does not already have the expected code at
+        // startBlock. If it does, the deploy happened before our search
+        // range and the result would be meaningless.
+        vm.rollFork(startBlock);
+        if (target.codehash == expectedCodeHash) {
+            vm.rollFork(originalBlock);
+            revert DeployedBeforeStartBlock(target, startBlock);
+        }
+
+        uint256 low = startBlock;
+        uint256 high = originalBlock;
+
+        while (low < high) {
+            uint256 mid = (low + high) / 2;
+            vm.rollFork(mid);
+            if (target.codehash == expectedCodeHash) {
+                high = mid;
+            } else {
+                low = mid + 1;
+            }
+        }
+
+        deployBlock = low;
+        vm.rollFork(originalBlock);
+    }
 
     /// Etches the Zoltu factory bytecode into the factory address. Useful for
     /// networks where the factory is not yet deployed.
