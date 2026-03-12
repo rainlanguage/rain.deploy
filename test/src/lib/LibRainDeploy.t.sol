@@ -28,6 +28,131 @@ contract MockReverter {
 contract LibRainDeployTest is Test {
     mapping(string => mapping(address => bytes32)) internal sDepCodeHashes;
 
+    /// External wrapper for `isStartBlock` so that it can be called
+    /// externally in tests.
+    /// @param target The contract address to check.
+    /// @param expectedCodeHash The code hash to look for.
+    /// @param blockNumber The block number to check.
+    /// @return isStart True if the contract first appears at this block.
+    function externalIsStartBlock(address target, bytes32 expectedCodeHash, uint256 blockNumber)
+        external
+        returns (bool isStart)
+    {
+        isStart = LibRainDeploy.isStartBlock(vm, target, expectedCodeHash, blockNumber);
+    }
+
+    /// External wrapper for `findDeployBlock` so that `vm.expectRevert`
+    /// works at the correct call depth.
+    /// @param target The contract address to search for.
+    /// @param expectedCodeHash The expected code hash of the target.
+    /// @param startBlock The earliest block to search from.
+    /// @return deployBlock The first block number where `target` has code.
+    function externalFindDeployBlock(address target, bytes32 expectedCodeHash, uint256 startBlock)
+        external
+        returns (uint256 deployBlock)
+    {
+        deployBlock = LibRainDeploy.findDeployBlock(vm, target, expectedCodeHash, startBlock);
+    }
+
+    /// `isStartBlock` MUST return false when the target has no code at the
+    /// given block.
+    function testIsStartBlockNoCode() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        assertFalse(LibRainDeploy.isStartBlock(vm, address(0xdead), bytes32(uint256(1)), block.number));
+    }
+
+    /// `isStartBlock` MUST return false when the target has the expected
+    /// code hash at both the given block and the block before it.
+    function testIsStartBlockCodeAtBothBlocks() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        // The Zoltu factory exists at the current block and the block
+        // before it, so this is not a start block.
+        assertFalse(
+            LibRainDeploy.isStartBlock(
+                vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, block.number
+            )
+        );
+    }
+
+    /// `isStartBlock` MUST return true when the target has the expected code
+    /// hash at the given block but not at the block before it. Uses the
+    /// actual Zoltu factory deploy block found by `findDeployBlock`.
+    function testIsStartBlockAtDeployBlock() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        uint256 deployBlock =
+            LibRainDeploy.findDeployBlock(vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, 0);
+        assertTrue(
+            LibRainDeploy.isStartBlock(
+                vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, deployBlock
+            )
+        );
+    }
+
+    /// `isStartBlock` MUST restore the fork to its original block number.
+    function testIsStartBlockRestoresFork() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        uint256 originalBlock = block.number;
+        LibRainDeploy.isStartBlock(vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, 0);
+        assertEq(block.number, originalBlock);
+    }
+
+    /// `findDeployBlock` MUST revert with `NotDeployed` when the target
+    /// address has no code on the current fork.
+    function testFindDeployBlockNotDeployedReverts() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NotDeployed.selector, address(0xdead)));
+        this.externalFindDeployBlock(address(0xdead), bytes32(0), 0);
+    }
+
+    /// `findDeployBlock` MUST revert with `UnexpectedDeployedCodeHash` when
+    /// the target's code hash does not match the expected value.
+    function testFindDeployBlockWrongCodeHashReverts() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        bytes32 wrongHash = bytes32(uint256(1));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedCodeHash.selector, wrongHash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH
+            )
+        );
+        this.externalFindDeployBlock(LibRainDeploy.ZOLTU_FACTORY, wrongHash, 0);
+    }
+
+    /// `findDeployBlock` MUST revert with `DeployedBeforeStartBlock` when
+    /// the target already has code at the start block.
+    function testFindDeployBlockDeployedBeforeStartBlockReverts() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        // Use the current block as startBlock — the Zoltu factory already
+        // exists here, so the function should revert.
+        uint256 startBlock = block.number;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DeployedBeforeStartBlock.selector, LibRainDeploy.ZOLTU_FACTORY, startBlock
+            )
+        );
+        this.externalFindDeployBlock(LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, startBlock);
+    }
+
+    /// `findDeployBlock` MUST return a block that `isStartBlock` confirms,
+    /// and the fork MUST be restored to the original block number.
+    /// Uses Base because the public Base RPC has full archive access.
+    function testFindDeployBlockZoltuFactory() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        uint256 originalBlock = block.number;
+
+        uint256 deployBlock =
+            LibRainDeploy.findDeployBlock(vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, 0);
+
+        // Fork must be restored to the original block.
+        assertEq(block.number, originalBlock);
+
+        // The result must be a valid start block.
+        assertTrue(
+            LibRainDeploy.isStartBlock(
+                vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, deployBlock
+            )
+        );
+    }
+
     /// `supportedNetworks` MUST return exactly 5 networks in the expected
     /// order matching the library constants.
     function testSupportedNetworks() external pure {
