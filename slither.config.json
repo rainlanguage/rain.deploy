@@ -1,4 +1,4 @@
 {
-  "filter_paths": "lib/forge-std",
+  "filter_paths": "dependencies/forge-std-",
   "detectors_to_exclude": "assembly"
 }
