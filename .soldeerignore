@@ -1,4 +1,5 @@
 .DS_Store
+.coderabbitai.yaml
 .gas-snapshot
 .git
 .github
@@ -7,6 +8,7 @@
 .pre-commit-config.yaml
 .soldeerignore
 .vscode
+CLAUDE.md
 /audit
 /cache
 /dependencies
