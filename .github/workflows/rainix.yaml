@@ -4,17 +4,15 @@ on:
     branches:
       - main
   pull_request:
-
 concurrency:
   group: ${{ github.ref }}-rainix
   cancel-in-progress: ${{ github.ref != 'refs/heads/main' }}
-
 jobs:
   rainix:
     strategy:
       matrix:
         os: [ubuntu-latest]
-        task: [rainix-sol-legal, rainix-sol-test, rainix-sol-static]
+        task: [rainix-sol-legal, rainix-sol-test]
       fail-fast: false
     runs-on: ${{ matrix.os }}
     env:
@@ -22,9 +20,7 @@ jobs:
     steps:
       - uses: actions/checkout@v4
         with:
-          submodules: recursive
           fetch-depth: 0
-
       - uses: nixbuild/nix-quick-install-action@v30
         with:
           nix_conf: |
@@ -39,10 +35,7 @@ jobs:
           restore-prefixes-first-match: nix-${{ runner.os }}-
           gc-max-store-size-linux: 5G
           gc-max-store-size-macos: 5G
-
-      - run: nix develop -c rainix-sol-prelude
-        if: matrix.task == 'rainix-rs-test' || matrix.task == 'rainix-rs-static' || matrix.task == 'test-wasm-build'
-
+      - run: nix develop -c forge soldeer install
       - name: Run ${{ matrix.task }}
         env:
           ETH_RPC_URL: ${{ secrets.CI_DEPLOY_SEPOLIA_RPC_URL || vars.CI_DEPLOY_SEPOLIA_RPC_URL }}

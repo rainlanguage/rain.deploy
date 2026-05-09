@@ -2,17 +2,21 @@ version = 1
 
 [[annotations]]
 path = [
-    ".gas-snapshot",
-    ".github/**/",
-    ".gitignore",
-    ".gitmodules",
-    "audit/**/",
-    "README.md",
-    "flake.lock",
-    "flake.nix",
-    "foundry.toml",
-    "foundry.lock",
-    "slither.config.json",
+  ".gas-snapshot",
+  ".github/**/",
+  ".gitignore",
+  ".gitmodules",
+  ".soldeerignore",
+  "audit/**/",
+  "README.md",
+  "flake.lock",
+  "flake.nix",
+  "foundry.toml",
+  "foundry.lock",
+  "remappings.txt",
+  "slither.config.json",
+  "REUSE.toml",
+  "soldeer.lock",
 ]
 SPDX-FileCopyrightText = "Copyright (c) 2020 Rain Open Source Software Ltd"
 SPDX-License-Identifier = "LicenseRef-DCL-1.0"

@@ -1,33 +1,79 @@
 # rain.deploy
 
-Tooling to deploy Solidity code managed with foundry and nix to production using
-the Zoltu deterministic deployment proxy to supported networks.
+Tooling to deploy Solidity contracts deterministically across EVM networks via
+the Zoltu deployment proxy.
 
-Fundamentally Rain code is EVM compatible so can be deployed to any EVM network.
-All code is open source and permissionlessly deployable and useable, but only a
-subset of all possible networks will be active deploy targets for the Rain
-organisation/ecosystem based on use cases and demand.
+Fundamentally Rain code is EVM-compatible and permissionlessly deployable
+anywhere, but only a curated subset of networks are active deploy targets for
+the Rain organisation. This library provides shared infrastructure for that
+subset.
 
-Additionally, because Rain is expected to operate across many networks, several
-questions naturally arise:
+It answers:
 
 - Are the dependencies of the current deployment available on this network?
 - Does this deployment match other deployments on other networks?
-- Have I deployed sucessfully to all expected networks?
+- Have I deployed successfully to all expected networks?
 - How do I track deployments over time and share addresses with other people?
-- How do I ensure the deployed code is bytecode equivalent to local compilations?
+- How do I ensure deployed code is bytecode-equivalent to local compilations?
 
-This repo helps to tool and answer these questions in as foolproof a way as
-possible, without overreliance on processes that can be forgotten or
-misunderstood.
+Approach:
 
-- The Zoltu deterministic deployment proxy is used to ensure that addresses are
-  the same across all networks.
-- The interface into the library allows lists of supported networks and
-  dependencies to be provided by the caller.
-- Standard error handling and guards are provided to prevent deployments to
-  networks missing dependencies and other silent failures in the deployment.
-- Deployments only succeed if the resulting address matches a precalculated
-  address (ideally committed to a repo somewhere)
-- Post-deploy bytecode integrity checks are supported, such as those provided by
-  the Rain Extrospection lib.
+- Zoltu deterministic deployment proxy: same address on every supported network.
+- Caller-provided supported-network and dependency lists.
+- Hard guards against deploying to networks where dependencies are missing.
+- Pre-calculated addresses asserted post-deploy: silent failures fail loudly.
+- Bytecode integrity checks (e.g. via the Rain Extrospection lib) supported
+  post-deploy.
+
+## Install
+
+Via [soldeer](https://soldeer.xyz):
+
+```sh
+forge soldeer install rain-deploy~<version>
+```
+
+## Develop
+
+This repo uses [nix](https://nixos.org/download.html). The default shell is the
+slim `sol-shell` from [rainix](https://github.com/rainlanguage/rainix).
+
+```sh
+nix develop          # enter the shell
+forge soldeer install # install deps declared in foundry.toml
+forge test
+```
+
+Tasks:
+
+- `rainix-sol-test` — `forge test`
+- `rainix-sol-static` — slither
+- `rainix-sol-legal` — `reuse lint`
+
+Use the nix-pinned `forge` for all development.
+
+## Publish
+
+Tag `v<x.y.z>` on `main`. The
+[`Publish to Soldeer`](.github/workflows/publish-soldeer.yaml) wrapper delegates
+to rainix's reusable workflow, which derives the package name from the repo name
+(`rain.deploy` → `rain-deploy`).
+
+## License
+
+DecentraLicense 1.0 (DCL-1.0) — full text in
+[`LICENSES/`](LICENSES/LicenseRef-DCL-1.0.txt). Roughly `CAL-1.0`
+([opensource.org](https://opensource.org/license/cal-1-0)) plus user-data
+disclosure obligations consistent with permissionless-blockchain assumptions.
+
+This repo is [REUSE 3.2](https://reuse.software/spec-3.2/) compliant. Verify
+locally:
+
+```sh
+nix develop -c rainix-sol-legal
+```
+
+## Contributions
+
+Welcome under the same license. Contributors warrant that their contributions
+are compliant.
