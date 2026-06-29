@@ -4,22 +4,8 @@ pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-
-/// @title MockDeployable
-/// Minimal contract used as a deployment target for Zoltu factory tests.
-contract MockDeployable {
-    /// @notice Placeholder value to ensure the contract has non-trivial code.
-    uint256 public value = 42;
-}
-
-/// @title MockReverter
-/// Contract whose constructor always reverts, used to test DeployFailed with
-/// success=false.
-contract MockReverter {
-    constructor() {
-        revert();
-    }
-}
+import {MockDeployable} from "./MockDeployable.sol";
+import {MockReverter} from "./MockReverter.sol";
 
 /// @title LibRainDeployTest
 /// Tests for `LibRainDeploy`. External wrappers are used for library functions
@@ -429,7 +415,7 @@ contract LibRainDeployTest is Test {
             networks,
             1,
             type(MockDeployable).creationCode,
-            "test/src/lib/LibRainDeploy.t.sol:MockDeployable",
+            "test/src/lib/MockDeployable.sol:MockDeployable",
             0xC24016f209562fc151e5Ab7F88694ED5775feb36,
             0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483,
             dependencies
@@ -457,7 +443,7 @@ contract LibRainDeployTest is Test {
             forkIds,
             address(this),
             type(MockDeployable).creationCode,
-            "test/src/lib/LibRainDeploy.t.sol:MockDeployable",
+            "test/src/lib/MockDeployable.sol:MockDeployable",
             0xC24016f209562fc151e5Ab7F88694ED5775feb36,
             0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483
         );
