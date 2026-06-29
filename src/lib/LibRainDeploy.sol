@@ -184,27 +184,44 @@ library LibRainDeploy {
         return networks;
     }
 
-    /// Checks that the Zoltu factory has the expected codehash and all
-    /// dependencies have code on each network, returning the fork validated for
-    /// each network so the deploy phase can reuse it.
-    /// @param vm The Vm instance to use for forking.
-    /// @param networks The list of network names to check.
+    /// Deploys the given creation code to each network via the Zoltu factory.
+    /// For each network it forks once, verifies the Zoltu factory and every
+    /// dependency have code (the factory codehash must also match), then
+    /// broadcasts the deploy on that same fork. If code already exists at
+    /// `expectedAddress`, deployment is skipped for that network. Checking and
+    /// deploying on a single fork reads each dependency exactly once, so a
+    /// transient RPC inconsistency on a redundant second read cannot report an
+    /// already-deployed dependency as missing and abort an otherwise-valid
+    /// deploy. Each network is handled independently: the Zoltu deploy is
+    /// idempotent (an existing contract is skipped), so a failure on one network
+    /// leaves the others intact and the script can simply be re-run, which is why
+    /// no separate all-network pre-flight is needed.
+    /// @param vm The Vm instance to use for forking and broadcasting.
+    /// @param networks The list of network names to deploy to.
+    /// @param deployer The deployer address.
+    /// @param creationCode The creation code to deploy.
+    /// @param contractPath The contract path for verification commands.
+    /// @param expectedAddress The expected deterministic address.
+    /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The addresses that must have code on each network.
-    /// @return forkIds The fork id created and selected for each network, in the
-    /// same order as `networks`, so the deploy phase can reuse the validated
-    /// fork instead of creating a fresh one.
-    function checkDependencies(Vm vm, string[] memory networks, address[] memory dependencies)
-        internal
-        returns (uint256[] memory forkIds)
-    {
+    /// @return deployedAddress The deployed contract address.
+    function deployToNetworks(
+        Vm vm,
+        string[] memory networks,
+        address deployer,
+        bytes memory creationCode,
+        string memory contractPath,
+        address expectedAddress,
+        bytes32 expectedCodeHash,
+        address[] memory dependencies
+    ) internal returns (address deployedAddress) {
         if (networks.length == 0) {
             revert NoNetworks();
         }
-        forkIds = new uint256[](networks.length);
         for (uint256 i = 0; i < networks.length; i++) {
-            forkIds[i] = vm.createSelectFork(networks[i]);
+            vm.createSelectFork(networks[i]);
+            console2.log("Deploying to network:", networks[i]);
             console2.log("Block number:", block.number);
-            console2.log("Checking dependencies on network:", networks[i]);
 
             console2.log(" - Zoltu Factory:", ZOLTU_FACTORY);
             // Zoltu factory must exist with the expected codehash.
@@ -215,51 +232,13 @@ library LibRainDeploy {
                 revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);
             }
 
+            // Each dependency must already be deployed on this network.
             for (uint256 j = 0; j < dependencies.length; j++) {
                 console2.log(" - Dependency:", dependencies[j]);
                 if (dependencies[j].code.length == 0) {
                     revert MissingDependency(networks[i], dependencies[j]);
                 }
             }
-        }
-    }
-
-    /// Deploys to each network via the Zoltu factory, reusing the fork that
-    /// `checkDependencies` already validated. If code already exists at
-    /// `expectedAddress`, deployment is skipped for that network.
-    /// @param vm The Vm instance to use for forking and broadcasting.
-    /// @param networks The list of network names to deploy to.
-    /// @param forkIds The fork ids returned by `checkDependencies`, reused per
-    /// network so the deploy runs on the same validated snapshot.
-    /// @param deployer The deployer address.
-    /// @param creationCode The creation code to deploy.
-    /// @param contractPath The contract path for verification commands.
-    /// @param expectedAddress The expected deterministic address.
-    /// @param expectedCodeHash The expected code hash of the deployed contract.
-    /// @return deployedAddress The deployed contract address.
-    function deployToNetworks(
-        Vm vm,
-        string[] memory networks,
-        uint256[] memory forkIds,
-        address deployer,
-        bytes memory creationCode,
-        string memory contractPath,
-        address expectedAddress,
-        bytes32 expectedCodeHash
-    ) internal returns (address deployedAddress) {
-        if (networks.length == 0) {
-            revert NoNetworks();
-        }
-        for (uint256 i = 0; i < networks.length; i++) {
-            console2.log("Deploying to network:", networks[i]);
-            // Reuse the fork that checkDependencies already validated for this
-            // network, rather than creating a fresh fork at a newer head. The
-            // dependencies were verified on this exact snapshot; a fresh fork
-            // re-reads them on a different one, where a transient RPC
-            // inconsistency can report an already-deployed dependency as missing
-            // and abort an otherwise-valid deploy.
-            vm.selectFork(forkIds[i]);
-            console2.log("Block number:", block.number);
 
             vm.startBroadcast(deployer);
             if (expectedAddress.code.length == 0) {
@@ -317,9 +296,8 @@ library LibRainDeploy {
 
         console2.log("Deploying from address:", deployer);
 
-        uint256[] memory forkIds = checkDependencies(vm, networks, dependencies);
         deployedAddress = deployToNetworks(
-            vm, networks, forkIds, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash
+            vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies
         );
     }
 }
