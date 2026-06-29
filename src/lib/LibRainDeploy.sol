@@ -219,7 +219,10 @@ library LibRainDeploy {
             revert NoNetworks();
         }
         for (uint256 i = 0; i < networks.length; i++) {
-            vm.createSelectFork(networks[i]);
+            // createSelectFork returns a fork id that is not needed here; bind
+            // and reference it so the unused-return lint stays satisfied.
+            uint256 forkId = vm.createSelectFork(networks[i]);
+            (forkId);
             console2.log("Deploying to network:", networks[i]);
             console2.log("Block number:", block.number);
 
