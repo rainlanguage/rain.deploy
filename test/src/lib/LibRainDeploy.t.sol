@@ -379,6 +379,37 @@ contract LibRainDeployTest is Test {
         assertEq(result, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
     }
 
+    /// `deployToNetworks` MUST skip an already-deployed network WITHOUT checking
+    /// its dependencies. A rerun on a network that no longer needs deployment is
+    /// a clean no-op even when a dependency is now missing, because the
+    /// dependency check only guards the deploy path.
+    function testDeployToNetworksSkipsAlreadyDeployedWithMissingDependency() external {
+        vm.makePersistent(address(this));
+
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        address deployed = this.externalDeployZoltu(type(MockDeployable).creationCode);
+        assertEq(deployed, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+        vm.makePersistent(deployed);
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        // A dependency with no code: it would revert MissingDependency on the
+        // deploy path, but the target is already deployed so it is never checked.
+        address[] memory dependencies = new address[](1);
+        dependencies[0] = address(0xdead);
+
+        address result = this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "test/src/lib/MockDeployable.sol:MockDeployable",
+            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
+            0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483,
+            dependencies
+        );
+        assertEq(result, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+    }
+
     /// `deployToNetworks` MUST revert with `MissingDependency` when the Zoltu
     /// factory has no code on the network.
     function testDeployToNetworksMissingZoltuFactoryReverts() external {

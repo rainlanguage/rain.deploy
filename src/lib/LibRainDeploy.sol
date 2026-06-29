@@ -226,40 +226,44 @@ library LibRainDeploy {
             console2.log("Deploying to network:", networks[i]);
             console2.log("Block number:", block.number);
 
-            console2.log(" - Zoltu Factory:", ZOLTU_FACTORY);
-            // Zoltu factory must exist with the expected codehash.
-            if (ZOLTU_FACTORY.code.length == 0) {
-                revert MissingDependency(networks[i], ZOLTU_FACTORY);
-            }
-            if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {
-                revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);
-            }
-
-            // Each dependency must already be deployed on this network.
-            for (uint256 j = 0; j < dependencies.length; j++) {
-                console2.log(" - Dependency:", dependencies[j]);
-                if (dependencies[j].code.length == 0) {
-                    revert MissingDependency(networks[i], dependencies[j]);
-                }
-            }
-
-            vm.startBroadcast(deployer);
             if (expectedAddress.code.length == 0) {
+                // Nothing is deployed here yet, so the Zoltu factory and every
+                // dependency must be present before broadcasting the deploy.
+                console2.log(" - Zoltu Factory:", ZOLTU_FACTORY);
+                if (ZOLTU_FACTORY.code.length == 0) {
+                    revert MissingDependency(networks[i], ZOLTU_FACTORY);
+                }
+                if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {
+                    revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);
+                }
+                for (uint256 j = 0; j < dependencies.length; j++) {
+                    console2.log(" - Dependency:", dependencies[j]);
+                    if (dependencies[j].code.length == 0) {
+                        revert MissingDependency(networks[i], dependencies[j]);
+                    }
+                }
+
                 console2.log(" - Deploying via Zoltu");
+                vm.startBroadcast(deployer);
                 deployedAddress = deployZoltu(creationCode);
+                vm.stopBroadcast();
+                if (deployedAddress != expectedAddress) {
+                    revert UnexpectedDeployedAddress(expectedAddress, deployedAddress);
+                }
             } else {
+                // Already deployed on this network. The Zoltu deploy is
+                // idempotent, so skip it without checking dependencies: an
+                // already-deployed network needs neither the Zoltu factory nor
+                // its dependencies present to remain deployed, which keeps a
+                // rerun a clean no-op here.
                 console2.log(" - Code already exists at expected address, skipping deployment");
                 deployedAddress = expectedAddress;
             }
             console2.log(" - Final Address:", deployedAddress);
-            if (deployedAddress != expectedAddress) {
-                revert UnexpectedDeployedAddress(expectedAddress, deployedAddress);
-            }
             console2.log(" - Verifying code hash");
             if (expectedCodeHash != deployedAddress.codehash) {
                 revert UnexpectedDeployedCodeHash(expectedCodeHash, deployedAddress.codehash);
             }
-            vm.stopBroadcast();
 
             console2.log("manual verification command:");
             console2.log(
