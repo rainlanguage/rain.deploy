@@ -184,51 +184,18 @@ library LibRainDeploy {
         return networks;
     }
 
-    /// Checks that the Zoltu factory has the expected codehash and all
-    /// dependencies have code on each network. Records each dependency's
-    /// codehash in the provided mapping.
-    /// @param vm The Vm instance to use for forking.
-    /// @param networks The list of network names to check.
-    /// @param dependencies The addresses that must have code on each network.
-    /// @param depCodeHashes Storage mapping to record dependency codehashes.
-    function checkDependencies(
-        Vm vm,
-        string[] memory networks,
-        address[] memory dependencies,
-        mapping(string => mapping(address => bytes32)) storage depCodeHashes
-    ) internal {
-        if (networks.length == 0) {
-            revert NoNetworks();
-        }
-        for (uint256 i = 0; i < networks.length; i++) {
-            // Capture return value to suppress slither unused-return warning.
-            uint256 forkId = vm.createSelectFork(networks[i]);
-            (forkId);
-            console2.log("Block number:", block.number);
-            console2.log("Checking dependencies on network:", networks[i]);
-
-            console2.log(" - Zoltu Factory:", ZOLTU_FACTORY);
-            // Zoltu factory must exist with the expected codehash.
-            if (ZOLTU_FACTORY.code.length == 0) {
-                revert MissingDependency(networks[i], ZOLTU_FACTORY);
-            }
-            if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {
-                revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);
-            }
-
-            for (uint256 j = 0; j < dependencies.length; j++) {
-                console2.log(" - Dependency:", dependencies[j]);
-                if (dependencies[j].code.length == 0) {
-                    revert MissingDependency(networks[i], dependencies[j]);
-                }
-                depCodeHashes[networks[i]][dependencies[j]] = dependencies[j].codehash;
-            }
-        }
-    }
-
-    /// Verifies that dependencies have not changed since the check phase,
-    /// then deploys to each network via the Zoltu factory. If code already
-    /// exists at `expectedAddress`, deployment is skipped for that network.
+    /// Deploys the given creation code to each network via the Zoltu factory.
+    /// For each network it forks once, verifies the Zoltu factory and every
+    /// dependency have code (the factory codehash must also match), then
+    /// broadcasts the deploy on that same fork. If code already exists at
+    /// `expectedAddress`, deployment is skipped for that network. Checking and
+    /// deploying on a single fork reads each dependency exactly once, so a
+    /// transient RPC inconsistency on a redundant second read cannot report an
+    /// already-deployed dependency as missing and abort an otherwise-valid
+    /// deploy. Each network is handled independently: the Zoltu deploy is
+    /// idempotent (an existing contract is skipped), so a failure on one network
+    /// leaves the others intact and the script can simply be re-run, which is why
+    /// no separate all-network pre-flight is needed.
     /// @param vm The Vm instance to use for forking and broadcasting.
     /// @param networks The list of network names to deploy to.
     /// @param deployer The deployer address.
@@ -236,8 +203,7 @@ library LibRainDeploy {
     /// @param contractPath The contract path for verification commands.
     /// @param expectedAddress The expected deterministic address.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
-    /// @param dependencies The dependency addresses to re-verify.
-    /// @param depCodeHashes Storage mapping of recorded dependency codehashes.
+    /// @param dependencies The addresses that must have code on each network.
     /// @return deployedAddress The deployed contract address.
     function deployToNetworks(
         Vm vm,
@@ -247,60 +213,57 @@ library LibRainDeploy {
         string memory contractPath,
         address expectedAddress,
         bytes32 expectedCodeHash,
-        address[] memory dependencies,
-        mapping(string => mapping(address => bytes32)) storage depCodeHashes
+        address[] memory dependencies
     ) internal returns (address deployedAddress) {
         if (networks.length == 0) {
             revert NoNetworks();
         }
         for (uint256 i = 0; i < networks.length; i++) {
-            console2.log("Deploying to network:", networks[i]);
-            // Capture return value to suppress slither unused-return warning.
+            // createSelectFork returns a fork id that is not needed here; bind
+            // and reference it so the unused-return lint stays satisfied.
             uint256 forkId = vm.createSelectFork(networks[i]);
             (forkId);
+            console2.log("Deploying to network:", networks[i]);
             console2.log("Block number:", block.number);
 
-            // Re-verify Zoltu factory exists.
-            if (ZOLTU_FACTORY.code.length == 0) {
-                revert MissingDependency(networks[i], ZOLTU_FACTORY);
-            }
-            // Re-verify Zoltu factory codehash.
-            if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {
-                revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);
-            }
-
-            // Re-verify dependencies have not changed since the check phase.
-            for (uint256 j = 0; j < dependencies.length; j++) {
-                if (dependencies[j].code.length == 0) {
-                    revert MissingDependency(networks[i], dependencies[j]);
-                }
-                if (dependencies[j].codehash != depCodeHashes[networks[i]][dependencies[j]]) {
-                    revert DependencyChanged(
-                        networks[i],
-                        dependencies[j],
-                        depCodeHashes[networks[i]][dependencies[j]],
-                        dependencies[j].codehash
-                    );
-                }
-            }
-
-            vm.startBroadcast(deployer);
             if (expectedAddress.code.length == 0) {
+                // Nothing is deployed here yet, so the Zoltu factory and every
+                // dependency must be present before broadcasting the deploy.
+                console2.log(" - Zoltu Factory:", ZOLTU_FACTORY);
+                if (ZOLTU_FACTORY.code.length == 0) {
+                    revert MissingDependency(networks[i], ZOLTU_FACTORY);
+                }
+                if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {
+                    revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);
+                }
+                for (uint256 j = 0; j < dependencies.length; j++) {
+                    console2.log(" - Dependency:", dependencies[j]);
+                    if (dependencies[j].code.length == 0) {
+                        revert MissingDependency(networks[i], dependencies[j]);
+                    }
+                }
+
                 console2.log(" - Deploying via Zoltu");
+                vm.startBroadcast(deployer);
                 deployedAddress = deployZoltu(creationCode);
+                vm.stopBroadcast();
+                if (deployedAddress != expectedAddress) {
+                    revert UnexpectedDeployedAddress(expectedAddress, deployedAddress);
+                }
             } else {
+                // Already deployed on this network. The Zoltu deploy is
+                // idempotent, so skip it without checking dependencies: an
+                // already-deployed network needs neither the Zoltu factory nor
+                // its dependencies present to remain deployed, which keeps a
+                // rerun a clean no-op here.
                 console2.log(" - Code already exists at expected address, skipping deployment");
                 deployedAddress = expectedAddress;
             }
             console2.log(" - Final Address:", deployedAddress);
-            if (deployedAddress != expectedAddress) {
-                revert UnexpectedDeployedAddress(expectedAddress, deployedAddress);
-            }
             console2.log(" - Verifying code hash");
             if (expectedCodeHash != deployedAddress.codehash) {
                 revert UnexpectedDeployedCodeHash(expectedCodeHash, deployedAddress.codehash);
             }
-            vm.stopBroadcast();
 
             console2.log("manual verification command:");
             console2.log(
@@ -322,7 +285,6 @@ library LibRainDeploy {
     /// @param expectedAddress The expected deterministic address.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The dependency addresses to check.
-    /// @param depCodeHashes Storage mapping to record dependency codehashes.
     /// @return deployedAddress The address of the deployed contract.
     function deployAndBroadcast(
         Vm vm,
@@ -332,8 +294,7 @@ library LibRainDeploy {
         string memory contractPath,
         address expectedAddress,
         bytes32 expectedCodeHash,
-        address[] memory dependencies,
-        mapping(string => mapping(address => bytes32)) storage depCodeHashes
+        address[] memory dependencies
     ) internal returns (address deployedAddress) {
         if (networks.length == 0) {
             revert NoNetworks();
@@ -342,17 +303,8 @@ library LibRainDeploy {
 
         console2.log("Deploying from address:", deployer);
 
-        checkDependencies(vm, networks, dependencies, depCodeHashes);
         deployedAddress = deployToNetworks(
-            vm,
-            networks,
-            deployer,
-            creationCode,
-            contractPath,
-            expectedAddress,
-            expectedCodeHash,
-            dependencies,
-            depCodeHashes
+            vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies
         );
     }
 }
