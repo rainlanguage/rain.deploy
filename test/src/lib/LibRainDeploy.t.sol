@@ -26,8 +26,6 @@ contract MockReverter {
 /// that need `vm.expectRevert` at the correct call depth, and for functions
 /// that require a storage mapping reference.
 contract LibRainDeployTest is Test {
-    mapping(string => mapping(address => bytes32)) internal sDepCodeHashes;
-
     /// External wrapper for `isStartBlock` so that it can be called
     /// externally in tests.
     /// @param target The contract address to check.
@@ -215,8 +213,7 @@ contract LibRainDeployTest is Test {
             contractPath,
             expectedAddress,
             expectedCodeHash,
-            dependencies,
-            sDepCodeHashes
+            dependencies
         );
     }
 
@@ -241,17 +238,88 @@ contract LibRainDeployTest is Test {
     /// networks array.
     function testDeployToNetworksNoNetworksReverts() external {
         string[] memory networks = new string[](0);
-        address[] memory dependencies = new address[](0);
+        uint256[] memory forkIds = new uint256[](0);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
+        this.externalDeployToNetworks(networks, forkIds, address(this), hex"", "", address(0), bytes32(0));
+    }
+
+    /// `deployToNetworks` MUST reuse the fork that `checkDependencies` validated
+    /// for each network, never create a fresh one. A fresh fork re-reads the
+    /// dependencies on a newer snapshot, where a transient RPC inconsistency can
+    /// report an already-deployed dependency as missing and abort a valid
+    /// deploy. After `deployToNetworks` returns, the active fork MUST equal the
+    /// fork id `checkDependencies` returned for the last network, proving the
+    /// validated fork was reused rather than replaced (a fresh fork would leave
+    /// a different active fork id).
+    function testDeployToNetworksReusesValidatedFork() external {
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.BASE;
+        address[] memory dependencies = new address[](1);
+        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
+
+        uint256[] memory forkIds = this.externalCheckDependencies(networks, dependencies);
+        assertEq(forkIds.length, networks.length);
+
+        // Target the already-deployed Zoltu factory so the deploy is skipped;
+        // this test asserts fork reuse, not the deployment itself.
+        this.externalDeployToNetworks(
+            networks,
+            forkIds,
+            address(this),
+            hex"",
+            "",
+            LibRainDeploy.ZOLTU_FACTORY,
+            LibRainDeploy.ZOLTU_FACTORY_CODEHASH
+        );
+
+        assertEq(vm.activeFork(), forkIds[networks.length - 1]);
+    }
+
+    /// With multiple networks, `deployToNetworks` MUST select each network's own
+    /// validated fork by index (`forkIds[i]`), not a fixed one. Two distinct
+    /// networks produce two distinct fork ids; after deploying to both, the
+    /// active fork MUST be the SECOND network's fork, which only holds if the
+    /// per-index selection is correct (selecting `forkIds[0]` for every network
+    /// would leave the first network's fork active instead).
+    function testDeployToNetworksReusesPerNetworkFork() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](1);
+        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
+
+        uint256[] memory forkIds = this.externalCheckDependencies(networks, dependencies);
+        assertEq(forkIds.length, networks.length);
+        // Each network gets its own fork.
+        assertTrue(forkIds[0] != forkIds[1]);
+
+        // Target the already-deployed Zoltu factory so the deploy is skipped on
+        // both networks; this test asserts per-network fork selection.
+        this.externalDeployToNetworks(
+            networks,
+            forkIds,
+            address(this),
+            hex"",
+            "",
+            LibRainDeploy.ZOLTU_FACTORY,
+            LibRainDeploy.ZOLTU_FACTORY_CODEHASH
+        );
+
+        // The loop ends on the last network, so the active fork must be the last
+        // network's fork. Selecting forkIds[0] for every iteration would leave
+        // forkIds[0] active here, killing that mutation.
+        assertEq(vm.activeFork(), forkIds[1]);
     }
 
     /// External wrapper for `checkDependencies` so that `vm.expectRevert`
     /// works at the correct call depth.
     /// @param networks The list of network names to check.
     /// @param dependencies The dependency addresses to check.
-    function externalCheckDependencies(string[] memory networks, address[] memory dependencies) external {
-        LibRainDeploy.checkDependencies(vm, networks, dependencies, sDepCodeHashes);
+    function externalCheckDependencies(string[] memory networks, address[] memory dependencies)
+        external
+        returns (uint256[] memory forkIds)
+    {
+        forkIds = LibRainDeploy.checkDependencies(vm, networks, dependencies);
     }
 
     /// External wrapper for `deployToNetworks` so that `vm.expectRevert`
@@ -262,27 +330,18 @@ contract LibRainDeployTest is Test {
     /// @param contractPath The contract path for verification commands.
     /// @param expectedAddress The expected deterministic address.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
-    /// @param dependencies The dependency addresses to re-verify.
     /// @return deployedAddress The deployed contract address.
     function externalDeployToNetworks(
         string[] memory networks,
+        uint256[] memory forkIds,
         address deployer,
         bytes memory creationCode,
         string memory contractPath,
         address expectedAddress,
-        bytes32 expectedCodeHash,
-        address[] memory dependencies
+        bytes32 expectedCodeHash
     ) external returns (address deployedAddress) {
         deployedAddress = LibRainDeploy.deployToNetworks(
-            vm,
-            networks,
-            deployer,
-            creationCode,
-            contractPath,
-            expectedAddress,
-            expectedCodeHash,
-            dependencies,
-            sDepCodeHashes
+            vm, networks, forkIds, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash
         );
     }
 
@@ -321,10 +380,11 @@ contract LibRainDeployTest is Test {
     /// `deployToNetworks` MUST revert with `UnexpectedDeployedAddress` when the
     /// deployed address does not match the expected address.
     function testUnexpectedDeployedAddressReverts() external {
-        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
-        address[] memory dependencies = new address[](0);
+        uint256 forkId = vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        uint256[] memory forkIds = new uint256[](1);
+        forkIds[0] = forkId;
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.UnexpectedDeployedAddress.selector,
@@ -333,17 +393,18 @@ contract LibRainDeployTest is Test {
             )
         );
         this.externalDeployToNetworks(
-            networks, address(this), type(MockDeployable).creationCode, "", address(0xdead), bytes32(0), dependencies
+            networks, forkIds, address(this), type(MockDeployable).creationCode, "", address(0xdead), bytes32(0)
         );
     }
 
     /// `deployToNetworks` MUST revert with `UnexpectedDeployedCodeHash` when the
     /// deployed code hash does not match the expected code hash.
     function testUnexpectedDeployedCodeHashReverts() external {
-        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
-        address[] memory dependencies = new address[](0);
+        uint256 forkId = vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        uint256[] memory forkIds = new uint256[](1);
+        forkIds[0] = forkId;
         address expectedAddress = 0xC24016f209562fc151e5Ab7F88694ED5775feb36;
         bytes32 wrongCodeHash = bytes32(uint256(1));
         vm.expectRevert(
@@ -354,7 +415,7 @@ contract LibRainDeployTest is Test {
             )
         );
         this.externalDeployToNetworks(
-            networks, address(this), type(MockDeployable).creationCode, "", expectedAddress, wrongCodeHash, dependencies
+            networks, forkIds, address(this), type(MockDeployable).creationCode, "", expectedAddress, wrongCodeHash
         );
     }
 
@@ -381,38 +442,26 @@ contract LibRainDeployTest is Test {
     function testDeployToNetworksSkipsWhenAlreadyDeployed() external {
         vm.makePersistent(address(this));
 
-        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        uint256 forkId = vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         address deployed = this.externalDeployZoltu(type(MockDeployable).creationCode);
         assertEq(deployed, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
         vm.makePersistent(deployed);
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        uint256[] memory forkIds = new uint256[](1);
+        forkIds[0] = forkId;
 
         address result = this.externalDeployToNetworks(
             networks,
+            forkIds,
             address(this),
             type(MockDeployable).creationCode,
             "test/src/lib/LibRainDeploy.t.sol:MockDeployable",
             0xC24016f209562fc151e5Ab7F88694ED5775feb36,
-            0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483,
-            dependencies
+            0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483
         );
         assertEq(result, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
-    }
-
-    /// `checkDependencies` MUST record the codehash of each dependency in the
-    /// storage mapping after verifying it exists.
-    function testCheckDependenciesRecordsCodehash() external {
-        string[] memory networks = new string[](1);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](1);
-        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
-
-        this.externalCheckDependencies(networks, dependencies);
-
-        assertTrue(sDepCodeHashes[LibRainDeploy.ARBITRUM_ONE][LibRainDeploy.ZOLTU_FACTORY] != bytes32(0));
     }
 
     /// `checkDependencies` MUST revert with `MissingDependency` when the
@@ -471,101 +520,5 @@ contract LibRainDeployTest is Test {
             )
         );
         this.externalCheckDependencies(networks, dependencies);
-    }
-
-    /// `deployToNetworks` MUST revert with `MissingDependency` when the
-    /// Zoltu factory has been removed since the check phase.
-    function testDeployToNetworksZoltuFactoryMissingReverts() external {
-        vm.makePersistent(address(this));
-
-        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
-        vm.makePersistent(LibRainDeploy.ZOLTU_FACTORY);
-        vm.etch(LibRainDeploy.ZOLTU_FACTORY, hex"");
-
-        string[] memory networks = new string[](1);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.ZOLTU_FACTORY
-            )
-        );
-        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
-    }
-
-    /// `deployToNetworks` MUST revert with `DependencyChanged` when the
-    /// Zoltu factory has a wrong codehash at deploy time.
-    function testDeployToNetworksZoltuFactoryCodehashChangedReverts() external {
-        vm.makePersistent(address(this));
-
-        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
-        vm.makePersistent(LibRainDeploy.ZOLTU_FACTORY);
-        vm.etch(LibRainDeploy.ZOLTU_FACTORY, hex"00");
-
-        string[] memory networks = new string[](1);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRainDeploy.DependencyChanged.selector,
-                LibRainDeploy.ARBITRUM_ONE,
-                LibRainDeploy.ZOLTU_FACTORY,
-                LibRainDeploy.ZOLTU_FACTORY_CODEHASH,
-                keccak256(hex"00")
-            )
-        );
-        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
-    }
-
-    /// `deployToNetworks` MUST revert with `DependencyChanged` when a
-    /// dependency's codehash differs from what was recorded during the check
-    /// phase.
-    function testDependencyChangedCodehashReverts() external {
-        // Make the test contract persistent so storage survives fork switches.
-        vm.makePersistent(address(this));
-
-        string[] memory networks = new string[](1);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](1);
-        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
-
-        // Pre-populate with a wrong codehash to simulate a change between
-        // the check and deploy phases.
-        sDepCodeHashes[LibRainDeploy.ARBITRUM_ONE][LibRainDeploy.ZOLTU_FACTORY] = bytes32(uint256(1));
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRainDeploy.DependencyChanged.selector,
-                LibRainDeploy.ARBITRUM_ONE,
-                LibRainDeploy.ZOLTU_FACTORY,
-                bytes32(uint256(1)),
-                LibRainDeploy.ZOLTU_FACTORY_CODEHASH
-            )
-        );
-        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
-    }
-
-    /// `deployToNetworks` MUST revert with `MissingDependency` when a
-    /// dependency has been destroyed (code.length == 0) since the check phase.
-    function testDependencyMissingAtDeployTimeReverts() external {
-        // Make the test contract persistent so storage survives fork switches.
-        vm.makePersistent(address(this));
-
-        string[] memory networks = new string[](1);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](1);
-        dependencies[0] = address(0xdead);
-
-        // Pre-populate as if the dependency existed during the check phase.
-        sDepCodeHashes[LibRainDeploy.ARBITRUM_ONE][address(0xdead)] = bytes32(uint256(1));
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdead)
-            )
-        );
-        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
     }
 }
