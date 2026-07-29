@@ -553,6 +553,27 @@ contract LibRainDeployTest is Test {
         assertEq(address(0x1efA03dD8f7D8e86Bbd2eEBe25f63052e95C002B).code.length, 0);
     }
 
+    /// `deployToNetworks` MUST check `expectedAddress` against the creation
+    /// code before it forks anything, so the mismatch is reported without any
+    /// network being reachable at all.
+    function testDeployToNetworksStaleExpectedAddressRevertsBeforeForking() external {
+        string[] memory networks = new string[](1);
+        // Not a configured RPC alias, so forking it is itself an error.
+        networks[0] = "unconfigured_network";
+        address[] memory dependencies = new address[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedAddress.selector,
+                address(0xdead),
+                0xC24016f209562fc151e5Ab7F88694ED5775feb36
+            )
+        );
+        this.externalDeployToNetworks(
+            networks, address(this), type(MockDeployable).creationCode, "", address(0xdead), bytes32(0), dependencies
+        );
+    }
+
     /// `deployToNetworks` MUST revert with `UnexpectedDeployedAddress` when the
     /// factory reports an address other than the one derived from the creation
     /// code, so the chain is checked and not only the derivation.
