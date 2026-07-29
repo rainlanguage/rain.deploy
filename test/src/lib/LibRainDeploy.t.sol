@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {MockDeployable} from "./MockDeployable.sol";
+import {MockDeployableV2} from "./MockDeployableV2.sol";
 import {MockReverter} from "./MockReverter.sol";
 
 /// @title LibRainDeployTest
@@ -212,7 +213,7 @@ contract LibRainDeployTest is Test {
     }
 
     /// `deployToNetworks` MUST revert with `NoNetworks` when given an empty
-    /// networks array.
+    /// networks array, before any other input is checked.
     function testDeployToNetworksNoNetworksReverts() external {
         string[] memory networks = new string[](0);
         address[] memory dependencies = new address[](0);
@@ -298,7 +299,7 @@ contract LibRainDeployTest is Test {
     }
 
     /// `deployToNetworks` MUST revert with `UnexpectedDeployedAddress` when the
-    /// deployed address does not match the expected address.
+    /// creation code does not deploy to the expected address.
     function testUnexpectedDeployedAddressReverts() external {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
@@ -427,7 +428,15 @@ contract LibRainDeployTest is Test {
                 LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.ZOLTU_FACTORY
             )
         );
-        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
+            bytes32(0),
+            dependencies
+        );
     }
 
     /// `deployToNetworks` MUST revert with `DependencyChanged` when the Zoltu
@@ -451,7 +460,15 @@ contract LibRainDeployTest is Test {
                 keccak256(hex"00")
             )
         );
-        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
+            bytes32(0),
+            dependencies
+        );
     }
 
     /// `deployToNetworks` MUST revert with `MissingDependency` when a dependency
@@ -467,6 +484,107 @@ contract LibRainDeployTest is Test {
                 LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdead)
             )
         );
-        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
+            bytes32(0),
+            dependencies
+        );
+    }
+
+    /// `zoltuAddress` MUST derive the address the Zoltu factory actually
+    /// deploys the given creation code to, and creation code that differs MUST
+    /// derive a different address.
+    function testZoltuAddressMatchesFactoryDeploy() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        assertEq(
+            LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
+            this.externalDeployZoltu(type(MockDeployable).creationCode)
+        );
+        assertEq(
+            LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
+            this.externalDeployZoltu(type(MockDeployableV2).creationCode)
+        );
+        assertNotEq(
+            LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
+            LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode)
+        );
+    }
+
+    /// `deployToNetworks` MUST revert with `UnexpectedDeployedAddress` when the
+    /// creation code does not deploy to `expectedAddress`, even when a contract
+    /// with the expected code hash already sits at that address on every
+    /// network and would otherwise be skipped as already deployed.
+    function testDeployToNetworksStaleExpectedAddressReverts() external {
+        vm.makePersistent(address(this));
+
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        address deployed = this.externalDeployZoltu(type(MockDeployable).creationCode);
+        assertEq(deployed, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+        vm.makePersistent(deployed);
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedAddress.selector,
+                0xC24016f209562fc151e5Ab7F88694ED5775feb36,
+                0x1efA03dD8f7D8e86Bbd2eEBe25f63052e95C002B
+            )
+        );
+        // The new contract's creation code paired with the old contract's
+        // address and code hash.
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployableV2).creationCode,
+            "test/src/lib/MockDeployableV2.sol:MockDeployableV2",
+            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
+            0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483,
+            dependencies
+        );
+
+        // The new contract was not deployed anywhere.
+        assertEq(address(0x1efA03dD8f7D8e86Bbd2eEBe25f63052e95C002B).code.length, 0);
+    }
+
+    /// `deployToNetworks` MUST revert with `UnexpectedDeployedAddress` when the
+    /// factory reports an address other than the one derived from the creation
+    /// code, so the chain is checked and not only the derivation.
+    function testDeployToNetworksFactoryReportsOtherAddressReverts() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        // The factory reports the address of a contract that does have code,
+        // but not the one the creation code derives.
+        vm.mockCall(
+            LibRainDeploy.ZOLTU_FACTORY,
+            type(MockDeployable).creationCode,
+            abi.encodePacked(bytes20(LibRainDeploy.ZOLTU_FACTORY))
+        );
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedAddress.selector,
+                0xC24016f209562fc151e5Ab7F88694ED5775feb36,
+                LibRainDeploy.ZOLTU_FACTORY
+            )
+        );
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "test/src/lib/MockDeployable.sol:MockDeployable",
+            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
+            0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483,
+            dependencies
+        );
     }
 }
