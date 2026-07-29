@@ -4,6 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {MockAddressRevertingFactory} from "./MockAddressRevertingFactory.sol";
 import {MockDeployable} from "./MockDeployable.sol";
 import {MockReverter} from "./MockReverter.sol";
 
@@ -295,6 +296,22 @@ contract LibRainDeployTest is Test {
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, false, address(0)));
         this.externalDeployZoltu(type(MockReverter).creationCode);
+    }
+
+    /// `deployZoltu` MUST report the zero address when the factory call fails,
+    /// even when the factory reverts with data that reads as an address. The
+    /// call output buffer holds revert data on the failure path, so anything
+    /// read from it there is not an address the factory returned.
+    function testDeployZoltuFailedCallReportsZeroAddress() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        vm.etch(LibRainDeploy.ZOLTU_FACTORY, address(new MockAddressRevertingFactory()).code);
+        // The factory reverts with its own address, which has code, so the
+        // reported address is only zero if the failure path never reads the
+        // output buffer.
+        assertGt(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, false, address(0)));
+        this.externalDeployZoltu(type(MockDeployable).creationCode);
     }
 
     /// `deployToNetworks` MUST revert with `UnexpectedDeployedAddress` when the

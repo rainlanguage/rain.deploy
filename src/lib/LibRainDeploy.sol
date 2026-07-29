@@ -14,7 +14,9 @@ import {console2} from "forge-std-1.16.1/src/console2.sol";
 library LibRainDeploy {
     /// Thrown when deployment via Zoltu factory fails. This could be either an
     /// explicit revert that manifests as non success, or a silent failure that
-    /// results in the deployed address being empty somehow.
+    /// results in the deployed address being empty somehow. `deployedAddress`
+    /// is zero whenever `success` is false, as a failed factory call returns no
+    /// address.
     error DeployFailed(bool success, address deployedAddress);
 
     /// Thrown when a dependency is missing on a network before deployment.
@@ -161,7 +163,11 @@ library LibRainDeploy {
             // Writing 20 bytes at offset 12 (= 32 - 20) right-aligns the address
             // in scratch space so that mload(0) produces a correctly padded value.
             success := call(gas(), zoltuFactory, 0, add(creationCode, 0x20), mload(creationCode), 12, 20)
-            deployedAddress := mload(0)
+            // The EVM copies revert data into the output region too, so only a
+            // successful call leaves an address there. A failed call leaves
+            // `deployedAddress` zero rather than reporting revert bytes as an
+            // address.
+            if success { deployedAddress := mload(0) }
         }
         if (!success || deployedAddress == address(0) || deployedAddress.code.length == 0) {
             console2.log("Zoltu deployment failed. Success:", success, "Deployed Address:", deployedAddress);
