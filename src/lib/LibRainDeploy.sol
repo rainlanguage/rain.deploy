@@ -152,9 +152,9 @@ library LibRainDeploy {
     /// address is a pure function of the creation code and is identical on
     /// every network.
     /// @param creationCode The creation code to derive the address for.
-    /// @return derivedAddress The address the creation code deploys to.
-    function zoltuAddress(bytes memory creationCode) internal pure returns (address derivedAddress) {
-        derivedAddress = address(
+    /// @return The address the creation code deploys to.
+    function zoltuAddress(bytes memory creationCode) internal pure returns (address) {
+        return address(
             uint160(
                 uint256(keccak256(abi.encodePacked(bytes1(0xff), ZOLTU_FACTORY, bytes32(0), keccak256(creationCode))))
             )
