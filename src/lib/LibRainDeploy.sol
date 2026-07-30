@@ -147,6 +147,20 @@ library LibRainDeploy {
         vm.etch(ZOLTU_FACTORY, ZOLTU_FACTORY_BYTECODE);
     }
 
+    /// Derives the address the Zoltu factory deploys the given creation code
+    /// to. The factory is CREATE2 over its calldata with a zero salt, so the
+    /// address is a pure function of the creation code and is identical on
+    /// every network.
+    /// @param creationCode The creation code to derive the address for.
+    /// @return The address the creation code deploys to.
+    function zoltuAddress(bytes memory creationCode) internal pure returns (address) {
+        return address(
+            uint160(
+                uint256(keccak256(abi.encodePacked(bytes1(0xff), ZOLTU_FACTORY, bytes32(0), keccak256(creationCode))))
+            )
+        );
+    }
+
     /// Deploys the given creation code via the Zoltu factory.
     /// Handles the return data and errors appropriately.
     /// @param creationCode The creation code to deploy.
@@ -185,6 +199,11 @@ library LibRainDeploy {
     }
 
     /// Deploys the given creation code to each network via the Zoltu factory.
+    /// `expectedAddress` MUST be the address the Zoltu factory derives for
+    /// `creationCode`, which is checked before any network is forked, so an
+    /// expected address that disagrees with the creation code fails loudly
+    /// rather than matching some other contract already deployed there and
+    /// skipping every network.
     /// For each network it forks once, verifies the Zoltu factory and every
     /// dependency have code (the factory codehash must also match), then
     /// broadcasts the deploy on that same fork. If code already exists at
@@ -201,7 +220,8 @@ library LibRainDeploy {
     /// @param deployer The deployer address.
     /// @param creationCode The creation code to deploy.
     /// @param contractPath The contract path for verification commands.
-    /// @param expectedAddress The expected deterministic address.
+    /// @param expectedAddress The expected deterministic address, which MUST be
+    /// the address the Zoltu factory derives for `creationCode`.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The addresses that must have code on each network.
     /// @return deployedAddress The deployed contract address.
@@ -217,6 +237,16 @@ library LibRainDeploy {
     ) internal returns (address deployedAddress) {
         if (networks.length == 0) {
             revert NoNetworks();
+        }
+        // The Zoltu factory deploys the given creation code to a single
+        // deterministic address on every network, so an expected address that
+        // disagrees with the creation code can never hold that code. Checked
+        // up front, before any fork, because otherwise a network that already
+        // has some other contract at the expected address takes the skip
+        // branch and reports success without ever deploying.
+        address derivedAddress = zoltuAddress(creationCode);
+        if (derivedAddress != expectedAddress) {
+            revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);
         }
         for (uint256 i = 0; i < networks.length; i++) {
             // createSelectFork returns a fork id that is not needed here; bind
@@ -282,7 +312,8 @@ library LibRainDeploy {
     /// @param deployerPrivateKey The private key to use for broadcasting.
     /// @param creationCode The creation code to deploy.
     /// @param contractPath The contract path for verification commands.
-    /// @param expectedAddress The expected deterministic address.
+    /// @param expectedAddress The expected deterministic address, which MUST be
+    /// the address the Zoltu factory derives for `creationCode`.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The dependency addresses to check.
     /// @return deployedAddress The address of the deployed contract.
