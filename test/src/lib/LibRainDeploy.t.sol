@@ -306,8 +306,7 @@ contract LibRainDeployTest is Test {
         // factory on the fork is the oracle here, so an expected value taken
         // from the derivation would only check `zoltuAddress` against itself.
         // It is the address the factory returns for the creation code solc
-        // 0.8.25 emits for `MockDeployable`, which is the version the whole
-        // test build resolves to because `MockDeployableV2` pins `=0.8.25`.
+        // 0.8.25 emits for `MockDeployable`, which itself pins `=0.8.25`.
         assertEq(deployed, 0x1fa1bBf9Cf73B1aCCc1a3D9de5896E81Cd567854);
     }
 
