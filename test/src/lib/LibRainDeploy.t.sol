@@ -4,9 +4,9 @@ pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {MockDeployable} from "./MockDeployable.sol";
-import {MockDeployableV2} from "./MockDeployableV2.sol";
-import {MockReverter} from "./MockReverter.sol";
+import {MockDeployable} from "../../concrete/MockDeployable.sol";
+import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
+import {MockReverter} from "../../concrete/MockReverter.sol";
 
 /// @title LibRainDeployTest
 /// Tests for `LibRainDeploy`. External wrappers are used for library functions
@@ -258,7 +258,7 @@ contract LibRainDeployTest is Test {
             networks,
             address(this),
             type(MockDeployable).creationCode,
-            "test/src/lib/MockDeployable.sol:MockDeployable",
+            "test/concrete/MockDeployable.sol:MockDeployable",
             mockDeployableAddress(),
             mockDeployableCodeHash(),
             dependencies
@@ -371,7 +371,7 @@ contract LibRainDeployTest is Test {
             networks,
             1,
             type(MockDeployable).creationCode,
-            "test/src/lib/MockDeployable.sol:MockDeployable",
+            "test/concrete/MockDeployable.sol:MockDeployable",
             mockDeployableAddress(),
             mockDeployableCodeHash(),
             dependencies
@@ -397,7 +397,7 @@ contract LibRainDeployTest is Test {
             networks,
             address(this),
             type(MockDeployable).creationCode,
-            "test/src/lib/MockDeployable.sol:MockDeployable",
+            "test/concrete/MockDeployable.sol:MockDeployable",
             mockDeployableAddress(),
             mockDeployableCodeHash(),
             dependencies
@@ -428,7 +428,7 @@ contract LibRainDeployTest is Test {
             networks,
             address(this),
             type(MockDeployable).creationCode,
-            "test/src/lib/MockDeployable.sol:MockDeployable",
+            "test/concrete/MockDeployable.sol:MockDeployable",
             mockDeployableAddress(),
             mockDeployableCodeHash(),
             dependencies
@@ -566,7 +566,7 @@ contract LibRainDeployTest is Test {
             networks,
             address(this),
             type(MockDeployableV2).creationCode,
-            "test/src/lib/MockDeployableV2.sol:MockDeployableV2",
+            "test/concrete/MockDeployableV2.sol:MockDeployableV2",
             mockDeployableAddress(),
             mockDeployableCodeHash(),
             dependencies
@@ -621,7 +621,7 @@ contract LibRainDeployTest is Test {
             networks,
             address(this),
             type(MockDeployable).creationCode,
-            "test/src/lib/MockDeployable.sol:MockDeployable",
+            "test/concrete/MockDeployable.sol:MockDeployable",
             mockDeployableAddress(),
             mockDeployableCodeHash(),
             dependencies
