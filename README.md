@@ -15,6 +15,9 @@ It answers:
 - Have I deployed successfully to all expected networks?
 - How do I track deployments over time and share addresses with other people?
 - How do I ensure deployed code is bytecode-equivalent to local compilations?
+- How does a deployment get a configured address — an owner, say — without
+  baking one into its creation code, where changing it would move every future
+  deployment?
 
 Approach:
 
@@ -25,6 +28,31 @@ Approach:
   and against the chain after: silent failures fail loudly.
 - Bytecode integrity checks (e.g. via the Rain Extrospection lib) supported
   post-deploy.
+- A write-once address registry, read at run time rather than compiled in, and
+  gated across every target network before a deploy.
+
+## Address registry
+
+`IAddressRegistryV1` binds an opaque `bytes32` name to an address. An immutable
+root authority binds a name that is unbound; nothing, root included, can change
+one after; and reading an unbound name reverts rather than answering with the
+zero address. There is no rotation, no removal and no admin surface, because a
+binding that can move is not worth checking before a deploy.
+
+`LibAddressRegistry.resolve` reads it, verifying the registry's code hash first,
+the same way `LibRainDeploy` verifies the Zoltu factory's. It resolves a name to
+an address and stops there — what a consumer does with the address, and when, is
+the consumer's business.
+
+`LibRainDeploy.checkRegisteredAddressesOnNetworks` is the deploy-time gate:
+every name must resolve to the address the deployment expects, on every target
+network, before anything is broadcast. Because bindings are write-once, that
+pre-flight is exactly as strong as checking inline — an answer that exists
+cannot change, and one that does not exist reverts.
+
+The implementation, `AddressRegistry`, lives in
+[rain.factory.deploy](https://github.com/rainlanguage/rain.factory.deploy);
+`LibAddressRegistry` pins its deterministic address and code hash.
 
 ## Install
 

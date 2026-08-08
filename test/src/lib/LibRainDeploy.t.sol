@@ -4,9 +4,12 @@ pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibAddressRegistry} from "../../../src/lib/LibAddressRegistry.sol";
+import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
+import {ADDRESS_REGISTRY_CREATION_CODE, ADDRESS_REGISTRY_ROOT} from "../../lib/AddressRegistryPins.sol";
 
 /// @title LibRainDeployTest
 /// Tests for `LibRainDeploy`. External wrappers are used for library functions
@@ -626,5 +629,216 @@ contract LibRainDeployTest is Test {
             mockDeployableCodeHash(),
             dependencies
         );
+    }
+
+    /// Deploys the real `AddressRegistry` creation code through the Zoltu
+    /// factory, which lands it at `LibAddressRegistry.ADDRESS_REGISTRY`, and
+    /// binds `name` to `account` as root.
+    /// @param name The name to bind.
+    /// @param account The address to bind it to.
+    function deployRegistryWithBinding(bytes32 name, address account) internal {
+        LibRainDeploy.etchZoltuFactory(vm);
+        IAddressRegistryV1 registry = IAddressRegistryV1(LibRainDeploy.deployZoltu(ADDRESS_REGISTRY_CREATION_CODE));
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+    }
+
+    /// External wrapper for `checkRegisteredAddresses` so that
+    /// `vm.expectRevert` works at the correct call depth.
+    /// @param network The network name, for the error only.
+    /// @param names The names to resolve.
+    /// @param expectedAddresses The address each name MUST resolve to.
+    function externalCheckRegisteredAddresses(
+        string memory network,
+        bytes32[] memory names,
+        address[] memory expectedAddresses
+    ) external view {
+        LibRainDeploy.checkRegisteredAddresses(network, names, expectedAddresses);
+    }
+
+    /// External wrapper for `checkRegisteredAddressesOnNetworks` so that
+    /// `vm.expectRevert` works at the correct call depth.
+    /// @param networks The list of network names to check.
+    /// @param names The names to resolve on each network.
+    /// @param expectedAddresses The address each name MUST resolve to.
+    function externalCheckRegisteredAddressesOnNetworks(
+        string[] memory networks,
+        bytes32[] memory names,
+        address[] memory expectedAddresses
+    ) external {
+        LibRainDeploy.checkRegisteredAddressesOnNetworks(vm, networks, names, expectedAddresses);
+    }
+
+    /// `checkRegisteredAddresses` MUST pass when every name resolves to the
+    /// address paired with it.
+    function testCheckRegisteredAddressesMatch(bytes32 name, address account) external {
+        vm.assume(account != address(0));
+        deployRegistryWithBinding(name, account);
+
+        bytes32[] memory names = new bytes32[](1);
+        names[0] = name;
+        address[] memory expectedAddresses = new address[](1);
+        expectedAddresses[0] = account;
+
+        LibRainDeploy.checkRegisteredAddresses(LibRainDeploy.BASE, names, expectedAddresses);
+    }
+
+    /// `checkRegisteredAddresses` MUST revert with `UnexpectedRegisteredAddress`
+    /// when a name resolves to an address other than the expected one, naming
+    /// the network so the failure identifies where it disagrees.
+    function testCheckRegisteredAddressesMismatchReverts(bytes32 name, address account, address expected) external {
+        vm.assume(account != address(0));
+        vm.assume(expected != account);
+        deployRegistryWithBinding(name, account);
+
+        bytes32[] memory names = new bytes32[](1);
+        names[0] = name;
+        address[] memory expectedAddresses = new address[](1);
+        expectedAddresses[0] = expected;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedRegisteredAddress.selector, LibRainDeploy.BASE, name, expected, account
+            )
+        );
+        this.externalCheckRegisteredAddresses(LibRainDeploy.BASE, names, expectedAddresses);
+    }
+
+    /// `checkRegisteredAddresses` MUST check every name, not only the first, so
+    /// a later name that disagrees still stops the deployment.
+    function testCheckRegisteredAddressesChecksEveryName(
+        bytes32 nameA,
+        bytes32 nameB,
+        address account,
+        address expected
+    ) external {
+        vm.assume(nameA != nameB);
+        vm.assume(account != address(0));
+        vm.assume(expected != account);
+        deployRegistryWithBinding(nameA, account);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        IAddressRegistryV1(LibAddressRegistry.ADDRESS_REGISTRY).register(nameB, account);
+
+        bytes32[] memory names = new bytes32[](2);
+        names[0] = nameA;
+        names[1] = nameB;
+        address[] memory expectedAddresses = new address[](2);
+        expectedAddresses[0] = account;
+        expectedAddresses[1] = expected;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedRegisteredAddress.selector, LibRainDeploy.BASE, nameB, expected, account
+            )
+        );
+        this.externalCheckRegisteredAddresses(LibRainDeploy.BASE, names, expectedAddresses);
+    }
+
+    /// `checkRegisteredAddresses` MUST propagate the registry's own revert for
+    /// an unbound name, so a network where a name was never bound fails as
+    /// loudly as one where it disagrees.
+    function testCheckRegisteredAddressesUnregisteredReverts(bytes32 name, address expected) external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        LibRainDeploy.deployZoltu(ADDRESS_REGISTRY_CREATION_CODE);
+
+        bytes32[] memory names = new bytes32[](1);
+        names[0] = name;
+        address[] memory expectedAddresses = new address[](1);
+        expectedAddresses[0] = expected;
+
+        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name));
+        this.externalCheckRegisteredAddresses(LibRainDeploy.BASE, names, expectedAddresses);
+    }
+
+    /// `checkRegisteredAddresses` MUST revert when the names and expected
+    /// addresses do not pair up, rather than checking the shorter of the two.
+    function testCheckRegisteredAddressesLengthMismatchReverts(uint8 namesLength, uint8 expectedLength) external {
+        vm.assume(namesLength != expectedLength);
+
+        bytes32[] memory names = new bytes32[](namesLength);
+        address[] memory expectedAddresses = new address[](expectedLength);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.RegisteredAddressesLengthMismatch.selector, uint256(namesLength), uint256(expectedLength)
+            )
+        );
+        this.externalCheckRegisteredAddresses(LibRainDeploy.BASE, names, expectedAddresses);
+    }
+
+    /// `checkRegisteredAddressesOnNetworks` MUST revert with `NoNetworks` when
+    /// given none, so an empty target set can never be mistaken for every name
+    /// checking out.
+    function testCheckRegisteredAddressesOnNetworksNoNetworksReverts(bytes32 name, address expected) external {
+        string[] memory networks = new string[](0);
+        bytes32[] memory names = new bytes32[](1);
+        names[0] = name;
+        address[] memory expectedAddresses = new address[](1);
+        expectedAddresses[0] = expected;
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        this.externalCheckRegisteredAddressesOnNetworks(networks, names, expectedAddresses);
+    }
+
+    /// `checkRegisteredAddressesOnNetworks` MUST check the names and expected
+    /// addresses pair up before it forks anything, so a mispaired call is
+    /// reported without any network being reachable at all.
+    function testCheckRegisteredAddressesOnNetworksLengthMismatchRevertsBeforeForking() external {
+        string[] memory networks = new string[](1);
+        // Not a configured RPC alias, so forking it is itself an error.
+        networks[0] = "unconfigured_network";
+        bytes32[] memory names = new bytes32[](2);
+        address[] memory expectedAddresses = new address[](1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.RegisteredAddressesLengthMismatch.selector, uint256(2), uint256(1))
+        );
+        this.externalCheckRegisteredAddressesOnNetworks(networks, names, expectedAddresses);
+    }
+
+    /// `checkRegisteredAddressesOnNetworks` MUST pass over every supported
+    /// network when the name resolves to the expected address on each. The
+    /// registry is made persistent so the same binding is present on every
+    /// fork, which is the state the check exists to confirm. Fixed inputs
+    /// rather than fuzzed: what varies here is the network, and every run forks
+    /// all five.
+    function testCheckRegisteredAddressesOnNetworksAllNetworks() external {
+        bytes32 name = keccak256("testCheckRegisteredAddressesOnNetworksAllNetworks");
+        address account = address(0xf00);
+        deployRegistryWithBinding(name, account);
+        vm.makePersistent(LibAddressRegistry.ADDRESS_REGISTRY);
+
+        bytes32[] memory names = new bytes32[](1);
+        names[0] = name;
+        address[] memory expectedAddresses = new address[](1);
+        expectedAddresses[0] = account;
+
+        LibRainDeploy.checkRegisteredAddressesOnNetworks(
+            vm, LibRainDeploy.supportedNetworks(), names, expectedAddresses
+        );
+    }
+
+    /// `checkRegisteredAddressesOnNetworks` MUST fail on the network that
+    /// disagrees, and MUST name it.
+    function testCheckRegisteredAddressesOnNetworksMismatchReverts() external {
+        bytes32 name = keccak256("testCheckRegisteredAddressesOnNetworksMismatchReverts");
+        address account = address(0xf00);
+        address expected = address(0xba4);
+        deployRegistryWithBinding(name, account);
+        vm.makePersistent(LibAddressRegistry.ADDRESS_REGISTRY);
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.BASE;
+        bytes32[] memory names = new bytes32[](1);
+        names[0] = name;
+        address[] memory expectedAddresses = new address[](1);
+        expectedAddresses[0] = expected;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedRegisteredAddress.selector, LibRainDeploy.BASE, name, expected, account
+            )
+        );
+        this.externalCheckRegisteredAddressesOnNetworks(networks, names, expectedAddresses);
     }
 }

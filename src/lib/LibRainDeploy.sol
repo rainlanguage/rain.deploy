@@ -4,6 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.16.1/src/Vm.sol";
 import {console2} from "forge-std-1.16.1/src/console2.sol";
+import {LibAddressRegistry} from "./LibAddressRegistry.sol";
 
 /// @title LibRainDeploy
 /// Library for deploying contracts via the Zoltu factory across all the networks
@@ -39,6 +40,14 @@ library LibRainDeploy {
     /// Thrown when the target already has code at the start block, meaning
     /// the deploy may have happened before the search range.
     error DeployedBeforeStartBlock(address target, uint256 startBlock);
+
+    /// Thrown when a registry name resolves to something other than the address
+    /// the deployment expects on a network.
+    error UnexpectedRegisteredAddress(string network, bytes32 name, address expected, address actual);
+
+    /// Thrown when the names and expected addresses of a registry check do not
+    /// pair up.
+    error RegisteredAddressesLengthMismatch(uint256 namesLength, uint256 expectedAddressesLength);
 
     /// Zoltu factory is the same on every network.
     address constant ZOLTU_FACTORY = 0x7A0D94F55792C434d74a40883C6ed8545E406D12;
@@ -196,6 +205,68 @@ library LibRainDeploy {
         networks[3] = FLARE;
         networks[4] = POLYGON;
         return networks;
+    }
+
+    /// Asserts that each name resolves, in the address registry, to the address
+    /// the deployment expects, on whichever network is currently selected.
+    /// Verifying the registry's code hash is `LibAddressRegistry.resolve`'s job,
+    /// and an unbound name reverts there rather than resolving to nothing, so
+    /// every way this can be wrong is a revert.
+    /// @param network The network name, for the error only.
+    /// @param names The names to resolve.
+    /// @param expectedAddresses The address each name MUST resolve to,
+    /// positionally paired with `names`.
+    function checkRegisteredAddresses(string memory network, bytes32[] memory names, address[] memory expectedAddresses)
+        internal
+        view
+    {
+        if (names.length != expectedAddresses.length) {
+            revert RegisteredAddressesLengthMismatch(names.length, expectedAddresses.length);
+        }
+        for (uint256 i = 0; i < names.length; i++) {
+            address actual = LibAddressRegistry.resolve(names[i]);
+            if (actual != expectedAddresses[i]) {
+                revert UnexpectedRegisteredAddress(network, names[i], expectedAddresses[i], actual);
+            }
+        }
+    }
+
+    /// Runs `checkRegisteredAddresses` over every network, so a deployment
+    /// asserts its resolved addresses agree across the whole target set here,
+    /// rather than every consumer's deploy script forking the networks itself.
+    ///
+    /// Registry bindings are write-once, so this is a pre-flight rather than a
+    /// race: a name that resolves here cannot resolve differently later, and a
+    /// name that is unbound here reverts here. Checking every network before
+    /// deploying to any of them means a network that disagrees stops the
+    /// deployment instead of leaving it half-applied.
+    /// @param vm The Vm instance to use for forking.
+    /// @param networks The list of network names to check.
+    /// @param names The names to resolve on each network.
+    /// @param expectedAddresses The address each name MUST resolve to,
+    /// positionally paired with `names`.
+    function checkRegisteredAddressesOnNetworks(
+        Vm vm,
+        string[] memory networks,
+        bytes32[] memory names,
+        address[] memory expectedAddresses
+    ) internal {
+        if (networks.length == 0) {
+            revert NoNetworks();
+        }
+        // Checked before any fork so a mispaired call fails immediately rather
+        // than after an RPC round trip.
+        if (names.length != expectedAddresses.length) {
+            revert RegisteredAddressesLengthMismatch(names.length, expectedAddresses.length);
+        }
+        for (uint256 i = 0; i < networks.length; i++) {
+            // createSelectFork returns a fork id that is not needed here; bind
+            // and reference it so the unused-return lint stays satisfied.
+            uint256 forkId = vm.createSelectFork(networks[i]);
+            (forkId);
+            console2.log("Checking registered addresses on network:", networks[i]);
+            checkRegisteredAddresses(networks[i], names, expectedAddresses);
+        }
     }
 
     /// Deploys the given creation code to each network via the Zoltu factory.
