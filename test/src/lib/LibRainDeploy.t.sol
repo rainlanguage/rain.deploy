@@ -308,9 +308,13 @@ contract LibRainDeployTest is Test {
         // Pinned literal, deliberately not `mockDeployableAddress()`. The live
         // factory on the fork is the oracle here, so an expected value taken
         // from the derivation would only check `zoltuAddress` against itself.
-        // It is the address the factory returns for the creation code solc
-        // 0.8.25 emits for `MockDeployable`, which itself pins `=0.8.25`.
-        assertEq(deployed, 0x1fa1bBf9Cf73B1aCCc1a3D9de5896E81Cd567854);
+        // It is the address the factory returns for the creation code this
+        // repo's compiler settings emit for `MockDeployable` — solc 0.8.25,
+        // optimizer on at 100,000 runs, targeting cancun. Those settings are
+        // now pinned exactly in `foundry.toml`, because this repo's deploy pins
+        // depend on them; that is what makes a literal here stable at all, and
+        // moving any of them moves this address.
+        assertEq(deployed, 0x0c04367b381F8Ca252aD2516F1Eac2b9B2ca928F);
     }
 
     /// `deployZoltu` MUST revert with `DeployFailed` when the Zoltu factory
