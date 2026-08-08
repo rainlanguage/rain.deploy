@@ -796,26 +796,33 @@ contract LibRainDeployTest is Test {
         this.externalCheckRegisteredAddressesOnNetworks(networks, names, expectedAddresses);
     }
 
-    /// `checkRegisteredAddressesOnNetworks` MUST pass over every supported
-    /// network when the name resolves to the expected address on each. The
+    /// `checkRegisteredAddressesOnNetworks` MUST fork each network in turn and
+    /// pass when the name resolves to the expected address on all of them. The
     /// registry is made persistent so the same binding is present on every
     /// fork, which is the state the check exists to confirm. Fixed inputs
     /// rather than fuzzed: what varies here is the network, and every run forks
-    /// all five.
-    function testCheckRegisteredAddressesOnNetworksAllNetworks() external {
-        bytes32 name = keccak256("testCheckRegisteredAddressesOnNetworksAllNetworks");
+    /// each one.
+    ///
+    /// Two networks rather than `supportedNetworks()`. What is under test is
+    /// that the loop visits every network it is given, which two prove as well
+    /// as five; the roster itself is `testSupportedNetworks`'s job. These are
+    /// the two networks the rest of this suite forks, so the test does not
+    /// depend on the reliability of RPC endpoints nothing else here touches.
+    function testCheckRegisteredAddressesOnNetworksEachNetwork() external {
+        bytes32 name = keccak256("testCheckRegisteredAddressesOnNetworksEachNetwork");
         address account = address(0xf00);
         deployRegistryWithBinding(name, account);
         vm.makePersistent(LibAddressRegistry.ADDRESS_REGISTRY);
 
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
         bytes32[] memory names = new bytes32[](1);
         names[0] = name;
         address[] memory expectedAddresses = new address[](1);
         expectedAddresses[0] = account;
 
-        LibRainDeploy.checkRegisteredAddressesOnNetworks(
-            vm, LibRainDeploy.supportedNetworks(), names, expectedAddresses
-        );
+        LibRainDeploy.checkRegisteredAddressesOnNetworks(vm, networks, names, expectedAddresses);
     }
 
     /// `checkRegisteredAddressesOnNetworks` MUST fail on the network that
