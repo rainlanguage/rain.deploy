@@ -10,9 +10,10 @@ code in this repository.
 
 rain.deploy is a Solidity library for deploying Rain Protocol contracts via the
 Zoltu deterministic deployment proxy to multiple EVM networks. It ensures
-identical contract addresses across all supported chains (Arbitrum, Base, Flare,
-Polygon) because the Zoltu proxy is deployed at the same address on every chain
-and uses CREATE with a predictable nonce.
+identical contract addresses across all supported chains (Arbitrum, Base, Base
+Sepolia, Flare, Polygon) because the Zoltu proxy is deployed at the same address
+on every chain and deploys with `CREATE2` over its calldata under a zero salt,
+so a contract's address is a pure function of its creation code.
 
 ## Build & Development
 
