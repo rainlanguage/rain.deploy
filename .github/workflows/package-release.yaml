@@ -1,11 +1,27 @@
 name: Package Release
+# Deploy repo: a manual `sol-v*` tag is the sole release trigger. This repo now
+# carries a deployed concrete (`AddressRegistry`) whose address + codehash
+# consumers pin, which is exactly the shape rainix-tag-release exists for and
+# exactly the shape rainix-autopublish's merge-driven, next-version lifecycle is
+# wrong for: autopublish bumps [package].version on every merge while the frozen
+# deploy tag only advances at deploy time.
+#
+# The tag names the version; rainix-tag-release regenerates the snapshot for it,
+# verifies the live chains match the fresh pins, publishes rain-deploy to
+# Soldeer, and commits the frozen snapshot back to main. The on-chain deploy is
+# separate and manual, run before tagging; this never broadcasts.
+#
+# Switching lifecycles retracts nothing: every version already published stays
+# published, and consumers pin exact versions, so this changes who cuts a
+# release and nothing about how anyone consumes one.
 on:
   push:
-    branches:
-      - main
+    tags:
+      - sol-v*
 jobs:
   release:
-    uses: rainlanguage/rainix/.github/workflows/rainix-autopublish.yaml@main
+    uses: rainlanguage/rainix/.github/workflows/rainix-tag-release.yaml@main
     with:
       soldeer-package: rain-deploy
+      snapshot-generate-cmd: forge script ./script/BuildPointers.sol && forge fmt
     secrets: inherit

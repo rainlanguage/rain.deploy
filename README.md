@@ -28,31 +28,55 @@ Approach:
   and against the chain after: silent failures fail loudly.
 - Bytecode integrity checks (e.g. via the Rain Extrospection lib) supported
   post-deploy.
-- A write-once address registry, read at run time rather than compiled in, and
-  gated across every target network before a deploy.
+- An address registry, read at run time rather than compiled into creation code,
+  and a post-deploy check that every target network's deployment took the
+  address it was supposed to.
 
 ## Address registry
 
-`IAddressRegistryV1` binds an opaque `bytes32` name to an address. An immutable
-root authority binds a name that is unbound; nothing, root included, can change
-one after; and reading an unbound name reverts rather than answering with the
-zero address. There is no rotation, no removal and no admin surface, because a
-binding that can move is not worth checking before a deploy.
+`AddressRegistry` binds an opaque `bytes32` name to an address. An immutable
+root authority binds a name, anyone reads a bound name, and reading an unbound
+name reverts rather than answering with the zero address. There is no removal,
+no upgrade and no authority besides root.
 
-`LibAddressRegistry.resolve` reads it, verifying the registry's code hash first,
-the same way `LibRainDeploy` verifies the Zoltu factory's. It resolves a name to
-an address and stops there — what a consumer does with the address, and when, is
-the consumer's business.
+Bindings are **mutable**, because the addresses they name are. Rotating an
+owning multisig is ordinary business and has to be expressible without moving
+anybody's deterministic address — which a binding welded to one address forever
+would make impossible, because the name is in the consumer's creation code, so a
+new name means new creation code and a new address. That is the problem the
+registry exists to remove, not a property worth keeping.
 
-`LibRainDeploy.checkRegisteredAddressesOnNetworks` is the deploy-time gate:
-every name must resolve to the address the deployment expects, on every target
-network, before anything is broadcast. Because bindings are write-once, that
-pre-flight is exactly as strong as checking inline — an answer that exists
-cannot change, and one that does not exist reverts.
+Mutability costs nothing already deployed. A consumer resolves a name **once**,
+in its constructor, and stores the answer; it never reads the registry again. So
+re-binding a name changes what the _next_ deployment resolves and nothing else,
+which makes a rotation a deliberate migration rather than a silent change to
+live contracts.
 
-The implementation, `AddressRegistry`, lives in
-[rain.factory.deploy](https://github.com/rainlanguage/rain.factory.deploy);
-`LibAddressRegistry` pins its deterministic address and code hash.
+`LibAddressRegistry.resolve` is the read, verifying the registry's code hash
+first, the same way `LibRainDeploy` verifies the Zoltu factory's. It resolves a
+name to an address and stops there — what a consumer does with the address, and
+when, is the consumer's business.
+
+`LibRainDeploy.checkResolvedAddressesOnNetworks` is the **post-deploy**
+verification: on every target network, the deployed contract must hold the
+address the deployment expected. It runs after the deploy and before anything
+depends on it, against state the deployment has already settled, so nothing it
+reads can move underneath it. The same check run beforehand would be worth
+nothing against a mutable source. A network where the deployment took something
+else is a burned deterministic address, found while nothing points at it yet.
+
+Only the consumer knows where it stored what it resolved, so the consumer
+supplies the reads (`abi.encodeCall(IOwnable.owner, ())` and the like) and this
+library supplies the fork loop and the comparison.
+
+## Releases
+
+This is a deploy repo: it carries a deployed concrete whose address and codehash
+consumers pin, so releases are **manual `sol-v*` tags**, not merges.
+`[package].version` is the LAST released version, naming the current
+`src/generated/<tag>/` snapshot, and only a release moves it. Every version
+published under the previous merge-driven lifecycle stays published; consumers
+pin exact versions and are unaffected.
 
 ## Install
 

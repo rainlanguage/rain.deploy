@@ -4,12 +4,12 @@ pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {LibAddressRegistry} from "../../../src/lib/LibAddressRegistry.sol";
 import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
+import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
+import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
-import {ADDRESS_REGISTRY_CREATION_CODE, ADDRESS_REGISTRY_ROOT} from "../../lib/AddressRegistryPins.sol";
 
 /// @title LibRainDeployTest
 /// Tests for `LibRainDeploy`. External wrappers are used for library functions
@@ -631,221 +631,287 @@ contract LibRainDeployTest is Test {
         );
     }
 
-    /// Deploys the real `AddressRegistry` creation code through the Zoltu
-    /// factory, which lands it at `LibAddressRegistry.ADDRESS_REGISTRY`, and
-    /// binds `name` to `account` as root.
-    /// @param name The name to bind.
+    /// Deploys `AddressRegistry` through the Zoltu factory (which lands it at
+    /// its pinned address), binds `name` to `account` as root, then deploys a
+    /// consumer that resolves `name` once in its constructor.
+    /// @param name The name to bind and resolve.
     /// @param account The address to bind it to.
-    function deployRegistryWithBinding(bytes32 name, address account) internal {
+    /// @return registry The deployed registry.
+    /// @return consumer The deployed consumer holding the resolved address.
+    function deployRegistryAndConsumer(bytes32 name, address account)
+        internal
+        returns (IAddressRegistryV1 registry, MockResolvedOwner consumer)
+    {
         LibRainDeploy.etchZoltuFactory(vm);
-        IAddressRegistryV1 registry = IAddressRegistryV1(LibRainDeploy.deployZoltu(ADDRESS_REGISTRY_CREATION_CODE));
+        registry = IAddressRegistryV1(LibRainDeploy.deployZoltu(type(AddressRegistry).creationCode));
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, account);
+        consumer = new MockResolvedOwner(name);
     }
 
-    /// External wrapper for `checkRegisteredAddresses` so that
-    /// `vm.expectRevert` works at the correct call depth.
+    /// The calldata for reading `MockResolvedOwner`'s stored address.
+    /// @return The single-element read call list.
+    function ownerReadCalls() internal pure returns (bytes[] memory) {
+        bytes[] memory readCalls = new bytes[](1);
+        readCalls[0] = abi.encodeWithSignature("iOwner()");
+        return readCalls;
+    }
+
+    /// A single-element expected address list.
+    /// @param account The expected address.
+    /// @return The list.
+    function expected(address account) internal pure returns (address[] memory) {
+        address[] memory expectedAddresses = new address[](1);
+        expectedAddresses[0] = account;
+        return expectedAddresses;
+    }
+
+    /// External wrapper for `checkResolvedAddresses` so that `vm.expectRevert`
+    /// works at the correct call depth.
     /// @param network The network name, for the error only.
-    /// @param names The names to resolve.
-    /// @param expectedAddresses The address each name MUST resolve to.
-    function externalCheckRegisteredAddresses(
+    /// @param target The deployed contract to read.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedAddresses The address each read MUST answer with.
+    function externalCheckResolvedAddresses(
         string memory network,
-        bytes32[] memory names,
+        address target,
+        bytes[] memory readCalls,
         address[] memory expectedAddresses
     ) external view {
-        LibRainDeploy.checkRegisteredAddresses(network, names, expectedAddresses);
+        LibRainDeploy.checkResolvedAddresses(network, target, readCalls, expectedAddresses);
     }
 
-    /// External wrapper for `checkRegisteredAddressesOnNetworks` so that
+    /// External wrapper for `checkResolvedAddressesOnNetworks` so that
     /// `vm.expectRevert` works at the correct call depth.
     /// @param networks The list of network names to check.
-    /// @param names The names to resolve on each network.
-    /// @param expectedAddresses The address each name MUST resolve to.
-    function externalCheckRegisteredAddressesOnNetworks(
+    /// @param target The deployed contract to read on each network.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedAddresses The address each read MUST answer with.
+    function externalCheckResolvedAddressesOnNetworks(
         string[] memory networks,
-        bytes32[] memory names,
+        address target,
+        bytes[] memory readCalls,
         address[] memory expectedAddresses
     ) external {
-        LibRainDeploy.checkRegisteredAddressesOnNetworks(vm, networks, names, expectedAddresses);
+        LibRainDeploy.checkResolvedAddressesOnNetworks(vm, networks, target, readCalls, expectedAddresses);
     }
 
-    /// `checkRegisteredAddresses` MUST pass when every name resolves to the
-    /// address paired with it.
-    function testCheckRegisteredAddressesMatch(bytes32 name, address account) external {
+    /// `checkResolvedAddresses` MUST pass when the deployed contract holds the
+    /// address the deployment expects.
+    function testCheckResolvedAddressesMatch(bytes32 name, address account) external {
         vm.assume(account != address(0));
-        deployRegistryWithBinding(name, account);
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
-        bytes32[] memory names = new bytes32[](1);
-        names[0] = name;
-        address[] memory expectedAddresses = new address[](1);
-        expectedAddresses[0] = account;
-
-        LibRainDeploy.checkRegisteredAddresses(LibRainDeploy.BASE, names, expectedAddresses);
+        LibRainDeploy.checkResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(account));
     }
 
-    /// `checkRegisteredAddresses` MUST revert with `UnexpectedRegisteredAddress`
-    /// when a name resolves to an address other than the expected one, naming
-    /// the network so the failure identifies where it disagrees.
-    function testCheckRegisteredAddressesMismatchReverts(bytes32 name, address account, address expected) external {
+    /// The check is against settled state, which is the entire point of running
+    /// it after the deploy rather than before. Re-binding the name afterwards
+    /// changes what the registry answers but cannot change what the deployed
+    /// contract holds, so the check still passes against the address the
+    /// deployment actually took.
+    function testCheckResolvedAddressesUnaffectedByRebinding(bytes32 name, address account, address rebound) external {
         vm.assume(account != address(0));
-        vm.assume(expected != account);
-        deployRegistryWithBinding(name, account);
+        vm.assume(rebound != address(0));
+        vm.assume(rebound != account);
+        (IAddressRegistryV1 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
-        bytes32[] memory names = new bytes32[](1);
-        names[0] = name;
-        address[] memory expectedAddresses = new address[](1);
-        expectedAddresses[0] = expected;
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, rebound);
+        assertEq(registry.get(name), rebound);
+
+        assertEq(consumer.iOwner(), account);
+        LibRainDeploy.checkResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(account));
+
+        // And the value the registry now answers with is NOT what this
+        // deployment holds, so a check against it fails.
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                "test_network",
+                address(consumer),
+                uint256(0),
+                rebound,
+                account
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(rebound));
+    }
+
+    /// `checkResolvedAddresses` MUST revert with `UnexpectedResolvedAddress`
+    /// when the deployed contract holds something else, naming the network and
+    /// which read disagreed.
+    function testCheckResolvedAddressesMismatchReverts(bytes32 name, address account, address wrong) external {
+        vm.assume(account != address(0));
+        vm.assume(wrong != account);
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.UnexpectedRegisteredAddress.selector, LibRainDeploy.BASE, name, expected, account
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                "test_network",
+                address(consumer),
+                uint256(0),
+                wrong,
+                account
             )
         );
-        this.externalCheckRegisteredAddresses(LibRainDeploy.BASE, names, expectedAddresses);
+        this.externalCheckResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(wrong));
     }
 
-    /// `checkRegisteredAddresses` MUST check every name, not only the first, so
-    /// a later name that disagrees still stops the deployment.
-    function testCheckRegisteredAddressesChecksEveryName(
-        bytes32 nameA,
-        bytes32 nameB,
-        address account,
-        address expected
-    ) external {
-        vm.assume(nameA != nameB);
+    /// `checkResolvedAddresses` MUST check every read, not only the first, so a
+    /// later value that disagrees is still caught.
+    function testCheckResolvedAddressesChecksEveryRead(bytes32 name, address account, address wrong) external {
         vm.assume(account != address(0));
-        vm.assume(expected != account);
-        deployRegistryWithBinding(nameA, account);
-        vm.prank(ADDRESS_REGISTRY_ROOT);
-        IAddressRegistryV1(LibAddressRegistry.ADDRESS_REGISTRY).register(nameB, account);
+        vm.assume(wrong != account);
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
-        bytes32[] memory names = new bytes32[](2);
-        names[0] = nameA;
-        names[1] = nameB;
+        bytes[] memory readCalls = new bytes[](2);
+        readCalls[0] = abi.encodeWithSignature("iOwner()");
+        readCalls[1] = abi.encodeWithSignature("iOwner()");
         address[] memory expectedAddresses = new address[](2);
         expectedAddresses[0] = account;
-        expectedAddresses[1] = expected;
+        expectedAddresses[1] = wrong;
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.UnexpectedRegisteredAddress.selector, LibRainDeploy.BASE, nameB, expected, account
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                "test_network",
+                address(consumer),
+                uint256(1),
+                wrong,
+                account
             )
         );
-        this.externalCheckRegisteredAddresses(LibRainDeploy.BASE, names, expectedAddresses);
+        this.externalCheckResolvedAddresses("test_network", address(consumer), readCalls, expectedAddresses);
     }
 
-    /// `checkRegisteredAddresses` MUST propagate the registry's own revert for
-    /// an unbound name, so a network where a name was never bound fails as
-    /// loudly as one where it disagrees.
-    function testCheckRegisteredAddressesUnregisteredReverts(bytes32 name, address expected) external {
-        LibRainDeploy.etchZoltuFactory(vm);
-        LibRainDeploy.deployZoltu(ADDRESS_REGISTRY_CREATION_CODE);
+    /// A read that cannot be answered is never a pass. An address with no code
+    /// static-calls successfully and returns nothing, which would compare equal
+    /// to nothing at all if the length were not checked.
+    function testCheckResolvedAddressesUnreadableTargetReverts(address target, address account) external {
+        vm.assume(target.code.length == 0);
 
-        bytes32[] memory names = new bytes32[](1);
-        names[0] = name;
-        address[] memory expectedAddresses = new address[](1);
-        expectedAddresses[0] = expected;
-
-        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name));
-        this.externalCheckRegisteredAddresses(LibRainDeploy.BASE, names, expectedAddresses);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector, "test_network", target, uint256(0), bytes("")
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", target, ownerReadCalls(), expected(account));
     }
 
-    /// `checkRegisteredAddresses` MUST revert when the names and expected
+    /// A read that reverts is never a pass either.
+    function testCheckResolvedAddressesRevertingReadReverts(bytes32 name, address account) external {
+        vm.assume(account != address(0));
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+
+        bytes[] memory readCalls = new bytes[](1);
+        readCalls[0] = abi.encodeWithSignature("thisFunctionDoesNotExist()");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector,
+                "test_network",
+                address(consumer),
+                uint256(0),
+                bytes("")
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(consumer), readCalls, expected(account));
+    }
+
+    /// `checkResolvedAddresses` MUST revert when the reads and expected
     /// addresses do not pair up, rather than checking the shorter of the two.
-    function testCheckRegisteredAddressesLengthMismatchReverts(uint8 namesLength, uint8 expectedLength) external {
-        vm.assume(namesLength != expectedLength);
+    function testCheckResolvedAddressesLengthMismatchReverts(uint8 readCallsLength, uint8 expectedLength) external {
+        vm.assume(readCallsLength != expectedLength);
 
-        bytes32[] memory names = new bytes32[](namesLength);
+        bytes[] memory readCalls = new bytes[](readCallsLength);
         address[] memory expectedAddresses = new address[](expectedLength);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.RegisteredAddressesLengthMismatch.selector, uint256(namesLength), uint256(expectedLength)
+                LibRainDeploy.ResolvedAddressesLengthMismatch.selector,
+                uint256(readCallsLength),
+                uint256(expectedLength)
             )
         );
-        this.externalCheckRegisteredAddresses(LibRainDeploy.BASE, names, expectedAddresses);
+        this.externalCheckResolvedAddresses("test_network", address(this), readCalls, expectedAddresses);
     }
 
-    /// `checkRegisteredAddressesOnNetworks` MUST revert with `NoNetworks` when
-    /// given none, so an empty target set can never be mistaken for every name
+    /// `checkResolvedAddressesOnNetworks` MUST revert with `NoNetworks` when
+    /// given none, so an empty target set can never be mistaken for every read
     /// checking out.
-    function testCheckRegisteredAddressesOnNetworksNoNetworksReverts(bytes32 name, address expected) external {
+    function testCheckResolvedAddressesOnNetworksNoNetworksReverts(address account) external {
         string[] memory networks = new string[](0);
-        bytes32[] memory names = new bytes32[](1);
-        names[0] = name;
-        address[] memory expectedAddresses = new address[](1);
-        expectedAddresses[0] = expected;
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalCheckRegisteredAddressesOnNetworks(networks, names, expectedAddresses);
+        this.externalCheckResolvedAddressesOnNetworks(networks, address(this), ownerReadCalls(), expected(account));
     }
 
-    /// `checkRegisteredAddressesOnNetworks` MUST check the names and expected
+    /// `checkResolvedAddressesOnNetworks` MUST check the reads and expected
     /// addresses pair up before it forks anything, so a mispaired call is
     /// reported without any network being reachable at all.
-    function testCheckRegisteredAddressesOnNetworksLengthMismatchRevertsBeforeForking() external {
+    function testCheckResolvedAddressesOnNetworksLengthMismatchRevertsBeforeForking() external {
         string[] memory networks = new string[](1);
         // Not a configured RPC alias, so forking it is itself an error.
         networks[0] = "unconfigured_network";
-        bytes32[] memory names = new bytes32[](2);
+        bytes[] memory readCalls = new bytes[](2);
         address[] memory expectedAddresses = new address[](1);
 
         vm.expectRevert(
-            abi.encodeWithSelector(LibRainDeploy.RegisteredAddressesLengthMismatch.selector, uint256(2), uint256(1))
+            abi.encodeWithSelector(LibRainDeploy.ResolvedAddressesLengthMismatch.selector, uint256(2), uint256(1))
         );
-        this.externalCheckRegisteredAddressesOnNetworks(networks, names, expectedAddresses);
+        this.externalCheckResolvedAddressesOnNetworks(networks, address(this), readCalls, expectedAddresses);
     }
 
-    /// `checkRegisteredAddressesOnNetworks` MUST fork each network in turn and
-    /// pass when the name resolves to the expected address on all of them. The
-    /// registry is made persistent so the same binding is present on every
-    /// fork, which is the state the check exists to confirm. Fixed inputs
-    /// rather than fuzzed: what varies here is the network, and every run forks
-    /// each one.
+    /// `checkResolvedAddressesOnNetworks` MUST fork each network in turn and
+    /// pass when the deployed contract holds the expected address on all of
+    /// them. The deployment is made persistent so the same contract is present
+    /// on every fork, which is the state a real multi-network deploy leaves
+    /// behind.
     ///
     /// Two networks rather than `supportedNetworks()`. What is under test is
     /// that the loop visits every network it is given, which two prove as well
     /// as five; the roster itself is `testSupportedNetworks`'s job. These are
     /// the two networks the rest of this suite forks, so the test does not
     /// depend on the reliability of RPC endpoints nothing else here touches.
-    function testCheckRegisteredAddressesOnNetworksEachNetwork() external {
-        bytes32 name = keccak256("testCheckRegisteredAddressesOnNetworksEachNetwork");
+    function testCheckResolvedAddressesOnNetworksEachNetwork() external {
+        bytes32 name = keccak256("testCheckResolvedAddressesOnNetworksEachNetwork");
         address account = address(0xf00);
-        deployRegistryWithBinding(name, account);
-        vm.makePersistent(LibAddressRegistry.ADDRESS_REGISTRY);
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+        vm.makePersistent(address(consumer));
 
         string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.BASE;
-        bytes32[] memory names = new bytes32[](1);
-        names[0] = name;
-        address[] memory expectedAddresses = new address[](1);
-        expectedAddresses[0] = account;
 
-        LibRainDeploy.checkRegisteredAddressesOnNetworks(vm, networks, names, expectedAddresses);
+        LibRainDeploy.checkResolvedAddressesOnNetworks(
+            vm, networks, address(consumer), ownerReadCalls(), expected(account)
+        );
     }
 
-    /// `checkRegisteredAddressesOnNetworks` MUST fail on the network that
+    /// `checkResolvedAddressesOnNetworks` MUST fail on the network that
     /// disagrees, and MUST name it.
-    function testCheckRegisteredAddressesOnNetworksMismatchReverts() external {
-        bytes32 name = keccak256("testCheckRegisteredAddressesOnNetworksMismatchReverts");
+    function testCheckResolvedAddressesOnNetworksMismatchReverts() external {
+        bytes32 name = keccak256("testCheckResolvedAddressesOnNetworksMismatchReverts");
         address account = address(0xf00);
-        address expected = address(0xba4);
-        deployRegistryWithBinding(name, account);
-        vm.makePersistent(LibAddressRegistry.ADDRESS_REGISTRY);
+        address wrong = address(0xba4);
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+        vm.makePersistent(address(consumer));
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.BASE;
-        bytes32[] memory names = new bytes32[](1);
-        names[0] = name;
-        address[] memory expectedAddresses = new address[](1);
-        expectedAddresses[0] = expected;
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.UnexpectedRegisteredAddress.selector, LibRainDeploy.BASE, name, expected, account
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                LibRainDeploy.BASE,
+                address(consumer),
+                uint256(0),
+                wrong,
+                account
             )
         );
-        this.externalCheckRegisteredAddressesOnNetworks(networks, names, expectedAddresses);
+        this.externalCheckResolvedAddressesOnNetworks(networks, address(consumer), ownerReadCalls(), expected(wrong));
     }
 }

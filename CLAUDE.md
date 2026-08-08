@@ -71,21 +71,36 @@ These are referenced in `foundry.toml` under `[rpc_endpoints]`.
   as foundry RPC config aliases)
 - `isStartBlock(...)` / `findDeployBlock(...)` — binary search a fork's history
   for the block a contract first appears at
-- `checkRegisteredAddresses(...)` — asserts names resolve to their expected
-  addresses in the address registry, on the currently selected fork
-- `checkRegisteredAddressesOnNetworks(...)` — runs that check on every network,
-  so a deployment's resolved addresses are gated across the whole target set
-  here rather than in each consumer's deploy script
+- `checkResolvedAddresses(...)` — asserts an already-deployed contract holds the
+  addresses the deployment expected, on the currently selected fork, via
+  consumer-supplied static reads
+- `checkResolvedAddressesOnNetworks(...)` — runs that check on every network. It
+  runs AFTER the deploy, against state the deployment has already settled, which
+  is the only point at which such a check means anything: registry bindings are
+  mutable, so a pre-deploy check would read a source that can change before the
+  constructor that consumes it
 - `deployToNetworks(...)` — forks each network, verifies the factory and
   dependencies, deploys via Zoltu, verifies address and code hash
 - `deployAndBroadcast(...)` — the main entry point: derives the deployer from a
   private key, then `deployToNetworks`
 
 **`src/interface/IAddressRegistryV1.sol`** — the address registry interface: an
-immutable root binds a `bytes32` name to an address once and forever
-(`register`), anyone reads a bound name (`get`), and reading an unbound name
-reverts. The implementation is `AddressRegistry` in
-[rain.factory.deploy](https://github.com/rainlanguage/rain.factory.deploy).
+immutable root binds a `bytes32` name to an address (`register`), anyone reads a
+bound name (`get`), and reading an unbound name reverts. Bindings are mutable so
+an owning multisig can rotate without moving any consumer's deterministic
+address; a consumer resolves once in its constructor and stores the answer, so a
+re-binding never moves anything already deployed.
+
+**`src/concrete/AddressRegistry.sol`** — the implementation. Two functions and
+nothing else. `ADDRESS_REGISTRY_ROOT` is a compile-time constant and therefore
+part of the creation code, so changing it moves the deterministic address and
+code hash.
+
+**`src/lib/LibAddressRegistryDeploy.sol`** — those pins, derived from the
+creation code this repo compiles under this repo's own settings and checked
+against it by `AddressRegistryDeployPinsTest`. Hand-written until the first
+`sol-v*` release generates it from `src/generated/<tag>/`; no snapshot is frozen
+while the root is a placeholder, because that directory is append-only.
 
 **`src/lib/LibAddressRegistry.sol`** — reads that registry at its deterministic
 address, verifying its code hash first, exactly as `LibRainDeploy` verifies
@@ -107,9 +122,15 @@ expected addresses, expected code hashes, and dependency lists.
   (contract addresses) are verified to have code on-chain.
 - **Idempotent deploys**: If code already exists at the expected address,
   deployment is skipped for that network.
-- **Write-once bindings**: registry bindings can never move, which is what makes
-  checking them before a deploy meaningful rather than a race, and what lets the
-  cross-network check be a pre-flight over every network.
+- **Resolve once, verify after**: registry bindings are mutable, so the
+  meaningful check is not "does the registry say what I expect" before a deploy
+  but "does the deployed contract hold what I expect" after one. A consumer
+  resolves in its constructor; the deployment is then verified across every
+  network before anything migrates onto it.
+- **Deploy-repo lifecycle**: a manual `sol-v*` tag is the sole release trigger
+  (`rainix-tag-release`), because this repo carries a deployed concrete whose
+  pins consumers rely on. `[package].version` is the LAST released version and
+  moves only in lockstep with its snapshot.
 
 ## License
 

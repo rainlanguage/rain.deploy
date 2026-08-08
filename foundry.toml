@@ -1,6 +1,9 @@
 [package]
 name = "rain-deploy"
-version = "0.1.6"
+# Deploy repo: this is the LAST released version, naming the current
+# src/generated/<tag>/ snapshot, not a next-version slot. A normal PR does not
+# bump it; only a `sol-v*` tag release moves it, in lockstep with the snapshot.
+version = "0.1.5"
 
 # SPDX-License-Identifier: LicenseRef-DCL-1.0
 # SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
@@ -9,11 +12,30 @@ version = "0.1.6"
 src = "src"
 out = "out"
 libs = ["dependencies"]
+
+# This repo compiles a contract whose deterministic deploy address and code hash
+# are pinned in LibAddressRegistryDeploy, and both are a pure function of the
+# creation code, which is a function of these settings. They are pinned exactly
+# rather than floated so the pins cannot move under a compiler or default-target
+# change, and they match the settings the org's other deploy repos use.
+solc = "0.8.25"
+optimizer = true
+optimizer_runs = 100000
+evm_version = "cancun"
 cbor_metadata = false
 bytecode_hash = "none"
 
+# BuildPointers reads the version from foundry.toml and writes the generated
+# per-tag snapshots + the current-pin lib under src/. Nothing else in this repo
+# touches the filesystem.
+fs_permissions = [
+  { access = "read", path = "./foundry.toml" },
+  { access = "read-write", path = "./src" },
+]
+
 [dependencies]
 forge-std = "1.16.1"
+rain-sol-codegen = "0.1.0"
 
 [soldeer]
 recursive_deps = false

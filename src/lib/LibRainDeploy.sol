@@ -4,7 +4,6 @@ pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.16.1/src/Vm.sol";
 import {console2} from "forge-std-1.16.1/src/console2.sol";
-import {LibAddressRegistry} from "./LibAddressRegistry.sol";
 
 /// @title LibRainDeploy
 /// Library for deploying contracts via the Zoltu factory across all the networks
@@ -41,13 +40,17 @@ library LibRainDeploy {
     /// the deploy may have happened before the search range.
     error DeployedBeforeStartBlock(address target, uint256 startBlock);
 
-    /// Thrown when a registry name resolves to something other than the address
-    /// the deployment expects on a network.
-    error UnexpectedRegisteredAddress(string network, bytes32 name, address expected, address actual);
+    /// Thrown when a deployed contract holds an address other than the one the
+    /// deployment expects, on a network.
+    error UnexpectedResolvedAddress(string network, address target, uint256 index, address expected, address actual);
 
-    /// Thrown when the names and expected addresses of a registry check do not
-    /// pair up.
-    error RegisteredAddressesLengthMismatch(uint256 namesLength, uint256 expectedAddressesLength);
+    /// Thrown when the read calls and expected addresses of a post-deploy check
+    /// do not pair up.
+    error ResolvedAddressesLengthMismatch(uint256 readCallsLength, uint256 expectedAddressesLength);
+
+    /// Thrown when a post-deploy read reverts, or answers with something that is
+    /// not a single address-sized word.
+    error ResolvedAddressReadFailed(string network, address target, uint256 index, bytes returnData);
 
     /// Zoltu factory is the same on every network.
     address constant ZOLTU_FACTORY = 0x7A0D94F55792C434d74a40883C6ed8545E406D12;
@@ -207,48 +210,75 @@ library LibRainDeploy {
         return networks;
     }
 
-    /// Asserts that each name resolves, in the address registry, to the address
-    /// the deployment expects, on whichever network is currently selected.
-    /// Verifying the registry's code hash is `LibAddressRegistry.resolve`'s job,
-    /// and an unbound name reverts there rather than resolving to nothing, so
-    /// every way this can be wrong is a revert.
+    /// Asserts that an already-deployed contract holds the addresses the
+    /// deployment expects, on whichever network is currently selected.
+    ///
+    /// This runs AFTER the deploy, deliberately. What it checks is state the
+    /// deployed contract has already settled — a value it resolved once, in its
+    /// constructor, and stored — so nothing it reads can move underneath it. The
+    /// same check run BEFORE a deploy would be worth nothing: it would read a
+    /// source that can change between the check and the constructor that
+    /// consumes it.
+    ///
+    /// It is deliberately source-agnostic. It says the deployed contract holds
+    /// the expected address, not where that address came from, because the
+    /// address registry is only one way a deployment acquires one, and because
+    /// re-reading the registry here would assert a value that can move rather
+    /// than the value this deployment actually took.
+    ///
+    /// Only the consumer knows where it stored what it resolved, so the consumer
+    /// supplies the reads. Each entry in `readCalls` is static-called against
+    /// `target` and MUST answer with exactly one address.
     /// @param network The network name, for the error only.
-    /// @param names The names to resolve.
-    /// @param expectedAddresses The address each name MUST resolve to,
-    /// positionally paired with `names`.
-    function checkRegisteredAddresses(string memory network, bytes32[] memory names, address[] memory expectedAddresses)
-        internal
-        view
-    {
-        if (names.length != expectedAddresses.length) {
-            revert RegisteredAddressesLengthMismatch(names.length, expectedAddresses.length);
+    /// @param target The deployed contract to read.
+    /// @param readCalls The calldata for each read, e.g.
+    /// `abi.encodeCall(IOwnable.owner, ())`.
+    /// @param expectedAddresses The address each read MUST answer with,
+    /// positionally paired with `readCalls`.
+    function checkResolvedAddresses(
+        string memory network,
+        address target,
+        bytes[] memory readCalls,
+        address[] memory expectedAddresses
+    ) internal view {
+        if (readCalls.length != expectedAddresses.length) {
+            revert ResolvedAddressesLengthMismatch(readCalls.length, expectedAddresses.length);
         }
-        for (uint256 i = 0; i < names.length; i++) {
-            address actual = LibAddressRegistry.resolve(names[i]);
+        for (uint256 i = 0; i < readCalls.length; i++) {
+            (bool success, bytes memory returnData) = target.staticcall(readCalls[i]);
+            // A read that reverts, answers nothing (no code at `target`), or
+            // answers something that is not one word cannot be compared, and is
+            // never a pass.
+            if (!success || returnData.length != 0x20) {
+                revert ResolvedAddressReadFailed(network, target, i, returnData);
+            }
+            address actual = abi.decode(returnData, (address));
             if (actual != expectedAddresses[i]) {
-                revert UnexpectedRegisteredAddress(network, names[i], expectedAddresses[i], actual);
+                revert UnexpectedResolvedAddress(network, target, i, expectedAddresses[i], actual);
             }
         }
     }
 
-    /// Runs `checkRegisteredAddresses` over every network, so a deployment
-    /// asserts its resolved addresses agree across the whole target set here,
-    /// rather than every consumer's deploy script forking the networks itself.
+    /// Runs `checkResolvedAddresses` on every network, so a deployment verifies
+    /// itself across the whole target set here rather than in every consumer's
+    /// deploy script.
     ///
-    /// Registry bindings are write-once, so this is a pre-flight rather than a
-    /// race: a name that resolves here cannot resolve differently later, and a
-    /// name that is unbound here reverts here. Checking every network before
-    /// deploying to any of them means a network that disagrees stops the
-    /// deployment instead of leaving it half-applied.
+    /// Run this after `deployAndBroadcast` and before anything depends on the
+    /// deployment. A network where the deployed contract holds something other
+    /// than expected is a burned deterministic address, found while nothing
+    /// points at it yet — which is the whole reason to verify before migrating
+    /// onto a deployment rather than trusting it.
     /// @param vm The Vm instance to use for forking.
     /// @param networks The list of network names to check.
-    /// @param names The names to resolve on each network.
-    /// @param expectedAddresses The address each name MUST resolve to,
-    /// positionally paired with `names`.
-    function checkRegisteredAddressesOnNetworks(
+    /// @param target The deployed contract to read on each network.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedAddresses The address each read MUST answer with,
+    /// positionally paired with `readCalls`.
+    function checkResolvedAddressesOnNetworks(
         Vm vm,
         string[] memory networks,
-        bytes32[] memory names,
+        address target,
+        bytes[] memory readCalls,
         address[] memory expectedAddresses
     ) internal {
         if (networks.length == 0) {
@@ -256,16 +286,16 @@ library LibRainDeploy {
         }
         // Checked before any fork so a mispaired call fails immediately rather
         // than after an RPC round trip.
-        if (names.length != expectedAddresses.length) {
-            revert RegisteredAddressesLengthMismatch(names.length, expectedAddresses.length);
+        if (readCalls.length != expectedAddresses.length) {
+            revert ResolvedAddressesLengthMismatch(readCalls.length, expectedAddresses.length);
         }
         for (uint256 i = 0; i < networks.length; i++) {
             // createSelectFork returns a fork id that is not needed here; bind
             // and reference it so the unused-return lint stays satisfied.
             uint256 forkId = vm.createSelectFork(networks[i]);
             (forkId);
-            console2.log("Checking registered addresses on network:", networks[i]);
-            checkRegisteredAddresses(networks[i], names, expectedAddresses);
+            console2.log("Checking resolved addresses on network:", networks[i]);
+            checkResolvedAddresses(networks[i], target, readCalls, expectedAddresses);
         }
     }
 
