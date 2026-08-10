@@ -21,7 +21,8 @@ Approach:
 - Zoltu deterministic deployment proxy: same address on every supported network.
 - Caller-provided supported-network and dependency lists.
 - Hard guards against deploying to networks where dependencies are missing.
-- Pre-calculated addresses asserted post-deploy: silent failures fail loudly.
+- Pre-calculated addresses asserted against the creation code before deploying,
+  and against the chain after: silent failures fail loudly.
 - Bytecode integrity checks (e.g. via the Rain Extrospection lib) supported
   post-deploy.
 
