@@ -23,8 +23,8 @@ import {
 /// @title RainDeployVerifyChainTest
 /// @notice `RainDeployVerifyChain` inherited by a fixture repo whose versions
 /// are made live on every network by `setUp`, so the inherited
-/// `testDeployPinsLiveOnEverySupportedNetwork` is the passing case: it forks all
-/// five supported networks and finds all three versions.
+/// `testDeployPinsLiveOnEverySupportedNetwork` is the passing case: it forks
+/// every network `supportedNetworks()` returns and finds all three versions.
 ///
 /// `setUp` places the code with a persistent `vm.etch` rather than pointing the
 /// fixture at some real deployment in another repo. A real one would make this

@@ -11,10 +11,8 @@ pragma solidity ^0.8.25;
 /// Both values are derived from the creation code this repo compiles, under
 /// this repo's own compiler settings, and are checked against it by
 /// `AddressRegistryDeployPinsOfflineTest` — the contract, the settings that
-/// compile it
-/// and the pins that describe it are all here, so there is no boundary across
-/// and the pins that describe it are all here, so there is no boundary across
-/// which they can silently diverge.
+/// compile it and the pins that describe it are all here, so there is no
+/// boundary across which they can silently diverge.
 ///
 /// The root authority is a constant in that creation code, so changing the root
 /// moves both values.

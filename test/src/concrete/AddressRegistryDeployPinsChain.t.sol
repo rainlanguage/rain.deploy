@@ -12,7 +12,7 @@ import {AddressRegistryDeployVersions} from "../../abstract/AddressRegistryDeplo
 /// It is not. `AddressRegistry` has never been deployed and
 /// `ADDRESS_REGISTRY_ROOT` is still a placeholder, so this fails on the first
 /// network with `NotDeployedOnNetwork` and keeps failing until the contract is
-/// deployed to all five.
+/// deployed to every supported network.
 ///
 /// That failure is the check working. "Nothing is deployed at the address
 /// `LibAddressRegistry` reads" is true, it is the single most important fact

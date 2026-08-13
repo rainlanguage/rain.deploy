@@ -172,6 +172,22 @@ Via [soldeer](https://soldeer.xyz):
 forge soldeer install rain-deploy~<version>
 ```
 
+**You also need `forge-std` 1.16.1**, remapped as `forge-std-1.16.1/`. The
+published package deliberately ships only `src/` and `script/` — no
+`remappings.txt`, no `soldeer.lock`, no `dependencies/` — and everything under
+`src/` here is Foundry test-and-script infrastructure that imports `Vm`,
+`console2` or `Test`. So a consumer resolves `forge-std` itself:
+
+```toml
+[dependencies]
+forge-std = "1.16.1"
+rain-deploy = "<version>"
+```
+
+The version has to match: the import paths are version-qualified, which is
+deliberate — it is what stops a consumer's incompatible `forge-std` from
+silently satisfying these imports.
+
 ## Develop
 
 This repo uses [nix](https://nixos.org/download.html). The default shell is the
