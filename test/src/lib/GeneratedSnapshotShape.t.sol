@@ -5,55 +5,68 @@ pragma solidity ^0.8.25;
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 
 /// @title GeneratedSnapshotShapeTest
-/// @notice THE EXEMPLAR OWNS THE SHAPE. THE COMPILER OWNS THE VALUES. This is
-/// what makes the first half true rather than aspirational.
+/// @notice What a generated deploy snapshot must look like, asserted against
+/// the real generator's committed output.
 ///
-/// It checks the REAL generator's committed output —
-/// `src/generated/candidate/AddressRegistry.sol`, written by
-/// `script/Build.sol` — against `test/exemplars/`, which is hand-written.
+/// THESE ASSERTIONS ARE THE SPECIFICATION. There is no second hand-written file
+/// to compare against and therefore no question about that file's provenance:
+/// "there is an `address` constant named `DEPLOYED_ADDRESS`" is stated here,
+/// once, in test code, and checked against what `script/Build.sol` actually
+/// emitted.
 ///
-/// The independence is the whole instrument. The exemplar is evidence about the
-/// generator precisely because the generator did not emit it: a helper that
-/// regenerated exemplars through `LibCodeGen` and `LibFs` — the emitters
-/// `Build.sol` itself uses — would reduce every assertion below to "the
-/// generator is deterministic", which nobody doubted. So the exemplars are
-/// maintained by hand and this reads both files as text.
+/// The check reads the compiler's AST rather than the source text, so it is
+/// about the file's STRUCTURE and not its formatting. `forge build --ast`
+/// writes the AST into the artifact JSON, and — usefully, since a snapshot
+/// declares only file-level constants and no contract at all — foundry still
+/// emits an artifact for such a file.
 ///
-/// It asserts NAMED STRUCTURAL PROPERTIES rather than diffing whole files. A
-/// diff fails for reasons nobody can read, and one exemplar compared once is
-/// already a weak instrument; naming each property means a failure says which
-/// one broke. Values are deliberately not compared — the two files describe
-/// different contracts, and a solc bump moves every literal in both without
-/// changing anything this test is about.
+/// Values are deliberately not asserted. A solc or optimiser change moves every
+/// literal without changing anything here, and a wrong literal is caught
+/// immediately by the group 1 derivation checks in `RainDeployVerifyOffline`.
 contract GeneratedSnapshotShapeTest is Test {
-    /// The real generator's output, as committed.
-    /// @return The file contents.
-    function generated() internal view returns (string memory) {
-        return vm.readFile("src/generated/candidate/AddressRegistry.sol");
-    }
+    /// The artifact for the generated candidate snapshot, which carries its AST.
+    string constant ARTIFACT = "out/candidate/AddressRegistry.sol/AddressRegistry.json";
 
-    /// The hand-written exemplar.
-    /// @return The file contents.
-    function exemplar() internal view returns (string memory) {
-        return vm.readFile("test/exemplars/0_0_1/MockDeployable.sol");
-    }
-
-    /// The ordered constant DECLARATIONS in a file, values stripped:
-    /// `bytes32 constant BYTECODE_HASH` and so on. This is the shape.
-    /// @param content The file to read.
-    /// @return declarations One entry per constant, in file order.
-    function constantDeclarations(string memory content) internal pure returns (string[] memory declarations) {
-        string[] memory lines = vm.split(content, "\n");
-        string[] memory found = new string[](lines.length);
+    /// The node types of the generated snapshot's source unit, in file order.
+    ///
+    /// Indexed one at a time rather than with a `$.ast.nodes[*].nodeType`
+    /// wildcard: foundry's JSON path support requires a path to resolve to
+    /// exactly one value, so the wildcard is rejected outright.
+    /// @return types One entry per top-level AST node.
+    function nodeTypes() internal view returns (string[] memory types) {
+        string memory json = vm.readFile(ARTIFACT);
+        string[] memory found = new string[](64);
         uint256 count = 0;
-        for (uint256 i = 0; i < lines.length; i++) {
-            // A declaration line, not a comment describing one.
-            if (!vm.contains(lines[i], " constant ") || vm.contains(lines[i], "//")) {
+        while (vm.keyExistsJson(json, string.concat("$.ast.nodes[", vm.toString(count), "].nodeType"))) {
+            found[count] = vm.parseJsonString(json, string.concat("$.ast.nodes[", vm.toString(count), "].nodeType"));
+            count++;
+        }
+        types = new string[](count);
+        for (uint256 i = 0; i < count; i++) {
+            types[i] = found[i];
+        }
+    }
+
+    /// The declared constants of the generated snapshot, in file order, as
+    /// `<type> <NAME>` — read from the AST, so formatting cannot affect it.
+    /// @return declarations One entry per file-level constant.
+    function constantDeclarations() internal view returns (string[] memory declarations) {
+        string memory json = vm.readFile(ARTIFACT);
+        string[] memory types = nodeTypes();
+
+        string[] memory found = new string[](types.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < types.length; i++) {
+            if (keccak256(bytes(types[i])) != keccak256(bytes("VariableDeclaration"))) {
                 continue;
             }
-            // Everything before the assignment is the declaration; everything
-            // after it is a value, which this test has no opinion about.
-            found[count] = vm.split(lines[i], " =")[0];
+            string memory base = string.concat("$.ast.nodes[", vm.toString(i), "]");
+            assertTrue(vm.parseJsonBool(json, string.concat(base, ".constant")), "snapshot declared a non-constant");
+            found[count] = string.concat(
+                vm.parseJsonString(json, string.concat(base, ".typeName.name")),
+                " ",
+                vm.parseJsonString(json, string.concat(base, ".name"))
+            );
             count++;
         }
         declarations = new string[](count);
@@ -62,62 +75,50 @@ contract GeneratedSnapshotShapeTest is Test {
         }
     }
 
-    /// PROPERTY: the generator emits exactly the four constants a deploy
-    /// snapshot is for, in this order. Named literally, because the exemplar's
-    /// authority comes from a human having written down what a snapshot SHOULD
-    /// be — not from whatever the generator currently does.
-    function testGeneratorEmitsTheDeploySnapshotConstantsInOrder() external view {
-        string[] memory declarations = constantDeclarations(generated());
+    /// PROPERTY: the snapshot declares exactly the four constants a deploy
+    /// record is for, of these types, in this order. A rename, a retype, a
+    /// reorder or a fifth constant each fail here and name what broke.
+    function testSnapshotDeclaresTheFourDeployConstantsInOrder() external view {
+        string[] memory declarations = constantDeclarations();
 
-        assertEq(declarations.length, 4, "generator emitted an unexpected number of constants");
-        assertEq(declarations[0], "bytes32 constant BYTECODE_HASH");
-        assertEq(declarations[1], "address constant DEPLOYED_ADDRESS");
-        assertEq(declarations[2], "bytes constant CREATION_CODE");
-        assertEq(declarations[3], "bytes constant RUNTIME_CODE");
+        assertEq(declarations.length, 4, "snapshot declares an unexpected number of constants");
+        assertEq(declarations[0], "bytes32 BYTECODE_HASH", "first constant is not bytes32 BYTECODE_HASH");
+        assertEq(declarations[1], "address DEPLOYED_ADDRESS", "second constant is not address DEPLOYED_ADDRESS");
+        assertEq(declarations[2], "bytes CREATION_CODE", "third constant is not bytes CREATION_CODE");
+        assertEq(declarations[3], "bytes RUNTIME_CODE", "fourth constant is not bytes RUNTIME_CODE");
     }
 
-    /// PROPERTY: the exemplar declares the same constants, of the same types,
-    /// in the same order, as the generator's real output. This is the
-    /// conformance itself — a fifth constant, a rename, a reorder or a changed
-    /// type breaks it, and none of those is something a compiler can cause.
-    function testExemplarDeclaresWhatTheGeneratorEmits() external view {
-        string[] memory fromGenerator = constantDeclarations(generated());
-        string[] memory fromExemplar = constantDeclarations(exemplar());
-
-        assertEq(fromExemplar.length, fromGenerator.length, "exemplar and generator disagree on constant count");
-        for (uint256 i = 0; i < fromGenerator.length; i++) {
-            assertEq(fromExemplar[i], fromGenerator[i]);
+    /// PROPERTY: the snapshot imports nothing. It is read by repos that do not
+    /// have the contract it describes — that is the whole reason a frozen
+    /// release stays verifiable after its source has changed or gone — so any
+    /// import would make it unusable to exactly the readers it exists for.
+    function testSnapshotImportsNothing() external view {
+        string[] memory types = nodeTypes();
+        for (uint256 i = 0; i < types.length; i++) {
+            assertNotEq(types[i], "ImportDirective", "snapshot imports something");
         }
     }
 
-    /// PROPERTY: both carry the generated-file header. It is what tells a
-    /// reader the file is not to be hand-edited, and an exemplar without it
-    /// would be describing something the generator does not produce.
-    function testBothCarryTheGeneratedHeader() external view {
-        string memory header = "// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.";
-        assertTrue(vm.contains(generated(), header), "generator stopped emitting the header");
-        assertTrue(vm.contains(exemplar(), header), "exemplar is missing the generated header");
+    /// PROPERTY: the snapshot declares no contract, library or interface. It is
+    /// a record, not code; anything deployable in it would be a second
+    /// definition of something the record is supposed to describe.
+    function testSnapshotDeclaresNoContract() external view {
+        string[] memory types = nodeTypes();
+        for (uint256 i = 0; i < types.length; i++) {
+            assertNotEq(types[i], "ContractDefinition", "snapshot declares a contract");
+        }
     }
 
-    /// PROPERTY: a snapshot references no source contract. It is read by repos
-    /// that do not have that source — which is the whole reason a frozen
-    /// release stays verifiable after its contract has changed or gone — so an
-    /// import, or the contract's own name, would make it unusable.
-    function testNeitherReferencesASourceContract() external view {
-        assertFalse(vm.contains(generated(), "import "), "generator emitted an import");
-        assertFalse(vm.contains(generated(), "AddressRegistry"), "generator referenced its source contract");
-
-        assertFalse(vm.contains(exemplar(), "import "), "exemplar carries an import");
-        assertFalse(vm.contains(exemplar(), "MockDeployable"), "exemplar references a source contract");
-    }
-
-    /// PROPERTY: the exemplar carries the operating rule, because the rule is
-    /// what someone reads when this suite goes red.
-    function testExemplarCarriesTheOperatingRule() external view {
+    /// PROPERTY: the snapshot says it is generated. Someone who opens it must
+    /// be told not to hand-edit it, because hand-editing is how a deploy record
+    /// stops describing the deployment.
+    function testSnapshotSaysItIsGenerated() external view {
         assertTrue(
-            vm.contains(exemplar(), "THE EXEMPLAR OWNS THE SHAPE. THE COMPILER OWNS THE VALUES."),
-            "exemplar is missing the operating rule"
+            vm.contains(
+                vm.readFile("src/generated/candidate/AddressRegistry.sol"),
+                "// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND."
+            ),
+            "snapshot is missing the generated-file header"
         );
-        assertTrue(vm.contains(exemplar(), "This file is HAND-WRITTEN"), "exemplar no longer states it is hand-written");
     }
 }

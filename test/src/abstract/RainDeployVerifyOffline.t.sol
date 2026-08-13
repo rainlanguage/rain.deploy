@@ -16,11 +16,11 @@ import {MockDeploySuites} from "../../abstract/MockDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
-    BYTECODE_HASH as MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1,
-    CREATION_CODE as MOCK_DEPLOYABLE_CREATION_CODE_0_0_1,
-    DEPLOYED_ADDRESS as MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
-    RUNTIME_CODE as MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1
-} from "../../exemplars/0_0_1/MockDeployable.sol";
+    BYTECODE_HASH as MOCK_BYTECODE_HASH_0_0_1,
+    CREATION_CODE as MOCK_CREATION_CODE_0_0_1,
+    DEPLOYED_ADDRESS as MOCK_DEPLOYED_ADDRESS_0_0_1,
+    RUNTIME_CODE as MOCK_RUNTIME_CODE_0_0_1
+} from "../../generated/0_0_1/MockDeployable.sol";
 
 /// @title RainDeployVerifyOfflineTest
 /// @notice `RainDeployVerifyOffline` inherited by a exemplar repo, so the
@@ -60,10 +60,10 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
         return DeployCandidate({
             snapshot: DeploySuite({
                 suite: "mock-deployable-v2-candidate",
-                creationCode: MOCK_DEPLOYABLE_CREATION_CODE_0_0_1,
-                storedDeployedAddress: MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
-                storedBytecodeHash: MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1,
-                storedRuntimeCode: MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1,
+                creationCode: MOCK_CREATION_CODE_0_0_1,
+                storedDeployedAddress: MOCK_DEPLOYED_ADDRESS_0_0_1,
+                storedBytecodeHash: MOCK_BYTECODE_HASH_0_0_1,
+                storedRuntimeCode: MOCK_RUNTIME_CODE_0_0_1,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new address[](0)
             }),
@@ -77,10 +77,10 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
     function consistentSuite() internal pure returns (DeploySuite memory) {
         return DeploySuite({
             suite: "mock-deployable-0-0-1",
-            creationCode: MOCK_DEPLOYABLE_CREATION_CODE_0_0_1,
-            storedDeployedAddress: MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
-            storedBytecodeHash: MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1,
-            storedRuntimeCode: MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1,
+            creationCode: MOCK_CREATION_CODE_0_0_1,
+            storedDeployedAddress: MOCK_DEPLOYED_ADDRESS_0_0_1,
+            storedBytecodeHash: MOCK_BYTECODE_HASH_0_0_1,
+            storedRuntimeCode: MOCK_RUNTIME_CODE_0_0_1,
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new address[](0)
         });
@@ -95,10 +95,7 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                StoredAddressMismatch.selector,
-                "mock-deployable-0-0-1",
-                address(0xdead),
-                MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1
+                StoredAddressMismatch.selector, "mock-deployable-0-0-1", address(0xdead), MOCK_DEPLOYED_ADDRESS_0_0_1
             )
         );
         this.externalCheckInternallyConsistent(suite);
@@ -113,10 +110,7 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                StoredCodeHashMismatch.selector,
-                "mock-deployable-0-0-1",
-                bytes32(uint256(1)),
-                MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1
+                StoredCodeHashMismatch.selector, "mock-deployable-0-0-1", bytes32(uint256(1)), MOCK_BYTECODE_HASH_0_0_1
             )
         );
         this.externalCheckInternallyConsistent(suite);
@@ -135,7 +129,7 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
             abi.encodeWithSelector(
                 StoredRuntimeCodeHashMismatch.selector,
                 "mock-deployable-0-0-1",
-                MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1,
+                MOCK_BYTECODE_HASH_0_0_1,
                 keccak256(hex"00")
             )
         );
@@ -172,7 +166,7 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
             abi.encodeWithSelector(
                 CandidateSourceMismatch.selector,
                 "mock-deployable-v2-candidate",
-                keccak256(MOCK_DEPLOYABLE_CREATION_CODE_0_0_1),
+                keccak256(MOCK_CREATION_CODE_0_0_1),
                 keccak256(type(MockDeployableV2).creationCode)
             )
         );
@@ -215,7 +209,7 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
         // the one the creation code derives.
         vm.mockCall(
             LibRainDeploy.ZOLTU_FACTORY,
-            MOCK_DEPLOYABLE_CREATION_CODE_0_0_1,
+            MOCK_CREATION_CODE_0_0_1,
             abi.encodePacked(bytes20(LibRainDeploy.ZOLTU_FACTORY))
         );
 
@@ -223,7 +217,7 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
             abi.encodeWithSelector(
                 ZoltuDerivationMismatch.selector,
                 "mock-deployable-0-0-1",
-                MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
+                MOCK_DEPLOYED_ADDRESS_0_0_1,
                 LibRainDeploy.ZOLTU_FACTORY
             )
         );

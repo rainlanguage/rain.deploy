@@ -3,9 +3,6 @@
 pragma solidity =0.8.25;
 
 import {Script} from "forge-std-1.16.1/src/Script.sol";
-import {LibCodeGen} from "rain-sol-codegen-0.1.4/src/lib/LibCodeGen.sol";
-import {LibFs} from "rain-sol-codegen-0.1.4/src/lib/LibFs.sol";
-import {LibRainDeploy} from "../src/lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../src/lib/LibRainDeploySnapshot.sol";
 import {AddressRegistry} from "../src/concrete/AddressRegistry.sol";
 
@@ -33,12 +30,6 @@ import {AddressRegistry} from "../src/concrete/AddressRegistry.sol";
 /// itself is written by `LibFs`. Nothing here restates any of them.
 contract Build is Script {
     string constant GEN_LIB_PATH = "src/lib/LibAddressRegistryDeploy.sol";
-
-    /// @notice The NatSpec emitted above the generated `DEPLOYED_ADDRESS`
-    /// constant. An argument to `LibCodeGen.addressConstantString` rather than
-    /// hardcoded into a local copy of it.
-    string constant DEPLOYED_ADDRESS_COMMENT =
-        "/// @dev The deterministic deploy address of the contract when deployed via\n/// the Zoltu factory.";
 
     // REUSE-IgnoreStart  (the two SPDX lines below are the header EMITTED into the
     // generated lib, not this script's own license — hide from reuse lint)
@@ -70,32 +61,15 @@ contract Build is Script {
         genLibAddressRegistryDeploy();
     }
 
-    /// @notice Rewrite `src/generated/candidate/AddressRegistry.sol`
-    /// from what this repo currently compiles.
+    /// @notice Rewrite `src/generated/candidate/AddressRegistry.sol` from what
+    /// this repo currently compiles.
     function regenerateCandidate() internal {
-        LibRainDeploy.etchZoltuFactory(vm);
-
-        // A fresh checkout has no `candidate/` dir yet, and `vm.writeFile`
-        // won't create one.
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.createDir(LibRainDeploySnapshot.dirForSnapshot(LibRainDeploySnapshot.CANDIDATE), true);
-
-        bytes memory creationCode = type(AddressRegistry).creationCode;
-        address deployed = LibRainDeploy.deployZoltu(creationCode);
-
-        LibFs.buildFileForContract(
+        LibRainDeploySnapshot.writeSnapshot(
             vm,
-            deployed,
-            LibRainDeploySnapshot.snapshotName(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry"),
-            string.concat(
-                LibCodeGen.addressConstantString(vm, DEPLOYED_ADDRESS_COMMENT, "DEPLOYED_ADDRESS", deployed),
-                LibCodeGen.bytesConstantString(
-                    vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", creationCode
-                ),
-                LibCodeGen.bytesConstantString(
-                    vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", deployed.code
-                )
-            )
+            LibRainDeploySnapshot.LIB_FS_ROOT,
+            LibRainDeploySnapshot.CANDIDATE,
+            "AddressRegistry",
+            type(AddressRegistry).creationCode
         );
     }
 

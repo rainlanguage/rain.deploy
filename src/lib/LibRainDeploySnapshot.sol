@@ -3,7 +3,9 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.16.1/src/Vm.sol";
+import {LibCodeGen} from "rain-sol-codegen-0.1.4/src/lib/LibCodeGen.sol";
 import {LibFs} from "rain-sol-codegen-0.1.4/src/lib/LibFs.sol";
+import {LibRainDeploy} from "./LibRainDeploy.sol";
 
 /// Thrown when `[package].version` is not strict `X.Y.Z`. A version like
 /// `0.1.7-rc1` maps to the directory `0_1_7-rc1`, which the append-only gate's
@@ -137,6 +139,76 @@ library LibRainDeploySnapshot {
     /// @return The file path.
     function pathForSnapshot(string memory dir, string memory contractName) internal pure returns (string memory) {
         return LibFs.pathForContract(snapshotName(dir, contractName));
+    }
+
+    /// The output root `LibFs` writes to, and the only one it can write to:
+    /// `LibFs.pathForContract` hardcodes it.
+    string constant LIB_FS_ROOT = "src/generated";
+
+    /// Generate one snapshot for one contract, under an arbitrary output root.
+    ///
+    /// The root is a parameter because a repo generates real deploy records
+    /// under `src/generated/` and test records under `test/generated/`, and
+    /// both must come from THIS code path — a second emitter would make the
+    /// shape assertions a statement about the wrong generator.
+    ///
+    /// `LibFs` hardcodes `src/generated/` and takes a contract name rather than
+    /// a path, so a non-default root is reached by generating there and moving
+    /// the result. That is the one awkward step here, and it is upstream's to
+    /// remove: `pathForContract` would need to take a root.
+    /// @param vm The Vm instance for file operations.
+    /// @param outputRoot Where the snapshot should end up.
+    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// @param contractName The contract the snapshot describes.
+    /// @param creationCode That contract's creation code.
+    /// @return The path written.
+    function writeSnapshot(
+        Vm vm,
+        string memory outputRoot,
+        string memory dir,
+        string memory contractName,
+        bytes memory creationCode
+    ) internal returns (string memory) {
+        LibRainDeploy.etchZoltuFactory(vm);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(dirForSnapshot(dir), true);
+
+        address deployed = LibRainDeploy.deployZoltu(creationCode);
+
+        LibFs.buildFileForContract(
+            vm,
+            deployed,
+            snapshotName(dir, contractName),
+            string.concat(
+                LibCodeGen.addressConstantString(
+                    vm,
+                    "/// @dev The deterministic deploy address of the contract when deployed via\n/// the Zoltu factory.",
+                    "DEPLOYED_ADDRESS",
+                    deployed
+                ),
+                LibCodeGen.bytesConstantString(
+                    vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", creationCode
+                ),
+                LibCodeGen.bytesConstantString(
+                    vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", deployed.code
+                )
+            )
+        );
+
+        string memory written = pathForSnapshot(dir, contractName);
+        if (keccak256(bytes(outputRoot)) == keccak256(bytes(LIB_FS_ROOT))) {
+            return written;
+        }
+
+        string memory destDir = string.concat(outputRoot, "/", dir);
+        string memory dest = string.concat(destDir, "/", contractName, ".sol");
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(destDir, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(dest, vm.readFile(written));
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(dirForSnapshot(dir), true);
+        return dest;
     }
 
     /// Regenerate the rolling snapshot and freeze it as this release's record,
