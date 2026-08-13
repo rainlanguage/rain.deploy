@@ -61,11 +61,7 @@ contract Build is Script {
     /// this repo currently compiles.
     function regenerateCandidate() internal {
         LibRainDeploySnapshot.writeSnapshot(
-            vm,
-            LibRainDeploySnapshot.LIB_FS_ROOT,
-            LibRainDeploySnapshot.CANDIDATE,
-            "AddressRegistry",
-            type(AddressRegistry).creationCode
+            vm, LibRainDeploySnapshot.CANDIDATE, "AddressRegistry", type(AddressRegistry).creationCode
         );
     }
 }

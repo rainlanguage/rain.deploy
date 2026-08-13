@@ -5,8 +5,9 @@ pragma solidity ^0.8.25;
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 
 import {
+    EmptyRelease,
     LibRainDeploySnapshot,
-    SnapshotScratchDirCollision,
+    NothingToFreeze,
     UnreleasableVersion
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
@@ -25,15 +26,16 @@ contract LibRainDeploySnapshotTest is Test {
         return LibRainDeploySnapshot.tagForVersion(version);
     }
 
+    /// A regeneration that does nothing, for driving `freeze`'s guards. Every
+    /// one of them either fires before this runs or is about what it left
+    /// behind, so a no-op is what makes "the guard fired" and "the guard fired
+    /// FIRST" the same observation.
+    function noRegeneration() internal {}
+
     /// External wrapper so `vm.expectRevert` lands at the right call depth.
-    /// @param outputRoot Where the snapshot should end up.
-    /// @param dir The snapshot directory.
-    /// @return The path written.
-    function externalWriteSnapshot(string memory outputRoot, string memory dir) external returns (string memory) {
-        return
-            LibRainDeploySnapshot.writeSnapshot(
-                vm, outputRoot, dir, "MockDeployable", type(MockDeployable).creationCode
-            );
+    /// @param contractNames The contracts to freeze.
+    function externalFreeze(string[] memory contractNames) external {
+        LibRainDeploySnapshot.freeze(vm, noRegeneration, contractNames);
     }
 
     /// Where the record fixture is built. NOT `src/generated`: the inherited
@@ -192,40 +194,65 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(LibRainDeploySnapshot.pathForSnapshot("0_1_7", "Foo"), "src/generated/0_1_7/Foo.sol");
     }
 
-    /// Generating to a non-default root stages through `src/generated/<dir>`
-    /// and REMOVES it afterwards. So it MUST refuse a directory that already
-    /// exists: that removal is under the directory frozen releases live in, and
-    /// a colliding `dir` would destroy one.
-    function testWriteSnapshotRefusesAnExistingScratchDir() external {
-        string memory dir = "collision-guard";
+    /// A snapshot MUST land at the path this library says it does, and writing
+    /// one over a directory that is already there is the ORDINARY case: the
+    /// rolling snapshot is regenerated into the same `candidate/` on every
+    /// build.
+    ///
+    /// Written into a directory that is not tag shaped on purpose. The record
+    /// root is the real `src/generated/`, which the inherited record check
+    /// walks from other contracts that forge runs in parallel with this one, so
+    /// a tag-shaped name here would be a release those contracts have to fail
+    /// on for as long as it exists.
+    function testWriteSnapshotWritesTheSnapshotAtItsPath() external {
+        string memory dir = "write-snapshot-not-a-tag";
+        assertFalse(LibRainDeploySnapshot.isTag(dir));
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(LibRainDeploySnapshot.dirForSnapshot(dir), true);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(SnapshotScratchDirCollision.selector, dir, LibRainDeploySnapshot.dirForSnapshot(dir))
-        );
-        this.externalWriteSnapshot("test/generated", dir);
+        string memory written =
+            LibRainDeploySnapshot.writeSnapshot(vm, dir, "MockDeployable", type(MockDeployable).creationCode);
 
-        // The guard must leave it alone, not remove it.
-        assertTrue(vm.exists(LibRainDeploySnapshot.dirForSnapshot(dir)));
+        assertEq(written, LibRainDeploySnapshot.pathForSnapshot(dir, "MockDeployable"));
+        assertTrue(vm.exists(written));
+
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(dir), true);
     }
 
-    /// Generating to the DEFAULT root does not stage, so it MUST NOT refuse an
-    /// existing directory — that is the ordinary case of regenerating a
-    /// snapshot that is already there.
-    function testWriteSnapshotAllowsAnExistingDirWithoutStaging() external {
-        string memory dir = "no-staging-guard";
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.createDir(LibRainDeploySnapshot.dirForSnapshot(dir), true);
+    /// A freeze that names no contracts MUST be refused. It would write
+    /// nothing, report success, and leave `<tag>/` there — and an empty
+    /// `<tag>/` is a frozen tag, so the real cut of that release could never
+    /// happen afterwards.
+    function testFreezeRefusesAnEmptyRelease() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
 
-        assertEq(
-            this.externalWriteSnapshot(LibRainDeploySnapshot.LIB_FS_ROOT, dir),
-            LibRainDeploySnapshot.pathForSnapshot(dir, "MockDeployable")
+        vm.expectRevert(abi.encodeWithSelector(EmptyRelease.selector, tag));
+        this.externalFreeze(new string[](0));
+
+        assertFalse(vm.exists(LibRainDeploySnapshot.dirForSnapshot(tag)));
+    }
+
+    /// A freeze that throws MUST leave NOTHING behind. Filesystem cheatcodes
+    /// survive a revert, so a `<tag>/` created before the last thing that can
+    /// fail is a partial record that outlives the failure — and it is a frozen
+    /// tag, which the immutability check then refuses the retry of, forever.
+    /// The exit from that state is deleting a directory this design calls
+    /// append-only, so the ordering here is what keeps a failed release
+    /// retryable at all.
+    function testFreezeLeavesNothingBehindWhenThereIsNothingToFreeze() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = "NoSuchContract";
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                NothingToFreeze.selector,
+                LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, contractNames[0])
+            )
         );
+        this.externalFreeze(contractNames);
 
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(dir), true);
+        assertFalse(vm.exists(LibRainDeploySnapshot.dirForSnapshot(tag)));
     }
 }

@@ -27,13 +27,12 @@ error NothingToFreeze(string path);
 /// @param dir The frozen directory that already exists.
 error SnapshotAlreadyFrozen(string tag, string dir);
 
-/// Thrown when generating to a non-default output root would have to stage
-/// through a `src/generated/` directory that already exists. Staging removes
-/// that directory afterwards, so proceeding would recursively delete content
-/// this call did not create — a real frozen release, if the name collided.
-/// @param dir The colliding directory.
-/// @param path The staging path under `src/generated/`.
-error SnapshotScratchDirCollision(string dir, string path);
+/// Thrown when a freeze names no contracts. There would be nothing to write, so
+/// it would leave `<tag>/` empty and report success — and an empty `<tag>/` is
+/// still a frozen tag, which `SnapshotAlreadyFrozen` then refuses the real cut
+/// of forever. A release lost to a directory with nothing in it.
+/// @param tag The release tag that was being cut.
+error EmptyRelease(string tag);
 
 /// @title LibRainDeploySnapshot
 /// @notice Which release is being built, where its record lives, and how it is
@@ -250,48 +249,24 @@ library LibRainDeploySnapshot {
         }
     }
 
-    /// Generate one snapshot for one contract, under an arbitrary output root.
+    /// Generate one snapshot for one contract.
     ///
-    /// The root is a parameter because a repo generates real deploy records
-    /// under `src/generated/` and test records under `test/generated/`, and
-    /// both must come from THIS code path — a second emitter would make the
-    /// shape assertions a statement about the wrong generator.
-    ///
-    /// `LibFs` hardcodes `src/generated/` and takes a contract name rather than
-    /// a path, so a non-default root is reached by STAGING there and moving the
-    /// result, then removing the staging directory. That recursive removal is
-    /// the sharp edge: it is under `src/generated/`, where real frozen releases
-    /// live. It is guarded by refusing to stage through a directory that
-    /// already exists, so a name collision fails loudly instead of deleting a
-    /// release.
-    ///
-    /// The guard exists because the clean fix is upstream and not ours:
-    /// `LibFs.pathForContract` needs to take an output root
-    /// (`pathForContract(string root, string contractName)`), with
-    /// `buildFileForContract` passing it through. Then a caller writes directly
-    /// to `test/generated/` and there is no staging, no copy and no removal at
-    /// all.
+    /// There is no output root to choose. `LibFs.pathForContract` hardcodes
+    /// `LIB_FS_ROOT` and takes a contract name rather than a path, and this is
+    /// the repo's real deploy record, which belongs under that root and nowhere
+    /// else. A test that wants a record tree of its own writes one with
+    /// `vm.writeFile` and reads it with `frozenSnapshotPaths`, which does take a
+    /// root, because reading somebody else's tree is a thing a walk genuinely
+    /// does and writing this repo's record somewhere else is not.
     /// @param vm The Vm instance for file operations.
-    /// @param outputRoot Where the snapshot should end up.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
     /// @param creationCode That contract's creation code.
     /// @return The path written.
-    function writeSnapshot(
-        Vm vm,
-        string memory outputRoot,
-        string memory dir,
-        string memory contractName,
-        bytes memory creationCode
-    ) internal returns (string memory) {
-        bool staging = keccak256(bytes(outputRoot)) != keccak256(bytes(LIB_FS_ROOT));
-        // Staging ends by removing the directory, so it must not begin with one
-        // that already exists. A test snapshot whose `dir` collided with a real
-        // frozen tag would otherwise destroy it.
-        if (staging && vm.exists(dirForSnapshot(dir))) {
-            revert SnapshotScratchDirCollision(dir, dirForSnapshot(dir));
-        }
-
+    function writeSnapshot(Vm vm, string memory dir, string memory contractName, bytes memory creationCode)
+        internal
+        returns (string memory)
+    {
         LibRainDeploy.etchZoltuFactory(vm);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(dirForSnapshot(dir), true);
@@ -318,20 +293,7 @@ library LibRainDeploySnapshot {
             )
         );
 
-        string memory written = pathForSnapshot(dir, contractName);
-        if (!staging) {
-            return written;
-        }
-
-        string memory destDir = string.concat(outputRoot, "/", dir);
-        string memory dest = string.concat(destDir, "/", contractName, ".sol");
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.createDir(destDir, true);
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.writeFile(dest, vm.readFile(written));
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeDir(dirForSnapshot(dir), true);
-        return dest;
+        return pathForSnapshot(dir, contractName);
     }
 
     /// The import block of a generated alias lib.
@@ -436,11 +398,23 @@ library LibRainDeploySnapshot {
     /// Regenerate the rolling snapshot and freeze it as this release's record,
     /// in that order, in one call.
     ///
-    /// Every guard runs before anything is written:
+    /// Every guard runs, and every byte that will be written is in hand, BEFORE
+    /// `<tag>/` is created. That ordering is load bearing rather than tidy.
+    /// Filesystem cheatcodes are not undone by a revert, so a throw once the
+    /// directory exists leaves a partial record behind — and a partial record is
+    /// a frozen tag, which `SnapshotAlreadyFrozen` then refuses the retry of.
+    /// The only exit from that state is deleting a directory this design calls
+    /// append-only, so the release is wedged by the failure rather than merely
+    /// stopped by it.
+    ///
+    /// The guards, in order:
     ///
     /// - the version must be strict `X.Y.Z` (`deployTag`)
     /// - this release must not already be frozen — a release is cut once
-    /// - there must be something to freeze after regenerating
+    /// - the release must name at least one contract, because a release with no
+    ///   record is not a release and freezing one wedges the tag exactly as a
+    ///   partial write does
+    /// - every named contract must have a rolling snapshot, once regenerated
     ///
     /// The frozen copy is the bytes just regenerated, read back from disk, so
     /// "the record matches the candidate" is true by construction rather than
@@ -455,18 +429,28 @@ library LibRainDeploySnapshot {
         if (vm.exists(frozenDir)) {
             revert SnapshotAlreadyFrozen(tag, frozenDir);
         }
+        if (contractNames.length == 0) {
+            revert EmptyRelease(tag);
+        }
 
         regenerate();
 
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.createDir(frozenDir, true);
+        // Read the whole record before writing any of it. Every reason this
+        // call can fail is now behind it, so what follows is writes only.
+        string[] memory records = new string[](contractNames.length);
         for (uint256 i = 0; i < contractNames.length; i++) {
             string memory rollingPath = pathForSnapshot(CANDIDATE, contractNames[i]);
             if (!vm.exists(rollingPath)) {
                 revert NothingToFreeze(rollingPath);
             }
+            records[i] = vm.readFile(rollingPath);
+        }
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(frozenDir, true);
+        for (uint256 i = 0; i < contractNames.length; i++) {
             //forge-lint: disable-next-line(unsafe-cheatcode)
-            vm.writeFile(pathForSnapshot(tag, contractNames[i]), vm.readFile(rollingPath));
+            vm.writeFile(pathForSnapshot(tag, contractNames[i]), records[i]);
         }
     }
 }

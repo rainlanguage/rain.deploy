@@ -36,8 +36,10 @@ ast = true
 fs_permissions = [
   { access = "read", path = "./foundry.toml" },
   { access = "read-write", path = "./src" },
-  # script/BuildTestSnapshots.sol emits the mock snapshots the verification
-  # abstracts are exercised against.
+  # LibRainDeploySnapshotTest builds a record tree of its own under
+  # test/generated to drive the frozen-record walk. NOT src/generated: the
+  # inherited record check reads that root from contracts forge runs in
+  # parallel, so a fixture release there would be one they have to fail on.
   { access = "read-write", path = "./test" },
   # GeneratedSnapshotShapeTest reads the compiler's AST out of the artifact.
   { access = "read", path = "./out" },
