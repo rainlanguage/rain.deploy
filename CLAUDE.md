@@ -50,9 +50,16 @@ Fork tests require RPC endpoints defined in `.env` (gitignored):
 ```bash
 ARBITRUM_RPC_URL=https://arb1.arbitrum.io/rpc
 BASE_RPC_URL=https://mainnet.base.org
+BASE_SEPOLIA_RPC_URL=https://sepolia.base.org
 FLARE_RPC_URL=https://flare-api.flare.network/ext/C/rpc
-POLYGON_RPC_URL=https://polygon-rpc.com
+POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
 ```
+
+All five are needed: `RainDeployVerifyChain` forks every network in
+`supportedNetworks()`, so a missing or rate-limited endpoint fails it. Those
+failures are `vm.createSelectFork` errors, distinct from the
+`NotDeployedOnNetwork` a reachable network raises, and the offline contracts run
+regardless: `forge test --no-match-contract Chain`.
 
 These are referenced in `foundry.toml` under `[rpc_endpoints]`.
 
@@ -98,14 +105,57 @@ code hash.
 
 **`src/lib/LibAddressRegistryDeploy.sol`** — those pins, derived from the
 creation code this repo compiles under this repo's own settings and checked
-against it by `AddressRegistryDeployPinsTest`. Hand-written until the first
-`sol-v*` release generates it from `src/generated/<tag>/`; no snapshot is frozen
-while the root is a placeholder, because that directory is append-only.
+against it by `AddressRegistryDeployPinsOfflineTest`. Hand-written until the
+first `sol-v*` release generates it from `src/generated/<tag>/`; no snapshot is
+frozen while the root is a placeholder, because that directory is append-only.
 
 **`src/lib/LibAddressRegistry.sol`** — reads that registry at its deterministic
 address, verifying its code hash first, exactly as `LibRainDeploy` verifies
 `ZOLTU_FACTORY_CODEHASH`. It resolves a name to an address and nothing more:
 what a consumer resolves a name for, and when, is the consumer's business.
+
+**`src/abstract/RainDeployVerify*.sol`** — the deploy-pin verification every
+deploy repo inherits instead of hand-writing. In `src/`, not `test/`, because
+`.soldeerignore` excludes `/test` from the published package and a consumer that
+cannot import it cannot use it.
+
+A repo declares its versions once — `releasedVersions()` and
+`candidateVersion()` on one abstract contract — and inherits that into one
+`RainDeployVerifyOffline` and one `RainDeployVerifyChain`. Nothing is per
+version and nothing is per network.
+
+The creation code is the only parameter. The Zoltu factory is `CREATE2` over its
+calldata under a zero salt, so the address is a pure function of it, and running
+it once locally gives the runtime code and its hash. The address, code hash and
+runtime code a pointers file records are checked OUTPUTS.
+
+Three groups, sorted by what they are anchored to:
+
+1. **Internal to the recorded set** (`RainDeployVerifyOffline`) — what a version
+   records is what its own creation code derives. Catches a set generated
+   inconsistently. CANNOT catch a snapshot of the wrong contract: a consistent
+   snapshot of the wrong thing satisfies all of it, which
+   `testWrongContractSnapshotPassesInternalConsistency` pins.
+2. **Anchored to source** (`RainDeployVerifyOffline`) — the candidate's recorded
+   creation code is `type(X).creationCode`. The only check that catches a
+   wrong-contract snapshot. Candidate only, because a released tag is MEANT to
+   diverge from current source; there is no field on a released version to spell
+   it, so it cannot be opted into or out of.
+3. **Anchored to chain** (`RainDeployVerifyChain`) — across
+   `supportedNetworks()`, every version's derived address carries code with its
+   derived code hash. The only check that catches "never deployed" or "not there
+   any more", neither of which the repo can hold: both go false with nobody
+   touching it.
+
+Group 3 lives in its own contract so an unreachable RPC endpoint fails only it,
+never the assertions that hold offline — `forge test --no-match-contract Chain`
+is the whole offline gate, and nothing reachable from those contracts forks
+anything.
+
+A single recorded code hash per version can only be true if the runtime code is
+the same on every network, so a constructor reading `block.chainid` or similar
+is a DEFECT: it fails hard, naming the chain and both hashes. There is
+deliberately no per-chain code hash to record.
 
 The libraries are designed to be called from Foundry scripts (`forge script`) in
 consuming repos, not directly. Consuming repos provide their own creation code,

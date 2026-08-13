@@ -18,6 +18,8 @@ It answers:
 - How does a deployment get a configured address — an owner, say — without
   baking one into its creation code, where changing it would move every future
   deployment?
+- Is every version I have ever released still live, with the code I compiled, on
+  every network I support?
 
 Approach:
 
@@ -31,6 +33,72 @@ Approach:
 - An address registry, read at run time rather than compiled into creation code,
   and a post-deploy check that every target network's deployment took the
   address it was supposed to.
+- One inherited deploy-pin verification, parameterized over versions, rather
+  than assertions hand-enumerated per version and per chain in every deploy
+  repo.
+
+## Deploy verification
+
+A deploy repo records, per released version, a deterministic address, a code
+hash and the bytecode behind them. `src/abstract/RainDeployVerify*.sol` is the
+verification of those records, inherited rather than rewritten.
+
+**The creation code is the only parameter.** The Zoltu factory is `CREATE2` over
+its calldata under a zero salt, so the address is a pure function of the
+creation code and identical on every network, and running that creation code
+once locally yields the runtime code and its hash. Everything else a pointers
+file holds is a checked output.
+
+A repo declares its versions once and inherits that declaration into one offline
+contract and one chain contract:
+
+```solidity
+abstract contract MyDeployVersions is RainDeployVerifyBase {
+    function releasedVersions() internal pure override returns (DeployVersion[] memory) { /* frozen snapshots */ }
+    function candidateVersion() internal pure override returns (DeployCandidate memory) { /* current source */ }
+}
+
+contract MyDeployPinsOfflineTest is MyDeployVersions, RainDeployVerifyOffline {}
+contract MyDeployPinsChainTest is MyDeployVersions, RainDeployVerifyChain {}
+```
+
+There is nothing per version and nothing per network. A new release adds an
+array entry; a network added to `supportedNetworks()` is checked for every
+version already recorded, which is exactly the cell a hand-written suite never
+grows.
+
+Three groups, sorted by what each is anchored to and therefore by what each can
+catch:
+
+| Group    | Anchored to            | Catches                               | Cannot catch                     |
+| -------- | ---------------------- | ------------------------------------- | -------------------------------- |
+| Internal | the recorded set       | an inconsistently generated set       | a snapshot of the wrong contract |
+| Source   | `type(X).creationCode` | a snapshot of the wrong contract      | anything about any chain         |
+| Chain    | the networks           | never deployed, or not there any more | anything before it is deployed   |
+
+The internal group's blind spot is not a gap to close there: every check in it
+asks the recorded bytes to agree with each other, and the wrong contract's bytes
+agree with each other perfectly. The source anchor is the only thing that
+catches it, and it applies to the **candidate only** — a released tag is meant
+to have diverged from current source, so anchoring one to source asserts
+something false by design. That is a property of the assertion, and there is no
+field on a released version with which to opt in or out.
+
+The chain group has no such exemption. It applies to every version, including
+one that has never been deployed — where it fails, and that failure is the
+answer.
+
+It is a separate contract so that an unreachable RPC endpoint fails only it.
+`forge test --no-match-contract Chain` is the whole offline gate, and it is
+structural rather than conventional: nothing reachable from the offline
+contracts forks anything.
+
+**Chain-independent runtime code is a requirement, not a caveat.** One recorded
+code hash per version can only be true if the runtime code is the same
+everywhere. A constructor that reads `block.chainid` deploys different code per
+chain: deploying through Zoltu buys address predictability, and such a
+constructor spends it. So a per-chain difference fails hard, naming the chain
+and both hashes, and there is deliberately no per-chain code hash to record.
 
 ## Address registry
 

@@ -25,7 +25,7 @@ evm_version = "cancun"
 cbor_metadata = false
 bytecode_hash = "none"
 
-# BuildPointers reads the version from foundry.toml and writes the generated
+# Build reads the version from foundry.toml and writes the generated
 # per-tag snapshots + the current-pin lib under src/. Nothing else in this repo
 # touches the filesystem.
 fs_permissions = [
