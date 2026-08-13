@@ -45,6 +45,16 @@ error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, byte
 /// @param path The frozen record file no released suite declares.
 error FrozenSnapshotNotReleased(string path);
 
+/// Thrown when a file in the frozen record declares no deployed address. The
+/// record holds generated snapshots and nothing else, and `DEPLOYED_ADDRESS` is
+/// what makes one the record of a deployment rather than a file that happens to
+/// be in a release directory. Distinct from `FrozenSnapshotNotReleased`, which
+/// is a declaration that is missing something — this is a record that cannot be
+/// read at all, and reporting it as undeclared would send the reader after the
+/// wrong thing.
+/// @param path The record file with no `DEPLOYED_ADDRESS` declaration.
+error FrozenSnapshotUnreadable(string path);
+
 /// @title RainDeployVerifySnapshot
 /// @notice Every deploy-pin assertion that needs no network, for every suite
 /// a repo declares. Three groups, which catch different things and are
@@ -103,6 +113,42 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifyBase {
         }
     }
 
+    /// @dev The declaration a generated snapshot records its deploy address in.
+    /// Matched whole, so what is being looked for is the DECLARATION and cannot
+    /// be satisfied by characters that happen to occur inside a hex payload.
+    string constant DEPLOYED_ADDRESS_DECLARATION = "address constant DEPLOYED_ADDRESS =";
+
+    /// The address a frozen record declares as its deploy address.
+    ///
+    /// `LibCodeGen` emits an address constant on ONE line — wrapping needs 120
+    /// characters and this declaration occupies 88 — so the declaration is a
+    /// line, and its value is that line's last token with the type wrapper and
+    /// the terminator stripped. `address(0x...);` and a bare `0x...;` read the
+    /// same, so which wrapper the generator chose is not something this has to
+    /// know.
+    ///
+    /// That every generated snapshot HAS this declaration, second, of type
+    /// `address`, is pinned by `GeneratedSnapshotShapeTest` against the
+    /// compiler's own AST. Read from the text here rather than from that AST
+    /// because a record is reached by its PATH, which is what the walk returns,
+    /// while its artifact path is not something a caller can name — foundry
+    /// disambiguates those by whatever else happens to share the basename.
+    /// @param path The record file, for the error only.
+    /// @param record The record file's contents.
+    /// @return The address the record declares.
+    function recordedDeployedAddress(string memory path, string memory record) internal pure returns (address) {
+        string[] memory lines = vm.split(record, "\n");
+        for (uint256 i = 0; i < lines.length; i++) {
+            if (!vm.contains(lines[i], DEPLOYED_ADDRESS_DECLARATION)) {
+                continue;
+            }
+            string[] memory tokens = vm.split(lines[i], " ");
+            string memory literal = tokens[tokens.length - 1];
+            return vm.parseAddress(vm.replace(vm.replace(vm.replace(literal, "address(", ""), ")", ""), ";", ""));
+        }
+        revert FrozenSnapshotUnreadable(path);
+    }
+
     /// Checks the frozen record against the released declaration: every file in
     /// the record is declared by a released suite.
     ///
@@ -119,19 +165,25 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifyBase {
     /// would let the candidate declare a frozen release — and the candidate is
     /// exactly what the chain group does not check.
     ///
-    /// The match is by derived address, which is a pure function of the
-    /// creation code and is what the record records. A suite whose creation
-    /// code derives the address in a file IS that file's release. Nothing is
-    /// matched by name, which would assert only that a convention was followed.
+    /// The match is by address: the address a file DECLARES against the address
+    /// a suite's creation code DERIVES. The derived side is a pure function of
+    /// the creation code, so a suite whose creation code derives the address a
+    /// file records IS that file's release.
+    ///
+    /// Nothing is matched by name, which would assert only that a convention
+    /// was followed. Nothing is matched by searching the file's text either: a
+    /// record is mostly two hex payloads thousands of digits long, and an
+    /// address that merely OCCURS somewhere in one of them says nothing about
+    /// what the file records.
     /// @param paths The frozen record's files.
     /// @param released The declared released suites.
     function checkFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released) internal view {
         for (uint256 i = 0; i < paths.length; i++) {
-            string memory record = vm.readFile(paths[i]);
+            address recorded = recordedDeployedAddress(paths[i], vm.readFile(paths[i]));
 
             bool declared = false;
             for (uint256 j = 0; j < released.length; j++) {
-                if (vm.contains(record, vm.toString(LibRainDeploy.zoltuAddress(released[j].creationCode)))) {
+                if (recorded == LibRainDeploy.zoltuAddress(released[j].creationCode)) {
                     declared = true;
                     break;
                 }
