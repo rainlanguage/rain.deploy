@@ -27,6 +27,14 @@ error NothingToFreeze(string path);
 /// @param dir The frozen directory that already exists.
 error SnapshotAlreadyFrozen(string tag, string dir);
 
+/// Thrown when generating to a non-default output root would have to stage
+/// through a `src/generated/` directory that already exists. Staging removes
+/// that directory afterwards, so proceeding would recursively delete content
+/// this call did not create — a real frozen release, if the name collided.
+/// @param dir The colliding directory.
+/// @param path The staging path under `src/generated/`.
+error SnapshotScratchDirCollision(string dir, string path);
+
 /// @title LibRainDeploySnapshot
 /// @notice Which release is being built, where its record lives, and how it is
 /// frozen. Release machinery, not code generation.
@@ -153,9 +161,19 @@ library LibRainDeploySnapshot {
     /// shape assertions a statement about the wrong generator.
     ///
     /// `LibFs` hardcodes `src/generated/` and takes a contract name rather than
-    /// a path, so a non-default root is reached by generating there and moving
-    /// the result. That is the one awkward step here, and it is upstream's to
-    /// remove: `pathForContract` would need to take a root.
+    /// a path, so a non-default root is reached by STAGING there and moving the
+    /// result, then removing the staging directory. That recursive removal is
+    /// the sharp edge: it is under `src/generated/`, where real frozen releases
+    /// live. It is guarded by refusing to stage through a directory that
+    /// already exists, so a name collision fails loudly instead of deleting a
+    /// release.
+    ///
+    /// The guard exists because the clean fix is upstream and not ours:
+    /// `LibFs.pathForContract` needs to take an output root
+    /// (`pathForContract(string root, string contractName)`), with
+    /// `buildFileForContract` passing it through. Then a caller writes directly
+    /// to `test/generated/` and there is no staging, no copy and no removal at
+    /// all.
     /// @param vm The Vm instance for file operations.
     /// @param outputRoot Where the snapshot should end up.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
@@ -169,6 +187,14 @@ library LibRainDeploySnapshot {
         string memory contractName,
         bytes memory creationCode
     ) internal returns (string memory) {
+        bool staging = keccak256(bytes(outputRoot)) != keccak256(bytes(LIB_FS_ROOT));
+        // Staging ends by removing the directory, so it must not begin with one
+        // that already exists. A test snapshot whose `dir` collided with a real
+        // frozen tag would otherwise destroy it.
+        if (staging && vm.exists(dirForSnapshot(dir))) {
+            revert SnapshotScratchDirCollision(dir, dirForSnapshot(dir));
+        }
+
         LibRainDeploy.etchZoltuFactory(vm);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(dirForSnapshot(dir), true);
@@ -196,7 +222,7 @@ library LibRainDeploySnapshot {
         );
 
         string memory written = pathForSnapshot(dir, contractName);
-        if (keccak256(bytes(outputRoot)) == keccak256(bytes(LIB_FS_ROOT))) {
+        if (!staging) {
             return written;
         }
 
@@ -209,6 +235,95 @@ library LibRainDeploySnapshot {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(dirForSnapshot(dir), true);
         return dest;
+    }
+
+    /// Generate the alias lib for a snapshot: the stable, consumer-facing
+    /// import path that re-exports one snapshot's address and code hash.
+    ///
+    /// Every deploy repo needs exactly this file and only four things differ,
+    /// three of which follow from the first — `rain.factory.deploy`'s
+    /// `LibCloneFactoryDeploy` is this shape to the character. Emitted here so
+    /// that ~20 lines of `vm.writeLine` are not copied into every repo and then
+    /// drifted.
+    ///
+    /// The constant prefix is passed rather than derived. Deriving
+    /// `ADDRESS_REGISTRY` from `AddressRegistry` means camelCase to
+    /// SCREAMING_SNAKE in Solidity, which is a byte loop with an acronym
+    /// problem, to save a caller one short string. The library name and output
+    /// path ARE derived, because `Lib<Contract>Deploy` at `src/lib/` is
+    /// mechanical.
+    ///
+    /// ## This owns its header, and `LibCodeGen.filePrefix` cannot supply it
+    ///
+    /// `filePrefix` hardcodes a paragraph explaining that the file is committed
+    /// because of a circular dependency between a contract and its generated
+    /// file. That is true of a snapshot and FALSE of an alias lib, which is
+    /// committed because it IS the stable source consumers import. Emitting it
+    /// here would put a false statement into generated output, so the header is
+    /// written out instead — the SPDX lines included, which is why this
+    /// function carries a REUSE ignore.
+    ///
+    /// The upstream fix is to split `filePrefix` into the invariant part (SPDX,
+    /// pragma, `AUTOGENERATED ... DO NOT EDIT BY HAND`) and a caller-supplied
+    /// rationale, or to take that rationale as a parameter. Then both this and
+    /// the snapshot writer use it and nothing here restates anything.
+    /// @param vm The Vm instance for file operations.
+    /// @param contractName The contract the snapshot describes.
+    /// @param constantPrefix The prefix for the emitted constants, e.g.
+    /// `ADDRESS_REGISTRY`.
+    /// @param dir The snapshot directory to alias — ordinarily `CANDIDATE`.
+    /// @return The path written.
+    function writeAliasLib(Vm vm, string memory contractName, string memory constantPrefix, string memory dir)
+        internal
+        returns (string memory)
+    {
+        string memory libraryName = string.concat("Lib", contractName, "Deploy");
+        string memory path = string.concat("src/lib/", libraryName, ".sol");
+        string memory importPath = string.concat("../generated/", dir, "/", contractName, ".sol");
+
+        // REUSE-IgnoreStart  (the SPDX lines below are the header EMITTED into
+        // the generated lib, not this file's own license)
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(
+            path,
+            string.concat(
+                "// SPDX-License-Identifier: LicenseRef-DCL-1.0\n",
+                "// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd\n",
+                "pragma solidity ^0.8.25;\n\n",
+                "// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.\n\n",
+                "import {\n",
+                "    DEPLOYED_ADDRESS as ",
+                constantPrefix,
+                "_ADDR,\n    BYTECODE_HASH as ",
+                constantPrefix,
+                "_HASH\n} from \"",
+                importPath,
+                "\";\n\n",
+                "/// @title ",
+                libraryName,
+                "\n/// @notice The deterministic Zoltu deploy address and code hash of\n/// `",
+                contractName,
+                "`, aliased from the `src/generated/",
+                dir,
+                "/",
+                contractName,
+                ".sol`\n/// snapshot so that snapshot stays the single source of truth. The import\n",
+                "/// path never moves, so consumers are unaffected by which snapshot it names.\n",
+                "library ",
+                libraryName,
+                " {\n    address constant ",
+                constantPrefix,
+                "_DEPLOYED_ADDRESS = ",
+                constantPrefix,
+                "_ADDR;\n    bytes32 constant ",
+                constantPrefix,
+                "_DEPLOYED_CODEHASH = ",
+                constantPrefix,
+                "_HASH;\n}\n"
+            )
+        );
+        // REUSE-IgnoreEnd
+        return path;
     }
 
     /// Regenerate the rolling snapshot and freeze it as this release's record,

@@ -17,6 +17,15 @@ import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 /// @param factoryAddress The address the factory bytecode actually deployed to.
 error ZoltuDerivationMismatch(string suite, address formulaAddress, address factoryAddress);
 
+/// Thrown when the state snapshot taken around a derivation could not be
+/// reverted. The derivation plants code at the derived address and clears its
+/// nonce; if that cannot be undone, every later derivation reads state this one
+/// created, and the chain-anchored checks compare a locally planted deployment
+/// against itself. There is no safe way to continue.
+/// @param suite The suite being derived when the revert failed.
+/// @param snapshotId The snapshot that could not be reverted.
+error DerivationSnapshotRevertFailed(string suite, uint256 snapshotId);
+
 /// What a suite's creation code derives, offline and by itself. Computed
 /// once and then compared against whatever claims to hold it, whether that is a
 /// recorded constant or a live chain.
@@ -101,11 +110,13 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         derived =
             DerivedDeploy({suite: suite.suite, deployedAddress: formulaAddress, bytecodeHash: factoryAddress.codehash});
 
-        // revertToState returns whether the snapshot existed; it was taken
-        // above, so bind and reference it to satisfy the unused-return lint
-        // rather than asserting on it.
-        bool reverted = vm.revertToState(snapshotId);
-        (reverted);
+        // A failed revert is unrecoverable, not a warning to silence. The etch
+        // and the nonce reset would survive into every later derivation, whose
+        // results would then look entirely plausible while describing state
+        // this call planted.
+        if (!vm.revertToState(snapshotId)) {
+            revert DerivationSnapshotRevertFailed(suite.suite, snapshotId);
+        }
     }
 
     /// Derives every suite once, before anything forks. Callers that compare
