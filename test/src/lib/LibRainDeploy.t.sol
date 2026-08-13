@@ -795,6 +795,13 @@ contract LibRainDeployTest is Test {
     /// to nothing at all if the length were not checked.
     function testCheckResolvedAddressesUnreadableTargetReverts(address target, address account) external {
         vm.assume(target.code.length == 0);
+        // The low address space is reserved for precompiles, which have no code
+        // and yet DO answer — the identity precompile echoes its calldata back,
+        // so a read of one returns data rather than nothing. They are not
+        // instances of the case under test. Bounded by the reserved range rather
+        // than by listing today's precompiles, so a chain or fork that adds one
+        // does not reintroduce this.
+        vm.assume(uint160(target) > 0xffff);
 
         vm.expectRevert(
             abi.encodeWithSelector(

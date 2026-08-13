@@ -37,35 +37,58 @@ Approach:
   than assertions hand-enumerated per version and per chain in every deploy
   repo.
 
-## Deploy verification
+## One declaration, deployed and verified
 
-A deploy repo records, per released version, a deterministic address, a code
-hash and the bytecode behind them. `src/abstract/RainDeployVerify*.sol` is the
-verification of those records, inherited rather than rewritten.
-
-**The creation code is the only parameter.** The Zoltu factory is `CREATE2` over
-its calldata under a zero salt, so the address is a pure function of the
-creation code and identical on every network, and running that creation code
-once locally yields the runtime code and its hash. Everything else a pointers
-file holds is a checked output.
-
-A repo declares its versions once and inherits that declaration into one offline
-contract and one chain contract:
+A repo declares its suites ONCE. A suite is a named snapshot: a key, the
+creation code, the recorded address/code hash/runtime code, the artifact path
+and the addresses that must already be on chain before it can be deployed.
 
 ```solidity
-abstract contract MyDeployVersions is RainDeployVerifyBase {
-    function releasedVersions() internal pure override returns (DeployVersion[] memory) { /* frozen snapshots */ }
-    function candidateVersion() internal pure override returns (DeployCandidate memory) { /* current source */ }
+// src/abstract/MyDeploySuites.sol
+abstract contract MyDeploySuites is RainDeploySuitesBase {
+    function releasedSuites() internal pure override returns (DeploySuite[] memory);
+    function candidateSuite() internal pure override returns (DeployCandidate memory);
 }
 
-contract MyDeployPinsOfflineTest is MyDeployVersions, RainDeployVerifyOffline {}
-contract MyDeployPinsChainTest is MyDeployVersions, RainDeployVerifyChain {}
+// script/Deploy.sol
+contract Deploy is MyDeploySuites, RainDeployBroadcast {}
+
+// test/src/concrete/MyDeployPinsOffline.t.sol
+contract MyDeployPinsOfflineTest is MyDeploySuites, RainDeployVerifyOffline {}
+
+// test/src/concrete/MyDeployPinsChain.t.sol
+contract MyDeployPinsChainTest is MyDeploySuites, RainDeployVerifyChain {}
 ```
 
-There is nothing per version and nothing per network. A new release adds an
-array entry; a network added to `supportedNetworks()` is checked for every
-version already recorded, which is exactly the cell a hand-written suite never
-grows.
+The broadcast and the verification read the SAME array. "The deploy script ships
+one contract while the tests verify another" is therefore not a statement that
+can be true — not because something checks for it, but because there is nothing
+for it to disagree with. A repo that wrote its suites out twice would have that
+bug available to it; this one does not.
+
+Suites are a **registry the abstract iterates**, not a chain of `else if`.
+Adding a suite is adding an array entry. A mistyped `DEPLOYMENT_SUITE` reports
+the valid keys built from that same array, so the error cannot fall behind the
+suites it describes, and keys are checked unique because the key is what selects
+what gets broadcast.
+
+Every suite is individually selectable, including a frozen release — which is
+how a snapshot from before a network existed reaches that network.
+
+## Deploy verification
+
+**The creation code is the only input.** The Zoltu factory is `CREATE2` over its
+calldata under a zero salt, so the address is a pure function of the creation
+code and identical on every network, and running that creation code once locally
+yields the runtime code and its hash. Everything else a suite records is a
+checked output.
+
+Recorded rather than derived, deliberately. `LibRainDeploy` compares the
+recorded address against the creation code **before it forks anything**, so a
+stale pin fails instead of deploying to wherever the code happens to land.
+Deriving the pins at broadcast time would make that comparison
+derived-against-derived, and a guard that compares a value to itself is not a
+guard.
 
 Three groups, sorted by what each is anchored to and therefore by what each can
 catch:

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {DeployCandidate, DeployVersion, RainDeployVerifyBase} from "../../src/abstract/RainDeployVerifyBase.sol";
+import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 import {
     BYTECODE_HASH as MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1,
@@ -17,8 +17,8 @@ import {
     RUNTIME_CODE as MOCK_DEPLOYABLE_V2_RUNTIME_CODE_0_0_2
 } from "../fixtures/0_0_2/MockDeployableV2.pointers.sol";
 
-/// @title MockDeployVersions
-/// @notice A deploy repo's version declaration, as a fixture: two frozen
+/// @title MockDeploySuites
+/// @notice A deploy repo's suite declaration, as a fixture: two frozen
 /// releases plus a candidate tracking `MockDeployableV2`.
 ///
 /// It is declared once, here, and inherited into one `RainDeployVerifyOffline`
@@ -32,39 +32,46 @@ import {
 ///   constants, never from `type(X).creationCode`. A release records what was
 ///   deployed; that the contract still exists in this repo is incidental.
 /// - `0_0_2` and the candidate are the same bytes, which is what a repo looks
-///   like between a release and the next source change. Two versions therefore
-///   derive one address.
+///   like between a release and the next source change. Two suites therefore
+///   derive one address, under two distinct keys — each is separately
+///   deployable, which is how an old release reaches a chain added after it.
 /// - The candidate takes its creation code from source, because it has no
 ///   frozen snapshot to take it from — the state `AddressRegistry` is in.
-abstract contract MockDeployVersions is RainDeployVerifyBase {
-    /// @inheritdoc RainDeployVerifyBase
-    function releasedVersions() internal pure override returns (DeployVersion[] memory versions) {
-        versions = new DeployVersion[](2);
-        versions[0] = DeployVersion({
-            version: "0_0_1",
+abstract contract MockDeploySuites is RainDeploySuitesBase {
+    /// @inheritdoc RainDeploySuitesBase
+    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
+        suites = new DeploySuite[](2);
+        suites[0] = DeploySuite({
+            suite: "mock-deployable-0-0-1",
             creationCode: MOCK_DEPLOYABLE_CREATION_CODE_0_0_1,
             storedDeployedAddress: MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
             storedBytecodeHash: MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1,
-            storedRuntimeCode: MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1
+            storedRuntimeCode: MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1,
+            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
+            dependencies: new address[](0)
         });
-        versions[1] = DeployVersion({
-            version: "0_0_2",
+        suites[1] = DeploySuite({
+            suite: "mock-deployable-v2-0-0-2",
             creationCode: MOCK_DEPLOYABLE_V2_CREATION_CODE_0_0_2,
             storedDeployedAddress: MOCK_DEPLOYABLE_V2_DEPLOYED_ADDRESS_0_0_2,
             storedBytecodeHash: MOCK_DEPLOYABLE_V2_BYTECODE_HASH_0_0_2,
-            storedRuntimeCode: MOCK_DEPLOYABLE_V2_RUNTIME_CODE_0_0_2
+            storedRuntimeCode: MOCK_DEPLOYABLE_V2_RUNTIME_CODE_0_0_2,
+            artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
+            dependencies: new address[](0)
         });
     }
 
-    /// @inheritdoc RainDeployVerifyBase
-    function candidateVersion() internal pure override returns (DeployCandidate memory) {
+    /// @inheritdoc RainDeploySuitesBase
+    function candidateSuite() internal pure override returns (DeployCandidate memory) {
         return DeployCandidate({
-            snapshot: DeployVersion({
-                version: "candidate",
+            snapshot: DeploySuite({
+                suite: "mock-deployable-v2-candidate",
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: MOCK_DEPLOYABLE_V2_DEPLOYED_ADDRESS_0_0_2,
                 storedBytecodeHash: MOCK_DEPLOYABLE_V2_BYTECODE_HASH_0_0_2,
-                storedRuntimeCode: type(MockDeployableV2).runtimeCode
+                storedRuntimeCode: type(MockDeployableV2).runtimeCode,
+                artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
+                dependencies: new address[](0)
             }),
             sourceCreationCode: type(MockDeployableV2).creationCode
         });

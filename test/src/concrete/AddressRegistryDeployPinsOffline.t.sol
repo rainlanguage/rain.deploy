@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {RainDeployVerifyOffline} from "../../../src/abstract/RainDeployVerifyOffline.sol";
-import {AddressRegistryDeployVersions} from "../../abstract/AddressRegistryDeployVersions.sol";
+import {AddressRegistryDeploySuites} from "../../../src/abstract/AddressRegistryDeploySuites.sol";
 
 /// @title AddressRegistryDeployPinsOfflineTest
 /// @notice The deploy-pin assertions for `AddressRegistry` that need no
@@ -18,6 +18,6 @@ import {AddressRegistryDeployVersions} from "../../abstract/AddressRegistryDeplo
 /// so changing the root moves both pins and turns this red until they follow.
 ///
 /// Both assertions are inherited. There is nothing to write here, which is the
-/// point: `AddressRegistryDeployVersions` says which versions exist and
+/// point: `AddressRegistryDeploySuites` says which versions exist and
 /// `RainDeployVerifyOffline` says what is true of them.
-contract AddressRegistryDeployPinsOfflineTest is AddressRegistryDeployVersions, RainDeployVerifyOffline {}
+contract AddressRegistryDeployPinsOfflineTest is AddressRegistryDeploySuites, RainDeployVerifyOffline {}

@@ -9,7 +9,7 @@ import {
     RainDeployVerifyChain
 } from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {MockDeployVersions} from "../../abstract/MockDeployVersions.sol";
+import {MockDeploySuites} from "../../abstract/MockDeploySuites.sol";
 import {
     BYTECODE_HASH as MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1,
     DEPLOYED_ADDRESS as MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
@@ -24,7 +24,7 @@ import {
 /// @notice `RainDeployVerifyChain` inherited by a fixture repo whose versions
 /// are made live on every network by `setUp`, so the inherited
 /// `testDeployPinsLiveOnEverySupportedNetwork` is the passing case: it forks
-/// every network `supportedNetworks()` returns and finds all three versions.
+/// every network `supportedNetworks()` returns and finds all three suites.
 ///
 /// `setUp` places the code with a persistent `vm.etch` rather than pointing the
 /// fixture at some real deployment in another repo. A real one would make this
@@ -38,7 +38,7 @@ import {
 /// the assertion. `testChainCodeHashMismatchReverts` is what proves it: it
 /// leaves the etch in place and changes only the code, and the check still
 /// fails, which it could not do if the expectation were read from the etch.
-contract RainDeployVerifyChainTest is MockDeployVersions, RainDeployVerifyChain {
+contract RainDeployVerifyChainTest is MockDeploySuites, RainDeployVerifyChain {
     /// Makes every fixture version live on every fork, which is what the
     /// inherited test then verifies. Persistent so it survives each
     /// `createSelectFork` inside the loop.
@@ -69,24 +69,24 @@ contract RainDeployVerifyChainTest is MockDeployVersions, RainDeployVerifyChain 
             abi.encodeWithSelector(
                 NotDeployedOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                "0_0_1",
+                "mock-deployable-0-0-1",
                 MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1
             )
         );
         this.testDeployPinsLiveOnEverySupportedNetwork();
     }
 
-    /// EVERY version MUST be checked, not just the first one the matrix
+    /// EVERY suite MUST be checked, not just the first one the matrix
     /// reaches. The version missing here is the second and third, so a matrix
     /// that stopped after the first version would pass.
-    function testChainNotDeployedRevertsForALaterVersion() external {
+    function testChainNotDeployedRevertsForALaterSuite() external {
         vm.revokePersistent(MOCK_DEPLOYABLE_V2_DEPLOYED_ADDRESS_0_0_2);
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 NotDeployedOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                "0_0_2",
+                "mock-deployable-v2-0-0-2",
                 MOCK_DEPLOYABLE_V2_DEPLOYED_ADDRESS_0_0_2
             )
         );
@@ -133,7 +133,7 @@ contract RainDeployVerifyChainTest is MockDeployVersions, RainDeployVerifyChain 
             abi.encodeWithSelector(
                 CodeHashMismatchOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                "0_0_1",
+                "mock-deployable-0-0-1",
                 MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
                 MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1,
                 keccak256(hex"6001")
@@ -150,14 +150,16 @@ contract RainDeployVerifyChainTest is MockDeployVersions, RainDeployVerifyChain 
         vm.createSelectFork(LibRainDeploy.BASE);
 
         DerivedDeploy memory derived = DerivedDeploy({
-            version: "0_0_1", deployedAddress: MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1, bytecodeHash: bytes32(uint256(1))
+            suite: "mock-deployable-0-0-1",
+            deployedAddress: MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
+            bytecodeHash: bytes32(uint256(1))
         });
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 CodeHashMismatchOnNetwork.selector,
                 LibRainDeploy.BASE,
-                "0_0_1",
+                "mock-deployable-0-0-1",
                 MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
                 bytes32(uint256(1)),
                 MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1
@@ -170,7 +172,7 @@ contract RainDeployVerifyChainTest is MockDeployVersions, RainDeployVerifyChain 
     /// derivation clears that address to run the creation code there, so if it
     /// did not put things back, a persistent deployment would be destroyed
     /// before the networks were ever read — and the matrix would report every
-    /// version missing everywhere.
+    /// suite missing everywhere.
     ///
     /// The nonce is checked as well as the code, and it is the part that
     /// discriminates. A local deploy that survived would leave the SAME runtime
@@ -183,7 +185,7 @@ contract RainDeployVerifyChainTest is MockDeployVersions, RainDeployVerifyChain 
         assertEq(vm.getNonce(MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1), 0);
         assertEq(vm.getNonce(MOCK_DEPLOYABLE_V2_DEPLOYED_ADDRESS_0_0_2), 0);
 
-        DerivedDeploy[] memory derived = deriveDeployments(allVersions());
+        DerivedDeploy[] memory derived = deriveDeployments(allSuites());
         assertEq(derived.length, 3);
 
         assertEq(MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1.code, MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1);
@@ -194,7 +196,7 @@ contract RainDeployVerifyChainTest is MockDeployVersions, RainDeployVerifyChain 
 
     /// The matrix MUST cover every supported network, not a subset one repo
     /// happened to list. A network added to `LibRainDeploy.supportedNetworks()`
-    /// is checked for every recorded version from the moment it is added, which
+    /// is checked for every declared suite from the moment it is added, which
     /// is the case no per-chain test function can cover.
     function testChainMatrixCoversEverySupportedNetwork() external {
         string[] memory networks = LibRainDeploy.supportedNetworks();
@@ -208,14 +210,17 @@ contract RainDeployVerifyChainTest is MockDeployVersions, RainDeployVerifyChain 
             vm.etch(MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1, hex"");
 
             DerivedDeploy memory derived = DerivedDeploy({
-                version: "0_0_1",
+                suite: "mock-deployable-0-0-1",
                 deployedAddress: MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
                 bytecodeHash: MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1
             });
 
             vm.expectRevert(
                 abi.encodeWithSelector(
-                    NotDeployedOnNetwork.selector, networks[i], "0_0_1", MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1
+                    NotDeployedOnNetwork.selector,
+                    networks[i],
+                    "mock-deployable-0-0-1",
+                    MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1
                 )
             );
             this.externalCheckDeployedOnNetwork(networks[i], derived);

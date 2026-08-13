@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {DeployCandidate, DeployVersion, ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBase.sol";
+import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBase.sol";
+import {DeployCandidate, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     CandidateSourceMismatch,
     RainDeployVerifyOffline,
@@ -11,7 +12,7 @@ import {
     StoredRuntimeCodeHashMismatch
 } from "../../../src/abstract/RainDeployVerifyOffline.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {MockDeployVersions} from "../../abstract/MockDeployVersions.sol";
+import {MockDeploySuites} from "../../abstract/MockDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
@@ -23,7 +24,7 @@ import {
 
 /// @title RainDeployVerifyOfflineTest
 /// @notice `RainDeployVerifyOffline` inherited by a fixture repo, so the
-/// inherited tests themselves are the passing case: `MockDeployVersions`
+/// inherited tests themselves are the passing case: `MockDeploySuites`
 /// declares two frozen releases and a candidate, and
 /// `testDeployPinsInternallyConsistent` /
 /// `testDeployPinsCandidateAnchoredToSource` run over them here exactly as they
@@ -34,12 +35,12 @@ import {
 /// inherited tests do, through external wrappers so `vm.expectRevert` lands at
 /// the right call depth, with the fixture data deliberately broken one field at
 /// a time.
-contract RainDeployVerifyOfflineTest is MockDeployVersions, RainDeployVerifyOffline {
+contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOffline {
     /// External wrapper for `checkInternallyConsistent` so `vm.expectRevert`
     /// works at the correct call depth.
-    /// @param version The version to check.
-    function externalCheckInternallyConsistent(DeployVersion memory version) external {
-        checkInternallyConsistent(version);
+    /// @param suite The suite to check.
+    function externalCheckInternallyConsistent(DeploySuite memory suite) external {
+        checkInternallyConsistent(suite);
     }
 
     /// External wrapper for `checkAnchoredToSource` so `vm.expectRevert` works
@@ -57,12 +58,14 @@ contract RainDeployVerifyOfflineTest is MockDeployVersions, RainDeployVerifyOffl
     /// @return The wrong-contract candidate.
     function wrongContractCandidate() internal pure returns (DeployCandidate memory) {
         return DeployCandidate({
-            snapshot: DeployVersion({
-                version: "candidate",
+            snapshot: DeploySuite({
+                suite: "mock-deployable-v2-candidate",
                 creationCode: MOCK_DEPLOYABLE_CREATION_CODE_0_0_1,
                 storedDeployedAddress: MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
                 storedBytecodeHash: MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1,
-                storedRuntimeCode: MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1
+                storedRuntimeCode: MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1,
+                artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
+                dependencies: new address[](0)
             }),
             sourceCreationCode: type(MockDeployableV2).creationCode
         });
@@ -70,14 +73,16 @@ contract RainDeployVerifyOfflineTest is MockDeployVersions, RainDeployVerifyOffl
 
     /// The frozen `0_0_1` release, which every negative case below breaks one
     /// field of.
-    /// @return The consistent `0_0_1` version.
-    function consistentVersion() internal pure returns (DeployVersion memory) {
-        return DeployVersion({
-            version: "0_0_1",
+    /// @return The consistent `0_0_1` suite.
+    function consistentSuite() internal pure returns (DeploySuite memory) {
+        return DeploySuite({
+            suite: "mock-deployable-0-0-1",
             creationCode: MOCK_DEPLOYABLE_CREATION_CODE_0_0_1,
             storedDeployedAddress: MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
             storedBytecodeHash: MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1,
-            storedRuntimeCode: MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1
+            storedRuntimeCode: MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1,
+            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
+            dependencies: new address[](0)
         });
     }
 
@@ -85,30 +90,36 @@ contract RainDeployVerifyOfflineTest is MockDeployVersions, RainDeployVerifyOffl
     /// derives MUST fail, naming the version and both addresses. This is the
     /// hand-edited constant, and the address copied from the wrong tag.
     function testStoredAddressMismatchReverts() external {
-        DeployVersion memory version = consistentVersion();
-        version.storedDeployedAddress = address(0xdead);
+        DeploySuite memory suite = consistentSuite();
+        suite.storedDeployedAddress = address(0xdead);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                StoredAddressMismatch.selector, "0_0_1", address(0xdead), MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1
+                StoredAddressMismatch.selector,
+                "mock-deployable-0-0-1",
+                address(0xdead),
+                MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1
             )
         );
-        this.externalCheckInternallyConsistent(version);
+        this.externalCheckInternallyConsistent(suite);
     }
 
     /// A recorded code hash that is not the one the recorded creation code
     /// produces MUST fail, naming the version and both hashes. This is a
     /// snapshot regenerated for one field and not the others.
     function testStoredCodeHashMismatchReverts() external {
-        DeployVersion memory version = consistentVersion();
-        version.storedBytecodeHash = bytes32(uint256(1));
+        DeploySuite memory suite = consistentSuite();
+        suite.storedBytecodeHash = bytes32(uint256(1));
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                StoredCodeHashMismatch.selector, "0_0_1", bytes32(uint256(1)), MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1
+                StoredCodeHashMismatch.selector,
+                "mock-deployable-0-0-1",
+                bytes32(uint256(1)),
+                MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1
             )
         );
-        this.externalCheckInternallyConsistent(version);
+        this.externalCheckInternallyConsistent(suite);
     }
 
     /// Recorded runtime code that does not hash to the code hash recorded
@@ -117,15 +128,18 @@ contract RainDeployVerifyOfflineTest is MockDeployVersions, RainDeployVerifyOffl
     /// only check standing between a corrupted `RUNTIME_CODE` and a green
     /// suite.
     function testStoredRuntimeCodeHashMismatchReverts() external {
-        DeployVersion memory version = consistentVersion();
-        version.storedRuntimeCode = hex"00";
+        DeploySuite memory suite = consistentSuite();
+        suite.storedRuntimeCode = hex"00";
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                StoredRuntimeCodeHashMismatch.selector, "0_0_1", MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1, keccak256(hex"00")
+                StoredRuntimeCodeHashMismatch.selector,
+                "mock-deployable-0-0-1",
+                MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1,
+                keccak256(hex"00")
             )
         );
-        this.externalCheckInternallyConsistent(version);
+        this.externalCheckInternallyConsistent(suite);
     }
 
     /// The internal group MUST NOT catch a consistent snapshot of the wrong
@@ -157,7 +171,7 @@ contract RainDeployVerifyOfflineTest is MockDeployVersions, RainDeployVerifyOffl
         vm.expectRevert(
             abi.encodeWithSelector(
                 CandidateSourceMismatch.selector,
-                "candidate",
+                "mock-deployable-v2-candidate",
                 keccak256(MOCK_DEPLOYABLE_CREATION_CODE_0_0_1),
                 keccak256(type(MockDeployableV2).creationCode)
             )
@@ -169,22 +183,22 @@ contract RainDeployVerifyOfflineTest is MockDeployVersions, RainDeployVerifyOffl
     /// the previous test is discriminating rather than a check that always
     /// fails.
     function testCandidateAnchoredToSourcePasses() external view {
-        this.externalCheckAnchoredToSource(candidateVersion());
+        this.externalCheckAnchoredToSource(candidateSuite());
     }
 
-    /// Two versions that record the SAME creation code MUST both derive, which
+    /// Two suites that record the SAME creation code MUST both derive, which
     /// is the ordinary state of a repo between a release and the next source
     /// change. `0_0_2` and the candidate are the same bytes and therefore the
     /// same address, and the whole set still passes.
     function testVersionsSharingCreationCodeAllDerive() external {
-        DeployVersion[] memory versions = allVersions();
-        assertEq(versions.length, 3);
-        assertEq(versions[1].storedDeployedAddress, versions[2].storedDeployedAddress);
-        assertEq(keccak256(versions[1].creationCode), keccak256(versions[2].creationCode));
+        DeploySuite[] memory suites = allSuites();
+        assertEq(suites.length, 3);
+        assertEq(suites[1].storedDeployedAddress, suites[2].storedDeployedAddress);
+        assertEq(keccak256(suites[1].creationCode), keccak256(suites[2].creationCode));
 
         // Neither derivation is disturbed by the other.
-        this.externalCheckInternallyConsistent(versions[1]);
-        this.externalCheckInternallyConsistent(versions[2]);
+        this.externalCheckInternallyConsistent(suites[1]);
+        this.externalCheckInternallyConsistent(suites[2]);
     }
 
     /// The pure address formula and the factory bytecode the derivation etches
@@ -195,7 +209,7 @@ contract RainDeployVerifyOfflineTest is MockDeployVersions, RainDeployVerifyOffl
     /// itself, so only a `LibRainDeploy` whose constant and formula had drifted
     /// apart could produce it.
     function testZoltuDerivationMismatchReverts() external {
-        DeployVersion memory version = consistentVersion();
+        DeploySuite memory suite = consistentSuite();
 
         // The factory answers with an address that does have code, but is not
         // the one the creation code derives.
@@ -208,27 +222,27 @@ contract RainDeployVerifyOfflineTest is MockDeployVersions, RainDeployVerifyOffl
         vm.expectRevert(
             abi.encodeWithSelector(
                 ZoltuDerivationMismatch.selector,
-                "0_0_1",
+                "mock-deployable-0-0-1",
                 MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
                 LibRainDeploy.ZOLTU_FACTORY
             )
         );
-        this.externalCheckInternallyConsistent(version);
+        this.externalCheckInternallyConsistent(suite);
     }
 
     /// The derivation MUST leave nothing behind. A local deploy that survived
     /// would be compared against itself by the chain-anchored group, and every
     /// network would pass whether or not anything is deployed there.
     function testDerivationLeavesNoCodeBehind() external {
-        DeployVersion[] memory versions = allVersions();
-        for (uint256 i = 0; i < versions.length; i++) {
-            assertEq(versions[i].storedDeployedAddress.code.length, 0);
+        DeploySuite[] memory suites = allSuites();
+        for (uint256 i = 0; i < suites.length; i++) {
+            assertEq(suites[i].storedDeployedAddress.code.length, 0);
         }
 
-        this.externalCheckInternallyConsistent(versions[0]);
+        this.externalCheckInternallyConsistent(suites[0]);
 
-        for (uint256 i = 0; i < versions.length; i++) {
-            assertEq(versions[i].storedDeployedAddress.code.length, 0);
+        for (uint256 i = 0; i < suites.length; i++) {
+            assertEq(suites[i].storedDeployedAddress.code.length, 0);
         }
     }
 }

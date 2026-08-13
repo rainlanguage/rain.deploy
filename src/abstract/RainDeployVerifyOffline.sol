@@ -2,45 +2,46 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {DeployCandidate, DeployVersion, DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
+import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
+import {DeployCandidate, DeploySuite} from "./RainDeploySuitesBase.sol";
 
 /// Thrown when the deploy address recorded for a version is not the address its
 /// own creation code derives.
-/// @param version The version label that failed.
-/// @param storedAddress The address the version records.
+/// @param suite The suite that failed.
+/// @param storedAddress The address the suite records.
 /// @param derivedAddress The address its creation code derives.
-error StoredAddressMismatch(string version, address storedAddress, address derivedAddress);
+error StoredAddressMismatch(string suite, address storedAddress, address derivedAddress);
 
 /// Thrown when the deployed code hash recorded for a version is not the hash
 /// its own creation code produces.
-/// @param version The version label that failed.
-/// @param storedCodeHash The code hash the version records.
+/// @param suite The suite that failed.
+/// @param storedCodeHash The code hash the suite records.
 /// @param derivedCodeHash The code hash its creation code produces.
-error StoredCodeHashMismatch(string version, bytes32 storedCodeHash, bytes32 derivedCodeHash);
+error StoredCodeHashMismatch(string suite, bytes32 storedCodeHash, bytes32 derivedCodeHash);
 
 /// Thrown when the runtime code recorded for a version does not hash to the
 /// code hash recorded beside it.
-/// @param version The version label that failed.
-/// @param storedBytecodeHash The code hash the version records.
-/// @param runtimeCodeHash The hash of the runtime code the version records.
-error StoredRuntimeCodeHashMismatch(string version, bytes32 storedBytecodeHash, bytes32 runtimeCodeHash);
+/// @param suite The suite that failed.
+/// @param storedBytecodeHash The code hash the suite records.
+/// @param runtimeCodeHash The hash of the runtime code the suite records.
+error StoredRuntimeCodeHashMismatch(string suite, bytes32 storedBytecodeHash, bytes32 runtimeCodeHash);
 
 /// Thrown when the candidate's recorded creation code is not the creation code
 /// this repo currently compiles. Hashes rather than the bytes themselves, which
 /// run to tens of kilobytes.
-/// @param version The candidate's version label.
+/// @param suite The candidate's key.
 /// @param storedCreationCodeHash Hash of the creation code the candidate
 /// records.
 /// @param sourceCreationCodeHash Hash of `type(X).creationCode` for the
 /// contract the candidate claims to be.
-error CandidateSourceMismatch(string version, bytes32 storedCreationCodeHash, bytes32 sourceCreationCodeHash);
+error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, bytes32 sourceCreationCodeHash);
 
 /// @title RainDeployVerifyOffline
-/// @notice Every deploy-pin assertion that needs no network, for every version
-/// a repo records. Two groups, which catch different things and are documented
+/// @notice Every deploy-pin assertion that needs no network, for every suite
+/// a repo declares. Two groups, which catch different things and are documented
 /// as such because it is easy to read the first as covering the second.
 ///
-/// **Internal to the recorded set.** The address a version's creation code
+/// **Internal to the recorded set.** The address a suite's creation code
 /// derives is the address it records, the code hash that creation code produces
 /// is the code hash it records, and the runtime code it records hashes to that
 /// same code hash. These are real derivations and they catch a set generated
@@ -59,27 +60,27 @@ error CandidateSourceMismatch(string version, bytes32 storedCreationCodeHash, by
 /// source, so anchoring one to source asserts something that is false by
 /// design.
 ///
-/// Neither group can catch a version that was never deployed, or that is no
+/// Neither group can catch a suite that was never deployed, or that is no
 /// longer deployed. Only `RainDeployVerifyChain` can, and nothing here is a
 /// substitute for it.
 abstract contract RainDeployVerifyOffline is RainDeployVerifyBase {
-    /// Checks one version against itself: derive from its creation code, then
+    /// Checks one suite against itself: derive from its creation code, then
     /// require everything it records to agree with the derivation.
-    /// @param version The version to check.
-    function checkInternallyConsistent(DeployVersion memory version) internal {
-        DerivedDeploy memory derived = deriveDeployment(version);
+    /// @param suite The suite to check.
+    function checkInternallyConsistent(DeploySuite memory suite) internal {
+        DerivedDeploy memory derived = deriveDeployment(suite);
 
-        if (version.storedDeployedAddress != derived.deployedAddress) {
-            revert StoredAddressMismatch(version.version, version.storedDeployedAddress, derived.deployedAddress);
+        if (suite.storedDeployedAddress != derived.deployedAddress) {
+            revert StoredAddressMismatch(suite.suite, suite.storedDeployedAddress, derived.deployedAddress);
         }
 
-        if (version.storedBytecodeHash != derived.bytecodeHash) {
-            revert StoredCodeHashMismatch(version.version, version.storedBytecodeHash, derived.bytecodeHash);
+        if (suite.storedBytecodeHash != derived.bytecodeHash) {
+            revert StoredCodeHashMismatch(suite.suite, suite.storedBytecodeHash, derived.bytecodeHash);
         }
 
-        bytes32 runtimeCodeHash = keccak256(version.storedRuntimeCode);
-        if (version.storedBytecodeHash != runtimeCodeHash) {
-            revert StoredRuntimeCodeHashMismatch(version.version, version.storedBytecodeHash, runtimeCodeHash);
+        bytes32 runtimeCodeHash = keccak256(suite.storedRuntimeCode);
+        if (suite.storedBytecodeHash != runtimeCodeHash) {
+            revert StoredRuntimeCodeHashMismatch(suite.suite, suite.storedBytecodeHash, runtimeCodeHash);
         }
     }
 
@@ -88,25 +89,25 @@ abstract contract RainDeployVerifyOffline is RainDeployVerifyBase {
     function checkAnchoredToSource(DeployCandidate memory candidate) internal pure {
         if (keccak256(candidate.snapshot.creationCode) != keccak256(candidate.sourceCreationCode)) {
             revert CandidateSourceMismatch(
-                candidate.snapshot.version,
+                candidate.snapshot.suite,
                 keccak256(candidate.snapshot.creationCode),
                 keccak256(candidate.sourceCreationCode)
             );
         }
     }
 
-    /// Every recorded version MUST be internally consistent: what it records is
+    /// Every declared suite MUST be internally consistent: what it records is
     /// what its own creation code derives.
     function testDeployPinsInternallyConsistent() external {
-        DeployVersion[] memory versions = allVersions();
-        for (uint256 i = 0; i < versions.length; i++) {
-            checkInternallyConsistent(versions[i]);
+        DeploySuite[] memory suites = allSuites();
+        for (uint256 i = 0; i < suites.length; i++) {
+            checkInternallyConsistent(suites[i]);
         }
     }
 
     /// The candidate MUST be a snapshot of the contract this repo compiles, not
     /// of some other contract that happens to be internally consistent.
     function testDeployPinsCandidateAnchoredToSource() external pure {
-        checkAnchoredToSource(candidateVersion());
+        checkAnchoredToSource(candidateSuite());
     }
 }

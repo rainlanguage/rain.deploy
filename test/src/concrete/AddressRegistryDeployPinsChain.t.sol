@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
-import {AddressRegistryDeployVersions} from "../../abstract/AddressRegistryDeployVersions.sol";
+import {AddressRegistryDeploySuites} from "../../../src/abstract/AddressRegistryDeploySuites.sol";
 
 /// @title AddressRegistryDeployPinsChainTest
 /// @notice Whether `AddressRegistry` is actually live, with the code this repo
@@ -25,4 +25,4 @@ import {AddressRegistryDeployVersions} from "../../abstract/AddressRegistryDeplo
 /// --no-match-contract Chain` still verifies everything that holds offline,
 /// whether the deployment is missing or the RPC endpoints are merely
 /// unreachable.
-contract AddressRegistryDeployPinsChainTest is AddressRegistryDeployVersions, RainDeployVerifyChain {}
+contract AddressRegistryDeployPinsChainTest is AddressRegistryDeploySuites, RainDeployVerifyChain {}

@@ -116,20 +116,65 @@ address, verifying its code hash first, exactly as `LibRainDeploy` verifies
 `ZOLTU_FACTORY_CODEHASH`. It resolves a name to an address and nothing more:
 what a consumer resolves a name for, and when, is the consumer's business.
 
-**`script/Deploy.sol`** — the broadcast. Deploys `AddressRegistry` to every
-network in `supportedNetworks()` at the address `LibAddressRegistryDeploy` pins,
-dispatching on `DEPLOYMENT_SUITE` (`address-registry`) and reverting on anything
-else. Run only via the `Manual sol artifacts` workflow.
+### `src/` holds the deploy machinery here. That is a SCOPED EXCEPTION.
+
+`src/abstract/RainDeploy*.sol` are test and script infrastructure, and they live
+in `src/` rather than `test/`. Two reasons, and the second is the one that
+matters:
+
+1. `.soldeerignore` excludes `test/` from the published package, and a
+   downstream repo has to import all of this — its `script/Deploy.sol` inherits
+   `RainDeployBroadcast`, its test contracts inherit `RainDeployVerify*`. An
+   abstract in a path the package excludes is unusable by every consumer.
+2. **This repo's PRODUCT is the deployment process.** Machinery for deploying
+   and for verifying deployments is not scaffolding that happens to live here —
+   it is the thing the package exists to publish. So `src/` is where it belongs.
+
+**Do not copy this into a consumer repo.** There, `src/` is the product —
+tokens, vaults, a factory — and deploy verification is scaffolding around it, so
+the usual convention stands unchanged: `test/src/**` mirrors `src/**`, and test
+abstracts live under `test/`. The exception is earned by what this repo IS, and
+a repo that merely USES this machinery has not earned it.
+
+The exception is scoped to the deploy/verify abstracts and the suite
+declaration. `src/concrete/AddressRegistry.sol` is an ordinary deployed
+contract, tested from `test/src/concrete/` exactly as the convention requires.
+
+**`src/abstract/RainDeploySuitesBase.sol`** — the ONE declaration of what a repo
+deploys: per suite, a key, the creation code, the recorded address/code
+hash/runtime code, an artifact path, and dependencies.
+
+Both sides read it. `RainDeployBroadcast` deploys from it and
+`RainDeployVerify*` verify against it, so "the deploy script broadcasts one
+contract while the tests verify another" is not a statement that can be true —
+not because something checks for it, but because there is one array and all
+three contracts read it.
+
+Suites are a REGISTRY the abstract iterates, not a chain of `else if`. A repo
+adds a suite by adding an array entry; the keys reported by a mistyped
+`DEPLOYMENT_SUITE` are built from that same array, so the failure message cannot
+fall behind the suites it describes. Keys are checked unique, because the key is
+what selects what gets broadcast.
+
+**`src/abstract/RainDeployBroadcast.sol`** — the broadcast. Selects one suite by
+`DEPLOYMENT_SUITE` and deploys it, before reading `DEPLOYMENT_KEY` so a mistyped
+suite fails naming the valid ones rather than on a missing key.
+`deployNetworks()` defaults to `supportedNetworks()` and is overridable for
+repos that bootstrap one chain per dispatch.
+
+**`script/Deploy.sol`** —
+`contract Deploy is AddressRegistryDeploySuites,
+RainDeployBroadcast {}`. Empty
+on purpose: the suites and the broadcast are both inherited. Run only via the
+`Manual sol artifacts` workflow.
+
+**`src/abstract/AddressRegistryDeploySuites.sol`** — this repo's own
+declaration, inherited by `script/Deploy.sol` and by both pins test contracts.
 
 **`src/abstract/RainDeployVerify*.sol`** — the deploy-pin verification every
-deploy repo inherits instead of hand-writing. In `src/`, not `test/`, because
-`.soldeerignore` excludes `/test` from the published package and a consumer that
-cannot import it cannot use it.
+deploy repo inherits instead of hand-writing.
 
-A repo declares its versions once — `releasedVersions()` and
-`candidateVersion()` on one abstract contract — and inherits that into one
-`RainDeployVerifyOffline` and one `RainDeployVerifyChain`. Nothing is per
-version and nothing is per network.
+Nothing is per suite beyond an array entry, and nothing anywhere is per network.
 
 The creation code is the only parameter. The Zoltu factory is `CREATE2` over its
 calldata under a zero salt, so the address is a pure function of it, and running
@@ -164,13 +209,15 @@ the same on every network, so a constructor reading `block.chainid` or similar
 is a DEFECT: it fails hard, naming the chain and both hashes. There is
 deliberately no per-chain code hash to record.
 
-These three are the only `src/` files `slither.config.json` filters out, by
-name. They are inherited by test contracts and never deployed, so slither's
-detectors — all of which are about deployed-code risk — have nothing to say
-about them except that an abstract does not implement its own virtuals and that
-a cheatcode is called in a loop. The filter matches those three filenames
-exactly, not the `src/abstract/` prefix, so a file added there later — including
-a deployable one — is analyzed rather than silently exempted.
+The `src/abstract/` files are the only `src/` files `slither.config.json`
+filters out, by name. They are inherited by test contracts and never deployed,
+so slither's detectors — all of which are about deployed-code risk — have
+nothing to say about them except that an abstract does not implement its own
+virtuals and that a cheatcode is called in a loop, and — because slither skips
+`test/` and `script/` — that an abstract's virtuals have no caller. The filter
+matches those filenames exactly, not the `src/abstract/` prefix, so a file added
+there later — including a deployable one — is analyzed rather than silently
+exempted.
 
 The libraries are designed to be called from Foundry scripts (`forge script`) in
 consuming repos, not directly. Consuming repos provide their own creation code,

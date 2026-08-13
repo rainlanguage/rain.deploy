@@ -1,4 +1,4 @@
 {
-  "filter_paths": "dependencies/forge-std-|src/abstract/RainDeployVerify(Base|Chain|Offline)\\.sol",
+  "filter_paths": "dependencies/forge-std-|src/abstract/(RainDeploy(SuitesBase|Broadcast|VerifyBase|VerifyChain|VerifyOffline)|AddressRegistryDeploySuites)\\.sol",
   "detectors_to_exclude": "assembly,low-level-calls"
 }
