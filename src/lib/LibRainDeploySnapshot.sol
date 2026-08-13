@@ -81,17 +81,27 @@ library LibRainDeploySnapshot {
     /// form. The single definition of the tag form — the version in
     /// `foundry.toml` is the one source of truth for which release is being
     /// built, so every path derives from it rather than restating it.
-    ///
-    /// Refuses anything that is not strict `X.Y.Z`.
     /// @param vm The Vm instance for file operations.
     /// @return The tag.
     function deployTag(Vm vm) internal view returns (string memory) {
-        string memory version = vm.parseTomlString(vm.readFile("foundry.toml"), ".package.version");
+        return tagForVersion(vm.parseTomlString(vm.readFile("foundry.toml"), ".package.version"));
+    }
+
+    /// The directory form of a release version, refusing anything that is not
+    /// strict `X.Y.Z`.
+    ///
+    /// Split from `deployTag` so the refusal is reachable without writing a
+    /// `foundry.toml`: a guard that cannot be exercised is a guard nobody knows
+    /// works. `0.1.7-rc1` maps to `0_1_7-rc1`, a directory the append-only gate
+    /// ignores forever — an orphan snapshot nothing protects — so it is refused
+    /// rather than frozen.
+    /// @param version The version string, e.g. `0.1.7`.
+    /// @return The tag, e.g. `0_1_7`.
+    function tagForVersion(string memory version) internal pure returns (string memory) {
         bytes memory versionBytes = bytes(version);
 
-        // Strict X.Y.Z: digits and exactly two dots, no leading or trailing
-        // dot, no empty component. Checked here rather than by the caller
-        // because every path below derives from the result.
+        // Digits and exactly two dots, no leading or trailing dot, no empty
+        // component.
         uint256 dots = 0;
         uint256 digitsInComponent = 0;
         for (uint256 i = 0; i < versionBytes.length; i++) {
