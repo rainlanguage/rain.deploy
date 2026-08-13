@@ -14,20 +14,20 @@ import {
     BYTECODE_HASH as MOCK_DEPLOYABLE_BYTECODE_HASH_0_0_1,
     DEPLOYED_ADDRESS as MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
     RUNTIME_CODE as MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1
-} from "../../fixtures/0_0_1/MockDeployable.sol";
+} from "../../exemplars/0_0_1/MockDeployable.sol";
 import {
     DEPLOYED_ADDRESS as MOCK_DEPLOYABLE_V2_DEPLOYED_ADDRESS_0_0_2,
     RUNTIME_CODE as MOCK_DEPLOYABLE_V2_RUNTIME_CODE_0_0_2
-} from "../../fixtures/0_0_2/MockDeployableV2.sol";
+} from "../../exemplars/0_0_2/MockDeployableV2.sol";
 
 /// @title RainDeployVerifyChainTest
-/// @notice `RainDeployVerifyChain` inherited by a fixture repo whose versions
+/// @notice `RainDeployVerifyChain` inherited by a exemplar repo whose versions
 /// are made live on every network by `setUp`, so the inherited
 /// `testDeployPinsLiveOnEverySupportedNetwork` is the passing case: it forks
 /// every network `supportedNetworks()` returns and finds all three suites.
 ///
 /// `setUp` places the code with a persistent `vm.etch` rather than pointing the
-/// fixture at some real deployment in another repo. A real one would make this
+/// exemplar at some real deployment in another repo. A real one would make this
 /// suite fail whenever that unrelated deployment moved — which is precisely the
 /// signal this group exists to raise for its own repo, and precisely the wrong
 /// thing to import into this one.
@@ -39,7 +39,7 @@ import {
 /// leaves the etch in place and changes only the code, and the check still
 /// fails, which it could not do if the expectation were read from the etch.
 contract RainDeployVerifyChainTest is MockDeploySuites, RainDeployVerifyChain {
-    /// Makes every fixture version live on every fork, which is what the
+    /// Makes every exemplar version live on every fork, which is what the
     /// inherited test then verifies. Persistent so it survives each
     /// `createSelectFork` inside the loop.
     function setUp() external {

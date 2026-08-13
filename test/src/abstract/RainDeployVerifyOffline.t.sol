@@ -20,10 +20,10 @@ import {
     CREATION_CODE as MOCK_DEPLOYABLE_CREATION_CODE_0_0_1,
     DEPLOYED_ADDRESS as MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
     RUNTIME_CODE as MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1
-} from "../../fixtures/0_0_1/MockDeployable.sol";
+} from "../../exemplars/0_0_1/MockDeployable.sol";
 
 /// @title RainDeployVerifyOfflineTest
-/// @notice `RainDeployVerifyOffline` inherited by a fixture repo, so the
+/// @notice `RainDeployVerifyOffline` inherited by a exemplar repo, so the
 /// inherited tests themselves are the passing case: `MockDeploySuites`
 /// declares two frozen releases and a candidate, and
 /// `testDeployPinsInternallyConsistent` /
@@ -33,7 +33,7 @@ import {
 /// The rest is what each group CATCHES, and — for the internal group — what it
 /// provably does not. Every case drives the same internal functions the
 /// inherited tests do, through external wrappers so `vm.expectRevert` lands at
-/// the right call depth, with the fixture data deliberately broken one field at
+/// the right call depth, with the exemplar data deliberately broken one field at
 /// a time.
 contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOffline {
     /// External wrapper for `checkInternallyConsistent` so `vm.expectRevert`

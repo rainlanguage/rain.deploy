@@ -31,6 +31,9 @@ bytecode_hash = "none"
 fs_permissions = [
   { access = "read", path = "./foundry.toml" },
   { access = "read-write", path = "./src" },
+  # GeneratedSnapshotShapeTest reads test/exemplars/ as text to check the
+  # generator's committed output against a hand-written shape.
+  { access = "read", path = "./test" },
 ]
 
 [dependencies]
