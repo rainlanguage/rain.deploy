@@ -57,7 +57,10 @@ contract LibRainDeploySnapshotTest is Test {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(dir, true);
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.writeFile(path, "// SPDX-License-Identifier: LicenseRef-DCL-1.0\n");
+        // Split so `reuse lint` reads this as a fixture rather than as this
+        // file's own license declaration -- an SPDX identifier in a string
+        // literal is indistinguishable from a real one to a line scanner.
+        vm.writeFile(path, string.concat("// SPDX-License", "-Identifier: LicenseRef-DCL-1.0\n"));
     }
 
     /// Whether `paths` holds `path`. The walk's order is the filesystem's, so
