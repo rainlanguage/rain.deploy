@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 // Hand-written fixture, deliberately shaped exactly like the frozen per-release
-// snapshot a deploy repo generates at `src/generated/<tag>/<Contract>.pointers.sol`.
+// snapshot a deploy repo generates at `src/generated/<tag>/<Contract>.sol`.
 // It exists so the verification abstracts are exercised against the real shape
 // consumers have — four literal constants and no reference to any source
 // contract — rather than only against values re-derived at test time, which

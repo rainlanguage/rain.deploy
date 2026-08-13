@@ -9,13 +9,13 @@ import {
     CREATION_CODE as MOCK_DEPLOYABLE_CREATION_CODE_0_0_1,
     DEPLOYED_ADDRESS as MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
     RUNTIME_CODE as MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1
-} from "../fixtures/0_0_1/MockDeployable.pointers.sol";
+} from "../fixtures/0_0_1/MockDeployable.sol";
 import {
     BYTECODE_HASH as MOCK_DEPLOYABLE_V2_BYTECODE_HASH_0_0_2,
     CREATION_CODE as MOCK_DEPLOYABLE_V2_CREATION_CODE_0_0_2,
     DEPLOYED_ADDRESS as MOCK_DEPLOYABLE_V2_DEPLOYED_ADDRESS_0_0_2,
     RUNTIME_CODE as MOCK_DEPLOYABLE_V2_RUNTIME_CODE_0_0_2
-} from "../fixtures/0_0_2/MockDeployableV2.pointers.sol";
+} from "../fixtures/0_0_2/MockDeployableV2.sol";
 
 /// @title MockDeploySuites
 /// @notice A deploy repo's suite declaration, as a fixture: two frozen

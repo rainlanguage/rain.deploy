@@ -20,7 +20,7 @@ import {
     CREATION_CODE as MOCK_DEPLOYABLE_CREATION_CODE_0_0_1,
     DEPLOYED_ADDRESS as MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1,
     RUNTIME_CODE as MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1
-} from "../../fixtures/0_0_1/MockDeployable.pointers.sol";
+} from "../../fixtures/0_0_1/MockDeployable.sol";
 
 /// @title RainDeployVerifyOfflineTest
 /// @notice `RainDeployVerifyOffline` inherited by a fixture repo, so the

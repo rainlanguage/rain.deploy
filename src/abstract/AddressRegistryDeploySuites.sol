@@ -4,6 +4,10 @@ pragma solidity ^0.8.25;
 
 import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {AddressRegistry} from "../concrete/AddressRegistry.sol";
+import {
+    CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE_CANDIDATE,
+    RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE_CANDIDATE
+} from "../generated/candidate/AddressRegistry.sol";
 import {LibAddressRegistryDeploy} from "../lib/LibAddressRegistryDeploy.sol";
 
 /// @title AddressRegistryDeploySuites
@@ -33,9 +37,10 @@ import {LibAddressRegistryDeploy} from "../lib/LibAddressRegistryDeploy.sol";
 /// From the first `sol-v*` release this is what `script/Build.sol` generates.
 abstract contract AddressRegistryDeploySuites is RainDeploySuitesBase {
     /// @inheritdoc RainDeploySuitesBase
-    /// @dev Empty: no release has been cut, so no snapshot is frozen.
+    /// @dev Empty: no release has been cut, so no `<tag>/` snapshot is frozen.
     /// `src/generated/<tag>/` is append-only and `ADDRESS_REGISTRY_ROOT` is
-    /// still a placeholder, so a snapshot written now could never be corrected.
+    /// still a placeholder, so a release cut now could never be corrected. The
+    /// rolling `candidate/` snapshot is not frozen and does exist.
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
         return new DeploySuite[](0);
     }
@@ -45,13 +50,12 @@ abstract contract AddressRegistryDeploySuites is RainDeploySuitesBase {
     /// and they are what the internal group checks the derivation against and
     /// what the broadcast asserts against before it forks anything.
     ///
-    /// The creation code and runtime code come from source because nothing
-    /// records them yet — there is no `src/generated/candidate/` pointers file
-    /// to read them from. Until there is, the source anchor compares source
-    /// against itself and can only pass: what it protects against is a RECORDED
-    /// creation code drifting from the source it claims to be, and there is no
-    /// recorded creation code here to drift. The address and code hash pins ARE
-    /// recorded, and those are checked for real.
+    /// The creation code and runtime code are RECORDED, read from the rolling
+    /// `src/generated/candidate/` snapshot. That is what makes the source
+    /// anchor mean something: it compares the recorded creation code against
+    /// `type(AddressRegistry).creationCode`, so editing the contract without
+    /// re-running `script/Build.sol` fails. While nothing was recorded, that
+    /// check compared source against itself and could only pass.
     ///
     /// `AddressRegistry` reads nothing and calls nothing at construction, so it
     /// has no dependency that must already be on chain.
@@ -59,10 +63,10 @@ abstract contract AddressRegistryDeploySuites is RainDeploySuitesBase {
         return DeployCandidate({
             snapshot: DeploySuite({
                 suite: "address-registry",
-                creationCode: type(AddressRegistry).creationCode,
+                creationCode: ADDRESS_REGISTRY_CREATION_CODE_CANDIDATE,
                 storedDeployedAddress: LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
                 storedBytecodeHash: LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH,
-                storedRuntimeCode: type(AddressRegistry).runtimeCode,
+                storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
                 dependencies: new address[](0)
             }),

@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 // Hand-written fixture in the frozen per-release snapshot shape, as
-// `0_0_1/MockDeployable.pointers.sol` explains. A SECOND release, for two
+// `0_0_1/MockDeployable.sol` explains. A SECOND release, for two
 // reasons neither of which one release covers.
 //
 // It is a different contract from `0_0_1`, so the two releases derive different

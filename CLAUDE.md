@@ -179,7 +179,7 @@ Nothing is per suite beyond an array entry, and nothing anywhere is per network.
 The creation code is the only parameter. The Zoltu factory is `CREATE2` over its
 calldata under a zero salt, so the address is a pure function of it, and running
 it once locally gives the runtime code and its hash. The address, code hash and
-runtime code a pointers file records are checked OUTPUTS.
+runtime code a generated file records are checked OUTPUTS.
 
 Three groups, sorted by what they are anchored to:
 
