@@ -157,6 +157,14 @@ the same on every network, so a constructor reading `block.chainid` or similar
 is a DEFECT: it fails hard, naming the chain and both hashes. There is
 deliberately no per-chain code hash to record.
 
+These three are the only `src/` files `slither.config.json` filters out, by
+name. They are inherited by test contracts and never deployed, so slither's
+detectors — all of which are about deployed-code risk — have nothing to say
+about them except that an abstract does not implement its own virtuals and that
+a cheatcode is called in a loop. The filter names the files rather than the
+directory, so a future `src/abstract/` file that IS deployable is still
+analyzed.
+
 The libraries are designed to be called from Foundry scripts (`forge script`) in
 consuming repos, not directly. Consuming repos provide their own creation code,
 expected addresses, expected code hashes, and dependency lists.

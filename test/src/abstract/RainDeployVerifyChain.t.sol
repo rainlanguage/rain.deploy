@@ -166,20 +166,30 @@ contract RainDeployVerifyChainTest is MockDeployVersions, RainDeployVerifyChain 
         this.externalCheckDeployedOnNetwork(LibRainDeploy.BASE, derived);
     }
 
-    /// Deriving MUST NOT disturb what is deployed at the derived address. The
+    /// Deriving MUST leave the derived address exactly as it found it. The
     /// derivation clears that address to run the creation code there, so if it
     /// did not put things back, a persistent deployment would be destroyed
     /// before the networks were ever read — and the matrix would report every
     /// version missing everywhere.
+    ///
+    /// The nonce is checked as well as the code, and it is the part that
+    /// discriminates. A local deploy that survived would leave the SAME runtime
+    /// code sitting there, so comparing code alone cannot tell "put back" from
+    /// "deployed over the top" — but a `CREATE2` deploy leaves the account at
+    /// nonce 1, while a restored etch is at nonce 0.
     function testDerivationRestoresCodeAtDerivedAddress() external {
         assertEq(MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1.code, MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1);
         assertEq(MOCK_DEPLOYABLE_V2_DEPLOYED_ADDRESS_0_0_2.code, MOCK_DEPLOYABLE_V2_RUNTIME_CODE_0_0_2);
+        assertEq(vm.getNonce(MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1), 0);
+        assertEq(vm.getNonce(MOCK_DEPLOYABLE_V2_DEPLOYED_ADDRESS_0_0_2), 0);
 
         DerivedDeploy[] memory derived = deriveDeployments(allVersions());
         assertEq(derived.length, 3);
 
         assertEq(MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1.code, MOCK_DEPLOYABLE_RUNTIME_CODE_0_0_1);
         assertEq(MOCK_DEPLOYABLE_V2_DEPLOYED_ADDRESS_0_0_2.code, MOCK_DEPLOYABLE_V2_RUNTIME_CODE_0_0_2);
+        assertEq(vm.getNonce(MOCK_DEPLOYABLE_DEPLOYED_ADDRESS_0_0_1), 0);
+        assertEq(vm.getNonce(MOCK_DEPLOYABLE_V2_DEPLOYED_ADDRESS_0_0_2), 0);
     }
 
     /// The matrix MUST cover every supported network, not a subset one repo
