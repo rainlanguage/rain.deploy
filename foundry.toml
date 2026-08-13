@@ -45,7 +45,7 @@ fs_permissions = [
 
 [dependencies]
 forge-std = "1.16.1"
-rain-sol-codegen = "0.1.4"
+rain-sol-codegen = "0.1.6"
 
 [soldeer]
 recursive_deps = false
