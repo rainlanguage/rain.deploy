@@ -41,7 +41,9 @@ nix develop -c rainix-sol-legal
 ```
 
 CI runs three matrix tasks: `rainix-sol-legal`, `rainix-sol-test`,
-`rainix-sol-static`.
+`rainix-sol-static`. There is a fourth workflow, `Manual sol artifacts`, which
+is `workflow_dispatch` only and is the on-chain deploy — nothing automatic ever
+broadcasts.
 
 ## RPC Configuration
 
@@ -113,6 +115,11 @@ frozen while the root is a placeholder, because that directory is append-only.
 address, verifying its code hash first, exactly as `LibRainDeploy` verifies
 `ZOLTU_FACTORY_CODEHASH`. It resolves a name to an address and nothing more:
 what a consumer resolves a name for, and when, is the consumer's business.
+
+**`script/Deploy.sol`** — the broadcast. Deploys `AddressRegistry` to every
+network in `supportedNetworks()` at the address `LibAddressRegistryDeploy` pins,
+dispatching on `DEPLOYMENT_SUITE` (`address-registry`) and reverting on anything
+else. Run only via the `Manual sol artifacts` workflow.
 
 **`src/abstract/RainDeployVerify*.sol`** — the deploy-pin verification every
 deploy repo inherits instead of hand-writing. In `src/`, not `test/`, because
@@ -189,6 +196,16 @@ expected addresses, expected code hashes, and dependency lists.
   (`rainix-tag-release`), because this repo carries a deployed concrete whose
   pins consumers rely on. `[package].version` is the LAST released version and
   moves only in lockstep with its snapshot.
+- **Deploy, then verify, then tag** — in that order, and they are three separate
+  things. `script/Deploy.sol` broadcasts `AddressRegistry` to every network in
+  `supportedNetworks()`, dispatched by hand through
+  `.github/workflows/manual-sol-artifacts.yaml`. Only then can
+  `AddressRegistryDeployPinsChainTest` pass, and only then is there a deployment
+  for `rainix-tag-release` to verify pins against — it verifies and publishes,
+  it never broadcasts. Broadcasting is key custody and real money, so it is
+  `workflow_dispatch` and nothing else. Deploying is idempotent: a network that
+  already has the code is skipped, so a partial run is fixed by running it
+  again.
 
 ## License
 

@@ -137,7 +137,25 @@ Only the consumer knows where it stored what it resolved, so the consumer
 supplies the reads (`abi.encodeCall(IOwnable.owner, ())` and the like) and this
 library supplies the fork loop and the comparison.
 
-## Releases
+## Deploying, and then releasing
+
+Three separate steps, in this order. Nothing automatic ever broadcasts.
+
+1. **Deploy.** Dispatch the
+   [`Manual sol artifacts`](.github/workflows/manual-sol-artifacts.yaml)
+   workflow, which runs `script/Deploy.sol` and broadcasts `AddressRegistry` to
+   every network in `supportedNetworks()`. `workflow_dispatch` only: this is key
+   custody and real money, and no merge or tag should be able to trigger it. It
+   is idempotent — a network that already has the code is skipped — so a partial
+   run is fixed by running it again rather than by unpicking anything.
+2. **Verify.** `AddressRegistryDeployPinsChainTest` passes only once every
+   supported network has the registry, with the code this repo compiles. It is
+   red today because step 1 has never been run.
+3. **Tag.** Push a `sol-v*` tag. `rainix-tag-release` regenerates the snapshot
+   for the version the tag names, verifies the live chains against those fresh
+   pins, publishes to Soldeer and commits the frozen snapshot back to `main`. It
+   verifies and publishes; it never broadcasts, which is exactly why step 1
+   cannot be folded into it.
 
 This is a deploy repo: it carries a deployed concrete whose address and codehash
 consumers pin, so releases are **manual `sol-v*` tags**, not merges.

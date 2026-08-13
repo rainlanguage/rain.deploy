@@ -40,9 +40,25 @@ rain-sol-codegen = "0.1.0"
 [soldeer]
 recursive_deps = false
 
+# Every alias here is a network script/Deploy.sol broadcasts to and
+# RainDeployVerifyChain forks. rainix's rpc-preflight action binds
+# <NETWORK>_RPC_URL to a candidate that is reachable at the time of the run,
+# rather than to one URL that may be dead, so these names are the contract with
+# it.
 [rpc_endpoints]
 arbitrum = "${ARBITRUM_RPC_URL}"
 base = "${BASE_RPC_URL}"
 base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
 flare = "${FLARE_RPC_URL}"
 polygon = "${POLYGON_RPC_URL}"
+
+# `rainix-manual-sol-artifacts` passes `--verify` by default and exports exactly
+# these variable names, so a deploy without this section broadcasts and then
+# fails with no API key configured for the chain — after spending the gas. One
+# entry per `[rpc_endpoints]` alias, because the deploy goes to all of them.
+[etherscan]
+arbitrum = { key = "${CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY}" }
+base = { key = "${CI_DEPLOY_BASE_ETHERSCAN_API_KEY}" }
+base_sepolia = { key = "${CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY}" }
+flare = { key = "${CI_DEPLOY_FLARE_ETHERSCAN_API_KEY}" }
+polygon = { key = "${CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY}" }
