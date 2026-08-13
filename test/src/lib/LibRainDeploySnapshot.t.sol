@@ -56,10 +56,10 @@ contract LibRainDeploySnapshotTest is Test {
         }
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(dir, true);
-        //forge-lint: disable-next-line(unsafe-cheatcode)
         // Split so `reuse lint` reads this as a fixture rather than as this
         // file's own license declaration -- an SPDX identifier in a string
         // literal is indistinguishable from a real one to a line scanner.
+        //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeFile(path, string.concat("// SPDX-License", "-Identifier: LicenseRef-DCL-1.0\n"));
     }
 
@@ -102,8 +102,9 @@ contract LibRainDeploySnapshotTest is Test {
     /// `UnreleasableVersion` exists to prevent, and it is what two spellings of
     /// the version rule would eventually produce.
     function testEveryFreezableVersionIsATagTheRecordFinds(uint8 major, uint8 minor, uint8 patch) external pure {
-        string memory version =
-            string.concat(vm.toString(uint256(major)), ".", vm.toString(uint256(minor)), ".", vm.toString(uint256(patch)));
+        string memory version = string.concat(
+            vm.toString(uint256(major)), ".", vm.toString(uint256(minor)), ".", vm.toString(uint256(patch))
+        );
 
         assertTrue(LibRainDeploySnapshot.isStrictTriple(version, "."));
         assertTrue(LibRainDeploySnapshot.isTag(LibRainDeploySnapshot.tagForVersion(version)));

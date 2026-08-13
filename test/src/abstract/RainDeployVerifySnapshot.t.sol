@@ -56,10 +56,7 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
     /// works at the correct call depth.
     /// @param paths The frozen record's files.
     /// @param released The declared released suites.
-    function externalCheckFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released)
-        external
-        view
-    {
+    function externalCheckFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released) external view {
         checkFrozenSnapshotsReleased(paths, released);
     }
 
@@ -84,9 +81,7 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
     /// mentions that release, so without this it is simply never checked again
     /// and every other assertion stays green.
     function testFrozenSnapshotUndeclaredReverts() external {
-        vm.expectRevert(
-            abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfTheGeneratedSnapshot()[0])
-        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfTheGeneratedSnapshot()[0]));
         this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), new DeploySuite[](0));
     }
 
@@ -99,9 +94,7 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
         wrongRelease[0] = releasedSuites()[1];
         assertEq(wrongRelease[0].suite, "second-address");
 
-        vm.expectRevert(
-            abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfTheGeneratedSnapshot()[0])
-        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfTheGeneratedSnapshot()[0]));
         this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), wrongRelease);
     }
 
