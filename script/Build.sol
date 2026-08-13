@@ -3,8 +3,9 @@
 pragma solidity =0.8.25;
 
 import {Script} from "forge-std-1.16.1/src/Script.sol";
-import {LibCodeGen} from "rain-sol-codegen-0.1.0/src/lib/LibCodeGen.sol";
-import {LibFs} from "rain-sol-codegen-0.1.0/src/lib/LibFs.sol";
+import {LibCodeGen} from "rain-sol-codegen-0.1.3/src/lib/LibCodeGen.sol";
+import {LibFs} from "rain-sol-codegen-0.1.3/src/lib/LibFs.sol";
+import {LibSnapshot} from "rain-sol-codegen-0.1.3/src/lib/LibSnapshot.sol";
 import {LibRainDeploy} from "../src/lib/LibRainDeploy.sol";
 import {AddressRegistry} from "../src/concrete/AddressRegistry.sol";
 
@@ -13,12 +14,17 @@ import {AddressRegistry} from "../src/concrete/AddressRegistry.sol";
 ///   1. A frozen per-release snapshot
 ///      `src/generated/<tag>/AddressRegistry.pointers.sol` (`BYTECODE_HASH`,
 ///      `DEPLOYED_ADDRESS`, `CREATION_CODE`, `RUNTIME_CODE`) for the current
-///      `deployTag()`. Historical tags are never regenerated; a release bump
-///      writes a new `<tag>/` snapshot beside them.
+///      `LibSnapshot.deployTag`. Historical tags are never regenerated; a
+///      release bump writes a new `<tag>/` snapshot beside them.
 ///   2. `src/lib/LibAddressRegistryDeploy.sol` — the current-release address and
-///      codehash, aliased from the current `deployTag()` snapshot so that
+///      codehash, aliased from the current tag's snapshot so that
 ///      snapshot stays the single source of truth (never a duplicated literal).
 ///      Kept in `src/lib` so consumers' import path is stable across releases.
+///
+/// The tag, the snapshot directory and the address-constant formatting all come
+/// from `rain-sol-codegen` rather than being restated here — `LibSnapshot` calls
+/// itself the single definition of the tag form, and a second definition in this
+/// file is exactly the drift that would make a release freeze the wrong dir.
 ///
 /// Run as `forge script script/Build.sol`. Wired into
 /// `rainix-tag-release`'s `snapshot-generate-cmd`, so a release regenerates the
@@ -33,52 +39,35 @@ contract Build is Script {
 
     // REUSE-IgnoreEnd
 
-    /// @notice The canonical release tag. Read from `foundry.toml`
-    /// `[package].version` — the single source of truth — with dots converted to
-    /// underscores for the Solidity dir form (`0.1.6` -> `0_1_6`).
-    /// @return The tag in its Solidity directory form.
-    function deployTag() internal view returns (string memory) {
-        string memory version = vm.parseTomlString(vm.readFile("foundry.toml"), ".package.version");
-        bytes memory b = bytes(version);
-        bytes memory out = new bytes(b.length);
-        for (uint256 i = 0; i < b.length; i++) {
-            // forge-lint: disable-next-line(unsafe-typecast)
-            out[i] = b[i] == "." ? bytes1("_") : b[i];
-        }
-        return string(out);
-    }
-
-    /// @notice The generated `DEPLOYED_ADDRESS` constant declaration.
-    /// @param addr The deterministic deploy address.
-    /// @return The Solidity source for the constant.
-    function addressConstantString(address addr) internal pure returns (string memory) {
-        return string.concat(
-            "\n",
-            "/// @dev The deterministic deploy address of the contract when deployed via\n",
-            "/// the Zoltu factory.\n",
-            "address constant DEPLOYED_ADDRESS = address(",
-            vm.toString(addr),
-            ");\n"
-        );
-    }
+    /// @notice The NatSpec emitted above the generated `DEPLOYED_ADDRESS`
+    /// constant. An argument to `LibCodeGen.addressConstantString` rather than
+    /// hardcoded into a local copy of it.
+    string constant DEPLOYED_ADDRESS_COMMENT =
+        "/// @dev The deterministic deploy address of the contract when deployed via\n/// the Zoltu factory.";
 
     function run() external {
         LibRainDeploy.etchZoltuFactory(vm);
 
+        string memory tag = LibSnapshot.deployTag(vm);
+
         // A fresh version slot has no `<tag>/` dir yet, and `vm.writeFile`
         // won't create one.
-        vm.createDir(string.concat("src/generated/", deployTag()), true);
+        vm.createDir(LibSnapshot.dirForTag(tag), true);
 
         bytes memory creationCode = type(AddressRegistry).creationCode;
         address deployed = LibRainDeploy.deployZoltu(creationCode);
 
-        // Frozen per-tag snapshot.
+        // Frozen per-tag snapshot. The tag is folded into the contract name so
+        // `LibFs` places it at `LibSnapshot.frozenPathForContract(tag,
+        // "AddressRegistry")`, which is the same path — `LibFs` owns writing a
+        // generated file, including its header and the idempotent removal of an
+        // existing one, and there is no variant of it that takes a path.
         LibFs.buildFileForContract(
             vm,
             deployed,
-            string.concat(deployTag(), "/AddressRegistry"),
+            string.concat(tag, "/AddressRegistry"),
             string.concat(
-                addressConstantString(deployed),
+                LibCodeGen.addressConstantString(vm, DEPLOYED_ADDRESS_COMMENT, "DEPLOYED_ADDRESS", deployed),
                 LibCodeGen.bytesConstantString(
                     vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", creationCode
                 ),
@@ -89,16 +78,17 @@ contract Build is Script {
         );
 
         // Current-release pin lib.
-        genLibAddressRegistryDeploy();
+        genLibAddressRegistryDeploy(tag);
     }
 
     /// @notice (Re)generate `src/lib/LibAddressRegistryDeploy.sol`, aliasing the
-    /// current `deployTag()` snapshot's `DEPLOYED_ADDRESS` + `BYTECODE_HASH` as
-    /// the current-release constants — the snapshot stays the single source of
+    /// current tag's snapshot `DEPLOYED_ADDRESS` + `BYTECODE_HASH` as the
+    /// current-release constants — the snapshot stays the single source of
     /// truth (never a duplicated literal). Emitted line-by-line to match the
     /// generated-file convention.
-    function genLibAddressRegistryDeploy() internal {
-        string memory importPath = string.concat("../generated/", deployTag(), "/AddressRegistry.pointers.sol");
+    /// @param tag The release tag, from `LibSnapshot.deployTag`.
+    function genLibAddressRegistryDeploy(string memory tag) internal {
+        string memory importPath = string.concat("../generated/", tag, "/AddressRegistry.pointers.sol");
         vm.writeFile(GEN_LIB_PATH, "");
         vm.writeLine(GEN_LIB_PATH, GEN_SPDX_LICENSE);
         vm.writeLine(GEN_LIB_PATH, GEN_SPDX_COPYRIGHT);
