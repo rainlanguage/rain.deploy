@@ -6,11 +6,13 @@ import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBas
 import {DeployCandidate, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     CandidateSourceMismatch,
+    FrozenSnapshotNotReleased,
     RainDeployVerifySnapshot,
     StoredAddressMismatch,
     StoredCodeHashMismatch,
     StoredRuntimeCodeHashMismatch
 } from "../../../src/abstract/RainDeployVerifySnapshot.sol";
+import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {AddressRegistry} from "../../../src/concrete/AddressRegistry.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
@@ -48,6 +50,59 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
     /// @param candidate The candidate to check.
     function externalCheckAnchoredToSource(DeployCandidate memory candidate) external pure {
         checkAnchoredToSource(candidate);
+    }
+
+    /// External wrapper for `checkFrozenSnapshotsReleased` so `vm.expectRevert`
+    /// works at the correct call depth.
+    /// @param paths The frozen record's files.
+    /// @param released The declared released suites.
+    function externalCheckFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released)
+        external
+        view
+    {
+        checkFrozenSnapshotsReleased(paths, released);
+    }
+
+    /// The real generated snapshot, standing in for a frozen record. It is the
+    /// same file a freeze copies into `src/generated/<tag>/`, and the exemplar's
+    /// first released suite is declared from it, so the pair below is a real
+    /// record checked against a real declaration.
+    /// @return paths The one-file record.
+    function recordOfTheGeneratedSnapshot() internal pure returns (string[] memory paths) {
+        paths = new string[](1);
+        paths[0] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry");
+    }
+
+    /// A record declared by a released suite MUST pass, so the failing cases
+    /// below are discriminating rather than a check that cannot succeed.
+    function testFrozenSnapshotDeclaredPasses() external view {
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), releasedSuites());
+    }
+
+    /// A release in the record that the declaration does not name MUST fail,
+    /// naming the file. This is the hole the check exists for: nothing else
+    /// mentions that release, so without this it is simply never checked again
+    /// and every other assertion stays green.
+    function testFrozenSnapshotUndeclaredReverts() external {
+        vm.expectRevert(
+            abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfTheGeneratedSnapshot()[0])
+        );
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), new DeploySuite[](0));
+    }
+
+    /// The match MUST be against what each suite's creation code derives, not
+    /// merely against a declaration existing. A repo that declares SOME
+    /// releases and misses one is the case that actually happens, and it is
+    /// indistinguishable from a full declaration to anything that only counts.
+    function testFrozenSnapshotDeclaredByAnotherSuiteReverts() external {
+        DeploySuite[] memory wrongRelease = new DeploySuite[](1);
+        wrongRelease[0] = releasedSuites()[1];
+        assertEq(wrongRelease[0].suite, "second-address");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfTheGeneratedSnapshot()[0])
+        );
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), wrongRelease);
     }
 
     /// A consistent snapshot of the WRONG contract: every recorded field is

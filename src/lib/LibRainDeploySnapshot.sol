@@ -87,41 +87,71 @@ library LibRainDeploySnapshot {
         return tagForVersion(vm.parseTomlString(vm.readFile("foundry.toml"), ".package.version"));
     }
 
+    /// Whether `subject` is three non-empty runs of digits joined by exactly
+    /// two `separator`s.
+    ///
+    /// The ONE definition of the release-version shape. It is asked with `.`
+    /// for a version out of `foundry.toml` and with `_` for the directory that
+    /// version freezes to, so what `tagForVersion` accepts and what
+    /// `frozenSnapshotPaths` recognises as a release cannot drift apart. Two
+    /// spellings of one rule is how a version becomes freezable to a directory
+    /// the record then ignores.
+    /// @param subject The string to test.
+    /// @param separator The component separator: `.` for a version, `_` for a
+    /// tag.
+    /// @return Whether it has the shape.
+    function isStrictTriple(string memory subject, bytes1 separator) internal pure returns (bool) {
+        bytes memory subjectBytes = bytes(subject);
+
+        uint256 separators = 0;
+        uint256 digitsInComponent = 0;
+        for (uint256 i = 0; i < subjectBytes.length; i++) {
+            bytes1 char = subjectBytes[i];
+            if (char == separator) {
+                // No leading separator, and no empty component.
+                if (digitsInComponent == 0) {
+                    return false;
+                }
+                separators++;
+                digitsInComponent = 0;
+            } else if (char >= "0" && char <= "9") {
+                digitsInComponent++;
+            } else {
+                return false;
+            }
+        }
+        // Exactly two separators, and no trailing one.
+        return separators == 2 && digitsInComponent > 0;
+    }
+
+    /// Whether a directory under a record root is a frozen release.
+    ///
+    /// A release directory is named by `tagForVersion`, so being tag shaped is
+    /// what makes a directory a release. The rolling `candidate/` is not a
+    /// release and is excluded by the same rule that admits every real one,
+    /// rather than by a name this would have to remember to exclude.
+    /// @param dir The directory name, e.g. `0_1_7`.
+    /// @return Whether it is a release tag.
+    function isTag(string memory dir) internal pure returns (bool) {
+        return isStrictTriple(dir, "_");
+    }
+
     /// The directory form of a release version, refusing anything that is not
     /// strict `X.Y.Z`.
     ///
     /// Split from `deployTag` so the refusal is reachable without writing a
     /// `foundry.toml`: a guard that cannot be exercised is a guard nobody knows
-    /// works. `0.1.7-rc1` maps to `0_1_7-rc1`, a directory the append-only gate
-    /// ignores forever — an orphan snapshot nothing protects — so it is refused
-    /// rather than frozen.
+    /// works. `0.1.7-rc1` maps to `0_1_7-rc1`, a directory `isTag` does not
+    /// recognise and the record therefore ignores forever — an orphan snapshot
+    /// nothing protects — so it is refused rather than frozen.
     /// @param version The version string, e.g. `0.1.7`.
     /// @return The tag, e.g. `0_1_7`.
     function tagForVersion(string memory version) internal pure returns (string memory) {
-        bytes memory versionBytes = bytes(version);
-
-        // Digits and exactly two dots, no leading or trailing dot, no empty
-        // component.
-        uint256 dots = 0;
-        uint256 digitsInComponent = 0;
-        for (uint256 i = 0; i < versionBytes.length; i++) {
-            bytes1 char = versionBytes[i];
-            if (char == ".") {
-                if (digitsInComponent == 0) {
-                    revert UnreleasableVersion(version);
-                }
-                dots++;
-                digitsInComponent = 0;
-            } else if (char >= "0" && char <= "9") {
-                digitsInComponent++;
-            } else {
-                revert UnreleasableVersion(version);
-            }
-        }
-        if (dots != 2 || digitsInComponent == 0) {
+        if (!isStrictTriple(version, ".")) {
             revert UnreleasableVersion(version);
         }
 
+        bytes memory versionBytes = bytes(version);
         bytes memory tagBytes = new bytes(versionBytes.length);
         for (uint256 i = 0; i < versionBytes.length; i++) {
             // forge-lint: disable-next-line(unsafe-typecast)
@@ -162,6 +192,63 @@ library LibRainDeploySnapshot {
     /// The output root `LibFs` writes to, and the only one it can write to:
     /// `LibFs.pathForContract` hardcodes it.
     string constant LIB_FS_ROOT = "src/generated";
+
+    /// Every file in the FROZEN record: everything inside a release-tag
+    /// directory under `root`.
+    ///
+    /// The record is the directory tree, not a list. `freeze` writes one
+    /// directory per release and removes none, so the tree is the complete
+    /// history of what a repo has released and is the only description of it
+    /// that cannot fall behind. Anything that reads a repo's own declaration of
+    /// what it has released has to be checkable against this, or a release
+    /// nobody declared is a release nothing verifies.
+    ///
+    /// Two rules, and both are the shape `freeze` writes:
+    ///
+    /// - the directory is tag shaped (`isTag`), which is what a release
+    ///   directory is named by. `candidate/` is not a release and falls out
+    ///   here, as does a scratch directory a test or a human left behind.
+    /// - the entry is a file directly inside it. Everything in a release
+    ///   directory belongs to that release's record — there is no extension to
+    ///   filter on, because nothing else has any business being in there.
+    /// @param vm The Vm instance for file operations.
+    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// @return paths Every frozen record file.
+    function frozenSnapshotPaths(Vm vm, string memory root) internal view returns (string[] memory paths) {
+        // A repo with no generated directory at all has released nothing. That
+        // is a real state — it is this repo's own, before its first release —
+        // rather than a missing file to fail on.
+        if (!vm.exists(root)) {
+            return new string[](0);
+        }
+
+        Vm.DirEntry[] memory entries = vm.readDir(root, 2);
+
+        string[] memory found = new string[](entries.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].isDir || entries[i].depth != 2) {
+                continue;
+            }
+            string[] memory components = vm.split(entries[i].path, "/");
+            string memory tag = components[components.length - 2];
+            if (!isTag(tag)) {
+                continue;
+            }
+            // Rebuilt from `root` rather than taken from the entry, which
+            // `readDir` spells absolutely. A record path is compared against a
+            // repo's own paths and named in a failure, so it has to be the
+            // repo-relative one every other path here is — and at depth 2 the
+            // last two components are the whole of what is below `root`.
+            found[count] = string.concat(root, "/", tag, "/", components[components.length - 1]);
+            count++;
+        }
+
+        paths = new string[](count);
+        for (uint256 i = 0; i < count; i++) {
+            paths[i] = found[i];
+        }
+    }
 
     /// Generate one snapshot for one contract, under an arbitrary output root.
     ///

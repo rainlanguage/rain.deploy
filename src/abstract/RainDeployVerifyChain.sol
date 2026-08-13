@@ -32,7 +32,7 @@ error CodeHashMismatchOnNetwork(
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the
 /// repo: across every network in `LibRainDeploy.supportedNetworks()`, every
-/// declared suite's derived address carries code with its derived code hash.
+/// RELEASED suite's derived address carries code with its derived code hash.
 ///
 /// This is the only group that can catch a suite that never deployed to a
 /// network, or that is not there any more. Neither is a fact the repo can hold:
@@ -40,8 +40,32 @@ error CodeHashMismatchOnNetwork(
 /// chains of five, a chain added to `supportedNetworks()` after a release that
 /// therefore never got it, a deploy that silently failed.
 ///
+/// ## Released only, for the same reason source anchors the candidate only
+///
+/// A release IS a deployment that happened. That is what its recorded bytes
+/// describe and why they are frozen, so "it is on every network" is a claim
+/// about it that is either true or a defect. The candidate is what the NEXT
+/// release will be: between releases it is ordinarily ahead of anything on
+/// chain, and a repo whose source has moved since its last deploy is the
+/// normal state of a repo, not a fault in it. Demanding the candidate be live
+/// asserts something false by design.
+///
+/// The two exemptions are the same shape from opposite ends —
+/// `RainDeployVerifySnapshot` anchors the candidate to source and never a
+/// release, because a release is meant to have diverged from source; this
+/// anchors releases to the chain and never the candidate, because the
+/// candidate is meant to be ahead of the chain. Neither is a field a caller
+/// can set: there is nothing to opt a suite into or out of.
+///
+/// That puts the whole weight on `releasedSuites()` naming every release. A
+/// frozen tag missing from it would be a release nothing here is ever handed,
+/// and a check that is never handed a subject cannot fail on it — so
+/// `RainDeployVerifySnapshot` checks that declaration against the append-only
+/// `src/generated/<tag>/` record. Without that, scoping to releases would be a
+/// way to make this contract quiet rather than correct.
+///
 /// The matrix is suites by networks and is generated from both, so a new
-/// network leaves no suite unchecked and a new suite is checked on every
+/// network leaves no suite unchecked and a new release is checked on every
 /// network from the moment it is declared. There are deliberately no per-chain
 /// or per-suite functions to add.
 ///
@@ -84,6 +108,14 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// expectation.
     /// @param derived The derivation of every suite to check.
     function checkDeployedOnSupportedNetworks(DerivedDeploy[] memory derived) internal {
+        // Nothing to check is not a reason to touch five RPC endpoints. Forking
+        // to check nothing turns an outage into the failure of an assertion
+        // that has no subject, which is the one failure this contract is
+        // supposed to be legible against.
+        if (derived.length == 0) {
+            return;
+        }
+
         string[] memory networks = LibRainDeploy.supportedNetworks();
         for (uint256 i = 0; i < networks.length; i++) {
             // createSelectFork returns a fork id that is not needed here; bind
@@ -96,9 +128,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         }
     }
 
-    /// Every declared suite MUST be live, with the code its creation code
+    /// Every RELEASED suite MUST be live, with the code its creation code
     /// produces, on every supported network.
     function testSuitesLiveOnEverySupportedNetwork() external {
-        checkDeployedOnSupportedNetworks(deriveDeployments(allSuites()));
+        checkDeployedOnSupportedNetworks(deriveDeployments(releasedSuites()));
     }
 }

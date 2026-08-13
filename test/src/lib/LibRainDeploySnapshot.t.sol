@@ -36,6 +36,125 @@ contract LibRainDeploySnapshotTest is Test {
             );
     }
 
+    /// Where the record fixture is built. NOT `src/generated`: the inherited
+    /// record check reads that root, in other contracts, which forge runs in
+    /// parallel with this one — a fixture release there would be a release
+    /// those contracts have to fail on, for as long as it exists.
+    string constant FIXTURE_ROOT = "test/generated";
+
+    /// Writes one file into the fixture record.
+    ///
+    /// Carries a licence header because a run that fails midway leaves it
+    /// behind, and an unlicensed file in the tree is a second failure on top of
+    /// the first.
+    /// @param path The file to write, under `FIXTURE_ROOT`.
+    function writeFixture(string memory path) internal {
+        string[] memory components = vm.split(path, "/");
+        string memory dir = components[0];
+        for (uint256 i = 1; i < components.length - 1; i++) {
+            dir = string.concat(dir, "/", components[i]);
+        }
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(dir, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(path, "// SPDX-License-Identifier: LicenseRef-DCL-1.0\n");
+    }
+
+    /// Whether `paths` holds `path`. The walk's order is the filesystem's, so
+    /// membership is the only thing worth asserting about it.
+    /// @param paths The paths returned by the walk.
+    /// @param path The path to look for.
+    /// @return Whether it is there.
+    function holdsPath(string[] memory paths, string memory path) internal pure returns (bool) {
+        for (uint256 i = 0; i < paths.length; i++) {
+            if (keccak256(bytes(paths[i])) == keccak256(bytes(path))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// A release tag is what `tagForVersion` produces and nothing else, so
+    /// exactly the directories a freeze can write are the ones the record
+    /// counts. The rolling `candidate/` is excluded by that same rule rather
+    /// than by name.
+    function testIsTagAcceptsWhatAFreezeCanWrite() external pure {
+        assertTrue(LibRainDeploySnapshot.isTag(LibRainDeploySnapshot.tagForVersion("0.1.7")));
+        assertTrue(LibRainDeploySnapshot.isTag("0_0_0"));
+        assertTrue(LibRainDeploySnapshot.isTag("10_20_30"));
+
+        assertFalse(LibRainDeploySnapshot.isTag(LibRainDeploySnapshot.CANDIDATE));
+        assertFalse(LibRainDeploySnapshot.isTag("0_1"));
+        assertFalse(LibRainDeploySnapshot.isTag("0_1_7-rc1"));
+        assertFalse(LibRainDeploySnapshot.isTag("0.1.7"));
+        assertFalse(LibRainDeploySnapshot.isTag("_1_7"));
+        assertFalse(LibRainDeploySnapshot.isTag("0_1_"));
+        assertFalse(LibRainDeploySnapshot.isTag(""));
+        assertFalse(LibRainDeploySnapshot.isTag("collision-guard"));
+    }
+
+    /// EVERY version a freeze accepts MUST produce a directory the record
+    /// recognises as a release. A version that could be frozen to a directory
+    /// the record then ignores is exactly the orphan snapshot
+    /// `UnreleasableVersion` exists to prevent, and it is what two spellings of
+    /// the version rule would eventually produce.
+    function testEveryFreezableVersionIsATagTheRecordFinds(uint8 major, uint8 minor, uint8 patch) external pure {
+        string memory version =
+            string.concat(vm.toString(uint256(major)), ".", vm.toString(uint256(minor)), ".", vm.toString(uint256(patch)));
+
+        assertTrue(LibRainDeploySnapshot.isStrictTriple(version, "."));
+        assertTrue(LibRainDeploySnapshot.isTag(LibRainDeploySnapshot.tagForVersion(version)));
+    }
+
+    /// The record is every file inside a release-tag directory, and only those.
+    ///
+    /// The whole point of reading the tree is that it is the one description of
+    /// what a repo has released that cannot fall behind, so a walk that quietly
+    /// found nothing would leave exactly the hole it is here to close. Driven
+    /// against a directory that really has releases in it.
+    function testFrozenSnapshotPathsFindsEveryReleaseAndNothingElse() external {
+        writeFixture(string.concat(FIXTURE_ROOT, "/0_0_1/MockDeployable.sol"));
+        writeFixture(string.concat(FIXTURE_ROOT, "/0_0_2/MockDeployableV2.sol"));
+        writeFixture(string.concat(FIXTURE_ROOT, "/0_0_2/Second.sol"));
+        // Not releases: the rolling snapshot, a version no freeze could have
+        // written, a file loose in the root, and a file too deep to be a record.
+        writeFixture(string.concat(FIXTURE_ROOT, "/", LibRainDeploySnapshot.CANDIDATE, "/MockDeployable.sol"));
+        writeFixture(string.concat(FIXTURE_ROOT, "/0_0_3-rc1/MockDeployable.sol"));
+        writeFixture(string.concat(FIXTURE_ROOT, "/Loose.sol"));
+        writeFixture(string.concat(FIXTURE_ROOT, "/0_0_1/nested/TooDeep.sol"));
+
+        string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, FIXTURE_ROOT);
+
+        assertTrue(holdsPath(paths, string.concat(FIXTURE_ROOT, "/0_0_1/MockDeployable.sol")));
+        assertTrue(holdsPath(paths, string.concat(FIXTURE_ROOT, "/0_0_2/MockDeployableV2.sol")));
+        assertTrue(holdsPath(paths, string.concat(FIXTURE_ROOT, "/0_0_2/Second.sol")));
+        assertEq(paths.length, 3);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(FIXTURE_ROOT, true);
+    }
+
+    /// A root that is not there at all MUST read as a repo that has released
+    /// nothing, not as a failure. That is the state of every deploy repo before
+    /// its first release, including this one.
+    function testFrozenSnapshotPathsOnAMissingRoot() external view {
+        assertFalse(vm.exists(FIXTURE_ROOT));
+        assertEq(LibRainDeploySnapshot.frozenSnapshotPaths(vm, FIXTURE_ROOT).length, 0);
+    }
+
+    /// The rolling snapshot MUST NOT be in this repo's own record. It is the
+    /// only directory in `src/generated/` today, and a walk that returned it
+    /// would make the candidate a release that has to be declared and deployed.
+    function testFrozenSnapshotPathsExcludesTheRollingSnapshot() external view {
+        assertTrue(vm.exists(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry")));
+        assertFalse(
+            holdsPath(
+                LibRainDeploySnapshot.frozenSnapshotPaths(vm, LibRainDeploySnapshot.LIB_FS_ROOT),
+                LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry")
+            )
+        );
+    }
+
     /// A strict `X.Y.Z` version MUST become its directory form.
     function testTagForVersionConvertsDots() external pure {
         assertEq(LibRainDeploySnapshot.tagForVersion("0.1.7"), "0_1_7");

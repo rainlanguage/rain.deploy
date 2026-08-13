@@ -4,17 +4,22 @@ pragma solidity =0.8.25;
 
 import {IAddressRegistryV1} from "../interface/IAddressRegistryV1.sol";
 
-/// @dev PLACEHOLDER ROOT AUTHORITY. THIS IS NOT A REAL ROOT.
-///
-/// The only account that may bind a name. It is a compile-time constant, not
-/// storage, so it can never be rotated, and it is part of the creation code, so
+/// @dev The only account that may bind a name. A compile-time constant rather
+/// than storage, so it can never be rotated, and part of the creation code, so
 /// changing it changes the deterministic deploy address and code hash of
 /// `AddressRegistry` on every network.
 ///
-/// A human MUST replace this value with the intended root before any deploy-pin
-/// snapshot is generated for this contract, and the pins in `rain-deploy`'s
-/// `LibAddressRegistry` MUST be regenerated from the resulting creation code.
-address constant ADDRESS_REGISTRY_ROOT = address(0xdeaDDeADDEaDdeaDdEAddEADDEAdDeadDEADDEaD);
+/// Zero during rollout. Nothing calls from the zero address, so no name can be
+/// bound while root is zero, and `get` reverts on every name that is not bound
+/// — so a registry compiled under this root answers every read with a revert
+/// and cannot answer one with an address. There is no state in which a consumer
+/// silently resolves something wrong from it: a zero root makes the registry
+/// inert, loudly, in every direction.
+///
+/// Setting a real root is an ordinary source change. It moves the creation
+/// code, and therefore the deploy address, the code hash, the snapshot
+/// `script/Build.sol` generates and the release that carries them.
+address constant ADDRESS_REGISTRY_ROOT = address(0);
 
 /// @title AddressRegistry
 /// @notice The whole of `IAddressRegistryV1`: an immutable root authority binds
