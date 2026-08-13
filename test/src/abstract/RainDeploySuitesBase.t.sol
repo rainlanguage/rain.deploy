@@ -9,8 +9,8 @@ import {
     DuplicateDeploySuite,
     UnknownDeploymentSuite
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {MockBroadcastDeploy} from "../../concrete/MockBroadcastDeploy.sol";
-import {MockDuplicateSuites} from "../../concrete/MockDuplicateSuites.sol";
+import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
+import {DuplicateDeploySuites} from "../../concrete/DuplicateDeploySuites.sol";
 
 /// @title RainDeploySuitesBaseTest
 /// @notice The registry itself: one declaration, keyed lookup, and the two ways
@@ -22,11 +22,11 @@ import {MockDuplicateSuites} from "../../concrete/MockDuplicateSuites.sol";
 /// so the failure message and the actual set of suites are free to drift. Here
 /// they are the same array, which is what these tests pin.
 contract RainDeploySuitesBaseTest is Test {
-    MockBroadcastDeploy internal sSuites;
+    ExampleDeploy internal sSuites;
 
     /// The fixture declaration, as a deploy script would inherit it.
     function setUp() external {
-        sSuites = new MockBroadcastDeploy();
+        sSuites = new ExampleDeploy();
     }
 
     /// The registry MUST be the released suites followed by the candidate, in
@@ -37,9 +37,9 @@ contract RainDeploySuitesBaseTest is Test {
         DeploySuite[] memory suites = sSuites.externalAllSuites();
 
         assertEq(suites.length, 3);
-        assertEq(suites[0].suite, "mock-deployable-0-0-1");
-        assertEq(suites[1].suite, "mock-deployable-v2-0-0-2");
-        assertEq(suites[2].suite, "mock-deployable-v2-candidate");
+        assertEq(suites[0].suite, "address-registry-0-0-1");
+        assertEq(suites[1].suite, "second-address");
+        assertEq(suites[2].suite, "address-registry-candidate");
     }
 
     /// Every declared key MUST select its own suite. A deploy is dispatched per
@@ -62,8 +62,8 @@ contract RainDeploySuitesBaseTest is Test {
     /// so the key is the only thing that distinguishes them — and it has to,
     /// because they are separately deployable records.
     function testSuitesSharingCreationCodeSelectApart() external view {
-        DeploySuite memory released = sSuites.externalSuiteByName("mock-deployable-v2-0-0-2");
-        DeploySuite memory candidate = sSuites.externalSuiteByName("mock-deployable-v2-candidate");
+        DeploySuite memory released = sSuites.externalSuiteByName("address-registry-0-0-1");
+        DeploySuite memory candidate = sSuites.externalSuiteByName("address-registry-candidate");
 
         assertEq(keccak256(released.creationCode), keccak256(candidate.creationCode));
         assertEq(released.storedDeployedAddress, candidate.storedDeployedAddress);
@@ -78,7 +78,7 @@ contract RainDeploySuitesBaseTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "mock-deployable",
-                "mock-deployable-0-0-1, mock-deployable-v2-0-0-2, mock-deployable-v2-candidate"
+                "address-registry-0-0-1, second-address, address-registry-candidate"
             )
         );
         sSuites.externalSuiteByName("mock-deployable");
@@ -91,7 +91,7 @@ contract RainDeploySuitesBaseTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "",
-                "mock-deployable-0-0-1, mock-deployable-v2-0-0-2, mock-deployable-v2-candidate"
+                "address-registry-0-0-1, second-address, address-registry-candidate"
             )
         );
         sSuites.externalSuiteByName("");
@@ -99,10 +99,7 @@ contract RainDeploySuitesBaseTest is Test {
 
     /// The reported key list MUST be exactly the registry, in order.
     function testSuiteNamesIsTheRegistry() external view {
-        assertEq(
-            sSuites.externalSuiteNames(),
-            "mock-deployable-0-0-1, mock-deployable-v2-0-0-2, mock-deployable-v2-candidate"
-        );
+        assertEq(sSuites.externalSuiteNames(), "address-registry-0-0-1, second-address, address-registry-candidate");
     }
 
     /// Two suites under one key MUST fail, on BOTH paths that read the
@@ -110,7 +107,7 @@ contract RainDeploySuitesBaseTest is Test {
     /// unreachable, and it is checked where both the deploy side and the verify
     /// side pay for it rather than in either one of them.
     function testDuplicateSuiteKeyReverts() external {
-        MockDuplicateSuites duplicates = new MockDuplicateSuites();
+        DuplicateDeploySuites duplicates = new DuplicateDeploySuites();
 
         vm.expectRevert(abi.encodeWithSelector(DuplicateDeploySuite.selector, "collides"));
         duplicates.externalAllSuites();

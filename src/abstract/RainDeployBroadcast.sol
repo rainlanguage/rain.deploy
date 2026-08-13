@@ -35,7 +35,7 @@ import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 ///
 /// The recorded address and code hash are passed to `deployAndBroadcast`, not
 /// derived from the creation code here. They are derivable — that is exactly
-/// what `RainDeployVerifyOffline` derives them for — but deriving them at
+/// what `RainDeployVerifySnapshot` derives them for — but deriving them at
 /// broadcast time would defeat the check that matters most at broadcast time.
 /// `LibRainDeploy.deployToNetworks` compares the recorded address against the
 /// address the creation code derives BEFORE it forks anything, precisely so a

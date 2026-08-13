@@ -26,7 +26,7 @@ error ZoltuDerivationMismatch(string suite, address formulaAddress, address fact
 /// @param snapshotId The snapshot that could not be reverted.
 error DerivationSnapshotRevertFailed(string suite, uint256 snapshotId);
 
-/// What a suite's creation code derives, offline and by itself. Computed
+/// What a suite's creation code derives, by itself. Computed
 /// once and then compared against whatever claims to hold it, whether that is a
 /// recorded constant or a live chain.
 struct DerivedDeploy {
@@ -47,13 +47,13 @@ struct DerivedDeploy {
 /// declaration `RainDeployBroadcast` deploys from. Verification and deployment
 /// therefore cannot describe different things.
 ///
-/// This is not inherited directly. `RainDeployVerifyOffline` and
+/// This is not inherited directly. `RainDeployVerifySnapshot` and
 /// `RainDeployVerifyChain` each inherit it and contribute the checks that need
 /// no network and the checks that do, respectively. A repo inherits its
-/// declaration into one of each, so running the offline checks never touches an
-/// RPC endpoint — an outage is then a failure of one contract that plainly is
+/// declaration into one of each, so running the snapshot checks never touches
+/// an RPC endpoint — an outage is then a failure of one contract that plainly is
 /// about the chain, and can never be confused with, or take down, the
-/// assertions that hold offline.
+/// snapshot assertions.
 ///
 /// ## Chain-independent runtime code is a requirement, not a caveat
 ///

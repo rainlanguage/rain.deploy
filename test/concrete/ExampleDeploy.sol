@@ -4,14 +4,14 @@ pragma solidity =0.8.25;
 
 import {DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
-import {MockDeploySuites} from "../abstract/MockDeploySuites.sol";
+import {ExampleDeploySuites} from "../abstract/ExampleDeploySuites.sol";
 
-/// @title MockBroadcastDeploy
-/// A deploy repo's whole script, as a fixture — the fixture suite declaration
-/// plus `RainDeployBroadcast` and nothing else, which is exactly what
-/// `script/Deploy.sol` is. The external wrappers exist so a plain `Test`
-/// contract can drive the internals without inheriting `Script`.
-contract MockBroadcastDeploy is MockDeploySuites, RainDeployBroadcast {
+/// @title ExampleDeploy
+/// A deploy repo's whole script — a suite declaration plus `RainDeployBroadcast`
+/// and nothing else, which is exactly what `script/Deploy.sol` is. The external
+/// wrappers let a plain `Test` contract drive the internals without inheriting
+/// `Script`.
+contract ExampleDeploy is ExampleDeploySuites, RainDeployBroadcast {
     /// @param requested The suite key to select.
     /// @return The selected suite.
     function externalSuiteByName(string memory requested) external pure returns (DeploySuite memory) {

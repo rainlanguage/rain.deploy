@@ -27,7 +27,7 @@ import {AddressRegistryDeploySuites} from "../src/abstract/AddressRegistryDeploy
 /// chains of five, one RPC down — is fixed by running it again rather than by
 /// unpicking anything.
 ///
-/// `AddressRegistryDeployPinsChainTest` is what says whether this has been run
+/// `AddressRegistryDeployChainTest` is what says whether this has been run
 /// and worked. It fails until every supported network has the registry, which
 /// is the state this repo is in right now.
 contract Deploy is AddressRegistryDeploySuites, RainDeployBroadcast {}

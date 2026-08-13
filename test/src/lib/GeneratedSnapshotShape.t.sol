@@ -22,7 +22,7 @@ import {Test} from "forge-std-1.16.1/src/Test.sol";
 ///
 /// Values are deliberately not asserted. A solc or optimiser change moves every
 /// literal without changing anything here, and a wrong literal is caught
-/// immediately by the group 1 derivation checks in `RainDeployVerifyOffline`.
+/// immediately by the group 1 derivation checks in `RainDeployVerifySnapshot`.
 contract GeneratedSnapshotShapeTest is Test {
     /// The artifact for the generated candidate snapshot, which carries its AST.
     string constant ARTIFACT = "out/candidate/AddressRegistry.sol/AddressRegistry.json";

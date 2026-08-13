@@ -11,9 +11,9 @@ import {
 
 /// @title LibAddressRegistryDeploy
 /// @notice The deterministic Zoltu deploy address and code hash of
-/// `AddressRegistry` as this repo currently compiles it, aliased from the
-/// rolling `src/generated/candidate/AddressRegistry.sol` snapshot so
-/// that snapshot stays the single source of truth.
+/// `AddressRegistry`, aliased from its generated snapshot so that snapshot stays the
+/// single source of truth. The import path never moves, so consumers are
+/// unaffected by which snapshot it names.
 library LibAddressRegistryDeploy {
     address constant ADDRESS_REGISTRY_DEPLOYED_ADDRESS = ADDRESS_REGISTRY_ADDR;
     bytes32 constant ADDRESS_REGISTRY_DEPLOYED_CODEHASH = ADDRESS_REGISTRY_HASH;

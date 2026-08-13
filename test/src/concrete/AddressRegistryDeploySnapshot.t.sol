@@ -2,10 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {RainDeployVerifyOffline} from "../../../src/abstract/RainDeployVerifyOffline.sol";
+import {RainDeployVerifySnapshot} from "../../../src/abstract/RainDeployVerifySnapshot.sol";
 import {AddressRegistryDeploySuites} from "../../../src/abstract/AddressRegistryDeploySuites.sol";
 
-/// @title AddressRegistryDeployPinsOfflineTest
+/// @title AddressRegistryDeploySnapshotTest
 /// @notice The deploy-pin assertions for `AddressRegistry` that need no
 /// network: what `LibAddressRegistryDeploy` records is what the creation code
 /// this repo compiles derives, and the candidate is a snapshot of that source
@@ -19,5 +19,5 @@ import {AddressRegistryDeploySuites} from "../../../src/abstract/AddressRegistry
 ///
 /// Both assertions are inherited. There is nothing to write here, which is the
 /// point: `AddressRegistryDeploySuites` says which versions exist and
-/// `RainDeployVerifyOffline` says what is true of them.
-contract AddressRegistryDeployPinsOfflineTest is AddressRegistryDeploySuites, RainDeployVerifyOffline {}
+/// `RainDeployVerifySnapshot` says what is true of them.
+contract AddressRegistryDeploySnapshotTest is AddressRegistryDeploySuites, RainDeployVerifySnapshot {}

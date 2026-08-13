@@ -16,9 +16,9 @@ import {LibAddressRegistryDeploy} from "../lib/LibAddressRegistryDeploy.sol";
 /// Three contracts inherit this and nothing else declares a suite:
 ///
 /// - `script/Deploy.sol` broadcasts from it
-/// - `AddressRegistryDeployPinsOfflineTest` checks its records against its
+/// - `AddressRegistryDeploySnapshotTest` checks its records against its
 ///   creation code
-/// - `AddressRegistryDeployPinsChainTest` checks it against every chain
+/// - `AddressRegistryDeployChainTest` checks it against every chain
 ///
 /// So "the deploy script broadcasts one contract while the tests verify
 /// another" is not a thing that can be true here. Not because something checks

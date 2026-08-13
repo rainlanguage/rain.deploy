@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {AddressRegistryDeploySuites} from "../../../src/abstract/AddressRegistryDeploySuites.sol";
 
-/// @title AddressRegistryDeployPinsChainTest
+/// @title AddressRegistryDeployChainTest
 /// @notice Whether `AddressRegistry` is actually live, with the code this repo
 /// compiles, on every supported network.
 ///
@@ -16,13 +16,13 @@ import {AddressRegistryDeploySuites} from "../../../src/abstract/AddressRegistry
 ///
 /// That failure is the check working. "Nothing is deployed at the address
 /// `LibAddressRegistry` reads" is true, it is the single most important fact
-/// about these pins, and no offline assertion can discover it — a perfectly
+/// about these pins, and no snapshot assertion can discover it — a perfectly
 /// consistent set of pins for a contract that exists nowhere passes every one
 /// of them. A green here would only mean nobody asked.
 ///
-/// It is a separate contract from `AddressRegistryDeployPinsOfflineTest`
+/// It is a separate contract from `AddressRegistryDeploySnapshotTest`
 /// precisely so that it says this and nothing more: `forge test
-/// --no-match-contract Chain` still verifies everything that holds offline,
+/// --no-match-contract Chain` still runs every snapshot assertion,
 /// whether the deployment is missing or the RPC endpoints are merely
 /// unreachable.
-contract AddressRegistryDeployPinsChainTest is AddressRegistryDeploySuites, RainDeployVerifyChain {}
+contract AddressRegistryDeployChainTest is AddressRegistryDeploySuites, RainDeployVerifyChain {}

@@ -46,17 +46,17 @@ error CodeHashMismatchOnNetwork(
 /// or per-suite functions to add.
 ///
 /// It compares against the DERIVED code hash rather than the recorded one, so
-/// the creation code stays the only parameter. `RainDeployVerifyOffline` is
+/// the creation code stays the only parameter. `RainDeployVerifySnapshot` is
 /// what ties the derivation back to the recorded constants; the two together
 /// say the recorded set describes what is actually live.
 ///
-/// Kept in its own contract, away from every assertion that holds offline, so
-/// an unreachable RPC endpoint fails only this. It cannot take down the offline
-/// checks with it, and its failures are legible: a fork that cannot be created
+/// Kept in its own contract, away from every assertion about the snapshot, so
+/// an unreachable RPC endpoint fails only this. It cannot take down the
+/// snapshot checks with it, and its failures are legible: a fork that cannot be created
 /// is an outage, while `NotDeployedOnNetwork` from a fork that was created is a
 /// missing deployment. A contract boundary is what `forge test
 /// --match-contract` and a CI job select at, and it is structural rather than
-/// conventional — nothing reachable from the offline contract forks anything.
+/// conventional — nothing reachable from the snapshot contract forks anything.
 abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// Checks one derived suite against whichever network is currently
     /// selected.
@@ -98,7 +98,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
 
     /// Every declared suite MUST be live, with the code its creation code
     /// produces, on every supported network.
-    function testDeployPinsLiveOnEverySupportedNetwork() external {
+    function testSuitesLiveOnEverySupportedNetwork() external {
         checkDeployedOnSupportedNetworks(deriveDeployments(allSuites()));
     }
 }

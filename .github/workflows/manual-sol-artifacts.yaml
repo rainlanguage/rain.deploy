@@ -6,7 +6,7 @@ name: Manual sol artifacts
 # never broadcasts. So the deploy has to happen first, and separately, which is
 # this.
 #
-# Order is: dispatch this, confirm `AddressRegistryDeployPinsChainTest` passes
+# Order is: dispatch this, confirm `AddressRegistryDeployChainTest` passes
 # on every supported network, then push the `sol-v*` tag.
 #
 # Deliberately `workflow_dispatch` only. Broadcasting is key custody and real

@@ -6,28 +6,28 @@ import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBas
 import {DeployCandidate, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     CandidateSourceMismatch,
-    RainDeployVerifyOffline,
+    RainDeployVerifySnapshot,
     StoredAddressMismatch,
     StoredCodeHashMismatch,
     StoredRuntimeCodeHashMismatch
-} from "../../../src/abstract/RainDeployVerifyOffline.sol";
+} from "../../../src/abstract/RainDeployVerifySnapshot.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {MockDeploySuites} from "../../abstract/MockDeploySuites.sol";
-import {MockDeployable} from "../../concrete/MockDeployable.sol";
+import {AddressRegistry} from "../../../src/concrete/AddressRegistry.sol";
+import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
-    BYTECODE_HASH as MOCK_BYTECODE_HASH_0_0_1,
-    CREATION_CODE as MOCK_CREATION_CODE_0_0_1,
-    DEPLOYED_ADDRESS as MOCK_DEPLOYED_ADDRESS_0_0_1,
-    RUNTIME_CODE as MOCK_RUNTIME_CODE_0_0_1
-} from "../../generated/0_0_1/MockDeployable.sol";
+    BYTECODE_HASH as ADDRESS_REGISTRY_BYTECODE_HASH,
+    CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE,
+    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
+} from "../../../src/generated/candidate/AddressRegistry.sol";
 
-/// @title RainDeployVerifyOfflineTest
-/// @notice `RainDeployVerifyOffline` inherited by a exemplar repo, so the
-/// inherited tests themselves are the passing case: `MockDeploySuites`
+/// @title RainDeployVerifySnapshotTest
+/// @notice `RainDeployVerifySnapshot` inherited by a exemplar repo, so the
+/// inherited tests themselves are the passing case: `ExampleDeploySuites`
 /// declares two frozen releases and a candidate, and
-/// `testDeployPinsInternallyConsistent` /
-/// `testDeployPinsCandidateAnchoredToSource` run over them here exactly as they
+/// `testSnapshotInternallyConsistent` /
+/// `testSnapshotMatchesSource` run over them here exactly as they
 /// would in a consumer.
 ///
 /// The rest is what each group CATCHES, and — for the internal group — what it
@@ -35,7 +35,7 @@ import {
 /// inherited tests do, through external wrappers so `vm.expectRevert` lands at
 /// the right call depth, with the exemplar data deliberately broken one field at
 /// a time.
-contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOffline {
+contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySnapshot {
     /// External wrapper for `checkInternallyConsistent` so `vm.expectRevert`
     /// works at the correct call depth.
     /// @param suite The suite to check.
@@ -59,12 +59,12 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
     function wrongContractCandidate() internal pure returns (DeployCandidate memory) {
         return DeployCandidate({
             snapshot: DeploySuite({
-                suite: "mock-deployable-v2-candidate",
-                creationCode: MOCK_CREATION_CODE_0_0_1,
-                storedDeployedAddress: MOCK_DEPLOYED_ADDRESS_0_0_1,
-                storedBytecodeHash: MOCK_BYTECODE_HASH_0_0_1,
-                storedRuntimeCode: MOCK_RUNTIME_CODE_0_0_1,
-                artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
+                suite: "address-registry-candidate",
+                creationCode: ADDRESS_REGISTRY_CREATION_CODE,
+                storedDeployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
+                storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
+                storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
+                artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
                 dependencies: new address[](0)
             }),
             sourceCreationCode: type(MockDeployableV2).creationCode
@@ -76,12 +76,12 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
     /// @return The consistent `0_0_1` suite.
     function consistentSuite() internal pure returns (DeploySuite memory) {
         return DeploySuite({
-            suite: "mock-deployable-0-0-1",
-            creationCode: MOCK_CREATION_CODE_0_0_1,
-            storedDeployedAddress: MOCK_DEPLOYED_ADDRESS_0_0_1,
-            storedBytecodeHash: MOCK_BYTECODE_HASH_0_0_1,
-            storedRuntimeCode: MOCK_RUNTIME_CODE_0_0_1,
-            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
+            suite: "address-registry-0-0-1",
+            creationCode: ADDRESS_REGISTRY_CREATION_CODE,
+            storedDeployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
+            storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
+            storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new address[](0)
         });
     }
@@ -95,7 +95,10 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                StoredAddressMismatch.selector, "mock-deployable-0-0-1", address(0xdead), MOCK_DEPLOYED_ADDRESS_0_0_1
+                StoredAddressMismatch.selector,
+                "address-registry-0-0-1",
+                address(0xdead),
+                ADDRESS_REGISTRY_DEPLOYED_ADDRESS
             )
         );
         this.externalCheckInternallyConsistent(suite);
@@ -110,7 +113,10 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                StoredCodeHashMismatch.selector, "mock-deployable-0-0-1", bytes32(uint256(1)), MOCK_BYTECODE_HASH_0_0_1
+                StoredCodeHashMismatch.selector,
+                "address-registry-0-0-1",
+                bytes32(uint256(1)),
+                ADDRESS_REGISTRY_BYTECODE_HASH
             )
         );
         this.externalCheckInternallyConsistent(suite);
@@ -128,8 +134,8 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
         vm.expectRevert(
             abi.encodeWithSelector(
                 StoredRuntimeCodeHashMismatch.selector,
-                "mock-deployable-0-0-1",
-                MOCK_BYTECODE_HASH_0_0_1,
+                "address-registry-0-0-1",
+                ADDRESS_REGISTRY_BYTECODE_HASH,
                 keccak256(hex"00")
             )
         );
@@ -150,7 +156,7 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
         // It really is the wrong contract: the recorded creation code is not
         // the creation code this repo compiles for the candidate.
         assertNotEq(keccak256(candidate.snapshot.creationCode), keccak256(type(MockDeployableV2).creationCode));
-        assertEq(keccak256(candidate.snapshot.creationCode), keccak256(type(MockDeployable).creationCode));
+        assertEq(keccak256(candidate.snapshot.creationCode), keccak256(type(AddressRegistry).creationCode));
 
         // Every internal check passes anyway.
         this.externalCheckInternallyConsistent(candidate.snapshot);
@@ -165,8 +171,8 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
         vm.expectRevert(
             abi.encodeWithSelector(
                 CandidateSourceMismatch.selector,
-                "mock-deployable-v2-candidate",
-                keccak256(MOCK_CREATION_CODE_0_0_1),
+                "address-registry-candidate",
+                keccak256(ADDRESS_REGISTRY_CREATION_CODE),
                 keccak256(type(MockDeployableV2).creationCode)
             )
         );
@@ -184,14 +190,14 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
     /// is the ordinary state of a repo between a release and the next source
     /// change. `0_0_2` and the candidate are the same bytes and therefore the
     /// same address, and the whole set still passes.
-    function testVersionsSharingCreationCodeAllDerive() external {
+    function testSuitesSharingCreationCodeAllDerive() external {
         DeploySuite[] memory suites = allSuites();
         assertEq(suites.length, 3);
-        assertEq(suites[1].storedDeployedAddress, suites[2].storedDeployedAddress);
-        assertEq(keccak256(suites[1].creationCode), keccak256(suites[2].creationCode));
+        assertEq(suites[0].storedDeployedAddress, suites[2].storedDeployedAddress);
+        assertEq(keccak256(suites[0].creationCode), keccak256(suites[2].creationCode));
 
         // Neither derivation is disturbed by the other.
-        this.externalCheckInternallyConsistent(suites[1]);
+        this.externalCheckInternallyConsistent(suites[0]);
         this.externalCheckInternallyConsistent(suites[2]);
     }
 
@@ -209,15 +215,15 @@ contract RainDeployVerifyOfflineTest is MockDeploySuites, RainDeployVerifyOfflin
         // the one the creation code derives.
         vm.mockCall(
             LibRainDeploy.ZOLTU_FACTORY,
-            MOCK_CREATION_CODE_0_0_1,
+            ADDRESS_REGISTRY_CREATION_CODE,
             abi.encodePacked(bytes20(LibRainDeploy.ZOLTU_FACTORY))
         );
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 ZoltuDerivationMismatch.selector,
-                "mock-deployable-0-0-1",
-                MOCK_DEPLOYED_ADDRESS_0_0_1,
+                "address-registry-0-0-1",
+                ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
                 LibRainDeploy.ZOLTU_FACTORY
             )
         );

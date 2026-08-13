@@ -53,11 +53,11 @@ abstract contract MyDeploySuites is RainDeploySuitesBase {
 // script/Deploy.sol
 contract Deploy is MyDeploySuites, RainDeployBroadcast {}
 
-// test/src/concrete/MyDeployPinsOffline.t.sol
-contract MyDeployPinsOfflineTest is MyDeploySuites, RainDeployVerifyOffline {}
+// test/src/concrete/MyDeploySnapshot.t.sol
+contract MyDeploySnapshotTest is MyDeploySuites, RainDeployVerifySnapshot {}
 
-// test/src/concrete/MyDeployPinsChain.t.sol
-contract MyDeployPinsChainTest is MyDeploySuites, RainDeployVerifyChain {}
+// test/src/concrete/MyDeployChain.t.sol
+contract MyDeployChainTest is MyDeploySuites, RainDeployVerifyChain {}
 ```
 
 The broadcast and the verification read the SAME array. "The deploy script ships
@@ -112,8 +112,8 @@ one that has never been deployed — where it fails, and that failure is the
 answer.
 
 It is a separate contract so that an unreachable RPC endpoint fails only it.
-`forge test --no-match-contract Chain` is the whole offline gate, and it is
-structural rather than conventional: nothing reachable from the offline
+`forge test --no-match-contract Chain` is the whole snapshot gate, and it is
+structural rather than conventional: nothing reachable from the snapshot
 contracts forks anything.
 
 **Chain-independent runtime code is a requirement, not a caveat.** One recorded
@@ -171,9 +171,9 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
    custody and real money, and no merge or tag should be able to trigger it. It
    is idempotent — a network that already has the code is skipped — so a partial
    run is fixed by running it again rather than by unpicking anything.
-2. **Verify.** `AddressRegistryDeployPinsChainTest` passes only once every
-   supported network has the registry, with the code this repo compiles. It is
-   red today because step 1 has never been run.
+2. **Verify.** `AddressRegistryDeployChainTest` passes only once every supported
+   network has the registry, with the code this repo compiles. It is red today
+   because step 1 has never been run.
 3. **Tag.** Push a `sol-v*` tag. `rainix-tag-release` regenerates the snapshot
    for the version the tag names, verifies the live chains against those fresh
    pins, publishes to Soldeer and commits the frozen snapshot back to `main`. It

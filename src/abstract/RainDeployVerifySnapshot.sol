@@ -36,7 +36,7 @@ error StoredRuntimeCodeHashMismatch(string suite, bytes32 storedBytecodeHash, by
 /// contract the candidate claims to be.
 error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, bytes32 sourceCreationCodeHash);
 
-/// @title RainDeployVerifyOffline
+/// @title RainDeployVerifySnapshot
 /// @notice Every deploy-pin assertion that needs no network, for every suite
 /// a repo declares. Two groups, which catch different things and are documented
 /// as such because it is easy to read the first as covering the second.
@@ -63,7 +63,7 @@ error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, byte
 /// Neither group can catch a suite that was never deployed, or that is no
 /// longer deployed. Only `RainDeployVerifyChain` can, and nothing here is a
 /// substitute for it.
-abstract contract RainDeployVerifyOffline is RainDeployVerifyBase {
+abstract contract RainDeployVerifySnapshot is RainDeployVerifyBase {
     /// Checks one suite against itself: derive from its creation code, then
     /// require everything it records to agree with the derivation.
     /// @param suite The suite to check.
@@ -98,7 +98,7 @@ abstract contract RainDeployVerifyOffline is RainDeployVerifyBase {
 
     /// Every declared suite MUST be internally consistent: what it records is
     /// what its own creation code derives.
-    function testDeployPinsInternallyConsistent() external {
+    function testSnapshotInternallyConsistent() external {
         DeploySuite[] memory suites = allSuites();
         for (uint256 i = 0; i < suites.length; i++) {
             checkInternallyConsistent(suites[i]);
@@ -107,7 +107,7 @@ abstract contract RainDeployVerifyOffline is RainDeployVerifyBase {
 
     /// The candidate MUST be a snapshot of the contract this repo compiles, not
     /// of some other contract that happens to be internally consistent.
-    function testDeployPinsCandidateAnchoredToSource() external pure {
+    function testSnapshotMatchesSource() external pure {
         checkAnchoredToSource(candidateSuite());
     }
 }

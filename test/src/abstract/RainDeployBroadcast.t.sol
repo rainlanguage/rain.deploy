@@ -6,7 +6,7 @@ import {Test} from "forge-std-1.16.1/src/Test.sol";
 
 import {UnknownDeploymentSuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {MockBroadcastDeploy} from "../../concrete/MockBroadcastDeploy.sol";
+import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 
 /// @title RainDeployBroadcastTest
 /// @notice The broadcast entry point, driven exactly as the `Manual sol
@@ -18,12 +18,12 @@ import {MockBroadcastDeploy} from "../../concrete/MockBroadcastDeploy.sol";
 /// tested without a key, an RPC and real money — and, not coincidentally, the
 /// half that decides WHAT would be deployed.
 contract RainDeployBroadcastTest is Test {
-    MockBroadcastDeploy internal sDeploy;
+    ExampleDeploy internal sDeploy;
 
     /// A deploy repo's whole script: the fixture declaration plus
     /// `RainDeployBroadcast`.
     function setUp() external {
-        sDeploy = new MockBroadcastDeploy();
+        sDeploy = new ExampleDeploy();
     }
 
     /// A mistyped suite MUST fail naming every valid suite, and MUST do so
@@ -37,7 +37,7 @@ contract RainDeployBroadcastTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "address-registry",
-                "mock-deployable-0-0-1, mock-deployable-v2-0-0-2, mock-deployable-v2-candidate"
+                "address-registry-0-0-1, second-address, address-registry-candidate"
             )
         );
         sDeploy.run();
@@ -53,7 +53,7 @@ contract RainDeployBroadcastTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "",
-                "mock-deployable-0-0-1, mock-deployable-v2-0-0-2, mock-deployable-v2-candidate"
+                "address-registry-0-0-1, second-address, address-registry-candidate"
             )
         );
         sDeploy.run();
@@ -83,12 +83,12 @@ contract RainDeployBroadcastTest is Test {
     /// make that comparison derived-against-derived.
     function testSelectedSuiteCarriesTheRecordedPins() external view {
         assertEq(
-            sDeploy.externalSuiteByName("mock-deployable-0-0-1").storedDeployedAddress,
-            LibRainDeploy.zoltuAddress(sDeploy.externalSuiteByName("mock-deployable-0-0-1").creationCode)
+            sDeploy.externalSuiteByName("address-registry-0-0-1").storedDeployedAddress,
+            LibRainDeploy.zoltuAddress(sDeploy.externalSuiteByName("address-registry-0-0-1").creationCode)
         );
         assertEq(
-            sDeploy.externalSuiteByName("mock-deployable-0-0-1").artifactPath,
-            "test/concrete/MockDeployable.sol:MockDeployable"
+            sDeploy.externalSuiteByName("address-registry-0-0-1").artifactPath,
+            "src/concrete/AddressRegistry.sol:AddressRegistry"
         );
     }
 }
