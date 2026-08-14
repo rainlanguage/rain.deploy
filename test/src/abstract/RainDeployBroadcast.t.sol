@@ -37,8 +37,9 @@ contract RainDeployBroadcastTest is Test {
     /// variable, and this contract was exactly that until it was seen losing
     /// the race: the unset case resolved the `address-registry` the other test
     /// had written. Sequenced inside one test the two values cannot interleave,
-    /// and every write to that variable in this repo is now the one below,
-    /// after the only read that needs it absent.
+    /// and every `vm.setEnv` in this repo is now one of the two below — with
+    /// the write to `DEPLOYMENT_SUITE` after the only read that needs it
+    /// absent, so there is no write left for another test to observe.
     ///
     /// ## Unset first, and genuinely unset
     ///
@@ -61,17 +62,27 @@ contract RainDeployBroadcastTest is Test {
     ///
     /// ## Both before the key
     ///
-    /// `DEPLOYMENT_KEY` is deliberately unset. `vm.envUint` reverts on an unset
-    /// variable, so were the key read first, either half would fail on the
-    /// missing key — and a mistyped suite would send the deployer after the
-    /// wrong thing entirely.
+    /// `DEPLOYMENT_KEY` is set to something `vm.envUint` cannot parse, and that
+    /// unreadability is what makes the ordering observable: a suite failure
+    /// while the key is garbage is the outcome that says the key had not been
+    /// read yet, and a mistyped suite that failed on the key instead would send
+    /// the deployer after the wrong thing entirely.
+    ///
+    /// Set rather than absent, because absence is not this test's to give.
+    /// `rainix-sol-test` exports `DEPLOYMENT_KEY` from the org's deploy secret
+    /// onto the job that runs this suite, so a test that assumed it unset
+    /// asserted the ordering only in a bare shell — and a key that PARSES makes
+    /// both orderings produce the same revert, so it would assert nothing about
+    /// ordering in the one place the suite actually runs.
     function testRunSelectsTheSuiteFromTheEnvBeforeTheKeyAndNeverDefaults() external {
-        // Both absences are inputs, so they are asserted rather than assumed: a
-        // variable set outside this test reports itself by name here instead of
-        // as a surprising revert payload, or as an ordering this no longer
-        // discriminates.
+        // `DEPLOYMENT_SUITE` has to be ABSENT and no cheatcode makes it so, so
+        // the precondition is asserted: a value set outside this test reports
+        // itself by name here rather than as a surprising revert payload.
         assertFalse(vm.envExists("DEPLOYMENT_SUITE"));
-        assertFalse(vm.envExists("DEPLOYMENT_KEY"));
+        // `DEPLOYMENT_KEY` is asserted about by nothing, because this test SETS
+        // it. It only has to be unparseable, and a value it writes is a value
+        // no CI job's secret can change.
+        vm.setEnv("DEPLOYMENT_KEY", "not a private key");
 
         vm.expectRevert(
             abi.encodeWithSelector(
