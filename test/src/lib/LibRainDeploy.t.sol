@@ -4,9 +4,14 @@ pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {MockAddressRevertingFactory} from "./MockAddressRevertingFactory.sol";
-import {MockDeployable} from "./MockDeployable.sol";
-import {MockReverter} from "./MockReverter.sol";
+import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
+import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
+import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
+import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
+import {MockDirtyWordOwner} from "../../concrete/MockDirtyWordOwner.sol";
+import {MockDeployable} from "../../concrete/MockDeployable.sol";
+import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
+import {MockReverter} from "../../concrete/MockReverter.sol";
 
 /// @title LibRainDeployTest
 /// Tests for `LibRainDeploy`. External wrappers are used for library functions
@@ -25,6 +30,9 @@ contract LibRainDeployTest is Test {
     /// The block at which the Zoltu factory first has its code on Base.
     uint256 constant ZOLTU_BASE_DEPLOY_BLOCK = 1117029;
 
+    /// Chain id of Base.
+    uint256 constant BASE_CHAIN_ID = 8453;
+
     /// Chain id of Arbitrum One.
     uint256 constant ARBITRUM_ONE_CHAIN_ID = 42161;
 
@@ -32,6 +40,30 @@ contract LibRainDeployTest is Test {
     /// CREATE2 over the factory address, a zero salt and the hash of empty
     /// creation code. An account is created there but it has no code.
     address constant ZOLTU_EMPTY_CREATION_CODE_ADDRESS = 0x5DC93B79FBDD6f26Ed9540597C78eD5893F9aC7A;
+
+    /// The address the Zoltu factory deploys `MockDeployable` to. Derived from
+    /// the mock's creation code by the same formula the factory applies, so it
+    /// follows the compiler that builds the mock. `testDeployZoltu` pins the
+    /// derivation against the live factory on a fork.
+    /// @return The deterministic address for `MockDeployable`.
+    function mockDeployableAddress() internal pure returns (address) {
+        return LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode);
+    }
+
+    /// The code hash `MockDeployable` has once deployed, i.e. `keccak256` over
+    /// the runtime code its creation code leaves behind. Derived from the mock
+    /// rather than pinned, for the same reason as `mockDeployableAddress`.
+    /// @return The deployed code hash for `MockDeployable`.
+    function mockDeployableCodeHash() internal pure returns (bytes32) {
+        return keccak256(type(MockDeployable).runtimeCode);
+    }
+
+    /// The address the Zoltu factory deploys `MockDeployableV2` to, derived the
+    /// same way as `mockDeployableAddress`.
+    /// @return The deterministic address for `MockDeployableV2`.
+    function mockDeployableV2Address() internal pure returns (address) {
+        return LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
+    }
 
     /// External wrapper for `isStartBlock` so that it can be called
     /// externally in tests.
@@ -238,7 +270,7 @@ contract LibRainDeployTest is Test {
     }
 
     /// `deployToNetworks` MUST revert with `NoNetworks` when given an empty
-    /// networks array.
+    /// networks array, before any other input is checked.
     function testDeployToNetworksNoNetworksReverts() external {
         string[] memory networks = new string[](0);
         address[] memory dependencies = new address[](0);
@@ -259,17 +291,31 @@ contract LibRainDeployTest is Test {
             networks,
             address(this),
             type(MockDeployable).creationCode,
-            "test/src/lib/MockDeployable.sol:MockDeployable",
-            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
-            0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
             dependencies
         );
-        assertEq(result, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
-        // The fork left selected is the last network in the list, and the
-        // contract exists there with the expected code, so the loop reached
-        // beyond the first network.
+        assertEq(result, mockDeployableAddress());
+
+        // The returned address is the same for every network, so it says
+        // nothing about how many networks were visited. What does is the state
+        // each fork was left in.
+        //
+        // `deployToNetworks` creates one fork per network, in list order, and
+        // this test creates none of its own, so those forks are ids 0 and 1.
+        // Selecting each in turn and asserting BOTH the chain it is on and
+        // that the contract is deployed there is what pins "every network in
+        // the list": a loop that stops early never creates the second fork, a
+        // loop that starts late puts the wrong chain at id 0, and a loop that
+        // forks `networks[0]` every iteration puts the same chain at both ids.
+        vm.selectFork(0);
+        assertEq(block.chainid, BASE_CHAIN_ID);
+        assertEq(result.codehash, mockDeployableCodeHash());
+
+        vm.selectFork(1);
         assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
-        assertEq(result.codehash, 0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483);
+        assertEq(result.codehash, mockDeployableCodeHash());
     }
 
     /// External wrapper for `deployToNetworks` so that `vm.expectRevert`
@@ -316,7 +362,16 @@ contract LibRainDeployTest is Test {
     function testDeployZoltu() external {
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         address deployed = this.externalDeployZoltu(type(MockDeployable).creationCode);
-        assertEq(deployed, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+        // Pinned literal, deliberately not `mockDeployableAddress()`. The live
+        // factory on the fork is the oracle here, so an expected value taken
+        // from the derivation would only check `zoltuAddress` against itself.
+        // It is the address the factory returns for the creation code this
+        // repo's compiler settings emit for `MockDeployable` — solc 0.8.25,
+        // optimizer on at 100,000 runs, targeting cancun. Those settings are
+        // now pinned exactly in `foundry.toml`, because this repo's deploy pins
+        // depend on them; that is what makes a literal here stable at all, and
+        // moving any of them moves this address.
+        assertEq(deployed, 0x0c04367b381F8Ca252aD2516F1Eac2b9B2ca928F);
     }
 
     /// `deployZoltu` MUST revert with `DeployFailed` when the Zoltu factory
@@ -337,16 +392,14 @@ contract LibRainDeployTest is Test {
     }
 
     /// `deployToNetworks` MUST revert with `UnexpectedDeployedAddress` when the
-    /// deployed address does not match the expected address.
+    /// creation code does not deploy to the expected address.
     function testUnexpectedDeployedAddressReverts() external {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         address[] memory dependencies = new address[](0);
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.UnexpectedDeployedAddress.selector,
-                address(0xdead),
-                0xC24016f209562fc151e5Ab7F88694ED5775feb36
+                LibRainDeploy.UnexpectedDeployedAddress.selector, address(0xdead), mockDeployableAddress()
             )
         );
         this.externalDeployToNetworks(
@@ -360,13 +413,11 @@ contract LibRainDeployTest is Test {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         address[] memory dependencies = new address[](0);
-        address expectedAddress = 0xC24016f209562fc151e5Ab7F88694ED5775feb36;
+        address expectedAddress = mockDeployableAddress();
         bytes32 wrongCodeHash = bytes32(uint256(1));
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.UnexpectedDeployedCodeHash.selector,
-                wrongCodeHash,
-                0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483
+                LibRainDeploy.UnexpectedDeployedCodeHash.selector, wrongCodeHash, mockDeployableCodeHash()
             )
         );
         this.externalDeployToNetworks(
@@ -384,12 +435,12 @@ contract LibRainDeployTest is Test {
             networks,
             1,
             type(MockDeployable).creationCode,
-            "test/src/lib/MockDeployable.sol:MockDeployable",
-            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
-            0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
             dependencies
         );
-        assertEq(deployed, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+        assertEq(deployed, mockDeployableAddress());
     }
 
     /// `deployToNetworks` MUST skip deployment and return the expected address
@@ -399,7 +450,7 @@ contract LibRainDeployTest is Test {
 
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         address deployed = this.externalDeployZoltu(type(MockDeployable).creationCode);
-        assertEq(deployed, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+        assertEq(deployed, mockDeployableAddress());
         vm.makePersistent(deployed);
 
         string[] memory networks = new string[](1);
@@ -410,12 +461,12 @@ contract LibRainDeployTest is Test {
             networks,
             address(this),
             type(MockDeployable).creationCode,
-            "test/src/lib/MockDeployable.sol:MockDeployable",
-            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
-            0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
             dependencies
         );
-        assertEq(result, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+        assertEq(result, mockDeployableAddress());
     }
 
     /// `deployToNetworks` MUST skip an already-deployed network WITHOUT checking
@@ -427,7 +478,7 @@ contract LibRainDeployTest is Test {
 
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         address deployed = this.externalDeployZoltu(type(MockDeployable).creationCode);
-        assertEq(deployed, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+        assertEq(deployed, mockDeployableAddress());
         vm.makePersistent(deployed);
 
         string[] memory networks = new string[](1);
@@ -441,12 +492,12 @@ contract LibRainDeployTest is Test {
             networks,
             address(this),
             type(MockDeployable).creationCode,
-            "test/src/lib/MockDeployable.sol:MockDeployable",
-            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
-            0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
             dependencies
         );
-        assertEq(result, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+        assertEq(result, mockDeployableAddress());
     }
 
     /// `deployToNetworks` MUST revert with `MissingDependency` when the Zoltu
@@ -466,7 +517,15 @@ contract LibRainDeployTest is Test {
                 LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.ZOLTU_FACTORY
             )
         );
-        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            mockDeployableAddress(),
+            bytes32(0),
+            dependencies
+        );
     }
 
     /// `deployToNetworks` MUST revert with `DependencyChanged` when the Zoltu
@@ -490,7 +549,15 @@ contract LibRainDeployTest is Test {
                 keccak256(hex"00")
             )
         );
-        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            mockDeployableAddress(),
+            bytes32(0),
+            dependencies
+        );
     }
 
     /// `deployToNetworks` MUST revert with `MissingDependency` when a dependency
@@ -506,7 +573,446 @@ contract LibRainDeployTest is Test {
                 LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdead)
             )
         );
-        this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            mockDeployableAddress(),
+            bytes32(0),
+            dependencies
+        );
+    }
+
+    /// `zoltuAddress` MUST derive the address the Zoltu factory actually
+    /// deploys the given creation code to, and creation code that differs MUST
+    /// derive a different address.
+    function testZoltuAddressMatchesFactoryDeploy() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        assertEq(
+            LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
+            this.externalDeployZoltu(type(MockDeployable).creationCode)
+        );
+        assertEq(
+            LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
+            this.externalDeployZoltu(type(MockDeployableV2).creationCode)
+        );
+        assertNotEq(
+            LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
+            LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode)
+        );
+    }
+
+    /// `deployToNetworks` MUST revert with `UnexpectedDeployedAddress` when the
+    /// creation code does not deploy to `expectedAddress`, even when a contract
+    /// with the expected code hash already sits at that address on every
+    /// network and would otherwise be skipped as already deployed.
+    function testDeployToNetworksStaleExpectedAddressReverts() external {
+        vm.makePersistent(address(this));
+
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        address deployed = this.externalDeployZoltu(type(MockDeployable).creationCode);
+        assertEq(deployed, mockDeployableAddress());
+        vm.makePersistent(deployed);
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedAddress.selector, mockDeployableAddress(), mockDeployableV2Address()
+            )
+        );
+        // The new contract's creation code paired with the old contract's
+        // address and code hash.
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployableV2).creationCode,
+            "test/concrete/MockDeployableV2.sol:MockDeployableV2",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            dependencies
+        );
+
+        // The new contract was not deployed anywhere.
+        assertEq(mockDeployableV2Address().code.length, 0);
+    }
+
+    /// `deployToNetworks` MUST check `expectedAddress` against the creation
+    /// code before it forks anything, so the mismatch is reported without any
+    /// network being reachable at all.
+    function testDeployToNetworksStaleExpectedAddressRevertsBeforeForking() external {
+        string[] memory networks = new string[](1);
+        // Not a configured RPC alias, so forking it is itself an error.
+        networks[0] = "unconfigured_network";
+        address[] memory dependencies = new address[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedAddress.selector, address(0xdead), mockDeployableAddress()
+            )
+        );
+        this.externalDeployToNetworks(
+            networks, address(this), type(MockDeployable).creationCode, "", address(0xdead), bytes32(0), dependencies
+        );
+    }
+
+    /// `deployToNetworks` MUST revert with `UnexpectedDeployedAddress` when the
+    /// factory reports an address other than the one derived from the creation
+    /// code, so the chain is checked and not only the derivation.
+    function testDeployToNetworksFactoryReportsOtherAddressReverts() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        // The factory reports the address of a contract that does have code,
+        // but not the one the creation code derives.
+        vm.mockCall(
+            LibRainDeploy.ZOLTU_FACTORY,
+            type(MockDeployable).creationCode,
+            abi.encodePacked(bytes20(LibRainDeploy.ZOLTU_FACTORY))
+        );
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedAddress.selector, mockDeployableAddress(), LibRainDeploy.ZOLTU_FACTORY
+            )
+        );
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            dependencies
+        );
+    }
+
+    /// Deploys `AddressRegistry` through the Zoltu factory (which lands it at
+    /// its pinned address), binds `name` to `account` as root, then deploys a
+    /// consumer that resolves `name` once in its constructor.
+    /// @param name The name to bind and resolve.
+    /// @param account The address to bind it to.
+    /// @return registry The deployed registry.
+    /// @return consumer The deployed consumer holding the resolved address.
+    function deployRegistryAndConsumer(bytes32 name, address account)
+        internal
+        returns (IAddressRegistryV1 registry, MockResolvedOwner consumer)
+    {
+        LibRainDeploy.etchZoltuFactory(vm);
+        registry = IAddressRegistryV1(LibRainDeploy.deployZoltu(type(AddressRegistry).creationCode));
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+        consumer = new MockResolvedOwner(name);
+    }
+
+    /// The calldata for reading `MockResolvedOwner`'s stored address.
+    /// @return The single-element read call list.
+    function ownerReadCalls() internal pure returns (bytes[] memory) {
+        bytes[] memory readCalls = new bytes[](1);
+        readCalls[0] = abi.encodeWithSignature("iOwner()");
+        return readCalls;
+    }
+
+    /// A single-element expected address list.
+    /// @param account The expected address.
+    /// @return The list.
+    function expected(address account) internal pure returns (address[] memory) {
+        address[] memory expectedAddresses = new address[](1);
+        expectedAddresses[0] = account;
+        return expectedAddresses;
+    }
+
+    /// External wrapper for `checkResolvedAddresses` so that `vm.expectRevert`
+    /// works at the correct call depth.
+    /// @param network The network name, for the error only.
+    /// @param target The deployed contract to read.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedAddresses The address each read MUST answer with.
+    function externalCheckResolvedAddresses(
+        string memory network,
+        address target,
+        bytes[] memory readCalls,
+        address[] memory expectedAddresses
+    ) external view {
+        LibRainDeploy.checkResolvedAddresses(network, target, readCalls, expectedAddresses);
+    }
+
+    /// External wrapper for `checkResolvedAddressesOnNetworks` so that
+    /// `vm.expectRevert` works at the correct call depth.
+    /// @param networks The list of network names to check.
+    /// @param target The deployed contract to read on each network.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedAddresses The address each read MUST answer with.
+    function externalCheckResolvedAddressesOnNetworks(
+        string[] memory networks,
+        address target,
+        bytes[] memory readCalls,
+        address[] memory expectedAddresses
+    ) external {
+        LibRainDeploy.checkResolvedAddressesOnNetworks(vm, networks, target, readCalls, expectedAddresses);
+    }
+
+    /// `checkResolvedAddresses` MUST pass when the deployed contract holds the
+    /// address the deployment expects.
+    function testCheckResolvedAddressesMatch(bytes32 name, address account) external {
+        vm.assume(account != address(0));
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+
+        LibRainDeploy.checkResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(account));
+    }
+
+    /// The check is against settled state, which is the entire point of running
+    /// it after the deploy rather than before. Re-binding the name afterwards
+    /// changes what the registry answers but cannot change what the deployed
+    /// contract holds, so the check still passes against the address the
+    /// deployment actually took.
+    function testCheckResolvedAddressesUnaffectedByRebinding(bytes32 name, address account, address rebound) external {
+        vm.assume(account != address(0));
+        vm.assume(rebound != address(0));
+        vm.assume(rebound != account);
+        (IAddressRegistryV1 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, rebound);
+        assertEq(registry.get(name), rebound);
+
+        assertEq(consumer.iOwner(), account);
+        LibRainDeploy.checkResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(account));
+
+        // And the value the registry now answers with is NOT what this
+        // deployment holds, so a check against it fails.
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                "test_network",
+                address(consumer),
+                uint256(0),
+                rebound,
+                account
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(rebound));
+    }
+
+    /// `checkResolvedAddresses` MUST revert with `UnexpectedResolvedAddress`
+    /// when the deployed contract holds something else, naming the network and
+    /// which read disagreed.
+    function testCheckResolvedAddressesMismatchReverts(bytes32 name, address account, address wrong) external {
+        vm.assume(account != address(0));
+        vm.assume(wrong != account);
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                "test_network",
+                address(consumer),
+                uint256(0),
+                wrong,
+                account
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(wrong));
+    }
+
+    /// `checkResolvedAddresses` MUST check every read, not only the first, so a
+    /// later value that disagrees is still caught.
+    function testCheckResolvedAddressesChecksEveryRead(bytes32 name, address account, address wrong) external {
+        vm.assume(account != address(0));
+        vm.assume(wrong != account);
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+
+        bytes[] memory readCalls = new bytes[](2);
+        readCalls[0] = abi.encodeWithSignature("iOwner()");
+        readCalls[1] = abi.encodeWithSignature("iOwner()");
+        address[] memory expectedAddresses = new address[](2);
+        expectedAddresses[0] = account;
+        expectedAddresses[1] = wrong;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                "test_network",
+                address(consumer),
+                uint256(1),
+                wrong,
+                account
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(consumer), readCalls, expectedAddresses);
+    }
+
+    /// A read that cannot be answered is never a pass. An address with no code
+    /// static-calls successfully and returns nothing, which would compare equal
+    /// to nothing at all if the length were not checked.
+    function testCheckResolvedAddressesUnreadableTargetReverts(address target, address account) external {
+        vm.assume(target.code.length == 0);
+        // The low address space is reserved for precompiles, which have no code
+        // and yet DO answer — the identity precompile echoes its calldata back,
+        // so a read of one returns data rather than nothing. They are not
+        // instances of the case under test. Bounded by the reserved range rather
+        // than by listing today's precompiles, so a chain or fork that adds one
+        // does not reintroduce this.
+        vm.assume(uint160(target) > 0xffff);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector, "test_network", target, uint256(0), bytes("")
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", target, ownerReadCalls(), expected(account));
+    }
+
+    /// A read that reverts is never a pass either.
+    function testCheckResolvedAddressesRevertingReadReverts(bytes32 name, address account) external {
+        vm.assume(account != address(0));
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+
+        bytes[] memory readCalls = new bytes[](1);
+        readCalls[0] = abi.encodeWithSignature("thisFunctionDoesNotExist()");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector,
+                "test_network",
+                address(consumer),
+                uint256(0),
+                bytes("")
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(consumer), readCalls, expected(account));
+    }
+
+    /// A read that answers with one word whose upper 96 bits are dirty has not
+    /// answered with an address, and MUST be reported as
+    /// `ResolvedAddressReadFailed` — the error whose stated subject is a read
+    /// that answers with something that is not a single address-sized word.
+    ///
+    /// The expected address here is the word's own low 160 bits, so the only
+    /// thing wrong with the answer is the dirty bits. That rules out both ways
+    /// of getting this wrong at once: truncating the word silently PASSES this
+    /// check against an address the read never gave, and decoding it as an
+    /// address reverts inside the decoder with no return data at all — a bare
+    /// revert naming neither the network, the target, nor which read produced
+    /// it, which is exactly what this error exists to avoid.
+    function testCheckResolvedAddressesDirtyWordReverts(bytes32 word) external {
+        // Only the words that are not an address. A clean one is an address and
+        // decodes, which is `testCheckResolvedAddressesMatch`'s case.
+        vm.assume(uint256(word) > type(uint160).max);
+        MockDirtyWordOwner target = new MockDirtyWordOwner(word);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector,
+                "test_network",
+                address(target),
+                uint256(0),
+                abi.encode(word)
+            )
+        );
+        this.externalCheckResolvedAddresses(
+            "test_network", address(target), ownerReadCalls(), expected(address(uint160(uint256(word))))
+        );
+    }
+
+    /// `checkResolvedAddresses` MUST revert when the reads and expected
+    /// addresses do not pair up, rather than checking the shorter of the two.
+    function testCheckResolvedAddressesLengthMismatchReverts(uint8 readCallsLength, uint8 expectedLength) external {
+        vm.assume(readCallsLength != expectedLength);
+
+        bytes[] memory readCalls = new bytes[](readCallsLength);
+        address[] memory expectedAddresses = new address[](expectedLength);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressesLengthMismatch.selector,
+                uint256(readCallsLength),
+                uint256(expectedLength)
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(this), readCalls, expectedAddresses);
+    }
+
+    /// `checkResolvedAddressesOnNetworks` MUST revert with `NoNetworks` when
+    /// given none, so an empty target set can never be mistaken for every read
+    /// checking out.
+    function testCheckResolvedAddressesOnNetworksNoNetworksReverts(address account) external {
+        string[] memory networks = new string[](0);
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        this.externalCheckResolvedAddressesOnNetworks(networks, address(this), ownerReadCalls(), expected(account));
+    }
+
+    /// `checkResolvedAddressesOnNetworks` MUST check the reads and expected
+    /// addresses pair up before it forks anything, so a mispaired call is
+    /// reported without any network being reachable at all.
+    function testCheckResolvedAddressesOnNetworksLengthMismatchRevertsBeforeForking() external {
+        string[] memory networks = new string[](1);
+        // Not a configured RPC alias, so forking it is itself an error.
+        networks[0] = "unconfigured_network";
+        bytes[] memory readCalls = new bytes[](2);
+        address[] memory expectedAddresses = new address[](1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.ResolvedAddressesLengthMismatch.selector, uint256(2), uint256(1))
+        );
+        this.externalCheckResolvedAddressesOnNetworks(networks, address(this), readCalls, expectedAddresses);
+    }
+
+    /// `checkResolvedAddressesOnNetworks` MUST fork each network in turn and
+    /// pass when the deployed contract holds the expected address on all of
+    /// them. The deployment is made persistent so the same contract is present
+    /// on every fork, which is the state a real multi-network deploy leaves
+    /// behind.
+    ///
+    /// Two networks rather than `supportedNetworks()`. What is under test is
+    /// that the loop visits every network it is given, which two prove as well
+    /// as five; the roster itself is `testSupportedNetworks`'s job. These are
+    /// the two networks the rest of this suite forks, so the test does not
+    /// depend on the reliability of RPC endpoints nothing else here touches.
+    function testCheckResolvedAddressesOnNetworksEachNetwork() external {
+        bytes32 name = keccak256("testCheckResolvedAddressesOnNetworksEachNetwork");
+        address account = address(0xf00);
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+        vm.makePersistent(address(consumer));
+
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
+
+        LibRainDeploy.checkResolvedAddressesOnNetworks(
+            vm, networks, address(consumer), ownerReadCalls(), expected(account)
+        );
+    }
+
+    /// `checkResolvedAddressesOnNetworks` MUST fail on the network that
+    /// disagrees, and MUST name it.
+    function testCheckResolvedAddressesOnNetworksMismatchReverts() external {
+        bytes32 name = keccak256("testCheckResolvedAddressesOnNetworksMismatchReverts");
+        address account = address(0xf00);
+        address wrong = address(0xba4);
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+        vm.makePersistent(address(consumer));
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.BASE;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                LibRainDeploy.BASE,
+                address(consumer),
+                uint256(0),
+                wrong,
+                account
+            )
+        );
+        this.externalCheckResolvedAddressesOnNetworks(networks, address(consumer), ownerReadCalls(), expected(wrong));
     }
 
     /// `deployToNetworks` MUST deploy when every dependency has code on the
@@ -521,12 +1027,13 @@ contract LibRainDeployTest is Test {
             networks,
             address(this),
             type(MockDeployable).creationCode,
-            "test/src/lib/MockDeployable.sol:MockDeployable",
-            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
-            0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
             dependencies
         );
-        assertEq(result, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+        assertEq(result, mockDeployableAddress());
+        assertEq(result.codehash, mockDeployableCodeHash());
     }
 
     /// `isStartBlock` MUST return true at block 0 for a target that already
@@ -628,8 +1135,9 @@ contract LibRainDeployTest is Test {
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         vm.deal(address(this), 1 ether);
         address deployed = this.externalDeployZoltuPayable{value: 1}(type(MockDeployable).creationCode);
-        assertEq(deployed, 0xC24016f209562fc151e5Ab7F88694ED5775feb36);
+        assertEq(deployed, mockDeployableAddress());
         assertEq(deployed.balance, 0);
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.balance, 0);
     }
 
     /// `deployAndBroadcast` MUST broadcast as the address derived from the
@@ -643,15 +1151,21 @@ contract LibRainDeployTest is Test {
         address[] memory dependencies = new address[](0);
 
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        // Stated rather than assumed: the key is a test constant that has never
+        // transacted on any supported network, so its nonce is zero on a fresh
+        // fork. That is what makes the nonce read after the call — which lands
+        // on the fork `deployToNetworks` made, not this one — comparable to
+        // this baseline at all.
         uint64 nonceBefore = vm.getNonce(deployer);
+        assertEq(nonceBefore, 0);
 
         this.externalDeployAndBroadcast(
             networks,
             deployerPrivateKey,
             type(MockDeployable).creationCode,
-            "test/src/lib/MockDeployable.sol:MockDeployable",
-            0xC24016f209562fc151e5Ab7F88694ED5775feb36,
-            0xc1a263a0b50505687a5140c7964ec5c947329e7d03410306fee68cc3620c5483,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
             dependencies
         );
 

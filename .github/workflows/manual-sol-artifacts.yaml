@@ -1,0 +1,23 @@
+name: Manual sol artifacts
+# The on-chain deploy, run by hand. This repo carries a deployed concrete
+# (`AddressRegistry`) whose address + codehash consumers pin, and
+# `package-release.yaml` cuts a release for a deployment that ALREADY exists —
+# rainix-tag-release verifies the live chains against freshly generated pins and
+# never broadcasts. So the deploy has to happen first, and separately, which is
+# this.
+#
+# Order is: dispatch this, confirm `AddressRegistryDeployChainTest` passes
+# on every supported network, then push the `sol-v*` tag.
+#
+# Deliberately `workflow_dispatch` only. Broadcasting is key custody and real
+# money; nothing about a merge or a tag should trigger it.
+on:
+  workflow_dispatch:
+jobs:
+  deploy:
+    uses: rainlanguage/rainix/.github/workflows/rainix-manual-sol-artifacts.yaml@main
+    with:
+      # Passed through as DEPLOYMENT_SUITE; script/Deploy.sol dispatches on it
+      # and reverts on anything else.
+      suite: address-registry
+    secrets: inherit
