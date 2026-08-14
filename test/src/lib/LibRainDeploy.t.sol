@@ -7,6 +7,7 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
+import {MockDirtyWordOwner} from "../../concrete/MockDirtyWordOwner.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
@@ -829,6 +830,38 @@ contract LibRainDeployTest is Test {
             )
         );
         this.externalCheckResolvedAddresses("test_network", address(consumer), readCalls, expected(account));
+    }
+
+    /// A read that answers with one word whose upper 96 bits are dirty has not
+    /// answered with an address, and MUST be reported as
+    /// `ResolvedAddressReadFailed` — the error whose stated subject is a read
+    /// that answers with something that is not a single address-sized word.
+    ///
+    /// The expected address here is the word's own low 160 bits, so the only
+    /// thing wrong with the answer is the dirty bits. That rules out both ways
+    /// of getting this wrong at once: truncating the word silently PASSES this
+    /// check against an address the read never gave, and decoding it as an
+    /// address reverts inside the decoder with no return data at all — a bare
+    /// revert naming neither the network, the target, nor which read produced
+    /// it, which is exactly what this error exists to avoid.
+    function testCheckResolvedAddressesDirtyWordReverts(bytes32 word) external {
+        // Only the words that are not an address. A clean one is an address and
+        // decodes, which is `testCheckResolvedAddressesMatch`'s case.
+        vm.assume(uint256(word) > type(uint160).max);
+        MockDirtyWordOwner target = new MockDirtyWordOwner(word);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector,
+                "test_network",
+                address(target),
+                uint256(0),
+                abi.encode(word)
+            )
+        );
+        this.externalCheckResolvedAddresses(
+            "test_network", address(target), ownerReadCalls(), expected(address(uint160(uint256(word))))
+        );
     }
 
     /// `checkResolvedAddresses` MUST revert when the reads and expected

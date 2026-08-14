@@ -245,6 +245,11 @@ library LibRainDeploy {
             revert ResolvedAddressesLengthMismatch(readCalls.length, expectedAddresses.length);
         }
         for (uint256 i = 0; i < readCalls.length; i++) {
+            // The consumer supplies the reads, so the call is low level by
+            // construction: there is no interface here to call through. Excluded
+            // at the site rather than repo-wide so a low-level call added
+            // anywhere else is still reported.
+            // slither-disable-next-line low-level-calls
             (bool success, bytes memory returnData) = target.staticcall(readCalls[i]);
             // A read that reverts, answers nothing (no code at `target`), or
             // answers something that is not one word cannot be compared, and is
@@ -252,7 +257,17 @@ library LibRainDeploy {
             if (!success || returnData.length != 0x20) {
                 revert ResolvedAddressReadFailed(network, target, i, returnData);
             }
-            address actual = abi.decode(returnData, (address));
+            // Decoded as a word and range checked here rather than decoded as an
+            // address, because `abi.decode(_, (address))` reverts with no data
+            // of its own when the word's upper 96 bits are dirty. A read that
+            // answers with a word that is not an address is exactly the case
+            // `ResolvedAddressReadFailed` is for, so it is reported as that
+            // rather than as a bare revert nothing can diagnose.
+            uint256 word = abi.decode(returnData, (uint256));
+            if (word > type(uint160).max) {
+                revert ResolvedAddressReadFailed(network, target, i, returnData);
+            }
+            address actual = address(uint160(word));
             if (actual != expectedAddresses[i]) {
                 revert UnexpectedResolvedAddress(network, target, i, expectedAddresses[i], actual);
             }

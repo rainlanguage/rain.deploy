@@ -28,22 +28,26 @@ nix develop
 nix develop -c forge build
 
 # Run tests
-nix develop -c rainix-sol-test
+nix develop -c forge test -vvv
 
 # Run a single test
 nix develop -c forge test --match-test "testName"
 
 # Static analysis / linting
-nix develop -c rainix-sol-static
+nix develop -c slither .
+nix develop -c forge fmt --check
+nix develop -c rainix-sol-single-contract
 
 # License/legal checks (REUSE compliance)
-nix develop -c rainix-sol-legal
+nix develop -c reuse lint
 ```
 
 CI runs three matrix tasks: `rainix-sol-legal`, `rainix-sol-test`,
-`rainix-sol-static`. There is a fourth workflow, `Manual sol artifacts`, which
-is `workflow_dispatch` only and is the on-chain deploy — nothing automatic ever
-broadcasts.
+`rainix-sol-static`. Those are rainix reusable workflow names, not commands —
+the block above is what they run.
+
+A fourth workflow, `Manual sol artifacts`, is `workflow_dispatch` only and is
+the on-chain deploy — nothing automatic ever broadcasts.
 
 ## RPC Configuration
 

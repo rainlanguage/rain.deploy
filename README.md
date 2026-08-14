@@ -90,14 +90,15 @@ Deriving the pins at broadcast time would make that comparison
 derived-against-derived, and a guard that compares a value to itself is not a
 guard.
 
-Three groups, sorted by what each is anchored to and therefore by what each can
+Four groups, sorted by what each is anchored to and therefore by what each can
 catch:
 
 | Group    | Anchored to            | Catches                               | Cannot catch                     |
 | -------- | ---------------------- | ------------------------------------- | -------------------------------- |
 | Internal | the recorded set       | an inconsistently generated set       | a snapshot of the wrong contract |
 | Source   | `type(X).creationCode` | a snapshot of the wrong contract      | anything about any chain         |
-| Chain    | the networks           | never deployed, or not there any more | anything before it is deployed   |
+| Record   | the frozen record      | a release the declaration missed      | what a declared suite records    |
+| Chain    | the networks           | never deployed, or not there any more | anything about the candidate     |
 
 The internal group's blind spot is not a gap to close there: every check in it
 asks the recorded bytes to agree with each other, and the wrong contract's bytes
@@ -107,14 +108,21 @@ to have diverged from current source, so anchoring one to source asserts
 something false by design. That is a property of the assertion, and there is no
 field on a released version with which to opt in or out.
 
-The chain group has no such exemption. It applies to every version, including
-one that has never been deployed — where it fails, and that failure is the
-answer.
+The chain group carries the mirror image of that exemption: it applies to
+**released versions only**. A release IS a deployment that happened, so "it is
+live on every supported network" is either true of it or a defect. The candidate
+is what the next release will be, ordinarily ahead of anything on chain, so
+demanding it be live asserts something false by design in the other direction.
+Neither exemption is a field a caller can set.
 
-It is a separate contract so that an unreachable RPC endpoint fails only it.
-`forge test --no-match-contract Chain` is the whole snapshot gate, and it is
-structural rather than conventional: nothing reachable from the snapshot
-contracts forks anything.
+Scoping to releases puts the whole weight on `releasedSuites()` naming every
+release, which is what the record group is for. A frozen tag the declaration
+misses is not an entry that turns up missing somewhere — it is a release the
+chain group is never handed, and a check with no subject cannot fail on it, so
+that release drops out of everything while the suite stays green. The
+declaration is generated from the append-only `src/generated/<tag>/` record and
+checked back against it, matched by address, since matching by name would assert
+only that a convention was followed.
 
 **Chain-independent runtime code is a requirement, not a caveat.** One recorded
 code hash per version can only be true if the runtime code is the same
@@ -197,9 +205,11 @@ forge soldeer install rain-deploy~<version>
 
 **You also need `forge-std` 1.16.1**, remapped as `forge-std-1.16.1/`. The
 published package deliberately ships only `src/` and `script/` — no
-`remappings.txt`, no `soldeer.lock`, no `dependencies/` — and everything under
-`src/` here is Foundry test-and-script infrastructure that imports `Vm`,
-`console2` or `Test`. So a consumer resolves `forge-std` itself:
+`remappings.txt`, no `soldeer.lock`, no `dependencies/` — so a consumer resolves
+`forge-std` itself. The requirement is transitive rather than incidental: the
+deployed contract imports nothing outside this package, but every abstract a
+consumer inherits pulls forge-std in — `Script` via `RainDeployBroadcast`,
+`Test` via `RainDeployVerifyBase`, and `Vm` via `LibRainDeploy` beneath both:
 
 ```toml
 [dependencies]
@@ -222,20 +232,15 @@ forge soldeer install # install deps declared in foundry.toml
 forge test
 ```
 
-Tasks:
+The three CI jobs are rainix reusable workflows, not commands in the shell. What
+each of them runs, which is what reproduces it locally:
 
-- `rainix-sol-test` — `forge test`
-- `rainix-sol-static` — slither
+- `rainix-sol-test` — `forge test -vvv`
 - `rainix-sol-legal` — `reuse lint`
+- `rainix-sol-static` — `slither .`, `forge fmt --check`, then
+  `rainix-sol-single-contract`
 
 Use the nix-pinned `forge` for all development.
-
-## Publish
-
-Tag `v<x.y.z>` on `main`. The
-[`Publish to Soldeer`](.github/workflows/publish-soldeer.yaml) wrapper delegates
-to rainix's reusable workflow, which derives the package name from the repo name
-(`rain.deploy` → `rain-deploy`).
 
 ## License
 
@@ -248,7 +253,7 @@ This repo is [REUSE 3.2](https://reuse.software/spec-3.2/) compliant. Verify
 locally:
 
 ```sh
-nix develop -c rainix-sol-legal
+nix develop -c reuse lint
 ```
 
 ## Contributions
