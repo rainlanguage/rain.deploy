@@ -9,6 +9,7 @@ import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/Addr
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
 import {MockDirtyWordOwner} from "../../concrete/MockDirtyWordOwner.sol";
+import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
@@ -389,6 +390,30 @@ contract LibRainDeployTest is Test {
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, false, address(0)));
         this.externalDeployZoltu(type(MockReverter).creationCode);
+    }
+
+    /// `deployZoltu` MUST report the zero address when the factory call fails,
+    /// even when the factory reverts with data that reads as an address. The
+    /// call output buffer holds revert data on the failure path, so anything
+    /// read from it there is not an address the factory returned.
+    function testDeployZoltuFailedCallReportsZeroAddress() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        vm.etch(LibRainDeploy.ZOLTU_FACTORY, address(new MockAddressRevertingFactory()).code);
+
+        // The discriminating power of this test is entirely the shape of the
+        // fixture's revert data: a failing call returning the twenty bytes of
+        // an address that has code. Asserted rather than assumed, because a
+        // fixture that reverted with fewer than twenty bytes would leave the
+        // pre-zeroed output buffer reading as the zero address, and the
+        // assertion below would then hold whether or not the failure path
+        // reads that buffer.
+        (bool factorySuccess, bytes memory factoryRevertData) = LibRainDeploy.ZOLTU_FACTORY.call("");
+        assertFalse(factorySuccess);
+        assertEq(factoryRevertData, abi.encodePacked(bytes20(LibRainDeploy.ZOLTU_FACTORY)));
+        assertGt(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, false, address(0)));
+        this.externalDeployZoltu(type(MockDeployable).creationCode);
     }
 
     /// `deployToNetworks` MUST revert with `UnexpectedDeployedAddress` when the
