@@ -42,6 +42,18 @@ library LibRainDeploy {
     /// the deploy may have happened before the search range.
     error DeployedBeforeStartBlock(address target, uint256 startBlock);
 
+    /// Thrown when a deployed contract holds an address other than the one the
+    /// deployment expects, on a network.
+    error UnexpectedResolvedAddress(string network, address target, uint256 index, address expected, address actual);
+
+    /// Thrown when the read calls and expected addresses of a post-deploy check
+    /// do not pair up.
+    error ResolvedAddressesLengthMismatch(uint256 readCallsLength, uint256 expectedAddressesLength);
+
+    /// Thrown when a post-deploy read reverts, or answers with something that is
+    /// not a single address-sized word.
+    error ResolvedAddressReadFailed(string network, address target, uint256 index, bytes returnData);
+
     /// Zoltu factory is the same on every network.
     address constant ZOLTU_FACTORY = 0x7A0D94F55792C434d74a40883C6ed8545E406D12;
 
@@ -202,6 +214,110 @@ library LibRainDeploy {
         networks[3] = FLARE;
         networks[4] = POLYGON;
         return networks;
+    }
+
+    /// Asserts that an already-deployed contract holds the addresses the
+    /// deployment expects, on whichever network is currently selected.
+    ///
+    /// This runs AFTER the deploy, deliberately. What it checks is state the
+    /// deployed contract has already settled — a value it resolved once, in its
+    /// constructor, and stored — so nothing it reads can move underneath it. The
+    /// same check run BEFORE a deploy would be worth nothing: it would read a
+    /// source that can change between the check and the constructor that
+    /// consumes it.
+    ///
+    /// It is deliberately source-agnostic. It says the deployed contract holds
+    /// the expected address, not where that address came from, because the
+    /// address registry is only one way a deployment acquires one, and because
+    /// re-reading the registry here would assert a value that can move rather
+    /// than the value this deployment actually took.
+    ///
+    /// Only the consumer knows where it stored what it resolved, so the consumer
+    /// supplies the reads. Each entry in `readCalls` is static-called against
+    /// `target` and MUST answer with exactly one address.
+    /// @param network The network name, for the error only.
+    /// @param target The deployed contract to read.
+    /// @param readCalls The calldata for each read, e.g.
+    /// `abi.encodeCall(IOwnable.owner, ())`.
+    /// @param expectedAddresses The address each read MUST answer with,
+    /// positionally paired with `readCalls`.
+    function checkResolvedAddresses(
+        string memory network,
+        address target,
+        bytes[] memory readCalls,
+        address[] memory expectedAddresses
+    ) internal view {
+        if (readCalls.length != expectedAddresses.length) {
+            revert ResolvedAddressesLengthMismatch(readCalls.length, expectedAddresses.length);
+        }
+        for (uint256 i = 0; i < readCalls.length; i++) {
+            // The consumer supplies the reads, so the call is low level by
+            // construction: there is no interface here to call through. Excluded
+            // at the site rather than repo-wide so a low-level call added
+            // anywhere else is still reported.
+            // slither-disable-next-line low-level-calls
+            (bool success, bytes memory returnData) = target.staticcall(readCalls[i]);
+            // A read that reverts, answers nothing (no code at `target`), or
+            // answers something that is not one word cannot be compared, and is
+            // never a pass.
+            if (!success || returnData.length != 0x20) {
+                revert ResolvedAddressReadFailed(network, target, i, returnData);
+            }
+            // Decoded as a word and range checked here rather than decoded as an
+            // address, because `abi.decode(_, (address))` reverts with no data
+            // of its own when the word's upper 96 bits are dirty. A read that
+            // answers with a word that is not an address is exactly the case
+            // `ResolvedAddressReadFailed` is for, so it is reported as that
+            // rather than as a bare revert nothing can diagnose.
+            uint256 word = abi.decode(returnData, (uint256));
+            if (word > type(uint160).max) {
+                revert ResolvedAddressReadFailed(network, target, i, returnData);
+            }
+            address actual = address(uint160(word));
+            if (actual != expectedAddresses[i]) {
+                revert UnexpectedResolvedAddress(network, target, i, expectedAddresses[i], actual);
+            }
+        }
+    }
+
+    /// Runs `checkResolvedAddresses` on every network, so a deployment verifies
+    /// itself across the whole target set here rather than in every consumer's
+    /// deploy script.
+    ///
+    /// Run this after `deployAndBroadcast` and before anything depends on the
+    /// deployment. A network where the deployed contract holds something other
+    /// than expected is a burned deterministic address, found while nothing
+    /// points at it yet — which is the whole reason to verify before migrating
+    /// onto a deployment rather than trusting it.
+    /// @param vm The Vm instance to use for forking.
+    /// @param networks The list of network names to check.
+    /// @param target The deployed contract to read on each network.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedAddresses The address each read MUST answer with,
+    /// positionally paired with `readCalls`.
+    function checkResolvedAddressesOnNetworks(
+        Vm vm,
+        string[] memory networks,
+        address target,
+        bytes[] memory readCalls,
+        address[] memory expectedAddresses
+    ) internal {
+        if (networks.length == 0) {
+            revert NoNetworks();
+        }
+        // Checked before any fork so a mispaired call fails immediately rather
+        // than after an RPC round trip.
+        if (readCalls.length != expectedAddresses.length) {
+            revert ResolvedAddressesLengthMismatch(readCalls.length, expectedAddresses.length);
+        }
+        for (uint256 i = 0; i < networks.length; i++) {
+            // createSelectFork returns a fork id that is not needed here; bind
+            // and reference it so the unused-return lint stays satisfied.
+            uint256 forkId = vm.createSelectFork(networks[i]);
+            (forkId);
+            console2.log("Checking resolved addresses on network:", networks[i]);
+            checkResolvedAddresses(networks[i], target, readCalls, expectedAddresses);
+        }
     }
 
     /// Deploys the given creation code to each network via the Zoltu factory.

@@ -1,11 +1,34 @@
 name: Package Release
+# Deploy repo: a manual `sol-v*` tag is the sole release trigger. This repo now
+# carries a deployed concrete (`AddressRegistry`) whose address + codehash
+# consumers pin, which is exactly the shape rainix-tag-release exists for and
+# exactly the shape rainix-autopublish's merge-driven, next-version lifecycle is
+# wrong for: autopublish bumps [package].version on every merge while the frozen
+# deploy tag only advances at deploy time.
+#
+# The tag names the version; rainix-tag-release runs `cutRelease()`, which
+# freezes src/generated/<tag>/ AND regenerates the released-suites lib that
+# declares it in one call, then verifies the live chains match the fresh pins,
+# publishes rain-deploy to Soldeer, and commits both back to main. One call,
+# because a frozen record no declaration names is a release every check silently
+# stops asking about.
+#
+# The on-chain deploy is separate and manual, run BEFORE tagging; this never
+# broadcasts. The chain verification inside rainix-tag-release is what fails if a
+# newly declared release is not on chain, and that is the intended gate: a
+# release is declared here only once it is a deployment that already happened.
+#
+# Switching lifecycles retracts nothing: every version already published stays
+# published, and consumers pin exact versions, so this changes who cuts a
+# release and nothing about how anyone consumes one.
 on:
   push:
-    branches:
-      - main
+    tags:
+      - sol-v*
 jobs:
   release:
-    uses: rainlanguage/rainix/.github/workflows/rainix-autopublish.yaml@main
+    uses: rainlanguage/rainix/.github/workflows/rainix-tag-release.yaml@main
     with:
       soldeer-package: rain-deploy
+      snapshot-generate-cmd: forge script ./script/Build.sol --sig "cutRelease()" && forge fmt
     secrets: inherit
