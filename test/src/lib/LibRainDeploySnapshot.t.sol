@@ -571,8 +571,9 @@ contract LibRainDeploySnapshotTest is Test {
         string memory libraryName = string.concat("Lib", FIXTURE_CONTRACT, "Released");
         string memory path = string.concat("src/lib/", libraryName, ".sol");
 
-        string memory written =
-            LibRainDeploySnapshot.writeReleasedSuitesLib(vm, RELEASED_FIXTURE_ROOT, FIXTURE_CONTRACT, emitterTemplate());
+        string memory written = LibRainDeploySnapshot.writeReleasedSuitesLib(
+            vm, RELEASED_FIXTURE_ROOT, FIXTURE_CONTRACT, emitterTemplate()
+        );
 
         string memory emitted = vm.readFile(path);
         // Built while the fixture record is still there: both emitters read it.
