@@ -64,8 +64,7 @@ POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
 All five are needed: `RainDeployVerifyChain` forks every network in
 `supportedNetworks()`, so a missing or rate-limited endpoint fails it. Those
 failures are `vm.createSelectFork` errors, distinct from the
-`NotDeployedOnNetwork` a reachable network raises, and the snapshot contracts
-run regardless: `forge test --no-match-contract Chain`.
+`NotDeployedOnNetwork` a reachable network raises.
 
 These are referenced in `foundry.toml` under `[rpc_endpoints]`.
 
@@ -270,8 +269,7 @@ can set. Group 3 is what makes group 4's scope complete — a release group 4 is
 never handed is a release it cannot fail on.
 
 Group 4 lives in its own contract so an unreachable RPC endpoint fails only it,
-never the snapshot assertions — `forge test --no-match-contract Chain` is the
-whole snapshot gate, and nothing reachable from those contracts forks anything.
+never the snapshot assertions, and a failure names which of the two it was.
 
 A single recorded code hash per version can only be true if the runtime code is
 the same on every network, so a constructor reading `block.chainid` or similar
