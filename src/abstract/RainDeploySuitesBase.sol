@@ -1,0 +1,171 @@
+// SPDX-License-Identifier: LicenseRef-DCL-1.0
+// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+pragma solidity ^0.8.25;
+
+/// Thrown when two suites share a key. The key selects what gets broadcast, so
+/// a duplicate makes the selection ambiguous and one of the two unreachable.
+/// @param suite The key declared more than once.
+error DuplicateDeploySuite(string suite);
+
+/// Thrown when `DEPLOYMENT_SUITE` names no declared suite. Carries the valid
+/// keys, because the whole point of a registry is that the answer is not one
+/// hardcoded string the caller has to already know.
+/// @param requested The key that was asked for.
+/// @param validSuites The declared keys, comma separated.
+error UnknownDeploymentSuite(string requested, string validSuites);
+
+/// One deployable unit: a named snapshot of one contract.
+///
+/// `creationCode` is the ONLY input. The Zoltu factory is `CREATE2` over its
+/// calldata under a zero salt, so the deploy address is a pure function of it
+/// and identical on every network, and running it once locally yields the
+/// runtime code and its hash. The address, code hash and runtime code recorded
+/// beside it are checked OUTPUTS, which is what the verification abstracts
+/// check them as.
+///
+/// They are recorded rather than derived on purpose. `LibRainDeploy` compares
+/// the recorded address against the creation code before it forks anything, so
+/// a snapshot whose pins have gone stale fails BEFORE broadcasting rather than
+/// deploying to wherever the code happens to land. Deriving them here would
+/// make that comparison derived-against-derived, and a guard that compares a
+/// value to itself is not a guard.
+struct DeploySuite {
+    /// The key. Unique across every suite a repo declares: it is what
+    /// `DEPLOYMENT_SUITE` selects for broadcasting, and the label every
+    /// verification error names.
+    ///
+    /// A repo with one contract and several frozen releases gives each release
+    /// its own key, because each is separately deployable — a chain added after
+    /// a release is exactly the case where an OLD snapshot has to be broadcast
+    /// on its own.
+    string suite;
+    /// The creation code this suite is a snapshot of. The only parameter.
+    ///
+    /// A frozen `CREATION_CODE` constant for a released snapshot, or
+    /// `type(X).creationCode` where nothing is frozen yet. Frozen matters: a
+    /// released suite broadcasts the exact bytes its audit covered, whatever
+    /// the current source now compiles to.
+    bytes creationCode;
+    /// The deploy address recorded for this suite.
+    address storedDeployedAddress;
+    /// The deployed code hash recorded for this suite.
+    bytes32 storedBytecodeHash;
+    /// The runtime code recorded for this suite. A frozen `RUNTIME_CODE`
+    /// constant, or `type(X).runtimeCode` where nothing is frozen yet.
+    bytes storedRuntimeCode;
+    /// `<path>:<Name>`, for the explorer verification command.
+    ///
+    /// Declared rather than derived from the contract name. `src/concrete/`
+    /// holds only the flattest repos; a repo that groups concretes into
+    /// subdirectories has paths no naming convention recovers.
+    string artifactPath;
+    /// Addresses that MUST already have code on a network before this suite is
+    /// broadcast there. Ordinarily other suites' recorded addresses: a
+    /// constructor that bakes in a beacon, or a fallback that delegatecalls a
+    /// facet, silently produces a broken deployment if its target is absent.
+    address[] dependencies;
+}
+
+/// The rolling candidate: the snapshot that tracks current source rather than a
+/// frozen release, paired with the current source's creation code it MUST
+/// equal.
+///
+/// This pairing is the ONLY thing that catches a snapshot of the wrong
+/// contract. Every check internal to a snapshot is satisfied by a consistent
+/// snapshot of the wrong thing, so without an anchor to source there is nothing
+/// that says the recorded bytes belong to the contract this repo compiles.
+///
+/// It is deliberately absent from `DeploySuite` and therefore from released
+/// suites: a released tag is MEANT to diverge from current source, so anchoring
+/// one to source would fail on every release that is not the newest. That is a
+/// property of the assertion, not an opt-out — there is no way for a caller to
+/// spell "released, and also skip the checks that do apply".
+struct DeployCandidate {
+    /// The candidate's own recorded snapshot, checked exactly as any other.
+    DeploySuite snapshot;
+    /// `type(X).creationCode` for the contract the candidate claims to be.
+    bytes sourceCreationCode;
+}
+
+/// @title RainDeploySuitesBase
+/// @notice The ONE declaration of what a repo deploys, consumed by both the
+/// broadcasting abstract and the verification abstracts.
+///
+/// That sharing is the point. A repo that declared its suites twice — once for
+/// the deploy script, once for the verification tests — could broadcast one
+/// contract while verifying another and have every test pass, because nothing
+/// would connect the two lists. Here there is one list, so the deployment and
+/// the thing checked against the chain cannot disagree: not because it is
+/// checked, but because there is nothing to disagree with.
+///
+/// A repo overrides `releasedSuites` and `candidateSuite` on one abstract
+/// contract and inherits that into its deploy script and its test contracts.
+/// Nothing else is per suite, and nothing anywhere is per network.
+abstract contract RainDeploySuitesBase {
+    /// Every FROZEN released suite, in any order. A released snapshot is
+    /// immutable: its recorded bytes describe a deployment that already
+    /// happened, so it is never regenerated and never anchored to current
+    /// source.
+    /// @return The released suites.
+    function releasedSuites() internal pure virtual returns (DeploySuite[] memory);
+
+    /// The rolling candidate — the snapshot describing what this repo compiles
+    /// right now. Required rather than optional: a deploy repo always compiles
+    /// a current source, so there is always something for the source-anchored
+    /// check to anchor to, and making it optional would let the only check that
+    /// catches a wrong-contract snapshot be silently skipped.
+    /// @return The candidate.
+    function candidateSuite() internal pure virtual returns (DeployCandidate memory);
+
+    /// Every suite this repo declares: the released ones followed by the
+    /// candidate. This is the verification set and the deploy registry, which
+    /// are the same set because they are the same declaration.
+    ///
+    /// Keys are checked unique here rather than anywhere more specific, so both
+    /// sides pay for the check and neither can be handed an ambiguous registry.
+    /// @return suites Every declared suite.
+    function allSuites() internal pure returns (DeploySuite[] memory suites) {
+        DeploySuite[] memory released = releasedSuites();
+        suites = new DeploySuite[](released.length + 1);
+        for (uint256 i = 0; i < released.length; i++) {
+            suites[i] = released[i];
+        }
+        suites[released.length] = candidateSuite().snapshot;
+
+        for (uint256 i = 0; i < suites.length; i++) {
+            for (uint256 j = i + 1; j < suites.length; j++) {
+                if (keccak256(bytes(suites[i].suite)) == keccak256(bytes(suites[j].suite))) {
+                    revert DuplicateDeploySuite(suites[i].suite);
+                }
+            }
+        }
+    }
+
+    /// Every declared key, comma separated, for the unknown-suite error.
+    /// @return names The declared keys.
+    function suiteNames() internal pure returns (string memory names) {
+        DeploySuite[] memory suites = allSuites();
+        for (uint256 i = 0; i < suites.length; i++) {
+            names = i == 0 ? suites[i].suite : string.concat(names, ", ", suites[i].suite);
+        }
+    }
+
+    /// The suite a key selects.
+    ///
+    /// Iterating the registry rather than branching on a hash: a repo adds a
+    /// suite by adding an array entry, and the set of valid keys the failure
+    /// reports follows from the same array rather than from a string somebody
+    /// remembered to update.
+    /// @param requested The key to select, from `DEPLOYMENT_SUITE`.
+    /// @return The selected suite.
+    function suiteByName(string memory requested) internal pure returns (DeploySuite memory) {
+        DeploySuite[] memory suites = allSuites();
+        bytes32 requestedHash = keccak256(bytes(requested));
+        for (uint256 i = 0; i < suites.length; i++) {
+            if (keccak256(bytes(suites[i].suite)) == requestedHash) {
+                return suites[i];
+            }
+        }
+        revert UnknownDeploymentSuite(requested, suiteNames());
+    }
+}

@@ -1,6 +1,9 @@
 [package]
 name = "rain-deploy"
-version = "0.1.6"
+# Deploy repo: this is the LAST released version, naming the current
+# src/generated/<tag>/ snapshot, not a next-version slot. A normal PR does not
+# bump it; only a `sol-v*` tag release moves it, in lockstep with the snapshot.
+version = "0.1.5"
 
 # SPDX-License-Identifier: LicenseRef-DCL-1.0
 # SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
@@ -9,18 +12,65 @@ version = "0.1.6"
 src = "src"
 out = "out"
 libs = ["dependencies"]
+
+# This repo compiles a contract whose deterministic deploy address and code hash
+# are pinned in LibAddressRegistryDeploy, and both are a pure function of the
+# creation code, which is a function of these settings. They are pinned exactly
+# rather than floated so the pins cannot move under a compiler or default-target
+# change, and they match the settings the org's other deploy repos use.
+solc = "0.8.25"
+optimizer = true
+optimizer_runs = 100000
+evm_version = "cancun"
 cbor_metadata = false
 bytecode_hash = "none"
 
+# GeneratedSnapshotShapeTest asserts the SHAPE of a generated deploy snapshot
+# from the compiler's own AST, so the AST has to be in the artifacts that a
+# plain `forge test` produces — not only under an explicit `--ast`.
+ast = true
+
+# Build reads the version from foundry.toml and writes the generated
+# per-tag snapshots + the current-pin lib under src/. Nothing else in this repo
+# touches the filesystem.
+fs_permissions = [
+  { access = "read", path = "./foundry.toml" },
+  { access = "read-write", path = "./src" },
+  # LibRainDeploySnapshotTest builds a record tree of its own under
+  # test/generated to drive the frozen-record walk. NOT src/generated: the
+  # inherited record check reads that root from contracts forge runs in
+  # parallel, so a fixture release there would be one they have to fail on.
+  { access = "read-write", path = "./test" },
+  # GeneratedSnapshotShapeTest reads the compiler's AST out of the artifact.
+  { access = "read", path = "./out" },
+]
+
 [dependencies]
 forge-std = "1.16.1"
+rain-sol-codegen = "0.1.6"
 
 [soldeer]
 recursive_deps = false
 
+# Every alias here is a network script/Deploy.sol broadcasts to and
+# RainDeployVerifyChain forks. rainix's rpc-preflight action binds
+# <NETWORK>_RPC_URL to a candidate that is reachable at the time of the run,
+# rather than to one URL that may be dead, so these names are the contract with
+# it.
 [rpc_endpoints]
 arbitrum = "${ARBITRUM_RPC_URL}"
 base = "${BASE_RPC_URL}"
 base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
 flare = "${FLARE_RPC_URL}"
 polygon = "${POLYGON_RPC_URL}"
+
+# `rainix-manual-sol-artifacts` passes `--verify` by default and exports exactly
+# these variable names, so a deploy without this section broadcasts and then
+# fails with no API key configured for the chain — after spending the gas. One
+# entry per `[rpc_endpoints]` alias, because the deploy goes to all of them.
+[etherscan]
+arbitrum = { key = "${CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY}" }
+base = { key = "${CI_DEPLOY_BASE_ETHERSCAN_API_KEY}" }
+base_sepolia = { key = "${CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY}" }
+flare = { key = "${CI_DEPLOY_FLARE_ETHERSCAN_API_KEY}" }
+polygon = { key = "${CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY}" }
