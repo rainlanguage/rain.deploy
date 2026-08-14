@@ -343,9 +343,17 @@ contract LibRainDeployTest is Test {
     function testDeployZoltuFailedCallReportsZeroAddress() external {
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         vm.etch(LibRainDeploy.ZOLTU_FACTORY, address(new MockAddressRevertingFactory()).code);
-        // The factory reverts with its own address, which has code, so the
-        // reported address is only zero if the failure path never reads the
-        // output buffer.
+
+        // The discriminating power of this test is entirely the shape of the
+        // fixture's revert data: a failing call returning the twenty bytes of
+        // an address that has code. Asserted rather than assumed, because a
+        // fixture that reverted with fewer than twenty bytes would leave the
+        // pre-zeroed output buffer reading as the zero address, and the
+        // assertion below would then hold whether or not the failure path
+        // reads that buffer.
+        (bool factorySuccess, bytes memory factoryRevertData) = LibRainDeploy.ZOLTU_FACTORY.call("");
+        assertFalse(factorySuccess);
+        assertEq(factoryRevertData, abi.encodePacked(bytes20(LibRainDeploy.ZOLTU_FACTORY)));
         assertGt(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, false, address(0)));

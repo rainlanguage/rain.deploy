@@ -15,8 +15,8 @@ library LibRainDeploy {
     /// Thrown when deployment via Zoltu factory fails. This could be either an
     /// explicit revert that manifests as non success, or a silent failure that
     /// results in the deployed address being empty somehow. `deployedAddress`
-    /// is zero whenever `success` is false, as a failed factory call returns no
-    /// address.
+    /// is zero whenever `success` is false: a failed call leaves revert data in
+    /// the output buffer rather than an address, so it is never read there.
     error DeployFailed(bool success, address deployedAddress);
 
     /// Thrown when a dependency is missing on a network before deployment.
