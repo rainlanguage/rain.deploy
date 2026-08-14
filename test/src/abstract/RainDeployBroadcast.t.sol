@@ -26,33 +26,68 @@ contract RainDeployBroadcastTest is Test {
         sDeploy = new ExampleDeploy();
     }
 
-    /// A mistyped suite MUST fail naming every valid suite, and MUST do so
-    /// before `DEPLOYMENT_KEY` is read. `DEPLOYMENT_KEY` is deliberately unset
-    /// here: if the key were read first, this would fail on the missing key and
-    /// send the reader after the wrong thing entirely.
-    function testRunUnknownSuiteRevertsBeforeReadingTheKey() external {
+    /// The suite comes from `DEPLOYMENT_SUITE`, an unset one is no suite rather
+    /// than a default, and both answers are reached before `DEPLOYMENT_KEY` is
+    /// read.
+    ///
+    /// ONE test for both values, because `vm.setEnv` writes the forge PROCESS'
+    /// environment. It is scoped to neither a test nor a contract, nothing
+    /// unsets or restores it, and forge runs tests concurrently — so two tests
+    /// holding two values for one variable is two tests racing over one
+    /// variable, and this contract was exactly that until it was seen losing
+    /// the race: the unset case resolved the `address-registry` the other test
+    /// had written. Sequenced inside one test the two values cannot interleave,
+    /// and every write to that variable in this repo is now the one below,
+    /// after the only read that needs it absent.
+    ///
+    /// ## Unset first, and genuinely unset
+    ///
+    /// `vm.setEnv("DEPLOYMENT_SUITE", "")` would set a variable that is PRESENT
+    /// and empty, which never reaches `vm.envOr`'s default — so it would pass
+    /// just as happily if that default became a real suite key, and a deploy
+    /// that picks something when told nothing is how the wrong contract reaches
+    /// a chain. Only an absent variable exercises the default, and absent is a
+    /// state no cheatcode restores, so this half runs before anything sets it.
+    ///
+    /// That the reported key is empty rather than a suite is what says there is
+    /// no default; `RainDeploySuitesBaseTest.testEmptySuiteIsUnknown` is what
+    /// says an empty key is unknown.
+    ///
+    /// ## Then a suite nobody declared
+    ///
+    /// A mistyped suite MUST fail naming every valid suite. The reported key is
+    /// the value of THAT variable under THAT name, which is what a set value
+    /// distinct from the default proves and an unset one cannot.
+    ///
+    /// ## Both before the key
+    ///
+    /// `DEPLOYMENT_KEY` is deliberately unset. `vm.envUint` reverts on an unset
+    /// variable, so were the key read first, either half would fail on the
+    /// missing key — and a mistyped suite would send the deployer after the
+    /// wrong thing entirely.
+    function testRunSelectsTheSuiteFromTheEnvBeforeTheKeyAndNeverDefaults() external {
+        // Both absences are inputs, so they are asserted rather than assumed: a
+        // variable set outside this test reports itself by name here instead of
+        // as a surprising revert payload, or as an ordering this no longer
+        // discriminates.
+        assertFalse(vm.envExists("DEPLOYMENT_SUITE"));
+        assertFalse(vm.envExists("DEPLOYMENT_KEY"));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                UnknownDeploymentSuite.selector,
+                "",
+                "address-registry-0-0-1, second-address, address-registry-candidate"
+            )
+        );
+        sDeploy.run();
+
         vm.setEnv("DEPLOYMENT_SUITE", "address-registry");
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "address-registry",
-                "address-registry-0-0-1, second-address, address-registry-candidate"
-            )
-        );
-        sDeploy.run();
-    }
-
-    /// An unset `DEPLOYMENT_SUITE` MUST be an unknown suite rather than a
-    /// default. A deploy that picks something when told nothing is how the
-    /// wrong contract reaches a chain.
-    function testRunUnsetSuiteReverts() external {
-        vm.setEnv("DEPLOYMENT_SUITE", "");
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                UnknownDeploymentSuite.selector,
-                "",
                 "address-registry-0-0-1, second-address, address-registry-candidate"
             )
         );
