@@ -82,8 +82,13 @@ These are referenced in `foundry.toml` under `[rpc_endpoints]`.
   returns the deployed address
 - `supportedNetworks()` — returns the list of Rain-supported network names (used
   as foundry RPC config aliases)
-- `isStartBlock(...)` / `findDeployBlock(...)` — binary search a fork's history
-  for the block a contract first appears at
+- `isStartBlock(...)` — reads two adjacent blocks: true when the target has the
+  expected code hash at a block and does not have it at the block before
+- `findDeployBlock(...)` — binary searches a fork's history for a block where
+  the target has the expected code hash and did not have it at the block before.
+  Either one is "the block a contract first appears at" only where that code
+  hash is monotone; against a target that held the hash, lost it and holds it
+  again both answer about an appearance neither can identify
 - `checkResolvedAddresses(...)` — asserts an already-deployed contract holds the
   addresses the deployment expected, on the currently selected fork, via
   consumer-supplied static reads

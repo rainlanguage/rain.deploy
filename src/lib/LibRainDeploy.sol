@@ -126,11 +126,16 @@ library LibRainDeploy {
     ///
     /// That is the caller's precondition because nothing here can check it, and
     /// `isStartBlock` least of all. `high` is only ever a block where the code
-    /// hash matches and `low` is only ever one past a block where it does not,
-    /// so where they meet the hash matches and did not match at the block
-    /// before — `isStartBlock`'s exact condition, satisfied by construction and
-    /// satisfied on a non-monotone history just the same. Running it on the
-    /// result would read two more archive blocks to agree with itself.
+    /// hash matches: it starts at the current block, checked above, and
+    /// otherwise takes a `mid` the loop has just read as matching. `low` is
+    /// either `startBlock`, checked above as NOT matching, or one past a `mid`
+    /// the loop has just read as not matching. It cannot still be `startBlock`
+    /// when the loop ends, because that needs `high` down at `startBlock` and
+    /// `high` is only ever a matching block, so where they meet the hash
+    /// matches and did not match at the block before — `isStartBlock`'s exact
+    /// condition, satisfied by construction and satisfied on a non-monotone
+    /// history just the same. Running it on the result would read two more
+    /// archive blocks to agree with itself.
     /// @param vm The Vm instance for fork manipulation.
     /// @param target The contract address to search for.
     /// @param expectedCodeHash The expected code hash of the target contract.
