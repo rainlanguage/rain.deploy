@@ -64,8 +64,7 @@ POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
 All five are needed: `RainDeployVerifyChain` forks every network in
 `supportedNetworks()`, so a missing or rate-limited endpoint fails it. Those
 failures are `vm.createSelectFork` errors, distinct from the
-`NotDeployedOnNetwork` a reachable network raises, and the snapshot contracts
-run regardless: `forge test --no-match-contract Chain`.
+`NotDeployedOnNetwork` a reachable network raises.
 
 These are referenced in `foundry.toml` under `[rpc_endpoints]`.
 
@@ -82,8 +81,13 @@ These are referenced in `foundry.toml` under `[rpc_endpoints]`.
   returns the deployed address
 - `supportedNetworks()` — returns the list of Rain-supported network names (used
   as foundry RPC config aliases)
-- `isStartBlock(...)` / `findDeployBlock(...)` — binary search a fork's history
-  for the block a contract first appears at
+- `isStartBlock(...)` — reads two adjacent blocks: true when the target has the
+  expected code hash at a block and does not have it at the block before
+- `findDeployBlock(...)` — binary searches a fork's history for a block where
+  the target has the expected code hash and did not have it at the block before.
+  Either one is "the block a contract first appears at" only where that code
+  hash is monotone; against a target that held the hash, lost it and holds it
+  again both answer about an appearance neither can identify
 - `checkResolvedAddresses(...)` — asserts an already-deployed contract holds the
   addresses the deployment expected, on the currently selected fork, via
   consumer-supplied static reads
@@ -92,8 +96,10 @@ These are referenced in `foundry.toml` under `[rpc_endpoints]`.
   is the only point at which such a check means anything: registry bindings are
   mutable, so a pre-deploy check would read a source that can change before the
   constructor that consumes it
-- `deployToNetworks(...)` — forks each network, verifies the factory and
-  dependencies, deploys via Zoltu, verifies address and code hash
+- `deployToNetworks(...)` — forks each network; where the expected address is
+  still empty it verifies the factory and dependencies on that fork, deploys via
+  Zoltu and checks the address; the code hash is checked on every network,
+  deployed here or already there
 - `deployAndBroadcast(...)` — the main entry point: derives the deployer from a
   private key, then `deployToNetworks`
 
@@ -209,12 +215,12 @@ repos that bootstrap one chain per dispatch.
 
 **`script/Deploy.sol`** —
 `contract Deploy is RegistryDeploySuites,
-RainDeployBroadcast {}`. Empty
-on purpose: the suites and the broadcast are both inherited. Run only via the
+RainDeployBroadcast {}`. Empty on
+purpose: the suites and the broadcast are both inherited. Run only via the
 `Manual sol artifacts` workflow.
 
-**`src/abstract/RegistryDeploySuites.sol`** — this repo's own
-declaration, inherited by `script/Deploy.sol` and by both pins test contracts.
+**`src/abstract/RegistryDeploySuites.sol`** — this repo's own declaration,
+inherited by `script/Deploy.sol` and by both pins test contracts.
 
 **`src/abstract/RainDeployVerify*.sol`** — the deploy-pin verification every
 deploy repo inherits instead of hand-writing.
@@ -265,8 +271,7 @@ can set. Group 3 is what makes group 4's scope complete — a release group 4 is
 never handed is a release it cannot fail on.
 
 Group 4 lives in its own contract so an unreachable RPC endpoint fails only it,
-never the snapshot assertions — `forge test --no-match-contract Chain` is the
-whole snapshot gate, and nothing reachable from those contracts forks anything.
+never the snapshot assertions, and a failure names which of the two it was.
 
 A single recorded code hash per version can only be true if the runtime code is
 the same on every network, so a constructor reading `block.chainid` or similar
@@ -294,8 +299,13 @@ expected addresses, expected code hashes, and dependency lists.
 - **Code hash verification**: Post-deploy bytecode integrity is verified against
   `expectedCodeHash`. The address registry is verified the same way before it is
   read.
-- **Dependency checking**: Before deploying to any network, all dependencies
-  (contract addresses) are verified to have code on-chain.
+- **Dependency checking**: per network, and only where the deploy actually runs.
+  On a network with no code at `expectedAddress`, the Zoltu factory must have
+  code and match `ZOLTU_FACTORY_CODEHASH` and every dependency must have code,
+  all read on that network's own fork immediately before broadcasting. A network
+  that already has the code skips the deploy and the dependency check with it: a
+  contract that is already deployed does not need its dependencies present to
+  stay deployed. There is no all-network pre-flight.
 - **Idempotent deploys**: If code already exists at the expected address,
   deployment is skipped for that network.
 - **Resolve once, verify after**: registry bindings are mutable, so the

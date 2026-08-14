@@ -359,7 +359,8 @@ contract LibRainDeployTest is Test {
     }
 
     /// `deployZoltu` MUST deploy a contract via the Zoltu factory and return
-    /// the deterministic address predicted by the factory's nonce.
+    /// the deterministic address the factory derives with `CREATE2` over the
+    /// creation code under a zero salt.
     function testDeployZoltu() external {
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         address deployed = this.externalDeployZoltu(type(MockDeployable).creationCode);

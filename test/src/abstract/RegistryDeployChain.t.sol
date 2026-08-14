@@ -20,9 +20,8 @@ import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.s
 /// consistent set of pins for a contract that exists nowhere passes every one
 /// of them. A green here would only mean nobody asked.
 ///
-/// It is a separate contract from `AddressRegistryDeploySnapshotTest`
-/// precisely so that it says this and nothing more: `forge test
-/// --no-match-contract Chain` still runs every snapshot assertion,
-/// whether the deployment is missing or the RPC endpoints are merely
-/// unreachable.
+/// It is a separate contract from `AddressRegistryDeploySnapshotTest` precisely
+/// so that it says this and nothing more: a missing deployment or an
+/// unreachable endpoint fails here alone, leaving every snapshot assertion to
+/// answer for itself.
 contract AddressRegistryDeployChainTest is RegistryDeploySuites, RainDeployVerifyChain {}
