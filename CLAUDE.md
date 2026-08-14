@@ -92,8 +92,10 @@ These are referenced in `foundry.toml` under `[rpc_endpoints]`.
   is the only point at which such a check means anything: registry bindings are
   mutable, so a pre-deploy check would read a source that can change before the
   constructor that consumes it
-- `deployToNetworks(...)` — forks each network, verifies the factory and
-  dependencies, deploys via Zoltu, verifies address and code hash
+- `deployToNetworks(...)` — forks each network; where the expected address is
+  still empty it verifies the factory and dependencies on that fork, deploys via
+  Zoltu and checks the address; the code hash is checked on every network,
+  deployed here or already there
 - `deployAndBroadcast(...)` — the main entry point: derives the deployer from a
   private key, then `deployToNetworks`
 
@@ -292,8 +294,13 @@ expected addresses, expected code hashes, and dependency lists.
 - **Code hash verification**: Post-deploy bytecode integrity is verified against
   `expectedCodeHash`. The address registry is verified the same way before it is
   read.
-- **Dependency checking**: Before deploying to any network, all dependencies
-  (contract addresses) are verified to have code on-chain.
+- **Dependency checking**: per network, and only where the deploy actually runs.
+  On a network with no code at `expectedAddress`, the Zoltu factory must have
+  code and match `ZOLTU_FACTORY_CODEHASH` and every dependency must have code,
+  all read on that network's own fork immediately before broadcasting. A network
+  that already has the code skips the deploy and the dependency check with it: a
+  contract that is already deployed does not need its dependencies present to
+  stay deployed. There is no all-network pre-flight.
 - **Idempotent deploys**: If code already exists at the expected address,
   deployment is skipped for that network.
 - **Resolve once, verify after**: registry bindings are mutable, so the

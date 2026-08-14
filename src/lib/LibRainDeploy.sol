@@ -81,6 +81,15 @@ library LibRainDeploy {
     /// hash at `blockNumber` and does NOT have it at `blockNumber - 1`. At
     /// block 0, only the first condition is checked. The fork is restored to
     /// its original block number after checking.
+    ///
+    /// "First" is only true of a target whose code hash is MONOTONE: once it
+    /// equals `expectedCodeHash` at some block it equals it at every later
+    /// block. This reads two adjacent blocks and nothing else, so on a target
+    /// that held `expectedCodeHash`, lost it and holds it again — a pre-Cancun
+    /// `SELFDESTRUCT` followed by a `CREATE2` redeploy of the same code at the
+    /// same address, say — it answers true at EVERY block where the hash
+    /// reappears, not only the earliest. Monotonicity is the caller's to know:
+    /// two blocks cannot show it.
     /// @param vm The Vm instance for fork manipulation.
     /// @param target The contract address to check.
     /// @param expectedCodeHash The code hash to look for.
@@ -104,8 +113,20 @@ library LibRainDeploy {
     /// searching the fork history. Requires an active fork with archive access
     /// back to `startBlock`. The fork is restored to its original block
     /// number before returning. The target's code hash is verified against the
-    /// expected value before searching. The result is validated via
-    /// `isStartBlock`.
+    /// expected value before searching.
+    ///
+    /// The search REQUIRES the target's code hash to be monotone over
+    /// `[startBlock, block.number]`, in the sense `isStartBlock` describes.
+    /// Against a target that held `expectedCodeHash`, lost it and holds it
+    /// again, the search converges on one of those appearances with no way to
+    /// say which, and the result is meaningless as the subgraph start block it
+    /// is typically used as.
+    ///
+    /// That is the caller's precondition because nothing here can check it, and
+    /// `isStartBlock` least of all: the loop exits with the code hash matching
+    /// at the result and not matching at the block before it whatever the
+    /// history, so `isStartBlock` holds of the result by construction and
+    /// running it here could only ever agree.
     /// @param vm The Vm instance for fork manipulation.
     /// @param target The contract address to search for.
     /// @param expectedCodeHash The expected code hash of the target contract.
