@@ -125,10 +125,12 @@ library LibRainDeploy {
     /// is typically used as.
     ///
     /// That is the caller's precondition because nothing here can check it, and
-    /// `isStartBlock` least of all: the loop exits with the code hash matching
-    /// at the result and not matching at the block before it whatever the
-    /// history, so `isStartBlock` holds of the result by construction and
-    /// running it here could only ever agree.
+    /// `isStartBlock` least of all. `high` is only ever a block where the code
+    /// hash matches and `low` is only ever one past a block where it does not,
+    /// so where they meet the hash matches and did not match at the block
+    /// before — `isStartBlock`'s exact condition, satisfied by construction and
+    /// satisfied on a non-monotone history just the same. Running it on the
+    /// result would read two more archive blocks to agree with itself.
     /// @param vm The Vm instance for fork manipulation.
     /// @param target The contract address to search for.
     /// @param expectedCodeHash The expected code hash of the target contract.
