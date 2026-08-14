@@ -6,6 +6,7 @@ import {Test} from "forge-std-1.16.1/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
+import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
 import {MockDirtyWordOwner} from "../../concrete/MockDirtyWordOwner.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
@@ -17,6 +18,29 @@ import {MockReverter} from "../../concrete/MockReverter.sol";
 /// that need `vm.expectRevert` at the correct call depth, and for functions
 /// that require a storage mapping reference.
 contract LibRainDeployTest is Test {
+    /// Base allocates the OP Stack WETH9 predeploy in its genesis block, so
+    /// this address has code at block 0.
+    address constant BASE_GENESIS_PREDEPLOY = 0x4200000000000000000000000000000000000006;
+
+    /// Code hash of the Base genesis WETH9 predeploy, fixed by the genesis
+    /// allocation and therefore identical at block 0 and block 1.
+    bytes32 constant BASE_GENESIS_PREDEPLOY_CODEHASH =
+        0x8a3a1f6a9f9dce633117adee5b458245835a8645a8c8726a26382a4622508b1c;
+
+    /// The block at which the Zoltu factory first has its code on Base.
+    uint256 constant ZOLTU_BASE_DEPLOY_BLOCK = 1117029;
+
+    /// Chain id of Base.
+    uint256 constant BASE_CHAIN_ID = 8453;
+
+    /// Chain id of Arbitrum One.
+    uint256 constant ARBITRUM_ONE_CHAIN_ID = 42161;
+
+    /// The address the Zoltu factory derives for empty creation code, i.e.
+    /// CREATE2 over the factory address, a zero salt and the hash of empty
+    /// creation code. An account is created there but it has no code.
+    address constant ZOLTU_EMPTY_CREATION_CODE_ADDRESS = 0x5DC93B79FBDD6f26Ed9540597C78eD5893F9aC7A;
+
     /// The address the Zoltu factory deploys `MockDeployable` to. Derived from
     /// the mock's creation code by the same formula the factory applies, so it
     /// follows the compiler that builds the mock. `testDeployZoltu` pins the
@@ -179,10 +203,15 @@ contract LibRainDeployTest is Test {
     }
 
     /// `ZOLTU_FACTORY_CODEHASH` MUST match the actual codehash of the Zoltu
-    /// factory on a forked network.
+    /// factory on every supported network. Every name in `supportedNetworks`
+    /// MUST also be a configured fork alias, otherwise it cannot be deployed
+    /// to at all.
     function testZoltuFactoryCodehash() external {
-        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
-        assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
+        string[] memory networks = LibRainDeploy.supportedNetworks();
+        for (uint256 i = 0; i < networks.length; i++) {
+            vm.createSelectFork(networks[i]);
+            assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, networks[i]);
+        }
     }
 
     /// `ZOLTU_FACTORY_BYTECODE` MUST match the actual runtime bytecode of the
@@ -268,6 +297,25 @@ contract LibRainDeployTest is Test {
             dependencies
         );
         assertEq(result, mockDeployableAddress());
+
+        // The returned address is the same for every network, so it says
+        // nothing about how many networks were visited. What does is the state
+        // each fork was left in.
+        //
+        // `deployToNetworks` creates one fork per network, in list order, and
+        // this test creates none of its own, so those forks are ids 0 and 1.
+        // Selecting each in turn and asserting BOTH the chain it is on and
+        // that the contract is deployed there is what pins "every network in
+        // the list": a loop that stops early never creates the second fork, a
+        // loop that starts late puts the wrong chain at id 0, and a loop that
+        // forks `networks[0]` every iteration puts the same chain at both ids.
+        vm.selectFork(0);
+        assertEq(block.chainid, BASE_CHAIN_ID);
+        assertEq(result.codehash, mockDeployableCodeHash());
+
+        vm.selectFork(1);
+        assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
+        assertEq(result.codehash, mockDeployableCodeHash());
     }
 
     /// External wrapper for `deployToNetworks` so that `vm.expectRevert`
@@ -298,6 +346,14 @@ contract LibRainDeployTest is Test {
     /// @param creationCode The creation code to deploy via the Zoltu factory.
     /// @return deployedAddress The address of the deployed contract.
     function externalDeployZoltu(bytes memory creationCode) external returns (address deployedAddress) {
+        deployedAddress = LibRainDeploy.deployZoltu(creationCode);
+    }
+
+    /// External wrapper for `deployZoltu` that carries value, so that what the
+    /// library does with the caller's value is observable.
+    /// @param creationCode The creation code to deploy via the Zoltu factory.
+    /// @return deployedAddress The address of the deployed contract.
+    function externalDeployZoltuPayable(bytes memory creationCode) external payable returns (address deployedAddress) {
         deployedAddress = LibRainDeploy.deployZoltu(creationCode);
     }
 
@@ -957,5 +1013,162 @@ contract LibRainDeployTest is Test {
             )
         );
         this.externalCheckResolvedAddressesOnNetworks(networks, address(consumer), ownerReadCalls(), expected(wrong));
+    }
+
+    /// `deployToNetworks` MUST deploy when every dependency has code on the
+    /// network, i.e. a present dependency is not treated as missing.
+    function testDeployToNetworksPresentDependencyDeploys() external {
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](1);
+        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
+
+        address result = this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            dependencies
+        );
+        assertEq(result, mockDeployableAddress());
+        assertEq(result.codehash, mockDeployableCodeHash());
+    }
+
+    /// `isStartBlock` MUST return true at block 0 for a target that already
+    /// has the expected code hash in the genesis allocation. There is no block
+    /// before genesis, so the code hash at the given block alone decides.
+    function testIsStartBlockGenesisAllocationAtBlockZero() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        assertTrue(LibRainDeploy.isStartBlock(vm, BASE_GENESIS_PREDEPLOY, BASE_GENESIS_PREDEPLOY_CODEHASH, 0));
+    }
+
+    /// `isStartBlock` MUST return false at block 1 for a target from the
+    /// genesis allocation, because block 0 already has the same code hash.
+    function testIsStartBlockGenesisAllocationAtBlockOne() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        assertFalse(LibRainDeploy.isStartBlock(vm, BASE_GENESIS_PREDEPLOY, BASE_GENESIS_PREDEPLOY_CODEHASH, 1));
+    }
+
+    /// `isStartBlock` MUST return false for the block immediately after the
+    /// deploy block. The block compared against is the immediately preceding
+    /// one, which already has the expected code hash.
+    function testIsStartBlockOneBlockAfterDeployBlock() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        assertFalse(
+            LibRainDeploy.isStartBlock(
+                vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, ZOLTU_BASE_DEPLOY_BLOCK + 1
+            )
+        );
+    }
+
+    /// `findDeployBlock` MUST return the exact block at which the target first
+    /// has the expected code hash, including when that is the block the fork is
+    /// currently at.
+    function testFindDeployBlockExactZoltuBaseDeployBlock() external {
+        vm.createSelectFork(LibRainDeploy.BASE, ZOLTU_BASE_DEPLOY_BLOCK);
+        assertEq(
+            LibRainDeploy.findDeployBlock(vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, 0),
+            ZOLTU_BASE_DEPLOY_BLOCK
+        );
+    }
+
+    /// `findDeployBlock` MUST leave the fork on its original block when it
+    /// reverts because the target already has the expected code hash at the
+    /// start block.
+    function testFindDeployBlockRestoresForkOnDeployedBeforeStartBlockRevert() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        uint256 originalBlock = block.number;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DeployedBeforeStartBlock.selector, LibRainDeploy.ZOLTU_FACTORY, ZOLTU_BASE_DEPLOY_BLOCK
+            )
+        );
+        this.externalFindDeployBlock(
+            LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, ZOLTU_BASE_DEPLOY_BLOCK
+        );
+        assertEq(block.number, originalBlock);
+    }
+
+    /// `deployZoltu` MUST revert when the factory call succeeds but leaves no
+    /// code at the resulting address. Empty creation code creates an account
+    /// with no runtime code, which is not a deployment.
+    function testDeployZoltuRevertsEmptyCreationCode() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, true, ZOLTU_EMPTY_CREATION_CODE_ADDRESS)
+        );
+        this.externalDeployZoltu(hex"");
+    }
+
+    /// `deployZoltu` MUST NOT report a deployment when the factory call fails,
+    /// even when the failed call leaves the address of a contract that does
+    /// have code in the call output buffer.
+    function testDeployZoltuRevertsWhenFactoryCallFailsWithAddressData() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        vm.etch(LibRainDeploy.ZOLTU_FACTORY, address(new MockAddressRevertingFactory()).code);
+        assertGt(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+
+        vm.expectPartialRevert(LibRainDeploy.DeployFailed.selector);
+        this.externalDeployZoltu(type(MockDeployable).creationCode);
+    }
+
+    /// `deployZoltu` MUST NOT report the zero address as a deployment, even
+    /// when the zero address has code.
+    function testDeployZoltuRevertsZeroAddressWithCode() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        // A call to an address with no code succeeds and returns nothing, so
+        // the factory yields the zero address.
+        vm.etch(LibRainDeploy.ZOLTU_FACTORY, hex"");
+        vm.etch(address(0), hex"00");
+        assertGt(address(0).code.length, 0);
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, true, address(0)));
+        this.externalDeployZoltu(type(MockDeployable).creationCode);
+    }
+
+    /// `deployZoltu` MUST NOT forward the caller's value to the factory. The
+    /// deployed mock has a non payable constructor, so forwarded value would
+    /// fail the deployment outright.
+    function testDeployZoltuDoesNotForwardValue() external {
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        vm.deal(address(this), 1 ether);
+        address deployed = this.externalDeployZoltuPayable{value: 1}(type(MockDeployable).creationCode);
+        assertEq(deployed, mockDeployableAddress());
+        assertEq(deployed.balance, 0);
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.balance, 0);
+    }
+
+    /// `deployAndBroadcast` MUST broadcast as the address derived from the
+    /// given private key.
+    function testDeployAndBroadcastUsesDeployerFromPrivateKey() external {
+        uint256 deployerPrivateKey = 0xA11CE;
+        address deployer = vm.addr(deployerPrivateKey);
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        // Stated rather than assumed: the key is a test constant that has never
+        // transacted on any supported network, so its nonce is zero on a fresh
+        // fork. That is what makes the nonce read after the call — which lands
+        // on the fork `deployToNetworks` made, not this one — comparable to
+        // this baseline at all.
+        uint64 nonceBefore = vm.getNonce(deployer);
+        assertEq(nonceBefore, 0);
+
+        this.externalDeployAndBroadcast(
+            networks,
+            deployerPrivateKey,
+            type(MockDeployable).creationCode,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            dependencies
+        );
+
+        assertEq(vm.getNonce(deployer), nonceBefore + 1);
     }
 }
