@@ -226,6 +226,22 @@ contract LibRainDeploySnapshotTest is Test {
     /// and two of them writing one record root see each other's releases.
     string constant RELEASED_FIXTURE_ROOT = "test/generated-released";
 
+    /// Where the selection fixture's record is built, for the same reason
+    /// `RELEASED_FIXTURE_ROOT` is not `FIXTURE_ROOT`.
+    string constant SELECTED_FIXTURE_ROOT = "test/generated-selected";
+
+    /// The contract the fixture record freezes, and the one the writer is
+    /// pointed at there. NOT this repo's own `AddressRegistry`: the writer
+    /// derives the file it writes from the contract name, and the committed
+    /// declaration is not a file a fixture gets to overwrite.
+    string constant FIXTURE_CONTRACT = "MockDeployable";
+
+    /// A second contract frozen under one of the fixture record's tags, as a
+    /// release naming two contracts writes it. Its name starts with
+    /// `FIXTURE_CONTRACT`, so a selection that matched on a prefix would take
+    /// it too.
+    string constant FIXTURE_CONTRACT_SECOND = "MockDeployableV2";
+
     /// The contract every emitter test emits a released lib for.
     string constant EMITTED_CONTRACT = "AddressRegistry";
 
@@ -475,47 +491,102 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(sorted[4], "src/generated/1_0_0/AddressRegistry.sol");
     }
 
-    /// The emitted declaration MUST name every release in the record and
-    /// nothing else in the tree.
+    /// A record holds every contract a repo has ever frozen, and a released lib
+    /// describes ONE of them. The selection MUST be by whole contract name,
+    /// over releases only, in tag order.
     ///
-    /// Driven through the same pipeline `writeReleasedSuitesLib` runs —
-    /// `frozenSnapshotPaths`, `sortedRecordPaths`, then the emitters — because
-    /// the writer takes no output root and the repo's real record is the only
-    /// one it can read. `frozenSnapshotPaths` is where the record root is a
-    /// parameter, so that is where a fixture tree goes in.
-    function testReleasedLibReadsTheRecordAndNothingElse() external {
-        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/AddressRegistry.sol"));
-        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_10_0/AddressRegistry.sol"));
+    /// Two contracts under one tag is what a release naming two of them writes.
+    /// Emitting the other one's snapshot into this contract's lib would give it
+    /// this contract's suite key, colliding with this contract's own entry for
+    /// that tag and reverting `allSuites()` for everything downstream.
+    ///
+    /// The fixture record is written newest tag first, so the order returned is
+    /// the sort's and not whatever order the walk came back in.
+    function testRecordPathsForContractSelectsOneContractInTagOrder() external {
+        writeFixture(string.concat(SELECTED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol"));
+        writeFixture(string.concat(SELECTED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT, ".sol"));
+        writeFixture(string.concat(SELECTED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT_SECOND, ".sol"));
         // Not releases: the rolling snapshot, and a scratch directory a test or
         // a human left behind.
-        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/", LibRainDeploySnapshot.CANDIDATE, "/AddressRegistry.sol"));
-        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/collision-guard/AddressRegistry.sol"));
-
-        string[] memory paths = LibRainDeploySnapshot.sortedRecordPaths(
-            vm, LibRainDeploySnapshot.frozenSnapshotPaths(vm, RELEASED_FIXTURE_ROOT)
+        writeFixture(
+            string.concat(SELECTED_FIXTURE_ROOT, "/", LibRainDeploySnapshot.CANDIDATE, "/", FIXTURE_CONTRACT, ".sol")
         );
-        string memory emitted = string.concat(
-            LibRainDeploySnapshot.releasedImportBlock(vm, paths),
-            LibRainDeploySnapshot.releasedLibraryBlock(vm, EMITTED_LIBRARY, EMITTED_CONTRACT, paths, emitterTemplate())
+        writeFixture(string.concat(SELECTED_FIXTURE_ROOT, "/collision-guard/", FIXTURE_CONTRACT, ".sol"));
+
+        string[] memory selected =
+            LibRainDeploySnapshot.recordPathsForContract(vm, SELECTED_FIXTURE_ROOT, FIXTURE_CONTRACT);
+
+        assertEq(selected.length, 2);
+        assertEq(selected[0], string.concat(SELECTED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT, ".sol"));
+        assertEq(selected[1], string.concat(SELECTED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol"));
+
+        // The contract asked for is the contract selected, and the one frozen
+        // beside it has its own single release rather than none.
+        string[] memory second =
+            LibRainDeploySnapshot.recordPathsForContract(vm, SELECTED_FIXTURE_ROOT, FIXTURE_CONTRACT_SECOND);
+
+        assertEq(second.length, 1);
+        assertEq(second[0], string.concat(SELECTED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT_SECOND, ".sol"));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(SELECTED_FIXTURE_ROOT, true);
+    }
+
+    /// The writer MUST emit the record root it is HANDED, selected down to the
+    /// contract it names, and nothing else in that tree.
+    ///
+    /// The record root is a parameter, so a fixture record goes straight into
+    /// the writer: pointed at a root it was not given, or handed the record
+    /// whole, the file it writes says so. The fixture record is written newest
+    /// tag first, so the emitted order is the sort's and not the walk's.
+    ///
+    /// A fixture contract name, so the file written is the fixture's own and
+    /// not this repo's committed declaration. Removed at the end, because an
+    /// emitted lib importing a record that only a test wrote does not compile.
+    function testWriteReleasedSuitesLibReadsTheRecordItIsHanded() external {
+        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol"));
+        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT, ".sol"));
+        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT_SECOND, ".sol"));
+        // Not releases: the rolling snapshot, and a scratch directory a test or
+        // a human left behind.
+        writeFixture(
+            string.concat(RELEASED_FIXTURE_ROOT, "/", LibRainDeploySnapshot.CANDIDATE, "/", FIXTURE_CONTRACT, ".sol")
+        );
+        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/collision-guard/", FIXTURE_CONTRACT, ".sol"));
+
+        string[] memory paths = new string[](2);
+        paths[0] = string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT, ".sol");
+        paths[1] = string.concat(RELEASED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol");
+
+        string memory libraryName = string.concat("Lib", FIXTURE_CONTRACT, "Released");
+        string memory path = string.concat("src/lib/", libraryName, ".sol");
+
+        assertEq(
+            LibRainDeploySnapshot.writeReleasedSuitesLib(
+                vm, RELEASED_FIXTURE_ROOT, FIXTURE_CONTRACT, emitterTemplate()
+            ),
+            path
         );
 
-        assertEq(paths.length, 2);
+        string memory emitted = vm.readFile(path);
         assertEq(
             emitted,
             string.concat(
-                "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
-                expectedImport("0_9_0"),
-                expectedImport("0_10_0"),
-                EXPECTED_LIBRARY_HEADER,
-                "        suites = new DeploySuite[](2);\n",
-                expectedEntry("0", "0_9_0"),
-                expectedEntry("1", "0_10_0"),
-                "    }\n}\n"
+                "// SPDX-License",
+                "-Identifier: LicenseRef-DCL-1.0\n",
+                "// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd\n",
+                "pragma solidity ^0.8.25;\n\n",
+                "// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.\n\n",
+                LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+                LibRainDeploySnapshot.releasedLibraryBlock(vm, libraryName, FIXTURE_CONTRACT, paths, emitterTemplate())
             )
         );
+        assertFalse(vm.contains(emitted, FIXTURE_CONTRACT_SECOND));
         assertFalse(vm.contains(emitted, LibRainDeploySnapshot.CANDIDATE));
         assertFalse(vm.contains(emitted, "collision-guard"));
 
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeFile(path);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(RELEASED_FIXTURE_ROOT, true);
     }
@@ -524,19 +595,24 @@ contract LibRainDeploySnapshotTest is Test {
     /// from the contract, holding exactly the prefix, imports and library the
     /// emitters produce.
     ///
-    /// Run against this repo's REAL record, which is the one root the writer
-    /// reads, so what it writes is the committed generated file — that is the
-    /// whole of what makes a stale generated file a test failure rather than a
-    /// silent one. Restored afterwards, because a run that failed between the
-    /// write and the assertion would otherwise leave the tree dirty.
+    /// Run against this repo's REAL record and its real contract, so what it
+    /// writes is the committed generated file — that is the whole of what makes
+    /// a stale generated file a test failure rather than a silent one. Restored
+    /// afterwards, because a run that failed between the write and the
+    /// assertion would otherwise leave the tree dirty.
     function testWriteReleasedSuitesLibWritesTheLibAtItsPath() external {
         string memory path = "src/lib/LibAddressRegistryReleased.sol";
         string memory before = vm.readFile(path);
 
-        assertEq(LibRainDeploySnapshot.writeReleasedSuitesLib(vm, EMITTED_CONTRACT, emitterTemplate()), path);
+        assertEq(
+            LibRainDeploySnapshot.writeReleasedSuitesLib(
+                vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT, emitterTemplate()
+            ),
+            path
+        );
 
         string[] memory paths =
-            LibRainDeploySnapshot.sortedRecordPaths(vm, LibRainDeploySnapshot.frozenSnapshotPaths(vm, "src/generated"));
+            LibRainDeploySnapshot.recordPathsForContract(vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT);
         assertEq(
             vm.readFile(path),
             string.concat(

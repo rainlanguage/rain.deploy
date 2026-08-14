@@ -483,6 +483,45 @@ library LibRainDeploySnapshot {
         }
     }
 
+    /// One contract's releases out of a record, in tag order.
+    ///
+    /// The record holds every contract a repo has ever frozen, and `freeze`
+    /// takes a LIST of contract names, so a release of two contracts writes two
+    /// files under one tag. A released-suites lib describes one contract, so it
+    /// has to select rather than take the record whole: emitting another
+    /// contract's snapshot into it would give that entry this contract's suite
+    /// key, which collides with this contract's own entry for the same tag and
+    /// reverts `allSuites()` with `DuplicateDeploySuite`. A repo with one
+    /// contract never sees it, which is exactly why it is selected here rather
+    /// than left to be discovered by the first repo that freezes two.
+    /// @param vm The Vm instance for file operations.
+    /// @param recordRoot The record root to read releases from.
+    /// @param contractName The contract to select.
+    /// @return This contract's record paths, in tag order.
+    function recordPathsForContract(Vm vm, string memory recordRoot, string memory contractName)
+        internal
+        view
+        returns (string[] memory)
+    {
+        string[] memory paths = frozenSnapshotPaths(vm, recordRoot);
+
+        string[] memory found = new string[](paths.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < paths.length; i++) {
+            if (keccak256(bytes(contractForRecordPath(vm, paths[i]))) != keccak256(bytes(contractName))) {
+                continue;
+            }
+            found[count] = paths[i];
+            count++;
+        }
+
+        string[] memory selected = new string[](count);
+        for (uint256 i = 0; i < count; i++) {
+            selected[i] = found[i];
+        }
+        return sortedRecordPaths(vm, selected);
+    }
+
     /// The import block of a generated released-suites lib.
     ///
     /// One aliased import per record file, carrying all four consensus fields.
@@ -641,16 +680,23 @@ library LibRainDeploySnapshot {
     /// alternative is parsing the previously generated Solidity back in to
     /// preserve what it said.
     /// @param vm The Vm instance for file operations.
+    /// @param recordRoot The record root to read releases from — `LIB_FS_ROOT`
+    /// for a repo's real record. A parameter for the same reason
+    /// `frozenSnapshotPaths` takes one: a writer that can only be pointed at
+    /// the real record can only be tested against it, and a repo that has cut
+    /// no release has nothing there to test against.
     /// @param contractName The contract the released record describes.
     /// @param template The candidate declaration the metadata comes from.
     /// @return The path written.
-    function writeReleasedSuitesLib(Vm vm, string memory contractName, DeploySuite memory template)
-        internal
-        returns (string memory)
-    {
+    function writeReleasedSuitesLib(
+        Vm vm,
+        string memory recordRoot,
+        string memory contractName,
+        DeploySuite memory template
+    ) internal returns (string memory) {
         string memory libraryName = string.concat("Lib", contractName, "Released");
         string memory path = string.concat("src/lib/", libraryName, ".sol");
-        string[] memory paths = sortedRecordPaths(vm, frozenSnapshotPaths(vm, LIB_FS_ROOT));
+        string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeFile(

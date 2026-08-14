@@ -129,8 +129,8 @@ hand-edit a generated file.
 `src/generated/<tag>/` directories are the FROZEN record: what each release
 deployed, written once by `cutRelease()` and never again. That tree is the only
 description of what this repo has released that cannot fall behind, which is why
-`RainDeployVerifySnapshot` checks the hand-written `releasedSuites()` against
-it. `LibRainDeploySnapshot.frozenSnapshotPaths` is the walk: every file inside a
+`RainDeployVerifySnapshot` checks the generated `releasedSuites()` against it.
+`LibRainDeploySnapshot.frozenSnapshotPaths` is the walk: every file inside a
 release-tag directory, where a release tag is exactly what `tagForVersion`
 produces — so `candidate/`, a scratch directory and a `0_1_7-rc1` nobody could
 have frozen all fall out under the same rule, and there is no name to remember
@@ -237,11 +237,14 @@ Four groups, sorted by what they are anchored to:
 3. **Anchored to the record** (`RainDeployVerifySnapshot`) — every file in the
    append-only `src/generated/<tag>/` tree is declared by a released suite,
    matched by the address that file's creation code derives. `releasedSuites()`
-   is hand written and everything anchored to a chain reads it, so a frozen tag
-   nobody added to it is a release that quietly drops out of every check there
-   is. Matched against RELEASED suites only: a release and the candidate are
-   byte-identical from the moment the release is cut, so matching the whole
-   declaration would let the candidate declare a release.
+   is generated from that same record and everything anchored to a chain reads
+   it, so a frozen tag it does not name is a release that quietly drops out of
+   every check there is — which is what this catches when the generated file is
+   hand edited, a record directory arrives out of band, or nobody re-ran the
+   generator after the record moved. Matched against RELEASED suites only: a
+   release and the candidate are byte-identical from the moment the release is
+   cut, so matching the whole declaration would let the candidate declare a
+   release.
 4. **Anchored to chain** (`RainDeployVerifyChain`) — across
    `supportedNetworks()`, every RELEASED version's derived address carries code
    with its derived code hash. The only check that catches "never deployed" or

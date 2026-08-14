@@ -84,9 +84,10 @@ error FrozenSnapshotUnreadable(string path);
 /// append-only `src/generated/<tag>/` directories — is declared by a released
 /// suite. This is the one check that is about the DECLARATION rather than about
 /// what a declared suite records, and it exists because everything anchored to
-/// a chain reads `releasedSuites()`, which a human maintains. A release missing
-/// from it is not caught anywhere else, by anything: it simply stops being
-/// checked, and every check there is stays green.
+/// a chain reads `releasedSuites()`, which is a separate file from the record
+/// it describes. A release missing from it is not caught anywhere else, by
+/// anything: it simply stops being checked, and every check there is stays
+/// green.
 ///
 /// None of the three can catch a suite that was never deployed, or that is no
 /// longer deployed. Only `RainDeployVerifyChain` can, and nothing here is a
@@ -152,12 +153,19 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifyBase {
     /// Checks the frozen record against the released declaration: every file in
     /// the record is declared by a released suite.
     ///
-    /// `releasedSuites()` is hand written, and everything anchored to a chain
-    /// reads it. A frozen tag nobody added to it is therefore not a missing
+    /// `releasedSuites()` is a generated file, and everything anchored to a
+    /// chain reads it. A frozen tag it does not name is therefore not a missing
     /// entry that shows up as a failure somewhere — it is a release that drops
     /// out of every check there is, silently and permanently, while the whole
     /// suite stays green. The record is the only thing that can say it
     /// happened, so the declaration is checked against the record.
+    ///
+    /// Emitting the declaration from the record is what makes the two agree in
+    /// the first place. This is what catches the ways they still come apart: a
+    /// hand edit to the generated file, a record directory that arrived out of
+    /// band, and a generated file nobody regenerated after the record moved.
+    /// Nothing in CI regenerates anything, so a stale generated file is caught
+    /// here or not at all.
     ///
     /// Matched against the RELEASED suites alone, deliberately. A release and
     /// the rolling candidate are byte-identical from the moment the release is

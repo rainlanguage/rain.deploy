@@ -51,7 +51,9 @@ contract Build is Script, AddressRegistryDeploySuites {
     function run() external {
         regenerateCandidate();
         LibRainDeploySnapshot.writeAliasLib(vm, "AddressRegistry", CONSTANT_PREFIX, LibRainDeploySnapshot.CANDIDATE);
-        LibRainDeploySnapshot.writeReleasedSuitesLib(vm, "AddressRegistry", candidateSuite().snapshot);
+        LibRainDeploySnapshot.writeReleasedSuitesLib(
+            vm, LibRainDeploySnapshot.LIB_FS_ROOT, "AddressRegistry", candidateSuite().snapshot
+        );
     }
 
     /// @notice A release: regenerate the rolling snapshot, freeze it as this
@@ -72,7 +74,9 @@ contract Build is Script, AddressRegistryDeploySuites {
         contractNames[0] = "AddressRegistry";
         LibRainDeploySnapshot.freeze(vm, regenerateCandidate, contractNames);
         LibRainDeploySnapshot.writeAliasLib(vm, "AddressRegistry", CONSTANT_PREFIX, LibRainDeploySnapshot.CANDIDATE);
-        LibRainDeploySnapshot.writeReleasedSuitesLib(vm, "AddressRegistry", candidateSuite().snapshot);
+        LibRainDeploySnapshot.writeReleasedSuitesLib(
+            vm, LibRainDeploySnapshot.LIB_FS_ROOT, "AddressRegistry", candidateSuite().snapshot
+        );
     }
 
     /// @notice Rewrite `src/generated/candidate/AddressRegistry.sol` from what
