@@ -68,13 +68,17 @@ fails it. Those failures are `vm.createSelectFork` errors, distinct from the
 
 These are referenced in `foundry.toml` under `[rpc_endpoints]`.
 
-### `forge test --no-match-contract Chain` is the offline gate
+### `forge test --no-match-contract Chain` says whose fault a failure is
 
-It needs no `.env` at all. Every `vm.createSelectFork` in the repo sits in a
-contract with `Chain` in its name, so the gate forks nothing and no amount of
-RPC weather can make it red. That is a property of where the forks are, not a
-list to keep in step: the only way to break it is to fork from a contract the
-gate runs.
+Every `vm.createSelectFork` in the repo sits in a contract with `Chain` in its
+name, so this selection forks nothing and no amount of RPC weather can make it
+red. A red here is the code; a red only in the `Chain` contracts is the code or
+the endpoints, and which one has to be read off the failure. That is what the
+split buys — not the ability to work without a network, which is worth nothing
+here, but a result that means something on its own.
+
+It is a property of where the forks are, not a list to keep in step: the only
+way to break it is to fork from a contract this selection runs.
 
 Which is the question to answer when adding a test. A test needs a chain only if
 it reads state no fixture can supply, and three kinds do:
@@ -291,9 +295,9 @@ can set. Group 3 is what makes group 4's scope complete — a release group 4 is
 never handed is a release it cannot fail on.
 
 Group 4 lives in its own contract so an unreachable RPC endpoint fails only it,
-never the snapshot assertions. That is the offline gate's `Chain`-in-the-name
-rule applied to the verification abstracts, and groups 1-3 are on the offline
-side of it.
+never the snapshot assertions. That is the `Chain`-in-the-name rule applied to
+the verification abstracts, and groups 1-3 sit on the side of it that forks
+nothing.
 
 A single recorded code hash per version can only be true if the runtime code is
 the same on every network, so a constructor reading `block.chainid` or similar

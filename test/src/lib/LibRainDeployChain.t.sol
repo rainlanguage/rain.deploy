@@ -26,9 +26,9 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 ///    `vm.createSelectFork` themselves. The loop is the thing under test, so it
 ///    cannot be avoided from here.
 ///
-/// `Chain` in the name is load bearing: `forge test --no-match-contract Chain`
-/// is the offline gate, and this contract is what it excludes. Its sibling
-/// `LibRainDeployTest` is the rest, and forks nothing.
+/// `Chain` in the name is what selects it: `forge test --no-match-contract
+/// Chain` excludes this contract, so a red there is never an endpoint. Its
+/// sibling `LibRainDeployTest` is the rest, and forks nothing.
 contract LibRainDeployChainTest is LibRainDeployTestBase {
     /// Base allocates the OP Stack WETH9 predeploy in its genesis block, so
     /// this address has code at block 0.
