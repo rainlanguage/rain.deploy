@@ -208,12 +208,12 @@ suite fails naming the valid ones rather than on a missing key.
 repos that bootstrap one chain per dispatch.
 
 **`script/Deploy.sol`** —
-`contract Deploy is AddressRegistryDeploySuites,
+`contract Deploy is RegistryDeploySuites,
 RainDeployBroadcast {}`. Empty
 on purpose: the suites and the broadcast are both inherited. Run only via the
 `Manual sol artifacts` workflow.
 
-**`src/abstract/AddressRegistryDeploySuites.sol`** — this repo's own
+**`src/abstract/RegistryDeploySuites.sol`** — this repo's own
 declaration, inherited by `script/Deploy.sol` and by both pins test contracts.
 
 **`src/abstract/RainDeployVerify*.sol`** — the deploy-pin verification every
@@ -233,11 +233,13 @@ Four groups, sorted by what they are anchored to:
    generated inconsistently. CANNOT catch a snapshot of the wrong contract: a
    consistent snapshot of the wrong thing satisfies all of it, which
    `testWrongContractSnapshotPassesInternalConsistency` pins.
-2. **Anchored to source** (`RainDeployVerifySnapshot`) — the candidate's
+2. **Anchored to source** (`RainDeployVerifySnapshot`) — EVERY candidate's
    recorded creation code is `type(X).creationCode`. The only check that catches
-   a wrong-contract snapshot. Candidate only, because a released tag is MEANT to
-   diverge from current source; there is no field on a released version to spell
-   it, so it cannot be opted into or out of.
+   a wrong-contract snapshot. Candidates only, because a released tag is MEANT
+   to diverge from current source; there is no field on a released version to
+   spell it, so it cannot be opted into or out of. Every one, and refusing an
+   empty list, because a candidate the loop never reaches is a contract whose
+   snapshot nothing anywhere anchors — see `NoDeployCandidates`.
 3. **Anchored to the record** (`RainDeployVerifySnapshot`) — every file in the
    append-only `src/generated/<tag>/` tree is declared by a released suite,
    matched by the address that file's creation code derives. `releasedSuites()`
@@ -246,9 +248,9 @@ Four groups, sorted by what they are anchored to:
    every check there is — which is what this catches when the generated file is
    hand edited, a record directory arrives out of band, or nobody re-ran the
    generator after the record moved. Matched against RELEASED suites only: a
-   release and the candidate are byte-identical from the moment the release is
-   cut, so matching the whole declaration would let the candidate declare a
-   release.
+   release and the candidate it was cut from are byte-identical from the moment
+   the release is cut, so matching the whole declaration would let a candidate
+   declare a release.
 4. **Anchored to chain** (`RainDeployVerifyChain`) — across
    `supportedNetworks()`, every RELEASED version's derived address carries code
    with its derived code hash. The only check that catches "never deployed" or
@@ -256,7 +258,7 @@ Four groups, sorted by what they are anchored to:
    nobody touching it.
 
 Group 4 is released-only for the mirror image of group 2's reason. A release IS
-a deployment that happened; the candidate is what the next release will be, and
+a deployment that happened; a candidate is what the next release will be, and
 between releases it is ordinarily ahead of anything on chain, so demanding it be
 live asserts something false by design. Neither exemption is a field a caller
 can set. Group 3 is what makes group 4's scope complete — a release group 4 is

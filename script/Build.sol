@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Script} from "forge-std-1.16.1/src/Script.sol";
-import {AddressRegistryDeploySuites} from "../src/abstract/AddressRegistryDeploySuites.sol";
+import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../src/lib/LibRainDeploySnapshot.sol";
 import {AddressRegistry} from "../src/concrete/AddressRegistry.sol";
 
@@ -24,7 +24,7 @@ import {AddressRegistry} from "../src/concrete/AddressRegistry.sol";
 /// moves and `LibAddressRegistry` always resolves against what this repo
 /// currently compiles. The frozen `<tag>/` directories are the historical
 /// record — what each release actually deployed — which is what
-/// `AddressRegistryDeploySuites.releasedSuites()` enumerates.
+/// `RegistryDeploySuites.releasedSuites()` enumerates.
 ///
 /// BOTH entry points also regenerate that released-suites lib from the record.
 /// `run()` must: the lib is imported by ordinary source, so a repo before its
@@ -46,7 +46,7 @@ import {AddressRegistry} from "../src/concrete/AddressRegistry.sol";
 /// generated-lib writers all come from `LibRainDeploySnapshot`, which in turn
 /// emits every constant through `LibCodeGen` and writes snapshots through
 /// `LibFs`. This script is the declaration and the sequencing, nothing else.
-contract Build is Script, AddressRegistryDeploySuites {
+contract Build is Script, RegistryDeploySuites {
     /// @notice The prefix for the constants the alias lib exports. Passed
     /// rather than derived from the contract name; see `writeAliasLib`.
     string constant CONSTANT_PREFIX = "ADDRESS_REGISTRY";

@@ -47,7 +47,7 @@ and the addresses that must already be on chain before it can be deployed.
 // src/abstract/MyDeploySuites.sol
 abstract contract MyDeploySuites is RainDeploySuitesBase {
     function releasedSuites() internal pure override returns (DeploySuite[] memory);
-    function candidateSuite() internal pure override returns (DeployCandidate memory);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory);
 }
 
 // script/Deploy.sol
@@ -98,19 +98,25 @@ catch:
 | Internal | the recorded set       | an inconsistently generated set       | a snapshot of the wrong contract |
 | Source   | `type(X).creationCode` | a snapshot of the wrong contract      | anything about any chain         |
 | Record   | the frozen record      | a release the declaration missed      | what a declared suite records    |
-| Chain    | the networks           | never deployed, or not there any more | anything about the candidate     |
+| Chain    | the networks           | never deployed, or not there any more | anything about a candidate       |
 
 The internal group's blind spot is not a gap to close there: every check in it
 asks the recorded bytes to agree with each other, and the wrong contract's bytes
 agree with each other perfectly. The source anchor is the only thing that
-catches it, and it applies to the **candidate only** — a released tag is meant
+catches it, and it applies to the **candidates only** — a released tag is meant
 to have diverged from current source, so anchoring one to source asserts
 something false by design. That is a property of the assertion, and there is no
 field on a released version with which to opt in or out.
 
+It runs over EVERY candidate, and a declaration that names none at all is
+refused with `NoDeployCandidates` rather than passed as a loop with nothing in
+it. A candidate the source anchor never reaches is a contract whose snapshot
+nothing anywhere anchors, and a repo with several contracts is exactly where a
+snapshot generated from the wrong one comes from.
+
 The chain group carries the mirror image of that exemption: it applies to
 **released versions only**. A release IS a deployment that happened, so "it is
-live on every supported network" is either true of it or a defect. The candidate
+live on every supported network" is either true of it or a defect. A candidate
 is what the next release will be, ordinarily ahead of anything on chain, so
 demanding it be live asserts something false by design in the other direction.
 Neither exemption is a field a caller can set.

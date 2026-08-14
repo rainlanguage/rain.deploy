@@ -3,13 +3,13 @@
 pragma solidity =0.8.25;
 
 import {RainDeployBroadcast} from "../src/abstract/RainDeployBroadcast.sol";
-import {AddressRegistryDeploySuites} from "../src/abstract/AddressRegistryDeploySuites.sol";
+import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 
 /// @title Deploy
 /// @notice The on-chain deploy. Broadcasts whichever suite `DEPLOYMENT_SUITE`
 /// names, through the Zoltu factory, to every supported network.
 ///
-/// Empty on purpose. The suites come from `AddressRegistryDeploySuites`, which
+/// Empty on purpose. The suites come from `RegistryDeploySuites`, which
 /// is the same declaration the verification tests inherit, and the dispatch,
 /// the key handling and the broadcast come from `RainDeployBroadcast`. A deploy
 /// repo writes its declaration and this pair of base contracts, and nothing
@@ -30,4 +30,4 @@ import {AddressRegistryDeploySuites} from "../src/abstract/AddressRegistryDeploy
 /// `AddressRegistryDeployChainTest` is what says whether this has been run
 /// and worked. It fails until every supported network has the registry, which
 /// is the state this repo is in right now.
-contract Deploy is AddressRegistryDeploySuites, RainDeployBroadcast {}
+contract Deploy is RegistryDeploySuites, RainDeployBroadcast {}

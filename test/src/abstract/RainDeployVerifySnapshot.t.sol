@@ -365,12 +365,19 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
         // advance.
         this.externalCheckAnchoredToSource(candidates[0]);
 
-        candidates[1] = wrongContractCandidate();
+        // The break keeps the SECOND candidate's own key, so the failure names
+        // the entry that actually failed rather than the good one sitting in
+        // front of it — a loop that reported a fixed entry, or the first, would
+        // otherwise be indistinguishable from one that reported the right one.
+        DeployCandidate memory broken = wrongContractCandidate();
+        broken.snapshot.suite = candidates[1].snapshot.suite;
+        assertEq(broken.snapshot.suite, "second-address-candidate");
+        candidates[1] = broken;
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 CandidateSourceMismatch.selector,
-                "address-registry-candidate",
+                "second-address-candidate",
                 keccak256(ADDRESS_REGISTRY_CREATION_CODE),
                 keccak256(type(MockDeployableV2).creationCode)
             )

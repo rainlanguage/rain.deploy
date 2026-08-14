@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
-import {AddressRegistryDeploySuites} from "../../../src/abstract/AddressRegistryDeploySuites.sol";
+import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 
 /// @title AddressRegistryDeployChainTest
 /// @notice Whether `AddressRegistry` is actually live, with the code this repo
@@ -25,4 +25,4 @@ import {AddressRegistryDeploySuites} from "../../../src/abstract/AddressRegistry
 /// --no-match-contract Chain` still runs every snapshot assertion,
 /// whether the deployment is missing or the RPC endpoints are merely
 /// unreachable.
-contract AddressRegistryDeployChainTest is AddressRegistryDeploySuites, RainDeployVerifyChain {}
+contract AddressRegistryDeployChainTest is RegistryDeploySuites, RainDeployVerifyChain {}
