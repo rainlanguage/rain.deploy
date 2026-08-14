@@ -46,14 +46,17 @@ contract Build is Script, AddressRegistryDeploySuites {
     /// rather than derived from the contract name; see `writeAliasLib`.
     string constant CONSTANT_PREFIX = "ADDRESS_REGISTRY";
 
+    /// @notice The contract this repo deploys. Named once, because the
+    /// snapshot, the alias lib, the released-suites lib and the freeze all
+    /// describe the same contract, and a second spelling of it is a second
+    /// spelling that drifts.
+    string constant CONTRACT_NAME = "AddressRegistry";
+
     /// @notice Every build: regenerate the rolling snapshot, its alias lib and
     /// the released-suites lib.
     function run() external {
         regenerateCandidate();
-        LibRainDeploySnapshot.writeAliasLib(vm, "AddressRegistry", CONSTANT_PREFIX, LibRainDeploySnapshot.CANDIDATE);
-        LibRainDeploySnapshot.writeReleasedSuitesLib(
-            vm, LibRainDeploySnapshot.LIB_FS_ROOT, "AddressRegistry", candidateSuite().snapshot
-        );
+        regenerateLibs();
     }
 
     /// @notice A release: regenerate the rolling snapshot, freeze it as this
@@ -71,11 +74,18 @@ contract Build is Script, AddressRegistryDeploySuites {
     /// what generating the two from one call removes.
     function cutRelease() external {
         string[] memory contractNames = new string[](1);
-        contractNames[0] = "AddressRegistry";
+        contractNames[0] = CONTRACT_NAME;
         LibRainDeploySnapshot.freeze(vm, regenerateCandidate, contractNames);
-        LibRainDeploySnapshot.writeAliasLib(vm, "AddressRegistry", CONSTANT_PREFIX, LibRainDeploySnapshot.CANDIDATE);
+        regenerateLibs();
+    }
+
+    /// @notice Rewrite the alias lib and the released-suites lib. Both entry
+    /// points end here, so there is no entry point that regenerates one and not
+    /// the other.
+    function regenerateLibs() internal {
+        LibRainDeploySnapshot.writeAliasLib(vm, CONTRACT_NAME, CONSTANT_PREFIX, LibRainDeploySnapshot.CANDIDATE);
         LibRainDeploySnapshot.writeReleasedSuitesLib(
-            vm, LibRainDeploySnapshot.LIB_FS_ROOT, "AddressRegistry", candidateSuite().snapshot
+            vm, LibRainDeploySnapshot.LIB_FS_ROOT, CONTRACT_NAME, candidateSuite().snapshot
         );
     }
 
@@ -83,7 +93,7 @@ contract Build is Script, AddressRegistryDeploySuites {
     /// this repo currently compiles.
     function regenerateCandidate() internal {
         LibRainDeploySnapshot.writeSnapshot(
-            vm, LibRainDeploySnapshot.CANDIDATE, "AddressRegistry", type(AddressRegistry).creationCode
+            vm, LibRainDeploySnapshot.CANDIDATE, CONTRACT_NAME, type(AddressRegistry).creationCode
         );
     }
 }

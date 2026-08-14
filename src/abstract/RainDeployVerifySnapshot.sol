@@ -115,8 +115,13 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifyBase {
     }
 
     /// @dev The declaration a generated snapshot records its deploy address in.
-    /// Matched whole, so what is being looked for is the DECLARATION and cannot
-    /// be satisfied by characters that happen to occur inside a hex payload.
+    /// Matched whole and from the START of its line, so what is being looked
+    /// for is the DECLARATION: it cannot be satisfied by characters that happen
+    /// to occur inside a hex payload, nor by a line that merely CONTAINS the
+    /// declaration text — a commented-out copy carrying some other address is
+    /// exactly the hand edit this whole group exists to catch, and it is at
+    /// file scope in every generated snapshot, so there is no indentation to
+    /// allow for.
     string constant DEPLOYED_ADDRESS_DECLARATION = "address constant DEPLOYED_ADDRESS =";
 
     /// The address a frozen record declares as its deploy address.
@@ -140,7 +145,7 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifyBase {
     function recordedDeployedAddress(string memory path, string memory record) internal pure returns (address) {
         string[] memory lines = vm.split(record, "\n");
         for (uint256 i = 0; i < lines.length; i++) {
-            if (!vm.contains(lines[i], DEPLOYED_ADDRESS_DECLARATION)) {
+            if (vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) != 0) {
                 continue;
             }
             string[] memory tokens = vm.split(lines[i], " ");

@@ -132,21 +132,27 @@ contract LibRainDeploySnapshotTest is Test {
 
         string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, FIXTURE_ROOT);
 
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(FIXTURE_ROOT, true);
+
         assertTrue(holdsPath(paths, string.concat(FIXTURE_ROOT, "/0_0_1/MockDeployable.sol")));
         assertTrue(holdsPath(paths, string.concat(FIXTURE_ROOT, "/0_0_2/MockDeployableV2.sol")));
         assertTrue(holdsPath(paths, string.concat(FIXTURE_ROOT, "/0_0_2/Second.sol")));
         assertEq(paths.length, 3);
-
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeDir(FIXTURE_ROOT, true);
     }
+
+    /// Where the missing-root case reads. Its own tree, for the same reason
+    /// `RELEASED_FIXTURE_ROOT` is not `FIXTURE_ROOT`: a root another test in
+    /// this contract builds and tears down is not a root this one can assert is
+    /// absent, and nothing writes here at all.
+    string constant MISSING_FIXTURE_ROOT = "test/generated-missing";
 
     /// A root that is not there at all MUST read as a repo that has released
     /// nothing, not as a failure. That is the state of every deploy repo before
     /// its first release, including this one.
     function testFrozenSnapshotPathsOnAMissingRoot() external view {
-        assertFalse(vm.exists(FIXTURE_ROOT));
-        assertEq(LibRainDeploySnapshot.frozenSnapshotPaths(vm, FIXTURE_ROOT).length, 0);
+        assertFalse(vm.exists(MISSING_FIXTURE_ROOT));
+        assertEq(LibRainDeploySnapshot.frozenSnapshotPaths(vm, MISSING_FIXTURE_ROOT).length, 0);
     }
 
     /// The rolling snapshot MUST NOT be in this repo's own record. It is the
@@ -213,12 +219,14 @@ contract LibRainDeploySnapshotTest is Test {
 
         string memory written =
             LibRainDeploySnapshot.writeSnapshot(vm, dir, "MockDeployable", type(MockDeployable).creationCode);
-
-        assertEq(written, LibRainDeploySnapshot.pathForSnapshot(dir, "MockDeployable"));
-        assertTrue(vm.exists(written));
+        // Read while the snapshot is still there, asserted once it is gone.
+        bool exists = vm.exists(written);
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(dir), true);
+
+        assertEq(written, LibRainDeploySnapshot.pathForSnapshot(dir, "MockDeployable"));
+        assertTrue(exists);
     }
 
     /// Where the released-lib record fixture is built. Its own tree rather
@@ -516,20 +524,20 @@ contract LibRainDeploySnapshotTest is Test {
         string[] memory selected =
             LibRainDeploySnapshot.recordPathsForContract(vm, SELECTED_FIXTURE_ROOT, FIXTURE_CONTRACT);
 
-        assertEq(selected.length, 2);
-        assertEq(selected[0], string.concat(SELECTED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT, ".sol"));
-        assertEq(selected[1], string.concat(SELECTED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol"));
-
         // The contract asked for is the contract selected, and the one frozen
         // beside it has its own single release rather than none.
         string[] memory second =
             LibRainDeploySnapshot.recordPathsForContract(vm, SELECTED_FIXTURE_ROOT, FIXTURE_CONTRACT_SECOND);
 
-        assertEq(second.length, 1);
-        assertEq(second[0], string.concat(SELECTED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT_SECOND, ".sol"));
-
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(SELECTED_FIXTURE_ROOT, true);
+
+        assertEq(selected.length, 2);
+        assertEq(selected[0], string.concat(SELECTED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT, ".sol"));
+        assertEq(selected[1], string.concat(SELECTED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol"));
+
+        assertEq(second.length, 1);
+        assertEq(second[0], string.concat(SELECTED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT_SECOND, ".sol"));
     }
 
     /// The writer MUST emit the record root it is HANDED, selected down to the
@@ -541,8 +549,10 @@ contract LibRainDeploySnapshotTest is Test {
     /// tag first, so the emitted order is the sort's and not the walk's.
     ///
     /// A fixture contract name, so the file written is the fixture's own and
-    /// not this repo's committed declaration. Removed at the end, because an
-    /// emitted lib importing a record that only a test wrote does not compile.
+    /// not this repo's committed declaration. Removed BEFORE the assertions,
+    /// because an emitted lib importing a record that only a test wrote does
+    /// not compile, and forge-std assertions revert — undoing afterwards is
+    /// undoing in every case except the one this test exists to report.
     function testWriteReleasedSuitesLibReadsTheRecordItIsHanded() external {
         writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol"));
         writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT, ".sol"));
@@ -561,34 +571,31 @@ contract LibRainDeploySnapshotTest is Test {
         string memory libraryName = string.concat("Lib", FIXTURE_CONTRACT, "Released");
         string memory path = string.concat("src/lib/", libraryName, ".sol");
 
-        assertEq(
-            LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, RELEASED_FIXTURE_ROOT, FIXTURE_CONTRACT, emitterTemplate()
-            ),
-            path
-        );
+        string memory written =
+            LibRainDeploySnapshot.writeReleasedSuitesLib(vm, RELEASED_FIXTURE_ROOT, FIXTURE_CONTRACT, emitterTemplate());
 
         string memory emitted = vm.readFile(path);
-        assertEq(
-            emitted,
-            string.concat(
-                "// SPDX-License",
-                "-Identifier: LicenseRef-DCL-1.0\n",
-                "// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd\n",
-                "pragma solidity ^0.8.25;\n\n",
-                "// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.\n\n",
-                LibRainDeploySnapshot.releasedImportBlock(vm, paths),
-                LibRainDeploySnapshot.releasedLibraryBlock(vm, libraryName, FIXTURE_CONTRACT, paths, emitterTemplate())
-            )
+        // Built while the fixture record is still there: both emitters read it.
+        string memory expected = string.concat(
+            "// SPDX-License",
+            "-Identifier: LicenseRef-DCL-1.0\n",
+            "// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd\n",
+            "pragma solidity ^0.8.25;\n\n",
+            "// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.\n\n",
+            LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+            LibRainDeploySnapshot.releasedLibraryBlock(vm, libraryName, FIXTURE_CONTRACT, paths, emitterTemplate())
         );
-        assertFalse(vm.contains(emitted, FIXTURE_CONTRACT_SECOND));
-        assertFalse(vm.contains(emitted, LibRainDeploySnapshot.CANDIDATE));
-        assertFalse(vm.contains(emitted, "collision-guard"));
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeFile(path);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(RELEASED_FIXTURE_ROOT, true);
+
+        assertEq(written, path);
+        assertEq(emitted, expected);
+        assertFalse(vm.contains(emitted, FIXTURE_CONTRACT_SECOND));
+        assertFalse(vm.contains(emitted, LibRainDeploySnapshot.CANDIDATE));
+        assertFalse(vm.contains(emitted, "collision-guard"));
     }
 
     /// The released lib MUST land beside the alias lib, under the name derived
@@ -598,38 +605,35 @@ contract LibRainDeploySnapshotTest is Test {
     /// Run against this repo's REAL record and its real contract, so what it
     /// writes is the committed generated file — that is the whole of what makes
     /// a stale generated file a test failure rather than a silent one. Restored
-    /// afterwards, because a run that failed between the write and the
-    /// assertion would otherwise leave the tree dirty.
+    /// BEFORE the assertions run, because forge-std assertions revert: restoring
+    /// afterwards restores in every case except a failure, which is the only
+    /// case where the tree is dirty and the one this test exists to report.
     function testWriteReleasedSuitesLibWritesTheLibAtItsPath() external {
         string memory path = "src/lib/LibAddressRegistryReleased.sol";
         string memory before = vm.readFile(path);
 
-        assertEq(
-            LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT, emitterTemplate()
-            ),
-            path
+        string memory written = LibRainDeploySnapshot.writeReleasedSuitesLib(
+            vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT, emitterTemplate()
         );
+        string memory emitted = vm.readFile(path);
 
         string[] memory paths =
             LibRainDeploySnapshot.recordPathsForContract(vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT);
-        assertEq(
-            vm.readFile(path),
-            string.concat(
-                "// SPDX-License",
-                "-Identifier: LicenseRef-DCL-1.0\n",
-                "// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd\n",
-                "pragma solidity ^0.8.25;\n\n",
-                "// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.\n\n",
-                LibRainDeploySnapshot.releasedImportBlock(vm, paths),
-                LibRainDeploySnapshot.releasedLibraryBlock(
-                    vm, EMITTED_LIBRARY, EMITTED_CONTRACT, paths, emitterTemplate()
-                )
-            )
+        string memory expected = string.concat(
+            "// SPDX-License",
+            "-Identifier: LicenseRef-DCL-1.0\n",
+            "// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd\n",
+            "pragma solidity ^0.8.25;\n\n",
+            "// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.\n\n",
+            LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+            LibRainDeploySnapshot.releasedLibraryBlock(vm, EMITTED_LIBRARY, EMITTED_CONTRACT, paths, emitterTemplate())
         );
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeFile(path, before);
+
+        assertEq(written, path);
+        assertEq(emitted, expected);
     }
 
     /// A freeze that names no contracts MUST be refused. It would write
