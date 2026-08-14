@@ -61,13 +61,41 @@ FLARE_RPC_URL=https://flare-api.flare.network/ext/C/rpc
 POLYGON_RPC_URL=https://polygon-bor-rpc.publicnode.com
 ```
 
-All five are needed: `RainDeployVerifyChain` forks every network in
-`supportedNetworks()`, so a missing or rate-limited endpoint fails it. Those
-failures are `vm.createSelectFork` errors, distinct from the
-`NotDeployedOnNetwork` a reachable network raises, and the snapshot contracts
-run regardless: `forge test --no-match-contract Chain`.
+All five are needed by the contracts that fork: `RainDeployVerifyChain` forks
+every network in `supportedNetworks()`, so a missing or rate-limited endpoint
+fails it. Those failures are `vm.createSelectFork` errors, distinct from the
+`NotDeployedOnNetwork` a reachable network raises.
 
 These are referenced in `foundry.toml` under `[rpc_endpoints]`.
+
+### `forge test --no-match-contract Chain` is the offline gate
+
+It needs no `.env` at all. Every `vm.createSelectFork` in the repo sits in a
+contract with `Chain` in its name, so the gate forks nothing and no amount of
+RPC weather can make it red. That is a property of where the forks are, not a
+list to keep in step: the only way to break it is to fork from a contract the
+gate runs.
+
+Which is the question to answer when adding a test. A test needs a chain only if
+it reads state no fixture can supply, and three kinds do:
+
+1. The fork-history search. `isStartBlock` and `findDeployBlock` roll a fork
+   backwards and read the target at each block, so a chain's history IS their
+   subject and there is nothing to etch.
+2. The Zoltu factory pins. `ZOLTU_FACTORY_BYTECODE` and `ZOLTU_FACTORY_CODEHASH`
+   are constants asserted against the factory as actually deployed, and
+   `zoltuAddress`' derivation is checked against what the live factory returns.
+   Etching any of it leaves the constants checking themselves.
+3. Anything reaching `deployToNetworks`' or `checkResolvedAddressesOnNetworks`'
+   own per-network fork loop, which is the thing under test.
+
+Everything else etches what it reads and forks nothing — a test that etches the
+factory and deploys into a bare EVM gets the same answer a fork gives it, only
+without the endpoint. So `LibRainDeploy`'s suite is split by that question:
+`LibRainDeployTest` (`test/src/lib/LibRainDeploy.t.sol`) forks nothing,
+`LibRainDeployChainTest` (`test/src/lib/LibRainDeployChain.t.sol`) is the three
+kinds above, and `LibRainDeployTestBase` (`test/abstract/`) holds the fixtures
+and external wrappers both sides share so the split duplicates none of them.
 
 ## Architecture
 
@@ -263,8 +291,9 @@ can set. Group 3 is what makes group 4's scope complete — a release group 4 is
 never handed is a release it cannot fail on.
 
 Group 4 lives in its own contract so an unreachable RPC endpoint fails only it,
-never the snapshot assertions — `forge test --no-match-contract Chain` is the
-whole snapshot gate, and nothing reachable from those contracts forks anything.
+never the snapshot assertions. That is the offline gate's `Chain`-in-the-name
+rule applied to the verification abstracts, and groups 1-3 are on the offline
+side of it.
 
 A single recorded code hash per version can only be true if the runtime code is
 the same on every network, so a constructor reading `block.chainid` or similar
