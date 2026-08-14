@@ -23,13 +23,19 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 /// released and candidate paths, and two suites deriving one address, real
 /// rather than simulated.
 ///
-/// The third suite exists for one reason: the chain matrix loops over suites,
-/// and proving it does not stop at the first requires a suite at a DIFFERENT
-/// address. `AddressRegistry` is the only concrete in this repo, so the second
-/// address comes from `MockDeployableV2`, which is already on main for
-/// `LibRainDeploy`'s own tests. Without it, "the matrix silently checks only
-/// the first suite" is undetectable — the failure mode that matters most to the
-/// repos this abstract exists for, where ten suites sit at ten addresses.
+/// The `MockDeployableV2` entries exist for one reason: every loop here runs
+/// over a list, and proving a loop does not stop at the first entry requires a
+/// second entry at a DIFFERENT address. `AddressRegistry` is the only concrete
+/// in this repo, so the second address comes from `MockDeployableV2`, which is
+/// already on main for `LibRainDeploy`'s own tests. Without it, "the matrix
+/// silently checks only the first suite" is undetectable — the failure mode
+/// that matters most to the repos this abstract exists for, where ten suites
+/// sit at ten addresses.
+///
+/// It appears on BOTH sides for that reason, once as a release and once as a
+/// candidate. The released side is the chain matrix's second address; the
+/// candidate side is the source anchor's, which loops over the candidates
+/// alone and would otherwise be a loop with one thing in it.
 abstract contract ExampleDeploySuites is RainDeploySuitesBase {
     /// @inheritdoc RainDeploySuitesBase
     function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
@@ -55,8 +61,15 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuite() internal pure override returns (DeployCandidate memory) {
-        return DeployCandidate({
+    /// @dev TWO candidates, at two different addresses and anchored to two
+    /// different sources, because a repo that deploys more than one contract is
+    /// what the list exists for. One candidate cannot tell a loop that runs
+    /// over every candidate apart from one that stops at the first, and the
+    /// source anchor is the only check that catches a snapshot of the wrong
+    /// contract — so a loop that stops early is a contract nothing anchors.
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
+        candidates = new DeployCandidate[](2);
+        candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "address-registry-candidate",
                 creationCode: ADDRESS_REGISTRY_CREATION_CODE,
@@ -67,6 +80,18 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
                 dependencies: new address[](0)
             }),
             sourceCreationCode: type(AddressRegistry).creationCode
+        });
+        candidates[1] = DeployCandidate({
+            snapshot: DeploySuite({
+                suite: "second-address-candidate",
+                creationCode: type(MockDeployableV2).creationCode,
+                storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
+                storedBytecodeHash: keccak256(type(MockDeployableV2).runtimeCode),
+                storedRuntimeCode: type(MockDeployableV2).runtimeCode,
+                artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
+                dependencies: new address[](0)
+            }),
+            sourceCreationCode: type(MockDeployableV2).creationCode
         });
     }
 }

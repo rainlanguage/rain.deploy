@@ -14,6 +14,23 @@ error DuplicateDeploySuite(string suite);
 /// @param validSuites The declared keys, comma separated.
 error UnknownDeploymentSuite(string requested, string validSuites);
 
+/// Thrown when a declaration names no candidate at all.
+///
+/// The source anchor is the ONLY check that catches a snapshot of the wrong
+/// contract, and it runs over the candidates and nothing else. A declaration
+/// with an empty candidate list is therefore not a repo with nothing to say —
+/// it is a declaration that has quietly opted out of that check while every
+/// other assertion stays green.
+///
+/// A deploy repo always compiles a current source, so there is always something
+/// to declare. When the candidate was a single struct this was true by
+/// construction; a list has to say it.
+///
+/// Raised from `allSuites`, which is the only way anything reads the
+/// declaration — `suiteNames` and `suiteByName` both go through it — so there
+/// is no reader that answers from an empty one.
+error NoDeployCandidates();
+
 /// One deployable unit: a named snapshot of one contract.
 ///
 /// `creationCode` is the ONLY input. The Zoltu factory is `CREATE2` over its
@@ -98,7 +115,7 @@ struct DeployCandidate {
 /// the thing checked against the chain cannot disagree: not because it is
 /// checked, but because there is nothing to disagree with.
 ///
-/// A repo overrides `releasedSuites` and `candidateSuite` on one abstract
+/// A repo overrides `releasedSuites` and `candidateSuites` on one abstract
 /// contract and inherits that into its deploy script and its test contracts.
 /// Nothing else is per suite, and nothing anywhere is per network.
 abstract contract RainDeploySuitesBase {
@@ -109,28 +126,63 @@ abstract contract RainDeploySuitesBase {
     /// @return The released suites.
     function releasedSuites() internal pure virtual returns (DeploySuite[] memory);
 
-    /// The rolling candidate — the snapshot describing what this repo compiles
-    /// right now. Required rather than optional: a deploy repo always compiles
-    /// a current source, so there is always something for the source-anchored
-    /// check to anchor to, and making it optional would let the only check that
-    /// catches a wrong-contract snapshot be silently skipped.
-    /// @return The candidate.
-    function candidateSuite() internal pure virtual returns (DeployCandidate memory);
+    /// The rolling candidates — one snapshot per contract this repo compiles
+    /// right now, each paired with the source it MUST equal.
+    ///
+    /// A list because a repo deploys as many contracts as it deploys, and each
+    /// of them has its own rolling snapshot and its own source to be anchored
+    /// to. A single candidate leaves a repo's second deployed contract either
+    /// undeclared or declared as a release it is not, and in both cases the one
+    /// check that catches a snapshot of the wrong contract is never handed it.
+    ///
+    /// Two suites abstracts cannot be composed into that gap either: both would
+    /// override this, and a repo inherits exactly one declaration. So the list
+    /// is here rather than left to the consumer to assemble.
+    ///
+    /// MUST NOT be empty, which `allSuites` enforces. A deploy repo always
+    /// compiles a current source, so there is always something to anchor to —
+    /// see `NoDeployCandidates` for why an empty list is worse than it looks.
+    /// @return The candidates.
+    function candidateSuites() internal pure virtual returns (DeployCandidate[] memory);
+
+    /// The declared candidates, refusing an empty list.
+    ///
+    /// The ONE place `NoDeployCandidates` is raised, and the only way anything
+    /// reads the candidates. `allSuites` goes through it, and so does the
+    /// source anchor in `RainDeployVerifySnapshot` — which matters, because the
+    /// source anchor loops over the candidates and a loop over an empty list
+    /// passes. Guarding each reader separately would be two spellings of one
+    /// rule, and the reader that got the second spelling wrong is the one that
+    /// silently stops asserting.
+    /// @return candidates The candidates.
+    function checkedCandidateSuites() internal pure returns (DeployCandidate[] memory candidates) {
+        candidates = candidateSuites();
+        if (candidates.length == 0) {
+            revert NoDeployCandidates();
+        }
+    }
 
     /// Every suite this repo declares: the released ones followed by the
-    /// candidate. This is the verification set and the deploy registry, which
+    /// candidates. This is the verification set and the deploy registry, which
     /// are the same set because they are the same declaration.
     ///
     /// Keys are checked unique here rather than anywhere more specific, so both
     /// sides pay for the check and neither can be handed an ambiguous registry.
+    /// One pairwise pass over the whole set, so a candidate colliding with
+    /// another candidate is caught by the same code that catches a candidate
+    /// colliding with a release — there is no second rule to keep in step.
     /// @return suites Every declared suite.
     function allSuites() internal pure returns (DeploySuite[] memory suites) {
         DeploySuite[] memory released = releasedSuites();
-        suites = new DeploySuite[](released.length + 1);
+        DeployCandidate[] memory candidates = checkedCandidateSuites();
+
+        suites = new DeploySuite[](released.length + candidates.length);
         for (uint256 i = 0; i < released.length; i++) {
             suites[i] = released[i];
         }
-        suites[released.length] = candidateSuite().snapshot;
+        for (uint256 i = 0; i < candidates.length; i++) {
+            suites[released.length + i] = candidates[i].snapshot;
+        }
 
         for (uint256 i = 0; i < suites.length; i++) {
             for (uint256 j = i + 1; j < suites.length; j++) {

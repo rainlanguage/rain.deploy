@@ -32,10 +32,15 @@ import {AddressRegistry} from "../src/concrete/AddressRegistry.sol";
 /// empty set.
 ///
 /// The metadata each released entry carries beyond its frozen snapshot comes
-/// from `candidateSuite()`, which is why this inherits the declaration rather
-/// than restating it. There is one suite key, one artifact path and one
-/// dependency list in this repo, and a second copy of them here is a second
-/// copy that drifts.
+/// from the named candidate on the declaration, which is why this inherits the
+/// declaration rather than restating it. There is one suite key, one artifact
+/// path and one dependency list per contract in this repo, and a second copy of
+/// them here is a second copy that drifts.
+///
+/// Named rather than indexed out of `candidateSuites()`: a released-suites lib
+/// describes ONE contract, so this has to select the candidate for the contract
+/// it is writing, and a positional read would silently write another contract's
+/// metadata the moment the list is reordered.
 ///
 /// The tag, both snapshot paths, the freeze, the snapshot writer and both
 /// generated-lib writers all come from `LibRainDeploySnapshot`, which in turn
@@ -85,7 +90,7 @@ contract Build is Script, AddressRegistryDeploySuites {
     function regenerateLibs() internal {
         LibRainDeploySnapshot.writeAliasLib(vm, CONTRACT_NAME, CONSTANT_PREFIX, LibRainDeploySnapshot.CANDIDATE);
         LibRainDeploySnapshot.writeReleasedSuitesLib(
-            vm, LibRainDeploySnapshot.LIB_FS_ROOT, CONTRACT_NAME, candidateSuite().snapshot
+            vm, LibRainDeploySnapshot.LIB_FS_ROOT, CONTRACT_NAME, addressRegistryCandidate().snapshot
         );
     }
 

@@ -54,9 +54,19 @@ abstract contract AddressRegistryDeploySuites is RainDeploySuitesBase {
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    /// @dev The pins in `LibAddressRegistryDeploy` are hand-written literals,
-    /// and they are what the internal group checks the derivation against and
-    /// what the broadcast asserts against before it forks anything.
+    /// @dev One entry, because this repo deploys one contract. A second
+    /// deployed contract is a second named candidate below, a second entry
+    /// here, and a second snapshot in `script/Build.sol` — nothing else.
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
+        candidates = new DeployCandidate[](1);
+        candidates[0] = addressRegistryCandidate();
+    }
+
+    /// This repo's rolling `AddressRegistry` candidate.
+    ///
+    /// The pins in `LibAddressRegistryDeploy` are hand-written literals, and
+    /// they are what the internal group checks the derivation against and what
+    /// the broadcast asserts against before it forks anything.
     ///
     /// The creation code and runtime code are RECORDED, read from the rolling
     /// `src/generated/candidate/` snapshot. That is what makes the source
@@ -67,7 +77,15 @@ abstract contract AddressRegistryDeploySuites is RainDeploySuitesBase {
     ///
     /// `AddressRegistry` reads nothing and calls nothing at construction, so it
     /// has no dependency that must already be on chain.
-    function candidateSuite() internal pure override returns (DeployCandidate memory) {
+    ///
+    /// Named rather than reached by index into `candidateSuites`, because
+    /// `script/Build.sol` needs THIS candidate specifically — a released-suites
+    /// lib describes one contract — and a positional read silently describes a
+    /// different contract the moment the list is reordered. Naming it here also
+    /// keeps the suite key, the artifact path and the dependency list spelled
+    /// once: `Build.sol` inherits this rather than restating them.
+    /// @return The candidate.
+    function addressRegistryCandidate() internal pure returns (DeployCandidate memory) {
         return DeployCandidate({
             snapshot: DeploySuite({
                 suite: "address-registry",

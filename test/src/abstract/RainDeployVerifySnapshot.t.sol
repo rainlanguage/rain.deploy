@@ -28,7 +28,7 @@ import {
 /// @title RainDeployVerifySnapshotTest
 /// @notice `RainDeployVerifySnapshot` inherited by a exemplar repo, so the
 /// inherited tests themselves are the passing case: `ExampleDeploySuites`
-/// declares two frozen releases and a candidate, and
+/// declares two frozen releases and two candidates, and
 /// `testSnapshotInternallyConsistent` /
 /// `testSnapshotMatchesSource` run over them here exactly as they
 /// would in a consumer.
@@ -51,6 +51,13 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
     /// @param candidate The candidate to check.
     function externalCheckAnchoredToSource(DeployCandidate memory candidate) external pure {
         checkAnchoredToSource(candidate);
+    }
+
+    /// External wrapper for `checkCandidatesAnchoredToSource` so
+    /// `vm.expectRevert` works at the correct call depth.
+    /// @param candidates The candidates to check.
+    function externalCheckCandidatesAnchoredToSource(DeployCandidate[] memory candidates) external pure {
+        checkCandidatesAnchoredToSource(candidates);
     }
 
     /// External wrapper for `checkFrozenSnapshotsReleased` so `vm.expectRevert`
@@ -340,7 +347,35 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
     /// the previous test is discriminating rather than a check that always
     /// fails.
     function testCandidateAnchoredToSourcePasses() external view {
-        this.externalCheckAnchoredToSource(candidateSuite());
+        this.externalCheckCandidatesAnchoredToSource(checkedCandidateSuites());
+    }
+
+    /// The source anchor MUST reach EVERY candidate, not just the first.
+    ///
+    /// A loop that stops early is invisible while a repo declares one
+    /// candidate, and silently stops anchoring the moment it declares two — and
+    /// a repo with several contracts is precisely where a snapshot generated
+    /// from the wrong one comes from. So the broken candidate is the LAST one,
+    /// behind a good one, and the failure has to name it.
+    function testSourceAnchorReachesEveryCandidate() external {
+        DeployCandidate[] memory candidates = checkedCandidateSuites();
+        assertEq(candidates.length, 2);
+
+        // The first is genuinely fine, so nothing fails before the loop has to
+        // advance.
+        this.externalCheckAnchoredToSource(candidates[0]);
+
+        candidates[1] = wrongContractCandidate();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CandidateSourceMismatch.selector,
+                "address-registry-candidate",
+                keccak256(ADDRESS_REGISTRY_CREATION_CODE),
+                keccak256(type(MockDeployableV2).creationCode)
+            )
+        );
+        this.externalCheckCandidatesAnchoredToSource(candidates);
     }
 
     /// Two suites that record the SAME creation code MUST both derive, which
@@ -349,7 +384,7 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
     /// same address, and the whole set still passes.
     function testSuitesSharingCreationCodeAllDerive() external {
         DeploySuite[] memory suites = allSuites();
-        assertEq(suites.length, 3);
+        assertEq(suites.length, 4);
         assertEq(suites[0].storedDeployedAddress, suites[2].storedDeployedAddress);
         assertEq(keccak256(suites[0].creationCode), keccak256(suites[2].creationCode));
 
