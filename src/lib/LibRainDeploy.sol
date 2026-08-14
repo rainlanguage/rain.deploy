@@ -83,6 +83,15 @@ library LibRainDeploy {
     /// hash at `blockNumber` and does NOT have it at `blockNumber - 1`. At
     /// block 0, only the first condition is checked. The fork is restored to
     /// its original block number after checking.
+    ///
+    /// "First" is only true of a target whose code hash is MONOTONE: once it
+    /// equals `expectedCodeHash` at some block it equals it at every later
+    /// block. This reads two adjacent blocks and nothing else, so on a target
+    /// that held `expectedCodeHash`, lost it and holds it again — a pre-Cancun
+    /// `SELFDESTRUCT` followed by a `CREATE2` redeploy of the same code at the
+    /// same address, say — it answers true at EVERY block where the hash
+    /// reappears, not only the earliest. Monotonicity is the caller's to know:
+    /// two blocks cannot show it.
     /// @param vm The Vm instance for fork manipulation.
     /// @param target The contract address to check.
     /// @param expectedCodeHash The code hash to look for.
@@ -106,8 +115,27 @@ library LibRainDeploy {
     /// searching the fork history. Requires an active fork with archive access
     /// back to `startBlock`. The fork is restored to its original block
     /// number before returning. The target's code hash is verified against the
-    /// expected value before searching. The result is validated via
-    /// `isStartBlock`.
+    /// expected value before searching.
+    ///
+    /// The search REQUIRES the target's code hash to be monotone over
+    /// `[startBlock, block.number]`, in the sense `isStartBlock` describes.
+    /// Against a target that held `expectedCodeHash`, lost it and holds it
+    /// again, the search converges on one of those appearances with no way to
+    /// say which, and the result is meaningless as the subgraph start block it
+    /// is typically used as.
+    ///
+    /// That is the caller's precondition because nothing here can check it, and
+    /// `isStartBlock` least of all. `high` is only ever a block where the code
+    /// hash matches: it starts at the current block, checked above, and
+    /// otherwise takes a `mid` the loop has just read as matching. `low` is
+    /// either `startBlock`, checked above as NOT matching, or one past a `mid`
+    /// the loop has just read as not matching. It cannot still be `startBlock`
+    /// when the loop ends, because that needs `high` down at `startBlock` and
+    /// `high` is only ever a matching block, so where they meet the hash
+    /// matches and did not match at the block before — `isStartBlock`'s exact
+    /// condition, satisfied by construction and satisfied on a non-monotone
+    /// history just the same. Running it on the result would read two more
+    /// archive blocks to agree with itself.
     /// @param vm The Vm instance for fork manipulation.
     /// @param target The contract address to search for.
     /// @param expectedCodeHash The expected code hash of the target contract.
