@@ -20,6 +20,8 @@ It answers:
   deployment?
 - Is every version I have ever released still live, with the code I compiled, on
   every network I support?
+- Which operational migrations have actually been applied on this chain, so a
+  test can assert the state they imply instead of guessing from a date?
 
 Approach:
 
@@ -33,6 +35,8 @@ Approach:
 - An address registry, read at run time rather than compiled into creation code,
   and a post-deploy check that every target network's deployment took the
   address it was supposed to.
+- A migration registry, so operational scripts record what they applied and
+  tests assert the state that implies rather than branching on a deadline.
 - One inherited deploy-pin verification, parameterized over versions, rather
   than assertions hand-enumerated per version and per chain in every deploy
   repo.
@@ -174,30 +178,90 @@ Only the consumer knows where it stored what it resolved, so the consumer
 supplies the reads (`abi.encodeCall(IOwnable.owner, ())` and the like) and this
 library supplies the fork loop and the comparison.
 
+## Migration registry
+
+`MigrationRegistry` records that a migration has been applied: a writer records
+one of its own (`record`), and anyone reads whether a given writer has recorded
+a given one (`applied`). There is no removal and no upgrade.
+
+It exists because prod-state tests otherwise decide what to assert by reading
+the **clock**. The pattern that emerges without it is a dual-state invariant —
+accept either the pre- or the post-migration value until a hardcoded deadline,
+and only the post value after it. That window asserts nothing during the one
+period you most want to know about, every migration costs a manual refactor to
+add and another to delete, and once the deadline passes CI red-lines on a date
+rather than on a fact. What you actually want is "**exactly** the value implied
+by the migrations that have run", which needs the chain to hold which ones have:
+
+```solidity
+if (LibMigrationRegistry.applied(SAFE, MIGRATION_V2)) {
+    assertEq(vault.owner(), NEW_OWNER);
+} else {
+    assertEq(vault.owner(), OLD_OWNER);
+}
+```
+
+Both branches assert exactly. Neither skips, and `applied` answering `false` is
+an ordinary expected answer rather than a revert — it is the state of every
+migration before it runs, and of every migration on a chain that never got it.
+
+**A set of applied migrations, not a high-water mark.** A mark needs a total
+order consumers do not have: two migrations authored on one day collide, and one
+migration split across two scripts because it landed on two networks a week
+apart cannot be one comparable value at all. A set represents both exactly, and
+the ordering between migrations moves into the assertion —
+`applied(V5) ? … : applied(V4) ? … : …` — which is where the semantic dependency
+actually lives.
+
+**The namespace is `msg.sender`, and that is the whole access control.** Anyone
+may write, but only under themselves, so a reader asking about the namespace of
+an authority it already trusts is reading something only that authority could
+have written; every other namespace holds unforgeable claims nobody asks about.
+A root would have to be welded into the creation code, the way
+`ADDRESS_REGISTRY_ROOT` is — and the account that applies a migration is a
+different Safe, deployer or timelock for every consumer and every chain, so one
+root would have to be all of them, and baking each consumer's authority in would
+give each a different address for what is meant to be one shared registry. With
+nothing to configure there is also no rollout state in which it is inert.
+
+**An index, not proof.** The registry says which invariant applies. It does not
+say the invariant holds — a multisig can act out of band and nothing here moves.
+Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
+pins with it trades a clock-guess for a bookkeeping-guess.
+
+`LibMigrationRegistry` is the surface — `applied` and `record`, both verifying
+the registry's code hash first. There is deliberately **no broadcast runner**:
+the dominant real shape is a Safe executing a bundle that never broadcasts, and
+such a script appends `record` to the bundle it is already emitting, which makes
+the record atomic with the migration it describes.
+
 ## Deploying, and then releasing
 
 Three separate steps, in this order. Nothing automatic ever broadcasts.
 
 1. **Deploy.** Dispatch the
    [`Manual sol artifacts`](.github/workflows/manual-sol-artifacts.yaml)
-   workflow, which runs `script/Deploy.sol` and broadcasts `AddressRegistry` to
-   every network in `supportedNetworks()`. `workflow_dispatch` only: this is key
-   custody and real money, and no merge or tag should be able to trigger it. It
-   is idempotent — a network that already has the code is skipped — so a partial
-   run is fixed by running it again rather than by unpicking anything.
-2. **Verify.** `AddressRegistryDeployChainTest` passes only once every supported
-   network has the registry, with the code this repo compiles. It is red today
-   because step 1 has never been run.
+   workflow, choosing a `suite`. It runs `script/Deploy.sol` and broadcasts that
+   suite to every network in `supportedNetworks()`. One suite per dispatch, so
+   this repo's two registries are two dispatches. `workflow_dispatch` only: this
+   is key custody and real money, and no merge or tag should be able to trigger
+   it. It is idempotent — a network that already has the code is skipped — so a
+   partial run is fixed by running it again rather than by unpicking anything.
+2. **Verify.** `RegistryDeployChainTest` passes only once every **released**
+   suite is live on every supported network, with the code that release froze.
+   This repo has released none, so today it has nothing to check and passes; it
+   gets a subject the moment step 3 freezes one, and is red from then until step
+   1 has been run everywhere. That is the order these steps are in.
 3. **Tag.** Push a `sol-v*` tag. `rainix-tag-release` regenerates the snapshot
    for the version the tag names, verifies the live chains against those fresh
    pins, publishes to Soldeer and commits the frozen snapshot back to `main`. It
    verifies and publishes; it never broadcasts, which is exactly why step 1
    cannot be folded into it.
 
-This is a deploy repo: it carries a deployed concrete whose address and codehash
-consumers pin, so releases are **manual `sol-v*` tags**, not merges.
+This is a deploy repo: it carries deployed concretes whose addresses and
+codehashes consumers pin, so releases are **manual `sol-v*` tags**, not merges.
 `[package].version` is the LAST released version, naming the current
-`src/generated/<tag>/` snapshot, and only a release moves it. Every version
+`src/generated/<tag>/` snapshots, and only a release moves it. Every version
 published under the previous merge-driven lifecycle stays published; consumers
 pin exact versions and are unaffected.
 
