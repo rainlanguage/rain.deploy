@@ -4,6 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 
+import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     EmptyRelease,
     LibRainDeploySnapshot,
@@ -218,6 +219,341 @@ contract LibRainDeploySnapshotTest is Test {
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(dir), true);
+    }
+
+    /// Where the released-lib record fixture is built. Its own tree rather
+    /// than `FIXTURE_ROOT`: forge runs the tests in a contract concurrently,
+    /// and two of them writing one record root see each other's releases.
+    string constant RELEASED_FIXTURE_ROOT = "test/generated-released";
+
+    /// The contract every emitter test emits a released lib for.
+    string constant EMITTED_CONTRACT = "AddressRegistry";
+
+    /// The library every emitter test emits, derived from `EMITTED_CONTRACT`
+    /// exactly as `writeReleasedSuitesLib` derives it.
+    string constant EMITTED_LIBRARY = "LibAddressRegistryReleased";
+
+    /// The candidate declaration the emitted metadata comes from.
+    ///
+    /// Every CONSENSUS field is zero, so an emitter that took one of the four
+    /// frozen fields from the template rather than from the record would emit a
+    /// zero and be seen doing it. Only the key, the artifact path and the
+    /// dependencies are meant to come from here.
+    /// @return The template.
+    function emitterTemplate() internal pure returns (DeploySuite memory) {
+        return DeploySuite({
+            suite: "address-registry",
+            creationCode: "",
+            storedDeployedAddress: address(0),
+            storedBytecodeHash: bytes32(0),
+            storedRuntimeCode: "",
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: new address[](0)
+        });
+    }
+
+    /// A record of `count` releases, `0_0_1` upwards, as
+    /// `frozenSnapshotPaths` spells them.
+    /// @param count How many releases.
+    /// @return paths The record's files.
+    function recordOf(uint256 count) internal pure returns (string[] memory paths) {
+        paths = new string[](count);
+        for (uint256 i = 0; i < count; i++) {
+            paths[i] = string.concat(
+                LibRainDeploySnapshot.LIB_FS_ROOT, "/0_0_", vm.toString(i + 1), "/", EMITTED_CONTRACT, ".sol"
+            );
+        }
+    }
+
+    /// The aliased import one release contributes.
+    /// @param tag The release tag.
+    /// @return The import statement, and the blank line after it.
+    function expectedImport(string memory tag) internal pure returns (string memory) {
+        return string.concat(
+            "import {\n    DEPLOYED_ADDRESS as AddressRegistry_",
+            tag,
+            "_DEPLOYED_ADDRESS,\n    BYTECODE_HASH as AddressRegistry_",
+            tag,
+            "_BYTECODE_HASH,\n    CREATION_CODE as AddressRegistry_",
+            tag,
+            "_CREATION_CODE,\n    RUNTIME_CODE as AddressRegistry_",
+            tag,
+            "_RUNTIME_CODE\n} from \"../generated/",
+            tag,
+            "/AddressRegistry.sol\";\n\n"
+        );
+    }
+
+    /// The generated library's text from its title down to the line that opens
+    /// `releasedSuites`. The same for every record, so the per-record
+    /// assertions below are about the entries.
+    string constant EXPECTED_LIBRARY_HEADER = "/// @title LibAddressRegistryReleased\n"
+        "/// @notice Every frozen release of `AddressRegistry`: one entry per file in\n"
+        "/// the append-only `src/generated/<tag>/` record, in tag order.\n" "///\n"
+        "/// The deploy address, code hash, creation code and runtime code of each\n"
+        "/// entry are aliased from that release's own frozen snapshot, so the\n"
+        "/// consensus record is read from the immutable file and from nowhere else.\n" "///\n"
+        "/// The key, the artifact path and the dependencies are explorer and ordering\n"
+        "/// metadata regenerated from the CURRENT declaration, and are not part of\n"
+        "/// that record. A moved source path retroactively updates every entry's\n"
+        "/// artifact path, which is intended: the alternative is parsing this\n"
+        "/// generated file back in to preserve what it last said.\n" "library LibAddressRegistryReleased {\n"
+        "    /// Every frozen release, in tag order.\n" "    /// @return suites The released suites.\n"
+        "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n";
+
+    /// The entry one release contributes, with no dependencies.
+    /// @param index The entry's index.
+    /// @param tag The release tag.
+    /// @return The entry's statements.
+    function expectedEntry(string memory index, string memory tag) internal pure returns (string memory) {
+        return string.concat(
+            "        address[] memory dependencies",
+            index,
+            " = new address[](0);\n        suites[",
+            index,
+            "] = DeploySuite({\n            suite: \"address-registry@",
+            tag,
+            "\",\n            creationCode: AddressRegistry_",
+            tag,
+            "_CREATION_CODE,\n            storedDeployedAddress: AddressRegistry_",
+            tag,
+            "_DEPLOYED_ADDRESS,\n            storedBytecodeHash: AddressRegistry_",
+            tag,
+            "_BYTECODE_HASH,\n            storedRuntimeCode: AddressRegistry_",
+            tag,
+            "_RUNTIME_CODE,\n            artifactPath: \"src/concrete/AddressRegistry.sol:AddressRegistry\",\n",
+            "            dependencies: dependencies",
+            index,
+            "\n        });\n"
+        );
+    }
+
+    /// The import block MUST carry all four consensus constants of every record
+    /// file and nothing else, aliased so that two releases of one contract, and
+    /// two contracts in one release, are all distinct names.
+    ///
+    /// The four aliased fields are the whole of what a released entry says
+    /// about consensus, so an import that goes missing is a field that silently
+    /// falls back to whatever else is in scope.
+    function testReleasedImportBlockAliasesEveryRecord() external pure {
+        assertEq(
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(0)),
+            "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n"
+        );
+
+        assertEq(
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1)),
+            string.concat(
+                "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n", expectedImport("0_0_1")
+            )
+        );
+
+        assertEq(
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2)),
+            string.concat(
+                "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                expectedImport("0_0_1"),
+                expectedImport("0_0_2")
+            )
+        );
+    }
+
+    /// The library block MUST declare one suite per record file, taking the
+    /// four consensus fields from that file's aliased constants and the other
+    /// three from the template.
+    ///
+    /// A record with nothing in it is the state of every deploy repo before its
+    /// first release, including this one, and it MUST still emit a compiling
+    /// library: the declaration is imported by ordinary source, so a repo that
+    /// could not emit one before its first release could not build.
+    function testReleasedLibraryBlockDeclaresEveryRecord() external pure {
+        assertEq(
+            LibRainDeploySnapshot.releasedLibraryBlock(
+                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(0), emitterTemplate()
+            ),
+            string.concat(EXPECTED_LIBRARY_HEADER, "        suites = new DeploySuite[](0);\n", "    }\n}\n")
+        );
+
+        assertEq(
+            LibRainDeploySnapshot.releasedLibraryBlock(
+                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(1), emitterTemplate()
+            ),
+            string.concat(
+                EXPECTED_LIBRARY_HEADER,
+                "        suites = new DeploySuite[](1);\n",
+                expectedEntry("0", "0_0_1"),
+                "    }\n}\n"
+            )
+        );
+
+        assertEq(
+            LibRainDeploySnapshot.releasedLibraryBlock(
+                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), emitterTemplate()
+            ),
+            string.concat(
+                EXPECTED_LIBRARY_HEADER,
+                "        suites = new DeploySuite[](2);\n",
+                expectedEntry("0", "0_0_1"),
+                expectedEntry("1", "0_0_2"),
+                "    }\n}\n"
+            )
+        );
+    }
+
+    /// The key MUST be the template's with the tag appended, so a repo with
+    /// several releases of one contract declares several DISTINCT suites.
+    /// `allSuites` refuses a duplicate key, so a key that did not carry the tag
+    /// would make the second release unreachable and the whole declaration
+    /// revert.
+    function testReleasedLibraryBlockKeysAreUniquePerRelease() external pure {
+        string memory emitted = LibRainDeploySnapshot.releasedLibraryBlock(
+            vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), emitterTemplate()
+        );
+
+        assertTrue(vm.contains(emitted, "suite: \"address-registry@0_0_1\""));
+        assertTrue(vm.contains(emitted, "suite: \"address-registry@0_0_2\""));
+    }
+
+    /// The dependencies MUST be the template's, element for element. They are
+    /// what a broadcast checks is already on chain before it deploys anything,
+    /// so an entry that dropped them would deploy a suite whose constructor
+    /// reads an address with no code.
+    function testReleasedLibraryBlockCarriesTheTemplateDependencies() external pure {
+        DeploySuite memory template = emitterTemplate();
+        template.dependencies = new address[](2);
+        template.dependencies[0] = address(0xdead);
+        template.dependencies[1] = address(0xbeef);
+
+        assertEq(
+            LibRainDeploySnapshot.releasedLibraryBlock(vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(1), template),
+            string.concat(
+                EXPECTED_LIBRARY_HEADER,
+                "        suites = new DeploySuite[](1);\n",
+                "        address[] memory dependencies0 = new address[](2);\n",
+                "        dependencies0[0] = address(",
+                vm.toString(address(0xdead)),
+                ");\n        dependencies0[1] = address(",
+                vm.toString(address(0xbeef)),
+                ");\n        suites[0] = DeploySuite({\n            suite: \"address-registry@0_0_1\",\n",
+                "            creationCode: AddressRegistry_0_0_1_CREATION_CODE,\n",
+                "            storedDeployedAddress: AddressRegistry_0_0_1_DEPLOYED_ADDRESS,\n",
+                "            storedBytecodeHash: AddressRegistry_0_0_1_BYTECODE_HASH,\n",
+                "            storedRuntimeCode: AddressRegistry_0_0_1_RUNTIME_CODE,\n",
+                "            artifactPath: \"src/concrete/AddressRegistry.sol:AddressRegistry\",\n",
+                "            dependencies: dependencies0\n        });\n",
+                "    }\n}\n"
+            )
+        );
+    }
+
+    /// Releases MUST be emitted in the order they were cut, comparing tags as
+    /// VERSIONS. `0_10_0` follows `0_9_0` as a release and precedes it as text,
+    /// so a sort on the raw string misorders every record that outlives a
+    /// single-digit component.
+    ///
+    /// Files frozen under one tag are ordered by path, so the emitted file does
+    /// not change with whatever order the filesystem happened to hand the walk
+    /// — a generated file that moves on its own is a diff on every build. A
+    /// record directory holds every file in it and there is no extension to
+    /// filter on, so one name being the whole start of another is a state the
+    /// order has to settle too.
+    function testSortedRecordPathsOrdersTagsAsVersions() external pure {
+        string[] memory paths = new string[](5);
+        paths[0] = "src/generated/1_0_0/AddressRegistry.sol";
+        paths[1] = "src/generated/0_9_0/AddressRegistry.sol.orig";
+        paths[2] = "src/generated/0_9_0/Second.sol";
+        paths[3] = "src/generated/0_10_0/AddressRegistry.sol";
+        paths[4] = "src/generated/0_9_0/AddressRegistry.sol";
+
+        string[] memory sorted = LibRainDeploySnapshot.sortedRecordPaths(vm, paths);
+
+        assertEq(sorted.length, 5);
+        assertEq(sorted[0], "src/generated/0_9_0/AddressRegistry.sol");
+        assertEq(sorted[1], "src/generated/0_9_0/AddressRegistry.sol.orig");
+        assertEq(sorted[2], "src/generated/0_9_0/Second.sol");
+        assertEq(sorted[3], "src/generated/0_10_0/AddressRegistry.sol");
+        assertEq(sorted[4], "src/generated/1_0_0/AddressRegistry.sol");
+    }
+
+    /// The emitted declaration MUST name every release in the record and
+    /// nothing else in the tree.
+    ///
+    /// Driven through the same pipeline `writeReleasedSuitesLib` runs —
+    /// `frozenSnapshotPaths`, `sortedRecordPaths`, then the emitters — because
+    /// the writer takes no output root and the repo's real record is the only
+    /// one it can read. `frozenSnapshotPaths` is where the record root is a
+    /// parameter, so that is where a fixture tree goes in.
+    function testReleasedLibReadsTheRecordAndNothingElse() external {
+        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/AddressRegistry.sol"));
+        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_10_0/AddressRegistry.sol"));
+        // Not releases: the rolling snapshot, and a scratch directory a test or
+        // a human left behind.
+        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/", LibRainDeploySnapshot.CANDIDATE, "/AddressRegistry.sol"));
+        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/collision-guard/AddressRegistry.sol"));
+
+        string[] memory paths = LibRainDeploySnapshot.sortedRecordPaths(
+            vm, LibRainDeploySnapshot.frozenSnapshotPaths(vm, RELEASED_FIXTURE_ROOT)
+        );
+        string memory emitted = string.concat(
+            LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+            LibRainDeploySnapshot.releasedLibraryBlock(vm, EMITTED_LIBRARY, EMITTED_CONTRACT, paths, emitterTemplate())
+        );
+
+        assertEq(paths.length, 2);
+        assertEq(
+            emitted,
+            string.concat(
+                "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                expectedImport("0_9_0"),
+                expectedImport("0_10_0"),
+                EXPECTED_LIBRARY_HEADER,
+                "        suites = new DeploySuite[](2);\n",
+                expectedEntry("0", "0_9_0"),
+                expectedEntry("1", "0_10_0"),
+                "    }\n}\n"
+            )
+        );
+        assertFalse(vm.contains(emitted, LibRainDeploySnapshot.CANDIDATE));
+        assertFalse(vm.contains(emitted, "collision-guard"));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(RELEASED_FIXTURE_ROOT, true);
+    }
+
+    /// The released lib MUST land beside the alias lib, under the name derived
+    /// from the contract, holding exactly the prefix, imports and library the
+    /// emitters produce.
+    ///
+    /// Run against this repo's REAL record, which is the one root the writer
+    /// reads, so what it writes is the committed generated file — that is the
+    /// whole of what makes a stale generated file a test failure rather than a
+    /// silent one. Restored afterwards, because a run that failed between the
+    /// write and the assertion would otherwise leave the tree dirty.
+    function testWriteReleasedSuitesLibWritesTheLibAtItsPath() external {
+        string memory path = "src/lib/LibAddressRegistryReleased.sol";
+        string memory before = vm.readFile(path);
+
+        assertEq(LibRainDeploySnapshot.writeReleasedSuitesLib(vm, EMITTED_CONTRACT, emitterTemplate()), path);
+
+        string[] memory paths =
+            LibRainDeploySnapshot.sortedRecordPaths(vm, LibRainDeploySnapshot.frozenSnapshotPaths(vm, "src/generated"));
+        assertEq(
+            vm.readFile(path),
+            string.concat(
+                "// SPDX-License",
+                "-Identifier: LicenseRef-DCL-1.0\n",
+                "// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd\n",
+                "pragma solidity ^0.8.25;\n\n",
+                "// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.\n\n",
+                LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+                LibRainDeploySnapshot.releasedLibraryBlock(
+                    vm, EMITTED_LIBRARY, EMITTED_CONTRACT, paths, emitterTemplate()
+                )
+            )
+        );
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(path, before);
     }
 
     /// A freeze that names no contracts MUST be refused. It would write

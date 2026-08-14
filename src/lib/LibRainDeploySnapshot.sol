@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.16.1/src/Vm.sol";
 import {LibCodeGen} from "rain-sol-codegen-0.1.6/src/lib/LibCodeGen.sol";
 import {LibFs} from "rain-sol-codegen-0.1.6/src/lib/LibFs.sol";
+import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 
 /// Thrown when `[package].version` is not strict `X.Y.Z`. A version like
@@ -390,6 +391,275 @@ library LibRainDeploySnapshot {
                 "\n",
                 aliasImportBlock(contractName, constantPrefix, dir),
                 aliasLibraryBlock(contractName, constantPrefix, libraryName)
+            )
+        );
+        return path;
+    }
+
+    /// The release tag a record path sits under.
+    /// @param vm The Vm instance for string operations.
+    /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @return The tag, e.g. `0_1_7`.
+    function tagForRecordPath(Vm vm, string memory path) internal pure returns (string memory) {
+        string[] memory components = vm.split(path, "/");
+        return components[components.length - 2];
+    }
+
+    /// The contract a record path names.
+    /// @param vm The Vm instance for string operations.
+    /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @return The contract name, e.g. `AddressRegistry`.
+    function contractForRecordPath(Vm vm, string memory path) internal pure returns (string memory) {
+        string[] memory components = vm.split(path, "/");
+        return vm.replace(components[components.length - 1], ".sol", "");
+    }
+
+    /// The alias prefix a record's four constants are imported under.
+    ///
+    /// Both the tag and the contract, because a release freezes every contract
+    /// it names into one directory: the tag alone collides the moment a repo
+    /// releases two contracts together, and a collision here is a generated
+    /// file that does not compile.
+    /// @param vm The Vm instance for string operations.
+    /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @return The prefix, e.g. `AddressRegistry_0_1_7`.
+    function releasedConstantPrefix(Vm vm, string memory path) internal pure returns (string memory) {
+        return string.concat(contractForRecordPath(vm, path), "_", tagForRecordPath(vm, path));
+    }
+
+    /// Whether record file `a` is emitted before record file `b`: by release
+    /// tag, then by path.
+    ///
+    /// Tags compare as VERSIONS rather than as text — `0_10_0` follows `0_9_0`
+    /// as a release and precedes it as a string, so a text comparison misorders
+    /// every record that outlives a single-digit minor. Both tags are `isTag`,
+    /// so every component is a run of digits `parseUint` reads.
+    ///
+    /// The tie break is the path, byte for byte, so two contracts frozen under
+    /// one tag have an order at all. The walk's own order is the filesystem's,
+    /// and a generated file that changes with it is a diff on every build.
+    /// @param vm The Vm instance for string operations.
+    /// @param a A record file.
+    /// @param b A record file.
+    /// @return Whether `a` precedes `b`.
+    function recordPrecedes(Vm vm, string memory a, string memory b) internal pure returns (bool) {
+        string[] memory left = vm.split(tagForRecordPath(vm, a), "_");
+        string[] memory right = vm.split(tagForRecordPath(vm, b), "_");
+        for (uint256 i = 0; i < left.length; i++) {
+            uint256 leftComponent = vm.parseUint(left[i]);
+            uint256 rightComponent = vm.parseUint(right[i]);
+            if (leftComponent != rightComponent) {
+                return leftComponent < rightComponent;
+            }
+        }
+
+        bytes memory aBytes = bytes(a);
+        bytes memory bBytes = bytes(b);
+        uint256 shortest = aBytes.length < bBytes.length ? aBytes.length : bBytes.length;
+        for (uint256 i = 0; i < shortest; i++) {
+            if (aBytes[i] != bBytes[i]) {
+                return aBytes[i] < bBytes[i];
+            }
+        }
+        return aBytes.length < bBytes.length;
+    }
+
+    /// The record's files in the order they are emitted.
+    ///
+    /// An insertion sort, because a record is one directory per release and
+    /// nothing sorts a list that short faster than it takes to say so.
+    /// @param vm The Vm instance for string operations.
+    /// @param paths The record's files, in any order.
+    /// @return sorted The same files, in release order.
+    function sortedRecordPaths(Vm vm, string[] memory paths) internal pure returns (string[] memory sorted) {
+        sorted = new string[](paths.length);
+        for (uint256 i = 0; i < paths.length; i++) {
+            uint256 j = i;
+            while (j > 0 && recordPrecedes(vm, paths[i], sorted[j - 1])) {
+                sorted[j] = sorted[j - 1];
+                j--;
+            }
+            sorted[j] = paths[i];
+        }
+    }
+
+    /// The import block of a generated released-suites lib.
+    ///
+    /// One aliased import per record file, carrying all four consensus fields.
+    /// A released entry can therefore only say what its own frozen snapshot
+    /// says — there is no path by which a released address, code hash, creation
+    /// code or runtime code is written anywhere but into the immutable record.
+    /// @param vm The Vm instance for string operations.
+    /// @param paths The record's files, in the order they are emitted.
+    /// @return imports The import block.
+    function releasedImportBlock(Vm vm, string[] memory paths) internal pure returns (string memory imports) {
+        imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
+        for (uint256 i = 0; i < paths.length; i++) {
+            string memory prefix = releasedConstantPrefix(vm, paths[i]);
+            imports = string.concat(
+                imports,
+                "import {\n    DEPLOYED_ADDRESS as ",
+                prefix,
+                "_DEPLOYED_ADDRESS,\n    BYTECODE_HASH as ",
+                prefix,
+                "_BYTECODE_HASH,\n    CREATION_CODE as ",
+                prefix,
+                "_CREATION_CODE,\n    RUNTIME_CODE as ",
+                prefix,
+                "_RUNTIME_CODE\n} from \"../generated/",
+                tagForRecordPath(vm, paths[i]),
+                "/",
+                contractForRecordPath(vm, paths[i]),
+                ".sol\";\n\n"
+            );
+        }
+    }
+
+    /// The library block of a generated released-suites lib.
+    ///
+    /// Four fields per entry alias the frozen snapshot. The other three come
+    /// from `template`, the candidate declaration, and are regenerated from it
+    /// on every build: they are explorer and ordering metadata rather than
+    /// consensus, and preserving what a previous generation wrote would mean
+    /// parsing generated Solidity back in.
+    ///
+    /// The key is the template's with the tag appended, so every entry is
+    /// unique and `allSuites`'s duplicate check is satisfied by construction
+    /// rather than by whoever writes the declaration.
+    /// @param vm The Vm instance for string operations.
+    /// @param libraryName The generated library's name.
+    /// @param contractName The contract the released record describes.
+    /// @param paths The record's files, in the order they are emitted.
+    /// @param template The candidate declaration the metadata comes from.
+    /// @return The library block.
+    function releasedLibraryBlock(
+        Vm vm,
+        string memory libraryName,
+        string memory contractName,
+        string[] memory paths,
+        DeploySuite memory template
+    ) internal pure returns (string memory) {
+        string memory entries = "";
+        for (uint256 i = 0; i < paths.length; i++) {
+            string memory index = vm.toString(i);
+            string memory dependencies = string.concat("dependencies", index);
+            string memory prefix = releasedConstantPrefix(vm, paths[i]);
+
+            entries = string.concat(
+                entries,
+                "        address[] memory ",
+                dependencies,
+                " = new address[](",
+                vm.toString(template.dependencies.length),
+                ");\n"
+            );
+            for (uint256 j = 0; j < template.dependencies.length; j++) {
+                entries = string.concat(
+                    entries,
+                    "        ",
+                    dependencies,
+                    "[",
+                    vm.toString(j),
+                    "] = address(",
+                    vm.toString(template.dependencies[j]),
+                    ");\n"
+                );
+            }
+
+            entries = string.concat(
+                entries,
+                "        suites[",
+                index,
+                "] = DeploySuite({\n            suite: \"",
+                template.suite,
+                "@",
+                tagForRecordPath(vm, paths[i]),
+                "\",\n            creationCode: ",
+                prefix,
+                "_CREATION_CODE,\n            storedDeployedAddress: ",
+                prefix,
+                "_DEPLOYED_ADDRESS,\n            storedBytecodeHash: ",
+                prefix,
+                "_BYTECODE_HASH,\n            storedRuntimeCode: ",
+                prefix,
+                "_RUNTIME_CODE,\n            artifactPath: \"",
+                template.artifactPath,
+                "\",\n            dependencies: ",
+                dependencies,
+                "\n        });\n"
+            );
+        }
+
+        return string.concat(
+            "/// @title ",
+            libraryName,
+            "\n/// @notice Every frozen release of `",
+            contractName,
+            "`: one entry per file in\n",
+            "/// the append-only `src/generated/<tag>/` record, in tag order.\n///\n",
+            "/// The deploy address, code hash, creation code and runtime code of each\n",
+            "/// entry are aliased from that release's own frozen snapshot, so the\n",
+            "/// consensus record is read from the immutable file and from nowhere else.\n///\n",
+            "/// The key, the artifact path and the dependencies are explorer and ordering\n",
+            "/// metadata regenerated from the CURRENT declaration, and are not part of\n",
+            "/// that record. A moved source path retroactively updates every entry's\n",
+            "/// artifact path, which is intended: the alternative is parsing this\n",
+            "/// generated file back in to preserve what it last said.\nlibrary ",
+            libraryName,
+            " {\n    /// Every frozen release, in tag order.\n",
+            "    /// @return suites The released suites.\n",
+            "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n",
+            "        suites = new DeploySuite[](",
+            vm.toString(paths.length),
+            ");\n",
+            entries,
+            "    }\n}\n"
+        );
+    }
+
+    /// Generate the released-suites lib for a repo's frozen record: the
+    /// declaration of what this repo has released, emitted from the record
+    /// itself.
+    ///
+    /// The record and the declaration of it are produced by ONE call, so a
+    /// release that `src/generated/<tag>/` holds is a release `releasedSuites()`
+    /// names. A hand-written declaration is the one thing that can silently
+    /// drop a release out of every check there is — `RainDeployVerifySnapshot`
+    /// checks the declaration against the record precisely because nothing else
+    /// would notice, and generating both here is what makes that check pass by
+    /// construction rather than by remembering.
+    ///
+    /// Written beside the alias lib, under the same `Lib<Contract>` naming, so
+    /// all generated non-snapshot Solidity is in one directory.
+    ///
+    /// Four fields per entry come from the frozen snapshot and three from
+    /// `template`. Those three — the key, the artifact path and the
+    /// dependencies — are explorer and ordering metadata regenerated from the
+    /// CURRENT declaration on every build, NOT part of the frozen consensus
+    /// record. Moving a source file retroactively updates the artifact path of
+    /// every entry, including releases cut years ago, which is intended: the
+    /// alternative is parsing the previously generated Solidity back in to
+    /// preserve what it said.
+    /// @param vm The Vm instance for file operations.
+    /// @param contractName The contract the released record describes.
+    /// @param template The candidate declaration the metadata comes from.
+    /// @return The path written.
+    function writeReleasedSuitesLib(Vm vm, string memory contractName, DeploySuite memory template)
+        internal
+        returns (string memory)
+    {
+        string memory libraryName = string.concat("Lib", contractName, "Released");
+        string memory path = string.concat("src/lib/", libraryName, ".sol");
+        string[] memory paths = sortedRecordPaths(vm, frozenSnapshotPaths(vm, LIB_FS_ROOT));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(
+            path,
+            string.concat(
+                LibCodeGen.filePrefix(),
+                "\n",
+                releasedImportBlock(vm, paths),
+                releasedLibraryBlock(vm, libraryName, contractName, paths, template)
             )
         );
         return path;

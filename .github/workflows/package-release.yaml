@@ -6,10 +6,17 @@ name: Package Release
 # wrong for: autopublish bumps [package].version on every merge while the frozen
 # deploy tag only advances at deploy time.
 #
-# The tag names the version; rainix-tag-release regenerates the snapshot for it,
-# verifies the live chains match the fresh pins, publishes rain-deploy to
-# Soldeer, and commits the frozen snapshot back to main. The on-chain deploy is
-# separate and manual, run before tagging; this never broadcasts.
+# The tag names the version; rainix-tag-release runs `cutRelease()`, which
+# freezes src/generated/<tag>/ AND regenerates the released-suites lib that
+# declares it in one call, then verifies the live chains match the fresh pins,
+# publishes rain-deploy to Soldeer, and commits both back to main. One call,
+# because a frozen record no declaration names is a release every check silently
+# stops asking about.
+#
+# The on-chain deploy is separate and manual, run BEFORE tagging; this never
+# broadcasts. The chain verification inside rainix-tag-release is what fails if a
+# newly declared release is not on chain, and that is the intended gate: a
+# release is declared here only once it is a deployment that already happened.
 #
 # Switching lifecycles retracts nothing: every version already published stays
 # published, and consumers pin exact versions, so this changes who cuts a
@@ -23,5 +30,5 @@ jobs:
     uses: rainlanguage/rainix/.github/workflows/rainix-tag-release.yaml@main
     with:
       soldeer-package: rain-deploy
-      snapshot-generate-cmd: forge script ./script/Build.sol && forge fmt
+      snapshot-generate-cmd: forge script ./script/Build.sol --sig "cutRelease()" && forge fmt
     secrets: inherit
