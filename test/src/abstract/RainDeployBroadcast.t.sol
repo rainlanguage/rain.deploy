@@ -37,7 +37,7 @@ contract RainDeployBroadcastTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "address-registry",
-                "address-registry-0-0-1, second-address, address-registry-candidate"
+                "address-registry-0-0-1, second-address, address-registry-candidate, second-address-candidate"
             )
         );
         sDeploy.run();
@@ -53,7 +53,7 @@ contract RainDeployBroadcastTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "",
-                "address-registry-0-0-1, second-address, address-registry-candidate"
+                "address-registry-0-0-1, second-address, address-registry-candidate, second-address-candidate"
             )
         );
         sDeploy.run();
