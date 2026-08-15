@@ -185,10 +185,10 @@ library supplies the fork loop and the comparison.
 ## Migration registry
 
 `MigrationRegistry` records that a migration has been applied, and when: a
-writer records one of its own onto the migration it believes ran last
-(`record`), anyone reads when a given writer recorded a given one (`applied`),
-and anyone reads where a given writer's sequence has got to (`head`). There is
-no removal and no upgrade.
+writer applies one of its own onto the migration it believes ran last
+(`applyMigration`), anyone reads when a given writer applied a given one
+(`applied`), and anyone reads where a given writer's sequence has got to
+(`head`). There is no removal and no upgrade.
 
 It exists because prod-state tests otherwise decide what to assert by reading
 the **clock**. The pattern that emerges without it is a dual-state invariant —
@@ -229,34 +229,35 @@ the ordering between migrations moves into the assertion —
 dependency actually lives.
 
 **A head, so a step cannot be skipped or repeated.** A namespace has a head: the
-migration it recorded most recently, or `MIGRATION_HEAD_GENESIS` if it has
-recorded none. `record` names the head it is applying onto, so a chain that
-never got the predecessor fails at the moment of applying rather than diverging
-silently, and two migrations dispatched at once cannot land in the wrong order.
+migration it applied most recently, or `MIGRATION_HEAD_GENESIS` if it has
+applied none. `applyMigration` names the head it is applying onto, so a chain
+that never got the predecessor fails at the moment of applying rather than
+diverging silently, and two migrations dispatched at once cannot land in the
+wrong order.
 
 ```solidity
 // The first migration in a namespace.
-LibMigrationRegistry.record(MIGRATION_HEAD_GENESIS, MIGRATION_V1);
+LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, MIGRATION_V1);
 // Every later one names its predecessor.
-LibMigrationRegistry.record(MIGRATION_V1, MIGRATION_V2);
+LibMigrationRegistry.applyMigration(MIGRATION_V1, MIGRATION_V2);
 ```
 
 Genesis is deliberately **not zero**. Zero is what an uninitialised `bytes32`
 constant reads as, and a zero genesis would make a mis-set predecessor constant
-a _successful_ first record on any namespace that happens to be empty — the
+a _successful_ first application on any namespace that happens to be empty — the
 state of every chain that has not been migrated yet, which is exactly where such
 a mistake is most likely. A nonzero genesis makes it a revert everywhere.
 
 The head does **not** replace the per-migration refusal, and both are kept.
-Re-recording a migration whose successor has landed names a head that matches
-perfectly; without `MigrationAlreadyRecorded` it would drag the head backwards
+Re-applying a migration whose successor has landed names a head that matches
+perfectly; without `MigrationAlreadyApplied` it would drag the head backwards
 and overwrite the original timestamp, which is a record un-happening. The two
 answer different questions — the head is _where in the sequence_, the record is
 _whether at all_.
 
 One namespace on one chain is therefore one linear sequence. Two unrelated sets
 of migrations applied from the same account interleave into one chain of heads,
-so a consumer that wants two independent sequences records them from two
+so a consumer that wants two independent sequences applies them from two
 accounts — the same lever that already decides who a reader trusts.
 
 **The namespace is `msg.sender`, and that is the whole access control.** Anyone
@@ -275,11 +276,11 @@ say the invariant holds — a multisig can act out of band and nothing here move
 Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
-`LibMigrationRegistry` is the surface — `applied`, `head` and `record`, all
-verifying the registry's code hash first. There is deliberately **no broadcast
-runner**: the dominant real shape is a Safe executing a bundle that never
-broadcasts, and such a script appends `record` to the bundle it is already
-emitting, which makes the record atomic with the migration it describes.
+`LibMigrationRegistry` is the surface — `applied`, `head` and `applyMigration`,
+all verifying the registry's code hash first. There is deliberately **no
+broadcast runner**: the dominant real shape is a Safe executing a bundle that
+never broadcasts, and such a script appends `applyMigration` to the bundle it is
+already emitting, which makes the record atomic with the migration it describes.
 
 ## Deploying, and then releasing
 

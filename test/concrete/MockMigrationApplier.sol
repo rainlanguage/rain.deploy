@@ -4,10 +4,10 @@ pragma solidity =0.8.25;
 
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
 
-/// @title MockMigrationRecorder
-/// @notice A consumer in the shape `LibMigrationRegistry.record` is designed
-/// for: it calls the library and nothing else, so the record lands under THIS
-/// contract's address.
+/// @title MockMigrationApplier
+/// @notice A consumer in the shape `LibMigrationRegistry.applyMigration` is
+/// designed for: it calls the library and nothing else, so the record lands
+/// under THIS contract's address.
 ///
 /// It exists so the namespace can be exercised as the property it is. The
 /// library's functions are `internal` and inline into whatever executes them,
@@ -18,20 +18,20 @@ import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
 /// asserted about a single account.
 ///
 /// Two of them are also two heads, which is what makes "one namespace is one
-/// sequence" checkable at all: nothing about one recorder's head can be shown
+/// sequence" checkable at all: nothing about one applier's head can be shown
 /// to leave the other's alone from inside a single namespace.
-contract MockMigrationRecorder {
-    /// Records `migration` under this contract, onto `expectedHead`.
+contract MockMigrationApplier {
+    /// Applies `migration` under this contract, onto `expectedHead`.
     /// @param expectedHead The head this contract believes it is at.
-    /// @param migration The migration to record.
-    function record(bytes32 expectedHead, bytes32 migration) external {
-        LibMigrationRegistry.record(expectedHead, migration);
+    /// @param migration The migration to apply.
+    function applyMigration(bytes32 expectedHead, bytes32 migration) external {
+        LibMigrationRegistry.applyMigration(expectedHead, migration);
     }
 
-    /// When `writer` recorded `migration`.
+    /// When `writer` applied `migration`.
     /// @param writer The namespace to read.
     /// @param migration The migration to ask about.
-    /// @return The timestamp it was recorded at, or zero.
+    /// @return The timestamp it was applied at, or zero.
     function applied(address writer, bytes32 migration) external view returns (uint256) {
         return LibMigrationRegistry.applied(writer, migration);
     }

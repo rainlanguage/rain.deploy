@@ -5,9 +5,9 @@ pragma solidity =0.8.25;
 import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV1.sol";
 
 /// @title MigrationRegistry
-/// @notice The whole of `IMigrationRegistryV1`: a writer records one of its own
+/// @notice The whole of `IMigrationRegistryV1`: a writer applies one of its own
 /// migrations onto the head it believes its namespace is at, and anyone reads
-/// when a given writer recorded a given migration, or where that writer's
+/// when a given writer applied a given migration, or where that writer's
 /// namespace has got to.
 ///
 /// There is deliberately nothing else. No removal, no upgrade, no pause, and no
@@ -35,17 +35,17 @@ import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../interface/IMigrat
 /// on a chain.
 ///
 /// A record is append-only per writer, and a head only ever moves forward onto
-/// something new. `record` refuses a migration the caller has already recorded,
-/// which is what makes re-running a migration fail rather than repeat, and
-/// refuses one applied onto anything but the namespace's current head, which is
-/// what makes a skipped or out-of-order migration fail rather than diverge.
+/// something new. `applyMigration` refuses a migration the caller has already
+/// applied, which is what makes re-running a migration fail rather than repeat,
+/// and refuses one applied onto anything but the namespace's current head, which
+/// is what makes a skipped or out-of-order migration fail rather than diverge.
 /// There is no way to unrecord one — a record describes something that happened,
 /// and nothing that happened stops having happened.
 ///
 /// Neither storage mapping is `public`. `applied` and `head` refuse the zero
 /// writer, `applied` refuses the two ids a migration can never be, and a public
 /// mapping's generated getter would answer all of them with zero — which for
-/// `applied` is "not recorded" and for `head` is a value no head can ever hold,
+/// `applied` is "not applied" and for `head` is a value no head can ever hold,
 /// i.e. exactly the silent wrong-branch this contract reverts to prevent.
 contract MigrationRegistry is IMigrationRegistryV1 {
     /// When each record landed, namespaced by writer. Zero means never. Not
@@ -53,38 +53,27 @@ contract MigrationRegistry is IMigrationRegistryV1 {
     /// can only be mistakes.
     mapping(address writer => mapping(bytes32 migration => uint256 appliedAt)) internal sApplied;
 
-    /// The most recent migration recorded under each writer. Zero means the
+    /// The most recent migration applied under each writer. Zero means the
     /// namespace is empty, which reads out as `MIGRATION_HEAD_GENESIS` — the
-    /// only place that translation happens is `readHead`, so no reader and no
+    /// only place that translation happens is `head`, so no reader and no
     /// writer can disagree about where an empty namespace is. Not `public`, for
     /// the same reason as the records: the untranslated zero is not a head.
     mapping(address writer => bytes32 head) internal sHead;
-
-    /// The head of `writer`'s namespace, with an empty namespace translated to
-    /// genesis. One function, because `record` compares against it and `head`
-    /// returns it, and the two cannot be allowed to drift into different ideas
-    /// of where a namespace that has recorded nothing is.
-    /// @param writer The namespace to read.
-    /// @return The head. Never zero.
-    function readHead(address writer) internal view returns (bytes32) {
-        bytes32 recordedHead = sHead[writer];
-        return recordedHead == bytes32(0) ? MIGRATION_HEAD_GENESIS : recordedHead;
-    }
 
     /// @inheritdoc IMigrationRegistryV1
     /// @dev The refusals run caller-input first and environment last: the two
     /// that describe a mistake in the call are true whatever block this lands
     /// in, so they are what a caller is told about first.
-    function record(bytes32 expectedHead, bytes32 migration) external {
+    function applyMigration(bytes32 expectedHead, bytes32 migration) external {
         // Checked before everything else, so an uninitialised id is reported as
         // the mistake it is rather than as a first record of zero.
         if (migration == bytes32(0)) {
             revert ZeroMigration();
         }
-        // Genesis is a head, not a migration. Recording it would leave `sHead`
+        // Genesis is a head, not a migration. Applying it would leave `sHead`
         // holding the value an empty namespace reads as, so a namespace that had
-        // recorded something would be at a head indistinguishable from one that
-        // had recorded nothing — and the next first-migration script would be
+        // applied something would be at a head indistinguishable from one that
+        // had applied nothing — and the next first-migration script would be
         // accepted against it.
         if (migration == MIGRATION_HEAD_GENESIS) {
             revert GenesisMigration();
@@ -92,26 +81,26 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         // There is deliberately no zero-writer case here. `msg.sender` cannot
         // be the zero address, so the zero namespace is unreachable for writes
         // and a guard on it would be unreachable code pretending to be a check.
-        // Nor is there a zero-head case: a head is either genesis or a recorded
+        // Nor is there a zero-head case: a head is either genesis or an applied
         // id, both nonzero, so a zero `expectedHead` can never match and is
         // already refused below, by an error that names the zero it was handed.
 
         // Checked before the head, because a migration that has already run has
         // already run whatever the head is, and that is the more useful thing to
         // say to a re-dispatched script. It is also not implied by the head
-        // check: re-recording a migration whose successor has landed presents a
+        // check: re-applying a migration whose successor has landed presents a
         // matching head, and would drag the head backwards and overwrite the
         // original timestamp.
         if (sApplied[msg.sender][migration] != 0) {
-            revert MigrationAlreadyRecorded(msg.sender, migration);
+            revert MigrationAlreadyApplied(msg.sender, migration);
         }
-        bytes32 actualHead = readHead(msg.sender);
+        bytes32 actualHead = head(msg.sender);
         if (expectedHead != actualHead) {
             revert UnexpectedMigrationHead(msg.sender, expectedHead, actualHead);
         }
         // A zero timestamp is the one value a record cannot carry: `applied`
-        // would answer it as "never recorded" while the head had moved and the
-        // migration could never be recorded again. Not unreachable — a test can
+        // would answer it as "never applied" while the head had moved and the
+        // migration could never be applied again. Not unreachable — a test can
         // warp to zero and a chain can be configured from a zero genesis — so
         // this is a real check rather than a decorative one.
         //
@@ -140,8 +129,8 @@ contract MigrationRegistry is IMigrationRegistryV1 {
     /// @inheritdoc IMigrationRegistryV1
     /// @dev All three refusals are about a caller that has not supplied what it
     /// thinks it has. None can ever be a real record: nothing originates from
-    /// the zero address, and `record` will write neither the zero id nor the
-    /// genesis one — so answering zero for any of them would be answering a
+    /// the zero address, and `applyMigration` will write neither the zero id nor
+    /// the genesis one — so answering zero for any of them would be answering a
     /// question the caller did not mean to ask, and answering it with the value
     /// that sends it down its pre-migration branch.
     function applied(address writer, bytes32 migration) external view returns (uint256) {
@@ -162,10 +151,22 @@ contract MigrationRegistry is IMigrationRegistryV1 {
     /// provably empty forever, so "a namespace nothing has been applied to" is a
     /// true statement about it and a false one about what the caller meant to
     /// ask, which would send a first migration at it.
-    function head(address writer) external view returns (bytes32) {
+    ///
+    /// The empty-namespace zero is translated to genesis here and nowhere else,
+    /// which is why this is one `public` function rather than a reader beside an
+    /// internal helper: `applyMigration` compares against exactly what a caller
+    /// reads, so the two cannot drift into different ideas of where a namespace
+    /// that has applied nothing is.
+    ///
+    /// `applyMigration` reaches it as `head(msg.sender)`, which can never be the
+    /// zero address, so the refusal is redundant on that path. It is one
+    /// function, so it is one refusal, and the reachable path is the one it is
+    /// there for.
+    function head(address writer) public view returns (bytes32) {
         if (writer == address(0)) {
             revert ZeroWriter();
         }
-        return readHead(writer);
+        bytes32 storedHead = sHead[writer];
+        return storedHead == bytes32(0) ? MIGRATION_HEAD_GENESIS : storedHead;
     }
 }

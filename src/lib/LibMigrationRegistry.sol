@@ -13,8 +13,8 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// a chain the caller has not audited; the address plus the code hash says the
 /// caller is talking to the registry it compiled against.
 ///
-/// That is the whole library. It answers when a writer recorded a migration and
-/// where that writer's namespace has got to, and it records one under the
+/// That is the whole library. It answers when a writer applied a migration and
+/// where that writer's namespace has got to, and it applies one under the
 /// caller. Which writer a test trusts, which invariant each answer selects, and
 /// how an id is derived are entirely the consumer's business and none of this
 /// library's.
@@ -24,13 +24,13 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// `LibRainDeploy` wraps broadcasting because a deploy is always a broadcast.
 /// A migration is not: the dominant real shape is a Safe executing a bundle,
 /// where the script emits transactions for the multisig to sign and never
-/// broadcasts anything itself. Such a script appends `record` to the bundle it
-/// is already emitting, which is what makes the record atomic with the
+/// broadcasts anything itself. Such a script appends `applyMigration` to the
+/// bundle it is already emitting, which is what makes the record atomic with the
 /// migration it describes — a property no runner in this library could offer,
 /// and one a runner would quietly compete with.
 ///
-/// So `record` is an ordinary call. A broadcasting EOA script wraps it in its
-/// own `vm.startBroadcast`, a Safe bundle appends it, and a test calls it
+/// So `applyMigration` is an ordinary call. A broadcasting EOA script wraps it
+/// in its own `vm.startBroadcast`, a Safe bundle appends it, and a test calls it
 /// directly; none of those is privileged over the others here.
 ///
 /// ## Reading is what this is for
@@ -59,9 +59,10 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 ///
 /// ## Writing names the head it is applying onto
 ///
-/// `record` takes the migration the caller believes ran last in its namespace,
-/// so a chain that never got that predecessor refuses the write instead of
-/// silently skipping a step, and two migrations dispatched at once cannot land
+/// `applyMigration` takes the migration the caller believes ran last in its
+/// namespace, so a chain that never got that predecessor refuses the write
+/// instead of silently skipping a step, and two migrations dispatched at once
+/// cannot land
 /// in the wrong order. The first migration in a namespace names
 /// `MIGRATION_HEAD_GENESIS`, imported from the interface — never a zero, which
 /// is what an uninitialised constant would be and is refused everywhere.
@@ -99,7 +100,7 @@ library LibMigrationRegistry {
         }
     }
 
-    /// When `writer` recorded `migration`, or zero if it never did.
+    /// When `writer` applied `migration`, or zero if it never did.
     ///
     /// Verifies the registry's code hash before reading, so a chain where the
     /// registry is absent, or where something else occupies its address, is a
@@ -116,7 +117,7 @@ library LibMigrationRegistry {
     /// caller trusts. Never the zero address.
     /// @param migration The migration to ask about. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @return The block timestamp `writer` recorded `migration` at, or zero if
+    /// @return The block timestamp `writer` applied `migration` at, or zero if
     /// it has not.
     function applied(address writer, bytes32 migration) internal view returns (uint256) {
         checkCodeHash();
@@ -125,8 +126,8 @@ library LibMigrationRegistry {
                 .applied(writer, migration);
     }
 
-    /// The migration `writer` recorded most recently, or `MIGRATION_HEAD_GENESIS`
-    /// if it has never recorded one.
+    /// The migration `writer` applied most recently, or `MIGRATION_HEAD_GENESIS`
+    /// if it has never applied one.
     ///
     /// Verifies the registry's code hash first for the same reason `applied`
     /// does, and more sharply: a call into an empty account returns nothing,
@@ -140,33 +141,33 @@ library LibMigrationRegistry {
         return IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS).head(writer);
     }
 
-    /// Records `migration` under the CALLER's namespace, onto `expectedHead`.
+    /// Applies `migration` under the CALLER's namespace, onto `expectedHead`.
     ///
     /// The caller is whoever the resulting transaction is sent from — a Safe
     /// executing a bundle, a broadcasting EOA, a timelock — and that account is
     /// the namespace the record lands in. A reader has to ask about that same
-    /// account, so which account a migration is recorded from is a decision
+    /// account, so which account a migration is applied from is a decision
     /// with a consequence rather than an implementation detail. It is also the
-    /// account whose head this moves, so two unrelated sequences recorded from
+    /// account whose head this moves, so two unrelated sequences applied from
     /// one account interleave into one chain.
     ///
     /// Verifies the registry's code hash before writing, so a migration is
-    /// never "recorded" into an empty address or into unknown code. A record
+    /// never "applied" into an empty address or into unknown code. A record
     /// that went nowhere is worse than no record at all: the migration would
     /// have run, and every reader would go on asserting the pre-migration
     /// state.
     ///
     /// The registry refuses the zero id, refuses a migration this caller has
-    /// already recorded, and refuses one applied onto anything but the
+    /// already applied, and refuses one applied onto anything but the
     /// namespace's actual head — which between them make a re-dispatched, a
     /// skipped and an out-of-order migration all fail rather than land.
-    /// @param expectedHead The migration the caller believes it recorded last,
+    /// @param expectedHead The migration the caller believes it applied last,
     /// or `MIGRATION_HEAD_GENESIS` for the first in this namespace.
-    /// @param migration The migration to record. Never zero, never
+    /// @param migration The migration to apply. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    function record(bytes32 expectedHead, bytes32 migration) internal {
+    function applyMigration(bytes32 expectedHead, bytes32 migration) internal {
         checkCodeHash();
         IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .record(expectedHead, migration);
+            .applyMigration(expectedHead, migration);
     }
 }

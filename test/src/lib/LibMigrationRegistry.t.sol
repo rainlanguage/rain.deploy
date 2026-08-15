@@ -8,7 +8,7 @@ import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryD
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV1.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
-import {MockMigrationRecorder} from "../../concrete/MockMigrationRecorder.sol";
+import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
 
 /// @title LibMigrationRegistryTest
 /// Tests for `LibMigrationRegistry`. The registry is not mocked: the real
@@ -38,7 +38,7 @@ contract LibMigrationRegistryTest is Test {
     /// correct call depth.
     /// @param writer The namespace to read.
     /// @param migration The migration to ask about.
-    /// @return When `writer` recorded `migration`, or zero.
+    /// @return When `writer` applied `migration`, or zero.
     function externalApplied(address writer, bytes32 migration) external view returns (uint256) {
         return LibMigrationRegistry.applied(writer, migration);
     }
@@ -51,12 +51,12 @@ contract LibMigrationRegistryTest is Test {
         return LibMigrationRegistry.head(writer);
     }
 
-    /// External wrapper for `record` so that `vm.expectRevert` works at the
-    /// correct call depth.
+    /// External wrapper for `applyMigration` so that `vm.expectRevert` works at
+    /// the correct call depth.
     /// @param expectedHead The head this contract believes it is at.
-    /// @param migration The migration to record.
-    function externalRecord(bytes32 expectedHead, bytes32 migration) external {
-        LibMigrationRegistry.record(expectedHead, migration);
+    /// @param migration The migration to apply.
+    function externalApplyMigration(bytes32 expectedHead, bytes32 migration) external {
+        LibMigrationRegistry.applyMigration(expectedHead, migration);
     }
 
     /// The Zoltu deploy really does land the registry on its pinned address
@@ -72,11 +72,11 @@ contract LibMigrationRegistryTest is Test {
         );
     }
 
-    /// An unrecorded migration answers zero. This is the branch a caller
+    /// An unapplied migration answers zero. This is the branch a caller
     /// asserts the pre-migration state in, and it is the ordinary state of
     /// every migration that has not run, so it is an answer rather than a
     /// revert.
-    function testAppliedUnrecordedIsZero(address writer, bytes32 migration) external {
+    function testAppliedUnappliedIsZero(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
         assumeMigration(migration);
         deployRegistry();
@@ -84,20 +84,21 @@ contract LibMigrationRegistryTest is Test {
         assertEq(LibMigrationRegistry.applied(writer, migration), 0);
     }
 
-    /// A recorded migration answers the moment it was recorded — read back
-    /// through the library, so what `record` writes is what `applied` finds.
-    function testRecordThenApplied(bytes32 migration, uint32 recordedAt) external {
+    /// An applied migration answers the moment it was applied — read back
+    /// through the library, so what `applyMigration` writes is what `applied`
+    /// finds.
+    function testApplyMigrationThenApplied(bytes32 migration, uint32 appliedAt) external {
         assumeMigration(migration);
-        vm.assume(recordedAt != 0);
+        vm.assume(appliedAt != 0);
         deployRegistry();
-        vm.warp(recordedAt);
+        vm.warp(appliedAt);
 
-        LibMigrationRegistry.record(MIGRATION_HEAD_GENESIS, migration);
+        LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
 
-        assertEq(LibMigrationRegistry.applied(address(this), migration), recordedAt);
+        assertEq(LibMigrationRegistry.applied(address(this), migration), appliedAt);
     }
 
-    /// A namespace that has recorded nothing reads back as genesis, and each
+    /// A namespace that has applied nothing reads back as genesis, and each
     /// record moves the head to itself. This is the value the next migration
     /// has to name, so it is read through the library rather than assumed.
     function testHeadFollowsTheRecords(bytes32 migrationA, bytes32 migrationB) external {
@@ -108,17 +109,17 @@ contract LibMigrationRegistryTest is Test {
 
         assertEq(LibMigrationRegistry.head(address(this)), MIGRATION_HEAD_GENESIS);
 
-        LibMigrationRegistry.record(MIGRATION_HEAD_GENESIS, migrationA);
+        LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA);
         assertEq(LibMigrationRegistry.head(address(this)), migrationA);
 
-        LibMigrationRegistry.record(migrationA, migrationB);
+        LibMigrationRegistry.applyMigration(migrationA, migrationB);
         assertEq(LibMigrationRegistry.head(address(this)), migrationB);
     }
 
     /// A migration applied onto a head this namespace is not at is refused, and
     /// the registry's own revert arrives unmodified. This is a skipped step
     /// failing at the moment of applying rather than a chain quietly diverging.
-    function testRecordSkippedPredecessorReverts(bytes32 migration, bytes32 skipped) external {
+    function testApplyMigrationSkippedPredecessorReverts(bytes32 migration, bytes32 skipped) external {
         assumeMigration(migration);
         assumeMigration(skipped);
         deployRegistry();
@@ -128,7 +129,7 @@ contract LibMigrationRegistryTest is Test {
                 IMigrationRegistryV1.UnexpectedMigrationHead.selector, address(this), skipped, MIGRATION_HEAD_GENESIS
             )
         );
-        this.externalRecord(skipped, migration);
+        this.externalApplyMigration(skipped, migration);
 
         assertEq(LibMigrationRegistry.applied(address(this), migration), 0);
     }
@@ -138,14 +139,14 @@ contract LibMigrationRegistryTest is Test {
     /// the registry sees that caller as `msg.sender` — which means a consumer
     /// chooses its namespace by choosing what sends the transaction, and cannot
     /// write anybody else's.
-    function testRecordLandsUnderTheCallingContract(bytes32 migration) external {
+    function testApplyMigrationLandsUnderTheCallingContract(bytes32 migration) external {
         assumeMigration(migration);
         deployRegistry();
-        MockMigrationRecorder recorder = new MockMigrationRecorder();
+        MockMigrationApplier applier = new MockMigrationApplier();
 
-        recorder.record(MIGRATION_HEAD_GENESIS, migration);
+        applier.applyMigration(MIGRATION_HEAD_GENESIS, migration);
 
-        assertEq(LibMigrationRegistry.applied(address(recorder), migration), block.timestamp);
+        assertEq(LibMigrationRegistry.applied(address(applier), migration), block.timestamp);
         assertEq(LibMigrationRegistry.applied(address(this), migration), 0);
     }
 
@@ -153,49 +154,51 @@ contract LibMigrationRegistryTest is Test {
     /// for itself — heads included, so one consumer's sequence neither blocks
     /// nor unblocks another's. This is the whole of the access control: a
     /// reader's choice of writer is the whole of who it trusts.
-    function testRecordDoesNotReachAnotherNamespace(bytes32 migration) external {
+    function testApplyMigrationDoesNotReachAnotherNamespace(bytes32 migration) external {
         assumeMigration(migration);
         deployRegistry();
-        MockMigrationRecorder recorder = new MockMigrationRecorder();
-        MockMigrationRecorder other = new MockMigrationRecorder();
+        MockMigrationApplier applier = new MockMigrationApplier();
+        MockMigrationApplier other = new MockMigrationApplier();
 
-        recorder.record(MIGRATION_HEAD_GENESIS, migration);
+        applier.applyMigration(MIGRATION_HEAD_GENESIS, migration);
 
-        assertEq(other.applied(address(recorder), migration), block.timestamp);
+        assertEq(other.applied(address(applier), migration), block.timestamp);
         assertEq(other.applied(address(other), migration), 0);
-        assertEq(other.head(address(recorder)), migration);
+        assertEq(other.head(address(applier)), migration);
         assertEq(other.head(address(other)), MIGRATION_HEAD_GENESIS);
     }
 
-    /// Recording the same migration twice is refused, and the registry's own
+    /// Applying the same migration twice is refused, and the registry's own
     /// revert arrives unmodified — the library adds no handling of its own, so
     /// a re-dispatched migration fails naming the writer and the id.
-    function testRecordTwiceReverts(bytes32 migration) external {
+    function testApplyMigrationTwiceReverts(bytes32 migration) external {
         assumeMigration(migration);
         deployRegistry();
 
-        LibMigrationRegistry.record(MIGRATION_HEAD_GENESIS, migration);
+        LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV1.MigrationAlreadyRecorded.selector, address(this), migration)
+            abi.encodeWithSelector(IMigrationRegistryV1.MigrationAlreadyApplied.selector, address(this), migration)
         );
-        this.externalRecord(MIGRATION_HEAD_GENESIS, migration);
+        this.externalApplyMigration(MIGRATION_HEAD_GENESIS, migration);
     }
 
-    /// The registry's zero-id refusal arrives unmodified through `record`.
-    function testRecordZeroMigrationReverts() external {
+    /// The registry's zero-id refusal arrives unmodified through
+    /// `applyMigration`.
+    function testApplyMigrationZeroMigrationReverts() external {
         deployRegistry();
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
-        this.externalRecord(MIGRATION_HEAD_GENESIS, bytes32(0));
+        this.externalApplyMigration(MIGRATION_HEAD_GENESIS, bytes32(0));
     }
 
-    /// The registry's genesis-id refusal arrives unmodified through `record`.
-    function testRecordGenesisMigrationReverts() external {
+    /// The registry's genesis-id refusal arrives unmodified through
+    /// `applyMigration`.
+    function testApplyMigrationGenesisMigrationReverts() external {
         deployRegistry();
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
-        this.externalRecord(MIGRATION_HEAD_GENESIS, MIGRATION_HEAD_GENESIS);
+        this.externalApplyMigration(MIGRATION_HEAD_GENESIS, MIGRATION_HEAD_GENESIS);
     }
 
     /// The registry's zero-writer refusal arrives unmodified through `applied`.
@@ -269,11 +272,11 @@ contract LibMigrationRegistryTest is Test {
         this.externalHead(writer);
     }
 
-    /// Writing to a chain with no registry is refused for the mirror reason: a
-    /// `record` into an empty account is a migration that reports itself
-    /// recorded and is not, which leaves every reader asserting the
+    /// Writing to a chain with no registry is refused for the mirror reason: an
+    /// `applyMigration` into an empty account is a migration that reports itself
+    /// applied and is not, which leaves every reader asserting the
     /// pre-migration state forever.
-    function testRecordNoRegistry(bytes32 expectedHead, bytes32 migration) external {
+    function testApplyMigrationNoRegistry(bytes32 expectedHead, bytes32 migration) external {
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
 
         vm.expectRevert(
@@ -283,7 +286,7 @@ contract LibMigrationRegistryTest is Test {
                 bytes32(0)
             )
         );
-        this.externalRecord(expectedHead, migration);
+        this.externalApplyMigration(expectedHead, migration);
     }
 
     /// A chain where something other than the pinned registry occupies the
@@ -320,8 +323,8 @@ contract LibMigrationRegistryTest is Test {
         this.externalHead(writer);
     }
 
-    /// And never recorded into it either.
-    function testRecordWrongCode(bytes32 expectedHead, bytes32 migration, bytes memory code) external {
+    /// And never applied into it either.
+    function testApplyMigrationWrongCode(bytes32 expectedHead, bytes32 migration, bytes memory code) external {
         vm.assume(code.length > 0);
         vm.assume(keccak256(code) != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH);
         vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
@@ -333,6 +336,6 @@ contract LibMigrationRegistryTest is Test {
                 keccak256(code)
             )
         );
-        this.externalRecord(expectedHead, migration);
+        this.externalApplyMigration(expectedHead, migration);
     }
 }

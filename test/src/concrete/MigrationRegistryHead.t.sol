@@ -10,7 +10,7 @@ import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 /// @title MigrationRegistryHeadTest
 /// @notice A test suite for `MigrationRegistry.head`: where a namespace is, what
 /// an empty one answers, that the answer is never a value that is not a head,
-/// and that it is the same answer `record` checks against.
+/// and that it is the same answer `applyMigration` checks against.
 contract MigrationRegistryHeadTest is Test {
     /// The registry under test. Stateful, so a fresh one per test.
     MigrationRegistry internal sRegistry;
@@ -26,8 +26,8 @@ contract MigrationRegistryHeadTest is Test {
         vm.assume(migration != MIGRATION_HEAD_GENESIS);
     }
 
-    /// A namespace that has recorded nothing is at genesis, which is an ANSWER
-    /// rather than a revert for the same reason an unrecorded migration answers
+    /// A namespace that has applied nothing is at genesis, which is an ANSWER
+    /// rather than a revert for the same reason an unapplied migration answers
     /// zero: it is the ordinary state of every namespace before its first
     /// migration, and of every namespace on a chain that never got one.
     function testHeadEmptyNamespaceIsGenesis(address writer) external view {
@@ -44,7 +44,7 @@ contract MigrationRegistryHeadTest is Test {
         assertTrue(MIGRATION_HEAD_GENESIS != bytes32(0));
     }
 
-    /// The head is the migration recorded most recently, and it moves with each
+    /// The head is the migration applied most recently, and it moves with each
     /// one.
     function testHeadFollowsTheRecords(address writer, bytes32 migrationA, bytes32 migrationB) external {
         vm.assume(writer != address(0));
@@ -53,11 +53,11 @@ contract MigrationRegistryHeadTest is Test {
         vm.assume(migrationA != migrationB);
 
         vm.prank(writer);
-        sRegistry.record(MIGRATION_HEAD_GENESIS, migrationA);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA);
         assertEq(sRegistry.head(writer), migrationA);
 
         vm.prank(writer);
-        sRegistry.record(migrationA, migrationB);
+        sRegistry.applyMigration(migrationA, migrationB);
         assertEq(sRegistry.head(writer), migrationB);
     }
 
@@ -70,17 +70,17 @@ contract MigrationRegistryHeadTest is Test {
         assumeMigration(migration);
 
         vm.prank(writer);
-        sRegistry.record(MIGRATION_HEAD_GENESIS, migration);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
 
         assertEq(sRegistry.head(writer), migration);
         assertEq(sRegistry.head(other), MIGRATION_HEAD_GENESIS);
     }
 
-    /// The head `head` reports is exactly the head `record` demands: whatever
-    /// this answers is accepted, and it is the only value that is. The two go
-    /// through one translation of an empty namespace, so they cannot disagree
-    /// about where one is.
-    function testHeadIsWhatRecordAccepts(address writer, bytes32 migrationA, bytes32 migrationB) external {
+    /// The head `head` reports is exactly the head `applyMigration` demands:
+    /// whatever this answers is accepted, and it is the only value that is. The
+    /// two go through one translation of an empty namespace, so they cannot
+    /// disagree about where one is.
+    function testHeadIsWhatApplyMigrationAccepts(address writer, bytes32 migrationA, bytes32 migrationB) external {
         vm.assume(writer != address(0));
         assumeMigration(migrationA);
         assumeMigration(migrationB);
@@ -90,11 +90,11 @@ contract MigrationRegistryHeadTest is Test {
         // head is a call.
         bytes32 headBeforeA = sRegistry.head(writer);
         vm.prank(writer);
-        sRegistry.record(headBeforeA, migrationA);
+        sRegistry.applyMigration(headBeforeA, migrationA);
 
         bytes32 headBeforeB = sRegistry.head(writer);
         vm.prank(writer);
-        sRegistry.record(headBeforeB, migrationB);
+        sRegistry.applyMigration(headBeforeB, migrationB);
 
         assertEq(sRegistry.head(writer), migrationB);
         assertEq(sRegistry.applied(writer, migrationA), block.timestamp);
@@ -117,7 +117,7 @@ contract MigrationRegistryHeadTest is Test {
         assumeMigration(migration);
 
         vm.prank(writer);
-        sRegistry.record(MIGRATION_HEAD_GENESIS, migration);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
         sRegistry.head(address(0));
@@ -135,15 +135,15 @@ contract MigrationRegistryHeadTest is Test {
         assertTrue(sRegistry.head(writer) != bytes32(0));
 
         vm.prank(writer);
-        sRegistry.record(MIGRATION_HEAD_GENESIS, migration);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
 
         assertTrue(sRegistry.head(writer) != bytes32(0));
     }
 
-    /// A refused record leaves the head where it was. The head moves only for a
-    /// migration that was actually recorded, so it can never describe a step
+    /// A refused apply leaves the head where it was. The head moves only for a
+    /// migration that was actually applied, so it can never describe a step
     /// that did not happen.
-    function testHeadUnmovedByRefusedRecord(address writer, bytes32 migration, bytes32 wrongHead) external {
+    function testHeadUnmovedByRefusedApplyMigration(address writer, bytes32 migration, bytes32 wrongHead) external {
         vm.assume(writer != address(0));
         assumeMigration(migration);
         assumeMigration(wrongHead);
@@ -155,7 +155,7 @@ contract MigrationRegistryHeadTest is Test {
             )
         );
         vm.prank(writer);
-        sRegistry.record(wrongHead, migration);
+        sRegistry.applyMigration(wrongHead, migration);
 
         assertEq(sRegistry.head(writer), MIGRATION_HEAD_GENESIS);
     }

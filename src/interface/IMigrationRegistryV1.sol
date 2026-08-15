@@ -2,12 +2,14 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-/// @dev The head of a namespace that has never recorded a migration. A writer's
-/// first `record` names this, and every later one names the migration before it.
+/// @dev The head of a namespace that has never applied a migration. A writer's
+/// first `applyMigration` names this, and every later one names the migration
+/// before it.
 ///
 /// It is deliberately NOT zero. Zero is what an uninitialised `bytes32` constant
 /// reads as, and a genesis of zero would make an uninitialised predecessor
-/// constant a SUCCESSFUL first record on any namespace that happens to be empty
+/// constant a SUCCESSFUL first application on any namespace that happens to be
+/// empty
 /// — which is the state of every namespace on every chain the consumer has not
 /// migrated yet, i.e. exactly where a mis-set constant is most likely and most
 /// expensive. Under a nonzero genesis that same constant is a revert in every
@@ -20,9 +22,9 @@ pragma solidity ^0.8.25;
 /// deterministic address.
 ///
 /// It is not a migration, and an implementation MUST refuse it as one. A head
-/// holds exactly two kinds of value: a recorded migration, or this. Letting a
-/// migration BE this would put a namespace that has recorded something at a head
-/// indistinguishable from one that has recorded nothing, which is the same
+/// holds exactly two kinds of value: an applied migration, or this. Letting a
+/// migration BE this would put a namespace that has applied something at a head
+/// indistinguishable from one that has applied nothing, which is the same
 /// collapse of two distinct facts into one value that `ZeroMigration` exists to
 /// refuse — the two values a head can hold that are not migrations are exactly
 /// the two values a migration id may not be.
@@ -30,12 +32,12 @@ bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.hea
 
 /// @title IMigrationRegistryV1
 /// @notice A per-writer record of which migrations have been applied and when,
-/// with exactly three operations: a writer records one of its own migrations
-/// onto the head it believes its namespace is at (`record`), anyone reads when a
-/// given writer recorded a given migration (`applied`), and anyone reads where a
-/// given writer's namespace currently is (`head`). There is no removal, no
-/// upgrade and no authority beyond the writer over its own namespace, and an
-/// implementation MUST NOT add any.
+/// with exactly three operations: a writer applies one of its own migrations
+/// onto the head it believes its namespace is at (`applyMigration`), anyone
+/// reads when a given writer applied a given migration (`applied`), and anyone
+/// reads where a given writer's namespace currently is (`head`). There is no
+/// removal, no upgrade and no authority beyond the writer over its own
+/// namespace, and an implementation MUST NOT add any.
 ///
 /// It exists so that a test can decide what to assert by reading what happened
 /// on chain rather than by reading the clock. Without it, a test that spans a
@@ -57,7 +59,7 @@ bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.hea
 /// actually holds. Replacing the pins with this registry trades a clock-guess
 /// for a bookkeeping-guess, which is not an improvement. An implementation MUST
 /// NOT offer anything that invites it, and in particular MUST NOT record
-/// anything about the state a migration produced — only that it was recorded,
+/// anything about the state a migration produced — only that it was applied,
 /// and when.
 ///
 /// The timestamp is a fact about the RECORD, not about the state: it is the
@@ -66,7 +68,7 @@ bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.hea
 /// not become proof of anything, for the same reason reading the record back
 /// does not.
 ///
-/// ## `applied` answers WHEN, and zero still means "not recorded"
+/// ## `applied` answers WHEN, and zero still means "not applied"
 ///
 /// `applied` is a timestamp rather than a flag because "which invariant applies"
 /// is frequently "which invariant applies YET": a migration that starts a
@@ -74,7 +76,7 @@ bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.hea
 /// needs the moment to go and find the log for it, or — worse — to go back to
 /// the deadline constant this registry exists to delete.
 ///
-/// A migration nobody recorded answers zero, and that is an ANSWER rather than a
+/// A migration nobody applied answers zero, and that is an ANSWER rather than a
 /// revert: it is the ordinary state of every migration before it runs and of
 /// every migration on a chain that never got it, and it is the branch a caller
 /// asserts the pre-migration state in. Zero and nonzero are therefore the same
@@ -88,11 +90,11 @@ bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.hea
 ///
 /// ## The head is what makes an ordered sequence ordered
 ///
-/// A namespace has a HEAD: the migration most recently recorded under it, or
-/// `MIGRATION_HEAD_GENESIS` if it has never recorded one. `record` takes the
-/// head the caller believes its namespace is at and refuses to write unless that
-/// is where the namespace actually is; on success the recorded migration becomes
-/// the new head.
+/// A namespace has a HEAD: the migration most recently applied under it, or
+/// `MIGRATION_HEAD_GENESIS` if it has never applied one. `applyMigration` takes
+/// the head the caller believes its namespace is at and refuses to write unless
+/// that is where the namespace actually is; on success the applied migration
+/// becomes the new head.
 ///
 /// This is what blocks a SKIPPED step. A migration script names its predecessor,
 /// so a chain that never got the predecessor is a loud revert at the moment of
@@ -101,21 +103,21 @@ bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.hea
 /// from landing in whichever order the mempool chose: the second one names a
 /// head that has moved.
 ///
-/// It does NOT block a DUPLICATE, and `MigrationAlreadyRecorded` is not
-/// redundant beside it. Re-recording a migration whose successor has since
+/// It does NOT block a DUPLICATE, and `MigrationAlreadyApplied` is not
+/// redundant beside it. Re-applying a migration whose successor has since
 /// landed presents a head that matches perfectly, and would move the head
 /// BACKWARDS and overwrite the original timestamp — a record un-happening, which
 /// is the one thing this registry promises cannot occur. The two refusals answer
 /// two different questions: the head is about WHERE in the sequence a caller is,
-/// and the already-recorded refusal is about WHETHER this particular migration
+/// and the already-applied refusal is about WHETHER this particular migration
 /// has run at all.
 ///
 /// One namespace on one chain is therefore ONE linear sequence, and that is a
 /// consequence to design around rather than an implementation detail. Two
 /// unrelated sets of migrations applied from the same account on the same chain
 /// interleave into one chain of heads, so each script's expected head is
-/// whatever that account last recorded rather than whatever that script's own
-/// author had in mind. A consumer that wants two independent sequences records
+/// whatever that account last applied rather than whatever that script's own
+/// author had in mind. A consumer that wants two independent sequences applies
 /// them from two accounts, which is the same lever that already decides who a
 /// reader trusts.
 ///
@@ -148,22 +150,22 @@ bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.hea
 /// reserves: zero, which is what an empty namespace holds before it is read as
 /// genesis, and `MIGRATION_HEAD_GENESIS`, which is what it reads as. Neither can
 /// be a migration without a head losing the ability to say whether a namespace
-/// has recorded anything. Two callers agreeing on any other id is entirely their
+/// has applied anything. Two callers agreeing on any other id is entirely their
 /// business.
 ///
 /// The convention that suits scripts-as-migrations is the hash of the script's
 /// identity, e.g. `keccak256("script/20260623-upgrade-receipt-vaults.s.sol")`.
 /// A date alone is not enough: two migrations authored on one day collide, and
 /// consumers do author two on one day. An id is fixed at the moment it is first
-/// recorded, so a script renamed afterwards keeps the id it was recorded under
+/// applied, so a script renamed afterwards keeps the id it was applied under
 /// rather than acquiring a new one — which is why the id belongs in a named
 /// constant beside the script, not derived from a path at the call site.
 ///
 /// A head is an id, so the same is true of the head a script names: it is the
 /// predecessor's named constant, imported, not a second spelling of it.
 interface IMigrationRegistryV1 {
-    /// Thrown when `record` is called with the zero migration id, and by
-    /// `applied` when it is asked about one. The zero id is what an
+    /// Thrown when `applyMigration` is called with the zero migration id, and
+    /// by `applied` when it is asked about one. The zero id is what an
     /// uninitialised `bytes32` constant reads as, and an uninitialised id is
     /// never a migration anybody meant to name. Rejected in both directions
     /// because the read is the dangerous one: answering zero would silently
@@ -171,16 +173,17 @@ interface IMigrationRegistryV1 {
     ///
     /// There is no matching refusal for a zero HEAD, and adding one would be a
     /// guard on something already impossible: a head is either
-    /// `MIGRATION_HEAD_GENESIS` or a recorded id, both nonzero, so a zero head
+    /// `MIGRATION_HEAD_GENESIS` or an applied id, both nonzero, so a zero head
     /// can never match and is already refused by `UnexpectedMigrationHead` —
     /// which names the zero it was handed, so nothing about the mistake is lost.
     error ZeroMigration();
 
-    /// Thrown when `record` is called with `MIGRATION_HEAD_GENESIS` as the
-    /// migration, and by `applied` when it is asked about it. Genesis is a head,
-    /// not a migration: recording it would leave a namespace that has recorded
-    /// something at a head no different from one that has recorded nothing, and
-    /// asking `applied` about it would answer zero forever for a caller that has
+    /// Thrown when `applyMigration` is called with `MIGRATION_HEAD_GENESIS` as
+    /// the migration, and by `applied` when it is asked about it. Genesis is a
+    /// head, not a migration: applying it would leave a namespace that has
+    /// applied something at a head no different from one that has applied
+    /// nothing, and asking `applied` about it would answer zero forever for a
+    /// caller that has
     /// confused a head for a migration and will read that as its pre-migration
     /// branch.
     ///
@@ -192,15 +195,15 @@ interface IMigrationRegistryV1 {
 
     /// Thrown by `applied` and `head` when asked about the zero writer. No
     /// transaction can originate from the zero address, so the zero namespace is
-    /// provably empty and the answer would always be "nothing recorded, at
+    /// provably empty and the answer would always be "nothing applied, at
     /// genesis" — an unresolved or unset writer constant would therefore read as
     /// a pristine namespace rather than as the mistake it is.
     ///
-    /// There is no matching case on `record`: `msg.sender` is never zero, so
-    /// the zero namespace cannot be written to in the first place.
+    /// There is no matching case on `applyMigration`: `msg.sender` is never
+    /// zero, so the zero namespace cannot be written to in the first place.
     error ZeroWriter();
 
-    /// Thrown when a writer records a migration it has already recorded. This
+    /// Thrown when a writer applies a migration it has already applied. This
     /// is what makes running a migration twice structurally impossible rather
     /// than a warning in a workflow dropdown asking a human not to re-dispatch
     /// it: a script consults `applied` before it acts, and this is the backstop
@@ -211,10 +214,10 @@ interface IMigrationRegistryV1 {
     /// script is told the migration already ran, rather than told the namespace
     /// has moved on and left to work out why.
     /// @param writer The namespace, which is the caller.
-    /// @param migration The migration already recorded under it.
-    error MigrationAlreadyRecorded(address writer, bytes32 migration);
+    /// @param migration The migration already applied under it.
+    error MigrationAlreadyApplied(address writer, bytes32 migration);
 
-    /// Thrown when a writer records onto a head its namespace is not at. Either
+    /// Thrown when a writer applies onto a head its namespace is not at. Either
     /// something the caller believed had been applied has not been, or something
     /// it did not know about has been — a skipped predecessor, a concurrent
     /// dispatch that landed first, or a chain that is simply further behind than
@@ -224,14 +227,15 @@ interface IMigrationRegistryV1 {
     /// @param actualHead The head the namespace is actually at.
     error UnexpectedMigrationHead(address writer, bytes32 expectedHead, bytes32 actualHead);
 
-    /// Thrown when `record` is called in a block whose timestamp is zero. A
-    /// record IS its timestamp, so a zero one would read back through `applied`
-    /// as no record at all, while the head moved and the migration cannot be
-    /// re-recorded — the worst of every branch at once. Refusing to write is the
-    /// only outcome that leaves the namespace describing something true.
+    /// Thrown when `applyMigration` is called in a block whose timestamp is
+    /// zero. A record IS its timestamp, so a zero one would read back through
+    /// `applied` as no record at all, while the head moved and the migration
+    /// cannot be re-applied — the worst of every branch at once. Refusing to
+    /// write is the only outcome that leaves the namespace describing something
+    /// true.
     error ZeroTimestamp();
 
-    /// Emitted every time a migration is recorded. A migration is recorded at
+    /// Emitted every time a migration is applied. A migration is applied at
     /// most once per writer, so the log is the complete history of the registry
     /// and the only way to discover a record without already knowing the id.
     ///
@@ -241,15 +245,14 @@ interface IMigrationRegistryV1 {
     /// was applied onto, and the first was applied onto
     /// `MIGRATION_HEAD_GENESIS`. The timestamp is the block's.
     /// @param writer The namespace, which is the caller.
-    /// @param migration The migration recorded.
+    /// @param migration The migration applied.
     event Migrated(address indexed writer, bytes32 indexed migration);
 
-    /// Records `migration` as applied under the caller's namespace, onto
-    /// `expectedHead`.
+    /// Applies `migration` under the caller's namespace, onto `expectedHead`.
     ///
     /// The implementation MUST revert `ZeroMigration` if `migration` is zero,
     /// `GenesisMigration` if it is `MIGRATION_HEAD_GENESIS`,
-    /// `MigrationAlreadyRecorded` if the caller has already recorded it,
+    /// `MigrationAlreadyApplied` if the caller has already applied it,
     /// `UnexpectedMigrationHead` if the caller's namespace is not at
     /// `expectedHead`, and `ZeroTimestamp` if `block.timestamp` is zero. It MUST
     /// NOT provide any way to unrecord a migration or to move a head backwards.
@@ -259,10 +262,10 @@ interface IMigrationRegistryV1 {
     /// Nothing is returned: the new head is the `migration` just passed in and
     /// the timestamp is the block's, so both are already in the caller's hand.
     ///
-    /// A caller SHOULD record the migration in the same atomic unit as the
-    /// migration itself where it can — a Safe appends this call to the bundle
-    /// it is already executing — so that the record and the change it describes
-    /// cannot land apart. Where they cannot be atomic, record LAST: a record
+    /// A caller SHOULD call this in the same atomic unit as the migration
+    /// itself where it can — a Safe appends this call to the bundle it is
+    /// already executing — so that the record and the change it describes
+    /// cannot land apart. Where they cannot be atomic, call it LAST: a record
     /// that never landed leaves a reader asserting the pre-migration state,
     /// which the verification layer then catches loudly, and leaves a re-run
     /// possible. A record that landed for a migration that did not is the
@@ -270,16 +273,16 @@ interface IMigrationRegistryV1 {
     /// @param expectedHead The head the caller believes its namespace is at:
     /// the migration it is applying onto, or `MIGRATION_HEAD_GENESIS` for the
     /// first migration in a namespace. Never zero, which can never match.
-    /// @param migration The migration to record. Never zero, never
+    /// @param migration The migration to apply. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    function record(bytes32 expectedHead, bytes32 migration) external;
+    function applyMigration(bytes32 expectedHead, bytes32 migration) external;
 
-    /// When `writer` recorded `migration`, as the timestamp of the block the
+    /// When `writer` applied `migration`, as the timestamp of the block the
     /// record landed in. Zero if it never did.
     ///
     /// The implementation MUST revert `ZeroWriter`, `ZeroMigration` or
     /// `GenesisMigration` rather than answering about any of them, and MUST
-    /// answer zero — not revert — for a real writer that has simply not recorded
+    /// answer zero — not revert — for a real writer that has simply not applied
     /// a real migration.
     ///
     /// That zero is the deliberate difference from a registry whose reads revert
@@ -290,17 +293,17 @@ interface IMigrationRegistryV1 {
     /// revert there would leave a caller with nothing to say about the state it
     /// is actually looking at, which is the whole failure this registry removes.
     ///
-    /// Zero is unambiguous because `record` refuses to write a zero timestamp,
-    /// so no recorded migration can present as an unrecorded one.
+    /// Zero is unambiguous because `applyMigration` refuses to write a zero
+    /// timestamp, so no applied migration can present as an unapplied one.
     /// @param writer The namespace to read. Never the zero address.
     /// @param migration The migration to ask about. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @return The block timestamp `writer` recorded `migration` at, or zero if
+    /// @return The block timestamp `writer` applied `migration` at, or zero if
     /// it has not.
     function applied(address writer, bytes32 migration) external view returns (uint256);
 
-    /// Where `writer`'s namespace currently is: the migration it recorded most
-    /// recently, or `MIGRATION_HEAD_GENESIS` if it has never recorded one.
+    /// Where `writer`'s namespace currently is: the migration it applied most
+    /// recently, or `MIGRATION_HEAD_GENESIS` if it has never applied one.
     ///
     /// The implementation MUST revert `ZeroWriter` rather than answering about
     /// the zero namespace, and MUST NEVER answer zero — an empty namespace is
