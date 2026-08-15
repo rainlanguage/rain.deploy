@@ -361,7 +361,7 @@ Use the nix-pinned `forge` for all development.
 
 ## License
 
-DecentraLicense 1.0 (DCL-1.0) — full text in
+DecentraLicense 1.0 (SPDX: `LicenseRef-DCL-1.0`) — full text in
 [`LICENSES/`](LICENSES/LicenseRef-DCL-1.0.txt). Roughly `CAL-1.0`
 ([opensource.org](https://opensource.org/license/cal-1-0)) plus user-data
 disclosure obligations consistent with permissionless-blockchain assumptions.
