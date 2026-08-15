@@ -197,6 +197,10 @@ abstract contract RainDeploySuitesBase {
     /// @return names The declared keys.
     function suiteNames() internal pure returns (string memory names) {
         DeploySuite[] memory suites = allSuites();
+        // Seeded here so every path out of this function assigns `names`,
+        // provable from this body alone. `allSuites` never yields an empty set,
+        // but that is a fact about another function.
+        names = "";
         for (uint256 i = 0; i < suites.length; i++) {
             names = i == 0 ? suites[i].suite : string.concat(names, ", ", suites[i].suite);
         }
