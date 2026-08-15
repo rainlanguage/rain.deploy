@@ -160,11 +160,20 @@ library LibRainDeploySnapshot {
         return string(tagBytes);
     }
 
-    /// The directory holding a snapshot, rolling or frozen.
+    /// The directory holding a snapshot, rolling or frozen, under a record
+    /// root.
+    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// @return The directory path.
+    function dirForSnapshot(string memory root, string memory dir) internal pure returns (string memory) {
+        return string.concat(root, "/", dir);
+    }
+
+    /// The directory holding a snapshot in a repo's REAL record.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @return The directory path.
     function dirForSnapshot(string memory dir) internal pure returns (string memory) {
-        return string.concat("src/generated/", dir);
+        return dirForSnapshot(LIB_FS_ROOT, dir);
     }
 
     /// The contract name that places a generated file inside a snapshot
@@ -177,7 +186,29 @@ library LibRainDeploySnapshot {
         return string.concat(dir, "/", contractName);
     }
 
-    /// The path of a contract's generated file within a snapshot.
+    /// The path of a contract's generated file within a snapshot, under a
+    /// record root.
+    ///
+    /// `LibFs` writes under `LIB_FS_ROOT` and takes no root, so it cannot spell
+    /// this one — but the two MUST be one path where the root is the real one,
+    /// and `testSnapshotPathsAgreeWithTheWriter` is where that is held. This is
+    /// the only other spelling of a snapshot path there is, so a reader
+    /// pointed at a record root and a writer pointed at the real one cannot
+    /// drift by more than that one assertion.
+    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// @param contractName The name of the contract.
+    /// @return The file path.
+    function pathForSnapshot(string memory root, string memory dir, string memory contractName)
+        internal
+        pure
+        returns (string memory)
+    {
+        return string.concat(dirForSnapshot(root, dir), "/", contractName, ".sol");
+    }
+
+    /// The path of a contract's generated file within a snapshot in a repo's
+    /// REAL record.
     ///
     /// Delegated to `LibFs` rather than concatenated here, so the path this
     /// library freezes FROM is the same definition `LibFs` writes TO. Two
@@ -736,12 +767,24 @@ library LibRainDeploySnapshot {
     /// "the record matches the candidate" is true by construction rather than
     /// by a comparison afterwards.
     /// @param vm The Vm instance for file operations.
+    /// @param root The record root to freeze into — `LIB_FS_ROOT` for a repo's
+    /// real record. A parameter for the same reason `frozenSnapshotPaths` and
+    /// `writeReleasedSuitesLib` take one, and required rather than defaulted
+    /// for the same reason they do not default it: a freeze that can only be
+    /// pointed at the real record can only be tested against it, and the real
+    /// record is one a test must not leave a release in.
+    ///
+    /// It is the root of a whole record tree rather than an output directory
+    /// to choose: the rolling snapshot is read from under it and the frozen
+    /// copy written under it, so a freeze reads and writes ONE tree and there
+    /// is no arrangement in which a release is cut from another repo's
+    /// candidate.
     /// @param regenerate Rewrites the rolling snapshot. Run first, always.
     /// @param contractNames The contracts whose generated files form this
     /// release's record.
-    function freeze(Vm vm, function() internal regenerate, string[] memory contractNames) internal {
+    function freeze(Vm vm, string memory root, function() internal regenerate, string[] memory contractNames) internal {
         string memory tag = deployTag(vm);
-        string memory frozenDir = dirForSnapshot(tag);
+        string memory frozenDir = dirForSnapshot(root, tag);
         if (vm.exists(frozenDir)) {
             revert SnapshotAlreadyFrozen(tag, frozenDir);
         }
@@ -755,7 +798,7 @@ library LibRainDeploySnapshot {
         // call can fail is now behind it, so what follows is writes only.
         string[] memory records = new string[](contractNames.length);
         for (uint256 i = 0; i < contractNames.length; i++) {
-            string memory rollingPath = pathForSnapshot(CANDIDATE, contractNames[i]);
+            string memory rollingPath = pathForSnapshot(root, CANDIDATE, contractNames[i]);
             if (!vm.exists(rollingPath)) {
                 revert NothingToFreeze(rollingPath);
             }
@@ -766,7 +809,7 @@ library LibRainDeploySnapshot {
         vm.createDir(frozenDir, true);
         for (uint256 i = 0; i < contractNames.length; i++) {
             //forge-lint: disable-next-line(unsafe-cheatcode)
-            vm.writeFile(pathForSnapshot(tag, contractNames[i]), records[i]);
+            vm.writeFile(pathForSnapshot(root, tag, contractNames[i]), records[i]);
         }
     }
 }

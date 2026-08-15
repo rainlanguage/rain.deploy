@@ -9,6 +9,7 @@ import {
     EmptyRelease,
     LibRainDeploySnapshot,
     NothingToFreeze,
+    SnapshotAlreadyFrozen,
     UnreleasableVersion
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
@@ -30,13 +31,23 @@ contract LibRainDeploySnapshotTest is Test {
     /// A regeneration that does nothing, for driving `freeze`'s guards. Every
     /// one of them either fires before this runs or is about what it left
     /// behind, so a no-op is what makes "the guard fired" and "the guard fired
-    /// FIRST" the same observation.
+    /// FIRST" the same observation — which is why the ordering itself is
+    /// driven by `regenerateFreezeFixture` instead.
     function noRegeneration() internal {}
 
-    /// External wrapper so `vm.expectRevert` lands at the right call depth.
+    /// External wrapper so `vm.expectRevert` lands at the right call depth, for
+    /// the guards that are about this repo's REAL record.
     /// @param contractNames The contracts to freeze.
     function externalFreeze(string[] memory contractNames) external {
-        LibRainDeploySnapshot.freeze(vm, noRegeneration, contractNames);
+        LibRainDeploySnapshot.freeze(vm, LibRainDeploySnapshot.LIB_FS_ROOT, noRegeneration, contractNames);
+    }
+
+    /// External wrapper so `vm.expectRevert` lands at the right call depth, for
+    /// the guards driven against a fixture record.
+    /// @param root The record root to freeze into.
+    /// @param contractNames The contracts to freeze.
+    function externalFreezeAt(string memory root, string[] memory contractNames) external {
+        LibRainDeploySnapshot.freeze(vm, root, noRegeneration, contractNames);
     }
 
     /// Where the record fixture is built. NOT `src/generated`: the inherited
@@ -199,6 +210,40 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(LibRainDeploySnapshot.dirForSnapshot("0_1_7"), "src/generated/0_1_7");
         assertEq(LibRainDeploySnapshot.snapshotName("0_1_7", "Foo"), "0_1_7/Foo");
         assertEq(LibRainDeploySnapshot.pathForSnapshot("0_1_7", "Foo"), "src/generated/0_1_7/Foo.sol");
+
+        // The same two paths under a record root that is not the real one, so
+        // the shape a fixture record is built and read at is pinned rather than
+        // only implied by the real root's.
+        assertEq(LibRainDeploySnapshot.dirForSnapshot("test/generated-x", "0_1_7"), "test/generated-x/0_1_7");
+        assertEq(
+            LibRainDeploySnapshot.pathForSnapshot("test/generated-x", "0_1_7", "Foo"), "test/generated-x/0_1_7/Foo.sol"
+        );
+    }
+
+    /// The root-aware snapshot path and the one `LibFs` writes MUST be ONE path
+    /// wherever both can spell it.
+    ///
+    /// `LibFs` takes no root, so a fixture record is the one thing it cannot
+    /// spell — and `freeze` reads and writes through the root-aware spelling
+    /// for the REAL record too, so this is the whole of what keeps the path a
+    /// release is frozen to the path the regeneration wrote it at. Two
+    /// spellings of one path is how a freeze silently reads nothing, and this
+    /// is where they are held to being one.
+    ///
+    /// Fuzzed over the name rather than pinned to a literal because the
+    /// property is about every path either could produce, not about a chosen
+    /// one: a divergence that only appears for some names is exactly the
+    /// silence this is here to remove.
+    /// @param dir The snapshot directory name.
+    /// @param contractName The name of the contract.
+    function testRootAwareSnapshotPathIsTheWritersAtTheRealRoot(string memory dir, string memory contractName)
+        external
+        pure
+    {
+        assertEq(
+            LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.LIB_FS_ROOT, dir, contractName),
+            LibRainDeploySnapshot.pathForSnapshot(dir, contractName)
+        );
     }
 
     /// A snapshot MUST land at the path this library says it does, and writing
@@ -671,5 +716,226 @@ contract LibRainDeploySnapshotTest is Test {
         this.externalFreeze(contractNames);
 
         assertFalse(vm.exists(LibRainDeploySnapshot.dirForSnapshot(tag)));
+    }
+
+    /// Where the freeze fixture's record is built. Its own tree, for the same
+    /// reason `RELEASED_FIXTURE_ROOT` is not `FIXTURE_ROOT`, and NOT
+    /// `src/generated`: every freeze here cuts a release under THIS repo's
+    /// tag, and a transient `<tag>/` in the real record is a release the
+    /// inherited record check has to fail on, from contracts forge runs in
+    /// parallel with this one.
+    string constant FREEZE_FIXTURE_ROOT = "test/generated-freeze";
+
+    /// Where the multi-contract freeze fixture's record is built. Its own tree
+    /// again, and for a sharper reason than the others: every freeze test cuts
+    /// the SAME tag, so two of them sharing a root would have whichever ran
+    /// second refused as a re-cut.
+    string constant FREEZE_MULTI_FIXTURE_ROOT = "test/generated-freeze-multi";
+
+    /// Where the re-cut fixture's record is built. Its own tree: this one is
+    /// deliberately left frozen between the two calls, so no other test may
+    /// share it.
+    string constant RECUT_FIXTURE_ROOT = "test/generated-recut";
+
+    /// Where the empty-tag-directory fixture's record is built. Its own tree,
+    /// for the same reason: it is a frozen tag from the moment it is created.
+    string constant RECUT_EMPTY_FIXTURE_ROOT = "test/generated-recut-empty";
+
+    /// What the freeze fixture's regeneration writes, and what a freeze that
+    /// ran the regeneration first therefore copies.
+    ///
+    /// The SPDX identifier is split for the reason `writeFixture` splits it: a
+    /// run that fails midway leaves this content on disk, and an unlicensed
+    /// file in the tree is a second failure on top of the first.
+    /// @return The regenerated rolling snapshot.
+    function freshRolling() internal pure returns (string memory) {
+        return string.concat(
+            "// SPDX-License",
+            "-Identifier: LicenseRef-DCL-1.0\n",
+            "address constant DEPLOYED_ADDRESS = address(0xFEED000000000000000000000000000000000000);\n"
+        );
+    }
+
+    /// What is on disk before the call, and what a freeze that read the rolling
+    /// snapshot before regenerating it would copy instead.
+    /// @return The stale rolling snapshot.
+    function staleRolling() internal pure returns (string memory) {
+        return string.concat(
+            "// SPDX-License",
+            "-Identifier: LicenseRef-DCL-1.0\n",
+            "address constant DEPLOYED_ADDRESS = address(0x57A1E00000000000000000000000000000000000);\n"
+        );
+    }
+
+    /// A regeneration that really regenerates, so "the guard fired FIRST" is no
+    /// longer the only thing a freeze test can observe.
+    function regenerateFreezeFixture() internal {
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(
+            LibRainDeploySnapshot.pathForSnapshot(
+                FREEZE_FIXTURE_ROOT, LibRainDeploySnapshot.CANDIDATE, FIXTURE_CONTRACT
+            ),
+            freshRolling()
+        );
+    }
+
+    /// A freeze MUST copy the bytes the regeneration wrote, not the bytes that
+    /// were on disk when it was called, and the copy MUST land where the record
+    /// walk finds it.
+    ///
+    /// Freezing a stale candidate is silent: the immutability check only fires
+    /// on a re-cut, which is too late, so nothing downstream ever learns that a
+    /// release records bytes its own deploy did not produce. The ordering is
+    /// therefore the whole of what makes a release describe itself, and with a
+    /// no-op regeneration it is unobservable — a `freeze` that read before it
+    /// regenerated would pass every other test in this file.
+    function testFreezeCopiesTheRegeneratedRollingSnapshot() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        string memory rollingPath = LibRainDeploySnapshot.pathForSnapshot(
+            FREEZE_FIXTURE_ROOT, LibRainDeploySnapshot.CANDIDATE, FIXTURE_CONTRACT
+        );
+        string memory frozenPath = LibRainDeploySnapshot.pathForSnapshot(FREEZE_FIXTURE_ROOT, tag, FIXTURE_CONTRACT);
+
+        writeFixture(rollingPath);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(rollingPath, staleRolling());
+
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = FIXTURE_CONTRACT;
+        LibRainDeploySnapshot.freeze(vm, FREEZE_FIXTURE_ROOT, regenerateFreezeFixture, contractNames);
+
+        // Read while the fixture is still there, asserted once it is gone.
+        bool frozenExists = vm.exists(frozenPath);
+        string memory frozen = frozenExists ? vm.readFile(frozenPath) : "";
+        // The cut is a release the record walk finds, under the tag the version
+        // maps to and nowhere else.
+        string[] memory record = LibRainDeploySnapshot.frozenSnapshotPaths(vm, FREEZE_FIXTURE_ROOT);
+        // And the rolling snapshot is the regenerated one, still in place: a
+        // freeze MOVES nothing, it copies.
+        string memory rolling = vm.readFile(rollingPath);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(FREEZE_FIXTURE_ROOT, true);
+
+        assertTrue(frozenExists);
+        assertEq(frozen, freshRolling());
+        assertNotEq(frozen, staleRolling());
+        assertEq(rolling, freshRolling());
+        assertEq(record.length, 1);
+        assertEq(record[0], frozenPath);
+    }
+
+    /// A release naming SEVERAL contracts MUST freeze every one of them.
+    ///
+    /// A contract regenerated but absent from the record is a contract silently
+    /// missing from the release, and a tag that never held it has nothing
+    /// missing from it for anything downstream to notice.
+    function testFreezeCutsEveryNamedContract() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        string[] memory contractNames = new string[](2);
+        contractNames[0] = FIXTURE_CONTRACT;
+        contractNames[1] = FIXTURE_CONTRACT_SECOND;
+        for (uint256 i = 0; i < contractNames.length; i++) {
+            writeFixture(
+                LibRainDeploySnapshot.pathForSnapshot(
+                    FREEZE_MULTI_FIXTURE_ROOT, LibRainDeploySnapshot.CANDIDATE, contractNames[i]
+                )
+            );
+        }
+
+        LibRainDeploySnapshot.freeze(vm, FREEZE_MULTI_FIXTURE_ROOT, noRegeneration, contractNames);
+
+        string[] memory record = LibRainDeploySnapshot.frozenSnapshotPaths(vm, FREEZE_MULTI_FIXTURE_ROOT);
+        bool first =
+            holdsPath(record, LibRainDeploySnapshot.pathForSnapshot(FREEZE_MULTI_FIXTURE_ROOT, tag, contractNames[0]));
+        bool second =
+            holdsPath(record, LibRainDeploySnapshot.pathForSnapshot(FREEZE_MULTI_FIXTURE_ROOT, tag, contractNames[1]));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(FREEZE_MULTI_FIXTURE_ROOT, true);
+
+        assertTrue(first);
+        assertTrue(second);
+        assertEq(record.length, 2);
+    }
+
+    /// A release is cut ONCE. Re-cutting a tag that already has a record MUST
+    /// be refused, naming the tag and the directory, and MUST leave the
+    /// original record exactly as it was.
+    ///
+    /// That record is what consumers of that release pin their bytecode
+    /// against, and a second cut would replace it with whatever the candidate
+    /// currently is — which, between releases, is ordinarily something else.
+    /// This is the only protection there is on the immutability of
+    /// `src/generated/<tag>/`.
+    function testFreezeRefusesARecutRelease() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        string memory frozenDir = LibRainDeploySnapshot.dirForSnapshot(RECUT_FIXTURE_ROOT, tag);
+        string memory frozenPath = LibRainDeploySnapshot.pathForSnapshot(RECUT_FIXTURE_ROOT, tag, FIXTURE_CONTRACT);
+        string memory rollingPath = LibRainDeploySnapshot.pathForSnapshot(
+            RECUT_FIXTURE_ROOT, LibRainDeploySnapshot.CANDIDATE, FIXTURE_CONTRACT
+        );
+
+        writeFixture(rollingPath);
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = FIXTURE_CONTRACT;
+
+        LibRainDeploySnapshot.freeze(vm, RECUT_FIXTURE_ROOT, noRegeneration, contractNames);
+        string memory firstCut = vm.readFile(frozenPath);
+
+        // The candidate moves on, exactly as source does between releases, so
+        // an accepted re-cut would be seen writing something else.
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(rollingPath, freshRolling());
+
+        vm.expectRevert(abi.encodeWithSelector(SnapshotAlreadyFrozen.selector, tag, frozenDir));
+        this.externalFreezeAt(RECUT_FIXTURE_ROOT, contractNames);
+
+        // Read while the fixture is still there, asserted once it is gone.
+        string memory afterRefusal = vm.readFile(frozenPath);
+        string[] memory record = LibRainDeploySnapshot.frozenSnapshotPaths(vm, RECUT_FIXTURE_ROOT);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(RECUT_FIXTURE_ROOT, true);
+
+        assertEq(afterRefusal, firstCut);
+        assertNotEq(afterRefusal, freshRolling());
+        assertEq(record.length, 1);
+    }
+
+    /// The refusal is about the DIRECTORY existing, not about what is in it, so
+    /// an empty `<tag>/` left behind by anything refuses the real cut too.
+    ///
+    /// That is not a wrinkle, it is why `EmptyRelease` and the write ordering
+    /// exist: the exit from a wedged tag is deleting a directory this design
+    /// calls append-only, so everything that could leave one behind is refused
+    /// up front instead.
+    function testFreezeRefusesATagDirectoryThatIsEmpty() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        string memory frozenDir = LibRainDeploySnapshot.dirForSnapshot(RECUT_EMPTY_FIXTURE_ROOT, tag);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(frozenDir, true);
+        // Everything else a cut needs is ready, so the refusal can only be
+        // about the directory.
+        writeFixture(
+            LibRainDeploySnapshot.pathForSnapshot(
+                RECUT_EMPTY_FIXTURE_ROOT, LibRainDeploySnapshot.CANDIDATE, FIXTURE_CONTRACT
+            )
+        );
+
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = FIXTURE_CONTRACT;
+
+        vm.expectRevert(abi.encodeWithSelector(SnapshotAlreadyFrozen.selector, tag, frozenDir));
+        this.externalFreezeAt(RECUT_EMPTY_FIXTURE_ROOT, contractNames);
+
+        // Read while the fixture is still there, asserted once it is gone: the
+        // tag holds no record at all and the cut is refused anyway.
+        string[] memory record = LibRainDeploySnapshot.frozenSnapshotPaths(vm, RECUT_EMPTY_FIXTURE_ROOT);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(RECUT_EMPTY_FIXTURE_ROOT, true);
+
+        assertEq(record.length, 0);
     }
 }
