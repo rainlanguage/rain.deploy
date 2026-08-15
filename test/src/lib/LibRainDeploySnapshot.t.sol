@@ -767,6 +767,29 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
+    /// One contract's rolling snapshot, carrying the contract's own name.
+    ///
+    /// Distinct per contract, so a release of several is asserted to hold each
+    /// one's OWN bytes rather than merely to hold a file per name. A freeze
+    /// that copied one contract's snapshot into every file, or that read fewer
+    /// snapshots than it wrote, produces exactly the right set of paths.
+    /// @param contractName The contract the snapshot describes.
+    /// @return That contract's rolling snapshot.
+    function rollingFor(string memory contractName) internal pure returns (string memory) {
+        return
+            string.concat("// SPDX-License", "-Identifier: LicenseRef-DCL-1.0\n", "// snapshot of ", contractName, "\n");
+    }
+
+    /// Writes one contract's rolling snapshot into a fixture record.
+    /// @param root The record root to write under.
+    /// @param contractName The contract the snapshot describes.
+    function writeRollingFixture(string memory root, string memory contractName) internal {
+        string memory path = LibRainDeploySnapshot.pathForSnapshot(root, LibRainDeploySnapshot.CANDIDATE, contractName);
+        writeFixture(path);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(path, rollingFor(contractName));
+    }
+
     /// A regeneration that really regenerates, so "the guard fired FIRST" is no
     /// longer the only thing a freeze test can observe.
     function regenerateFreezeFixture() internal {
@@ -825,37 +848,41 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(record[0], frozenPath);
     }
 
-    /// A release naming SEVERAL contracts MUST freeze every one of them.
+    /// A release naming SEVERAL contracts MUST freeze every one of them, each
+    /// from its OWN rolling snapshot.
     ///
     /// A contract regenerated but absent from the record is a contract silently
     /// missing from the release, and a tag that never held it has nothing
-    /// missing from it for anything downstream to notice.
+    /// missing from it for anything downstream to notice. A contract present
+    /// under another one's bytes is worse: the record then says that release
+    /// deployed something it did not, at an address nothing derives.
     function testFreezeCutsEveryNamedContract() external {
         string memory tag = LibRainDeploySnapshot.deployTag(vm);
         string[] memory contractNames = new string[](2);
         contractNames[0] = FIXTURE_CONTRACT;
         contractNames[1] = FIXTURE_CONTRACT_SECOND;
         for (uint256 i = 0; i < contractNames.length; i++) {
-            writeFixture(
-                LibRainDeploySnapshot.pathForSnapshot(
-                    FREEZE_MULTI_FIXTURE_ROOT, LibRainDeploySnapshot.CANDIDATE, contractNames[i]
-                )
-            );
+            writeRollingFixture(FREEZE_MULTI_FIXTURE_ROOT, contractNames[i]);
         }
 
         LibRainDeploySnapshot.freeze(vm, FREEZE_MULTI_FIXTURE_ROOT, noRegeneration, contractNames);
 
+        // Read while the fixture is still there, asserted once it is gone.
         string[] memory record = LibRainDeploySnapshot.frozenSnapshotPaths(vm, FREEZE_MULTI_FIXTURE_ROOT);
-        bool first =
-            holdsPath(record, LibRainDeploySnapshot.pathForSnapshot(FREEZE_MULTI_FIXTURE_ROOT, tag, contractNames[0]));
-        bool second =
-            holdsPath(record, LibRainDeploySnapshot.pathForSnapshot(FREEZE_MULTI_FIXTURE_ROOT, tag, contractNames[1]));
+        string[] memory frozenPaths = new string[](contractNames.length);
+        string[] memory frozen = new string[](contractNames.length);
+        for (uint256 i = 0; i < contractNames.length; i++) {
+            frozenPaths[i] = LibRainDeploySnapshot.pathForSnapshot(FREEZE_MULTI_FIXTURE_ROOT, tag, contractNames[i]);
+            frozen[i] = vm.exists(frozenPaths[i]) ? vm.readFile(frozenPaths[i]) : "";
+        }
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(FREEZE_MULTI_FIXTURE_ROOT, true);
 
-        assertTrue(first);
-        assertTrue(second);
+        for (uint256 i = 0; i < contractNames.length; i++) {
+            assertTrue(holdsPath(record, frozenPaths[i]));
+            assertEq(frozen[i], rollingFor(contractNames[i]));
+        }
         assertEq(record.length, 2);
     }
 
@@ -876,7 +903,7 @@ contract LibRainDeploySnapshotTest is Test {
             RECUT_FIXTURE_ROOT, LibRainDeploySnapshot.CANDIDATE, FIXTURE_CONTRACT
         );
 
-        writeFixture(rollingPath);
+        writeRollingFixture(RECUT_FIXTURE_ROOT, FIXTURE_CONTRACT);
         string[] memory contractNames = new string[](1);
         contractNames[0] = FIXTURE_CONTRACT;
 
@@ -917,11 +944,7 @@ contract LibRainDeploySnapshotTest is Test {
         vm.createDir(frozenDir, true);
         // Everything else a cut needs is ready, so the refusal can only be
         // about the directory.
-        writeFixture(
-            LibRainDeploySnapshot.pathForSnapshot(
-                RECUT_EMPTY_FIXTURE_ROOT, LibRainDeploySnapshot.CANDIDATE, FIXTURE_CONTRACT
-            )
-        );
+        writeRollingFixture(RECUT_EMPTY_FIXTURE_ROOT, FIXTURE_CONTRACT);
 
         string[] memory contractNames = new string[](1);
         contractNames[0] = FIXTURE_CONTRACT;
