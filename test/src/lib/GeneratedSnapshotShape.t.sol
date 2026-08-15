@@ -213,11 +213,18 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// behind.
     ///
     /// Compared against the candidate's own `sourceCreationCode` rather than
-    /// merely required to resolve to something, because a path that resolves to
-    /// the wrong contract is the failure this field can actually produce: the
-    /// name is what the printed command asks an explorer to verify against, and
-    /// two files each declaring a contract the other one names resolve
-    /// perfectly while naming each other's.
+    /// merely required to resolve to something, because resolving is not the
+    /// same as resolving to the RIGHT contract. Two candidates whose declared
+    /// paths are swapped resolve perfectly, and every other assertion in this
+    /// repo stays green through it — including `testEveryCandidateHasASnapshot`
+    /// above, because swapping both halves leaves the SET of declared names
+    /// exactly as it was. This is the assertion that says each candidate's path
+    /// names ITS own contract rather than one of its siblings'.
+    ///
+    /// Hashed rather than compared as bytes, for the reason
+    /// `CandidateSourceMismatch` gives for hashing: creation codes run to tens
+    /// of kilobytes, and a failure message carrying two of them is a failure
+    /// message nobody reads.
     function testEveryCandidateArtifactPathResolves() external view {
         DeployCandidate[] memory candidates = checkedCandidateSuites();
         for (uint256 i = 0; i < candidates.length; i++) {
@@ -227,8 +234,8 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
             assertEq(parts.length, 2, string.concat("artifact path is not <path>:<Name>: ", declared));
             assertTrue(vm.isFile(parts[0]), string.concat("artifact path names no such file: ", declared));
             assertEq(
-                vm.getCode(declared),
-                candidates[i].sourceCreationCode,
+                keccak256(vm.getCode(declared)),
+                keccak256(candidates[i].sourceCreationCode),
                 string.concat("artifact path resolves to another contract: ", declared)
             );
         }
