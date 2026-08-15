@@ -237,19 +237,26 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
         }
     }
 
-    /// PROPERTY: every snapshot declares exactly the four constants a deploy
+    /// PROPERTY: every snapshot declares exactly the five constants a deploy
     /// record is for, of these types, in this order. A rename, a retype, a
-    /// reorder or a fifth constant each fail here and name what broke.
-    function testSnapshotDeclaresTheFourDeployConstantsInOrder() external view {
+    /// reorder or a sixth constant each fail here and name what broke.
+    ///
+    /// `DEPENDENCIES` is `bytes` rather than `address[]` because Solidity has
+    /// no file-scope constant of dynamic array type. It is the `abi.encode` of
+    /// the list, which `releasedLibraryBlock` emits the `abi.decode` of — the
+    /// type is a language constraint, so it is asserted here as one rather than
+    /// left to look like a choice somebody could tidy up.
+    function testSnapshotDeclaresTheFiveDeployConstantsInOrder() external view {
         string[] memory contractNames = snapshotContractNames();
         for (uint256 i = 0; i < contractNames.length; i++) {
             string[] memory declarations = constantDeclarations(contractNames[i]);
 
-            assertEq(declarations.length, 4, "snapshot declares an unexpected number of constants");
+            assertEq(declarations.length, 5, "snapshot declares an unexpected number of constants");
             assertEq(declarations[0], "bytes32 BYTECODE_HASH", "first constant is not bytes32 BYTECODE_HASH");
             assertEq(declarations[1], "address DEPLOYED_ADDRESS", "second constant is not address DEPLOYED_ADDRESS");
             assertEq(declarations[2], "bytes CREATION_CODE", "third constant is not bytes CREATION_CODE");
             assertEq(declarations[3], "bytes RUNTIME_CODE", "fourth constant is not bytes RUNTIME_CODE");
+            assertEq(declarations[4], "bytes DEPENDENCIES", "fifth constant is not bytes DEPENDENCIES");
         }
     }
 

@@ -241,13 +241,30 @@ produces — so `candidate/`, a scratch directory and a `0_1_7-rc1` nobody could
 have frozen all fall out under the same rule, and there is no name to remember
 to exclude.
 
+The dependency list is frozen with the rest, and it is NOT metadata.
+`RainDeployBroadcast.run` hands `suite.dependencies` to
+`LibRainDeploy.deployToNetworks`, which reverts `MissingDependency` for any
+dependency with no code on the target network — so it is a precondition of the
+broadcast, decided when the release is cut. Re-broadcasting a past release onto
+a newly supported chain is exactly the case that matters: it has to check the
+list THAT release was cut with, not today's. So `releasedSuites()` aliases
+`DEPENDENCIES` out of each release's own snapshot rather than rebuilding it from
+the current declaration. A dependency dropped from current source stays required
+by the releases cut with it, and one added is not retro-imposed on releases cut
+without it. Only the suite key and the artifact path are still regenerated from
+the current declaration.
+
 **`GeneratedSnapshotShapeTest` is the specification of the shape.** It asserts
 named properties against the compiler's AST — not against a second reference
 file, so there is no question of that file's provenance, and not against source
 text, so formatting cannot affect it:
 
-1. exactly four constants, in order: `bytes32 BYTECODE_HASH`,
-   `address DEPLOYED_ADDRESS`, `bytes CREATION_CODE`, `bytes RUNTIME_CODE`
+1. exactly five constants, in order: `bytes32 BYTECODE_HASH`,
+   `address DEPLOYED_ADDRESS`, `bytes CREATION_CODE`, `bytes RUNTIME_CODE`,
+   `bytes DEPENDENCIES`. `DEPENDENCIES` is the `abi.encode` of the suite's
+   `address[]` dependency list, and it is `bytes` because Solidity has no
+   file-scope constant of dynamic array type — the released-suites lib emits the
+   matching `abi.decode`
 2. every declaration is `constant`
 3. no `ImportDirective` — a snapshot is read by repos that do not have the
    contract it describes, which is the whole reason a frozen release stays

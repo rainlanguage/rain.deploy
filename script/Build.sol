@@ -20,9 +20,10 @@ struct GeneratedContract {
     /// The prefix for the constants the alias lib exports, e.g.
     /// `ADDRESS_REGISTRY`. Passed rather than derived; see `writeAliasLib`.
     string constantPrefix;
-    /// The rolling candidate from the declaration. Its `sourceCreationCode` is
-    /// what the snapshot is generated from, and its `snapshot` is the template
-    /// the released lib takes its key, artifact path and dependencies from.
+    /// The rolling candidate from the declaration. Its `sourceCreationCode`
+    /// and its `snapshot.dependencies` are what the snapshot is generated FROM
+    /// — both are frozen into it — and its `snapshot` is the template the
+    /// released lib takes its key and artifact path from.
     DeployCandidate candidate;
 }
 
@@ -74,6 +75,11 @@ struct GeneratedContract {
 /// declaration rather than restating it. There is one suite key, one artifact
 /// path and one dependency list per contract in this repo, and a second copy of
 /// them here is a second copy that drifts.
+///
+/// The dependency list goes into the SNAPSHOT rather than into the released lib
+/// on every build. It is a precondition of the broadcast, not metadata, so a
+/// release keeps the list it was cut with. `freeze` regenerates before it
+/// freezes, so the list a release records is the declaration's as of the cut.
 ///
 /// Candidates are reached by NAME rather than by index into `candidateSuites()`
 /// for the same reason: a released-suites lib describes one contract, so a
@@ -171,7 +177,8 @@ contract Build is Script, RegistryDeploySuites {
                 vm,
                 LibRainDeploySnapshot.CANDIDATE,
                 contracts[i].contractName,
-                contracts[i].candidate.sourceCreationCode
+                contracts[i].candidate.sourceCreationCode,
+                contracts[i].candidate.snapshot.dependencies
             );
         }
     }
