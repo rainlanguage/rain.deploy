@@ -305,6 +305,18 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
    verifies and publishes; it never broadcasts, which is exactly why step 1
    cannot be folded into it.
 
+`cutRelease()` refuses step 3 outright while `ADDRESS_REGISTRY_ROOT` is zero, so
+setting a real root is a prerequisite of the first release rather than a step
+somebody has to remember. A registry compiled under a zero root can never bind a
+name, and freezing one declares a suite that step 2 requires live on every
+supported network from then on — including networks added years later — at an
+address that answers every read with a revert. Setting a real root afterwards
+does not retire it, because the root is in the creation code, so the working
+registry is a second, different address and the dead one stays declared. Steps 1
+and 2 work unchanged under a zero root; only the step that cannot be undone is
+gated, and it gates the whole release, since a release is every generated
+contract frozen into one tag.
+
 This is a deploy repo: it carries deployed concretes whose addresses and
 codehashes consumers pin, so releases are **manual `sol-v*` tags**, not merges.
 `[package].version` is the LAST released version, naming the current

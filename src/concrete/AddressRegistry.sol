@@ -19,6 +19,12 @@ import {IAddressRegistryV1} from "../interface/IAddressRegistryV1.sol";
 /// Setting a real root is an ordinary source change. It moves the creation
 /// code, and therefore the deploy address, the code hash, the snapshot
 /// `script/Build.sol` generates and the release that carries them.
+///
+/// It is also a prerequisite of the first release, rather than a step anyone
+/// has to remember: `script/Build.sol` refuses to cut one while this is zero.
+/// Deploying an inert registry is repeatable, but freezing one declares a suite
+/// that every supported network must carry forever, at an address that can
+/// never answer a read and that setting a real root later does not replace.
 address constant ADDRESS_REGISTRY_ROOT = address(0);
 
 /// @title AddressRegistry
