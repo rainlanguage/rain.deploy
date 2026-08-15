@@ -12,6 +12,7 @@ import {
     UnreleasableVersion
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
+import {LibStringSet} from "../../lib/LibStringSet.sol";
 
 /// @title LibRainDeploySnapshotTest
 /// @notice The guards on the release machinery every deploy repo inherits.
@@ -66,20 +67,6 @@ contract LibRainDeploySnapshotTest is Test {
         vm.writeFile(path, string.concat("// SPDX-License", "-Identifier: LicenseRef-DCL-1.0\n"));
     }
 
-    /// Whether `paths` holds `path`. The walk's order is the filesystem's, so
-    /// membership is the only thing worth asserting about it.
-    /// @param paths The paths returned by the walk.
-    /// @param path The path to look for.
-    /// @return Whether it is there.
-    function holdsPath(string[] memory paths, string memory path) internal pure returns (bool) {
-        for (uint256 i = 0; i < paths.length; i++) {
-            if (keccak256(bytes(paths[i])) == keccak256(bytes(path))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     /// A release tag is what `tagForVersion` produces and nothing else, so
     /// exactly the directories a freeze can write are the ones the record
     /// counts. The rolling `candidate/` is excluded by that same rule rather
@@ -119,6 +106,10 @@ contract LibRainDeploySnapshotTest is Test {
     /// what a repo has released that cannot fall behind, so a walk that quietly
     /// found nothing would leave exactly the hole it is here to close. Driven
     /// against a directory that really has releases in it.
+    ///
+    /// Asserted as membership plus a count rather than as a sequence: the walk's
+    /// order is the filesystem's, so an assertion about position would be an
+    /// assertion about the machine that ran it.
     function testFrozenSnapshotPathsFindsEveryReleaseAndNothingElse() external {
         writeFixture(string.concat(FIXTURE_ROOT, "/0_0_1/MockDeployable.sol"));
         writeFixture(string.concat(FIXTURE_ROOT, "/0_0_2/MockDeployableV2.sol"));
@@ -135,9 +126,9 @@ contract LibRainDeploySnapshotTest is Test {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(FIXTURE_ROOT, true);
 
-        assertTrue(holdsPath(paths, string.concat(FIXTURE_ROOT, "/0_0_1/MockDeployable.sol")));
-        assertTrue(holdsPath(paths, string.concat(FIXTURE_ROOT, "/0_0_2/MockDeployableV2.sol")));
-        assertTrue(holdsPath(paths, string.concat(FIXTURE_ROOT, "/0_0_2/Second.sol")));
+        assertTrue(LibStringSet.holds(paths, string.concat(FIXTURE_ROOT, "/0_0_1/MockDeployable.sol")));
+        assertTrue(LibStringSet.holds(paths, string.concat(FIXTURE_ROOT, "/0_0_2/MockDeployableV2.sol")));
+        assertTrue(LibStringSet.holds(paths, string.concat(FIXTURE_ROOT, "/0_0_2/Second.sol")));
         assertEq(paths.length, 3);
     }
 
@@ -161,7 +152,7 @@ contract LibRainDeploySnapshotTest is Test {
     function testFrozenSnapshotPathsExcludesTheRollingSnapshot() external view {
         assertTrue(vm.exists(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry")));
         assertFalse(
-            holdsPath(
+            LibStringSet.holds(
                 LibRainDeploySnapshot.frozenSnapshotPaths(vm, LibRainDeploySnapshot.LIB_FS_ROOT),
                 LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry")
             )

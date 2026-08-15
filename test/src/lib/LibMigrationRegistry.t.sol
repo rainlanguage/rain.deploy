@@ -10,6 +10,7 @@ import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../../../src/interfa
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
 import {DELEGATION_DESIGNATOR_LENGTH, LibAccountCode} from "../../lib/LibAccountCode.sol";
+import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
 /// @title LibMigrationRegistryTest
 /// Tests for `LibMigrationRegistry`. The registry is not mocked: the real
@@ -26,13 +27,6 @@ contract LibMigrationRegistryTest is Test {
     function deployRegistry() internal returns (IMigrationRegistryV1) {
         LibRainDeploy.etchZoltuFactory(vm);
         return IMigrationRegistryV1(LibRainDeploy.deployZoltu(type(MigrationRegistry).creationCode));
-    }
-
-    /// A migration id that is neither of the two values the head space reserves.
-    /// @param migration The fuzzed candidate.
-    function assumeMigration(bytes32 migration) internal pure {
-        vm.assume(migration != bytes32(0));
-        vm.assume(migration != MIGRATION_HEAD_GENESIS);
     }
 
     /// Occupant code that is ORDINARY contract code rather than a delegation
@@ -103,7 +97,7 @@ contract LibMigrationRegistryTest is Test {
     /// revert.
     function testAppliedUnappliedIsZero(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
         assertEq(LibMigrationRegistry.applied(writer, migration), 0);
@@ -113,7 +107,7 @@ contract LibMigrationRegistryTest is Test {
     /// through the library, so what `applyMigration` writes is what `applied`
     /// finds.
     function testApplyMigrationThenApplied(bytes32 migration, uint32 appliedAt) external {
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(appliedAt != 0);
         deployRegistry();
         vm.warp(appliedAt);
@@ -127,8 +121,8 @@ contract LibMigrationRegistryTest is Test {
     /// record moves the head to itself. This is the value the next migration
     /// has to name, so it is read through the library rather than assumed.
     function testHeadFollowsTheRecords(bytes32 migrationA, bytes32 migrationB) external {
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
         deployRegistry();
 
@@ -145,8 +139,8 @@ contract LibMigrationRegistryTest is Test {
     /// the registry's own revert arrives unmodified. This is a skipped step
     /// failing at the moment of applying rather than a chain quietly diverging.
     function testApplyMigrationSkippedPredecessorReverts(bytes32 migration, bytes32 skipped) external {
-        assumeMigration(migration);
-        assumeMigration(skipped);
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        LibMigrationFuzz.assumeMigration(vm, skipped);
         deployRegistry();
 
         vm.expectRevert(
@@ -165,7 +159,7 @@ contract LibMigrationRegistryTest is Test {
     /// chooses its namespace by choosing what sends the transaction, and cannot
     /// write anybody else's.
     function testApplyMigrationLandsUnderTheCallingContract(bytes32 migration) external {
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
         MockMigrationApplier applier = new MockMigrationApplier();
 
@@ -180,7 +174,7 @@ contract LibMigrationRegistryTest is Test {
     /// nor unblocks another's. This is the whole of the access control: a
     /// reader's choice of writer is the whole of who it trusts.
     function testApplyMigrationDoesNotReachAnotherNamespace(bytes32 migration) external {
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
         MockMigrationApplier applier = new MockMigrationApplier();
         MockMigrationApplier other = new MockMigrationApplier();
@@ -197,7 +191,7 @@ contract LibMigrationRegistryTest is Test {
     /// revert arrives unmodified — the library adds no handling of its own, so
     /// a re-dispatched migration fails naming the writer and the id.
     function testApplyMigrationTwiceReverts(bytes32 migration) external {
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
         LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
@@ -228,7 +222,7 @@ contract LibMigrationRegistryTest is Test {
 
     /// The registry's zero-writer refusal arrives unmodified through `applied`.
     function testAppliedZeroWriterReverts(bytes32 migration) external {
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
