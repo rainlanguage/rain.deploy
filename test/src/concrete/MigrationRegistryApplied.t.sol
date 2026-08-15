@@ -99,8 +99,7 @@ contract MigrationRegistryAppliedTest is Test {
     /// The genesis head is refused as a migration for the same reason again:
     /// `applyMigration` will not write it either, so asking about it would
     /// answer zero forever to a caller that has confused a head for a migration
-    /// — and that
-    /// caller reads zero as its pre-migration branch.
+    /// — and that caller reads zero as its pre-migration branch.
     function testAppliedGenesisMigrationReverts(address writer) external {
         vm.assume(writer != address(0));
 

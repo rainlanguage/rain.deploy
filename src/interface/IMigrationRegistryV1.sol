@@ -9,13 +9,12 @@ pragma solidity ^0.8.25;
 /// It is deliberately NOT zero. Zero is what an uninitialised `bytes32` constant
 /// reads as, and a genesis of zero would make an uninitialised predecessor
 /// constant a SUCCESSFUL first application on any namespace that happens to be
-/// empty
-/// — which is the state of every namespace on every chain the consumer has not
-/// migrated yet, i.e. exactly where a mis-set constant is most likely and most
-/// expensive. Under a nonzero genesis that same constant is a revert in every
-/// namespace state, empty or not, for the same reason `ZeroMigration` and
-/// `ZeroWriter` exist: an uninitialised value is a mistake to be reported, never
-/// a question to be answered.
+/// empty — which is the state of every namespace on every chain the consumer
+/// has not migrated yet, i.e. exactly where a mis-set constant is most likely
+/// and most expensive. Under a nonzero genesis that same constant is a revert
+/// in every namespace state, empty or not, for the same reason `ZeroMigration`
+/// and `ZeroWriter` exist: an uninitialised value is a mistake to be reported,
+/// never a question to be answered.
 ///
 /// It is one shared value rather than anything derived per writer or per
 /// consumer, so it configures nothing and cannot fragment the implementation's
@@ -183,9 +182,8 @@ interface IMigrationRegistryV1 {
     /// head, not a migration: applying it would leave a namespace that has
     /// applied something at a head no different from one that has applied
     /// nothing, and asking `applied` about it would answer zero forever for a
-    /// caller that has
-    /// confused a head for a migration and will read that as its pre-migration
-    /// branch.
+    /// caller that has confused a head for a migration and will read that as
+    /// its pre-migration branch.
     ///
     /// This is the same refusal as `ZeroMigration` under a different diagnosis,
     /// and they are separate errors because the mistakes are different: a zero

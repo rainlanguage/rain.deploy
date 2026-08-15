@@ -59,7 +59,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// Two migrations applied in different blocks carry different timestamps,
     /// and the earlier one does not move when the later one lands. A record is
     /// of the moment it happened, not of the last time anything happened.
-    function testApplyMigrationTimestampsAreIndependent(address writer, bytes32 migrationA, bytes32 migrationB) external {
+    function testApplyMigrationTimestampsAreIndependent(address writer, bytes32 migrationA, bytes32 migrationB)
+        external
+    {
         vm.assume(writer != address(0));
         assumeMigration(migrationA);
         assumeMigration(migrationB);
@@ -211,7 +213,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// Genesis stops being an acceptable head the moment anything is applied,
     /// so a first-migration script re-run against a namespace that has moved on
     /// fails rather than restarting the sequence.
-    function testApplyMigrationOntoGenesisAfterFirstReverts(address writer, bytes32 migrationA, bytes32 migrationB) external {
+    function testApplyMigrationOntoGenesisAfterFirstReverts(address writer, bytes32 migrationA, bytes32 migrationB)
+        external
+    {
         vm.assume(writer != address(0));
         assumeMigration(migrationA);
         assumeMigration(migrationB);
@@ -232,7 +236,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// A head belongs to one namespace. One writer advancing its head leaves
     /// every other writer's exactly where it was, so a second consumer's
     /// migrations are not blocked or unblocked by the first's.
-    function testApplyMigrationHeadIsPerWriter(address writer, address other, bytes32 migrationA, bytes32 migrationB) external {
+    function testApplyMigrationHeadIsPerWriter(address writer, address other, bytes32 migrationA, bytes32 migrationB)
+        external
+    {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
         vm.assume(writer != other);
@@ -264,8 +270,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// A zero head never matches anything, including on a namespace that has
     /// applied nothing — which is the whole reason genesis is not zero. An
     /// uninitialised predecessor constant is a revert in every namespace state,
-    /// rather than a successful first application on every chain that happens to be
-    /// empty.
+    /// rather than a successful first application on every chain that happens
+    /// to be empty.
     function testApplyMigrationZeroHeadRevertsOnEmptyNamespace(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
         assumeMigration(migration);
@@ -282,7 +288,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
     }
 
     /// And on a namespace that has applied something.
-    function testApplyMigrationZeroHeadRevertsOnUsedNamespace(address writer, bytes32 migrationA, bytes32 migrationB) external {
+    function testApplyMigrationZeroHeadRevertsOnUsedNamespace(address writer, bytes32 migrationA, bytes32 migrationB)
+        external
+    {
         vm.assume(writer != address(0));
         assumeMigration(migrationA);
         assumeMigration(migrationB);
@@ -324,7 +332,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// perfectly, and is still refused — otherwise the head would move BACKWARDS
     /// and the original timestamp would be overwritten, which is a record
     /// un-happening.
-    function testApplyMigrationAgainOnMatchingHeadReverts(address writer, bytes32 migrationA, bytes32 migrationB) external {
+    function testApplyMigrationAgainOnMatchingHeadReverts(address writer, bytes32 migrationA, bytes32 migrationB)
+        external
+    {
         vm.assume(writer != address(0));
         assumeMigration(migrationA);
         assumeMigration(migrationB);
@@ -444,7 +454,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// Fuzzed over the head for the same reason
     /// `testApplyMigrationZeroMigrationCheckedFirst` is: a matching head alone
     /// cannot tell the two orderings apart.
-    function testApplyMigrationGenesisMigrationRevertsOnAnyHead(address writer, bytes32 migration, bytes32 anyHead) external {
+    function testApplyMigrationGenesisMigrationRevertsOnAnyHead(address writer, bytes32 migration, bytes32 anyHead)
+        external
+    {
         vm.assume(writer != address(0));
         assumeMigration(migration);
 

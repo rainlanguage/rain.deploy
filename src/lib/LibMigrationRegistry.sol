@@ -62,8 +62,7 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// `applyMigration` takes the migration the caller believes ran last in its
 /// namespace, so a chain that never got that predecessor refuses the write
 /// instead of silently skipping a step, and two migrations dispatched at once
-/// cannot land
-/// in the wrong order. The first migration in a namespace names
+/// cannot land in the wrong order. The first migration in a namespace names
 /// `MIGRATION_HEAD_GENESIS`, imported from the interface — never a zero, which
 /// is what an uninitialised constant would be and is refused everywhere.
 ///
