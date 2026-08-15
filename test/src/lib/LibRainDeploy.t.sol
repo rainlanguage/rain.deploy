@@ -9,7 +9,6 @@ import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/Addr
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
 import {MockDirtyWordOwner} from "../../concrete/MockDirtyWordOwner.sol";
-import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
