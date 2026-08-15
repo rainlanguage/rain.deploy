@@ -206,11 +206,16 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// in a comment or in a longer identifier, and defeated by a declaration
     /// written with no space before its brace.
     ///
-    /// `vm.isFile` on the path half AS WELL, because foundry resolves an
-    /// artifact id by path SUFFIX. `AddressRegistry.sol:AddressRegistry`
-    /// resolves for `vm.getCode` and is still not a path the printed command
-    /// can be run with, and a suffix is exactly what a file moved DEEPER leaves
-    /// behind.
+    /// `vm.isFile` on the path half AS WELL, because `vm.getCode` resolves an
+    /// artifact id by path SUFFIX while the printed command is run from the
+    /// repo root. `concrete/AddressRegistry.sol:AddressRegistry` resolves for
+    /// `vm.getCode` — uniquely, and to the right contract — and still names no
+    /// file anybody can point `forge verify-contract` at. That is the one shape
+    /// of wrong path nothing else in this repo goes red on.
+    ///
+    /// A path outside the `fs_permissions` roots fails here as a cheatcode
+    /// revert naming the path rather than as this assertion's own message,
+    /// which is foundry refusing to look rather than looking and not finding.
     ///
     /// Compared against the candidate's own `sourceCreationCode` rather than
     /// merely required to resolve to something, because resolving is not the
