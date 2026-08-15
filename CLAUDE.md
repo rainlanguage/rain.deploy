@@ -299,7 +299,7 @@ purpose: the suites and the broadcast are both inherited. Run only via the
 
 **`src/abstract/RegistryDeploySuites.sol`** — this repo's own declaration, one
 named candidate per deployed registry, inherited by `script/Deploy.sol`,
-`script/Build.sol` and both pins test contracts.
+`script/Build.sol`, the pins test contracts and `GeneratedSnapshotShapeTest`.
 
 **`src/abstract/RainDeployVerify*.sol`** — the deploy-pin verification every
 deploy repo inherits instead of hand-writing.
