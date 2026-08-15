@@ -26,10 +26,21 @@ error UnknownDeploymentSuite(string requested, string validSuites);
 /// to declare. When the candidate was a single struct this was true by
 /// construction; a list has to say it.
 ///
-/// Raised from `allSuites`, which is the only way anything reads the
-/// declaration — `suiteNames` and `suiteByName` both go through it — so there
-/// is no reader that answers from an empty one.
+/// Raised from `checkedCandidateSuites`, which is the only way anything reads
+/// the candidates — `allSuites` goes through it and so does the source anchor,
+/// and `suiteNames` and `suiteByName` go through `allSuites` — so there is no
+/// reader that answers from an empty one.
 error NoDeployCandidates();
+
+/// Thrown when a candidate's recorded creation code is not the creation code
+/// this repo currently compiles. Hashes rather than the bytes themselves, which
+/// run to tens of kilobytes.
+/// @param suite The candidate's key.
+/// @param storedCreationCodeHash Hash of the creation code the candidate
+/// records.
+/// @param sourceCreationCodeHash Hash of `type(X).creationCode` for the
+/// contract the candidate claims to be.
+error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, bytes32 sourceCreationCodeHash);
 
 /// One deployable unit: a named snapshot of one contract.
 ///
@@ -148,17 +159,64 @@ abstract contract RainDeploySuitesBase {
     /// The declared candidates, refusing an empty list.
     ///
     /// The ONE place `NoDeployCandidates` is raised, and the only way anything
-    /// reads the candidates. `allSuites` goes through it, and so does the
-    /// source anchor in `RainDeployVerifySnapshot` — which matters, because the
-    /// source anchor loops over the candidates and a loop over an empty list
-    /// passes. Guarding each reader separately would be two spellings of one
-    /// rule, and the reader that got the second spelling wrong is the one that
-    /// silently stops asserting.
+    /// reads the candidates. `allSuites` goes through it, and so does
+    /// `checkCandidatesAnchoredToSource` — which matters, because the source
+    /// anchor loops over the candidates and a loop over an empty list passes.
+    /// Guarding each reader separately would be two spellings of one rule, and
+    /// the reader that got the second spelling wrong is the one that silently
+    /// stops asserting.
     /// @return candidates The candidates.
     function checkedCandidateSuites() internal pure returns (DeployCandidate[] memory candidates) {
         candidates = candidateSuites();
         if (candidates.length == 0) {
             revert NoDeployCandidates();
+        }
+    }
+
+    /// EVERY candidate MUST record the creation code this repo compiles.
+    ///
+    /// This is the ONLY check that catches a snapshot of the wrong contract.
+    /// Everything else a snapshot is asked is internal to the snapshot — the
+    /// recorded address is what the recorded creation code derives, the
+    /// recorded code hash is what it produces — and a consistent snapshot of
+    /// the wrong thing satisfies all of it, because the wrong contract's bytes
+    /// agree with each other perfectly.
+    ///
+    /// It lives on the DECLARATION rather than on the verification abstract
+    /// because the broadcast runs it too. `RainDeployBroadcast` deploys the
+    /// bytes a candidate records, and the only guard between it and the Zoltu
+    /// factory is `LibRainDeploy`'s recorded-address-against-recorded-creation-
+    /// code comparison — both sides of which come out of the same generated
+    /// file, so it proves that file is internally consistent and nothing more.
+    /// A source anchor reachable only from a test contract is an anchor the
+    /// irreversible action does not run: broadcasting is `workflow_dispatch` on
+    /// a ref with no required-green gate, so "CI is red on that ref" is a
+    /// signal a human may not have read, and CREATE2 at a zero salt puts the
+    /// wrong bytes at their own permanent address on every chain the dispatch
+    /// reached. One definition, both callers, no way to deploy past it.
+    ///
+    /// EVERY candidate, because a candidate the loop never reaches is a
+    /// contract whose snapshot nothing anywhere anchors — and a repo with
+    /// several contracts is exactly where a snapshot generated from the wrong
+    /// one comes from.
+    ///
+    /// Read through `checkedCandidateSuites` rather than `candidateSuites`: a
+    /// loop over an empty list passes, so a declaration with no candidate at
+    /// all would turn this into a green check that asserts nothing.
+    ///
+    /// Candidates alone, and there is no way to spell an exemption. A released
+    /// suite is MEANT to diverge from current source — it records bytes that
+    /// are already on chain — so anchoring one to source asserts something
+    /// false by design, which is why `DeploySuite` carries no source at all and
+    /// only `DeployCandidate` does.
+    function checkCandidatesAnchoredToSource() internal pure {
+        DeployCandidate[] memory candidates = checkedCandidateSuites();
+        for (uint256 i = 0; i < candidates.length; i++) {
+            bytes32 stored = keccak256(candidates[i].snapshot.creationCode);
+            bytes32 source = keccak256(candidates[i].sourceCreationCode);
+            if (stored != source) {
+                revert CandidateSourceMismatch(candidates[i].snapshot.suite, stored, source);
+            }
         }
     }
 

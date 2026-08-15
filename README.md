@@ -122,6 +122,16 @@ it. A candidate the source anchor never reaches is a contract whose snapshot
 nothing anywhere anchors, and a repo with several contracts is exactly where a
 snapshot generated from the wrong one comes from.
 
+The source group is also the only one that is not only a test. It is defined on
+the suite declaration, and the broadcast runs it before it selects a suite or
+reads a key. The deploy reads the same recorded bytes, and the only other guard
+in front of the `CREATE2` compares the recorded address against what the
+recorded creation code derives — both out of the same generated file, so it
+catches a stale pin and cannot catch a snapshot of the wrong contract. An anchor
+only a test contract could reach would be an anchor the irreversible action does
+not run, and `CREATE2` at a zero salt puts the wrong bytes at their own
+permanent address on every chain the dispatch reached.
+
 The chain group carries the mirror image of that exemption: it applies to
 **released versions only**. A release IS a deployment that happened, so "it is
 live on every supported network" is either true of it or a defect. A candidate

@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
-import {DeployCandidate, DeploySuite} from "./RainDeploySuitesBase.sol";
+import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
@@ -27,16 +27,6 @@ error StoredCodeHashMismatch(string suite, bytes32 storedCodeHash, bytes32 deriv
 /// @param storedBytecodeHash The code hash the suite records.
 /// @param runtimeCodeHash The hash of the runtime code the suite records.
 error StoredRuntimeCodeHashMismatch(string suite, bytes32 storedBytecodeHash, bytes32 runtimeCodeHash);
-
-/// Thrown when the candidate's recorded creation code is not the creation code
-/// this repo currently compiles. Hashes rather than the bytes themselves, which
-/// run to tens of kilobytes.
-/// @param suite The candidate's key.
-/// @param storedCreationCodeHash Hash of the creation code the candidate
-/// records.
-/// @param sourceCreationCodeHash Hash of `type(X).creationCode` for the
-/// contract the candidate claims to be.
-error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, bytes32 sourceCreationCodeHash);
 
 /// Thrown when a file in the frozen record is declared by no released suite.
 /// The record is append-only, so this never goes away by itself: a release the
@@ -79,6 +69,12 @@ error FrozenSnapshotUnreadable(string path);
 /// candidate alone: a released tag is meant to have diverged from current
 /// source, so anchoring one to source asserts something that is false by
 /// design.
+///
+/// That one is not defined here. It lives on `RainDeploySuitesBase`, because
+/// `RainDeployBroadcast` runs it before it broadcasts and cannot reach anything
+/// on this side — this inherits `Test`. Here it is a test; there it is the last
+/// thing standing between a stale generated file and a permanent `CREATE2`
+/// address on every chain a dispatch reaches.
 ///
 /// **Anchored to the record.** Every file in the frozen record — the
 /// append-only `src/generated/<tag>/` directories — is declared by a released
@@ -208,18 +204,6 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifyBase {
         }
     }
 
-    /// Checks the candidate against the source this repo compiles.
-    /// @param candidate The candidate to check.
-    function checkAnchoredToSource(DeployCandidate memory candidate) internal pure {
-        if (keccak256(candidate.snapshot.creationCode) != keccak256(candidate.sourceCreationCode)) {
-            revert CandidateSourceMismatch(
-                candidate.snapshot.suite,
-                keccak256(candidate.snapshot.creationCode),
-                keccak256(candidate.sourceCreationCode)
-            );
-        }
-    }
-
     /// Every declared suite MUST be internally consistent: what it records is
     /// what its own creation code derives.
     function testSnapshotInternallyConsistent() external {
@@ -229,32 +213,16 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifyBase {
         }
     }
 
-    /// Checks every candidate in a set against the source it claims to be.
-    ///
-    /// Every one, because this is the only check that catches a wrong-contract
-    /// snapshot at all: a candidate the loop never reaches is a contract whose
-    /// snapshot nothing anywhere anchors, and a repo with several contracts is
-    /// exactly where a snapshot generated from the wrong one comes from.
-    ///
-    /// Takes the set as an argument, as `checkFrozenSnapshotsReleased` does, so
-    /// the loop is drivable with a set built to break it rather than only with
-    /// whatever the inheriting repo happens to declare.
-    /// @param candidates The candidates to check.
-    function checkCandidatesAnchoredToSource(DeployCandidate[] memory candidates) internal pure {
-        for (uint256 i = 0; i < candidates.length; i++) {
-            checkAnchoredToSource(candidates[i]);
-        }
-    }
-
     /// EVERY candidate MUST be a snapshot of the contract this repo compiles,
     /// not of some other contract that happens to be internally consistent.
     ///
-    /// Read through `checkedCandidateSuites` rather than `candidateSuites`: a
-    /// loop over an empty list passes, so a declaration with no candidate at
-    /// all would turn the one check that catches a wrong-contract snapshot into
-    /// a green test that asserts nothing.
+    /// The check itself is `RainDeploySuitesBase.checkCandidatesAnchoredToSource`
+    /// rather than anything here, because `RainDeployBroadcast` runs the same
+    /// definition before it broadcasts. A second spelling on this side is a
+    /// spelling the deploy does not run, which is exactly the state this test
+    /// would otherwise be reporting green about.
     function testSnapshotMatchesSource() external pure {
-        checkCandidatesAnchoredToSource(checkedCandidateSuites());
+        checkCandidatesAnchoredToSource();
     }
 
     /// Every release in the frozen record MUST be declared, so that the set the
