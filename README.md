@@ -152,6 +152,16 @@ root authority binds a name, anyone reads a bound name, and reading an unbound
 name reverts rather than answering with the zero address. There is no removal,
 no upgrade and no authority besides root.
 
+**Root is `address(0)` during rollout, so a registry deployed now is inert.**
+`ADDRESS_REGISTRY_ROOT` in `src/concrete/AddressRegistry.sol` is the one place
+that value lives. Nothing calls from the zero address, so no name can be bound,
+and every read of an unbound name reverts — it fails loudly in both directions
+and can never answer with a wrong address. Root is welded into the creation
+code, so setting a real one moves the deploy address, the code hash and the
+snapshot with it: the registry compiled under a zero root is not the one a
+consumer will eventually resolve against, and deploying it now is not
+preparation for the one that is.
+
 Bindings are **mutable**, because the addresses they name are. Rotating an
 owning multisig is ordinary business and has to be expressible without moving
 anybody's deterministic address — which a binding welded to one address forever
