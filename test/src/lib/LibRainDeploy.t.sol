@@ -645,6 +645,14 @@ contract LibRainDeployTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         address[] memory dependencies = new address[](0);
 
+        // Absent on the fork BEFORE the call, so the read after it is about
+        // what the call did rather than about what arbitrum happens to hold.
+        // The Zoltu factory is permissionless, so this is a premise about the
+        // chain and it says so — a mock that turned up at that address would
+        // fail here, naming itself, instead of silently making the assertion
+        // below true for a reason that has nothing to do with the library.
+        assertEq(mockDeployableV2Address().code.length, 0);
+
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.UnexpectedDeployedAddress.selector, mockDeployableAddress(), mockDeployableV2Address()

@@ -2,17 +2,14 @@ version = 1
 
 [[annotations]]
 path = [
-  ".gas-snapshot",
   ".github/**/",
   ".gitignore",
-  ".gitmodules",
   ".soldeerignore",
   "audit/**/",
   "README.md",
   "flake.lock",
   "flake.nix",
   "foundry.toml",
-  "foundry.lock",
   "remappings.txt",
   "slither.config.json",
   "REUSE.toml",

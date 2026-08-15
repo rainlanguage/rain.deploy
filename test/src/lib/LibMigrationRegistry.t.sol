@@ -9,6 +9,7 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV1.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
+import {DELEGATION_DESIGNATOR_LENGTH, LibAccountCode} from "../../lib/LibAccountCode.sol";
 
 /// @title LibMigrationRegistryTest
 /// Tests for `LibMigrationRegistry`. The registry is not mocked: the real
@@ -32,6 +33,30 @@ contract LibMigrationRegistryTest is Test {
     function assumeMigration(bytes32 migration) internal pure {
         vm.assume(migration != bytes32(0));
         vm.assume(migration != MIGRATION_HEAD_GENESIS);
+    }
+
+    /// Occupant code that is ORDINARY contract code rather than a delegation
+    /// designator, which is the kind the three `WrongCode` cases fuzz.
+    ///
+    /// `LibAccountCode` is what says why the split exists. The designator kind
+    /// is covered on its own by the three `DelegatedCode` cases, because an
+    /// account holding one executes the delegate's code while carrying 23 bytes
+    /// of its own — a shape no amount of fuzzing `bytes` can construct, and one
+    /// `vm.etch` refuses at every length but that.
+    /// @param code The fuzzed candidate.
+    function assumeOrdinaryCode(bytes memory code) internal pure {
+        vm.assume(code.length > 0);
+        vm.assume(!LibAccountCode.hasDelegationPrefix(code));
+    }
+
+    /// The designator that delegates the registry address to `delegate`,
+    /// refusing the clearing form — a delegation to zero leaves the account
+    /// empty, which is what the `NoRegistry` cases already cover.
+    /// @param delegate The fuzzed delegate.
+    /// @return designator The 23-byte designator.
+    function assumedDesignator(address delegate) internal pure returns (bytes memory designator) {
+        vm.assume(delegate != address(0));
+        designator = LibAccountCode.delegationDesignator(delegate);
     }
 
     /// External wrapper for `applied` so that `vm.expectRevert` works at the
@@ -289,11 +314,11 @@ contract LibMigrationRegistryTest is Test {
         this.externalApplyMigration(expectedHead, migration);
     }
 
-    /// A chain where something other than the pinned registry occupies the
+    /// A chain where ordinary code other than the pinned registry occupies the
     /// address reverts on the code hash, so a migration is never read from code
     /// the caller did not compile against.
     function testAppliedWrongCode(address writer, bytes32 migration, bytes memory code) external {
-        vm.assume(code.length > 0);
+        assumeOrdinaryCode(code);
         vm.assume(keccak256(code) != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH);
         vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
 
@@ -309,7 +334,7 @@ contract LibMigrationRegistryTest is Test {
 
     /// Nor is a head.
     function testHeadWrongCode(address writer, bytes memory code) external {
-        vm.assume(code.length > 0);
+        assumeOrdinaryCode(code);
         vm.assume(keccak256(code) != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH);
         vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
 
@@ -325,7 +350,7 @@ contract LibMigrationRegistryTest is Test {
 
     /// And never applied into it either.
     function testApplyMigrationWrongCode(bytes32 expectedHead, bytes32 migration, bytes memory code) external {
-        vm.assume(code.length > 0);
+        assumeOrdinaryCode(code);
         vm.assume(keccak256(code) != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH);
         vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
 
@@ -334,6 +359,75 @@ contract LibMigrationRegistryTest is Test {
                 LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
                 LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
                 keccak256(code)
+            )
+        );
+        this.externalApplyMigration(expectedHead, migration);
+    }
+
+    /// A chain where an EOA has DELEGATED the registry address under EIP-7702
+    /// is refused on the code hash exactly as ordinary wrong code is. This is
+    /// the other way an address gets occupied, and the worse one for a reader:
+    /// the account carries 23 bytes of designator while executing whatever the
+    /// delegate holds, so an address that looks like nothing at all can answer
+    /// `applied` with any timestamp it likes.
+    ///
+    /// The code hash refuses it without knowing anything about 7702 — a
+    /// delegated account hashes its designator and never the delegate's code,
+    /// so it can never present the pinned registry's hash.
+    /// @param writer The namespace a reader would ask about.
+    /// @param migration The migration a reader would ask about.
+    /// @param delegate The account the registry address is delegated to.
+    function testAppliedDelegatedCode(address writer, bytes32 migration, address delegate) external {
+        bytes memory designator = assumedDesignator(delegate);
+        assertEq(designator.length, DELEGATION_DESIGNATOR_LENGTH);
+
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, designator);
+        assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.codehash, keccak256(designator));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                keccak256(designator)
+            )
+        );
+        this.externalApplied(writer, migration);
+    }
+
+    /// Nor is a head read out of a delegated account.
+    /// @param writer The namespace a reader would ask about.
+    /// @param delegate The account the registry address is delegated to.
+    function testHeadDelegatedCode(address writer, address delegate) external {
+        bytes memory designator = assumedDesignator(delegate);
+
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, designator);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                keccak256(designator)
+            )
+        );
+        this.externalHead(writer);
+    }
+
+    /// And a migration is never applied into one. This is the write, so the
+    /// delegate would otherwise be handed a record the writer believes is in
+    /// the registry and every later reader asserts against.
+    /// @param expectedHead The head the writer believes it is at.
+    /// @param migration The migration being applied.
+    /// @param delegate The account the registry address is delegated to.
+    function testApplyMigrationDelegatedCode(bytes32 expectedHead, bytes32 migration, address delegate) external {
+        bytes memory designator = assumedDesignator(delegate);
+
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, designator);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                keccak256(designator)
             )
         );
         this.externalApplyMigration(expectedHead, migration);

@@ -1,10 +1,8 @@
 .DS_Store
 .coderabbitai.yaml
-.gas-snapshot
 .git
 .github
 .gitignore
-.gitmodules
 .pre-commit-config.yaml
 .soldeerignore
 .vscode
@@ -15,12 +13,9 @@ CLAUDE.md
 /docs
 /flake.lock
 /flake.nix
-/foundry.lock
 /foundry.toml
-/lib
 /out
 /remappings.txt
 /slither.config.json
 /soldeer.lock
-/target
 /test
