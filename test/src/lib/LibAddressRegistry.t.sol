@@ -8,6 +8,7 @@ import {LibAddressRegistryDeploy} from "../../../src/lib/LibAddressRegistryDeplo
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
+import {DELEGATION_DESIGNATOR_LENGTH, LibAccountCode} from "../../lib/LibAccountCode.sol";
 
 /// @title LibAddressRegistryTest
 /// Tests for `LibAddressRegistry`. The registry is not mocked: the real
@@ -88,11 +89,18 @@ contract LibAddressRegistryTest is Test {
         this.externalResolve(name);
     }
 
-    /// A chain where something other than the pinned registry occupies the
-    /// address reverts on the code hash, so a name is never resolved by code
-    /// the caller did not compile against.
+    /// A chain where ORDINARY code — anything that is not a delegation
+    /// designator — occupies the address reverts on the code hash, so a name is
+    /// never resolved by code the caller did not compile against.
+    ///
+    /// The designator family is excluded here and covered by
+    /// `testResolveDelegatedCode` instead. `LibAccountCode` is what says why:
+    /// it is the other KIND of account code, not another value of this one, and
+    /// the arbitrary-`bytes` domain this used to fuzz is not the domain of
+    /// things an account can hold.
     function testResolveWrongCode(bytes32 name, bytes memory code) external {
         vm.assume(code.length > 0);
+        vm.assume(!LibAccountCode.hasDelegationPrefix(code));
         vm.assume(keccak256(code) != LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH);
         vm.etch(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS, code);
 
@@ -101,6 +109,39 @@ contract LibAddressRegistryTest is Test {
                 LibAddressRegistry.UnexpectedAddressRegistryCodeHash.selector,
                 LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH,
                 keccak256(code)
+            )
+        );
+        this.externalResolve(name);
+    }
+
+    /// A chain where an EOA has DELEGATED the registry address under EIP-7702
+    /// reverts on the code hash too. This is the other way an address gets
+    /// occupied, and the more dangerous one: the account carries only 23 bytes
+    /// of designator while executing whatever the delegate holds, so an address
+    /// that looks nothing like a registry can answer `get` however it likes.
+    ///
+    /// The code hash is what refuses it, without knowing anything about 7702:
+    /// the account hashes its designator, never the delegate's code, so a
+    /// delegation can never present the pinned registry's hash.
+    ///
+    /// A delegation to the zero address is the CLEARING form — it leaves the
+    /// account with no code at all, which is `testResolveNoRegistry`, not this.
+    /// @param name The name a caller would resolve.
+    /// @param delegate The account the registry address is delegated to.
+    function testResolveDelegatedCode(bytes32 name, address delegate) external {
+        vm.assume(delegate != address(0));
+        bytes memory designator = LibAccountCode.delegationDesignator(delegate);
+        assertEq(designator.length, DELEGATION_DESIGNATOR_LENGTH);
+        assertTrue(LibAccountCode.hasDelegationPrefix(designator));
+
+        vm.etch(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS, designator);
+        assertEq(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.codehash, keccak256(designator));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibAddressRegistry.UnexpectedAddressRegistryCodeHash.selector,
+                LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH,
+                keccak256(designator)
             )
         );
         this.externalResolve(name);

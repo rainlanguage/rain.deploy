@@ -32,6 +32,28 @@ import {
 /// signal this group exists to raise for its own repo, and precisely the wrong
 /// thing to import into this one.
 ///
+/// ## Absence is CONSTRUCTED here, never assumed
+///
+/// Every state this contract puts the matrix in is one it etches: present, wrong
+/// code, and — the case below — absent. Absent is `vm.etch(addr, hex"")` on an
+/// account that STAYS persistent, so each fork the matrix creates carries the
+/// empty account no matter what that network holds.
+///
+/// Emptying the local account and revoking persistence instead would hand the
+/// matrix the real network, which turns "nothing is deployed at this address"
+/// from something the fixture arranged into a claim about the world. The
+/// exemplar's addresses are derived from `src/generated/candidate/`, so that
+/// claim is one this repo's own `Manual sol artifacts` deploy exists to
+/// falsify: the day `AddressRegistry` was broadcast, the address the fixture
+/// needed empty held 597 bytes of code on all five networks and this group went
+/// red with `next call did not revert as expected` — a test that passed only
+/// while the repo had not yet done the thing it exists to do.
+///
+/// A mock nobody happens to deploy would only move that dependency rather than
+/// remove it: the Zoltu factory is permissionless, so no address is
+/// structurally unoccupiable. Etching the state the assertion is about is what
+/// removes it.
+///
 /// The etch does not make the passing case circular. It writes the runtime code
 /// the compiler emits, while the expectation is derived independently by running
 /// the recorded CREATION code through the Zoltu factory. That the two agree is
@@ -75,8 +97,9 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     /// release that reached four chains of five, or a chain added after a
     /// release that therefore never got it, is invisible to every other check.
     function testChainNotDeployedReverts() external {
-        // Present locally, but no longer carried onto forks.
-        vm.revokePersistent(ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
+        // Emptied, and left persistent, so every fork carries an empty account
+        // here rather than whatever the network holds.
+        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"");
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -93,7 +116,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     /// reaches. The version missing here is the LAST one, so a matrix that
     /// stopped after the first version would pass.
     function testChainNotDeployedRevertsForALaterSuite() external {
-        vm.revokePersistent(secondDeployedAddress());
+        vm.etch(secondDeployedAddress(), hex"");
 
         vm.expectRevert(
             abi.encodeWithSelector(

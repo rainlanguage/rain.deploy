@@ -67,15 +67,32 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
         });
     }
 
-    /// The RELEASE is live everywhere. The candidate is not touched.
+    /// The RELEASE is live everywhere and the CANDIDATE is nowhere, both by
+    /// construction: each account is etched to the state this contract is about
+    /// and made persistent, so every fork carries that state rather than
+    /// whatever the network holds.
+    ///
+    /// The candidate's absence is etched for the same reason the release's
+    /// presence is. Reading it off the real chain would make the premise of
+    /// `testChainIgnoresAnUndeployedCandidate` a claim about the world, and the
+    /// Zoltu factory is permissionless — anyone can put `MockDeployableV2` at
+    /// that address, and this contract would then assert nothing while still
+    /// passing right up until they did.
     function setUp() external {
         vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, ADDRESS_REGISTRY_RUNTIME_CODE);
         vm.makePersistent(ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
+
+        address candidateAddress = LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
+        vm.etch(candidateAddress, hex"");
+        vm.makePersistent(candidateAddress);
     }
 
     /// The matrix MUST pass with the candidate on no network at all, and the
-    /// candidate MUST really be absent — otherwise this passes for the wrong
-    /// reason and says nothing about the scope.
+    /// candidate MUST really be absent on each of them — otherwise this passes
+    /// for the wrong reason and says nothing about the scope. The per-fork
+    /// reads are what say `setUp`'s construction reached every fork, so a
+    /// persistent empty account that stopped carrying would fail here rather
+    /// than quietly hand the matrix a live network.
     function testChainIgnoresAnUndeployedCandidate() external {
         address candidateAddress = LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
         assertNotEq(candidateAddress, ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
