@@ -16,11 +16,11 @@ name: rainix-sol-scheduled
 # the frozen snapshot and the released-suites declaration back to main), so the
 # constants under test here are the ones consumers resolve.
 #
-# Separate workflow rather than a `schedule:` added to `rainix.yaml`, matching
-# the org's other deploy repos: the two triggers answer different questions and
-# a red run should say on sight which one asked. `workflow_dispatch` is here so
-# the sweep can be run on demand — after a manual deploy, or to re-check a chain
-# that was unreachable — without waiting for the next cron tick.
+# Separate workflow rather than a `schedule:` added to `rainix.yaml`: the two
+# triggers answer different questions and a red run should say on sight which
+# one asked. `workflow_dispatch` is here so the sweep can be run on demand —
+# after a manual deploy, or to re-check a chain that was unreachable — without
+# waiting for the next cron tick.
 #
 # The schedule lives in this repo and not in a rainix reusable because it cannot
 # live anywhere else: `rainix-sol.yaml` is `on: workflow_call`, and GitHub only
@@ -36,9 +36,8 @@ name: rainix-sol-scheduled
 # only way to ask.
 on:
   schedule:
-    # Daily, 03:17 UTC. Off the hour deliberately: GitHub's scheduler drops or
-    # delays on-the-hour crons under load, and the deploy repos stagger their
-    # sweeps so they do not all queue against the same fork RPC endpoints.
+    # Daily, 03:17 UTC. Off the hour deliberately: GitHub's scheduler delays or
+    # drops on-the-hour crons under load, since that is when everything queues.
     - cron: "17 3 * * *"
   workflow_dispatch:
 jobs:
