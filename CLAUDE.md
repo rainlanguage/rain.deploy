@@ -394,8 +394,10 @@ expected addresses, expected code hashes, and dependency lists.
   network before anything migrates onto it.
 - **Deploy-repo lifecycle**: a manual `sol-v*` tag is the sole release trigger
   (`rainix-tag-release`), because this repo carries deployed concretes whose
-  pins consumers rely on. `[package].version` is the LAST released version and
-  moves only in lockstep with its snapshots.
+  pins consumers rely on. `[package].version` is the version of the LAST Soldeer
+  publish, and it moves only in lockstep with the frozen `src/generated/<tag>/`
+  record that release writes. A version published before this lifecycle has no
+  such record.
 - **Deploy, then verify, then tag** — in that order, and they are three separate
   things. `script/Deploy.sol` broadcasts the suite `DEPLOYMENT_SUITE` names to
   every network in `supportedNetworks()`, dispatched by hand through

@@ -1,8 +1,10 @@
 [package]
 name = "rain-deploy"
-# Deploy repo: this is the LAST released version, naming the current
-# src/generated/<tag>/ snapshot, not a next-version slot. A normal PR does not
-# bump it; only a `sol-v*` tag release moves it, in lockstep with the snapshot.
+# Deploy repo: this is the version of the LAST Soldeer publish, not a
+# next-version slot. A normal PR does not bump it; only a `sol-v*` tag release
+# moves it, in lockstep with the frozen src/generated/<tag>/ record that release
+# writes. A version published before this lifecycle has no such record, so
+# src/generated/ holds no directory for it.
 version = "0.1.5"
 
 # SPDX-License-Identifier: LicenseRef-DCL-1.0
