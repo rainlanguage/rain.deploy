@@ -196,7 +196,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         assertEq(vm.getNonce(secondDeployedAddress()), 0);
 
         DerivedDeploy[] memory derived = deriveDeployments(allSuites());
-        assertEq(derived.length, 3);
+        assertEq(derived.length, 4);
 
         assertEq(ADDRESS_REGISTRY_DEPLOYED_ADDRESS.code, ADDRESS_REGISTRY_RUNTIME_CODE);
         assertEq(secondDeployedAddress().code, secondRuntimeCode());

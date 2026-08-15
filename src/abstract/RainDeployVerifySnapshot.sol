@@ -229,10 +229,32 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifyBase {
         }
     }
 
-    /// The candidate MUST be a snapshot of the contract this repo compiles, not
-    /// of some other contract that happens to be internally consistent.
+    /// Checks every candidate in a set against the source it claims to be.
+    ///
+    /// Every one, because this is the only check that catches a wrong-contract
+    /// snapshot at all: a candidate the loop never reaches is a contract whose
+    /// snapshot nothing anywhere anchors, and a repo with several contracts is
+    /// exactly where a snapshot generated from the wrong one comes from.
+    ///
+    /// Takes the set as an argument, as `checkFrozenSnapshotsReleased` does, so
+    /// the loop is drivable with a set built to break it rather than only with
+    /// whatever the inheriting repo happens to declare.
+    /// @param candidates The candidates to check.
+    function checkCandidatesAnchoredToSource(DeployCandidate[] memory candidates) internal pure {
+        for (uint256 i = 0; i < candidates.length; i++) {
+            checkAnchoredToSource(candidates[i]);
+        }
+    }
+
+    /// EVERY candidate MUST be a snapshot of the contract this repo compiles,
+    /// not of some other contract that happens to be internally consistent.
+    ///
+    /// Read through `checkedCandidateSuites` rather than `candidateSuites`: a
+    /// loop over an empty list passes, so a declaration with no candidate at
+    /// all would turn the one check that catches a wrong-contract snapshot into
+    /// a green test that asserts nothing.
     function testSnapshotMatchesSource() external pure {
-        checkAnchoredToSource(candidateSuite());
+        checkCandidatesAnchoredToSource(checkedCandidateSuites());
     }
 
     /// Every release in the frozen record MUST be declared, so that the set the

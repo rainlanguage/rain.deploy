@@ -51,8 +51,9 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuite() internal pure override returns (DeployCandidate memory) {
-        return DeployCandidate({
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
+        candidates = new DeployCandidate[](1);
+        candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "second-address-candidate",
                 creationCode: type(MockDeployableV2).creationCode,

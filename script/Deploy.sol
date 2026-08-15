@@ -3,13 +3,14 @@
 pragma solidity =0.8.25;
 
 import {RainDeployBroadcast} from "../src/abstract/RainDeployBroadcast.sol";
-import {AddressRegistryDeploySuites} from "../src/abstract/AddressRegistryDeploySuites.sol";
+import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 
 /// @title Deploy
 /// @notice The on-chain deploy. Broadcasts whichever suite `DEPLOYMENT_SUITE`
-/// names, through the Zoltu factory, to every supported network.
+/// names, through the Zoltu factory, to every supported network. One suite per
+/// dispatch, so this repo's two registries are two dispatches.
 ///
-/// Empty on purpose. The suites come from `AddressRegistryDeploySuites`, which
+/// Empty on purpose. The suites come from `RegistryDeploySuites`, which
 /// is the same declaration the verification tests inherit, and the dispatch,
 /// the key handling and the broadcast come from `RainDeployBroadcast`. A deploy
 /// repo writes its declaration and this pair of base contracts, and nothing
@@ -27,7 +28,9 @@ import {AddressRegistryDeploySuites} from "../src/abstract/AddressRegistryDeploy
 /// chains of five, one RPC down — is fixed by running it again rather than by
 /// unpicking anything.
 ///
-/// `AddressRegistryDeployChainTest` is what says whether this has been run
-/// and worked. It fails until every supported network has the registry, which
-/// is the state this repo is in right now.
-contract Deploy is AddressRegistryDeploySuites, RainDeployBroadcast {}
+/// `RegistryDeployChainTest` is what says whether this has been run and worked
+/// — but only for RELEASED suites, and this repo has released none, so today it
+/// has nothing to check and passes. It gets a subject once a release is frozen,
+/// and then fails until every supported network has that release's code, which
+/// is why the deploy comes before the tag rather than after it.
+contract Deploy is RegistryDeploySuites, RainDeployBroadcast {}

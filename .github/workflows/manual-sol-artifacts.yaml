@@ -1,23 +1,37 @@
 name: Manual sol artifacts
-# The on-chain deploy, run by hand. This repo carries a deployed concrete
-# (`AddressRegistry`) whose address + codehash consumers pin, and
-# `package-release.yaml` cuts a release for a deployment that ALREADY exists —
-# rainix-tag-release verifies the live chains against freshly generated pins and
-# never broadcasts. So the deploy has to happen first, and separately, which is
-# this.
+# The on-chain deploy, run by hand. This repo carries deployed concretes
+# (`AddressRegistry`, `MigrationRegistry`) whose address + codehash consumers
+# pin, and `package-release.yaml` cuts a release for a deployment that ALREADY
+# exists — rainix-tag-release verifies the live chains against freshly generated
+# pins and never broadcasts. So the deploy has to happen first, and separately,
+# which is this.
 #
-# Order is: dispatch this, confirm `AddressRegistryDeployChainTest` passes
-# on every supported network, then push the `sol-v*` tag.
+# Order is: dispatch this once per suite, confirm `RegistryDeployChainTest`
+# passes on every supported network, then push the `sol-v*` tag.
 #
 # Deliberately `workflow_dispatch` only. Broadcasting is key custody and real
 # money; nothing about a merge or a tag should trigger it.
 on:
   workflow_dispatch:
+    inputs:
+      suite:
+        type: choice
+        required: true
+        description: |
+          Which declared suite to broadcast. One dispatch deploys one suite,
+          because `DEPLOYMENT_SUITE` selects one — a repo with two deployed
+          contracts is two dispatches. Offered as a choice rather than typed,
+          so a key that no suite declares cannot be dispatched at all; the
+          script still refuses one, naming the valid keys, if this list falls
+          behind the declaration.
+        options:
+          - address-registry
+          - migration-registry
 jobs:
   deploy:
     uses: rainlanguage/rainix/.github/workflows/rainix-manual-sol-artifacts.yaml@main
     with:
       # Passed through as DEPLOYMENT_SUITE; script/Deploy.sol dispatches on it
       # and reverts on anything else.
-      suite: address-registry
+      suite: ${{ inputs.suite }}
     secrets: inherit
