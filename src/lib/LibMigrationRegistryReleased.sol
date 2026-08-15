@@ -10,15 +10,18 @@ import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 /// @notice Every frozen release of `MigrationRegistry`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
 ///
-/// The deploy address, code hash, creation code and runtime code of each
-/// entry are aliased from that release's own frozen snapshot, so the
-/// consensus record is read from the immutable file and from nowhere else.
+/// The deploy address, code hash, creation code, runtime code and dependency
+/// list of each entry are aliased from that release's own frozen snapshot, so
+/// what a release deployed, and what it required to already be on chain, are
+/// read from the immutable file and from nowhere else. A dependency dropped
+/// from current source stays required by the releases cut with it, and one
+/// added is not imposed on releases cut without it.
 ///
-/// The key, the artifact path and the dependencies are explorer and ordering
-/// metadata regenerated from the CURRENT declaration, and are not part of
-/// that record. A moved source path retroactively updates every entry's
-/// artifact path, which is intended: the alternative is parsing this
-/// generated file back in to preserve what it last said.
+/// The key and the artifact path are explorer and ordering metadata
+/// regenerated from the CURRENT declaration, and are not part of that
+/// record. A moved source path retroactively updates every entry's artifact
+/// path, which is intended: the alternative is parsing this generated file
+/// back in to preserve what it last said.
 library LibMigrationRegistryReleased {
     /// Every frozen release, in tag order.
     /// @return suites The released suites.
