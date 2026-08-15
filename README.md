@@ -61,10 +61,10 @@ abstract contract MyDeploySuites is RainDeploySuitesBase {
 // script/Deploy.sol
 contract Deploy is MyDeploySuites, RainDeployBroadcast {}
 
-// test/src/concrete/MyDeploySnapshot.t.sol
+// test/src/abstract/MyDeploySnapshot.t.sol
 contract MyDeploySnapshotTest is MyDeploySuites, RainDeployVerifySnapshot {}
 
-// test/src/concrete/MyDeployChain.t.sol
+// test/src/abstract/MyDeployChain.t.sol
 contract MyDeployChainTest is MyDeploySuites, RainDeployVerifyChain {}
 ```
 
