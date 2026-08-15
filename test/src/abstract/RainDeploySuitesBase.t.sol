@@ -145,7 +145,7 @@ contract RainDeploySuitesBaseTest is Test {
     /// An empty candidate list reads as a repo with nothing left to declare and
     /// is a repo whose source anchor — the only check that catches a snapshot
     /// of the wrong contract — has been handed nothing to run over. It is
-    /// refused rather than tolerated, and refused on all three readers, because
+    /// refused rather than tolerated, and refused on all four readers, because
     /// a reader that answers from an empty declaration is a reader through
     /// which the whole registry can be empty and green.
     function testNoCandidateReverts() external {
