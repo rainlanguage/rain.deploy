@@ -686,8 +686,7 @@ library LibRainDeploySnapshot {
             libraryName,
             "\n/// @notice Every frozen release of `",
             contractName,
-            "`: one entry per file in\n"
-            "/// the append-only `src/generated/<tag>/` record, in tag order.\n///\n"
+            "`: one entry per file in\n" "/// the append-only `src/generated/<tag>/` record, in tag order.\n///\n"
             "/// The deploy address, code hash, creation code, runtime code and dependency\n"
             "/// list of each entry are aliased from that release's own frozen snapshot, so\n"
             "/// what a release deployed, and what it required to already be on chain, are\n"
@@ -700,8 +699,7 @@ library LibRainDeploySnapshot {
             "/// path, which is intended: the alternative is parsing this generated file\n"
             "/// back in to preserve what it last said.\nlibrary ",
             libraryName,
-            " {\n    /// Every frozen release, in tag order.\n"
-            "    /// @return suites The released suites.\n"
+            " {\n    /// Every frozen release, in tag order.\n" "    /// @return suites The released suites.\n"
             "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n"
             "        suites = new DeploySuite[](",
             vm.toString(paths.length),
