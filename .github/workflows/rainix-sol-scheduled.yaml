@@ -1,0 +1,52 @@
+name: rainix-sol-scheduled
+# The same sol suite as `rainix.yaml`, on a clock instead of on a push.
+#
+# `RegistryDeployChainTest` asks whether every RELEASED registry is live, with
+# the code its release froze, on every network in `supportedNetworks()`. That is
+# the one check whose answer changes without this repo changing: a pin can go
+# from true to false because a chain reorged past the deploy, because a release
+# was declared for a deployment that never landed on one of the five networks,
+# or because the code at the address is not the code the snapshot recorded.
+# Push-triggered CI cannot see any of it — a deploy repo deliberately does not
+# move between releases, so the push that would have asked can be months away,
+# and the pins consumers are already using are wrong for all of that time.
+#
+# Scheduled runs use the default branch, which for this repo is precisely the
+# branch that carries the current release's pins (`rainix-tag-release` commits
+# the frozen snapshot and the released-suites declaration back to main), so the
+# constants under test here are the ones consumers resolve.
+#
+# Separate workflow rather than a `schedule:` added to `rainix.yaml`, matching
+# the org's other deploy repos: the two triggers answer different questions and
+# a red run should say on sight which one asked. `workflow_dispatch` is here so
+# the sweep can be run on demand — after a manual deploy, or to re-check a chain
+# that was unreachable — without waiting for the next cron tick.
+#
+# The schedule lives in this repo and not in a rainix reusable because it cannot
+# live anywhere else: `rainix-sol.yaml` is `on: workflow_call`, and GitHub only
+# honours `schedule:` in the workflow that the event triggers. A reusable cannot
+# schedule itself, so the trigger is necessarily consumer-side even though the
+# jobs it runs are the shared rainix ones.
+#
+# Known gap, not fixed here: GitHub disables scheduled workflows in a PUBLIC
+# repository after 60 days with no repository activity, and a release-frozen
+# deploy repo is exactly the repo that goes quiet that long. When that happens
+# the sweep stops silently and has to be re-enabled by hand, so a repo that has
+# been idle past 60 days is not covered by this and `workflow_dispatch` is the
+# only way to ask.
+on:
+  schedule:
+    # Daily, 03:17 UTC. Off the hour deliberately: GitHub's scheduler drops or
+    # delays on-the-hour crons under load, and the deploy repos stagger their
+    # sweeps so they do not all queue against the same fork RPC endpoints.
+    - cron: "17 3 * * *"
+  workflow_dispatch:
+jobs:
+  rainix-sol:
+    uses: rainlanguage/rainix/.github/workflows/rainix-sol.yaml@main
+    # `inherit`, like every other workflow in this repo. The alternative — an
+    # explicit per-secret list — is a second copy of rainix's declared secret
+    # set that nothing keeps in sync: a network added to `[rpc_endpoints]` and
+    # to rainix would fork on push and silently not fork here, which is the same
+    # class of invisible gap this workflow exists to close.
+    secrets: inherit

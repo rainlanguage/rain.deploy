@@ -298,7 +298,12 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
    suite is live on every supported network, with the code that release froze.
    This repo has released none, so today it has nothing to check and passes; it
    gets a subject the moment step 3 freezes one, and is red from then until step
-   1 has been run everywhere. That is the order these steps are in.
+   1 has been run everywhere. That is the order these steps are in. It is not
+   asked once:
+   [`rainix-sol-scheduled`](.github/workflows/rainix-sol-scheduled.yaml) re-runs
+   the sol suite daily against `main`, because a released pin stops being true —
+   a chain rolls back, a network never got the deploy — without anything in this
+   repo changing to trigger a push build.
 3. **Tag.** Push a `sol-v*` tag. `rainix-tag-release` regenerates the snapshot
    for the version the tag names, verifies the live chains against those fresh
    pins, publishes to Soldeer and commits the frozen snapshot back to `main`. It

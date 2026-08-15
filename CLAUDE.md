@@ -49,6 +49,16 @@ the block above is what they run.
 A fourth workflow, `Manual sol artifacts`, is `workflow_dispatch` only and is
 the on-chain deploy — nothing automatic ever broadcasts.
 
+Those same three tasks run twice over: on every push (`rainix.yaml`) and daily
+on a schedule (`rainix-sol-scheduled.yaml`, also `workflow_dispatch`). The
+schedule exists for group 4 below — `RegistryDeployChainTest` is red on chain
+state that changes with nobody touching this repo, and between releases this
+repo is not touched for months, so a push is not an event that can be waited
+for. Scheduled runs use the default branch, which carries the current release's
+pins. GitHub disables scheduled workflows in a public repo after 60 days of no
+repository activity, which a release-frozen deploy repo can reach; past that the
+sweep has to be re-enabled by hand.
+
 ## RPC Configuration
 
 Fork tests require RPC endpoints defined in `.env` (gitignored):
@@ -340,7 +350,8 @@ Four groups, sorted by what they are anchored to:
    `supportedNetworks()`, every RELEASED version's derived address carries code
    with its derived code hash. The only check that catches "never deployed" or
    "not there any more", neither of which the repo can hold: both go false with
-   nobody touching it.
+   nobody touching it — which is why it is also run on a daily schedule
+   (`rainix-sol-scheduled.yaml`) and not only on push.
 
 Group 4 is released-only for the mirror image of group 2's reason. A release IS
 a deployment that happened; a candidate is what the next release will be, and
