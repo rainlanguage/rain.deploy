@@ -204,11 +204,29 @@ per deployed contract — `AddressRegistry.sol` and `MigrationRegistry.sol` — 
 `forge script script/Build.sol`.
 
 `script/Build.sol` declares those contracts ONCE, in `generatedContracts()`, and
-the regeneration, both lib writers and the freeze all read that list. A contract
-added to it is generated, aliased, released and frozen together. That matters
-most for the freeze: a contract regenerated but absent from the names `freeze`
-is given is a contract silently missing from the release, and a tag that never
-held it has nothing missing from it for anything downstream to notice.
+the regeneration, all three lib writers and the freeze all read that list. A
+contract added to it is generated, aliased, released, declared and frozen
+together. That matters most for the freeze: a contract regenerated but absent
+from the names `freeze` is given is a contract silently missing from the
+release, and a tag that never held it has nothing missing from it for anything
+downstream to notice.
+
+It matters for the DECLARATION one step later, and for the same reason. There is
+one `src/lib/Lib<Contract>Released.sol` per deployed contract, because a release
+freezes every contract it names into a single tag directory and a lib that took
+the record whole would give one contract's snapshot another's suite key. So
+something has to concatenate them, and `src/lib/LibReleasedSuites.sol` is that
+concatenation — also generated, from that same list, which is why
+`RegistryDeploySuites.releasedSuites()` is one call to it rather than a
+summation somebody maintains. A hand-written concatenation is a place a
+generated contract can be missing from with nothing to say so: its released lib
+compiles, is imported by nothing and is read by nothing, and the omission first
+shows up as a failed release job the day that contract is frozen.
+
+So a third deployed contract is a third named candidate in
+`RegistryDeploySuites`, a third entry in its `candidateSuites()`, and a third
+entry in `generatedContracts()`. The released declaration follows from the third
+entry rather than being a fourth place to edit.
 
 A compiler or optimiser change is therefore "run the script, commit". Never
 hand-edit a generated file.
@@ -299,7 +317,9 @@ purpose: the suites and the broadcast are both inherited. Run only via the
 
 **`src/abstract/RegistryDeploySuites.sol`** — this repo's own declaration, one
 named candidate per deployed registry, inherited by `script/Deploy.sol`,
-`script/Build.sol` and both pins test contracts.
+`script/Build.sol` and both pins test contracts. Only the candidates are written
+here; `releasedSuites()` returns the generated `LibReleasedSuites` and nothing
+about a release is spelled by hand.
 
 **`src/abstract/RainDeployVerify*.sol`** — the deploy-pin verification every
 deploy repo inherits instead of hand-writing.

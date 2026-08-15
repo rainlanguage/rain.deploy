@@ -193,6 +193,41 @@ library LibRainDeploySnapshot {
     /// `LibFs.pathForContract` hardcodes it.
     string constant LIB_FS_ROOT = "src/generated";
 
+    /// Where every generated non-snapshot lib is written — the alias libs, the
+    /// per-contract released libs and the aggregate over them.
+    ///
+    /// ONE constant rather than one per writer, because the aggregate imports
+    /// the per-contract libs as `./Lib<Contract>Released.sol` — a sibling path,
+    /// which is only a sibling path while both writers agree on this directory.
+    /// Two spellings of it is a generated file that stops compiling the moment
+    /// one of them moves.
+    string constant LIB_DIR = "src/lib";
+
+    /// The generated aggregate's library name, and the file it is written to.
+    ///
+    /// Named rather than derived from a contract, because it is the ONE lib per
+    /// repo that is about no single contract: it is the whole released
+    /// declaration. Spelled once here because the emitted source, the path and
+    /// the tests that check the committed file against the emitter all have to
+    /// mean the same file.
+    string constant RELEASED_SUITES_LIBRARY = "LibReleasedSuites";
+
+    /// The path of a generated lib, from the directory it goes in and its
+    /// library name.
+    /// @param libDir The directory the generated libs go in.
+    /// @param libraryName The generated library's name.
+    /// @return The path.
+    function pathForLib(string memory libDir, string memory libraryName) internal pure returns (string memory) {
+        return string.concat(libDir, "/", libraryName, ".sol");
+    }
+
+    /// The path of a generated lib in a repo's real `LIB_DIR`.
+    /// @param libraryName The generated library's name.
+    /// @return The path.
+    function pathForLib(string memory libraryName) internal pure returns (string memory) {
+        return pathForLib(LIB_DIR, libraryName);
+    }
+
     /// Every file in the FROZEN record: everything inside a release-tag
     /// directory under `root`.
     ///
@@ -381,7 +416,7 @@ library LibRainDeploySnapshot {
         returns (string memory)
     {
         string memory libraryName = string.concat("Lib", contractName, "Deploy");
-        string memory path = string.concat("src/lib/", libraryName, ".sol");
+        string memory path = pathForLib(libraryName);
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeFile(
@@ -520,6 +555,19 @@ library LibRainDeploySnapshot {
             selected[i] = found[i];
         }
         return sortedRecordPaths(vm, selected);
+    }
+
+    /// The name of the generated lib that declares ONE contract's releases.
+    ///
+    /// Spelled once because two emitters have to agree on it: the writer that
+    /// emits that lib, and the aggregate that imports it. A second spelling is
+    /// an aggregate importing a file nothing ever wrote — which does not
+    /// compile, but only for the repo that regenerates, and the point of
+    /// generating the aggregate is that nobody has to.
+    /// @param contractName The contract the released record describes.
+    /// @return The library name, e.g. `LibAddressRegistryReleased`.
+    function releasedLibraryName(string memory contractName) internal pure returns (string memory) {
+        return string.concat("Lib", contractName, "Released");
     }
 
     /// The import block of a generated released-suites lib.
@@ -694,8 +742,8 @@ library LibRainDeploySnapshot {
         string memory contractName,
         DeploySuite memory template
     ) internal returns (string memory) {
-        string memory libraryName = string.concat("Lib", contractName, "Released");
-        string memory path = string.concat("src/lib/", libraryName, ".sol");
+        string memory libraryName = releasedLibraryName(contractName);
+        string memory path = pathForLib(libraryName);
         string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
@@ -706,6 +754,147 @@ library LibRainDeploySnapshot {
                 "\n",
                 releasedImportBlock(vm, paths),
                 releasedLibraryBlock(vm, libraryName, contractName, paths, template)
+            )
+        );
+        return path;
+    }
+
+    /// The import block of the generated aggregate lib.
+    ///
+    /// One import per contract, of the released lib `writeReleasedSuitesLib`
+    /// emitted for it, by sibling path — both writers emit into `LIB_DIR`, and
+    /// naming the sibling rather than the directory is what keeps that true of
+    /// a repo that moves the directory.
+    /// @param contractNames The contracts whose released libs to aggregate.
+    /// @return imports The import block.
+    function aggregateImportBlock(string[] memory contractNames) internal pure returns (string memory imports) {
+        imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
+        for (uint256 i = 0; i < contractNames.length; i++) {
+            string memory libraryName = releasedLibraryName(contractNames[i]);
+            imports = string.concat(imports, "import {", libraryName, "} from \"./", libraryName, ".sol\";\n\n");
+        }
+    }
+
+    /// The library block of the generated aggregate lib: every per-contract
+    /// released lib read once and copied into one array, in declaration order.
+    ///
+    /// It emits the concatenation rather than computing one, because the
+    /// entries are only known when the emitted source RUNS: a released lib
+    /// declares its own releases, and how many it has is not a thing this
+    /// emitter can see or should have to. So the lengths are summed and the
+    /// offsets are spelled as expressions over them.
+    ///
+    /// A repo with no generated contracts emits a lib returning an empty array.
+    /// That is the state of a deploy repo whose declaration is not written yet,
+    /// and it MUST compile: the aggregate is imported by ordinary source, so a
+    /// repo that could not emit one could not build to get to the point of
+    /// declaring anything.
+    /// @param vm The Vm instance for string operations.
+    /// @param contractNames The contracts whose released libs to aggregate.
+    /// @return The library block.
+    function aggregateLibraryBlock(Vm vm, string[] memory contractNames) internal pure returns (string memory) {
+        string memory locals = "";
+        string memory copies = "";
+        // The running sum of the lengths already emitted: the whole array's
+        // length once the loop is done, and the OFFSET of the contract the loop
+        // is on before its own length is added to it.
+        string memory total = "";
+
+        for (uint256 i = 0; i < contractNames.length; i++) {
+            string memory local = string.concat("released", vm.toString(i));
+
+            locals = string.concat(
+                locals,
+                "        DeploySuite[] memory ",
+                local,
+                " = ",
+                releasedLibraryName(contractNames[i]),
+                ".releasedSuites();\n"
+            );
+
+            copies = string.concat(
+                copies,
+                "        for (uint256 i = 0; i < ",
+                local,
+                ".length; i++) {\n            suites[",
+                bytes(total).length == 0 ? "" : string.concat(total, " + "),
+                "i] = ",
+                local,
+                "[i];\n        }\n"
+            );
+
+            total = string.concat(total, bytes(total).length == 0 ? "" : " + ", local, ".length");
+        }
+
+        return string.concat(
+            "/// @title ",
+            RELEASED_SUITES_LIBRARY,
+            "\n/// @notice Every frozen release this repo has cut, of every contract it\n",
+            "/// deploys: the per-contract released libs concatenated, in declaration\n",
+            "/// order.\n///\n",
+            "/// There is one released lib per deployed contract because a release freezes\n",
+            "/// every contract it names into a single tag directory, so a lib that took\n",
+            "/// the record whole would give another contract's snapshot this contract's\n",
+            "/// suite key and collide with its own entry for that tag. This is where\n",
+            "/// those libs meet, and it is emitted from the same list that wrote them --\n",
+            "/// so a contract that is generated, aliased and frozen cannot be missing\n",
+            "/// from the declaration, and a release missing from the declaration is a\n",
+            "/// release every check quietly stops asking about.\nlibrary ",
+            RELEASED_SUITES_LIBRARY,
+            " {\n    /// Every released suite, in declaration order.\n",
+            "    /// @return suites The released suites.\n",
+            "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n",
+            contractNames.length == 0
+                ? "        suites = new DeploySuite[](0);\n"
+                : string.concat(locals, "\n        suites = new DeploySuite[](", total, ");\n\n", copies),
+            "    }\n}\n"
+        );
+    }
+
+    /// Generate the ONE released-suites lib a repo's declaration reads: the
+    /// per-contract libs concatenated, emitted from the same list that wrote
+    /// them.
+    ///
+    /// The concatenation is the LAST place a contract could be generated,
+    /// aliased and frozen and still be absent from the declaration. Written by
+    /// hand it is also the only one of those places nothing enforces: a
+    /// candidate with no snapshot and a snapshot with no candidate both fail
+    /// the shape assertions, and a missing generated file fails to compile,
+    /// while a released lib that exists and is concatenated nowhere compiles
+    /// cleanly, is read by nothing, and leaves the whole suite green until the
+    /// release that first freezes that contract — at which point the record
+    /// check fails the release job with the tag already pushed.
+    ///
+    /// So it is emitted rather than written, from the one list everything else
+    /// reads, and there is no fourth place.
+    ///
+    /// Written beside the libs it imports, which is what makes those imports
+    /// sibling paths.
+    /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory the per-contract released libs were written
+    /// to, which this is written into as well — `LIB_DIR` for a repo's real
+    /// libs. A parameter for the same reason `writeReleasedSuitesLib` takes a
+    /// record root: a writer that can only be pointed at the committed
+    /// declaration can only be tested by overwriting it, and a test that
+    /// overwrites a file the rest of the suite reads is a test that fails on
+    /// timing. Sibling imports are what make any directory correct, so the
+    /// caller's only obligation is to name the one the released libs went to.
+    /// @param contractNames The contracts whose released libs to aggregate.
+    /// @return The path written.
+    function writeReleasedSuitesAggregate(Vm vm, string memory libDir, string[] memory contractNames)
+        internal
+        returns (string memory)
+    {
+        string memory path = pathForLib(libDir, RELEASED_SUITES_LIBRARY);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(
+            path,
+            string.concat(
+                LibCodeGen.filePrefix(),
+                "\n",
+                aggregateImportBlock(contractNames),
+                aggregateLibraryBlock(vm, contractNames)
             )
         );
         return path;

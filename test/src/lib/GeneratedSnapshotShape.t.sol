@@ -6,6 +6,7 @@ import {Test, Vm} from "forge-std-1.16.1/src/Test.sol";
 import {DeployCandidate} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
 
 /// @title GeneratedSnapshotShapeTest
 /// @notice What a generated deploy snapshot must look like, asserted against
@@ -177,6 +178,61 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
         for (uint256 i = 0; i < snapshots.length; i++) {
             assertTrue(
                 holdsName(declared, snapshots[i]), string.concat("rolling snapshot has no candidate: ", snapshots[i])
+            );
+        }
+    }
+
+    /// PROPERTY: the released aggregate declares exactly the contracts that
+    /// have a rolling snapshot.
+    ///
+    /// `releasedSuites()` reads `src/lib/LibReleasedSuites.sol` and nothing
+    /// else, so a contract missing from it has no declared release at all: its
+    /// own `Lib<Contract>Released` compiles, is imported by nothing, is read by
+    /// nothing, and the whole suite stays green for exactly as long as that
+    /// contract has never been released. The release is when it lands —
+    /// `cutRelease()` freezes every contract in the generated list, and
+    /// `testEveryFrozenSnapshotIsReleased` then reverts on the frozen file that
+    /// no released suite declares, during the release job, with the tag pushed
+    /// and the deploy already broadcast.
+    ///
+    /// Generating the aggregate is what stops that being written. This is what
+    /// stops it being LEFT — a hand-edited or stale aggregate is the same
+    /// defect back — and it fails at the moment of the mistake instead of at
+    /// the release.
+    ///
+    /// Matched against the rolling snapshots rather than against a list here,
+    /// because a list here would be one more place to add a contract to and
+    /// that is the whole finding. `testEveryCandidateHasASnapshot` above pins
+    /// that same set to the declaration, so the two together run the chain from
+    /// the declared candidates through the generator to what `releasedSuites()`
+    /// returns.
+    ///
+    /// Both directions and the count, for the reason the snapshot match gives:
+    /// an aggregate that imports one contract twice and another not at all has
+    /// the right number of imports, and a copied import line is how it happens.
+    function testEverySnapshotIsInTheReleasedAggregate() external view {
+        string[] memory snapshots = snapshotContractNames();
+        string[] memory declared = LibReleasedSuitesAggregate.declaredContractNames(
+            vm, vm.readFile(LibRainDeploySnapshot.pathForLib(LibRainDeploySnapshot.RELEASED_SUITES_LIBRARY))
+        );
+
+        assertEq(
+            declared.length,
+            snapshots.length,
+            "a rolling snapshot is missing from the released aggregate, or the aggregate names a contract with none"
+        );
+
+        for (uint256 i = 0; i < snapshots.length; i++) {
+            assertTrue(
+                holdsName(declared, snapshots[i]),
+                string.concat("rolling snapshot is not in the released aggregate: ", snapshots[i])
+            );
+        }
+
+        for (uint256 i = 0; i < declared.length; i++) {
+            assertTrue(
+                holdsName(snapshots, declared[i]),
+                string.concat("released aggregate names a contract with no rolling snapshot: ", declared[i])
             );
         }
     }
