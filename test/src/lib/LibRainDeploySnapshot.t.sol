@@ -741,30 +741,42 @@ contract LibRainDeploySnapshotTest is Test {
     /// for the same reason: it is a frozen tag from the moment it is created.
     string constant RECUT_EMPTY_FIXTURE_ROOT = "test/generated-recut-empty";
 
+    /// A fixture snapshot's content: a licence header and a marker, and
+    /// deliberately NOTHING a compiler would look at twice.
+    ///
+    /// Two properties, and both are about a run that fails rather than one that
+    /// passes, because a passing run removes its fixtures and a failing one
+    /// cannot.
+    ///
+    /// The licence header is here for the reason `writeFixture` puts one there:
+    /// a failure leaves this on disk, and an unlicensed file in the tree is a
+    /// second failure on top of the first.
+    ///
+    /// It is a COMMENT for a sharper reason. `forge test` compiles everything
+    /// under `test/`, so a fixture a failing test left behind is source the
+    /// NEXT run has to compile — and content that does not compile turns one
+    /// red test into a repo that cannot build until somebody deletes a
+    /// directory by hand. A real snapshot's content is declarations, so writing
+    /// something that looks like one is the tempting thing to do here and is
+    /// precisely what wedges the build.
+    /// @param marker What distinguishes this snapshot from the others.
+    /// @return The fixture snapshot.
+    function fixtureSnapshot(string memory marker) internal pure returns (string memory) {
+        return string.concat("// SPDX-License", "-Identifier: LicenseRef-DCL-1.0\n", "// ", marker, "\n");
+    }
+
     /// What the freeze fixture's regeneration writes, and what a freeze that
     /// ran the regeneration first therefore copies.
-    ///
-    /// The SPDX identifier is split for the reason `writeFixture` splits it: a
-    /// run that fails midway leaves this content on disk, and an unlicensed
-    /// file in the tree is a second failure on top of the first.
     /// @return The regenerated rolling snapshot.
     function freshRolling() internal pure returns (string memory) {
-        return string.concat(
-            "// SPDX-License",
-            "-Identifier: LicenseRef-DCL-1.0\n",
-            "address constant DEPLOYED_ADDRESS = address(0xFEED000000000000000000000000000000000000);\n"
-        );
+        return fixtureSnapshot("regenerated");
     }
 
     /// What is on disk before the call, and what a freeze that read the rolling
     /// snapshot before regenerating it would copy instead.
     /// @return The stale rolling snapshot.
     function staleRolling() internal pure returns (string memory) {
-        return string.concat(
-            "// SPDX-License",
-            "-Identifier: LicenseRef-DCL-1.0\n",
-            "address constant DEPLOYED_ADDRESS = address(0x57A1E00000000000000000000000000000000000);\n"
-        );
+        return fixtureSnapshot("stale");
     }
 
     /// One contract's rolling snapshot, carrying the contract's own name.
@@ -776,8 +788,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// @param contractName The contract the snapshot describes.
     /// @return That contract's rolling snapshot.
     function rollingFor(string memory contractName) internal pure returns (string memory) {
-        return
-            string.concat("// SPDX-License", "-Identifier: LicenseRef-DCL-1.0\n", "// snapshot of ", contractName, "\n");
+        return fixtureSnapshot(string.concat("snapshot of ", contractName));
     }
 
     /// Writes one contract's rolling snapshot into a fixture record.

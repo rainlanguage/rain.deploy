@@ -286,10 +286,17 @@ library LibRainDeploySnapshot {
     /// There is no output root to choose. `LibFs.pathForContract` hardcodes
     /// `LIB_FS_ROOT` and takes a contract name rather than a path, and this is
     /// the repo's real deploy record, which belongs under that root and nowhere
-    /// else. A test that wants a record tree of its own writes one with
-    /// `vm.writeFile` and reads it with `frozenSnapshotPaths`, which does take a
-    /// root, because reading somebody else's tree is a thing a walk genuinely
-    /// does and writing this repo's record somewhere else is not.
+    /// else. This is the one place a snapshot's bytes come into existence, and
+    /// they come from the compiler rather than from another tree, so there is
+    /// nothing for a root to select between.
+    ///
+    /// `freeze` does take a root and that is not the same freedom: it COPIES,
+    /// within one record tree, reading a rolling snapshot under the root it is
+    /// handed and writing the frozen copy under that same root. Pointing a
+    /// copier at a tree of its own is a thing a test genuinely needs, exactly
+    /// as pointing `frozenSnapshotPaths` at one is; GENERATING this repo's
+    /// record anywhere but under `LIB_FS_ROOT` remains something nothing here
+    /// can express.
     /// @param vm The Vm instance for file operations.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
