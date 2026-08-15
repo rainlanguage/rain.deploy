@@ -101,6 +101,59 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.applied(writer, migration), 1);
     }
 
+    /// The zero timestamp is checked LAST, after every refusal that describes a
+    /// mistake in the call. Those are true whatever block the call lands in, so
+    /// a caller in a zero-timestamp block is told which of its arguments is
+    /// wrong rather than told to come back later — and only a caller whose
+    /// arguments are all right is told about the block, which is the one
+    /// refusal that goes away on its own.
+    function testApplyMigrationZeroTimestampCheckedLast(
+        address writer,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        bytes32 anyHead
+    ) external {
+        vm.assume(writer != address(0));
+        assumeMigration(migrationA);
+        assumeMigration(migrationB);
+        vm.assume(migrationA != migrationB);
+
+        vm.warp(1000);
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA);
+
+        vm.warp(0);
+
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(anyHead, bytes32(0));
+
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(anyHead, MIGRATION_HEAD_GENESIS);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV1.MigrationAlreadyApplied.selector, writer, migrationA)
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMigrationRegistryV1.UnexpectedMigrationHead.selector, writer, MIGRATION_HEAD_GENESIS, migrationA
+            )
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationB);
+
+        // With nothing left to say about the call, the block. This is what
+        // makes the four refusals above statements about the ORDER rather than
+        // about a check that was not live in this block at all.
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB);
+    }
+
     /// A record is confined to the caller's namespace. Applying under one
     /// writer says nothing about any other, which is what makes a reader's
     /// choice of namespace the whole of who it trusts — a hostile caller can
@@ -417,12 +470,32 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// The zero id is refused BEFORE the already-applied read and before the
     /// head, so it is always reported as `ZeroMigration` and never as anything
     /// about where the namespace is.
-    function testApplyMigrationZeroMigrationCheckedFirst(address writer, bytes32 anyHead) external {
+    ///
+    /// Fuzzed over the head against BOTH an empty namespace and one that has
+    /// moved on, for the same reason
+    /// `testApplyMigrationGenesisMigrationRevertsOnAnyHead` is: one namespace
+    /// state cannot tell the orderings apart, because a head the namespace
+    /// happens to be at is accepted whichever check runs first, and the two
+    /// states here have different heads so no fuzzed head matches both.
+    ///
+    /// The already-applied read can never answer anything but zero for this id
+    /// — this refusal is what keeps the zero id out of the records in the first
+    /// place — so what the second call pins is the reachable half of the same
+    /// claim: the refusal is a fact about the ID, not about the state of the
+    /// namespace it arrives at.
+    function testApplyMigrationZeroMigrationCheckedFirst(address writer, bytes32 anyHead, bytes32 migration) external {
         vm.assume(writer != address(0));
+        assumeMigration(migration);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
         vm.prank(writer);
         sRegistry.applyMigration(anyHead, bytes32(0));
+
+        // A namespace that has moved on: the zero id is still reported as
+        // `ZeroMigration` rather than as anything about the head or about what
+        // has already been applied.
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
         vm.prank(writer);
