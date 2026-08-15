@@ -20,8 +20,11 @@ It answers:
   deployment?
 - Is every version I have ever released still live, with the code I compiled, on
   every network I support?
-- Which operational migrations have actually been applied on this chain, so a
-  test can assert the state they imply instead of guessing from a date?
+- Which operational migrations have actually been applied on this chain, and
+  when, so a test can assert the state they imply instead of guessing from a
+  date?
+- Can a migration be skipped, repeated or applied out of order on one chain and
+  not another?
 
 Approach:
 
@@ -36,7 +39,8 @@ Approach:
   and a post-deploy check that every target network's deployment took the
   address it was supposed to.
 - A migration registry, so operational scripts record what they applied and
-  tests assert the state that implies rather than branching on a deadline.
+  when, each onto the head it is applying to, and tests assert the state that
+  implies rather than branching on a deadline.
 - One inherited deploy-pin verification, parameterized over versions, rather
   than assertions hand-enumerated per version and per chain in every deploy
   repo.
@@ -180,9 +184,11 @@ library supplies the fork loop and the comparison.
 
 ## Migration registry
 
-`MigrationRegistry` records that a migration has been applied: a writer records
-one of its own (`record`), and anyone reads whether a given writer has recorded
-a given one (`applied`). There is no removal and no upgrade.
+`MigrationRegistry` records that a migration has been applied, and when: a
+writer records one of its own onto the migration it believes ran last
+(`record`), anyone reads when a given writer recorded a given one (`applied`),
+and anyone reads where a given writer's sequence has got to (`head`). There is
+no removal and no upgrade.
 
 It exists because prod-state tests otherwise decide what to assert by reading
 the **clock**. The pattern that emerges without it is a dual-state invariant —
@@ -194,24 +200,64 @@ rather than on a fact. What you actually want is "**exactly** the value implied
 by the migrations that have run", which needs the chain to hold which ones have:
 
 ```solidity
-if (LibMigrationRegistry.applied(SAFE, MIGRATION_V2)) {
+if (LibMigrationRegistry.applied(SAFE, MIGRATION_V2) != 0) {
     assertEq(vault.owner(), NEW_OWNER);
 } else {
     assertEq(vault.owner(), OLD_OWNER);
 }
 ```
 
-Both branches assert exactly. Neither skips, and `applied` answering `false` is
-an ordinary expected answer rather than a revert — it is the state of every
+Both branches assert exactly. Neither skips, and `applied` answering zero is an
+ordinary expected answer rather than a revert — it is the state of every
 migration before it runs, and of every migration on a chain that never got it.
+
+**`applied` is a timestamp, not a flag.** "Which invariant applies" is
+frequently "which invariant applies _yet_": a cliff that starts at the
+migration, a rate that changes a week after it. A flag sends a consumer that
+needs the moment back to a hardcoded date, which is the thing this registry
+exists to delete. Zero and nonzero carry the same two distinct facts a flag did,
+with the nonzero case saying more — and zero stays unambiguous because a record
+is refused outright in a block whose timestamp is zero rather than written as
+one that reads back as no record.
 
 **A set of applied migrations, not a high-water mark.** A mark needs a total
 order consumers do not have: two migrations authored on one day collide, and one
 migration split across two scripts because it landed on two networks a week
 apart cannot be one comparable value at all. A set represents both exactly, and
 the ordering between migrations moves into the assertion —
-`applied(V5) ? … : applied(V4) ? … : …` — which is where the semantic dependency
-actually lives.
+`applied(V5) != 0 ? … : applied(V4) != 0 ? … : …` — which is where the semantic
+dependency actually lives.
+
+**A head, so a step cannot be skipped or repeated.** A namespace has a head: the
+migration it recorded most recently, or `MIGRATION_HEAD_GENESIS` if it has
+recorded none. `record` names the head it is applying onto, so a chain that
+never got the predecessor fails at the moment of applying rather than diverging
+silently, and two migrations dispatched at once cannot land in the wrong order.
+
+```solidity
+// The first migration in a namespace.
+LibMigrationRegistry.record(MIGRATION_HEAD_GENESIS, MIGRATION_V1);
+// Every later one names its predecessor.
+LibMigrationRegistry.record(MIGRATION_V1, MIGRATION_V2);
+```
+
+Genesis is deliberately **not zero**. Zero is what an uninitialised `bytes32`
+constant reads as, and a zero genesis would make a mis-set predecessor constant
+a _successful_ first record on any namespace that happens to be empty — the
+state of every chain that has not been migrated yet, which is exactly where such
+a mistake is most likely. A nonzero genesis makes it a revert everywhere.
+
+The head does **not** replace the per-migration refusal, and both are kept.
+Re-recording a migration whose successor has landed names a head that matches
+perfectly; without `MigrationAlreadyRecorded` it would drag the head backwards
+and overwrite the original timestamp, which is a record un-happening. The two
+answer different questions — the head is _where in the sequence_, the record is
+_whether at all_.
+
+One namespace on one chain is therefore one linear sequence. Two unrelated sets
+of migrations applied from the same account interleave into one chain of heads,
+so a consumer that wants two independent sequences records them from two
+accounts — the same lever that already decides who a reader trusts.
 
 **The namespace is `msg.sender`, and that is the whole access control.** Anyone
 may write, but only under themselves, so a reader asking about the namespace of
@@ -229,11 +275,11 @@ say the invariant holds — a multisig can act out of band and nothing here move
 Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
-`LibMigrationRegistry` is the surface — `applied` and `record`, both verifying
-the registry's code hash first. There is deliberately **no broadcast runner**:
-the dominant real shape is a Safe executing a bundle that never broadcasts, and
-such a script appends `record` to the bundle it is already emitting, which makes
-the record atomic with the migration it describes.
+`LibMigrationRegistry` is the surface — `applied`, `head` and `record`, all
+verifying the registry's code hash first. There is deliberately **no broadcast
+runner**: the dominant real shape is a Safe executing a bundle that never
+broadcasts, and such a script appends `record` to the bundle it is already
+emitting, which makes the record atomic with the migration it describes.
 
 ## Deploying, and then releasing
 

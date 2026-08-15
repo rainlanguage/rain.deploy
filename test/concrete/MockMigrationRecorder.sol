@@ -16,18 +16,30 @@ import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
 /// therefore only ever write one namespace. Two of these are two namespaces,
 /// which is what makes "a record reaches nobody else" checkable rather than
 /// asserted about a single account.
+///
+/// Two of them are also two heads, which is what makes "one namespace is one
+/// sequence" checkable at all: nothing about one recorder's head can be shown
+/// to leave the other's alone from inside a single namespace.
 contract MockMigrationRecorder {
-    /// Records `migration` under this contract.
+    /// Records `migration` under this contract, onto `expectedHead`.
+    /// @param expectedHead The head this contract believes it is at.
     /// @param migration The migration to record.
-    function record(bytes32 migration) external {
-        LibMigrationRegistry.record(migration);
+    function record(bytes32 expectedHead, bytes32 migration) external {
+        LibMigrationRegistry.record(expectedHead, migration);
     }
 
-    /// Whether `writer` has recorded `migration`.
+    /// When `writer` recorded `migration`.
     /// @param writer The namespace to read.
     /// @param migration The migration to ask about.
-    /// @return Whether it is recorded.
-    function applied(address writer, bytes32 migration) external view returns (bool) {
+    /// @return The timestamp it was recorded at, or zero.
+    function applied(address writer, bytes32 migration) external view returns (uint256) {
         return LibMigrationRegistry.applied(writer, migration);
+    }
+
+    /// The head of `writer`'s namespace.
+    /// @param writer The namespace to read.
+    /// @return The head.
+    function head(address writer) external view returns (bytes32) {
+        return LibMigrationRegistry.head(writer);
     }
 }

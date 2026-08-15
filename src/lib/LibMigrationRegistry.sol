@@ -13,10 +13,11 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// a chain the caller has not audited; the address plus the code hash says the
 /// caller is talking to the registry it compiled against.
 ///
-/// That is the whole library. It answers whether a writer has recorded a
-/// migration, and it records one under the caller. Which writer a test trusts,
-/// which invariant each answer selects, and how an id is derived are entirely
-/// the consumer's business and none of this library's.
+/// That is the whole library. It answers when a writer recorded a migration and
+/// where that writer's namespace has got to, and it records one under the
+/// caller. Which writer a test trusts, which invariant each answer selects, and
+/// how an id is derived are entirely the consumer's business and none of this
+/// library's.
 ///
 /// ## There is deliberately no broadcast runner here
 ///
@@ -37,7 +38,7 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// A test asserts EXACTLY the value implied by the migrations that have run:
 ///
 /// ```solidity
-/// if (LibMigrationRegistry.applied(SAFE, MIGRATION_V2)) {
+/// if (LibMigrationRegistry.applied(SAFE, MIGRATION_V2) != 0) {
 ///     assertEq(vault.owner(), NEW_OWNER);
 /// } else {
 ///     assertEq(vault.owner(), OLD_OWNER);
@@ -46,10 +47,29 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 ///
 /// Both branches assert. Neither reads the clock, neither skips, and the branch
 /// is selected by what happened on chain rather than by a deadline somebody
-/// guessed. `applied` answering `false` is an ordinary, expected answer — it is
+/// guessed. `applied` answering zero is an ordinary, expected answer — it is
 /// the state of every migration before it runs and of every migration on a
 /// chain that never got it — which is why the registry answers it rather than
 /// reverting.
+///
+/// The nonzero answer is WHEN, which is what a test whose invariant is itself
+/// time-shaped needs: a cliff that starts at the migration, a rate that changes
+/// a week after it. That is still the clock being read, but it is the chain's
+/// record of the migration being read, not a date somebody guessed in advance.
+///
+/// ## Writing names the head it is applying onto
+///
+/// `record` takes the migration the caller believes ran last in its namespace,
+/// so a chain that never got that predecessor refuses the write instead of
+/// silently skipping a step, and two migrations dispatched at once cannot land
+/// in the wrong order. The first migration in a namespace names
+/// `MIGRATION_HEAD_GENESIS`, imported from the interface — never a zero, which
+/// is what an uninitialised constant would be and is refused everywhere.
+///
+/// `head` reads that value back, which is how an author finds what a new script
+/// must name and how an operator sees which migration a chain is at. It is not
+/// how a script tests that its predecessor ran: a head says what was LAST, and
+/// `applied` is what says whether a particular migration ever ran at all.
 ///
 /// The registry is an INDEX, not proof. It says which invariant applies; it does
 /// not say the invariant holds. A multisig can act out of band and nothing here
@@ -79,7 +99,7 @@ library LibMigrationRegistry {
         }
     }
 
-    /// Whether `writer` has recorded `migration`.
+    /// When `writer` recorded `migration`, or zero if it never did.
     ///
     /// Verifies the registry's code hash before reading, so a chain where the
     /// registry is absent, or where something else occupies its address, is a
@@ -89,26 +109,46 @@ library LibMigrationRegistry {
     /// first into the second would send a caller down its pre-migration branch
     /// on every chain the registry was never deployed to.
     ///
-    /// The registry itself refuses the zero writer and the zero migration, so
-    /// those arrive as reverts from it rather than as `false`.
+    /// The registry itself refuses the zero writer, and refuses the two ids a
+    /// migration can never be, so those arrive as reverts from it rather than
+    /// as zero.
     /// @param writer The namespace to read — the authority whose record the
     /// caller trusts. Never the zero address.
-    /// @param migration The migration to ask about. Never zero.
-    /// @return Whether `writer` has recorded `migration`.
-    function applied(address writer, bytes32 migration) internal view returns (bool) {
+    /// @param migration The migration to ask about. Never zero, never
+    /// `MIGRATION_HEAD_GENESIS`.
+    /// @return The block timestamp `writer` recorded `migration` at, or zero if
+    /// it has not.
+    function applied(address writer, bytes32 migration) internal view returns (uint256) {
         checkCodeHash();
         return
             IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
                 .applied(writer, migration);
     }
 
-    /// Records `migration` under the CALLER's namespace.
+    /// The migration `writer` recorded most recently, or `MIGRATION_HEAD_GENESIS`
+    /// if it has never recorded one.
+    ///
+    /// Verifies the registry's code hash first for the same reason `applied`
+    /// does, and more sharply: a call into an empty account returns nothing,
+    /// which decodes as zero, and zero is the one value a head can never hold —
+    /// so an unverified read would hand back a head that is not a head at all,
+    /// on exactly the chains where nothing has been deployed.
+    /// @param writer The namespace to read. Never the zero address.
+    /// @return The head of `writer`'s namespace. Never zero.
+    function head(address writer) internal view returns (bytes32) {
+        checkCodeHash();
+        return IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS).head(writer);
+    }
+
+    /// Records `migration` under the CALLER's namespace, onto `expectedHead`.
     ///
     /// The caller is whoever the resulting transaction is sent from — a Safe
     /// executing a bundle, a broadcasting EOA, a timelock — and that account is
     /// the namespace the record lands in. A reader has to ask about that same
     /// account, so which account a migration is recorded from is a decision
-    /// with a consequence rather than an implementation detail.
+    /// with a consequence rather than an implementation detail. It is also the
+    /// account whose head this moves, so two unrelated sequences recorded from
+    /// one account interleave into one chain.
     ///
     /// Verifies the registry's code hash before writing, so a migration is
     /// never "recorded" into an empty address or into unknown code. A record
@@ -116,12 +156,17 @@ library LibMigrationRegistry {
     /// have run, and every reader would go on asserting the pre-migration
     /// state.
     ///
-    /// The registry refuses the zero id and refuses a migration this caller has
-    /// already recorded, which is what makes a re-dispatched migration fail
-    /// rather than repeat.
-    /// @param migration The migration to record. Never zero.
-    function record(bytes32 migration) internal {
+    /// The registry refuses the zero id, refuses a migration this caller has
+    /// already recorded, and refuses one applied onto anything but the
+    /// namespace's actual head — which between them make a re-dispatched, a
+    /// skipped and an out-of-order migration all fail rather than land.
+    /// @param expectedHead The migration the caller believes it recorded last,
+    /// or `MIGRATION_HEAD_GENESIS` for the first in this namespace.
+    /// @param migration The migration to record. Never zero, never
+    /// `MIGRATION_HEAD_GENESIS`.
+    function record(bytes32 expectedHead, bytes32 migration) internal {
         checkCodeHash();
-        IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS).record(migration);
+        IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .record(expectedHead, migration);
     }
 }
