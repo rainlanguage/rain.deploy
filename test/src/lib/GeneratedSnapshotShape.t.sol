@@ -181,6 +181,59 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
         }
     }
 
+    /// PROPERTY: every declared artifact path RESOLVES — it is `<path>:<Name>`,
+    /// the path is a file this repo has, and the artifact that whole string
+    /// selects is the contract the candidate is anchored to.
+    ///
+    /// `artifactPath` is the one field of a suite that nothing derives, and
+    /// until this assertion nothing checked either. It is load bearing twice
+    /// over: `LibRainDeploy` prints it as the `forge verify-contract` command a
+    /// human runs against a freshly broadcast contract, and
+    /// `candidateContractName` above takes the contract this whole shape spec
+    /// is about out of it. Only the `:<Name>` half was ever read by a check —
+    /// `testEveryCandidateHasASnapshot` matches it against the generator's
+    /// output — so a path left behind by a moved or renamed source file passed
+    /// every assertion in this repo, including all of the ones here, because
+    /// the half that moved is the half nothing read. `bytecode_hash = "none"`
+    /// and `cbor_metadata = false` mean moving a file changes no creation code,
+    /// no address and no code hash either, so there is nothing else for it to
+    /// be caught by.
+    ///
+    /// Resolved through `vm.getCode`, which is foundry's own resolution of a
+    /// `<path>:<Name>` artifact id — the same form `forge verify-contract`
+    /// takes — rather than by searching the file's text for `contract <Name>`.
+    /// A text search asserts formatting: it is satisfied by the name occurring
+    /// in a comment or in a longer identifier, and defeated by a declaration
+    /// written with no space before its brace.
+    ///
+    /// `vm.isFile` on the path half AS WELL, because foundry resolves an
+    /// artifact id by path SUFFIX. `AddressRegistry.sol:AddressRegistry`
+    /// resolves for `vm.getCode` and is still not a path the printed command
+    /// can be run with, and a suffix is exactly what a file moved DEEPER leaves
+    /// behind.
+    ///
+    /// Compared against the candidate's own `sourceCreationCode` rather than
+    /// merely required to resolve to something, because a path that resolves to
+    /// the wrong contract is the failure this field can actually produce: the
+    /// name is what the printed command asks an explorer to verify against, and
+    /// two files each declaring a contract the other one names resolve
+    /// perfectly while naming each other's.
+    function testEveryCandidateArtifactPathResolves() external view {
+        DeployCandidate[] memory candidates = checkedCandidateSuites();
+        for (uint256 i = 0; i < candidates.length; i++) {
+            string memory declared = candidates[i].snapshot.artifactPath;
+            string[] memory parts = vm.split(declared, ":");
+
+            assertEq(parts.length, 2, string.concat("artifact path is not <path>:<Name>: ", declared));
+            assertTrue(vm.isFile(parts[0]), string.concat("artifact path names no such file: ", declared));
+            assertEq(
+                vm.getCode(declared),
+                candidates[i].sourceCreationCode,
+                string.concat("artifact path resolves to another contract: ", declared)
+            );
+        }
+    }
+
     /// PROPERTY: every snapshot declares exactly the four constants a deploy
     /// record is for, of these types, in this order. A rename, a retype, a
     /// reorder or a fifth constant each fail here and name what broke.
