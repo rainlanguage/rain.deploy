@@ -85,11 +85,13 @@ library LibMigrationRegistry {
 
     /// Reverts unless the pinned registry address holds the pinned code.
     ///
-    /// Both entry points check, and they check the same way, because both are
-    /// worse than useless against unknown code: a read would branch a test on
-    /// whatever that code returned, and a write would record a migration
+    /// All three entry points check, and they check the same way, because each
+    /// is worse than useless against unknown code: `applied` would branch a
+    /// test on whatever timestamp that code returned, `head` would hand back a
+    /// value that is not a head, and `applyMigration` would record a migration
     /// somewhere nothing will ever read it. The check is one function so the
-    /// two cannot drift into checking different things.
+    /// three cannot drift into checking different things, and an entry point
+    /// added later has one place to call rather than a rule to remember.
     function checkCodeHash() internal view {
         bytes32 actualCodeHash = LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.codehash;
         if (actualCodeHash != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH) {
