@@ -9,6 +9,7 @@ import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/Addr
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
 import {MockDirtyWordOwner} from "../../concrete/MockDirtyWordOwner.sol";
+import {MockRawAnswerOwner} from "../../concrete/MockRawAnswerOwner.sol";
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
@@ -952,6 +953,62 @@ contract LibRainDeployTest is Test {
         this.externalCheckResolvedAddresses(
             "test_network", address(target), ownerReadCalls(), expected(address(uint160(uint256(word))))
         );
+    }
+
+    /// A read that answers with MORE than one word has not answered with an
+    /// address either, whatever its leading word says, and MUST be reported as
+    /// `ResolvedAddressReadFailed`. This is the consumer that pointed a read at
+    /// a getter returning two values, or a dynamic type: the answer's first word
+    /// decodes perfectly well, so nothing but the length says it is not an
+    /// address.
+    ///
+    /// That first word is exactly the address the caller expects, so a guard
+    /// that accepted any answer of at least one word would decode it and PASS
+    /// this against a read that never answered with a single address. Fuzzed
+    /// over the whole tail rather than over one extra word, because the rule is
+    /// about every length that is not one word, not about a `(address,address)`
+    /// return in particular — an answer of 0x21 bytes is no more an address than
+    /// one of 0x40.
+    function testCheckResolvedAddressesLongAnswerReverts(address account, bytes memory tail) external {
+        vm.assume(tail.length > 0);
+        bytes memory answer = bytes.concat(abi.encode(account), tail);
+        MockRawAnswerOwner target = new MockRawAnswerOwner(answer);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector, "test_network", address(target), uint256(0), answer
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(target), ownerReadCalls(), expected(account));
+    }
+
+    /// An answer SHORTER than a word is not an ABI-encoded address either, and
+    /// MUST be reported as `ResolvedAddressReadFailed` rather than reverting
+    /// inside the decoder with no data of its own. A read pointed at a getter
+    /// that answers in raw bytes lands here — the Zoltu factory itself answers
+    /// with the twenty bytes of an address and nothing else.
+    ///
+    /// Fuzzed across every length between an answer of nothing and an answer of
+    /// one word. Zero is the case a target with no code produces, and 0x20 is an
+    /// address, so both ends are excluded and everything between them is the
+    /// regime nothing else exercises.
+    function testCheckResolvedAddressesShortAnswerReverts(address account, bytes32 tail, uint256 lengthSeed) external {
+        uint256 length = bound(lengthSeed, 1, 0x1f);
+        // The raw bytes of the address first, so length 20 is exactly the shape
+        // the Zoltu factory answers with, then arbitrary bytes to fill.
+        bytes memory source = abi.encodePacked(account, tail);
+        bytes memory answer = new bytes(length);
+        for (uint256 i = 0; i < length; i++) {
+            answer[i] = source[i];
+        }
+        MockRawAnswerOwner target = new MockRawAnswerOwner(answer);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector, "test_network", address(target), uint256(0), answer
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(target), ownerReadCalls(), expected(account));
     }
 
     /// `checkResolvedAddresses` MUST revert when the reads and expected
