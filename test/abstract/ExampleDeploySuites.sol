@@ -25,12 +25,17 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 ///
 /// The `MockDeployableV2` entries exist for one reason: every loop here runs
 /// over a list, and proving a loop does not stop at the first entry requires a
-/// second entry at a DIFFERENT address. `AddressRegistry` is the only concrete
-/// in this repo, so the second address comes from `MockDeployableV2`, which is
-/// already on main for `LibRainDeploy`'s own tests. Without it, "the matrix
-/// silently checks only the first suite" is undetectable — the failure mode
-/// that matters most to the repos this abstract exists for, where ten suites
-/// sit at ten addresses.
+/// second entry at a DIFFERENT address. That second address comes from
+/// `MockDeployableV2` rather than from this repo's other concrete,
+/// `MigrationRegistry`, because this is a fixture for the abstracts and not a
+/// copy of `RegistryDeploySuites`: it borrows ONE real snapshot, which is what
+/// makes the released and candidate paths real, and derives the second entry's
+/// creation code, address and hashes inline from a mock type. So what the
+/// abstracts are tested against is written here in full, and adding or removing
+/// a contract in `src/concrete/` does not change it. Without a second address,
+/// "the matrix silently checks only the first suite" is undetectable — the
+/// failure mode that matters most to the repos this abstract exists for, where
+/// ten suites sit at ten addresses.
 ///
 /// It appears on BOTH sides for that reason, once as a release and once as a
 /// candidate. The released side is the chain matrix's second address; the
