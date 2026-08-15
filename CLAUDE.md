@@ -399,9 +399,13 @@ expected addresses, expected code hashes, and dependency lists.
 - **Deploy, then verify, then tag** — in that order, and they are three separate
   things. `script/Deploy.sol` broadcasts the suite `DEPLOYMENT_SUITE` names to
   every network in `supportedNetworks()`, dispatched by hand through
-  `.github/workflows/manual-sol-artifacts.yaml`, whose `suite` input is a choice
-  over the declared keys. One suite per dispatch, so this repo's two registries
-  are two dispatches. Only then is there a deployment for `rainix-tag-release`
+  `.github/workflows/manual-sol-artifacts.yaml`, whose `suite` input is typed
+  rather than picked from a list — the workflow is not a second copy of the
+  declaration, so it cannot fall behind it, and released keys are generated as
+  `<key>@<tag>` and could never appear in a hand-written list at all. An
+  undeclared key is refused by `suiteByName` naming the valid ones, before the
+  key is read. One suite per dispatch, so this repo's two registries are two
+  dispatches. Only then is there a deployment for `rainix-tag-release`
   to verify pins against — it verifies and publishes, it never broadcasts.
   Broadcasting is key custody and real money, so it is `workflow_dispatch` and
   nothing else. Deploying is idempotent: a network that already has the code is

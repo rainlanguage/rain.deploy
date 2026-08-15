@@ -9,24 +9,48 @@ name: Manual sol artifacts
 # Order is: dispatch this once per suite, confirm `RegistryDeployChainTest`
 # passes on every supported network, then push the `sol-v*` tag.
 #
+# That is the pre-release use. The other one is after a release: adding a
+# network reds `RegistryDeployChainTest` until every RELEASED suite is live on
+# it, and the fix is to dispatch that release's own key — `<key>@<tag>`, the
+# frozen creation code — not the candidate, which is different bytes at a
+# different address. Both uses are the same dispatch with a different key.
+#
 # Deliberately `workflow_dispatch` only. Broadcasting is key custody and real
 # money; nothing about a merge or a tag should trigger it.
 on:
   workflow_dispatch:
     inputs:
       suite:
-        type: choice
+        type: string
         required: true
         description: |
-          Which declared suite to broadcast. One dispatch deploys one suite,
-          because `DEPLOYMENT_SUITE` selects one — a repo with two deployed
-          contracts is two dispatches. Offered as a choice rather than typed,
-          so a key that no suite declares cannot be dispatched at all; the
-          script still refuses one, naming the valid keys, if this list falls
-          behind the declaration.
-        options:
-          - address-registry
-          - migration-registry
+          Which declared suite to broadcast, spelled exactly as the declaration
+          spells it. One dispatch deploys one suite, because `DEPLOYMENT_SUITE`
+          selects one — a repo with two deployed contracts is two dispatches.
+
+          Typed rather than chosen from a list, so this file is not a second
+          copy of the declaration. The keys are `allSuites()` — the candidates
+          `RegistryDeploySuites` names, plus one per frozen release, and the
+          released ones are GENERATED as `<key>@<tag>` (`address-registry@0_1_6`)
+          by `cutRelease()`. A hand-written `options:` list could hold only the
+          candidates, which would make every release undispatchable — and
+          broadcasting a release on its own is exactly what a network added
+          after that release needs. There is one list, in Solidity:
+          `suiteByName` refuses an undeclared key with `UnknownDeploymentSuite`,
+          naming every valid one, before `DEPLOYMENT_KEY` is read and before
+          anything forks, so a typo costs seconds and no gas.
+      verify:
+        type: boolean
+        required: false
+        default: true
+        description: |
+          Whether to pass `--verify` to `forge script`. Leave ON for a candidate
+          key, which is a snapshot of current source.
+
+          Turn it OFF for a RELEASED key (`<key>@<tag>`): that broadcasts the
+          creation code the release froze, which is not what current source
+          compiles to once source has moved, so explorer verification against
+          source fails the run AFTER the gas is spent.
 jobs:
   deploy:
     uses: rainlanguage/rainix/.github/workflows/rainix-manual-sol-artifacts.yaml@main
@@ -34,4 +58,8 @@ jobs:
       # Passed through as DEPLOYMENT_SUITE; script/Deploy.sol dispatches on it
       # and reverts on anything else.
       suite: ${{ inputs.suite }}
+      # The reusable defaults this to true, so it has to be passed to be
+      # turnable off — a released suite broadcasts frozen bytes that current
+      # source no longer matches.
+      verify: ${{ inputs.verify }}
     secrets: inherit

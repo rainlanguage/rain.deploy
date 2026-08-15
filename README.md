@@ -288,12 +288,23 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
 
 1. **Deploy.** Dispatch the
    [`Manual sol artifacts`](.github/workflows/manual-sol-artifacts.yaml)
-   workflow, choosing a `suite`. It runs `script/Deploy.sol` and broadcasts that
+   workflow, typing a `suite`. It runs `script/Deploy.sol` and broadcasts that
    suite to every network in `supportedNetworks()`. One suite per dispatch, so
    this repo's two registries are two dispatches. `workflow_dispatch` only: this
    is key custody and real money, and no merge or tag should be able to trigger
    it. It is idempotent — a network that already has the code is skipped — so a
    partial run is fixed by running it again rather than by unpicking anything.
+
+   The key is any key the declaration declares — a candidate
+   (`address-registry`) or a frozen release (`address-registry@0_1_6`). A typed
+   input rather than a dropdown, because a dropdown would be a second copy of
+   the declaration and could never name a release, whose key is generated when
+   the release is cut. An undeclared key is refused in seconds, naming the valid
+   ones, before the deploy key is read.
+
+   Turn `verify` OFF when the key names a release: it broadcasts the creation
+   code that release froze, which current source no longer compiles to, so
+   verifying against source would fail the run after the gas is spent.
 2. **Verify.** `RegistryDeployChainTest` passes only once every **released**
    suite is live on every supported network, with the code that release froze.
    This repo has released none, so today it has nothing to check and passes; it
