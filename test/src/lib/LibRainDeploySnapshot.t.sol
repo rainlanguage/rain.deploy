@@ -201,6 +201,28 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(LibRainDeploySnapshot.pathForSnapshot("0_1_7", "Foo"), "src/generated/0_1_7/Foo.sol");
     }
 
+    /// The root the record is WALKED from MUST be the root the writer WRITES
+    /// to. They are two constants — `LIB_FS_ROOT` here, and the one
+    /// `LibFs.pathForContract` hardcodes in a package this repo does not own —
+    /// and a walk of a root nothing writes to returns nothing, which every
+    /// record-anchored assertion then passes on. Silence is the failure mode,
+    /// so it is asserted rather than observed.
+    ///
+    /// Compared through `pathForSnapshot`, which is what a snapshot is written
+    /// through, so the right hand side is the writer's own root rather than a
+    /// third restatement of it. The contract name is arbitrary — the path is
+    /// built by concatenation and names no artifact.
+    function testRecordRootIsTheRootTheWriterWritesTo() external pure {
+        assertEq(
+            LibRainDeploySnapshot.pathForSnapshot("0_1_7", "Foo"),
+            string.concat(LibRainDeploySnapshot.LIB_FS_ROOT, "/0_1_7/Foo.sol")
+        );
+        assertEq(
+            LibRainDeploySnapshot.dirForSnapshot(LibRainDeploySnapshot.CANDIDATE),
+            string.concat(LibRainDeploySnapshot.LIB_FS_ROOT, "/", LibRainDeploySnapshot.CANDIDATE)
+        );
+    }
+
     /// A snapshot MUST land at the path this library says it does, and writing
     /// one over a directory that is already there is the ORDINARY case: the
     /// rolling snapshot is regenerated into the same `candidate/` on every
