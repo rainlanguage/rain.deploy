@@ -62,9 +62,10 @@ contract RainDeploySuitesBaseTest is Test {
     }
 
     /// Two suites that record the SAME creation code MUST still be selectable
-    /// apart. `0_0_2` and the candidate are the same bytes at the same address,
-    /// so the key is the only thing that distinguishes them — and it has to,
-    /// because they are separately deployable records.
+    /// apart. `address-registry-0-0-1` and `address-registry-candidate` are the
+    /// same bytes at the same address, so the key is the only thing that
+    /// distinguishes them — and it has to, because they are separately
+    /// deployable records.
     function testSuitesSharingCreationCodeSelectApart() external view {
         DeploySuite memory released = sSuites.externalSuiteByName("address-registry-0-0-1");
         DeploySuite memory candidate = sSuites.externalSuiteByName("address-registry-candidate");
