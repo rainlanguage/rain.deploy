@@ -19,15 +19,14 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 /// that fail before `deployAndBroadcast` is reached, and the broadcast itself,
 /// on a fork.
 ///
-/// The broadcast half is not the hazard it sounds like, and this file used to
-/// say it was. `vm.startBroadcast` under `forge test` executes the deploy on
-/// the fork and records a transaction it never sends, so a success case here
-/// costs a test key that has never held anything, the same public RPC every
-/// other fork test uses, and no money — which is exactly what the sibling
-/// `LibRainDeployTest` has always relied on to drive this same library through
-/// this same path. Leaving it untested did not avoid a risk; it left the org's
-/// only broadcast entry point, inherited by every downstream deploy repo,
-/// asserting nothing about what it would deploy or where.
+/// The broadcast half costs no key custody and no money. `vm.startBroadcast`
+/// under `forge test` executes the deploy against the fork and records a
+/// transaction it never sends, so the whole of it is a test key that has never
+/// held anything and the same RPC alias every other fork test in this repo
+/// forks — which is what the sibling `LibRainDeployTest` drives this same
+/// library through this same path on. Without it, the org's only broadcast
+/// entry point, inherited by every downstream deploy repo, asserts nothing
+/// about what it would deploy or where.
 contract RainDeployBroadcastTest is Test {
     /// Chain id of Arbitrum One, which is what `deployNetworks()` being honoured
     /// looks like from inside a completed run.
@@ -56,10 +55,10 @@ contract RainDeployBroadcastTest is Test {
     /// holding two values for one variable is two tests racing over one
     /// variable, and this contract was exactly that until it was seen losing
     /// the race: the unset case resolved the `address-registry` the other test
-    /// had written. Sequenced inside one test the two values cannot interleave,
-    /// and every `vm.setEnv` in this repo is now one of the two below — with
-    /// the write to `DEPLOYMENT_SUITE` after the only read that needs it
-    /// absent, so there is no write left for another test to observe.
+    /// had written. Sequenced inside one test the values cannot interleave, and
+    /// every `vm.setEnv` in this repo is one of the four below — with every
+    /// write to `DEPLOYMENT_SUITE` after the only read that needs it absent, so
+    /// there is no write left for another test to observe.
     ///
     /// ## Unset first, and genuinely unset
     ///
