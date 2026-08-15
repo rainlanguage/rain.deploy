@@ -120,12 +120,18 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         // across a threshold. There is no threshold here and no nudge
         // available: zero is not a value a validator on a live chain can
         // produce at all, which is why this is an equality against it rather
-        // than a window around it, and why the two warnings are suppressed on
-        // this line alone rather than turned off for the repo.
-        // slither-disable-next-line incorrect-equality,timestamp
-        if (block.timestamp == 0) { // forge-lint: disable-line(block-timestamp)
+        // than a window around it, and why all three warnings are suppressed on
+        // this one comparison rather than turned off for the repo.
+        //
+        // Slither's two are a start/end pair rather than a next-line because
+        // only one comment fits immediately above the `if`, `forge fmt` moves a
+        // trailing one inside the braces, and forge-lint has no pair form.
+        // slither-disable-start incorrect-equality,timestamp
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.timestamp == 0) {
             revert ZeroTimestamp();
         }
+        // slither-disable-end incorrect-equality,timestamp
         sApplied[msg.sender][migration] = block.timestamp;
         sHead[msg.sender] = migration;
         emit Migrated(msg.sender, migration);
