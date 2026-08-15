@@ -39,18 +39,17 @@ import {
 /// account that STAYS persistent, so each fork the matrix creates carries the
 /// empty account no matter what that network holds.
 ///
-/// Emptying the local account and revoking persistence instead would hand the
-/// matrix the real network, which turns "nothing is deployed at this address"
-/// from something the fixture arranged into a claim about the world. The
-/// exemplar's addresses are derived from `src/generated/candidate/`, so that
-/// claim is one this repo's own `Manual sol artifacts` deploy exists to
-/// falsify: the day `AddressRegistry` was broadcast, the address the fixture
-/// needed empty held 597 bytes of code on all five networks and this group went
-/// red with `next call did not revert as expected` — a test that passed only
+/// Revoking persistence instead hands the matrix the real network, which turns
+/// "nothing is deployed at this address" from something the fixture arranged
+/// into a claim about the world. That claim is false here: the exemplar's
+/// addresses come from `src/generated/candidate/`, which is exactly what
+/// `Manual sol artifacts` broadcasts, and `AddressRegistry` is live on all five
+/// supported networks. A negative case resting on it asserts nothing and
+/// reports `next call did not revert as expected` — a fixture that only worked
 /// while the repo had not yet done the thing it exists to do.
 ///
-/// A mock nobody happens to deploy would only move that dependency rather than
-/// remove it: the Zoltu factory is permissionless, so no address is
+/// Pointing the fixture at a mock nobody deploys would move that dependency
+/// rather than remove it: the Zoltu factory is permissionless, so no address is
 /// structurally unoccupiable. Etching the state the assertion is about is what
 /// removes it.
 ///
