@@ -435,17 +435,36 @@ contract MigrationRegistryRecordTest is Test {
     }
 
     /// Refused whatever head it is applied onto, so it is a fact about the id
-    /// rather than about where the namespace happens to be.
-    function testRecordGenesisMigrationRevertsOnAnyHead(address writer, bytes32 migration) external {
+    /// rather than about where the namespace happens to be. That means a head
+    /// the namespace is NOT at as much as one it is: the refusal is checked
+    /// before the head, so a caller that has confused a head for a migration is
+    /// told which of the two it got wrong rather than sent to look at where the
+    /// namespace has got to.
+    ///
+    /// Fuzzed over the head for the same reason `testRecordZeroMigrationCheckedFirst`
+    /// is: a matching head alone cannot tell the two orderings apart.
+    function testRecordGenesisMigrationRevertsOnAnyHead(address writer, bytes32 migration, bytes32 anyHead) external {
         vm.assume(writer != address(0));
         assumeMigration(migration);
+
+        // An empty namespace, whose head is genesis: still refused onto a head
+        // that does not match it.
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.prank(writer);
+        sRegistry.record(anyHead, MIGRATION_HEAD_GENESIS);
 
         vm.prank(writer);
         sRegistry.record(MIGRATION_HEAD_GENESIS, migration);
 
+        // A namespace that has moved: same refusal, onto the head it is at and
+        // onto any other.
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
         vm.prank(writer);
         sRegistry.record(migration, MIGRATION_HEAD_GENESIS);
+
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.prank(writer);
+        sRegistry.record(anyHead, MIGRATION_HEAD_GENESIS);
 
         assertEq(sRegistry.head(writer), migration);
     }
