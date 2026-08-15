@@ -250,6 +250,52 @@ library LibRainDeploySnapshot {
         }
     }
 
+    /// The constants a snapshot declares below the `BYTECODE_HASH` that
+    /// `LibFs.buildFileForContract` writes itself: the deploy address, the
+    /// creation code, the runtime code and the frozen dependency list, in that
+    /// order.
+    ///
+    /// Split out of `writeSnapshot` rather than inlined there because the
+    /// deployed address, the creation code, the dependency list and the two
+    /// names `LibFs` needs are more live values than the legacy codegen has
+    /// stack for. Splitting the emission from the deploy-and-write is the
+    /// division that falls out of that, and it puts the file's whole shape in
+    /// one expression.
+    /// @param vm The Vm instance for string operations.
+    /// @param deployed The address the creation code deployed to.
+    /// @param creationCode The contract's creation code.
+    /// @param dependencies The addresses that must already have code on a
+    /// network before this contract can be broadcast there.
+    /// @return The constants, as Solidity source.
+    function snapshotConstants(Vm vm, address deployed, bytes memory creationCode, address[] memory dependencies)
+        internal
+        view
+        returns (string memory)
+    {
+        return string.concat(
+            LibCodeGen.addressConstantString(
+                vm,
+                "/// @dev The deterministic deploy address of the contract when deployed via\n/// the Zoltu factory.",
+                "DEPLOYED_ADDRESS",
+                deployed
+            ),
+            LibCodeGen.bytesConstantString(
+                vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", creationCode
+            ),
+            LibCodeGen.bytesConstantString(
+                vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", deployed.code
+            ),
+            LibCodeGen.bytesConstantString(
+                vm,
+                "/// @dev The addresses that MUST already have code on a network before\n"
+                "/// this release can be broadcast there, `abi.encode`d as an `address[]`\n"
+                "/// because Solidity has no file-scope constant of dynamic array type.",
+                "DEPENDENCIES",
+                abi.encode(dependencies)
+            )
+        );
+    }
+
     /// Generate one snapshot for one contract.
     ///
     /// There is no output root to choose. `LibFs.pathForContract` hardcodes
@@ -259,15 +305,34 @@ library LibRainDeploySnapshot {
     /// `vm.writeFile` and reads it with `frozenSnapshotPaths`, which does take a
     /// root, because reading somebody else's tree is a thing a walk genuinely
     /// does and writing this repo's record somewhere else is not.
+    ///
+    /// The dependency list is frozen here with the rest, and it is not
+    /// metadata. `RainDeployBroadcast.run` hands a suite's `dependencies` to
+    /// `LibRainDeploy.deployToNetworks`, which refuses to broadcast on any
+    /// network where one of them has no code — so it is a precondition of the
+    /// deployment, decided when the release is cut. Re-broadcasting a past
+    /// release onto a newly supported chain has to check the list THAT release
+    /// was cut with; regenerating it from current source would drop a
+    /// dependency an old release still needs the moment current source stops
+    /// needing it, and impose a new one on a release that never had it.
+    ///
+    /// `abi.encode`d because Solidity has no file-scope constant of dynamic
+    /// array type. The consumer is `releasedLibraryBlock`, which emits the
+    /// matching `abi.decode`.
     /// @param vm The Vm instance for file operations.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
     /// @param creationCode That contract's creation code.
+    /// @param dependencies The addresses that must already have code on a
+    /// network before this contract can be broadcast there.
     /// @return The path written.
-    function writeSnapshot(Vm vm, string memory dir, string memory contractName, bytes memory creationCode)
-        internal
-        returns (string memory)
-    {
+    function writeSnapshot(
+        Vm vm,
+        string memory dir,
+        string memory contractName,
+        bytes memory creationCode,
+        address[] memory dependencies
+    ) internal returns (string memory) {
         LibRainDeploy.etchZoltuFactory(vm);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(dirForSnapshot(dir), true);
@@ -275,23 +340,7 @@ library LibRainDeploySnapshot {
         address deployed = LibRainDeploy.deployZoltu(creationCode);
 
         LibFs.buildFileForContract(
-            vm,
-            deployed,
-            snapshotName(dir, contractName),
-            string.concat(
-                LibCodeGen.addressConstantString(
-                    vm,
-                    "/// @dev The deterministic deploy address of the contract when deployed via\n/// the Zoltu factory.",
-                    "DEPLOYED_ADDRESS",
-                    deployed
-                ),
-                LibCodeGen.bytesConstantString(
-                    vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", creationCode
-                ),
-                LibCodeGen.bytesConstantString(
-                    vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", deployed.code
-                )
-            )
+            vm, deployed, snapshotName(dir, contractName), snapshotConstants(vm, deployed, creationCode, dependencies)
         );
 
         return pathForSnapshot(dir, contractName);
@@ -522,45 +571,70 @@ library LibRainDeploySnapshot {
         return sortedRecordPaths(vm, selected);
     }
 
+    /// The aliased import one record file contributes: all four consensus
+    /// fields and the frozen dependency list, under that release's prefix.
+    ///
+    /// Split per file rather than inlined into the block for the same reason
+    /// `snapshotConstants` is split out of `writeSnapshot`: five aliases and
+    /// the path they come from are more live values than the legacy codegen has
+    /// stack for.
+    /// @param vm The Vm instance for string operations.
+    /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @return The import statement, and the blank line after it.
+    function releasedImport(Vm vm, string memory path) internal pure returns (string memory) {
+        string memory prefix = releasedConstantPrefix(vm, path);
+        return string.concat(
+            "import {\n    DEPLOYED_ADDRESS as ",
+            prefix,
+            "_DEPLOYED_ADDRESS,\n    BYTECODE_HASH as ",
+            prefix,
+            "_BYTECODE_HASH,\n    CREATION_CODE as ",
+            prefix,
+            "_CREATION_CODE,\n    RUNTIME_CODE as ",
+            prefix,
+            "_RUNTIME_CODE,\n    DEPENDENCIES as ",
+            prefix,
+            "_DEPENDENCIES\n} from \"../generated/",
+            tagForRecordPath(vm, path),
+            "/",
+            contractForRecordPath(vm, path),
+            ".sol\";\n\n"
+        );
+    }
+
     /// The import block of a generated released-suites lib.
     ///
-    /// One aliased import per record file, carrying all four consensus fields.
-    /// A released entry can therefore only say what its own frozen snapshot
-    /// says — there is no path by which a released address, code hash, creation
-    /// code or runtime code is written anywhere but into the immutable record.
+    /// One aliased import per record file, carrying all four consensus fields
+    /// and the frozen dependency list. A released entry can therefore only say
+    /// what its own frozen snapshot says — there is no path by which a released
+    /// address, code hash, creation code, runtime code or dependency list is
+    /// written anywhere but into the immutable record.
     /// @param vm The Vm instance for string operations.
     /// @param paths The record's files, in the order they are emitted.
     /// @return imports The import block.
     function releasedImportBlock(Vm vm, string[] memory paths) internal pure returns (string memory imports) {
         imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
         for (uint256 i = 0; i < paths.length; i++) {
-            string memory prefix = releasedConstantPrefix(vm, paths[i]);
-            imports = string.concat(
-                imports,
-                "import {\n    DEPLOYED_ADDRESS as ",
-                prefix,
-                "_DEPLOYED_ADDRESS,\n    BYTECODE_HASH as ",
-                prefix,
-                "_BYTECODE_HASH,\n    CREATION_CODE as ",
-                prefix,
-                "_CREATION_CODE,\n    RUNTIME_CODE as ",
-                prefix,
-                "_RUNTIME_CODE\n} from \"../generated/",
-                tagForRecordPath(vm, paths[i]),
-                "/",
-                contractForRecordPath(vm, paths[i]),
-                ".sol\";\n\n"
-            );
+            imports = string.concat(imports, releasedImport(vm, paths[i]));
         }
     }
 
     /// The library block of a generated released-suites lib.
     ///
-    /// Four fields per entry alias the frozen snapshot. The other three come
-    /// from `template`, the candidate declaration, and are regenerated from it
-    /// on every build: they are explorer and ordering metadata rather than
-    /// consensus, and preserving what a previous generation wrote would mean
-    /// parsing generated Solidity back in.
+    /// FIVE fields per entry alias the frozen snapshot: the four consensus
+    /// fields and the dependency list. The dependency list is aliased rather
+    /// than rebuilt from `template` because it is a precondition of the
+    /// deployment and not metadata — `RainDeployBroadcast.run` passes it to
+    /// `LibRainDeploy.deployToNetworks`, which refuses to broadcast on a
+    /// network where one of them has no code. Broadcasting a past release onto
+    /// a newly supported chain therefore has to check the list that release was
+    /// cut with, so it is read from that release's own frozen snapshot.
+    ///
+    /// The other two come from `template`, the candidate declaration, and are
+    /// regenerated from it on every build: the key and the artifact path are
+    /// explorer and ordering metadata rather than anything a broadcast acts on,
+    /// and preserving what a previous generation wrote would mean parsing
+    /// generated Solidity back in.
     ///
     /// The key is the template's with the tag appended, so every entry is
     /// unique and `allSuites`'s duplicate check is satisfied by construction
@@ -581,29 +655,7 @@ library LibRainDeploySnapshot {
         string memory entries = "";
         for (uint256 i = 0; i < paths.length; i++) {
             string memory index = vm.toString(i);
-            string memory dependencies = string.concat("dependencies", index);
             string memory prefix = releasedConstantPrefix(vm, paths[i]);
-
-            entries = string.concat(
-                entries,
-                "        address[] memory ",
-                dependencies,
-                " = new address[](",
-                vm.toString(template.dependencies.length),
-                ");\n"
-            );
-            for (uint256 j = 0; j < template.dependencies.length; j++) {
-                entries = string.concat(
-                    entries,
-                    "        ",
-                    dependencies,
-                    "[",
-                    vm.toString(j),
-                    "] = address(",
-                    vm.toString(template.dependencies[j]),
-                    ");\n"
-                );
-            }
 
             entries = string.concat(
                 entries,
@@ -623,9 +675,9 @@ library LibRainDeploySnapshot {
                 prefix,
                 "_RUNTIME_CODE,\n            artifactPath: \"",
                 template.artifactPath,
-                "\",\n            dependencies: ",
-                dependencies,
-                "\n        });\n"
+                "\",\n            dependencies: abi.decode(",
+                prefix,
+                "_DEPENDENCIES, (address[]))\n        });\n"
             );
         }
 
@@ -634,20 +686,23 @@ library LibRainDeploySnapshot {
             libraryName,
             "\n/// @notice Every frozen release of `",
             contractName,
-            "`: one entry per file in\n",
-            "/// the append-only `src/generated/<tag>/` record, in tag order.\n///\n",
-            "/// The deploy address, code hash, creation code and runtime code of each\n",
-            "/// entry are aliased from that release's own frozen snapshot, so the\n",
-            "/// consensus record is read from the immutable file and from nowhere else.\n///\n",
-            "/// The key, the artifact path and the dependencies are explorer and ordering\n",
-            "/// metadata regenerated from the CURRENT declaration, and are not part of\n",
-            "/// that record. A moved source path retroactively updates every entry's\n",
-            "/// artifact path, which is intended: the alternative is parsing this\n",
-            "/// generated file back in to preserve what it last said.\nlibrary ",
+            "`: one entry per file in\n"
+            "/// the append-only `src/generated/<tag>/` record, in tag order.\n///\n"
+            "/// The deploy address, code hash, creation code, runtime code and dependency\n"
+            "/// list of each entry are aliased from that release's own frozen snapshot, so\n"
+            "/// what a release deployed, and what it required to already be on chain, are\n"
+            "/// read from the immutable file and from nowhere else. A dependency dropped\n"
+            "/// from current source stays required by the releases cut with it, and one\n"
+            "/// added is not imposed on releases cut without it.\n///\n"
+            "/// The key and the artifact path are explorer and ordering metadata\n"
+            "/// regenerated from the CURRENT declaration, and are not part of that\n"
+            "/// record. A moved source path retroactively updates every entry's artifact\n"
+            "/// path, which is intended: the alternative is parsing this generated file\n"
+            "/// back in to preserve what it last said.\nlibrary ",
             libraryName,
-            " {\n    /// Every frozen release, in tag order.\n",
-            "    /// @return suites The released suites.\n",
-            "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n",
+            " {\n    /// Every frozen release, in tag order.\n"
+            "    /// @return suites The released suites.\n"
+            "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n"
             "        suites = new DeploySuite[](",
             vm.toString(paths.length),
             ");\n",
@@ -671,14 +726,20 @@ library LibRainDeploySnapshot {
     /// Written beside the alias lib, under the same `Lib<Contract>` naming, so
     /// all generated non-snapshot Solidity is in one directory.
     ///
-    /// Four fields per entry come from the frozen snapshot and three from
-    /// `template`. Those three — the key, the artifact path and the
-    /// dependencies — are explorer and ordering metadata regenerated from the
-    /// CURRENT declaration on every build, NOT part of the frozen consensus
-    /// record. Moving a source file retroactively updates the artifact path of
-    /// every entry, including releases cut years ago, which is intended: the
-    /// alternative is parsing the previously generated Solidity back in to
-    /// preserve what it said.
+    /// Five fields per entry come from the frozen snapshot and two from
+    /// `template`. Those two — the key and the artifact path — are explorer and
+    /// ordering metadata regenerated from the CURRENT declaration on every
+    /// build, NOT part of the frozen record. Moving a source file retroactively
+    /// updates the artifact path of every entry, including releases cut years
+    /// ago, which is intended: the alternative is parsing the previously
+    /// generated Solidity back in to preserve what it said.
+    ///
+    /// The dependency list is deliberately NOT among them. It is what a
+    /// broadcast checks is already on chain before it deploys anything, so
+    /// regenerating it from current source would mean re-broadcasting a past
+    /// release onto a new chain under today's preconditions rather than the
+    /// ones that release was cut with. It is frozen into the snapshot by
+    /// `writeSnapshot` and aliased back out here.
     /// @param vm The Vm instance for file operations.
     /// @param recordRoot The record root to read releases from — `LIB_FS_ROOT`
     /// for a repo's real record. A parameter for the same reason

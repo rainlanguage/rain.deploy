@@ -217,8 +217,9 @@ contract LibRainDeploySnapshotTest is Test {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(LibRainDeploySnapshot.dirForSnapshot(dir), true);
 
-        string memory written =
-            LibRainDeploySnapshot.writeSnapshot(vm, dir, "MockDeployable", type(MockDeployable).creationCode);
+        string memory written = LibRainDeploySnapshot.writeSnapshot(
+            vm, dir, "MockDeployable", type(MockDeployable).creationCode, new address[](0)
+        );
         // Read while the snapshot is still there, asserted once it is gone.
         bool exists = vm.exists(written);
 
@@ -261,8 +262,10 @@ contract LibRainDeploySnapshotTest is Test {
     ///
     /// Every CONSENSUS field is zero, so an emitter that took one of the four
     /// frozen fields from the template rather than from the record would emit a
-    /// zero and be seen doing it. Only the key, the artifact path and the
-    /// dependencies are meant to come from here.
+    /// zero and be seen doing it. Only the key and the artifact path are meant
+    /// to come from here — the dependency list is frozen into the record and
+    /// aliased back out of it, which
+    /// `testReleasedEntriesIgnoreTheTemplateDependencies` is the property for.
     /// @return The template.
     function emitterTemplate() internal pure returns (DeploySuite memory) {
         return DeploySuite({
@@ -302,7 +305,9 @@ contract LibRainDeploySnapshotTest is Test {
             tag,
             "_CREATION_CODE,\n    RUNTIME_CODE as AddressRegistry_",
             tag,
-            "_RUNTIME_CODE\n} from \"../generated/",
+            "_RUNTIME_CODE,\n    DEPENDENCIES as AddressRegistry_",
+            tag,
+            "_DEPENDENCIES\n} from \"../generated/",
             tag,
             "/AddressRegistry.sol\";\n\n"
         );
@@ -314,26 +319,27 @@ contract LibRainDeploySnapshotTest is Test {
     string constant EXPECTED_LIBRARY_HEADER = "/// @title LibAddressRegistryReleased\n"
         "/// @notice Every frozen release of `AddressRegistry`: one entry per file in\n"
         "/// the append-only `src/generated/<tag>/` record, in tag order.\n" "///\n"
-        "/// The deploy address, code hash, creation code and runtime code of each\n"
-        "/// entry are aliased from that release's own frozen snapshot, so the\n"
-        "/// consensus record is read from the immutable file and from nowhere else.\n" "///\n"
-        "/// The key, the artifact path and the dependencies are explorer and ordering\n"
-        "/// metadata regenerated from the CURRENT declaration, and are not part of\n"
-        "/// that record. A moved source path retroactively updates every entry's\n"
-        "/// artifact path, which is intended: the alternative is parsing this\n"
-        "/// generated file back in to preserve what it last said.\n" "library LibAddressRegistryReleased {\n"
+        "/// The deploy address, code hash, creation code, runtime code and dependency\n"
+        "/// list of each entry are aliased from that release's own frozen snapshot, so\n"
+        "/// what a release deployed, and what it required to already be on chain, are\n"
+        "/// read from the immutable file and from nowhere else. A dependency dropped\n"
+        "/// from current source stays required by the releases cut with it, and one\n"
+        "/// added is not imposed on releases cut without it.\n" "///\n"
+        "/// The key and the artifact path are explorer and ordering metadata\n"
+        "/// regenerated from the CURRENT declaration, and are not part of that\n"
+        "/// record. A moved source path retroactively updates every entry's artifact\n"
+        "/// path, which is intended: the alternative is parsing this generated file\n"
+        "/// back in to preserve what it last said.\n" "library LibAddressRegistryReleased {\n"
         "    /// Every frozen release, in tag order.\n" "    /// @return suites The released suites.\n"
         "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n";
 
-    /// The entry one release contributes, with no dependencies.
+    /// The entry one release contributes.
     /// @param index The entry's index.
     /// @param tag The release tag.
     /// @return The entry's statements.
     function expectedEntry(string memory index, string memory tag) internal pure returns (string memory) {
         return string.concat(
-            "        address[] memory dependencies",
-            index,
-            " = new address[](0);\n        suites[",
+            "        suites[",
             index,
             "] = DeploySuite({\n            suite: \"address-registry@",
             tag,
@@ -346,9 +352,9 @@ contract LibRainDeploySnapshotTest is Test {
             "_BYTECODE_HASH,\n            storedRuntimeCode: AddressRegistry_",
             tag,
             "_RUNTIME_CODE,\n            artifactPath: \"src/concrete/AddressRegistry.sol:AddressRegistry\",\n",
-            "            dependencies: dependencies",
-            index,
-            "\n        });\n"
+            "            dependencies: abi.decode(AddressRegistry_",
+            tag,
+            "_DEPENDENCIES, (address[]))\n        });\n"
         );
     }
 
@@ -438,36 +444,152 @@ contract LibRainDeploySnapshotTest is Test {
         assertTrue(vm.contains(emitted, "suite: \"address-registry@0_0_2\""));
     }
 
-    /// The dependencies MUST be the template's, element for element. They are
-    /// what a broadcast checks is already on chain before it deploys anything,
-    /// so an entry that dropped them would deploy a suite whose constructor
-    /// reads an address with no code.
-    function testReleasedLibraryBlockCarriesTheTemplateDependencies() external pure {
-        DeploySuite memory template = emitterTemplate();
-        template.dependencies = new address[](2);
-        template.dependencies[0] = address(0xdead);
-        template.dependencies[1] = address(0xbeef);
+    /// A released entry's dependency list MUST come from that release's OWN
+    /// frozen snapshot, and the template's list MUST NOT reach it.
+    ///
+    /// The list is not metadata. `RainDeployBroadcast.run` hands
+    /// `suite.dependencies` to `LibRainDeploy.deployToNetworks`, which reverts
+    /// `MissingDependency` for any of them with no code on the target network —
+    /// so it is a PRECONDITION of the broadcast, and re-broadcasting a past
+    /// release onto a newly supported chain has to check the preconditions that
+    /// release was cut with. Rebuilding it from the candidate declaration
+    /// checks today's instead.
+    ///
+    /// The template here differs from what any record holds, so an emitter that
+    /// still read it would be seen writing those addresses out. Two releases,
+    /// because each MUST take its list from its own constant: one release
+    /// inheriting its successor's is the same defect one step smaller.
+    function testReleasedEntriesTakeDependenciesFromTheFrozenRecord() external pure {
+        DeploySuite memory declared = emitterTemplate();
+        declared.dependencies = new address[](2);
+        declared.dependencies[0] = address(0xdead);
+        declared.dependencies[1] = address(0xbeef);
+
+        string memory emitted =
+            LibRainDeploySnapshot.releasedLibraryBlock(vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), declared);
+
+        assertTrue(
+            vm.contains(emitted, "dependencies: abi.decode(AddressRegistry_0_0_1_DEPENDENCIES, (address[]))"),
+            "the first release does not read its own frozen dependency list"
+        );
+        assertTrue(
+            vm.contains(emitted, "dependencies: abi.decode(AddressRegistry_0_0_2_DEPENDENCIES, (address[]))"),
+            "the second release does not read its own frozen dependency list"
+        );
+
+        assertFalse(vm.contains(emitted, vm.toString(address(0xdead))), "the declaration's dependency was emitted");
+        assertFalse(vm.contains(emitted, vm.toString(address(0xbeef))), "the declaration's dependency was emitted");
+        assertFalse(vm.contains(emitted, "address[] memory"), "an entry still builds its list from the declaration");
+    }
+
+    /// PROPERTY: the emitted released lib is INDEPENDENT of the template's
+    /// dependency list — byte identical under any list at all.
+    ///
+    /// The two failures this closes are the same property twice. A dependency
+    /// DROPPED from current source must stay required by the releases cut with
+    /// it, or an old release re-broadcast onto a new chain deploys against a
+    /// precondition nobody checked. One ADDED must not be imposed on releases
+    /// cut without it, or that re-broadcast reverts `MissingDependency` on
+    /// something that release never needed. Both say current source cannot move
+    /// a released entry's list, so it is stated as invariance rather than as
+    /// two examples — two examples is also what a partial re-read passes.
+    /// @param dependencies Whatever the candidate declaration now says.
+    function testReleasedEntriesIgnoreTheTemplateDependencies(address[] memory dependencies) external pure {
+        DeploySuite memory declared = emitterTemplate();
+        declared.dependencies = dependencies;
 
         assertEq(
-            LibRainDeploySnapshot.releasedLibraryBlock(vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(1), template),
-            string.concat(
-                EXPECTED_LIBRARY_HEADER,
-                "        suites = new DeploySuite[](1);\n",
-                "        address[] memory dependencies0 = new address[](2);\n",
-                "        dependencies0[0] = address(",
-                vm.toString(address(0xdead)),
-                ");\n        dependencies0[1] = address(",
-                vm.toString(address(0xbeef)),
-                ");\n        suites[0] = DeploySuite({\n            suite: \"address-registry@0_0_1\",\n",
-                "            creationCode: AddressRegistry_0_0_1_CREATION_CODE,\n",
-                "            storedDeployedAddress: AddressRegistry_0_0_1_DEPLOYED_ADDRESS,\n",
-                "            storedBytecodeHash: AddressRegistry_0_0_1_BYTECODE_HASH,\n",
-                "            storedRuntimeCode: AddressRegistry_0_0_1_RUNTIME_CODE,\n",
-                "            artifactPath: \"src/concrete/AddressRegistry.sol:AddressRegistry\",\n",
-                "            dependencies: dependencies0\n        });\n",
-                "    }\n}\n"
+            LibRainDeploySnapshot.releasedLibraryBlock(vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), declared),
+            LibRainDeploySnapshot.releasedLibraryBlock(
+                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), emitterTemplate()
+            ),
+            "the template's dependency list reached a released entry"
+        );
+    }
+
+    /// Where the frozen-dependency round trip writes its snapshots. NOT tag
+    /// shaped, for the reason `testWriteSnapshotWritesTheSnapshotAtItsPath`
+    /// gives: the record root is the real `src/generated/`, walked by the
+    /// inherited record check in contracts forge runs in parallel with this
+    /// one, so a tag-shaped name here is a release they have to fail on.
+    string constant DEPENDENCIES_FIXTURE_DIR = "write-dependencies-not-a-tag";
+
+    /// Freezes `dependencies` into a snapshot and returns the source written.
+    ///
+    /// The EVM state is rolled back around the write so each call is an
+    /// INDEPENDENT freeze. `writeSnapshot` deploys the creation code it is
+    /// handed through the Zoltu factory, which is `CREATE2` under a zero salt,
+    /// so one creation code lands at one address and a second deploy of it in
+    /// the same test would fail on the first still being there. Filesystem
+    /// cheatcodes are not undone by a state rollback, which is what makes the
+    /// source read back the source that call wrote.
+    /// @param dependencies The list to freeze.
+    /// @return The snapshot source.
+    function freezeDependencies(address[] memory dependencies) internal returns (string memory) {
+        uint256 state = vm.snapshotState();
+        string memory source = vm.readFile(
+            LibRainDeploySnapshot.writeSnapshot(
+                vm, DEPENDENCIES_FIXTURE_DIR, FIXTURE_CONTRACT, type(MockDeployable).creationCode, dependencies
             )
         );
+        assertTrue(vm.revertToState(state), "the deploy state did not roll back");
+        return source;
+    }
+
+    /// The `address[]` a snapshot's `DEPENDENCIES` constant holds, decoded out
+    /// of the source the generator wrote.
+    ///
+    /// Read back out of the FILE rather than returned by the writer, because
+    /// the file is the whole point: what a release required has to survive as
+    /// bytes on disk that a repo whose source has since changed can still read.
+    /// `abi.decode` here is the same expression `releasedLibraryBlock` emits
+    /// into the released lib, so what that expression evaluates to is what this
+    /// asserts about.
+    /// @param source The snapshot source.
+    /// @return The frozen dependency list.
+    function frozenDependencies(string memory source) internal pure returns (address[] memory) {
+        string[] memory afterName = vm.split(source, "bytes constant DEPENDENCIES =");
+        string[] memory afterOpen = vm.split(afterName[1], "hex\"");
+        return abi.decode(vm.parseBytes(string.concat("0x", vm.split(afterOpen[1], "\"")[0])), (address[]));
+    }
+
+    /// A snapshot MUST record the dependency list it is handed, exactly, and
+    /// `abi.decode` MUST give that list back. This is the half of the freeze
+    /// that lives on disk: the released lib only ever names the constant, so a
+    /// list the constant does not hold is a list no release can read.
+    ///
+    /// The empty list is asserted because it is what every contract in this
+    /// repo declares, and therefore the case a round trip is most likely to be
+    /// quietly wrong about — an encoder that wrote nothing at all would look
+    /// correct against this repo's own committed snapshots forever.
+    function testWriteSnapshotFreezesTheDependencyList() external {
+        address[] memory none = new address[](0);
+
+        address[] memory one = new address[](1);
+        one[0] = address(0xdead);
+
+        address[] memory three = new address[](3);
+        three[0] = address(0xdead);
+        // A zero in the middle. `abi.encode` of an address array is not
+        // self-delimiting, so a length or offset the round trip got wrong reads
+        // a neighbouring word rather than failing, and zero is the value that
+        // would hide it.
+        three[1] = address(0);
+        three[2] = address(0xbeef);
+
+        // Read while the snapshots are still there, asserted once they are
+        // gone: forge-std assertions revert, so undoing afterwards undoes in
+        // every case except a failure.
+        string memory sourceNone = freezeDependencies(none);
+        string memory sourceOne = freezeDependencies(one);
+        string memory sourceThree = freezeDependencies(three);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(DEPENDENCIES_FIXTURE_DIR), true);
+
+        assertEq(frozenDependencies(sourceNone), none, "an empty list did not round trip as empty");
+        assertEq(frozenDependencies(sourceOne), one, "a one element list did not round trip");
+        assertEq(frozenDependencies(sourceThree), three, "a three element list did not round trip");
     }
 
     /// Releases MUST be emitted in the order they were cut, comparing tags as
