@@ -33,8 +33,9 @@ Approach:
 - Hard guards against deploying to networks where dependencies are missing.
 - Pre-calculated addresses asserted against the creation code before deploying,
   and against the chain after: silent failures fail loudly.
-- Bytecode integrity checks (e.g. via the Rain Extrospection lib) supported
-  post-deploy.
+- Bytecode integrity checks post-deploy: `codehash` is compared against the
+  recorded pin on every network by `RainDeployVerifyChain`, and before every
+  registry access by `LibAddressRegistry` and `LibMigrationRegistry`.
 - An address registry, read at run time rather than compiled into creation code,
   and a post-deploy check that every target network's deployment took the
   address it was supposed to.
