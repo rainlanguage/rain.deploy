@@ -68,6 +68,10 @@ polygon = "${POLYGON_RPC_URL}"
 # these variable names, so a deploy without this section broadcasts and then
 # fails with no API key configured for the chain — after spending the gas. One
 # entry per `[rpc_endpoints]` alias, because the deploy goes to all of them.
+#
+# Both sections are checked against `LibRainDeploy.supportedNetworks()`, in both
+# directions, by `testSupportedNetworksAreFullyConfigured`. Adding a network is
+# an edit to all three or a red test, not a broadcast that discovers it.
 [etherscan]
 arbitrum = { key = "${CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY}" }
 base = { key = "${CI_DEPLOY_BASE_ETHERSCAN_API_KEY}" }
