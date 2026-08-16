@@ -387,8 +387,9 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
 
     /// Two suites that record the SAME creation code MUST both derive, which
     /// is the ordinary state of a repo between a release and the next source
-    /// change. `0_0_2` and the candidate are the same bytes and therefore the
-    /// same address, and the whole set still passes.
+    /// change. `address-registry-0-0-1` and `address-registry-candidate` are
+    /// the same bytes and therefore the same address, and the whole set still
+    /// passes.
     function testSuitesSharingCreationCodeAllDerive() external {
         DeploySuite[] memory suites = allSuites();
         assertEq(suites.length, 4);
