@@ -22,7 +22,15 @@ library LibRainDeploy {
     /// Thrown when a dependency is missing on a network before deployment.
     error MissingDependency(string network, address dependency);
 
-    /// Thrown when the deployed address does not match the expected address.
+    /// Thrown when an address does not match the address the deploy expects.
+    /// Raised at two distinct points, and nothing is deployed at the first of
+    /// them: before any fork, when the address the creation code derives is not
+    /// the expected one, and after broadcasting, when the address deployed to
+    /// is not the expected one.
+    /// @param expected The `expectedAddress` the caller passed to
+    /// `deployToNetworks` or `deployAndBroadcast`, at both sites.
+    /// @param actual The address the creation code derives, before any fork, or
+    /// the address actually deployed to, after broadcasting.
     error UnexpectedDeployedAddress(address expected, address actual);
 
     /// Thrown when the deployed code hash does not match the expected code hash.
@@ -49,6 +57,11 @@ library LibRainDeploy {
     /// Thrown when the read calls and expected addresses of a post-deploy check
     /// do not pair up.
     error ResolvedAddressesLengthMismatch(uint256 readCallsLength, uint256 expectedAddressesLength);
+
+    /// Thrown when a post-deploy check is given no reads. A check with nothing
+    /// to read passes on every network having asserted nothing, which is
+    /// indistinguishable from every read checking out.
+    error NoResolvedAddressReads(address target);
 
     /// Thrown when a post-deploy read reverts, or answers with something that is
     /// not a single address-sized word.
@@ -262,6 +275,12 @@ library LibRainDeploy {
     /// Only the consumer knows where it stored what it resolved, so the consumer
     /// supplies the reads. Each entry in `readCalls` is static-called against
     /// `target` and MUST answer with exactly one address.
+    ///
+    /// An empty read set is REFUSED. A check with nothing to read returns having
+    /// asserted nothing, which is indistinguishable from every read checking
+    /// out, and it is what a consumer that built its read list from a source
+    /// that came back empty hands in — right before it migrates onto the
+    /// deployment this was supposed to verify.
     /// @param network The network name, for the error only.
     /// @param target The deployed contract to read.
     /// @param readCalls The calldata for each read, e.g.
@@ -276,6 +295,13 @@ library LibRainDeploy {
     ) internal view {
         if (readCalls.length != expectedAddresses.length) {
             revert ResolvedAddressesLengthMismatch(readCalls.length, expectedAddresses.length);
+        }
+        // After the pairing check, not before it: an unpaired call is a
+        // mispairing whichever side is empty, and reporting the empty pair as a
+        // mismatch of zero against zero would say nothing. The empty pair is the
+        // one case pairing cannot see, so it is its own error.
+        if (readCalls.length == 0) {
+            revert NoResolvedAddressReads(target);
         }
         for (uint256 i = 0; i < readCalls.length; i++) {
             // The consumer supplies the reads, so the call is low level by
@@ -300,6 +326,12 @@ library LibRainDeploy {
             if (word > type(uint160).max) {
                 revert ResolvedAddressReadFailed(network, target, i, returnData);
             }
+            // Casting to `uint160` is safe because the range check directly
+            // above rejects every word with dirty upper 96 bits, so the low 160
+            // bits are the whole of the word and the cast keeps every one.
+            // Excluded at the site rather than repo-wide so an unchecked cast
+            // added anywhere else is still reported.
+            // forge-lint: disable-next-line(unsafe-typecast)
             address actual = address(uint160(word));
             if (actual != expectedAddresses[i]) {
                 revert UnexpectedResolvedAddress(network, target, i, expectedAddresses[i], actual);
@@ -316,6 +348,10 @@ library LibRainDeploy {
     /// than expected is a burned deterministic address, found while nothing
     /// points at it yet — which is the whole reason to verify before migrating
     /// onto a deployment rather than trusting it.
+    ///
+    /// An empty network set and an empty read set are both REFUSED, before
+    /// anything is forked. Either one makes this return success across every
+    /// network having read nothing at all.
     /// @param vm The Vm instance to use for forking.
     /// @param networks The list of network names to check.
     /// @param target The deployed contract to read on each network.
@@ -336,6 +372,11 @@ library LibRainDeploy {
         // than after an RPC round trip.
         if (readCalls.length != expectedAddresses.length) {
             revert ResolvedAddressesLengthMismatch(readCalls.length, expectedAddresses.length);
+        }
+        // Same reason: an empty read set is reported without an RPC round trip,
+        // so it cannot be masked by an outage on the first network.
+        if (readCalls.length == 0) {
+            revert NoResolvedAddressReads(target);
         }
         for (uint256 i = 0; i < networks.length; i++) {
             // createSelectFork returns a fork id that is not needed here; bind
