@@ -99,6 +99,25 @@ contract LibRainDeploySnapshotTest is Test {
         assertFalse(LibRainDeploySnapshot.isTag("collision-guard"));
     }
 
+    /// A component has ONE spelling. A padded component is the same release as
+    /// its unpadded form: it freezes to a second directory the immutability
+    /// check does not recognise as the first, and the two compare equal as
+    /// versions so nothing can order them either.
+    function testIsStrictTripleRefusesLeadingZeros() external pure {
+        assertFalse(LibRainDeploySnapshot.isStrictTriple("0.01.5", "."));
+        assertFalse(LibRainDeploySnapshot.isStrictTriple("01.1.5", "."));
+        assertFalse(LibRainDeploySnapshot.isStrictTriple("0.1.05", "."));
+        assertFalse(LibRainDeploySnapshot.isStrictTriple("00.0.0", "."));
+        assertFalse(LibRainDeploySnapshot.isTag("0_01_5"));
+
+        // The boundary: a single zero IS the number zero, and `0.0.0` is a real
+        // version.
+        assertTrue(LibRainDeploySnapshot.isStrictTriple("0.0.0", "."));
+        assertTrue(LibRainDeploySnapshot.isStrictTriple("0.10.0", "."));
+        assertTrue(LibRainDeploySnapshot.isStrictTriple("10.0.100", "."));
+        assertTrue(LibRainDeploySnapshot.isTag("0_0_0"));
+    }
+
     /// EVERY version a freeze accepts MUST produce a directory the record
     /// recognises as a release. A version that could be frozen to a directory
     /// the record then ignores is exactly the orphan snapshot
@@ -179,6 +198,16 @@ contract LibRainDeploySnapshotTest is Test {
     /// to a directory the append-only gate ignores forever.
     function testTagForVersionRefusesNonStrict() external {
         string[9] memory bad = ["0.1.7-rc1", "0.1", "0.1.7.1", "", "a.b.c", ".1.7", "0..7", "0.1.", "0.1.7 "];
+        for (uint256 i = 0; i < bad.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(UnreleasableVersion.selector, bad[i]));
+            this.externalTagForVersion(bad[i]);
+        }
+    }
+
+    /// The refusal MUST be reachable through the release path, naming the
+    /// version, rather than only through the predicate.
+    function testTagForVersionRefusesLeadingZeros() external {
+        string[3] memory bad = ["0.01.5", "01.1.5", "0.1.05"];
         for (uint256 i = 0; i < bad.length; i++) {
             vm.expectRevert(abi.encodeWithSelector(UnreleasableVersion.selector, bad[i]));
             this.externalTagForVersion(bad[i]);

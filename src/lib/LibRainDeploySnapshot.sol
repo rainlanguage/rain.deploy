@@ -87,8 +87,8 @@ library LibRainDeploySnapshot {
         return tagForVersion(vm.parseTomlString(vm.readFile("foundry.toml"), ".package.version"));
     }
 
-    /// Whether `subject` is three non-empty runs of digits joined by exactly
-    /// two `separator`s.
+    /// Whether `subject` is three numbers joined by exactly two `separator`s,
+    /// each written without a leading zero.
     ///
     /// The ONE definition of the release-version shape. It is asked with `.`
     /// for a version out of `foundry.toml` and with `_` for the directory that
@@ -115,6 +115,16 @@ library LibRainDeploySnapshot {
                 separators++;
                 digitsInComponent = 0;
             } else if (char >= "0" && char <= "9") {
+                // A component is one number, so it has one spelling. `01` and
+                // `1` are the same release and would freeze to two directories,
+                // neither of which `SnapshotAlreadyFrozen` sees as the other,
+                // and which `recordPrecedes` cannot order because they compare
+                // equal as versions. `i` is at least 1 wherever
+                // `digitsInComponent == 1`, because that digit was read at an
+                // earlier index.
+                if (digitsInComponent == 1 && subjectBytes[i - 1] == "0") {
+                    return false;
+                }
                 digitsInComponent++;
             } else {
                 return false;
