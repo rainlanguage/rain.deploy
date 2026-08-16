@@ -321,12 +321,13 @@ forge soldeer install rain-deploy~<version>
 ```
 
 **You also need `forge-std` 1.16.1**, remapped as `forge-std-1.16.1/`. The
-published package deliberately ships only `src/` and `script/` — no
-`remappings.txt`, no `soldeer.lock`, no `dependencies/` — so a consumer resolves
-`forge-std` itself. The requirement is transitive rather than incidental: the
-deployed contract imports nothing outside this package, but every abstract a
-consumer inherits pulls forge-std in — `Script` via `RainDeployBroadcast`,
-`Test` via `RainDeployVerifyBase`, and `Vm` via `LibRainDeploy` beneath both:
+published package ships `src/`, `script/` and the licence and README files — no
+`test/`, no `foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no
+`dependencies/` — so a consumer resolves `forge-std` itself. The requirement is
+transitive rather than incidental: the deployed contract imports nothing outside
+this package, but every abstract a consumer inherits pulls forge-std in —
+`Script` via `RainDeployBroadcast`, `Test` via `RainDeployVerifyBase`, and `Vm`
+via `LibRainDeploy` beneath both:
 
 ```toml
 [dependencies]
