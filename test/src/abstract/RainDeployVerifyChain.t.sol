@@ -60,8 +60,9 @@ import {
 /// leaves the etch in place and changes only the code, and the check still
 /// fails, which it could not do if the expectation were read from the etch.
 contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain {
-    /// The second suite's address, derived from the only other creation code in
-    /// this repo.
+    /// The second suite's address, derived from `MockDeployableV2`'s creation
+    /// code by the same derivation `ExampleDeploySuites` declares, so the etch
+    /// in `setUp` lands on the address the matrix reads.
     /// @return The address.
     function secondDeployedAddress() internal pure returns (address) {
         return LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
