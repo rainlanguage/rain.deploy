@@ -146,9 +146,9 @@ contract RainDeploySuitesBaseTest is Test {
     /// An empty candidate list reads as a repo with nothing left to declare and
     /// is a repo whose source anchor — the only check that catches a snapshot
     /// of the wrong contract — has been handed nothing to run over. It is
-    /// refused rather than tolerated, and refused on all four readers, because
-    /// a reader that answers from an empty declaration is a reader through
-    /// which the whole registry can be empty and green.
+    /// refused rather than tolerated, and refused on EVERY reader, because a
+    /// reader that answers from an empty declaration is a reader through which
+    /// the whole registry can be empty and green.
     function testNoCandidateReverts() external {
         NoCandidateDeploySuites none = new NoCandidateDeploySuites();
 
@@ -169,12 +169,19 @@ contract RainDeploySuitesBaseTest is Test {
         // passes, so that check cannot be the thing that catches this.
         vm.expectRevert(abi.encodeWithSelector(NoDeployCandidates.selector));
         none.externalCheckedCandidateSuites();
+
+        // Including through the anchor itself, which the BROADCAST runs. An
+        // empty declaration that reached it would be a deploy whose only
+        // wrong-contract check ran over nothing and passed.
+        vm.expectRevert(abi.encodeWithSelector(NoDeployCandidates.selector));
+        none.externalCheckCandidatesAnchoredToSource();
     }
 
     /// The refusal MUST be discriminating: a declaration that DOES name a
-    /// candidate answers all four readers rather than reverting, so the test
-    /// above is about emptiness and not about the fixture.
+    /// candidate answers every reader rather than reverting, so the test above
+    /// is about emptiness and not about the fixture.
     function testCandidatesPresentAnswers() external view {
         assertEq(sSuites.externalCheckedCandidateSuites().length, 2);
+        sSuites.externalCheckCandidatesAnchoredToSource();
     }
 }
