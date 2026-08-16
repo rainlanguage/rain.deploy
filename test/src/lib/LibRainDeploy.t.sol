@@ -13,6 +13,7 @@ import {MockRawAnswerOwner} from "../../concrete/MockRawAnswerOwner.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
+import {LibStringSet} from "../../lib/LibStringSet.sol";
 
 /// @title LibRainDeployTest
 /// Tests for `LibRainDeploy`. External wrappers are used for library functions
@@ -203,20 +204,6 @@ contract LibRainDeployTest is Test {
         assertEq(networks[4], LibRainDeploy.POLYGON);
     }
 
-    /// Whether `names` holds `name`. A config section is keyed, not ordered, so
-    /// membership is the only thing worth asserting across one.
-    /// @param names The names to search.
-    /// @param name The name to look for.
-    /// @return Whether it is there.
-    function holdsName(string[] memory names, string memory name) internal pure returns (bool) {
-        for (uint256 i = 0; i < names.length; i++) {
-            if (keccak256(bytes(names[i])) == keccak256(bytes(name))) {
-                return true;
-            }
-        }
-        return false;
-    }
-
     /// PROPERTY: `[rpc_endpoints]` and `[etherscan]` in `foundry.toml` are
     /// EXACTLY `supportedNetworks()`, which makes the three lists one list.
     ///
@@ -227,6 +214,8 @@ contract LibRainDeployTest is Test {
     /// drifted — so both directions are asserted, by membership: containment
     /// one way alone passes for a section carrying an alias nothing deploys
     /// to, and the other way alone passes for a network with no config at all.
+    /// Membership rather than position, because a config section is keyed
+    /// rather than ordered and there is no order in it to assert.
     ///
     /// This is what makes the `[etherscan]` half enforced at all. The RPC half
     /// is enforced only incidentally, by the fork tests, and only forwards.
@@ -253,7 +242,7 @@ contract LibRainDeployTest is Test {
         string[] memory rpcAliases = vm.parseTomlKeys(config, ".rpc_endpoints");
         for (uint256 i = 0; i < rpcAliases.length; i++) {
             assertTrue(
-                holdsName(networks, rpcAliases[i]),
+                LibStringSet.holds(networks, rpcAliases[i]),
                 string.concat("[rpc_endpoints] alias is not a supported network: ", rpcAliases[i])
             );
         }
@@ -261,7 +250,7 @@ contract LibRainDeployTest is Test {
         string[] memory etherscanKeys = vm.parseTomlKeys(config, ".etherscan");
         for (uint256 i = 0; i < etherscanKeys.length; i++) {
             assertTrue(
-                holdsName(networks, etherscanKeys[i]),
+                LibStringSet.holds(networks, etherscanKeys[i]),
                 string.concat("[etherscan] key is not a supported network: ", etherscanKeys[i])
             );
         }
