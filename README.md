@@ -343,24 +343,27 @@ Via [soldeer](https://soldeer.xyz):
 forge soldeer install rain-deploy~<version>
 ```
 
-**You also need `forge-std` 1.16.1**, remapped as `forge-std-1.16.1/`. The
-published package ships `src/`, `script/` and the licence and README files — no
-`test/`, no `foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no
-`dependencies/` — so a consumer resolves `forge-std` itself. The requirement is
-transitive rather than incidental: the deployed contract imports nothing outside
-this package, but every abstract a consumer inherits pulls forge-std in —
-`Script` via `RainDeployBroadcast`, `Test` via `RainDeployVerifyBase`, and `Vm`
-via `LibRainDeploy` beneath both:
+**You also need `forge-std` 1.16.1 and `rain-sol-codegen` 0.1.6**, remapped as
+`forge-std-1.16.1/` and `rain-sol-codegen-0.1.6/`. The published package ships
+`src/`, `script/` and the licence and README files — no `test/`, no
+`foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no `dependencies/` — so
+a consumer resolves both itself. The requirement is transitive rather than
+incidental: the deployed contract imports nothing outside this package, but
+every abstract a consumer inherits pulls them in — `Script` via
+`RainDeployBroadcast`, `Test` via `RainDeployVerifyBase`, `Vm` via
+`LibRainDeploy` beneath both, and `LibCodeGen`/`LibFs` via
+`LibRainDeploySnapshot`, which `RainDeployVerifySnapshot` imports:
 
 ```toml
 [dependencies]
 forge-std = "1.16.1"
+rain-sol-codegen = "0.1.6"
 rain-deploy = "<version>"
 ```
 
-The version has to match: the import paths are version-qualified, which is
-deliberate — it is what stops a consumer's incompatible `forge-std` from
-silently satisfying these imports.
+The versions have to match: the import paths are version-qualified, which is
+deliberate — it is what stops a consumer's incompatible copy from silently
+satisfying these imports.
 
 ## Develop
 
