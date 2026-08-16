@@ -40,7 +40,7 @@ import {LibMigrationRegistryReleased} from "../lib/LibMigrationRegistryReleased.
 /// It lives in `src/` rather than `test/` for two reasons. `.soldeerignore`
 /// excludes `test/`, and a downstream `script/` has to import its own
 /// equivalent. And in THIS repo the deployment process is the product: see the
-/// scoped exception recorded in `CLAUDE.md`.
+/// scoped exception recorded in `.claude/rules/src-layout-exception.md`.
 ///
 /// This declaration is the whole of what a deploy repo writes. The derivation,
 /// the comparisons, the source anchor, the networks matrix and the broadcast
