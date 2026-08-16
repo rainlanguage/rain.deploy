@@ -327,6 +327,12 @@ library LibRainDeploy {
             if (word > type(uint160).max) {
                 revert ResolvedAddressReadFailed(network, target, i, returnData);
             }
+            // Casting to `uint160` is safe because the range check directly
+            // above rejects every word with dirty upper 96 bits, so the low 160
+            // bits are the whole of the word and the cast keeps every one.
+            // Excluded at the site rather than repo-wide so an unchecked cast
+            // added anywhere else is still reported.
+            // forge-lint: disable-next-line(unsafe-typecast)
             address actual = address(uint160(word));
             if (actual != expectedAddresses[i]) {
                 revert UnexpectedResolvedAddress(network, target, i, expectedAddresses[i], actual);
