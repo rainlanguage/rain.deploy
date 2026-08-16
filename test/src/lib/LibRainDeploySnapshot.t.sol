@@ -1228,7 +1228,7 @@ contract LibRainDeploySnapshotTest is Test {
         vm.removeDir(FREEZE_MULTI_FIXTURE_ROOT, true);
 
         for (uint256 i = 0; i < contractNames.length; i++) {
-            assertTrue(holdsPath(record, frozenPaths[i]));
+            assertTrue(LibStringSet.holds(record, frozenPaths[i]));
             assertEq(frozen[i], rollingFor(contractNames[i]));
         }
         assertEq(record.length, 2);
