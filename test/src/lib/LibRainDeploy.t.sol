@@ -673,6 +673,40 @@ contract LibRainDeployTest is Test {
         );
     }
 
+    /// `deployToNetworks` MUST check EVERY dependency, not only the first. The
+    /// missing one here is the LAST, behind a dependency that really is
+    /// present, so a loop that stopped after `dependencies[0]` would broadcast
+    /// — and a contract whose constructor reads an address with no code is
+    /// broken at a deterministic address that can never be redeployed.
+    function testDeployToNetworksMissingLaterDependencyReverts() external {
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        address[] memory dependencies = new address[](2);
+        // Present on arbitrum: the Zoltu factory, which the deploy needs
+        // anyway. Index 0 therefore passes and only a loop that reaches index 1
+        // reverts at all.
+        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
+        dependencies[1] = address(0xdead);
+
+        // The revert names the LAST dependency, so a loop that reached index 1
+        // but reported index 0 fails here too.
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdead)
+            )
+        );
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            mockDeployableAddress(),
+            bytes32(0),
+            dependencies
+        );
+    }
+
     /// `zoltuAddress` MUST derive the address the Zoltu factory actually
     /// deploys the given creation code to, and creation code that differs MUST
     /// derive a different address.
@@ -1163,6 +1197,42 @@ contract LibRainDeployTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         address[] memory dependencies = new address[](1);
         dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
+
+        address result = this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            dependencies
+        );
+        assertEq(result, mockDeployableAddress());
+        assertEq(result.codehash, mockDeployableCodeHash());
+    }
+
+    /// `deployToNetworks` MUST deploy when a dependency list LONGER than one is
+    /// entirely present, so `testDeployToNetworksMissingLaterDependencyReverts`
+    /// is about the missing entry rather than about the list having more than
+    /// one entry at all.
+    function testDeployToNetworksEveryDependencyPresentDeploys() external {
+        // A second present dependency, distinct from the Zoltu factory.
+        // Deployed here rather than pinned to a mainnet address that happens to
+        // have code on arbitrum today, and made persistent so it is present on
+        // the fork `deployToNetworks` creates for itself as well as this one.
+        // Stated rather than assumed: if it had no code the deploy below would
+        // succeed for a reason that has nothing to do with the loop.
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        address dependency = this.externalDeployZoltu(type(MockDeployableV2).creationCode);
+        assertGt(dependency.code.length, 0);
+        vm.makePersistent(dependency);
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        address[] memory dependencies = new address[](2);
+        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
+        dependencies[1] = dependency;
 
         address result = this.externalDeployToNetworks(
             networks,
