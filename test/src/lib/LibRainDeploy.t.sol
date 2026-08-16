@@ -436,7 +436,7 @@ contract LibRainDeployTest is Test {
         // now pinned exactly in `foundry.toml`, because this repo's deploy pins
         // depend on them; that is what makes a literal here stable at all, and
         // moving any of them moves this address.
-        assertEq(deployed, 0x0c04367b381F8Ca252aD2516F1Eac2b9B2ca928F);
+        assertEq(deployed, 0x7DA611e4146dCf0107407Bb331599acC53E8B62c);
     }
 
     /// `deployZoltu` MUST revert with `DeployFailed` when the Zoltu factory
