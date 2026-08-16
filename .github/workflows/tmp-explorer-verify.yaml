@@ -1,47 +1,23 @@
 name: tmp explorer verify
-# Temporary, branch-only. Submits the source of the two already-deployed
-# registries to every supported explorer, in CI because the explorer key is a
-# GitHub org secret. Never broadcasts: `forge verify-contract` talks to the
-# explorer API and nothing else.
+# Temporary, branch-only. Exercises the `rainix-manual-sol-verify` reusable in
+# exactly the shape `manual-sol-verify.yaml` calls it, over both registries and
+# every supported explorer. Never broadcasts.
 on: push
-env:
-  RAINIX_SHA: 53e96a7d0a97d7c7c75c3b2412521324776fdac6
 jobs:
-  verify:
-    runs-on: ubuntu-latest
-    steps:
-      - uses: rainlanguage/rainix/.github/actions/nix-cachix-setup@main
-        with:
-          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
-      - name: Install soldeer dependencies
-        run: nix develop github:rainlanguage/rainix/${{ env.RAINIX_SHA }}#sol-shell -c forge soldeer install
-      - name: Verify on every supported explorer
-        run: |
-          failed=''
-          for target in \
-            'src/concrete/AddressRegistry.sol:AddressRegistry 0x25aC2b82915f191dbE64e65BAeDDD68b97b68fe1' \
-            'src/concrete/MigrationRegistry.sol:MigrationRegistry 0x6E3aE74aDCd6CF28A1b2F685D5E709ffE44D429D'
-          do
-            contract=${target% *}
-            address=${target#* }
-            for network in arbitrum base base-sepolia flare polygon
-            do
-              echo "::group::$contract on $network"
-              nix develop github:rainlanguage/rainix/${{ env.RAINIX_SHA }}#sol-shell -c \
-                forge verify-contract --chain "$network" "$address" "$contract" --watch \
-                || failed="$failed $network/$contract"
-              echo '::endgroup::'
-              sleep 15
-            done
-          done
-          if [ -n "$failed" ]
-          then
-            echo "::error::verification failed for:$failed"
-            exit 1
-          fi
-        env:
-          CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY: ${{ secrets.EXPLORER_VERIFICATION_KEY || secrets.CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY || vars.CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY || '' }}
-          CI_DEPLOY_BASE_ETHERSCAN_API_KEY: ${{ secrets.EXPLORER_VERIFICATION_KEY || secrets.CI_DEPLOY_BASE_ETHERSCAN_API_KEY || vars.CI_DEPLOY_BASE_ETHERSCAN_API_KEY || '' }}
-          CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY: ${{ secrets.EXPLORER_VERIFICATION_KEY || secrets.CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY || vars.CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY || '' }}
-          CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY: ${{ secrets.EXPLORER_VERIFICATION_KEY || secrets.CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY || vars.CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY || '' }}
-          CI_DEPLOY_FLARE_ETHERSCAN_API_KEY: ${{ secrets.CI_DEPLOY_FLARE_ETHERSCAN_API_KEY || vars.CI_DEPLOY_FLARE_ETHERSCAN_API_KEY || '' }}
+  address-registry:
+    uses: rainlanguage/rainix/.github/workflows/rainix-manual-sol-verify.yaml@2026-08-16-manual-sol-verify
+    with:
+      contract: src/concrete/AddressRegistry.sol:AddressRegistry
+      address: '0x25aC2b82915f191dbE64e65BAeDDD68b97b68fe1'
+      networks: arbitrum base base-sepolia flare polygon
+    secrets: inherit
+  migration-registry:
+    # Serialised behind the first, so the two do not share the one multichain
+    # key's per-second budget between them.
+    needs: address-registry
+    uses: rainlanguage/rainix/.github/workflows/rainix-manual-sol-verify.yaml@2026-08-16-manual-sol-verify
+    with:
+      contract: src/concrete/MigrationRegistry.sol:MigrationRegistry
+      address: '0x6E3aE74aDCd6CF28A1b2F685D5E709ffE44D429D'
+      networks: arbitrum base base-sepolia flare polygon
+    secrets: inherit
