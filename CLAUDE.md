@@ -24,7 +24,7 @@ relocated.
   inert and fails loudly in both directions. Do not "fix" it. The root is welded
   into the creation code, so setting a real one moves the deploy address, the
   code hash and the snapshot together, as an ordinary source change.
-- **The deploy/verify abstracts living in `src/` is a SCOPED exception.** This
+- **The deploy/verify abstracts live in `src/`, a SCOPED exception.** This
   repo's PRODUCT is the deploy process, so its machinery is published rather
   than scaffolding. Do not carry the exception into a consumer repo: there
   `src/` is the product, deploy verification is scaffolding around it, and
