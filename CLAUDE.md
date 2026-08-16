@@ -6,7 +6,9 @@
 Only what an agent working here would get WRONG, never what it would merely take
 a moment to find. Everything discoverable — the layout, what each contract does,
 the verification design, the commands CI runs — is deliberately absent and stays
-absent (rainlanguage/rainix#298). Path-scoped detail lives in `.claude/rules/`.
+absent (rainlanguage/rainix#298). This is the repo's ONE agent file: no
+`.claude/rules/`, no `@path` import. Content that fails the bar is deleted, not
+relocated.
 
 - **Broadcasting is key custody and real money.** Nothing automatic ever
   broadcasts: `Manual sol artifacts` is `workflow_dispatch` only, and no merge,
@@ -22,3 +24,14 @@ absent (rainlanguage/rainix#298). Path-scoped detail lives in `.claude/rules/`.
   inert and fails loudly in both directions. Do not "fix" it. The root is welded
   into the creation code, so setting a real one moves the deploy address, the
   code hash and the snapshot together, as an ordinary source change.
+- **The deploy/verify abstracts living in `src/` is a SCOPED exception.** This
+  repo's PRODUCT is the deploy process, so its machinery is published rather
+  than scaffolding. Do not carry the exception into a consumer repo: there
+  `src/` is the product, deploy verification is scaffolding around it, and
+  `test/src/**` mirrors `src/**` as usual.
+- **`slither.config.json` filters those abstracts by exact filename, never by
+  the `src/abstract/` prefix.** Keep it that way when adding an abstract: a
+  prefix filter would silently exempt a deployable file added there later.
+- **A `vm.createSelectFork` failure is not a missing deployment.** It is an
+  unreachable or rate-limited endpoint. Only `NotDeployedOnNetwork`, from a
+  network that forked, says anything about the deployment.

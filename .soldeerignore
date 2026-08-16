@@ -2,6 +2,7 @@
 .audit
 .claude
 .coderabbitai.yaml
+.env.example
 .git
 .github
 .gitignore
