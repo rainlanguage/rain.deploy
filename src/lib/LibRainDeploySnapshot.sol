@@ -72,7 +72,7 @@ error EmptyRelease(string tag);
 library LibRainDeploySnapshot {
     /// The rolling snapshot's directory name. A sibling of the frozen tag
     /// directories rather than a file beside them, so `src/generated/` reads as
-    /// `candidate/ 0_1_5/ 0_1_6/` and "which one is current" is answered by
+    /// `candidate/ 0_1_6/ 0_1_7/` and "which one is current" is answered by
     /// looking.
     string constant CANDIDATE = "candidate";
 
