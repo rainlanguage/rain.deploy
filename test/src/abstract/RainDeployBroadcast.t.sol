@@ -221,8 +221,8 @@ contract RainDeployBroadcastTest is Test {
     /// `run()` is the anchor's instead, which is what says the anchor ran first;
     /// an anchor placed after the selection would produce the other one. The key
     /// is read after the suite, which
-    /// `testRunSelectsTheSuiteFromTheEnvBeforeTheKeyAndNeverDefaults` pins, so
-    /// before the suite is before the key.
+    /// `testRunSelectsTheSuiteFromTheEnvBeforeTheKeyNeverDefaultsAndBroadcastsIt`
+    /// pins, so before the suite is before the key.
     ///
     /// Nothing here writes an env var. Both values are process-wide and forge
     /// runs tests concurrently, so a second writer is a race, and this test does
