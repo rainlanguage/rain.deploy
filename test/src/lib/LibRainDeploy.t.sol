@@ -202,6 +202,70 @@ contract LibRainDeployTest is Test {
         assertEq(networks[4], LibRainDeploy.POLYGON);
     }
 
+    /// Whether `names` holds `name`. A config section is keyed, not ordered, so
+    /// membership is the only thing worth asserting across one.
+    /// @param names The names to search.
+    /// @param name The name to look for.
+    /// @return Whether it is there.
+    function holdsName(string[] memory names, string memory name) internal pure returns (bool) {
+        for (uint256 i = 0; i < names.length; i++) {
+            if (keccak256(bytes(names[i])) == keccak256(bytes(name))) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// PROPERTY: `[rpc_endpoints]` and `[etherscan]` in `foundry.toml` are
+    /// EXACTLY `supportedNetworks()`, which makes the three lists one list.
+    ///
+    /// The deploy forks by the first and `--verify` resolves the second, so a
+    /// supported network missing from either broadcasts and then fails after
+    /// the gas is spent, and a section entry no supported network names is
+    /// config nothing ever reads. Both are the same defect — the lists having
+    /// drifted — so both directions are asserted, by membership: containment
+    /// one way alone passes for a section carrying an alias nothing deploys
+    /// to, and the other way alone passes for a network with no config at all.
+    ///
+    /// This is what makes the `[etherscan]` half enforced at all. The RPC half
+    /// is enforced only incidentally, by the fork tests, and only forwards.
+    ///
+    /// The raw file is read rather than forge's resolved config because the
+    /// values are `${VAR}` interpolations that exist only in CI. The KEYS are
+    /// the whole contract here, and they are in the text — so this needs no
+    /// RPC and fails on the PR that drifts rather than at dispatch time.
+    function testSupportedNetworksAreFullyConfigured() external view {
+        string memory config = vm.readFile("foundry.toml");
+        string[] memory networks = LibRainDeploy.supportedNetworks();
+
+        for (uint256 i = 0; i < networks.length; i++) {
+            assertTrue(
+                vm.keyExistsToml(config, string.concat(".rpc_endpoints.", networks[i])),
+                string.concat("supported network has no [rpc_endpoints] alias: ", networks[i])
+            );
+            assertTrue(
+                vm.keyExistsToml(config, string.concat(".etherscan.", networks[i])),
+                string.concat("supported network has no [etherscan] key: ", networks[i])
+            );
+        }
+
+        string[] memory rpcAliases = vm.parseTomlKeys(config, ".rpc_endpoints");
+        for (uint256 i = 0; i < rpcAliases.length; i++) {
+            assertTrue(
+                holdsName(networks, rpcAliases[i]),
+                string.concat("[rpc_endpoints] alias is not a supported network: ", rpcAliases[i])
+            );
+        }
+
+        string[] memory etherscanKeys = vm.parseTomlKeys(config, ".etherscan");
+        for (uint256 i = 0; i < etherscanKeys.length; i++) {
+            assertTrue(
+                holdsName(networks, etherscanKeys[i]),
+                string.concat("[etherscan] key is not a supported network: ", etherscanKeys[i])
+            );
+        }
+    }
+
     /// `ZOLTU_FACTORY_CODEHASH` MUST match the actual codehash of the Zoltu
     /// factory on every supported network. Every name in `supportedNetworks`
     /// MUST also be a configured fork alias, otherwise it cannot be deployed
