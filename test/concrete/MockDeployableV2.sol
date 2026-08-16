@@ -8,9 +8,9 @@ pragma solidity =0.8.25;
 /// bytecode has changed while its pinned constants have not.
 contract MockDeployableV2 {
     /// @notice Placeholder value to ensure the contract has non-trivial code.
-    uint256 public value = 43;
+    uint256 public sValue = 43;
 
     /// @notice Second placeholder value so the runtime code also differs from
     /// `MockDeployable`.
-    uint256 public other = 99;
+    uint256 public sOther = 99;
 }

@@ -72,7 +72,7 @@ error EmptyRelease(string tag);
 library LibRainDeploySnapshot {
     /// The rolling snapshot's directory name. A sibling of the frozen tag
     /// directories rather than a file beside them, so `src/generated/` reads as
-    /// `candidate/ 0_1_5/ 0_1_6/` and "which one is current" is answered by
+    /// `candidate/ 0_1_6/ 0_1_7/` and "which one is current" is answered by
     /// looking.
     string constant CANDIDATE = "candidate";
 
@@ -87,8 +87,8 @@ library LibRainDeploySnapshot {
         return tagForVersion(vm.parseTomlString(vm.readFile("foundry.toml"), ".package.version"));
     }
 
-    /// Whether `subject` is three non-empty runs of digits joined by exactly
-    /// two `separator`s.
+    /// Whether `subject` is three numbers joined by exactly two `separator`s,
+    /// each written without a leading zero.
     ///
     /// The ONE definition of the release-version shape. It is asked with `.`
     /// for a version out of `foundry.toml` and with `_` for the directory that
@@ -115,6 +115,16 @@ library LibRainDeploySnapshot {
                 separators++;
                 digitsInComponent = 0;
             } else if (char >= "0" && char <= "9") {
+                // A component is one number, so it has one spelling. `01` and
+                // `1` are the same release and would freeze to two directories,
+                // neither of which `SnapshotAlreadyFrozen` sees as the other,
+                // and which `recordPrecedes` cannot order because they compare
+                // equal as versions. `i` is at least 1 wherever
+                // `digitsInComponent == 1`, because that digit was read at an
+                // earlier index.
+                if (digitsInComponent == 1 && subjectBytes[i - 1] == "0") {
+                    return false;
+                }
                 digitsInComponent++;
             } else {
                 return false;
@@ -160,11 +170,22 @@ library LibRainDeploySnapshot {
         return string(tagBytes);
     }
 
+    /// The output root `LibFs` writes to, and the only one it can write to:
+    /// `LibFs.pathForContract` hardcodes it.
+    ///
+    /// The only spelling of that root in this library. Everything here that
+    /// names the root — the directory a snapshot is written into, and the tree
+    /// the frozen record is walked from — reads it, so a root this library
+    /// walks that is not a root it writes to is not a state it can be in. The
+    /// remaining pair, this and `LibFs`'s own, is what
+    /// `testRecordRootIsTheRootTheWriterWritesTo` pins.
+    string constant LIB_FS_ROOT = "src/generated";
+
     /// The directory holding a snapshot, rolling or frozen.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @return The directory path.
     function dirForSnapshot(string memory dir) internal pure returns (string memory) {
-        return string.concat("src/generated/", dir);
+        return string.concat(LIB_FS_ROOT, "/", dir);
     }
 
     /// The contract name that places a generated file inside a snapshot
@@ -188,10 +209,6 @@ library LibRainDeploySnapshot {
     function pathForSnapshot(string memory dir, string memory contractName) internal pure returns (string memory) {
         return LibFs.pathForContract(snapshotName(dir, contractName));
     }
-
-    /// The output root `LibFs` writes to, and the only one it can write to:
-    /// `LibFs.pathForContract` hardcodes it.
-    string constant LIB_FS_ROOT = "src/generated";
 
     /// Every file in the FROZEN record: everything inside a release-tag
     /// directory under `root`.

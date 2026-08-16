@@ -33,8 +33,9 @@ Approach:
 - Hard guards against deploying to networks where dependencies are missing.
 - Pre-calculated addresses asserted against the creation code before deploying,
   and against the chain after: silent failures fail loudly.
-- Bytecode integrity checks (e.g. via the Rain Extrospection lib) supported
-  post-deploy.
+- Bytecode integrity checks post-deploy: `codehash` is compared against the
+  recorded pin on every network by `RainDeployVerifyChain`, and before every
+  registry access by `LibAddressRegistry` and `LibMigrationRegistry`.
 - An address registry, read at run time rather than compiled into creation code,
   and a post-deploy check that every target network's deployment took the
   address it was supposed to.
@@ -307,10 +308,12 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
 
 This is a deploy repo: it carries deployed concretes whose addresses and
 codehashes consumers pin, so releases are **manual `sol-v*` tags**, not merges.
-`[package].version` is the LAST released version, naming the current
-`src/generated/<tag>/` snapshots, and only a release moves it. Every version
-published under the previous merge-driven lifecycle stays published; consumers
-pin exact versions and are unaffected.
+`[package].version` is the version of the LAST Soldeer publish, and only a
+release moves it. A release cut under this lifecycle also names the frozen
+`src/generated/<tag>/` record `cutRelease()` wrote for it. Every version
+published under the previous merge-driven lifecycle predates that record and has
+none, so `src/generated/` holds no directory for it; those versions stay
+published, and consumers pin exact versions and are unaffected.
 
 ## Install
 
@@ -362,7 +365,7 @@ Use the nix-pinned `forge` for all development.
 
 ## License
 
-DecentraLicense 1.0 (DCL-1.0) — full text in
+DecentraLicense 1.0 (SPDX: `LicenseRef-DCL-1.0`) — full text in
 [`LICENSES/`](LICENSES/LicenseRef-DCL-1.0.txt). Roughly `CAL-1.0`
 ([opensource.org](https://opensource.org/license/cal-1-0)) plus user-data
 disclosure obligations consistent with permissionless-blockchain assumptions.

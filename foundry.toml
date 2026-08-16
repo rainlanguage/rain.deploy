@@ -1,8 +1,10 @@
 [package]
 name = "rain-deploy"
-# Deploy repo: this is the LAST released version, naming the current
-# src/generated/<tag>/ snapshot, not a next-version slot. A normal PR does not
-# bump it; only a `sol-v*` tag release moves it, in lockstep with the snapshot.
+# Deploy repo: this is the version of the LAST Soldeer publish, not a
+# next-version slot. A normal PR does not bump it; only a `sol-v*` tag release
+# moves it, in lockstep with the frozen src/generated/<tag>/ record that release
+# writes. A version published before this lifecycle has no such record, so
+# src/generated/ holds no directory for it.
 version = "0.1.5"
 
 # SPDX-License-Identifier: LicenseRef-DCL-1.0
@@ -68,6 +70,10 @@ polygon = "${POLYGON_RPC_URL}"
 # these variable names, so a deploy without this section broadcasts and then
 # fails with no API key configured for the chain — after spending the gas. One
 # entry per `[rpc_endpoints]` alias, because the deploy goes to all of them.
+#
+# Both sections are checked against `LibRainDeploy.supportedNetworks()`, in both
+# directions, by `testSupportedNetworksAreFullyConfigured`. Adding a network is
+# an edit to all three or a red test, not a broadcast that discovers it.
 [etherscan]
 arbitrum = { key = "${CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY}" }
 base = { key = "${CI_DEPLOY_BASE_ETHERSCAN_API_KEY}" }

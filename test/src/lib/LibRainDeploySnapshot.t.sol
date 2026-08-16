@@ -99,6 +99,25 @@ contract LibRainDeploySnapshotTest is Test {
         assertFalse(LibRainDeploySnapshot.isTag("collision-guard"));
     }
 
+    /// A component has ONE spelling. A padded component is the same release as
+    /// its unpadded form: it freezes to a second directory the immutability
+    /// check does not recognise as the first, and the two compare equal as
+    /// versions so nothing can order them either.
+    function testIsStrictTripleRefusesLeadingZeros() external pure {
+        assertFalse(LibRainDeploySnapshot.isStrictTriple("0.01.5", "."));
+        assertFalse(LibRainDeploySnapshot.isStrictTriple("01.1.5", "."));
+        assertFalse(LibRainDeploySnapshot.isStrictTriple("0.1.05", "."));
+        assertFalse(LibRainDeploySnapshot.isStrictTriple("00.0.0", "."));
+        assertFalse(LibRainDeploySnapshot.isTag("0_01_5"));
+
+        // The boundary: a single zero IS the number zero, and `0.0.0` is a real
+        // version.
+        assertTrue(LibRainDeploySnapshot.isStrictTriple("0.0.0", "."));
+        assertTrue(LibRainDeploySnapshot.isStrictTriple("0.10.0", "."));
+        assertTrue(LibRainDeploySnapshot.isStrictTriple("10.0.100", "."));
+        assertTrue(LibRainDeploySnapshot.isTag("0_0_0"));
+    }
+
     /// EVERY version a freeze accepts MUST produce a directory the record
     /// recognises as a release. A version that could be frozen to a directory
     /// the record then ignores is exactly the orphan snapshot
@@ -185,6 +204,16 @@ contract LibRainDeploySnapshotTest is Test {
         }
     }
 
+    /// The refusal MUST be reachable through the release path, naming the
+    /// version, rather than only through the predicate.
+    function testTagForVersionRefusesLeadingZeros() external {
+        string[3] memory bad = ["0.01.5", "01.1.5", "0.1.05"];
+        for (uint256 i = 0; i < bad.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(UnreleasableVersion.selector, bad[i]));
+            this.externalTagForVersion(bad[i]);
+        }
+    }
+
     /// The tag read from `foundry.toml` MUST go through the same guard, so a
     /// repo cannot reach a release path with a version the guard would refuse.
     function testDeployTagUsesTheGuardedConversion() external view {
@@ -199,6 +228,28 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(LibRainDeploySnapshot.dirForSnapshot("0_1_7"), "src/generated/0_1_7");
         assertEq(LibRainDeploySnapshot.snapshotName("0_1_7", "Foo"), "0_1_7/Foo");
         assertEq(LibRainDeploySnapshot.pathForSnapshot("0_1_7", "Foo"), "src/generated/0_1_7/Foo.sol");
+    }
+
+    /// The root the record is WALKED from MUST be the root the writer WRITES
+    /// to. They are two constants — `LIB_FS_ROOT` here, and the one
+    /// `LibFs.pathForContract` hardcodes in a package this repo does not own —
+    /// and a walk of a root nothing writes to returns nothing, which every
+    /// record-anchored assertion then passes on. Silence is the failure mode,
+    /// so it is asserted rather than observed.
+    ///
+    /// Compared through `pathForSnapshot`, which is what a snapshot is written
+    /// through, so the right hand side is the writer's own root rather than a
+    /// third restatement of it. The contract name is arbitrary — the path is
+    /// built by concatenation and names no artifact.
+    function testRecordRootIsTheRootTheWriterWritesTo() external pure {
+        assertEq(
+            LibRainDeploySnapshot.pathForSnapshot("0_1_7", "Foo"),
+            string.concat(LibRainDeploySnapshot.LIB_FS_ROOT, "/0_1_7/Foo.sol")
+        );
+        assertEq(
+            LibRainDeploySnapshot.dirForSnapshot(LibRainDeploySnapshot.CANDIDATE),
+            string.concat(LibRainDeploySnapshot.LIB_FS_ROOT, "/", LibRainDeploySnapshot.CANDIDATE)
+        );
     }
 
     /// A snapshot MUST land at the path this library says it does, and writing
