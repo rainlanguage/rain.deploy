@@ -24,6 +24,10 @@ environment management.
 # Enter the nix dev shell (provides forge and all tooling)
 nix develop
 
+# Install the dependencies declared in foundry.toml (dependencies/ is
+# gitignored, so this is required on a fresh checkout before anything builds)
+nix develop -c forge soldeer install
+
 # Build
 nix develop -c forge build
 
@@ -223,13 +227,30 @@ produces — so `candidate/`, a scratch directory and a `0_1_7-rc1` nobody could
 have frozen all fall out under the same rule, and there is no name to remember
 to exclude.
 
+The dependency list is frozen with the rest, and it is NOT metadata.
+`RainDeployBroadcast.run` hands `suite.dependencies` to
+`LibRainDeploy.deployToNetworks`, which reverts `MissingDependency` for any
+dependency with no code on the target network — so it is a precondition of the
+broadcast, decided when the release is cut. Re-broadcasting a past release onto
+a newly supported chain is exactly the case that matters: it has to check the
+list THAT release was cut with, not today's. So `releasedSuites()` aliases
+`DEPENDENCIES` out of each release's own snapshot rather than rebuilding it from
+the current declaration. A dependency dropped from current source stays required
+by the releases cut with it, and one added is not retro-imposed on releases cut
+without it. Only the suite key and the artifact path are still regenerated from
+the current declaration.
+
 **`GeneratedSnapshotShapeTest` is the specification of the shape.** It asserts
 named properties against the compiler's AST — not against a second reference
 file, so there is no question of that file's provenance, and not against source
 text, so formatting cannot affect it:
 
-1. exactly four constants, in order: `bytes32 BYTECODE_HASH`,
-   `address DEPLOYED_ADDRESS`, `bytes CREATION_CODE`, `bytes RUNTIME_CODE`
+1. exactly five constants, in order: `bytes32 BYTECODE_HASH`,
+   `address DEPLOYED_ADDRESS`, `bytes CREATION_CODE`, `bytes RUNTIME_CODE`,
+   `bytes DEPENDENCIES`. `DEPENDENCIES` is the `abi.encode` of the suite's
+   `address[]` dependency list, and it is `bytes` because Solidity has no
+   file-scope constant of dynamic array type — the released-suites lib emits the
+   matching `abi.decode`
 2. every declaration is `constant`
 3. no `ImportDirective` — a snapshot is read by repos that do not have the
    contract it describes, which is the whole reason a frozen release stays
@@ -299,7 +320,7 @@ purpose: the suites and the broadcast are both inherited. Run only via the
 
 **`src/abstract/RegistryDeploySuites.sol`** — this repo's own declaration, one
 named candidate per deployed registry, inherited by `script/Deploy.sol`,
-`script/Build.sol` and both pins test contracts.
+`script/Build.sol`, the pins test contracts and `GeneratedSnapshotShapeTest`.
 
 **`src/abstract/RainDeployVerify*.sol`** — the deploy-pin verification every
 deploy repo inherits instead of hand-writing.
@@ -394,8 +415,10 @@ expected addresses, expected code hashes, and dependency lists.
   network before anything migrates onto it.
 - **Deploy-repo lifecycle**: a manual `sol-v*` tag is the sole release trigger
   (`rainix-tag-release`), because this repo carries deployed concretes whose
-  pins consumers rely on. `[package].version` is the LAST released version and
-  moves only in lockstep with its snapshots.
+  pins consumers rely on. `[package].version` is the version of the LAST Soldeer
+  publish, and it moves only in lockstep with the frozen `src/generated/<tag>/`
+  record that release writes. A version published before this lifecycle has no
+  such record.
 - **Deploy, then verify, then tag** — in that order, and they are three separate
   things. `script/Deploy.sol` broadcasts the suite `DEPLOYMENT_SUITE` names to
   every network in `supportedNetworks()`, dispatched by hand through

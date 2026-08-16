@@ -256,11 +256,13 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// A chain with no registry deployed reverts on the code hash rather than
-    /// calling into an empty account. That call would succeed and return
-    /// nothing, which `abi.decode` would read as zero — "this migration has
-    /// not been applied", on every chain the registry was never deployed to,
-    /// which is exactly the silent pre-migration branch this library exists to
-    /// make impossible.
+    /// calling into an empty account, and the point of that is the NAME. An
+    /// empty account has no returndata for `abi.decode` to read, so the call
+    /// reverts unguarded too — anonymously, saying nothing about whether the
+    /// registry is absent or the migration unapplied. Those are different
+    /// facts, and this error is what tells them apart. The case that would
+    /// answer the lie instead of reverting is occupying code, covered by
+    /// `testAppliedWrongCode` and `testAppliedDelegatedCode`.
     function testAppliedNoRegistry(address writer, bytes32 migration) external {
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
 
@@ -274,10 +276,11 @@ contract LibMigrationRegistryTest is Test {
         this.externalApplied(writer, migration);
     }
 
-    /// Reading a head off a chain with no registry is refused for a sharper
-    /// version of the same reason: the empty-account read decodes as zero, and
-    /// zero is a value no head can ever hold, so an unverified read hands back
-    /// something that is not a head at all.
+    /// Reading a head off a chain with no registry is refused for the same
+    /// reason and with the same named error: an unguarded read reverts here
+    /// anyway, because there is no returndata for a `bytes32` to decode from,
+    /// so what the check adds is which chain state it was. A head that is not
+    /// a head is what occupying code can return, not what an empty one does.
     function testHeadNoRegistry(address writer) external {
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
 
@@ -291,10 +294,12 @@ contract LibMigrationRegistryTest is Test {
         this.externalHead(writer);
     }
 
-    /// Writing to a chain with no registry is refused for the mirror reason: an
-    /// `applyMigration` into an empty account is a migration that reports itself
-    /// applied and is not, which leaves every reader asserting the
-    /// pre-migration state forever.
+    /// Writing to a chain with no registry is refused by the code hash rather
+    /// than by solc's own existence check, which an `applyMigration` into an
+    /// empty account hits regardless — no return data is expected, so the
+    /// callee is checked to exist and the write reverts unnamed. A migration
+    /// that reports itself applied and is not is what a write into occupying
+    /// code does, and `testApplyMigrationWrongCode` is where that is covered.
     function testApplyMigrationNoRegistry(bytes32 expectedHead, bytes32 migration) external {
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
 
