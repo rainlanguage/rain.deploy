@@ -24,6 +24,10 @@ environment management.
 # Enter the nix dev shell (provides forge and all tooling)
 nix develop
 
+# Install the dependencies declared in foundry.toml (dependencies/ is
+# gitignored, so this is required on a fresh checkout before anything builds)
+nix develop -c forge soldeer install
+
 # Build
 nix develop -c forge build
 
