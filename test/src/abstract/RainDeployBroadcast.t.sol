@@ -4,10 +4,12 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.1/src/Test.sol";
 
-import {UnknownDeploymentSuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {CandidateSourceMismatch, UnknownDeploymentSuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {ExampleDeploySingleNetwork} from "../../concrete/ExampleDeploySingleNetwork.sol";
+import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
+import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 
 /// @title RainDeployBroadcastTest
@@ -192,6 +194,67 @@ contract RainDeployBroadcastTest is Test {
         // VALUE of that function; nothing until here asserted that `run()` is
         // what consults it.
         assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
+    }
+
+    /// The broadcast MUST refuse a candidate that is not the contract this repo
+    /// compiles, and refuse it BEFORE anything else happens.
+    ///
+    /// This is the whole reason the anchor is on the declaration rather than on
+    /// the verification abstract. `RainDeployBroadcast` cannot reach anything on
+    /// `RainDeployVerifySnapshot`, which inherits `Test`, so an anchor defined
+    /// there is an anchor the deploy does not run — and the only other guard
+    /// before the `CREATE2` goes out compares the recorded address against the
+    /// recorded creation code, both of which come out of the same generated
+    /// file. That catches a stale PIN and cannot catch a snapshot of the wrong
+    /// CONTRACT, so without this the bytes reaching five chains are whatever the
+    /// generated file happens to hold. `CREATE2` at a zero salt makes that
+    /// permanent: the wrong bytes take the wrong bytes' own address, on every
+    /// chain the dispatch reached, and the dispatch is `workflow_dispatch` on a
+    /// ref with no required-green gate — so "CI was red" is a signal a human may
+    /// not have read.
+    ///
+    /// ## Before the suite, and therefore before the key
+    ///
+    /// This declaration names no suite anything sets `DEPLOYMENT_SUITE` to, so
+    /// selection is a revert waiting to happen whatever that variable holds —
+    /// asserted here rather than assumed. The revert that actually arrives from
+    /// `run()` is the anchor's instead, which is what says the anchor ran first;
+    /// an anchor placed after the selection would produce the other one. The key
+    /// is read after the suite, which
+    /// `testRunSelectsTheSuiteFromTheEnvBeforeTheKeyNeverDefaultsAndBroadcastsIt`
+    /// pins, so before the suite is before the key.
+    ///
+    /// Nothing here writes an env var. Both values are process-wide and forge
+    /// runs tests concurrently, so a second writer is a race, and this test does
+    /// not need one: the ordering is observable from a declaration that cannot
+    /// resolve any key at all.
+    ///
+    /// ## Discriminating
+    ///
+    /// That same env test is the passing case — `ExampleDeploy.run()` reaches
+    /// suite selection and fails there, which it can only do by getting past an
+    /// anchor that had nothing to say about a declaration whose candidates are
+    /// its source.
+    function testRunRefusesToBroadcastACandidateThatIsNotItsSource() external {
+        SourceMismatchDeploy mismatch = new SourceMismatchDeploy();
+
+        string memory requested = vm.envOr("DEPLOYMENT_SUITE", string(""));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                UnknownDeploymentSuite.selector, requested, "anchored-candidate, mismatched-candidate"
+            )
+        );
+        mismatch.externalSuiteByName(requested);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CandidateSourceMismatch.selector,
+                "mismatched-candidate",
+                keccak256(type(MockDeployableV2).creationCode),
+                keccak256(type(MockDeployable).creationCode)
+            )
+        );
+        mismatch.run();
     }
 
     /// The default target set MUST be every supported network, so a

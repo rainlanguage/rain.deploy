@@ -306,7 +306,8 @@ adds a suite by adding an array entry; the keys reported by a mistyped
 fall behind the suites it describes. Keys are checked unique, because the key is
 what selects what gets broadcast.
 
-**`src/abstract/RainDeployBroadcast.sol`** — the broadcast. Selects one suite by
+**`src/abstract/RainDeployBroadcast.sol`** — the broadcast. Runs the source
+anchor over the whole declaration first, then selects one suite by
 `DEPLOYMENT_SUITE` and deploys it, before reading `DEPLOYMENT_KEY` so a mistyped
 suite fails naming the valid ones rather than on a missing key.
 `deployNetworks()` defaults to `supportedNetworks()` and is overridable for
@@ -339,13 +340,23 @@ Four groups, sorted by what they are anchored to:
    generated inconsistently. CANNOT catch a snapshot of the wrong contract: a
    consistent snapshot of the wrong thing satisfies all of it, which
    `testWrongContractSnapshotPassesInternalConsistency` pins.
-2. **Anchored to source** (`RainDeployVerifySnapshot`) — EVERY candidate's
-   recorded creation code is `type(X).creationCode`. The only check that catches
-   a wrong-contract snapshot. Candidates only, because a released tag is MEANT
-   to diverge from current source; there is no field on a released version to
-   spell it, so it cannot be opted into or out of. Every one, and refusing an
-   empty list, because a candidate the loop never reaches is a contract whose
-   snapshot nothing anywhere anchors — see `NoDeployCandidates`.
+2. **Anchored to source** (`RainDeploySuitesBase`) — EVERY candidate's recorded
+   creation code is `type(X).creationCode`. The only check that catches a
+   wrong-contract snapshot. Candidates only, because a released tag is MEANT to
+   diverge from current source; there is no field on a released version to spell
+   it, so it cannot be opted into or out of. Every one, and refusing an empty
+   list, because a candidate the loop never reaches is a contract whose snapshot
+   nothing anywhere anchors — see `NoDeployCandidates`.
+
+   The only group that is not only a test. It is defined on the DECLARATION, and
+   `RainDeployBroadcast.run()` calls it before it selects a suite or reads a
+   key, because the broadcast deploys the recorded bytes and the only other
+   guard in front of the `CREATE2` — `LibRainDeploy` comparing the recorded
+   address to what the recorded creation code derives — takes both sides out of
+   the same generated file. An anchor reachable only from a contract that
+   inherits `Test` is an anchor the irreversible action does not run, and
+   `CREATE2` at a zero salt puts the wrong bytes at their own permanent address
+   on every chain a dispatch reaches.
 3. **Anchored to the record** (`RainDeployVerifySnapshot`) — every file in the
    append-only `src/generated/<tag>/` tree is declared by a released suite,
    matched by the address that file's creation code derives. `releasedSuites()`
