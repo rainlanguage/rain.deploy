@@ -228,6 +228,25 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifyBase {
     /// Every release in the frozen record MUST be declared, so that the set the
     /// chain group checks is every release this repo has ever cut rather than
     /// the ones somebody remembered to list.
+    ///
+    /// An empty walk passes, and is meant to: that is the state of every deploy
+    /// repo before its first release. What makes it safe is that the root is
+    /// the one a snapshot is WRITTEN to — `LIB_FS_ROOT` is the only spelling of
+    /// it in `LibRainDeploySnapshot` and `testRecordRootIsTheRootTheWriterWritesTo`
+    /// pins it against `LibFs`'s. Under the writer's own root, finding nothing
+    /// means there is nothing; under any other, the walk returns an empty list
+    /// forever, this passes with no subject, and the one check standing between
+    /// a release dropping out of everything and a green suite is inert.
+    ///
+    /// Deliberately NOT also guarded by comparing the record's size against the
+    /// declaration's. The two are emitted one-for-one by `writeReleasedSuitesLib`
+    /// for a repo that generates its declaration from its record, but this is
+    /// inherited by any repo that overrides `releasedSuites`, and a declaration
+    /// with no record behind it is a state such a repo is legitimately in: a
+    /// release deployed before it adopted this machinery has no frozen record
+    /// and never will. A size check would red-line that permanently with no way
+    /// to spell the exemption, while the release it names goes on being checked
+    /// by everything anchored to a chain.
     function testEveryFrozenSnapshotIsReleased() external view {
         checkFrozenSnapshotsReleased(
             LibRainDeploySnapshot.frozenSnapshotPaths(vm, LibRainDeploySnapshot.LIB_FS_ROOT), releasedSuites()

@@ -123,7 +123,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// declaration whose snapshot is somebody else's.
     /// @param candidate The candidate to name.
     /// @return The contract name.
-    function candidateContractName(DeployCandidate memory candidate) internal view returns (string memory) {
+    function candidateContractName(DeployCandidate memory candidate) internal pure returns (string memory) {
         string[] memory components = vm.split(candidate.snapshot.artifactPath, ":");
         return components[components.length - 1];
     }
@@ -181,19 +181,91 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
         }
     }
 
-    /// PROPERTY: every snapshot declares exactly the four constants a deploy
+    /// PROPERTY: every declared artifact path RESOLVES — it is `<path>:<Name>`,
+    /// the path is a file this repo has, and the artifact that whole string
+    /// selects is the contract the candidate is anchored to.
+    ///
+    /// `artifactPath` is the one field of a suite that nothing derives, and
+    /// until this assertion nothing checked either. It is load bearing twice
+    /// over: `LibRainDeploy` prints it as the `forge verify-contract` command a
+    /// human runs against a freshly broadcast contract, and
+    /// `candidateContractName` above takes the contract this whole shape spec
+    /// is about out of it. Only the `:<Name>` half was ever read by a check —
+    /// `testEveryCandidateHasASnapshot` matches it against the generator's
+    /// output — so a path left behind by a moved or renamed source file passed
+    /// every assertion in this repo, including all of the ones here, because
+    /// the half that moved is the half nothing read. `bytecode_hash = "none"`
+    /// and `cbor_metadata = false` mean moving a file changes no creation code,
+    /// no address and no code hash either, so there is nothing else for it to
+    /// be caught by.
+    ///
+    /// Resolved through `vm.getCode`, which is foundry's own resolution of a
+    /// `<path>:<Name>` artifact id — the same form `forge verify-contract`
+    /// takes — rather than by searching the file's text for `contract <Name>`.
+    /// A text search asserts formatting: it is satisfied by the name occurring
+    /// in a comment or in a longer identifier, and defeated by a declaration
+    /// written with no space before its brace.
+    ///
+    /// `vm.isFile` on the path half AS WELL, because `vm.getCode` resolves an
+    /// artifact id by path SUFFIX while the printed command is run from the
+    /// repo root. `concrete/AddressRegistry.sol:AddressRegistry` resolves for
+    /// `vm.getCode` — uniquely, and to the right contract — and still names no
+    /// file anybody can point `forge verify-contract` at. That is the one shape
+    /// of wrong path nothing else in this repo goes red on.
+    ///
+    /// A path outside the `fs_permissions` roots fails here as a cheatcode
+    /// revert naming the path rather than as this assertion's own message,
+    /// which is foundry refusing to look rather than looking and not finding.
+    ///
+    /// Compared against the candidate's own `sourceCreationCode` rather than
+    /// merely required to resolve to something, because resolving is not the
+    /// same as resolving to the RIGHT contract. Two candidates whose declared
+    /// paths are swapped resolve perfectly, and every other assertion in this
+    /// repo stays green through it — including `testEveryCandidateHasASnapshot`
+    /// above, because swapping both halves leaves the SET of declared names
+    /// exactly as it was. This is the assertion that says each candidate's path
+    /// names ITS own contract rather than one of its siblings'.
+    ///
+    /// Hashed rather than compared as bytes, for the reason
+    /// `CandidateSourceMismatch` gives for hashing: creation codes run to tens
+    /// of kilobytes, and a failure message carrying two of them is a failure
+    /// message nobody reads.
+    function testEveryCandidateArtifactPathResolves() external view {
+        DeployCandidate[] memory candidates = checkedCandidateSuites();
+        for (uint256 i = 0; i < candidates.length; i++) {
+            string memory declared = candidates[i].snapshot.artifactPath;
+            string[] memory parts = vm.split(declared, ":");
+
+            assertEq(parts.length, 2, string.concat("artifact path is not <path>:<Name>: ", declared));
+            assertTrue(vm.isFile(parts[0]), string.concat("artifact path names no such file: ", declared));
+            assertEq(
+                keccak256(vm.getCode(declared)),
+                keccak256(candidates[i].sourceCreationCode),
+                string.concat("artifact path resolves to another contract: ", declared)
+            );
+        }
+    }
+
+    /// PROPERTY: every snapshot declares exactly the five constants a deploy
     /// record is for, of these types, in this order. A rename, a retype, a
-    /// reorder or a fifth constant each fail here and name what broke.
-    function testSnapshotDeclaresTheFourDeployConstantsInOrder() external view {
+    /// reorder or a sixth constant each fail here and name what broke.
+    ///
+    /// `DEPENDENCIES` is `bytes` rather than `address[]` because Solidity has
+    /// no file-scope constant of dynamic array type. It is the `abi.encode` of
+    /// the list, which `releasedLibraryBlock` emits the `abi.decode` of — the
+    /// type is a language constraint, so it is asserted here as one rather than
+    /// left to look like a choice somebody could tidy up.
+    function testSnapshotDeclaresTheFiveDeployConstantsInOrder() external view {
         string[] memory contractNames = snapshotContractNames();
         for (uint256 i = 0; i < contractNames.length; i++) {
             string[] memory declarations = constantDeclarations(contractNames[i]);
 
-            assertEq(declarations.length, 4, "snapshot declares an unexpected number of constants");
+            assertEq(declarations.length, 5, "snapshot declares an unexpected number of constants");
             assertEq(declarations[0], "bytes32 BYTECODE_HASH", "first constant is not bytes32 BYTECODE_HASH");
             assertEq(declarations[1], "address DEPLOYED_ADDRESS", "second constant is not address DEPLOYED_ADDRESS");
             assertEq(declarations[2], "bytes CREATION_CODE", "third constant is not bytes CREATION_CODE");
             assertEq(declarations[3], "bytes RUNTIME_CODE", "fourth constant is not bytes RUNTIME_CODE");
+            assertEq(declarations[4], "bytes DEPENDENCIES", "fifth constant is not bytes DEPENDENCIES");
         }
     }
 

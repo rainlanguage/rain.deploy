@@ -21,15 +21,21 @@ import {LibMigrationRegistryReleased} from "../lib/LibMigrationRegistryReleased.
 /// @title RegistryDeploySuites
 /// @notice Everything this repo deploys, declared ONCE.
 ///
-/// Three contracts inherit this and nothing else declares a suite:
+/// These contracts inherit it, and nothing else declares a suite:
 ///
 /// - `script/Deploy.sol` broadcasts from it
+/// - `script/Build.sol` generates the snapshots, the alias libs and the
+///   released-suites libs from it — the named candidates below are the
+///   templates it emits from, which is why it inherits the declaration rather
+///   than restating the key, the artifact path and the dependency list
 /// - `RegistryDeploySnapshotTest` checks its records against its creation code
 /// - `RegistryDeployChainTest` checks it against every chain
+/// - `GeneratedSnapshotShapeTest` checks the shape of the files that generation
+///   writes
 ///
 /// So "the deploy script broadcasts one contract while the tests verify
 /// another" is not a thing that can be true here. Not because something checks
-/// for it — because there is only one list, and all three read it.
+/// for it — because there is only one list, and they all read it.
 ///
 /// It lives in `src/` rather than `test/` for two reasons. `.soldeerignore`
 /// excludes `test/`, and a downstream `script/` has to import its own

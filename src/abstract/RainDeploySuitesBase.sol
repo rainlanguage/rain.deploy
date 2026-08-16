@@ -26,10 +26,12 @@ error UnknownDeploymentSuite(string requested, string validSuites);
 /// to declare. When the candidate was a single struct this was true by
 /// construction; a list has to say it.
 ///
-/// Raised from `checkedCandidateSuites`, which is the only way anything reads
-/// the candidates — `allSuites` goes through it and so does the source anchor,
-/// and `suiteNames` and `suiteByName` go through `allSuites` — so there is no
-/// reader that answers from an empty one.
+/// Raised from `checkedCandidateSuites` — see there for why the guard sits at
+/// that one read rather than at each reader.
+///
+/// `releasedSuites` is read directly by the chain group and by the frozen
+/// record check, and is untouched by this: a repo with no release is an
+/// ordinary state, and it is the CANDIDATE that the source anchor needs.
 error NoDeployCandidates();
 
 /// Thrown when a candidate's recorded creation code is not the creation code
@@ -150,9 +152,10 @@ abstract contract RainDeploySuitesBase {
     /// override this, and a repo inherits exactly one declaration. So the list
     /// is here rather than left to the consumer to assemble.
     ///
-    /// MUST NOT be empty, which `allSuites` enforces. A deploy repo always
-    /// compiles a current source, so there is always something to anchor to —
-    /// see `NoDeployCandidates` for why an empty list is worse than it looks.
+    /// MUST NOT be empty, which `checkedCandidateSuites` enforces. A deploy
+    /// repo always compiles a current source, so there is always something to
+    /// anchor to — see `NoDeployCandidates` for why an empty list is worse
+    /// than it looks.
     /// @return The candidates.
     function candidateSuites() internal pure virtual returns (DeployCandidate[] memory);
 

@@ -6,5 +6,5 @@ pragma solidity =0.8.25;
 /// Minimal contract used as a deployment target for Zoltu factory tests.
 contract MockDeployable {
     /// @notice Placeholder value to ensure the contract has non-trivial code.
-    uint256 public value = 42;
+    uint256 public sValue = 42;
 }
