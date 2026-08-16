@@ -972,6 +972,39 @@ contract LibRainDeployTest is Test {
         this.externalCheckResolvedAddresses("test_network", address(this), readCalls, expectedAddresses);
     }
 
+    /// A check with no reads MUST be refused rather than pass. It is the same
+    /// hazard `NoNetworks` covers one argument along: an empty read set is
+    /// indistinguishable from every read checking out, and it is what a
+    /// consumer that built its read list from an empty config hands in — right
+    /// before it migrates onto the deployment this was supposed to verify.
+    function testCheckResolvedAddressesNoReadsReverts(address target) external {
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoResolvedAddressReads.selector, target));
+        this.externalCheckResolvedAddresses("test_network", target, new bytes[](0), new address[](0));
+    }
+
+    /// The refusal is about the READS, not about the pairing: an empty pair is
+    /// the one case a length mismatch cannot see, which is why it is its own
+    /// error. Empty reads against a non-empty expected list stays a mismatch,
+    /// pinning that pairing is still checked first, and a single real read
+    /// still passes, so emptiness alone is what is refused.
+    function testCheckResolvedAddressesEmptyPairIsNotALengthMismatch(bytes32 name, address account) external {
+        vm.assume(account != address(0));
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoResolvedAddressReads.selector, address(consumer)));
+        this.externalCheckResolvedAddresses("test_network", address(consumer), new bytes[](0), new address[](0));
+
+        // Empty reads against a non-empty expected list is a mispairing, and is
+        // still reported as one.
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.ResolvedAddressesLengthMismatch.selector, uint256(0), uint256(1))
+        );
+        this.externalCheckResolvedAddresses("test_network", address(consumer), new bytes[](0), expected(account));
+
+        // One read still passes, so the refusal is about emptiness alone.
+        LibRainDeploy.checkResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(account));
+    }
+
     /// `checkResolvedAddressesOnNetworks` MUST revert with `NoNetworks` when
     /// given none, so an empty target set can never be mistaken for every read
     /// checking out.
@@ -996,6 +1029,17 @@ contract LibRainDeployTest is Test {
             abi.encodeWithSelector(LibRainDeploy.ResolvedAddressesLengthMismatch.selector, uint256(2), uint256(1))
         );
         this.externalCheckResolvedAddressesOnNetworks(networks, address(this), readCalls, expectedAddresses);
+    }
+
+    /// And an empty read set is refused before any network is forked too, so it
+    /// is reported without an RPC round trip and cannot be masked by an outage.
+    function testCheckResolvedAddressesOnNetworksNoReadsRevertsBeforeForking() external {
+        string[] memory networks = new string[](1);
+        // Not a configured RPC alias, so forking it is itself an error.
+        networks[0] = "unconfigured_network";
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoResolvedAddressReads.selector, address(this)));
+        this.externalCheckResolvedAddressesOnNetworks(networks, address(this), new bytes[](0), new address[](0));
     }
 
     /// `checkResolvedAddressesOnNetworks` MUST fork each network in turn and
