@@ -65,6 +65,19 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
 
     /// Broadcasts the suite `DEPLOYMENT_SUITE` names.
     ///
+    /// The source anchor runs FIRST, before a suite is selected and before the
+    /// key is read. A snapshot the deploy reads and nothing anchors is a deploy
+    /// of unknown bytes: everything else asked of a snapshot is internal to it,
+    /// and the recorded-address guard `LibRainDeploy` applies before it forks
+    /// anything compares two values out of the same generated file. That guard
+    /// is what catches a stale PIN; only the anchor catches a snapshot of the
+    /// wrong CONTRACT, and `CREATE2` at a zero salt means the wrong bytes take
+    /// their own permanent address on every chain this reaches. It is run over
+    /// the whole declaration rather than over the selected suite because the
+    /// declaration is what a repo maintains and regenerates as a unit — a
+    /// dispatch of one suite from a tree where another candidate has gone stale
+    /// is a tree nobody should be broadcasting from at all.
+    ///
     /// The suite is resolved before the key is read, so a mistyped suite fails
     /// in seconds listing the valid ones rather than failing on a missing
     /// `DEPLOYMENT_KEY` and sending the reader after the wrong thing.
@@ -75,6 +88,8 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// `dependencies` enforces per network, and which a caller satisfies by
     /// dispatching in order.
     function run() external {
+        checkCandidatesAnchoredToSource();
+
         DeploySuite memory suite = suiteByName(vm.envOr("DEPLOYMENT_SUITE", string("")));
 
         uint256 deployerPrivateKey = vm.envUint("DEPLOYMENT_KEY");
