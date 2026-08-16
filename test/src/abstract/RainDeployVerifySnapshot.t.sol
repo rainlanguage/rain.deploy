@@ -87,6 +87,17 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
         paths[0] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry");
     }
 
+    /// A record of BOTH committed snapshots. `AddressRegistry` is what the
+    /// exemplar's first released suite derives; `MigrationRegistry` is declared
+    /// by no released suite here, so it is a real record file that really is
+    /// undeclared, and the undeclared one is the LAST.
+    /// @return paths The two-file record.
+    function recordOfBothGeneratedSnapshots() internal pure returns (string[] memory paths) {
+        paths = new string[](2);
+        paths[0] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry");
+        paths[1] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "MigrationRegistry");
+    }
+
     /// A record declared by a released suite MUST pass, so the failing cases
     /// below are discriminating rather than a check that cannot succeed.
     function testFrozenSnapshotDeclaredPasses() external view {
@@ -212,6 +223,73 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
 
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, paths[0]));
         this.externalCheckFrozenSnapshotsReleased(paths, releasedSuites());
+    }
+
+    /// EVERY file in the record MUST be checked, not just the first. The
+    /// undeclared file here is the LAST one, behind a declared one, so a loop
+    /// that stopped after the first path would pass — and a release that
+    /// dropped out of the declaration is exactly what this check exists to
+    /// catch, on a record that grows one file per release.
+    function testFrozenSnapshotCheckReachesEveryRecordFile() external {
+        // The first really is declared, so nothing fails before the loop has to
+        // advance.
+        string[] memory first = new string[](1);
+        first[0] = recordOfBothGeneratedSnapshots()[0];
+        this.externalCheckFrozenSnapshotsReleased(first, releasedSuites());
+
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfBothGeneratedSnapshots()[1]));
+        this.externalCheckFrozenSnapshotsReleased(recordOfBothGeneratedSnapshots(), releasedSuites());
+    }
+
+    /// An unreadable file MUST be named as the file the loop is ON. Its path is
+    /// carried into the read for that error alone, so a loop that advanced but
+    /// kept handing the read `paths[0]` would send the reader to a file that
+    /// reads perfectly well — and every position after the first is where a
+    /// record spends its life from the second release onward.
+    function testFrozenSnapshotUnreadableFileIsNamedAtEveryRecordPosition() external {
+        string[] memory paths = new string[](2);
+        // Declared and readable, so nothing fails before the loop has to
+        // advance.
+        paths[0] = recordOfTheGeneratedSnapshot()[0];
+        paths[1] = "src/concrete/AddressRegistry.sol";
+
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, paths[1]));
+        this.externalCheckFrozenSnapshotsReleased(paths, releasedSuites());
+    }
+
+    /// The inner search MUST reach every released suite, not just the first.
+    /// The suite that declares the record here is the LAST one, so a match that
+    /// only ever looked at `released[0]` would report a declared release as
+    /// undeclared and make the check unusable the moment a repo releases twice.
+    function testFrozenSnapshotCheckReachesEveryReleasedSuite() external view {
+        DeploySuite[] memory released = releasedSuites();
+        // `second-address` first, `address-registry-0-0-1` second.
+        DeploySuite[] memory reordered = new DeploySuite[](2);
+        reordered[0] = released[1];
+        reordered[1] = released[0];
+        assertEq(reordered[1].suite, "address-registry-0-0-1");
+
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), reordered);
+    }
+
+    /// An empty declaration against a record with several files fails on the
+    /// FIRST file, naming it: a repo that declared nothing is not a repo with
+    /// nothing frozen, and the file it names is the one it is on rather than
+    /// the last one in the record.
+    function testFrozenSnapshotEmptyDeclarationFailsOnTheFirstRecordFile() external {
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfBothGeneratedSnapshots()[0]));
+        this.externalCheckFrozenSnapshotsReleased(recordOfBothGeneratedSnapshots(), new DeploySuite[](0));
+    }
+
+    /// A record with no files at all is a repo that has released nothing —
+    /// which is this repo's own state — and MUST pass rather than fail on a
+    /// declaration it has nothing to check against. This is the deliberate
+    /// opposite of the source anchor, which refuses an empty candidate list:
+    /// there, an empty list is a repo whose snapshots nothing anchors; here, it
+    /// is a repo that has frozen nothing yet.
+    function testFrozenSnapshotEmptyRecordPasses() external view {
+        this.externalCheckFrozenSnapshotsReleased(new string[](0), releasedSuites());
+        this.externalCheckFrozenSnapshotsReleased(new string[](0), new DeploySuite[](0));
     }
 
     /// A consistent snapshot of the WRONG contract: every recorded field is
@@ -387,8 +465,9 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
 
     /// Two suites that record the SAME creation code MUST both derive, which
     /// is the ordinary state of a repo between a release and the next source
-    /// change. `0_0_2` and the candidate are the same bytes and therefore the
-    /// same address, and the whole set still passes.
+    /// change. `address-registry-0-0-1` and `address-registry-candidate` are
+    /// the same bytes and therefore the same address, and the whole set still
+    /// passes.
     function testSuitesSharingCreationCodeAllDerive() external {
         DeploySuite[] memory suites = allSuites();
         assertEq(suites.length, 4);

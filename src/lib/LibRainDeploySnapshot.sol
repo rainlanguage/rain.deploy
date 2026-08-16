@@ -35,6 +35,16 @@ error SnapshotAlreadyFrozen(string tag, string dir);
 /// @param tag The release tag that was being cut.
 error EmptyRelease(string tag);
 
+/// Thrown when a release tag does not strictly follow every tag already frozen
+/// in the record. The record is append-only, so a tag frozen out of order can
+/// never be removed: `releasedSuites()` declares it forever and the chain group
+/// then demands it be live on every supported network forever. Refused at the
+/// one place a release identity is minted, rather than discovered afterwards by
+/// whoever reads the record and finds a release nobody cut.
+/// @param tag The tag being cut.
+/// @param newestFrozenTag The newest tag already in the record.
+error NonMonotonicRelease(string tag, string newestFrozenTag);
+
 /// @title LibRainDeploySnapshot
 /// @notice Which release is being built, where its record lives, and how it is
 /// frozen. Release machinery, not code generation.
@@ -72,7 +82,7 @@ error EmptyRelease(string tag);
 library LibRainDeploySnapshot {
     /// The rolling snapshot's directory name. A sibling of the frozen tag
     /// directories rather than a file beside them, so `src/generated/` reads as
-    /// `candidate/ 0_1_5/ 0_1_6/` and "which one is current" is answered by
+    /// `candidate/ 0_1_6/ 0_1_7/` and "which one is current" is answered by
     /// looking.
     string constant CANDIDATE = "candidate";
 
@@ -87,8 +97,8 @@ library LibRainDeploySnapshot {
         return tagForVersion(vm.parseTomlString(vm.readFile("foundry.toml"), ".package.version"));
     }
 
-    /// Whether `subject` is three non-empty runs of digits joined by exactly
-    /// two `separator`s.
+    /// Whether `subject` is three numbers joined by exactly two `separator`s,
+    /// each written without a leading zero.
     ///
     /// The ONE definition of the release-version shape. It is asked with `.`
     /// for a version out of `foundry.toml` and with `_` for the directory that
@@ -115,6 +125,16 @@ library LibRainDeploySnapshot {
                 separators++;
                 digitsInComponent = 0;
             } else if (char >= "0" && char <= "9") {
+                // A component is one number, so it has one spelling. `01` and
+                // `1` are the same release and would freeze to two directories,
+                // neither of which `SnapshotAlreadyFrozen` sees as the other,
+                // and which `recordPrecedes` cannot order because they compare
+                // equal as versions. `i` is at least 1 wherever
+                // `digitsInComponent == 1`, because that digit was read at an
+                // earlier index.
+                if (digitsInComponent == 1 && subjectBytes[i - 1] == "0") {
+                    return false;
+                }
                 digitsInComponent++;
             } else {
                 return false;
@@ -160,11 +180,22 @@ library LibRainDeploySnapshot {
         return string(tagBytes);
     }
 
+    /// The output root `LibFs` writes to, and the only one it can write to:
+    /// `LibFs.pathForContract` hardcodes it.
+    ///
+    /// The only spelling of that root in this library. Everything here that
+    /// names the root — the directory a snapshot is written into, and the tree
+    /// the frozen record is walked from — reads it, so a root this library
+    /// walks that is not a root it writes to is not a state it can be in. The
+    /// remaining pair, this and `LibFs`'s own, is what
+    /// `testRecordRootIsTheRootTheWriterWritesTo` pins.
+    string constant LIB_FS_ROOT = "src/generated";
+
     /// The directory holding a snapshot, rolling or frozen.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @return The directory path.
     function dirForSnapshot(string memory dir) internal pure returns (string memory) {
-        return string.concat("src/generated/", dir);
+        return string.concat(LIB_FS_ROOT, "/", dir);
     }
 
     /// The contract name that places a generated file inside a snapshot
@@ -188,10 +219,6 @@ library LibRainDeploySnapshot {
     function pathForSnapshot(string memory dir, string memory contractName) internal pure returns (string memory) {
         return LibFs.pathForContract(snapshotName(dir, contractName));
     }
-
-    /// The output root `LibFs` writes to, and the only one it can write to:
-    /// `LibFs.pathForContract` hardcodes it.
-    string constant LIB_FS_ROOT = "src/generated";
 
     /// Every file in the FROZEN record: everything inside a release-tag
     /// directory under `root`.
@@ -250,6 +277,52 @@ library LibRainDeploySnapshot {
         }
     }
 
+    /// The constants a snapshot declares below the `BYTECODE_HASH` that
+    /// `LibFs.buildFileForContract` writes itself: the deploy address, the
+    /// creation code, the runtime code and the frozen dependency list, in that
+    /// order.
+    ///
+    /// Split out of `writeSnapshot` rather than inlined there because the
+    /// deployed address, the creation code, the dependency list and the two
+    /// names `LibFs` needs are more live values than the legacy codegen has
+    /// stack for. Splitting the emission from the deploy-and-write is the
+    /// division that falls out of that, and it puts the file's whole shape in
+    /// one expression.
+    /// @param vm The Vm instance for string operations.
+    /// @param deployed The address the creation code deployed to.
+    /// @param creationCode The contract's creation code.
+    /// @param dependencies The addresses that must already have code on a
+    /// network before this contract can be broadcast there.
+    /// @return The constants, as Solidity source.
+    function snapshotConstants(Vm vm, address deployed, bytes memory creationCode, address[] memory dependencies)
+        internal
+        view
+        returns (string memory)
+    {
+        return string.concat(
+            LibCodeGen.addressConstantString(
+                vm,
+                "/// @dev The deterministic deploy address of the contract when deployed via\n/// the Zoltu factory.",
+                "DEPLOYED_ADDRESS",
+                deployed
+            ),
+            LibCodeGen.bytesConstantString(
+                vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", creationCode
+            ),
+            LibCodeGen.bytesConstantString(
+                vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", deployed.code
+            ),
+            LibCodeGen.bytesConstantString(
+                vm,
+                "/// @dev The addresses that MUST already have code on a network before\n"
+                "/// this release can be broadcast there, `abi.encode`d as an `address[]`\n"
+                "/// because Solidity has no file-scope constant of dynamic array type.",
+                "DEPENDENCIES",
+                abi.encode(dependencies)
+            )
+        );
+    }
+
     /// Generate one snapshot for one contract.
     ///
     /// There is no output root to choose. `LibFs.pathForContract` hardcodes
@@ -259,15 +332,34 @@ library LibRainDeploySnapshot {
     /// `vm.writeFile` and reads it with `frozenSnapshotPaths`, which does take a
     /// root, because reading somebody else's tree is a thing a walk genuinely
     /// does and writing this repo's record somewhere else is not.
+    ///
+    /// The dependency list is frozen here with the rest, and it is not
+    /// metadata. `RainDeployBroadcast.run` hands a suite's `dependencies` to
+    /// `LibRainDeploy.deployToNetworks`, which refuses to broadcast on any
+    /// network where one of them has no code — so it is a precondition of the
+    /// deployment, decided when the release is cut. Re-broadcasting a past
+    /// release onto a newly supported chain has to check the list THAT release
+    /// was cut with; regenerating it from current source would drop a
+    /// dependency an old release still needs the moment current source stops
+    /// needing it, and impose a new one on a release that never had it.
+    ///
+    /// `abi.encode`d because Solidity has no file-scope constant of dynamic
+    /// array type. The consumer is `releasedLibraryBlock`, which emits the
+    /// matching `abi.decode`.
     /// @param vm The Vm instance for file operations.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
     /// @param creationCode That contract's creation code.
+    /// @param dependencies The addresses that must already have code on a
+    /// network before this contract can be broadcast there.
     /// @return The path written.
-    function writeSnapshot(Vm vm, string memory dir, string memory contractName, bytes memory creationCode)
-        internal
-        returns (string memory)
-    {
+    function writeSnapshot(
+        Vm vm,
+        string memory dir,
+        string memory contractName,
+        bytes memory creationCode,
+        address[] memory dependencies
+    ) internal returns (string memory) {
         LibRainDeploy.etchZoltuFactory(vm);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(dirForSnapshot(dir), true);
@@ -275,23 +367,7 @@ library LibRainDeploySnapshot {
         address deployed = LibRainDeploy.deployZoltu(creationCode);
 
         LibFs.buildFileForContract(
-            vm,
-            deployed,
-            snapshotName(dir, contractName),
-            string.concat(
-                LibCodeGen.addressConstantString(
-                    vm,
-                    "/// @dev The deterministic deploy address of the contract when deployed via\n/// the Zoltu factory.",
-                    "DEPLOYED_ADDRESS",
-                    deployed
-                ),
-                LibCodeGen.bytesConstantString(
-                    vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", creationCode
-                ),
-                LibCodeGen.bytesConstantString(
-                    vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", deployed.code
-                )
-            )
+            vm, deployed, snapshotName(dir, contractName), snapshotConstants(vm, deployed, creationCode, dependencies)
         );
 
         return pathForSnapshot(dir, contractName);
@@ -427,30 +503,61 @@ library LibRainDeploySnapshot {
         return string.concat(contractForRecordPath(vm, path), "_", tagForRecordPath(vm, path));
     }
 
-    /// Whether record file `a` is emitted before record file `b`: by release
-    /// tag, then by path.
+    /// Whether release tag `a` strictly precedes release tag `b`.
     ///
     /// Tags compare as VERSIONS rather than as text — `0_10_0` follows `0_9_0`
     /// as a release and precedes it as a string, so a text comparison misorders
-    /// every record that outlives a single-digit minor. Both tags are `isTag`,
-    /// so every component is a run of digits `parseUint` reads.
+    /// every record that outlives a single-digit minor. Both MUST be `isTag`,
+    /// so every component is a run of digits `parseUint` reads and both have
+    /// the same number of them.
     ///
-    /// The tie break is the path, byte for byte, so two contracts frozen under
-    /// one tag have an order at all. The walk's own order is the filesystem's,
-    /// and a generated file that changes with it is a diff on every build.
+    /// The ONE definition of what "follows" means for a release, asked by the
+    /// emission order and by the freeze's ordering guard alike. Two spellings
+    /// of it is how a record sorts one way and admits a tag the other way.
+    ///
+    /// Taking the tags rather than record paths is what makes the guard
+    /// reachable: a release being cut has no record file yet, and a comparison
+    /// that could only be asked with two paths could only be asked about
+    /// releases that already happened — the same reason `tagForVersion` is
+    /// split out of `deployTag`.
     /// @param vm The Vm instance for string operations.
-    /// @param a A record file.
-    /// @param b A record file.
-    /// @return Whether `a` precedes `b`.
-    function recordPrecedes(Vm vm, string memory a, string memory b) internal pure returns (bool) {
-        string[] memory left = vm.split(tagForRecordPath(vm, a), "_");
-        string[] memory right = vm.split(tagForRecordPath(vm, b), "_");
+    /// @param a A release tag.
+    /// @param b A release tag.
+    /// @return Whether `a` strictly precedes `b`.
+    function tagPrecedes(Vm vm, string memory a, string memory b) internal pure returns (bool) {
+        string[] memory left = vm.split(a, "_");
+        string[] memory right = vm.split(b, "_");
         for (uint256 i = 0; i < left.length; i++) {
             uint256 leftComponent = vm.parseUint(left[i]);
             uint256 rightComponent = vm.parseUint(right[i]);
             if (leftComponent != rightComponent) {
                 return leftComponent < rightComponent;
             }
+        }
+        return false;
+    }
+
+    /// Whether record file `a` is emitted before record file `b`: by release
+    /// tag (`tagPrecedes`), then by path.
+    ///
+    /// The tie break is the path, byte for byte, so two contracts frozen under
+    /// one tag have an order at all. The walk's own order is the filesystem's,
+    /// and a generated file that changes with it is a diff on every build. It
+    /// applies only when neither tag precedes the other, i.e. the two files are
+    /// the same release — a tag that follows the other is ordered by that and
+    /// never by the text of its path.
+    /// @param vm The Vm instance for string operations.
+    /// @param a A record file.
+    /// @param b A record file.
+    /// @return Whether `a` precedes `b`.
+    function recordPrecedes(Vm vm, string memory a, string memory b) internal pure returns (bool) {
+        string memory leftTag = tagForRecordPath(vm, a);
+        string memory rightTag = tagForRecordPath(vm, b);
+        if (tagPrecedes(vm, leftTag, rightTag)) {
+            return true;
+        }
+        if (tagPrecedes(vm, rightTag, leftTag)) {
+            return false;
         }
 
         bytes memory aBytes = bytes(a);
@@ -522,45 +629,70 @@ library LibRainDeploySnapshot {
         return sortedRecordPaths(vm, selected);
     }
 
+    /// The aliased import one record file contributes: all four consensus
+    /// fields and the frozen dependency list, under that release's prefix.
+    ///
+    /// Split per file rather than inlined into the block for the same reason
+    /// `snapshotConstants` is split out of `writeSnapshot`: five aliases and
+    /// the path they come from are more live values than the legacy codegen has
+    /// stack for.
+    /// @param vm The Vm instance for string operations.
+    /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @return The import statement, and the blank line after it.
+    function releasedImport(Vm vm, string memory path) internal pure returns (string memory) {
+        string memory prefix = releasedConstantPrefix(vm, path);
+        return string.concat(
+            "import {\n    DEPLOYED_ADDRESS as ",
+            prefix,
+            "_DEPLOYED_ADDRESS,\n    BYTECODE_HASH as ",
+            prefix,
+            "_BYTECODE_HASH,\n    CREATION_CODE as ",
+            prefix,
+            "_CREATION_CODE,\n    RUNTIME_CODE as ",
+            prefix,
+            "_RUNTIME_CODE,\n    DEPENDENCIES as ",
+            prefix,
+            "_DEPENDENCIES\n} from \"../generated/",
+            tagForRecordPath(vm, path),
+            "/",
+            contractForRecordPath(vm, path),
+            ".sol\";\n\n"
+        );
+    }
+
     /// The import block of a generated released-suites lib.
     ///
-    /// One aliased import per record file, carrying all four consensus fields.
-    /// A released entry can therefore only say what its own frozen snapshot
-    /// says — there is no path by which a released address, code hash, creation
-    /// code or runtime code is written anywhere but into the immutable record.
+    /// One aliased import per record file, carrying all four consensus fields
+    /// and the frozen dependency list. A released entry can therefore only say
+    /// what its own frozen snapshot says — there is no path by which a released
+    /// address, code hash, creation code, runtime code or dependency list is
+    /// written anywhere but into the immutable record.
     /// @param vm The Vm instance for string operations.
     /// @param paths The record's files, in the order they are emitted.
     /// @return imports The import block.
     function releasedImportBlock(Vm vm, string[] memory paths) internal pure returns (string memory imports) {
         imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
         for (uint256 i = 0; i < paths.length; i++) {
-            string memory prefix = releasedConstantPrefix(vm, paths[i]);
-            imports = string.concat(
-                imports,
-                "import {\n    DEPLOYED_ADDRESS as ",
-                prefix,
-                "_DEPLOYED_ADDRESS,\n    BYTECODE_HASH as ",
-                prefix,
-                "_BYTECODE_HASH,\n    CREATION_CODE as ",
-                prefix,
-                "_CREATION_CODE,\n    RUNTIME_CODE as ",
-                prefix,
-                "_RUNTIME_CODE\n} from \"../generated/",
-                tagForRecordPath(vm, paths[i]),
-                "/",
-                contractForRecordPath(vm, paths[i]),
-                ".sol\";\n\n"
-            );
+            imports = string.concat(imports, releasedImport(vm, paths[i]));
         }
     }
 
     /// The library block of a generated released-suites lib.
     ///
-    /// Four fields per entry alias the frozen snapshot. The other three come
-    /// from `template`, the candidate declaration, and are regenerated from it
-    /// on every build: they are explorer and ordering metadata rather than
-    /// consensus, and preserving what a previous generation wrote would mean
-    /// parsing generated Solidity back in.
+    /// FIVE fields per entry alias the frozen snapshot: the four consensus
+    /// fields and the dependency list. The dependency list is aliased rather
+    /// than rebuilt from `template` because it is a precondition of the
+    /// deployment and not metadata — `RainDeployBroadcast.run` passes it to
+    /// `LibRainDeploy.deployToNetworks`, which refuses to broadcast on a
+    /// network where one of them has no code. Broadcasting a past release onto
+    /// a newly supported chain therefore has to check the list that release was
+    /// cut with, so it is read from that release's own frozen snapshot.
+    ///
+    /// The other two come from `template`, the candidate declaration, and are
+    /// regenerated from it on every build: the key and the artifact path are
+    /// explorer and ordering metadata rather than anything a broadcast acts on,
+    /// and preserving what a previous generation wrote would mean parsing
+    /// generated Solidity back in.
     ///
     /// The key is the template's with the tag appended, so every entry is
     /// unique and `allSuites`'s duplicate check is satisfied by construction
@@ -581,29 +713,7 @@ library LibRainDeploySnapshot {
         string memory entries = "";
         for (uint256 i = 0; i < paths.length; i++) {
             string memory index = vm.toString(i);
-            string memory dependencies = string.concat("dependencies", index);
             string memory prefix = releasedConstantPrefix(vm, paths[i]);
-
-            entries = string.concat(
-                entries,
-                "        address[] memory ",
-                dependencies,
-                " = new address[](",
-                vm.toString(template.dependencies.length),
-                ");\n"
-            );
-            for (uint256 j = 0; j < template.dependencies.length; j++) {
-                entries = string.concat(
-                    entries,
-                    "        ",
-                    dependencies,
-                    "[",
-                    vm.toString(j),
-                    "] = address(",
-                    vm.toString(template.dependencies[j]),
-                    ");\n"
-                );
-            }
 
             entries = string.concat(
                 entries,
@@ -623,9 +733,9 @@ library LibRainDeploySnapshot {
                 prefix,
                 "_RUNTIME_CODE,\n            artifactPath: \"",
                 template.artifactPath,
-                "\",\n            dependencies: ",
-                dependencies,
-                "\n        });\n"
+                "\",\n            dependencies: abi.decode(",
+                prefix,
+                "_DEPENDENCIES, (address[]))\n        });\n"
             );
         }
 
@@ -634,20 +744,21 @@ library LibRainDeploySnapshot {
             libraryName,
             "\n/// @notice Every frozen release of `",
             contractName,
-            "`: one entry per file in\n",
-            "/// the append-only `src/generated/<tag>/` record, in tag order.\n///\n",
-            "/// The deploy address, code hash, creation code and runtime code of each\n",
-            "/// entry are aliased from that release's own frozen snapshot, so the\n",
-            "/// consensus record is read from the immutable file and from nowhere else.\n///\n",
-            "/// The key, the artifact path and the dependencies are explorer and ordering\n",
-            "/// metadata regenerated from the CURRENT declaration, and are not part of\n",
-            "/// that record. A moved source path retroactively updates every entry's\n",
-            "/// artifact path, which is intended: the alternative is parsing this\n",
-            "/// generated file back in to preserve what it last said.\nlibrary ",
+            "`: one entry per file in\n" "/// the append-only `src/generated/<tag>/` record, in tag order.\n///\n"
+            "/// The deploy address, code hash, creation code, runtime code and dependency\n"
+            "/// list of each entry are aliased from that release's own frozen snapshot, so\n"
+            "/// what a release deployed, and what it required to already be on chain, are\n"
+            "/// read from the immutable file and from nowhere else. A dependency dropped\n"
+            "/// from current source stays required by the releases cut with it, and one\n"
+            "/// added is not imposed on releases cut without it.\n///\n"
+            "/// The key and the artifact path are explorer and ordering metadata\n"
+            "/// regenerated from the CURRENT declaration, and are not part of that\n"
+            "/// record. A moved source path retroactively updates every entry's artifact\n"
+            "/// path, which is intended: the alternative is parsing this generated file\n"
+            "/// back in to preserve what it last said.\nlibrary ",
             libraryName,
-            " {\n    /// Every frozen release, in tag order.\n",
-            "    /// @return suites The released suites.\n",
-            "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n",
+            " {\n    /// Every frozen release, in tag order.\n" "    /// @return suites The released suites.\n"
+            "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n"
             "        suites = new DeploySuite[](",
             vm.toString(paths.length),
             ");\n",
@@ -671,14 +782,20 @@ library LibRainDeploySnapshot {
     /// Written beside the alias lib, under the same `Lib<Contract>` naming, so
     /// all generated non-snapshot Solidity is in one directory.
     ///
-    /// Four fields per entry come from the frozen snapshot and three from
-    /// `template`. Those three — the key, the artifact path and the
-    /// dependencies — are explorer and ordering metadata regenerated from the
-    /// CURRENT declaration on every build, NOT part of the frozen consensus
-    /// record. Moving a source file retroactively updates the artifact path of
-    /// every entry, including releases cut years ago, which is intended: the
-    /// alternative is parsing the previously generated Solidity back in to
-    /// preserve what it said.
+    /// Five fields per entry come from the frozen snapshot and two from
+    /// `template`. Those two — the key and the artifact path — are explorer and
+    /// ordering metadata regenerated from the CURRENT declaration on every
+    /// build, NOT part of the frozen record. Moving a source file retroactively
+    /// updates the artifact path of every entry, including releases cut years
+    /// ago, which is intended: the alternative is parsing the previously
+    /// generated Solidity back in to preserve what it said.
+    ///
+    /// The dependency list is deliberately NOT among them. It is what a
+    /// broadcast checks is already on chain before it deploys anything, so
+    /// regenerating it from current source would mean re-broadcasting a past
+    /// release onto a new chain under today's preconditions rather than the
+    /// ones that release was cut with. It is frozen into the snapshot by
+    /// `writeSnapshot` and aliased back out here.
     /// @param vm The Vm instance for file operations.
     /// @param recordRoot The record root to read releases from — `LIB_FS_ROOT`
     /// for a repo's real record. A parameter for the same reason
@@ -711,6 +828,74 @@ library LibRainDeploySnapshot {
         return path;
     }
 
+    /// The newest release in a record: the greatest tag any of its files sits
+    /// under, compared as a version.
+    ///
+    /// The empty string when the record holds no release at all. That is a real
+    /// state — a repo before its first release, including this one — rather
+    /// than a failure, and it cannot be confused with a release because it is
+    /// not a tag `isTag` admits or a freeze could ever write.
+    ///
+    /// A scan rather than the last of `sortedRecordPaths`: the newest release
+    /// is what this is asked for, and the path tie break that orders two files
+    /// frozen under one tag has nothing to say about which tag is newest.
+    /// @param vm The Vm instance for file operations.
+    /// @param recordRoot The record root — `LIB_FS_ROOT` for a repo's real
+    /// record.
+    /// @return newest The newest frozen tag, or `""` if nothing is frozen.
+    function newestFrozenTag(Vm vm, string memory recordRoot) internal view returns (string memory newest) {
+        string[] memory paths = frozenSnapshotPaths(vm, recordRoot);
+        for (uint256 i = 0; i < paths.length; i++) {
+            string memory tag = tagForRecordPath(vm, paths[i]);
+            if (bytes(newest).length == 0 || tagPrecedes(vm, newest, tag)) {
+                newest = tag;
+            }
+        }
+    }
+
+    /// Refuse a release tag that does not strictly follow every tag already in
+    /// the record.
+    ///
+    /// The record is APPEND-ONLY, which is what makes an out-of-order tag
+    /// permanent rather than merely wrong: `releasedSuites()` is generated from
+    /// the record and declares it forever, `RainDeployVerifyChain` then demands
+    /// its addresses stay live on every supported network forever, and the
+    /// append-only gate is exactly what stops the directory being deleted. The
+    /// only exit is suspending the invariant the whole design rests on.
+    ///
+    /// Nothing upstream is a substitute. The tag is a human-typed `sol-v*` that
+    /// `rainix-tag-release` seds straight into `foundry.toml` after checking
+    /// only that it is on `main` and shaped `X.Y.Z`, so a fat-fingered `0.1.9`
+    /// cut after `0.2.0` reaches this call as the release being made.
+    /// `SnapshotAlreadyFrozen` is existence-based and has no quarrel with it —
+    /// its directory is absent precisely because that release never happened —
+    /// and the frozen bytes are the current candidate, already live on chain,
+    /// so every downstream check passes and the record simply carries a release
+    /// sorted below the newest one.
+    ///
+    /// Strictly greater, so the newest tag itself is refused too: equality is
+    /// not "follows". `SnapshotAlreadyFrozen` also refuses that one, and both
+    /// must hold — neither guard is load bearing alone.
+    ///
+    /// The record root and the tag are parameters, so the refusal is reachable
+    /// without a record on disk to re-cut or a `foundry.toml` to rewrite, for
+    /// the same reason `frozenSnapshotPaths` takes a root and `tagForVersion`
+    /// is split out of `deployTag`. A guard nobody has seen fire is a guard
+    /// nobody knows works, which is the whole complaint against an unenforced
+    /// rule.
+    /// @param vm The Vm instance for file operations.
+    /// @param recordRoot The record root — `LIB_FS_ROOT` for a repo's real
+    /// record.
+    /// @param tag The release tag being cut. MUST be `isTag`.
+    function checkReleaseFollowsRecord(Vm vm, string memory recordRoot, string memory tag) internal view {
+        string memory newest = newestFrozenTag(vm, recordRoot);
+        // A repo that has released nothing has nothing for a first release to
+        // follow, so there is no tag it may not be.
+        if (bytes(newest).length > 0 && !tagPrecedes(vm, newest, tag)) {
+            revert NonMonotonicRelease(tag, newest);
+        }
+    }
+
     /// Regenerate the rolling snapshot and freeze it as this release's record,
     /// in that order, in one call.
     ///
@@ -730,6 +915,9 @@ library LibRainDeploySnapshot {
     /// - the release must name at least one contract, because a release with no
     ///   record is not a release and freezing one wedges the tag exactly as a
     ///   partial write does
+    /// - the tag must strictly follow every release already frozen
+    ///   (`checkReleaseFollowsRecord`), because the record it is appended to
+    ///   cannot be reordered or removed afterwards
     /// - every named contract must have a rolling snapshot, once regenerated
     ///
     /// The frozen copy is the bytes just regenerated, read back from disk, so
@@ -748,6 +936,11 @@ library LibRainDeploySnapshot {
         if (contractNames.length == 0) {
             revert EmptyRelease(tag);
         }
+        // The record this release is appended to is the one it is written into,
+        // so the root is `LIB_FS_ROOT` and not a caller's choice: a guard that
+        // could be pointed at another tree is a guard that could be pointed
+        // away from the record it is protecting.
+        checkReleaseFollowsRecord(vm, LIB_FS_ROOT, tag);
 
         regenerate();
 
