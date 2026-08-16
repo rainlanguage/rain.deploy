@@ -246,7 +246,7 @@ library LibRainDeploy {
     }
 
     /// Returns the list of networks currently supported by Rain deployments.
-    /// @return networks The list of supported network names.
+    /// @return The list of supported network names.
     function supportedNetworks() internal pure returns (string[] memory) {
         string[] memory networks = new string[](5);
         networks[0] = ARBITRUM_ONE;
