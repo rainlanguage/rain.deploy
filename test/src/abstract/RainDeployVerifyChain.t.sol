@@ -60,8 +60,9 @@ import {
 /// leaves the etch in place and changes only the code, and the check still
 /// fails, which it could not do if the expectation were read from the etch.
 contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain {
-    /// The second suite's address, derived from the only other creation code in
-    /// this repo.
+    /// The second suite's address, derived from `MockDeployableV2`'s creation
+    /// code by the same derivation `ExampleDeploySuites` declares, so the etch
+    /// in `setUp` lands on the address the matrix reads.
     /// @return The address.
     function secondDeployedAddress() internal pure returns (address) {
         return LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
@@ -145,6 +146,44 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         this.testSuitesLiveOnEverySupportedNetwork();
 
         assertEq(block.chainid, lastChainId);
+    }
+
+    /// The early return for an empty set is about having NOTHING to check, not
+    /// about the networks: handed ONE derivation, the matrix forks.
+    ///
+    /// The count is the whole point of the case. Every other test here runs the
+    /// matrix over this contract's TWO released suites, so a guard keyed
+    /// anywhere below two — `derived.length < 2` — returns early on every
+    /// subject in the repo and is caught by none of them:
+    /// `RainDeployVerifyChainCandidateTest` is the only other contract that
+    /// reaches the matrix with a subject, at exactly one, and it forks on its own
+    /// before calling, so a matrix that returned without forking is
+    /// indistinguishable there. `RegistryDeployChainTest`'s empty case reads as
+    /// satisfied under that guard, which is what makes one subject the length
+    /// that discriminates.
+    ///
+    /// This contract is where it belongs because it already forks every
+    /// supported network. Asserting it from the empty-set side would hand the
+    /// contract that exists to need no RPC endpoint the five-endpoint dependency
+    /// the early return removes from it.
+    function testChainWithASingleSubjectDoesFork() external {
+        (bool activeBefore,) = address(vm).call(abi.encodeWithSignature("activeFork()"));
+        assertFalse(activeBefore, "a fork was selected before the call");
+
+        // One subject, and `setUp` left it etched persistently, so it is live
+        // with its recorded hash on whichever forks the matrix creates and the
+        // check itself passes on all of them.
+        DerivedDeploy[] memory derived = new DerivedDeploy[](1);
+        derived[0] = DerivedDeploy({
+            suite: "address-registry-0-0-1",
+            deployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
+            bytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH
+        });
+
+        checkDeployedOnSupportedNetworks(derived);
+
+        (bool activeAfter,) = address(vm).call(abi.encodeWithSignature("activeFork()"));
+        assertTrue(activeAfter, "the matrix checked a subject without forking");
     }
 
     /// Code on a network that is not the code the version's creation code

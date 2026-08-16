@@ -9,9 +9,11 @@ import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/Addr
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
 import {MockDirtyWordOwner} from "../../concrete/MockDirtyWordOwner.sol";
+import {MockRawAnswerOwner} from "../../concrete/MockRawAnswerOwner.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
+import {LibStringSet} from "../../lib/LibStringSet.sol";
 
 /// @title LibRainDeployTest
 /// Tests for `LibRainDeploy`. External wrappers are used for library functions
@@ -202,6 +204,58 @@ contract LibRainDeployTest is Test {
         assertEq(networks[4], LibRainDeploy.POLYGON);
     }
 
+    /// PROPERTY: `[rpc_endpoints]` and `[etherscan]` in `foundry.toml` are
+    /// EXACTLY `supportedNetworks()`, which makes the three lists one list.
+    ///
+    /// The deploy forks by the first and `--verify` resolves the second, so a
+    /// supported network missing from either broadcasts and then fails after
+    /// the gas is spent, and a section entry no supported network names is
+    /// config nothing ever reads. Both are the same defect — the lists having
+    /// drifted — so both directions are asserted, by membership: containment
+    /// one way alone passes for a section carrying an alias nothing deploys
+    /// to, and the other way alone passes for a network with no config at all.
+    /// Membership rather than position, because a config section is keyed
+    /// rather than ordered and there is no order in it to assert.
+    ///
+    /// This is what makes the `[etherscan]` half enforced at all. The RPC half
+    /// is enforced only incidentally, by the fork tests, and only forwards.
+    ///
+    /// The raw file is read rather than forge's resolved config because the
+    /// values are `${VAR}` interpolations that exist only in CI. The KEYS are
+    /// the whole contract here, and they are in the text — so this needs no
+    /// RPC and fails on the PR that drifts rather than at dispatch time.
+    function testSupportedNetworksAreFullyConfigured() external view {
+        string memory config = vm.readFile("foundry.toml");
+        string[] memory networks = LibRainDeploy.supportedNetworks();
+
+        for (uint256 i = 0; i < networks.length; i++) {
+            assertTrue(
+                vm.keyExistsToml(config, string.concat(".rpc_endpoints.", networks[i])),
+                string.concat("supported network has no [rpc_endpoints] alias: ", networks[i])
+            );
+            assertTrue(
+                vm.keyExistsToml(config, string.concat(".etherscan.", networks[i])),
+                string.concat("supported network has no [etherscan] key: ", networks[i])
+            );
+        }
+
+        string[] memory rpcAliases = vm.parseTomlKeys(config, ".rpc_endpoints");
+        for (uint256 i = 0; i < rpcAliases.length; i++) {
+            assertTrue(
+                LibStringSet.holds(networks, rpcAliases[i]),
+                string.concat("[rpc_endpoints] alias is not a supported network: ", rpcAliases[i])
+            );
+        }
+
+        string[] memory etherscanKeys = vm.parseTomlKeys(config, ".etherscan");
+        for (uint256 i = 0; i < etherscanKeys.length; i++) {
+            assertTrue(
+                LibStringSet.holds(networks, etherscanKeys[i]),
+                string.concat("[etherscan] key is not a supported network: ", etherscanKeys[i])
+            );
+        }
+    }
+
     /// `ZOLTU_FACTORY_CODEHASH` MUST match the actual codehash of the Zoltu
     /// factory on every supported network. Every name in `supportedNetworks`
     /// MUST also be a configured fork alias, otherwise it cannot be deployed
@@ -372,7 +426,7 @@ contract LibRainDeployTest is Test {
         // now pinned exactly in `foundry.toml`, because this repo's deploy pins
         // depend on them; that is what makes a literal here stable at all, and
         // moving any of them moves this address.
-        assertEq(deployed, 0x0c04367b381F8Ca252aD2516F1Eac2b9B2ca928F);
+        assertEq(deployed, 0x7DA611e4146dCf0107407Bb331599acC53E8B62c);
     }
 
     /// `deployZoltu` MUST revert with `DeployFailed` when the Zoltu factory
@@ -593,6 +647,40 @@ contract LibRainDeployTest is Test {
         address[] memory dependencies = new address[](1);
         dependencies[0] = address(0xdead);
 
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdead)
+            )
+        );
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            mockDeployableAddress(),
+            bytes32(0),
+            dependencies
+        );
+    }
+
+    /// `deployToNetworks` MUST check EVERY dependency, not only the first. The
+    /// missing one here is the LAST, behind a dependency that really is
+    /// present, so a loop that stopped after `dependencies[0]` would broadcast
+    /// — and a contract whose constructor reads an address with no code is
+    /// broken at a deterministic address that can never be redeployed.
+    function testDeployToNetworksMissingLaterDependencyReverts() external {
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        address[] memory dependencies = new address[](2);
+        // Present on arbitrum: the Zoltu factory, which the deploy needs
+        // anyway. Index 0 therefore passes and only a loop that reaches index 1
+        // reverts at all.
+        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
+        dependencies[1] = address(0xdead);
+
+        // The revert names the LAST dependency, so a loop that reached index 1
+        // but reported index 0 fails here too.
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdead)
@@ -953,6 +1041,62 @@ contract LibRainDeployTest is Test {
         );
     }
 
+    /// A read that answers with MORE than one word has not answered with an
+    /// address either, whatever its leading word says, and MUST be reported as
+    /// `ResolvedAddressReadFailed`. This is the consumer that pointed a read at
+    /// a getter returning two values, or a dynamic type: the answer's first word
+    /// decodes perfectly well, so nothing but the length says it is not an
+    /// address.
+    ///
+    /// That first word is exactly the address the caller expects, so a guard
+    /// that accepted any answer of at least one word would decode it and PASS
+    /// this against a read that never answered with a single address. Fuzzed
+    /// over the whole tail rather than over one extra word, because the rule is
+    /// about every length that is not one word, not about a `(address,address)`
+    /// return in particular — an answer of 0x21 bytes is no more an address than
+    /// one of 0x40.
+    function testCheckResolvedAddressesLongAnswerReverts(address account, bytes memory tail) external {
+        vm.assume(tail.length > 0);
+        bytes memory answer = bytes.concat(abi.encode(account), tail);
+        MockRawAnswerOwner target = new MockRawAnswerOwner(answer);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector, "test_network", address(target), uint256(0), answer
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(target), ownerReadCalls(), expected(account));
+    }
+
+    /// An answer SHORTER than a word is not an ABI-encoded address either, and
+    /// MUST be reported as `ResolvedAddressReadFailed` rather than reverting
+    /// inside the decoder with no data of its own. A read pointed at a getter
+    /// that answers in raw bytes lands here — the Zoltu factory itself answers
+    /// with the twenty bytes of an address and nothing else.
+    ///
+    /// Fuzzed across every length between an answer of nothing and an answer of
+    /// one word. Zero is the case a target with no code produces, and 0x20 is an
+    /// address, so both ends are excluded and everything between them is the
+    /// regime nothing else exercises.
+    function testCheckResolvedAddressesShortAnswerReverts(address account, bytes32 tail, uint256 lengthSeed) external {
+        uint256 length = bound(lengthSeed, 1, 0x1f);
+        // The raw bytes of the address first, so length 20 is exactly the shape
+        // the Zoltu factory answers with, then arbitrary bytes to fill.
+        bytes memory source = abi.encodePacked(account, tail);
+        bytes memory answer = new bytes(length);
+        for (uint256 i = 0; i < length; i++) {
+            answer[i] = source[i];
+        }
+        MockRawAnswerOwner target = new MockRawAnswerOwner(answer);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector, "test_network", address(target), uint256(0), answer
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(target), ownerReadCalls(), expected(account));
+    }
+
     /// `checkResolvedAddresses` MUST revert when the reads and expected
     /// addresses do not pair up, rather than checking the shorter of the two.
     function testCheckResolvedAddressesLengthMismatchReverts(uint8 readCallsLength, uint8 expectedLength) external {
@@ -1099,6 +1243,42 @@ contract LibRainDeployTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         address[] memory dependencies = new address[](1);
         dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
+
+        address result = this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            dependencies
+        );
+        assertEq(result, mockDeployableAddress());
+        assertEq(result.codehash, mockDeployableCodeHash());
+    }
+
+    /// `deployToNetworks` MUST deploy when a dependency list LONGER than one is
+    /// entirely present, so `testDeployToNetworksMissingLaterDependencyReverts`
+    /// is about the missing entry rather than about the list having more than
+    /// one entry at all.
+    function testDeployToNetworksEveryDependencyPresentDeploys() external {
+        // A second present dependency, distinct from the Zoltu factory.
+        // Deployed here rather than pinned to a mainnet address that happens to
+        // have code on arbitrum today, and made persistent so it is present on
+        // the fork `deployToNetworks` creates for itself as well as this one.
+        // Stated rather than assumed: if it had no code the deploy below would
+        // succeed for a reason that has nothing to do with the loop.
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        address dependency = this.externalDeployZoltu(type(MockDeployableV2).creationCode);
+        assertGt(dependency.code.length, 0);
+        vm.makePersistent(dependency);
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        address[] memory dependencies = new address[](2);
+        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
+        dependencies[1] = dependency;
 
         address result = this.externalDeployToNetworks(
             networks,

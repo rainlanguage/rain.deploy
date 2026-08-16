@@ -6,6 +6,7 @@ import {Test, Vm} from "forge-std-1.16.1/src/Test.sol";
 import {DeployCandidate} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {LibStringSet} from "../../lib/LibStringSet.sol";
 
 /// @title GeneratedSnapshotShapeTest
 /// @notice What a generated deploy snapshot must look like, asserted against
@@ -123,22 +124,9 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// declaration whose snapshot is somebody else's.
     /// @param candidate The candidate to name.
     /// @return The contract name.
-    function candidateContractName(DeployCandidate memory candidate) internal view returns (string memory) {
+    function candidateContractName(DeployCandidate memory candidate) internal pure returns (string memory) {
         string[] memory components = vm.split(candidate.snapshot.artifactPath, ":");
         return components[components.length - 1];
-    }
-
-    /// Whether `names` holds `name`.
-    /// @param names The names to search.
-    /// @param name The name to find.
-    /// @return Whether it is present.
-    function holdsName(string[] memory names, string memory name) internal pure returns (bool) {
-        for (uint256 i = 0; i < names.length; i++) {
-            if (keccak256(bytes(names[i])) == keccak256(bytes(name))) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /// PROPERTY: the rolling snapshots and the declared candidates are the same
@@ -170,13 +158,15 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
 
         for (uint256 i = 0; i < declared.length; i++) {
             assertTrue(
-                holdsName(snapshots, declared[i]), string.concat("candidate has no rolling snapshot: ", declared[i])
+                LibStringSet.holds(snapshots, declared[i]),
+                string.concat("candidate has no rolling snapshot: ", declared[i])
             );
         }
 
         for (uint256 i = 0; i < snapshots.length; i++) {
             assertTrue(
-                holdsName(declared, snapshots[i]), string.concat("rolling snapshot has no candidate: ", snapshots[i])
+                LibStringSet.holds(declared, snapshots[i]),
+                string.concat("rolling snapshot has no candidate: ", snapshots[i])
             );
         }
     }

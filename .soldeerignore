@@ -1,6 +1,8 @@
 .DS_Store
 .audit
+.claude
 .coderabbitai.yaml
+.env.example
 .git
 .github
 .gitignore

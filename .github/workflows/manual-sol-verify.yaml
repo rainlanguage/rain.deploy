@@ -1,0 +1,50 @@
+name: Manual sol verify
+# Explorer source verification for a registry that is ALREADY on chain, run by
+# hand.
+#
+# `manual-sol-artifacts.yaml` submits source only for what its own run
+# broadcast, and the broadcast is idempotent: a rerun against networks that
+# already hold the code broadcasts nothing, so there is nothing for `--verify`
+# to submit and the run is green having verified nothing. A deploy that landed
+# and then failed verification — a bad explorer key, a rate limit, an explorer
+# that was down — is repaired here rather than by re-dispatching the deploy.
+#
+# Deliberately `workflow_dispatch` only, like the deploy. Unlike the deploy this
+# never broadcasts and never reads `DEPLOYMENT_KEY`: `forge verify-contract`
+# talks to the explorer API and nothing else, so it is safe to re-run and is
+# already a no-op ("already verified") against an explorer that has the source.
+on:
+  workflow_dispatch:
+    inputs:
+      contract:
+        type: string
+        required: true
+        description: |
+          Artifact path of the contract to submit, `path:Contract`. Paired with
+          `address` on the `manual verification command:` line `script/Deploy.sol`
+          prints for every network, whether it deployed there or skipped it, so
+          a run of the deploy is where both values come from.
+      address:
+        type: string
+        required: true
+        description: |
+          The deployed address. One value for every network, because the Zoltu
+          factory derives one address from the creation code.
+      networks:
+        type: string
+        required: true
+        default: arbitrum base base-sepolia flare polygon
+        description: |
+          Which explorers to submit to. FOUNDRY's chain names, not the
+          `[rpc_endpoints]` aliases: `base-sepolia` is a chain name and
+          `base_sepolia` is rejected outright. The default is
+          `LibRainDeploy.supportedNetworks()` spelled that way, i.e. every
+          network the deploy broadcasts to, so it has to move when that does.
+jobs:
+  verify:
+    uses: rainlanguage/rainix/.github/workflows/rainix-manual-sol-verify.yaml@main
+    with:
+      contract: ${{ inputs.contract }}
+      address: ${{ inputs.address }}
+      networks: ${{ inputs.networks }}
+    secrets: inherit

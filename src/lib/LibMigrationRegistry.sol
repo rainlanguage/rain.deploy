@@ -105,11 +105,13 @@ library LibMigrationRegistry {
     ///
     /// Verifies the registry's code hash before reading, so a chain where the
     /// registry is absent, or where something else occupies its address, is a
-    /// loud revert rather than a call into unknown code. That distinction is
-    /// the whole point here: "no registry on this chain" and "this migration
-    /// has not been applied" are different facts, and silently collapsing the
-    /// first into the second would send a caller down its pre-migration branch
-    /// on every chain the registry was never deployed to.
+    /// NAMED revert rather than a call into unknown code. An absent registry
+    /// reverts either way — solc reverts a high-level call whose returndata is
+    /// too short to decode — but anonymously, saying nothing about which of the
+    /// two it was. What the check actually forbids is the case that does NOT
+    /// revert: code at the address that is not this registry, an EIP-7702
+    /// delegation included, is free to answer zero to every migration and send
+    /// every caller down its pre-migration branch.
     ///
     /// The registry itself refuses the zero writer, and refuses the two ids a
     /// migration can never be, so those arrive as reverts from it rather than
@@ -131,10 +133,11 @@ library LibMigrationRegistry {
     /// if it has never applied one.
     ///
     /// Verifies the registry's code hash first for the same reason `applied`
-    /// does, and more sharply: a call into an empty account returns nothing,
-    /// which decodes as zero, and zero is the one value a head can never hold —
-    /// so an unverified read would hand back a head that is not a head at all,
-    /// on exactly the chains where nothing has been deployed.
+    /// does, and more sharply: occupying code is free to answer any head it
+    /// likes, including the zero no head can ever hold, so an unverified read
+    /// can hand back something that is not a head at all. An empty address is
+    /// not that case — there is no returndata for a `bytes32` to decode from,
+    /// so it reverts unguarded — and the check is what gives it a name.
     /// @param writer The namespace to read. Never the zero address.
     /// @return The head of `writer`'s namespace. Never zero.
     function head(address writer) internal view returns (bytes32) {
@@ -153,10 +156,12 @@ library LibMigrationRegistry {
     /// one account interleave into one chain.
     ///
     /// Verifies the registry's code hash before writing, so a migration is
-    /// never "applied" into an empty address or into unknown code. A record
-    /// that went nowhere is worse than no record at all: the migration would
-    /// have run, and every reader would go on asserting the pre-migration
-    /// state.
+    /// never "applied" into unknown code. A write into an EMPTY address fails
+    /// unguarded — solc checks the callee exists when no return data is
+    /// expected — so what this stops is the write that SUCCEEDS into something
+    /// that is not the registry: a record that went nowhere is worse than no
+    /// record at all, because the migration ran and every reader goes on
+    /// asserting the pre-migration state.
     ///
     /// The registry refuses the zero id, refuses a migration this caller has
     /// already applied, and refuses one applied onto anything but the

@@ -6,6 +6,7 @@ import {Test} from "forge-std-1.16.1/src/Test.sol";
 
 import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV1.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
+import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
 /// @title MigrationRegistryAppliedTest
 /// @notice A test suite for `MigrationRegistry.applied`: it answers an applied
@@ -20,13 +21,6 @@ contract MigrationRegistryAppliedTest is Test {
         sRegistry = new MigrationRegistry();
     }
 
-    /// A migration id that is neither of the two values the head space reserves.
-    /// @param migration The fuzzed candidate.
-    function assumeMigration(bytes32 migration) internal pure {
-        vm.assume(migration != bytes32(0));
-        vm.assume(migration != MIGRATION_HEAD_GENESIS);
-    }
-
     /// An unapplied migration answers zero rather than reverting. This is
     /// the deliberate difference from a registry whose reads revert on an
     /// unknown key: "not applied here" is the ordinary state of every migration
@@ -36,7 +30,7 @@ contract MigrationRegistryAppliedTest is Test {
     /// state it is actually looking at.
     function testAppliedUnappliedIsZero(address writer, bytes32 migration) external view {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         assertEq(sRegistry.applied(writer, migration), 0);
     }
@@ -49,7 +43,7 @@ contract MigrationRegistryAppliedTest is Test {
         external
     {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(appliedAt != 0);
         vm.assume(readAt >= appliedAt);
 
@@ -65,7 +59,7 @@ contract MigrationRegistryAppliedTest is Test {
     /// twice answers the same way.
     function testAppliedIsIdempotent(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
@@ -80,7 +74,7 @@ contract MigrationRegistryAppliedTest is Test {
     /// would read as "nothing has been applied" instead of as the mistake it
     /// is, and send its caller down the pre-migration branch on every chain.
     function testAppliedZeroWriterReverts(bytes32 migration) external {
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
         sRegistry.applied(address(0), migration);
@@ -123,7 +117,7 @@ contract MigrationRegistryAppliedTest is Test {
     /// records intact.
     function testAppliedRefusalLeavesRecordsIntact(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
