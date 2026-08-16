@@ -246,14 +246,15 @@ library LibRainDeploy {
     }
 
     /// Returns the list of networks currently supported by Rain deployments.
-    /// @return networks The list of supported network names.
-    function supportedNetworks() internal pure returns (string[] memory networks) {
-        networks = new string[](5);
+    /// @return The list of supported network names.
+    function supportedNetworks() internal pure returns (string[] memory) {
+        string[] memory networks = new string[](5);
         networks[0] = ARBITRUM_ONE;
         networks[1] = BASE;
         networks[2] = BASE_SEPOLIA;
         networks[3] = FLARE;
         networks[4] = POLYGON;
+        return networks;
     }
 
     /// Asserts that an already-deployed contract holds the addresses the
