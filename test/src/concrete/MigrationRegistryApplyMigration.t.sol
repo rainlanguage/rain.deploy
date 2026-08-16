@@ -6,6 +6,7 @@ import {Test, Vm} from "forge-std-1.16.1/src/Test.sol";
 
 import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV1.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
+import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
 /// @title MigrationRegistryApplyMigrationTest
 /// @notice A test suite for `MigrationRegistry.applyMigration`: who a record
@@ -19,20 +20,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry = new MigrationRegistry();
     }
 
-    /// A migration id that is neither of the two values the head space reserves,
-    /// which is what every test that is not about those values wants.
-    /// @param migration The fuzzed candidate.
-    function assumeMigration(bytes32 migration) internal pure {
-        vm.assume(migration != bytes32(0));
-        vm.assume(migration != MIGRATION_HEAD_GENESIS);
-    }
-
     /// Anyone may apply, and the record lands under the caller. There is no
     /// authority to be refused by, which is the whole access-control design:
     /// the namespace IS the caller.
     function testApplyMigrationAnyCallerAppliesUnderItself(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
@@ -46,7 +39,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// from the chain rather than from a constant somebody guessed.
     function testApplyMigrationStoresTheBlockTimestamp(address writer, bytes32 migration, uint32 timestamp) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(timestamp != 0);
         vm.warp(timestamp);
 
@@ -63,8 +56,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         external
     {
         vm.assume(writer != address(0));
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
 
         vm.warp(1000);
@@ -85,7 +78,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// only outcome that leaves the namespace describing something true.
     function testApplyMigrationZeroTimestampReverts(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
         vm.warp(0);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
@@ -114,8 +107,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         bytes32 anyHead
     ) external {
         vm.assume(writer != address(0));
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
 
         vm.warp(1000);
@@ -162,7 +155,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
         vm.assume(writer != other);
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
@@ -179,7 +172,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
         vm.assume(writer != other);
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
@@ -196,8 +189,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// rather than about a number that stands in for all of them.
     function testApplyMigrationDistinctMigrations(address writer, bytes32 migrationA, bytes32 migrationB) external {
         vm.assume(writer != address(0));
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
 
         vm.prank(writer);
@@ -217,8 +210,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// which is what the next one has to name.
     function testApplyMigrationAdvancesTheHead(address writer, bytes32 migrationA, bytes32 migrationB) external {
         vm.assume(writer != address(0));
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
 
         assertEq(sRegistry.head(writer), MIGRATION_HEAD_GENESIS);
@@ -243,9 +236,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
         bytes32 skipped
     ) external {
         vm.assume(writer != address(0));
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
-        assumeMigration(skipped);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        LibMigrationFuzz.assumeMigration(vm, skipped);
         vm.assume(migrationA != migrationB);
         vm.assume(skipped != migrationA);
         vm.assume(skipped != migrationB);
@@ -270,8 +263,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         external
     {
         vm.assume(writer != address(0));
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
 
         vm.prank(writer);
@@ -295,8 +288,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
         vm.assume(writer != other);
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
 
         vm.prank(writer);
@@ -327,7 +320,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// to be empty.
     function testApplyMigrationZeroHeadRevertsOnEmptyNamespace(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -345,8 +338,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         external
     {
         vm.assume(writer != address(0));
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
 
         vm.prank(writer);
@@ -366,7 +359,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// its way to looking like a first run.
     function testApplyMigrationTwiceReverts(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
@@ -389,8 +382,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         external
     {
         vm.assume(writer != address(0));
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
 
         vm.warp(1000);
@@ -421,8 +414,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         external
     {
         vm.assume(writer != address(0));
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
 
         vm.prank(writer);
@@ -444,7 +437,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
         vm.assume(writer != other);
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
@@ -485,7 +478,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// namespace it arrives at.
     function testApplyMigrationZeroMigrationCheckedFirst(address writer, bytes32 anyHead, bytes32 migration) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
         vm.prank(writer);
@@ -531,7 +524,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         external
     {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         // An empty namespace, whose head is genesis: still refused onto a head
         // that does not match it.
@@ -579,7 +572,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// is the block's.
     function testApplyMigrationEvent(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.recordLogs();
         vm.prank(writer);
@@ -600,7 +593,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// re-dispatched migration is exactly the mistake that matters.
     function testApplyMigrationNoEventOnRevert(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);

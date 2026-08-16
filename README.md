@@ -123,6 +123,16 @@ it. A candidate the source anchor never reaches is a contract whose snapshot
 nothing anywhere anchors, and a repo with several contracts is exactly where a
 snapshot generated from the wrong one comes from.
 
+The source group is also the only one that is not only a test. It is defined on
+the suite declaration, and the broadcast runs it before it selects a suite or
+reads a key. The deploy reads the same recorded bytes, and the only other guard
+in front of the `CREATE2` compares the recorded address against what the
+recorded creation code derives — both out of the same generated file, so it
+catches a stale pin and cannot catch a snapshot of the wrong contract. An anchor
+only a test contract could reach would be an anchor the irreversible action does
+not run, and `CREATE2` at a zero salt puts the wrong bytes at their own
+permanent address on every chain the dispatch reached.
+
 The chain group carries the mirror image of that exemption: it applies to
 **released versions only**. A release IS a deployment that happened, so "it is
 live on every supported network" is either true of it or a defect. A candidate
@@ -333,24 +343,27 @@ Via [soldeer](https://soldeer.xyz):
 forge soldeer install rain-deploy~<version>
 ```
 
-**You also need `forge-std` 1.16.1**, remapped as `forge-std-1.16.1/`. The
-published package ships `src/`, `script/` and the licence and README files — no
-`test/`, no `foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no
-`dependencies/` — so a consumer resolves `forge-std` itself. The requirement is
-transitive rather than incidental: the deployed contract imports nothing outside
-this package, but every abstract a consumer inherits pulls forge-std in —
-`Script` via `RainDeployBroadcast`, `Test` via `RainDeployVerifyBase`, and `Vm`
-via `LibRainDeploy` beneath both:
+**You also need `forge-std` 1.16.1 and `rain-sol-codegen` 0.1.6**, remapped as
+`forge-std-1.16.1/` and `rain-sol-codegen-0.1.6/`. The published package ships
+`src/`, `script/` and the licence and README files — no `test/`, no
+`foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no `dependencies/` — so
+a consumer resolves both itself. The requirement is transitive rather than
+incidental: the deployed contract imports nothing outside this package, but
+every abstract a consumer inherits pulls them in — `Script` via
+`RainDeployBroadcast`, `Test` via `RainDeployVerifyBase`, `Vm` via
+`LibRainDeploy` beneath both, and `LibCodeGen`/`LibFs` via
+`LibRainDeploySnapshot`, which `RainDeployVerifySnapshot` imports:
 
 ```toml
 [dependencies]
 forge-std = "1.16.1"
+rain-sol-codegen = "0.1.6"
 rain-deploy = "<version>"
 ```
 
-The version has to match: the import paths are version-qualified, which is
-deliberate — it is what stops a consumer's incompatible `forge-std` from
-silently satisfying these imports.
+The versions have to match: the import paths are version-qualified, which is
+deliberate — it is what stops a consumer's incompatible copy from silently
+satisfying these imports.
 
 ## Develop
 
