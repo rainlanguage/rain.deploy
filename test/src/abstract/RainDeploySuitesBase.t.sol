@@ -62,9 +62,10 @@ contract RainDeploySuitesBaseTest is Test {
     }
 
     /// Two suites that record the SAME creation code MUST still be selectable
-    /// apart. `0_0_2` and the candidate are the same bytes at the same address,
-    /// so the key is the only thing that distinguishes them — and it has to,
-    /// because they are separately deployable records.
+    /// apart. `address-registry-0-0-1` and `address-registry-candidate` are the
+    /// same bytes at the same address, so the key is the only thing that
+    /// distinguishes them — and it has to, because they are separately
+    /// deployable records.
     function testSuitesSharingCreationCodeSelectApart() external view {
         DeploySuite memory released = sSuites.externalSuiteByName("address-registry-0-0-1");
         DeploySuite memory candidate = sSuites.externalSuiteByName("address-registry-candidate");
@@ -145,7 +146,7 @@ contract RainDeploySuitesBaseTest is Test {
     /// An empty candidate list reads as a repo with nothing left to declare and
     /// is a repo whose source anchor — the only check that catches a snapshot
     /// of the wrong contract — has been handed nothing to run over. It is
-    /// refused rather than tolerated, and refused on all three readers, because
+    /// refused rather than tolerated, and refused on all four readers, because
     /// a reader that answers from an empty declaration is a reader through
     /// which the whole registry can be empty and green.
     function testNoCandidateReverts() external {

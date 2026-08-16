@@ -35,6 +35,16 @@ error SnapshotAlreadyFrozen(string tag, string dir);
 /// @param tag The release tag that was being cut.
 error EmptyRelease(string tag);
 
+/// Thrown when a release tag does not strictly follow every tag already frozen
+/// in the record. The record is append-only, so a tag frozen out of order can
+/// never be removed: `releasedSuites()` declares it forever and the chain group
+/// then demands it be live on every supported network forever. Refused at the
+/// one place a release identity is minted, rather than discovered afterwards by
+/// whoever reads the record and finds a release nobody cut.
+/// @param tag The tag being cut.
+/// @param newestFrozenTag The newest tag already in the record.
+error NonMonotonicRelease(string tag, string newestFrozenTag);
+
 /// @title LibRainDeploySnapshot
 /// @notice Which release is being built, where its record lives, and how it is
 /// frozen. Release machinery, not code generation.
@@ -72,7 +82,7 @@ error EmptyRelease(string tag);
 library LibRainDeploySnapshot {
     /// The rolling snapshot's directory name. A sibling of the frozen tag
     /// directories rather than a file beside them, so `src/generated/` reads as
-    /// `candidate/ 0_1_5/ 0_1_6/` and "which one is current" is answered by
+    /// `candidate/ 0_1_6/ 0_1_7/` and "which one is current" is answered by
     /// looking.
     string constant CANDIDATE = "candidate";
 
@@ -87,8 +97,8 @@ library LibRainDeploySnapshot {
         return tagForVersion(vm.parseTomlString(vm.readFile("foundry.toml"), ".package.version"));
     }
 
-    /// Whether `subject` is three non-empty runs of digits joined by exactly
-    /// two `separator`s.
+    /// Whether `subject` is three numbers joined by exactly two `separator`s,
+    /// each written without a leading zero.
     ///
     /// The ONE definition of the release-version shape. It is asked with `.`
     /// for a version out of `foundry.toml` and with `_` for the directory that
@@ -115,6 +125,16 @@ library LibRainDeploySnapshot {
                 separators++;
                 digitsInComponent = 0;
             } else if (char >= "0" && char <= "9") {
+                // A component is one number, so it has one spelling. `01` and
+                // `1` are the same release and would freeze to two directories,
+                // neither of which `SnapshotAlreadyFrozen` sees as the other,
+                // and which `recordPrecedes` cannot order because they compare
+                // equal as versions. `i` is at least 1 wherever
+                // `digitsInComponent == 1`, because that digit was read at an
+                // earlier index.
+                if (digitsInComponent == 1 && subjectBytes[i - 1] == "0") {
+                    return false;
+                }
                 digitsInComponent++;
             } else {
                 return false;
@@ -159,6 +179,17 @@ library LibRainDeploySnapshot {
         }
         return string(tagBytes);
     }
+
+    /// The output root `LibFs` writes to, and the only one it can write to:
+    /// `LibFs.pathForContract` hardcodes it.
+    ///
+    /// The only spelling of that root in this library. Everything here that
+    /// names the root — the directory a snapshot is written into, and the tree
+    /// the frozen record is walked from — reads it, so a root this library
+    /// walks that is not a root it writes to is not a state it can be in. The
+    /// remaining pair, this and `LibFs`'s own, is what
+    /// `testRecordRootIsTheRootTheWriterWritesTo` pins.
+    string constant LIB_FS_ROOT = "src/generated";
 
     /// The directory holding a snapshot, rolling or frozen, under a record
     /// root.
@@ -219,10 +250,6 @@ library LibRainDeploySnapshot {
     function pathForSnapshot(string memory dir, string memory contractName) internal pure returns (string memory) {
         return LibFs.pathForContract(snapshotName(dir, contractName));
     }
-
-    /// The output root `LibFs` writes to, and the only one it can write to:
-    /// `LibFs.pathForContract` hardcodes it.
-    string constant LIB_FS_ROOT = "src/generated";
 
     /// Every file in the FROZEN record: everything inside a release-tag
     /// directory under `root`.
@@ -514,30 +541,61 @@ library LibRainDeploySnapshot {
         return string.concat(contractForRecordPath(vm, path), "_", tagForRecordPath(vm, path));
     }
 
-    /// Whether record file `a` is emitted before record file `b`: by release
-    /// tag, then by path.
+    /// Whether release tag `a` strictly precedes release tag `b`.
     ///
     /// Tags compare as VERSIONS rather than as text — `0_10_0` follows `0_9_0`
     /// as a release and precedes it as a string, so a text comparison misorders
-    /// every record that outlives a single-digit minor. Both tags are `isTag`,
-    /// so every component is a run of digits `parseUint` reads.
+    /// every record that outlives a single-digit minor. Both MUST be `isTag`,
+    /// so every component is a run of digits `parseUint` reads and both have
+    /// the same number of them.
     ///
-    /// The tie break is the path, byte for byte, so two contracts frozen under
-    /// one tag have an order at all. The walk's own order is the filesystem's,
-    /// and a generated file that changes with it is a diff on every build.
+    /// The ONE definition of what "follows" means for a release, asked by the
+    /// emission order and by the freeze's ordering guard alike. Two spellings
+    /// of it is how a record sorts one way and admits a tag the other way.
+    ///
+    /// Taking the tags rather than record paths is what makes the guard
+    /// reachable: a release being cut has no record file yet, and a comparison
+    /// that could only be asked with two paths could only be asked about
+    /// releases that already happened — the same reason `tagForVersion` is
+    /// split out of `deployTag`.
     /// @param vm The Vm instance for string operations.
-    /// @param a A record file.
-    /// @param b A record file.
-    /// @return Whether `a` precedes `b`.
-    function recordPrecedes(Vm vm, string memory a, string memory b) internal pure returns (bool) {
-        string[] memory left = vm.split(tagForRecordPath(vm, a), "_");
-        string[] memory right = vm.split(tagForRecordPath(vm, b), "_");
+    /// @param a A release tag.
+    /// @param b A release tag.
+    /// @return Whether `a` strictly precedes `b`.
+    function tagPrecedes(Vm vm, string memory a, string memory b) internal pure returns (bool) {
+        string[] memory left = vm.split(a, "_");
+        string[] memory right = vm.split(b, "_");
         for (uint256 i = 0; i < left.length; i++) {
             uint256 leftComponent = vm.parseUint(left[i]);
             uint256 rightComponent = vm.parseUint(right[i]);
             if (leftComponent != rightComponent) {
                 return leftComponent < rightComponent;
             }
+        }
+        return false;
+    }
+
+    /// Whether record file `a` is emitted before record file `b`: by release
+    /// tag (`tagPrecedes`), then by path.
+    ///
+    /// The tie break is the path, byte for byte, so two contracts frozen under
+    /// one tag have an order at all. The walk's own order is the filesystem's,
+    /// and a generated file that changes with it is a diff on every build. It
+    /// applies only when neither tag precedes the other, i.e. the two files are
+    /// the same release — a tag that follows the other is ordered by that and
+    /// never by the text of its path.
+    /// @param vm The Vm instance for string operations.
+    /// @param a A record file.
+    /// @param b A record file.
+    /// @return Whether `a` precedes `b`.
+    function recordPrecedes(Vm vm, string memory a, string memory b) internal pure returns (bool) {
+        string memory leftTag = tagForRecordPath(vm, a);
+        string memory rightTag = tagForRecordPath(vm, b);
+        if (tagPrecedes(vm, leftTag, rightTag)) {
+            return true;
+        }
+        if (tagPrecedes(vm, rightTag, leftTag)) {
+            return false;
         }
 
         bytes memory aBytes = bytes(a);
@@ -808,6 +866,74 @@ library LibRainDeploySnapshot {
         return path;
     }
 
+    /// The newest release in a record: the greatest tag any of its files sits
+    /// under, compared as a version.
+    ///
+    /// The empty string when the record holds no release at all. That is a real
+    /// state — a repo before its first release, including this one — rather
+    /// than a failure, and it cannot be confused with a release because it is
+    /// not a tag `isTag` admits or a freeze could ever write.
+    ///
+    /// A scan rather than the last of `sortedRecordPaths`: the newest release
+    /// is what this is asked for, and the path tie break that orders two files
+    /// frozen under one tag has nothing to say about which tag is newest.
+    /// @param vm The Vm instance for file operations.
+    /// @param recordRoot The record root — `LIB_FS_ROOT` for a repo's real
+    /// record.
+    /// @return newest The newest frozen tag, or `""` if nothing is frozen.
+    function newestFrozenTag(Vm vm, string memory recordRoot) internal view returns (string memory newest) {
+        string[] memory paths = frozenSnapshotPaths(vm, recordRoot);
+        for (uint256 i = 0; i < paths.length; i++) {
+            string memory tag = tagForRecordPath(vm, paths[i]);
+            if (bytes(newest).length == 0 || tagPrecedes(vm, newest, tag)) {
+                newest = tag;
+            }
+        }
+    }
+
+    /// Refuse a release tag that does not strictly follow every tag already in
+    /// the record.
+    ///
+    /// The record is APPEND-ONLY, which is what makes an out-of-order tag
+    /// permanent rather than merely wrong: `releasedSuites()` is generated from
+    /// the record and declares it forever, `RainDeployVerifyChain` then demands
+    /// its addresses stay live on every supported network forever, and the
+    /// append-only gate is exactly what stops the directory being deleted. The
+    /// only exit is suspending the invariant the whole design rests on.
+    ///
+    /// Nothing upstream is a substitute. The tag is a human-typed `sol-v*` that
+    /// `rainix-tag-release` seds straight into `foundry.toml` after checking
+    /// only that it is on `main` and shaped `X.Y.Z`, so a fat-fingered `0.1.9`
+    /// cut after `0.2.0` reaches this call as the release being made.
+    /// `SnapshotAlreadyFrozen` is existence-based and has no quarrel with it —
+    /// its directory is absent precisely because that release never happened —
+    /// and the frozen bytes are the current candidate, already live on chain,
+    /// so every downstream check passes and the record simply carries a release
+    /// sorted below the newest one.
+    ///
+    /// Strictly greater, so the newest tag itself is refused too: equality is
+    /// not "follows". `SnapshotAlreadyFrozen` also refuses that one, and both
+    /// must hold — neither guard is load bearing alone.
+    ///
+    /// The record root and the tag are parameters, so the refusal is reachable
+    /// without a record on disk to re-cut or a `foundry.toml` to rewrite, for
+    /// the same reason `frozenSnapshotPaths` takes a root and `tagForVersion`
+    /// is split out of `deployTag`. A guard nobody has seen fire is a guard
+    /// nobody knows works, which is the whole complaint against an unenforced
+    /// rule.
+    /// @param vm The Vm instance for file operations.
+    /// @param recordRoot The record root — `LIB_FS_ROOT` for a repo's real
+    /// record.
+    /// @param tag The release tag being cut. MUST be `isTag`.
+    function checkReleaseFollowsRecord(Vm vm, string memory recordRoot, string memory tag) internal view {
+        string memory newest = newestFrozenTag(vm, recordRoot);
+        // A repo that has released nothing has nothing for a first release to
+        // follow, so there is no tag it may not be.
+        if (bytes(newest).length > 0 && !tagPrecedes(vm, newest, tag)) {
+            revert NonMonotonicRelease(tag, newest);
+        }
+    }
+
     /// Regenerate the rolling snapshot and freeze it as this release's record,
     /// in that order, in one call.
     ///
@@ -827,6 +953,9 @@ library LibRainDeploySnapshot {
     /// - the release must name at least one contract, because a release with no
     ///   record is not a release and freezing one wedges the tag exactly as a
     ///   partial write does
+    /// - the tag must strictly follow every release already frozen
+    ///   (`checkReleaseFollowsRecord`), because the record it is appended to
+    ///   cannot be reordered or removed afterwards
     /// - every named contract must have a rolling snapshot, once regenerated
     ///
     /// The frozen copy is the bytes just regenerated, read back from disk, so
@@ -857,6 +986,13 @@ library LibRainDeploySnapshot {
         if (contractNames.length == 0) {
             revert EmptyRelease(tag);
         }
+        // The record this release is appended to is the one it is written into,
+        // so the guard reads `root` — the same tree the frozen copy lands
+        // under, and the same one the rolling snapshot is read from. A guard
+        // pointed at any other tree is a guard pointed away from the record it
+        // is protecting: it would pass on a record it is not appending to while
+        // the append it is guarding lands somewhere it never looked.
+        checkReleaseFollowsRecord(vm, root, tag);
 
         regenerate();
 

@@ -8,6 +8,7 @@ import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     EmptyRelease,
     LibRainDeploySnapshot,
+    NonMonotonicRelease,
     NothingToFreeze,
     SnapshotAlreadyFrozen,
     UnreleasableVersion
@@ -48,6 +49,26 @@ contract LibRainDeploySnapshotTest is Test {
     /// @param contractNames The contracts to freeze.
     function externalFreezeAt(string memory root, string[] memory contractNames) external {
         LibRainDeploySnapshot.freeze(vm, root, noRegeneration, contractNames);
+    }
+
+    /// External wrapper so `vm.expectRevert` lands at the right call depth. The
+    /// accepting cases go through it too, so both answers are the same call.
+    /// @param recordRoot The record root to check against.
+    /// @param tag The release tag being cut.
+    function externalCheckReleaseFollowsRecord(string memory recordRoot, string memory tag) external view {
+        LibRainDeploySnapshot.checkReleaseFollowsRecord(vm, recordRoot, tag);
+    }
+
+    /// A release tag from its components, as `tagForVersion` spells one.
+    /// @param major The major component.
+    /// @param minor The minor component.
+    /// @param patch The patch component.
+    /// @return The tag, e.g. `0_1_7`.
+    function tagOf(uint8 major, uint8 minor, uint8 patch) internal pure returns (string memory) {
+        return
+            string.concat(
+                vm.toString(uint256(major)), "_", vm.toString(uint256(minor)), "_", vm.toString(uint256(patch))
+            );
     }
 
     /// Where the record fixture is built. NOT `src/generated`: the inherited
@@ -108,6 +129,25 @@ contract LibRainDeploySnapshotTest is Test {
         assertFalse(LibRainDeploySnapshot.isTag("0_1_"));
         assertFalse(LibRainDeploySnapshot.isTag(""));
         assertFalse(LibRainDeploySnapshot.isTag("collision-guard"));
+    }
+
+    /// A component has ONE spelling. A padded component is the same release as
+    /// its unpadded form: it freezes to a second directory the immutability
+    /// check does not recognise as the first, and the two compare equal as
+    /// versions so nothing can order them either.
+    function testIsStrictTripleRefusesLeadingZeros() external pure {
+        assertFalse(LibRainDeploySnapshot.isStrictTriple("0.01.5", "."));
+        assertFalse(LibRainDeploySnapshot.isStrictTriple("01.1.5", "."));
+        assertFalse(LibRainDeploySnapshot.isStrictTriple("0.1.05", "."));
+        assertFalse(LibRainDeploySnapshot.isStrictTriple("00.0.0", "."));
+        assertFalse(LibRainDeploySnapshot.isTag("0_01_5"));
+
+        // The boundary: a single zero IS the number zero, and `0.0.0` is a real
+        // version.
+        assertTrue(LibRainDeploySnapshot.isStrictTriple("0.0.0", "."));
+        assertTrue(LibRainDeploySnapshot.isStrictTriple("0.10.0", "."));
+        assertTrue(LibRainDeploySnapshot.isStrictTriple("10.0.100", "."));
+        assertTrue(LibRainDeploySnapshot.isTag("0_0_0"));
     }
 
     /// EVERY version a freeze accepts MUST produce a directory the record
@@ -196,6 +236,16 @@ contract LibRainDeploySnapshotTest is Test {
         }
     }
 
+    /// The refusal MUST be reachable through the release path, naming the
+    /// version, rather than only through the predicate.
+    function testTagForVersionRefusesLeadingZeros() external {
+        string[3] memory bad = ["0.01.5", "01.1.5", "0.1.05"];
+        for (uint256 i = 0; i < bad.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(UnreleasableVersion.selector, bad[i]));
+            this.externalTagForVersion(bad[i]);
+        }
+    }
+
     /// The tag read from `foundry.toml` MUST go through the same guard, so a
     /// repo cannot reach a release path with a version the guard would refuse.
     function testDeployTagUsesTheGuardedConversion() external view {
@@ -243,6 +293,28 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(
             LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.LIB_FS_ROOT, dir, contractName),
             LibRainDeploySnapshot.pathForSnapshot(dir, contractName)
+        );
+    }
+
+    /// The root the record is WALKED from MUST be the root the writer WRITES
+    /// to. They are two constants — `LIB_FS_ROOT` here, and the one
+    /// `LibFs.pathForContract` hardcodes in a package this repo does not own —
+    /// and a walk of a root nothing writes to returns nothing, which every
+    /// record-anchored assertion then passes on. Silence is the failure mode,
+    /// so it is asserted rather than observed.
+    ///
+    /// Compared through `pathForSnapshot`, which is what a snapshot is written
+    /// through, so the right hand side is the writer's own root rather than a
+    /// third restatement of it. The contract name is arbitrary — the path is
+    /// built by concatenation and names no artifact.
+    function testRecordRootIsTheRootTheWriterWritesTo() external pure {
+        assertEq(
+            LibRainDeploySnapshot.pathForSnapshot("0_1_7", "Foo"),
+            string.concat(LibRainDeploySnapshot.LIB_FS_ROOT, "/0_1_7/Foo.sol")
+        );
+        assertEq(
+            LibRainDeploySnapshot.dirForSnapshot(LibRainDeploySnapshot.CANDIDATE),
+            string.concat(LibRainDeploySnapshot.LIB_FS_ROOT, "/", LibRainDeploySnapshot.CANDIDATE)
         );
     }
 
@@ -635,6 +707,61 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(frozenDependencies(sourceNone), none, "an empty list did not round trip as empty");
         assertEq(frozenDependencies(sourceOne), one, "a one element list did not round trip");
         assertEq(frozenDependencies(sourceThree), three, "a three element list did not round trip");
+    }
+
+    /// Tags MUST compare as VERSIONS and not as text. `0_10_0` follows `0_9_0`
+    /// as a release and precedes it as a string, so a text comparison both
+    /// misorders the record and, since the freeze's ordering guard asks this
+    /// same question, would admit a release below the newest one.
+    ///
+    /// Strictly: a tag does not precede itself. That is the boundary the guard
+    /// refuses on, so "follows" meaning "greater or equal" here would be a tag
+    /// re-cut being called a new release.
+    function testTagPrecedesComparesVersionsNotText() external pure {
+        assertTrue(LibRainDeploySnapshot.tagPrecedes(vm, "0_9_0", "0_10_0"));
+        assertFalse(LibRainDeploySnapshot.tagPrecedes(vm, "0_10_0", "0_9_0"));
+
+        assertFalse(LibRainDeploySnapshot.tagPrecedes(vm, "0_1_7", "0_1_7"));
+
+        // Every component, and the most significant one that differs decides.
+        assertTrue(LibRainDeploySnapshot.tagPrecedes(vm, "0_1_6", "0_1_7"));
+        assertFalse(LibRainDeploySnapshot.tagPrecedes(vm, "0_1_7", "0_1_6"));
+        assertTrue(LibRainDeploySnapshot.tagPrecedes(vm, "0_1_9", "0_2_0"));
+        assertFalse(LibRainDeploySnapshot.tagPrecedes(vm, "0_2_0", "0_1_9"));
+        assertTrue(LibRainDeploySnapshot.tagPrecedes(vm, "0_9_9", "1_0_0"));
+        assertFalse(LibRainDeploySnapshot.tagPrecedes(vm, "1_0_0", "0_9_9"));
+    }
+
+    /// Over EVERY pair of tags, the order MUST be the order of the components
+    /// read as numbers, most significant first — a single wrong comparison is a
+    /// record that sorts wrongly and a guard that admits the tag it sorts
+    /// wrongly.
+    /// @param aMajor The first tag's major component.
+    /// @param aMinor The first tag's minor component.
+    /// @param aPatch The first tag's patch component.
+    /// @param bMajor The second tag's major component.
+    /// @param bMinor The second tag's minor component.
+    /// @param bPatch The second tag's patch component.
+    function testTagPrecedesMatchesComponentOrder(
+        uint8 aMajor,
+        uint8 aMinor,
+        uint8 aPatch,
+        uint8 bMajor,
+        uint8 bMinor,
+        uint8 bPatch
+    ) external pure {
+        string memory a = tagOf(aMajor, aMinor, aPatch);
+        string memory b = tagOf(bMajor, bMinor, bPatch);
+
+        bool precedes = aMajor != bMajor
+            ? aMajor < bMajor
+            : (aMinor != bMinor ? aMinor < bMinor : (aPatch != bPatch ? aPatch < bPatch : false));
+
+        assertEq(LibRainDeploySnapshot.tagPrecedes(vm, a, b), precedes);
+        // Strict, so exactly one of the two orderings holds unless they are the
+        // same release, when neither does.
+        assertFalse(LibRainDeploySnapshot.tagPrecedes(vm, a, a));
+        assertEq(LibRainDeploySnapshot.tagPrecedes(vm, b, a), !precedes && keccak256(bytes(a)) != keccak256(bytes(b)));
     }
 
     /// Releases MUST be emitted in the order they were cut, comparing tags as
@@ -1093,5 +1220,212 @@ contract LibRainDeploySnapshotTest is Test {
         vm.removeDir(RECUT_EMPTY_FIXTURE_ROOT, true);
 
         assertEq(record.length, 0);
+    }
+
+    /// Where the freeze's own ordering guard is driven. Its own tree, for the
+    /// same reason the other freeze fixtures have theirs.
+    string constant FREEZE_GUARD_FIXTURE_ROOT = "test/generated-freeze-guard";
+
+    /// The ordering guard inside `freeze` MUST read the record the release is
+    /// being APPENDED TO — the root `freeze` was handed — and not this repo's
+    /// real one.
+    ///
+    /// The two are the same root only when the real record is what is being
+    /// frozen into. Pointed anywhere else, the guard passes on a record nothing
+    /// is appended to while the append it exists to order lands in a tree it
+    /// never looked at, and the out-of-order tag it is there to refuse is
+    /// written anyway. This repo has released nothing, so a guard reading
+    /// `LIB_FS_ROOT` accepts every tag and cannot see this fixture's release at
+    /// all — which is exactly what makes the refusal here the observation that
+    /// the handed root is the one read.
+    function testFreezeChecksTheRecordItIsAppendingTo() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        // A release NEWER than the tag being cut, in the fixture record only.
+        writeFixture(string.concat(FREEZE_GUARD_FIXTURE_ROOT, "/9_9_9/", FIXTURE_CONTRACT, ".sol"));
+        // Everything else a cut needs is ready, so the refusal can only be
+        // about the order.
+        writeRollingFixture(FREEZE_GUARD_FIXTURE_ROOT, FIXTURE_CONTRACT);
+
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = FIXTURE_CONTRACT;
+
+        vm.expectRevert(abi.encodeWithSelector(NonMonotonicRelease.selector, tag, "9_9_9"));
+        this.externalFreezeAt(FREEZE_GUARD_FIXTURE_ROOT, contractNames);
+
+        // Read while the fixture is still there, asserted once it is gone: the
+        // refusal wrote nothing, so the record still holds only what it had.
+        string[] memory record = LibRainDeploySnapshot.frozenSnapshotPaths(vm, FREEZE_GUARD_FIXTURE_ROOT);
+        bool cutExists = vm.exists(LibRainDeploySnapshot.dirForSnapshot(FREEZE_GUARD_FIXTURE_ROOT, tag));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(FREEZE_GUARD_FIXTURE_ROOT, true);
+
+        assertFalse(cutExists);
+        assertEq(record.length, 1);
+    }
+
+    /// Every record the ordering guard is driven against gets a root of its
+    /// own, for the reason `RELEASED_FIXTURE_ROOT` is not `FIXTURE_ROOT`: forge
+    /// runs the tests in a contract concurrently, and a guard test sees the
+    /// wrong newest release the moment another test's fixture is in the tree it
+    /// is reading.
+    string constant NEWEST_FIXTURE_ROOT = "test/generated-newest";
+
+    /// The record with nothing released in it. See `NEWEST_FIXTURE_ROOT`.
+    string constant UNRELEASED_FIXTURE_ROOT = "test/generated-unreleased";
+
+    /// The record a below-the-newest tag is refused against. See
+    /// `NEWEST_FIXTURE_ROOT`.
+    string constant BELOW_FIXTURE_ROOT = "test/generated-below";
+
+    /// The record the newest tag itself is refused against. See
+    /// `NEWEST_FIXTURE_ROOT`.
+    string constant EQUAL_FIXTURE_ROOT = "test/generated-equal";
+
+    /// The record strictly greater tags are accepted against. See
+    /// `NEWEST_FIXTURE_ROOT`.
+    string constant GREATER_FIXTURE_ROOT = "test/generated-greater";
+
+    /// The record every fuzzed tag is put to. COMMITTED, and read only — see
+    /// the fixture itself for why a fuzz cannot build the record it is put
+    /// against.
+    string constant FROZEN_FIXTURE_ROOT = "test/fixture-record";
+
+    /// The one release in `FROZEN_FIXTURE_ROOT`. Every component is the same,
+    /// so a fuzzed tag that differs in any one of them lands on one side of it
+    /// or the other by that component alone.
+    string constant FROZEN_FIXTURE_NEWEST = "1_1_1";
+
+    /// The newest release is the greatest TAG, not a position in the walk. The
+    /// walk's order is the filesystem's, so an answer read off either end of it
+    /// is an answer about where a directory sorted rather than which release is
+    /// newest — and the guard would then compare the tag being cut against the
+    /// wrong release.
+    ///
+    /// `10_0_0` is the newest of these three and is neither the first nor the
+    /// last of them by text, so both ends are wrong answers here.
+    function testNewestFrozenTagIsTheGreatestReleaseNotAPositionInTheWalk() external {
+        writeFixture(string.concat(NEWEST_FIXTURE_ROOT, "/0_1_0/", FIXTURE_CONTRACT, ".sol"));
+        writeFixture(string.concat(NEWEST_FIXTURE_ROOT, "/10_0_0/", FIXTURE_CONTRACT, ".sol"));
+        writeFixture(string.concat(NEWEST_FIXTURE_ROOT, "/9_0_0/", FIXTURE_CONTRACT, ".sol"));
+        // Not releases: the rolling snapshot, and a scratch directory a test or
+        // a human left behind. Neither is a release the next one has to follow.
+        writeFixture(
+            string.concat(NEWEST_FIXTURE_ROOT, "/", LibRainDeploySnapshot.CANDIDATE, "/", FIXTURE_CONTRACT, ".sol")
+        );
+        writeFixture(string.concat(NEWEST_FIXTURE_ROOT, "/collision-guard/", FIXTURE_CONTRACT, ".sol"));
+
+        string memory newest = LibRainDeploySnapshot.newestFrozenTag(vm, NEWEST_FIXTURE_ROOT);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(NEWEST_FIXTURE_ROOT, true);
+
+        assertEq(newest, "10_0_0");
+    }
+
+    /// A repo that has released nothing has nothing for a first release to
+    /// follow, so EVERY tag MUST be accepted. That is the state of this repo
+    /// today, so a guard that refused here would refuse the first release of
+    /// every deploy repo that inherits it.
+    ///
+    /// Both spellings of "nothing released": a record root that is not there at
+    /// all, and one that is there holding only a rolling snapshot.
+    function testNoFrozenReleaseAcceptsAnyFirstRelease() external {
+        assertEq(LibRainDeploySnapshot.newestFrozenTag(vm, MISSING_FIXTURE_ROOT), "");
+        this.externalCheckReleaseFollowsRecord(MISSING_FIXTURE_ROOT, "0_0_1");
+        this.externalCheckReleaseFollowsRecord(MISSING_FIXTURE_ROOT, "9_9_9");
+
+        writeFixture(
+            string.concat(UNRELEASED_FIXTURE_ROOT, "/", LibRainDeploySnapshot.CANDIDATE, "/", FIXTURE_CONTRACT, ".sol")
+        );
+
+        string memory newest = LibRainDeploySnapshot.newestFrozenTag(vm, UNRELEASED_FIXTURE_ROOT);
+        this.externalCheckReleaseFollowsRecord(UNRELEASED_FIXTURE_ROOT, "0_0_1");
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(UNRELEASED_FIXTURE_ROOT, true);
+
+        assertEq(newest, "");
+    }
+
+    /// A tag BELOW the newest release MUST be refused, and against the NEWEST
+    /// release rather than any release. The record is append-only, so a tag
+    /// frozen out of order is permanent: `releasedSuites()` declares it forever
+    /// and the chain group then demands it stay live forever.
+    ///
+    /// This is the production shape. `0_1_9` is a plausible fat finger for the
+    /// release after `0_2_0`, it is greater than a release that IS in the
+    /// record, and every other guard admits it — its directory does not exist,
+    /// its shape is a valid version, and the bytes it would freeze are the
+    /// candidate's, already live on chain.
+    function testCheckReleaseFollowsRecordRefusesATagBelowTheNewestRelease() external {
+        writeFixture(string.concat(BELOW_FIXTURE_ROOT, "/0_1_0/", FIXTURE_CONTRACT, ".sol"));
+        writeFixture(string.concat(BELOW_FIXTURE_ROOT, "/0_2_0/", FIXTURE_CONTRACT, ".sol"));
+
+        vm.expectRevert(abi.encodeWithSelector(NonMonotonicRelease.selector, "0_1_9", "0_2_0"));
+        this.externalCheckReleaseFollowsRecord(BELOW_FIXTURE_ROOT, "0_1_9");
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(BELOW_FIXTURE_ROOT, true);
+    }
+
+    /// The newest tag ITSELF MUST be refused: equality is not "follows". The
+    /// fail-safe boundary, and the one case `SnapshotAlreadyFrozen` also
+    /// refuses — both must hold, so neither is load bearing alone and this one
+    /// holds against a record root whose directories are not where a freeze
+    /// would look for them.
+    function testCheckReleaseFollowsRecordRefusesTheNewestTagItself() external {
+        writeFixture(string.concat(EQUAL_FIXTURE_ROOT, "/0_2_0/", FIXTURE_CONTRACT, ".sol"));
+
+        vm.expectRevert(abi.encodeWithSelector(NonMonotonicRelease.selector, "0_2_0", "0_2_0"));
+        this.externalCheckReleaseFollowsRecord(EQUAL_FIXTURE_ROOT, "0_2_0");
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(EQUAL_FIXTURE_ROOT, true);
+    }
+
+    /// A tag that strictly follows the newest release MUST be accepted,
+    /// whichever component moved — a guard that refused an ordinary release
+    /// would stop every release this repo cuts.
+    ///
+    /// The last pair is the one a text comparison gets wrong: `0_10_0` follows
+    /// `0_9_0` as a release and precedes it as a string.
+    function testCheckReleaseFollowsRecordAcceptsAnyStrictlyGreaterTag() external {
+        string[3] memory records = ["0_1_6", "0_9_9", "0_9_0"];
+        string[3] memory tags = ["0_1_7", "1_0_0", "0_10_0"];
+
+        for (uint256 i = 0; i < records.length; i++) {
+            writeFixture(string.concat(GREATER_FIXTURE_ROOT, "/", records[i], "/", FIXTURE_CONTRACT, ".sol"));
+
+            this.externalCheckReleaseFollowsRecord(GREATER_FIXTURE_ROOT, tags[i]);
+
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(GREATER_FIXTURE_ROOT, true);
+        }
+    }
+
+    /// Over EVERY tag, against a record on disk, the guard MUST accept exactly
+    /// the tags that strictly follow the newest release and refuse every other
+    /// one, naming both tags when it does.
+    ///
+    /// The record is asserted to be the fixture on every case rather than
+    /// assumed: the whole answer is relative to the newest release, so a
+    /// fixture that has quietly grown a release is a test that has quietly
+    /// changed what it asks.
+    /// @param major The candidate tag's major component.
+    /// @param minor The candidate tag's minor component.
+    /// @param patch The candidate tag's patch component.
+    function testCheckReleaseFollowsRecordAcceptsExactlyTheStrictlyGreater(uint8 major, uint8 minor, uint8 patch)
+        external
+    {
+        assertEq(LibRainDeploySnapshot.newestFrozenTag(vm, FROZEN_FIXTURE_ROOT), FROZEN_FIXTURE_NEWEST);
+
+        string memory tag = tagOf(major, minor, patch);
+        bool follows = major != 1 ? major > 1 : (minor != 1 ? minor > 1 : patch > 1);
+
+        if (!follows) {
+            vm.expectRevert(abi.encodeWithSelector(NonMonotonicRelease.selector, tag, FROZEN_FIXTURE_NEWEST));
+        }
+        this.externalCheckReleaseFollowsRecord(FROZEN_FIXTURE_ROOT, tag);
     }
 }

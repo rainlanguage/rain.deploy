@@ -24,6 +24,10 @@ environment management.
 # Enter the nix dev shell (provides forge and all tooling)
 nix develop
 
+# Install the dependencies declared in foundry.toml (dependencies/ is
+# gitignored, so this is required on a fresh checkout before anything builds)
+nix develop -c forge soldeer install
+
 # Build
 nix develop -c forge build
 
@@ -316,7 +320,7 @@ purpose: the suites and the broadcast are both inherited. Run only via the
 
 **`src/abstract/RegistryDeploySuites.sol`** — this repo's own declaration, one
 named candidate per deployed registry, inherited by `script/Deploy.sol`,
-`script/Build.sol` and both pins test contracts.
+`script/Build.sol`, the pins test contracts and `GeneratedSnapshotShapeTest`.
 
 **`src/abstract/RainDeployVerify*.sol`** — the deploy-pin verification every
 deploy repo inherits instead of hand-writing.
@@ -411,8 +415,10 @@ expected addresses, expected code hashes, and dependency lists.
   network before anything migrates onto it.
 - **Deploy-repo lifecycle**: a manual `sol-v*` tag is the sole release trigger
   (`rainix-tag-release`), because this repo carries deployed concretes whose
-  pins consumers rely on. `[package].version` is the LAST released version and
-  moves only in lockstep with its snapshots.
+  pins consumers rely on. `[package].version` is the version of the LAST Soldeer
+  publish, and it moves only in lockstep with the frozen `src/generated/<tag>/`
+  record that release writes. A version published before this lifecycle has no
+  such record.
 - **Deploy, then verify, then tag** — in that order, and they are three separate
   things. `script/Deploy.sol` broadcasts the suite `DEPLOYMENT_SUITE` names to
   every network in `supportedNetworks()`, dispatched by hand through

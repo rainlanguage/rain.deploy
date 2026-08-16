@@ -1,0 +1,13 @@
+SPDX-License-Identifier: LicenseRef-DCL-1.0
+SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+
+A record fixture holding exactly one release, `1_1_1`, for the freeze's
+ordering guard to be fuzzed against. Committed rather than written by the test
+that reads it: forge runs the cases of a fuzz test CONCURRENTLY, so a fixture a
+fuzz builds and tears down races itself — one case removes the record another
+case is reading. A record that is simply there is the only kind a fuzz can be
+put against.
+
+Deliberately not `.sol`. A release directory holds every file in it and there is
+no extension to filter on, so the record walk finds this exactly as it finds a
+real snapshot, while the compiler never reads a fixture as source.
