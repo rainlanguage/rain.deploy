@@ -83,20 +83,15 @@ contract MigrationRegistryV2ApplyMigrationTest is Test {
     /// run, so a future one is not a late record of anything, and a consumer
     /// measuring an interval since the migration would be subtracting a moment
     /// later than the one it is measuring from.
-    function testApplyMigrationFutureTimestampReverts(
-        address writer,
-        bytes32 migration,
-        uint32 now_,
-        uint256 appliedAt
-    ) external {
+    function testApplyMigrationFutureTimestampReverts(address writer, bytes32 migration, uint32 now_, uint256 appliedAt)
+        external
+    {
         vm.assume(writer != address(0));
         assumeMigration(migration);
         vm.warp(now_);
         appliedAt = bound(appliedAt, uint256(now_) + 1, type(uint256).max);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.FutureTimestamp.selector, appliedAt, uint256(now_))
-        );
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.FutureTimestamp.selector, appliedAt, uint256(now_)));
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, appliedAt);
 
@@ -113,9 +108,7 @@ contract MigrationRegistryV2ApplyMigrationTest is Test {
         vm.warp(now_);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IMigrationRegistryV2.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_)
-            )
+            abi.encodeWithSelector(IMigrationRegistryV2.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
         );
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, uint256(now_) + 1);
@@ -218,11 +211,7 @@ contract MigrationRegistryV2ApplyMigrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.TimestampBeforeHead.selector,
-                writer,
-                migrationA,
-                appliedAt,
-                uint256(headAppliedAt)
+                IMigrationRegistryV2.TimestampBeforeHead.selector, writer, migrationA, appliedAt, uint256(headAppliedAt)
             )
         );
         vm.prank(writer);
@@ -260,6 +249,11 @@ contract MigrationRegistryV2ApplyMigrationTest is Test {
 
     /// One second before the head's record is refused, and the head's own moment
     /// is not: the floor is the head's record, inclusive.
+    ///
+    /// The floor is at least 2, so that one second below it is a moment a record
+    /// could otherwise carry. A floor of 1 puts that second at zero, which is
+    /// refused as a moment before any floor is consulted — a true refusal of a
+    /// different rule, and one that says nothing about where this boundary sits.
     function testApplyMigrationFloorBoundary(address writer, bytes32 migrationA, bytes32 migrationB, uint32 now_)
         external
     {
@@ -267,7 +261,7 @@ contract MigrationRegistryV2ApplyMigrationTest is Test {
         assumeMigration(migrationA);
         assumeMigration(migrationB);
         vm.assume(migrationA != migrationB);
-        vm.assume(now_ > 1);
+        vm.assume(now_ > 2);
         vm.warp(now_);
 
         vm.prank(writer);
@@ -334,12 +328,9 @@ contract MigrationRegistryV2ApplyMigrationTest is Test {
     /// The floor belongs to one namespace. Another writer's records say nothing
     /// about what this one may record, which is the same confinement the records
     /// and the heads already have.
-    function testApplyMigrationFloorIsPerWriter(
-        address writer,
-        address other,
-        bytes32 migrationA,
-        bytes32 migrationB
-    ) external {
+    function testApplyMigrationFloorIsPerWriter(address writer, address other, bytes32 migrationA, bytes32 migrationB)
+        external
+    {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
         vm.assume(writer != other);
@@ -464,18 +455,14 @@ contract MigrationRegistryV2ApplyMigrationTest is Test {
 
         // The wrong head, and backdated: told where the namespace is.
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, skipped, migrationA
-            )
+            abi.encodeWithSelector(IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, skipped, migrationA)
         );
         vm.prank(writer);
         sRegistry.applyMigration(skipped, migrationB, 1000);
 
         // The wrong head, and in the future: told where the namespace is.
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, skipped, migrationA
-            )
+            abi.encodeWithSelector(IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, skipped, migrationA)
         );
         vm.prank(writer);
         sRegistry.applyMigration(skipped, migrationB, 9001);
@@ -977,11 +964,7 @@ contract MigrationRegistryV2ApplyMigrationTest is Test {
         vm.recordLogs();
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.TimestampBeforeHead.selector,
-                writer,
-                migration,
-                uint256(4999),
-                uint256(5000)
+                IMigrationRegistryV2.TimestampBeforeHead.selector, writer, migration, uint256(4999), uint256(5000)
             )
         );
         vm.prank(writer);

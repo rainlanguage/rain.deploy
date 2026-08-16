@@ -260,9 +260,7 @@ contract LibMigrationRegistryV2Test is Test {
         vm.warp(now_);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IMigrationRegistryV2.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_)
-            )
+            abi.encodeWithSelector(IMigrationRegistryV2.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
         );
         this.externalApplyMigration(MIGRATION_HEAD_GENESIS, migration, uint256(now_) + 1);
     }
@@ -294,11 +292,9 @@ contract LibMigrationRegistryV2Test is Test {
     /// a consumer whose migrations ran before this registry reached the chain
     /// records what actually happened rather than the day it got round to
     /// writing it down.
-    function testApplyMigrationBackfillsAHistoricalSequence(
-        bytes32 migrationA,
-        bytes32 migrationB,
-        bytes32 migrationC
-    ) external {
+    function testApplyMigrationBackfillsAHistoricalSequence(bytes32 migrationA, bytes32 migrationB, bytes32 migrationC)
+        external
+    {
         assumeMigration(migrationA);
         assumeMigration(migrationB);
         assumeMigration(migrationC);
@@ -441,12 +437,9 @@ contract LibMigrationRegistryV2Test is Test {
     }
 
     /// And never applied into it either.
-    function testApplyMigrationWrongCode(
-        bytes32 expectedHead,
-        bytes32 migration,
-        uint256 appliedAt,
-        bytes memory code
-    ) external {
+    function testApplyMigrationWrongCode(bytes32 expectedHead, bytes32 migration, uint256 appliedAt, bytes memory code)
+        external
+    {
         assumeOrdinaryCode(code);
         vm.assume(keccak256(code) != LibMigrationRegistryV2Deploy.MIGRATION_REGISTRY_V2_DEPLOYED_CODEHASH);
         vm.etch(LibMigrationRegistryV2Deploy.MIGRATION_REGISTRY_V2_DEPLOYED_ADDRESS, code);
@@ -479,9 +472,7 @@ contract LibMigrationRegistryV2Test is Test {
         assertEq(designator.length, DELEGATION_DESIGNATOR_LENGTH);
 
         vm.etch(LibMigrationRegistryV2Deploy.MIGRATION_REGISTRY_V2_DEPLOYED_ADDRESS, designator);
-        assertEq(
-            LibMigrationRegistryV2Deploy.MIGRATION_REGISTRY_V2_DEPLOYED_ADDRESS.codehash, keccak256(designator)
-        );
+        assertEq(LibMigrationRegistryV2Deploy.MIGRATION_REGISTRY_V2_DEPLOYED_ADDRESS.codehash, keccak256(designator));
 
         vm.expectRevert(
             abi.encodeWithSelector(

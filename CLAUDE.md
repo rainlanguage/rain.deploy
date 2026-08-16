@@ -196,12 +196,74 @@ already emitting, which is what makes the record atomic with the migration.
 **`src/lib/LibMigrationRegistryDeploy.sol`** — its pins, generated exactly as
 `LibAddressRegistryDeploy` is.
 
+**`src/interface/IMigrationRegistryV2.sol`** — the same three operations, with
+one difference: `applyMigration` takes a third argument, `uint256 appliedAt`,
+instead of stamping the block. The fact recorded is that a migration RAN, and
+the moment it ran is not in general the moment anybody gets to write it down — a
+migration that ran before the registry reached the chain has a real moment
+already in the past. Stamping the block offers such a writer two options and no
+third: record a time that is false, or record nothing, and recording nothing
+strands the namespace because `applyMigration` refuses anything not applied onto
+the current head.
+
+What a reader gives up is NOT authenticity. The namespace is `msg.sender` with
+no authority, so every entry was always exactly as trustworthy as its writer.
+What it gives up is only that `appliedAt` is the block the record landed in.
+
+Everything else is kept by a window on the supplied value, checked in this
+order: `ZeroMigration` → `GenesisMigration` → `ZeroTimestamp` →
+`MigrationAlreadyApplied` → `UnexpectedMigrationHead` → `TimestampBeforeHead` →
+`FutureTimestamp`. The pure input refusals come first, then the ones about the
+namespace the call arrives at, then the one about the block it lands in — which
+is the order in which a caller can do something about them. `FutureTimestamp` is
+last because it is the only one time itself resolves.
+
+`ZeroTimestamp` keeps its name and changes character: it guards ordinary caller
+input rather than a zero-timestamp block. Zero is still the one moment a record
+cannot carry, because `applied` reads it as "never applied" while the head has
+moved and the migration can never be applied again.
+
+`TimestampBeforeHead` refuses only `<`, so equal is allowed: two migrations in
+one transaction share a block, and two backfilled to the same day share a
+moment. The head chain carries the order and the timestamps are not forced to.
+The floor is read unconditionally as `sApplied[msg.sender][actualHead]` —
+genesis can never be applied, so an empty namespace's record is always zero and
+its floor is zero with no branch.
+
+The order of `TimestampBeforeHead` against `FutureTimestamp` is UNOBSERVABLE:
+`headAppliedAt <= block.timestamp` always holds, so no input reaches both. No
+test claims to pin it.
+
+`MIGRATION_HEAD_GENESIS` is imported from `IMigrationRegistryV1.sol` rather than
+redeclared — one value, shared, configuring nothing and naming nobody.
+
+`Migrated(address indexed writer, bytes32 indexed migration, uint256 appliedAt)`
+carries the moment as data, because it is supplied by the caller rather than
+taken from the block: the block a log entry sits in says when the record was
+written, not when the migration ran.
+
+There is exactly one entry point. "Apply now" is `block.timestamp` passed as the
+argument, so a second entry point would be a second way to write one record and
+could express nothing the argument does not.
+
+**`src/concrete/MigrationRegistryV2.sol`** — the implementation, at its own
+deterministic address. Two creation codes are two addresses and two deployments,
+so it stands alongside `MigrationRegistry` rather than replacing it, and a
+writer's namespace under one is a different namespace from its namespace under
+the other. The `appliedAt > block.timestamp` comparison carries slither's
+`timestamp` start/end pair and forge-lint's `block-timestamp` next-line
+suppression, on that one comparison rather than for the repo.
+
+**`src/lib/LibMigrationRegistryV2.sol`** and
+**`src/lib/LibMigrationRegistryV2Deploy.sol`** — the consumer surface and the
+pins, exactly as the V1 pair are.
+
 ### Generated snapshots, and the assertions that specify their shape
 
 Every deploy snapshot in this repo is GENERATED and committed. There is no
 hand-maintained hex anywhere: `src/generated/candidate/` holds one deploy record
-per deployed contract — `AddressRegistry.sol` and `MigrationRegistry.sol` — from
-`forge script script/Build.sol`.
+per deployed contract — `AddressRegistry.sol`, `MigrationRegistry.sol` and
+`MigrationRegistryV2.sol` — from `forge script script/Build.sol`.
 
 `script/Build.sol` declares those contracts ONCE, in `generatedContracts()`, and
 the regeneration, both lib writers and the freeze all read that list. A contract
@@ -282,9 +344,10 @@ abstracts live under `test/`. The exception is earned by what this repo IS, and
 a repo that merely USES this machinery has not earned it.
 
 The exception is scoped to the deploy/verify abstracts and the suite
-declaration. `src/concrete/AddressRegistry.sol` and
-`src/concrete/MigrationRegistry.sol` are ordinary deployed contracts, tested
-from `test/src/concrete/` exactly as the convention requires.
+declaration. `src/concrete/AddressRegistry.sol`,
+`src/concrete/MigrationRegistry.sol` and `src/concrete/MigrationRegistryV2.sol`
+are ordinary deployed contracts, tested from `test/src/concrete/` exactly as the
+convention requires.
 
 **`src/abstract/RainDeploySuitesBase.sol`** — the ONE declaration of what a repo
 deploys: per suite, a key, the creation code, the recorded address/code
@@ -417,12 +480,13 @@ expected addresses, expected code hashes, and dependency lists.
   things. `script/Deploy.sol` broadcasts the suite `DEPLOYMENT_SUITE` names to
   every network in `supportedNetworks()`, dispatched by hand through
   `.github/workflows/manual-sol-artifacts.yaml`, whose `suite` input is a choice
-  over the declared keys. One suite per dispatch, so this repo's two registries
-  are two dispatches. Only then is there a deployment for `rainix-tag-release`
-  to verify pins against — it verifies and publishes, it never broadcasts.
-  Broadcasting is key custody and real money, so it is `workflow_dispatch` and
-  nothing else. Deploying is idempotent: a network that already has the code is
-  skipped, so a partial run is fixed by running it again.
+  over the declared keys. One suite per dispatch, so this repo's three
+  registries are three dispatches. Only then is there a deployment for
+  `rainix-tag-release` to verify pins against — it verifies and publishes, it
+  never broadcasts. Broadcasting is key custody and real money, so it is
+  `workflow_dispatch` and nothing else. Deploying is idempotent: a network that
+  already has the code is skipped, so a partial run is fixed by running it
+  again.
 
   `RegistryDeployChainTest` is what verifies it, and it checks the RELEASED
   suites. Nothing is released yet, so it has nothing to check and forks nothing.

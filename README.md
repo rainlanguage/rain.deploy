@@ -21,8 +21,9 @@ It answers:
 - Is every version I have ever released still live, with the code I compiled, on
   every network I support?
 - Which operational migrations have actually been applied on this chain, and
-  when, so a test can assert the state they imply instead of guessing from a
-  date?
+  when they ran — including the ones that ran before there was anywhere to write
+  them down — so a test can assert the state they imply instead of guessing from
+  a date?
 - Can a migration be skipped, repeated or applied out of order on one chain and
   not another?
 
@@ -38,8 +39,8 @@ Approach:
 - An address registry, read at run time rather than compiled into creation code,
   and a post-deploy check that every target network's deployment took the
   address it was supposed to.
-- A migration registry, so operational scripts record what they applied and
-  when, each onto the head it is applying to, and tests assert the state that
+- A migration registry, so operational scripts record what they applied and when
+  it ran, each onto the head it is applying to, and tests assert the state that
   implies rather than branching on a deadline.
 - One inherited deploy-pin verification, parameterized over versions, rather
   than assertions hand-enumerated per version and per chain in every deploy
@@ -184,11 +185,20 @@ library supplies the fork loop and the comparison.
 
 ## Migration registry
 
-`MigrationRegistry` records that a migration has been applied, and when: a
-writer applies one of its own onto the migration it believes ran last
-(`applyMigration`), anyone reads when a given writer applied a given one
-(`applied`), and anyone reads where a given writer's sequence has got to
-(`head`). There is no removal and no upgrade.
+`MigrationRegistry` and `MigrationRegistryV2` each record that a migration has
+been applied, and when: a writer applies one of its own onto the migration it
+believes ran last (`applyMigration`), anyone reads when a given writer applied a
+given one (`applied`), and anyone reads where a given writer's sequence has got
+to (`head`). There is no removal and no upgrade.
+
+They differ in exactly one thing, and everything below holds for both except
+where it says otherwise: where the recorded moment comes from.
+`MigrationRegistry` stamps the block the record lands in, so it can only say a
+migration ran now. `MigrationRegistryV2` takes the moment as an argument, so a
+migration that ran before the registry reached the chain is recordable with the
+time it actually ran. Two creation codes are two addresses and two deployments;
+a consumer pins whichever one it reads, and a writer's namespace under one is a
+different namespace from its namespace under the other.
 
 It exists because prod-state tests otherwise decide what to assert by reading
 the **clock**. The pattern that emerges without it is a dual-state invariant —
@@ -216,9 +226,47 @@ frequently "which invariant applies _yet_": a cliff that starts at the
 migration, a rate that changes a week after it. A flag sends a consumer that
 needs the moment back to a hardcoded date, which is the thing this registry
 exists to delete. Zero and nonzero carry the same two distinct facts a flag did,
-with the nonzero case saying more — and zero stays unambiguous because a record
-is refused outright in a block whose timestamp is zero rather than written as
-one that reads back as no record.
+with the nonzero case saying more — and zero stays unambiguous because a zero
+moment is refused outright rather than written as a record that reads back as no
+record.
+
+**The moment is the caller's, inside a window `MigrationRegistryV2` enforces.**
+The fact being recorded is that a migration RAN, and the moment it ran is not in
+general the moment anybody gets to write it down. A registry that could only
+stamp its own block offers a writer with history two options and no third:
+record a time that is false for every past migration, or record nothing — and
+recording nothing strands the namespace, because `applyMigration` refuses
+anything not applied onto the current head, so a writer that skipped its past
+migrations cannot record its next one either.
+
+What a reader gives up is **not** authenticity. A record is namespaced by the
+account that wrote it and no authority checks it, so every entry is already
+exactly as trustworthy as its writer and no more; a writer free to invent an id
+was always free to invent the fact. What a reader gives up is precisely that
+`appliedAt` is the block the record landed in. Everything else is kept, by three
+refusals:
+
+- **Never zero** (`ZeroTimestamp`), or the record would read back through
+  `applied` as no record while the head had moved and the migration could never
+  be applied again.
+- **Never after the block it is written in** (`FutureTimestamp`). A migration
+  that has run has run, so a moment still to come is not a late record of
+  anything, and a consumer measuring an interval since the migration — a cliff,
+  a grace period, a rate that changes a week later — can subtract it from the
+  current block without underflowing.
+- **Never before the record of the head it is applied onto**
+  (`TimestampBeforeHead`), so a namespace's records read in head order never go
+  backwards.
+
+Equal is allowed at both ends. Two migrations applied in one transaction share a
+block, and two backfilled to the same day share a moment; the head chain is what
+orders them, so forcing the moments apart would make them carry an ordering they
+do not have.
+
+There is one way to write a record. A script recording a migration as it runs
+passes `block.timestamp`, which is the same statement as any other `appliedAt`
+and gets the same three refusals — so a second entry point could express nothing
+the argument does not.
 
 **A set of applied migrations, not a high-water mark.** A mark needs a total
 order consumers do not have: two migrations authored on one day collide, and one
@@ -237,9 +285,11 @@ wrong order.
 
 ```solidity
 // The first migration in a namespace.
-LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, MIGRATION_V1);
+LibMigrationRegistryV2.applyMigration(MIGRATION_HEAD_GENESIS, MIGRATION_V1, block.timestamp);
 // Every later one names its predecessor.
-LibMigrationRegistry.applyMigration(MIGRATION_V1, MIGRATION_V2);
+LibMigrationRegistryV2.applyMigration(MIGRATION_V1, MIGRATION_V2, block.timestamp);
+// One that ran before the registry reached this chain names the moment it ran.
+LibMigrationRegistryV2.applyMigration(MIGRATION_V2, MIGRATION_V3, 1750000000);
 ```
 
 Genesis is deliberately **not zero**. Zero is what an uninitialised `bytes32`
@@ -276,11 +326,13 @@ say the invariant holds — a multisig can act out of band and nothing here move
 Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
-`LibMigrationRegistry` is the surface — `applied`, `head` and `applyMigration`,
-all verifying the registry's code hash first. There is deliberately **no
-broadcast runner**: the dominant real shape is a Safe executing a bundle that
-never broadcasts, and such a script appends `applyMigration` to the bundle it is
-already emitting, which makes the record atomic with the migration it describes.
+`LibMigrationRegistry` and `LibMigrationRegistryV2` are the surfaces —
+`applied`, `head` and `applyMigration`, each verifying its own registry's code
+hash first, and each reading only the deployment it pins. There is deliberately
+**no broadcast runner**: the dominant real shape is a Safe executing a bundle
+that never broadcasts, and such a script appends `applyMigration` to the bundle
+it is already emitting, which makes the record atomic with the migration it
+describes.
 
 ## Deploying, and then releasing
 
@@ -290,10 +342,11 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
    [`Manual sol artifacts`](.github/workflows/manual-sol-artifacts.yaml)
    workflow, choosing a `suite`. It runs `script/Deploy.sol` and broadcasts that
    suite to every network in `supportedNetworks()`. One suite per dispatch, so
-   this repo's two registries are two dispatches. `workflow_dispatch` only: this
-   is key custody and real money, and no merge or tag should be able to trigger
-   it. It is idempotent — a network that already has the code is skipped — so a
-   partial run is fixed by running it again rather than by unpicking anything.
+   this repo's three registries are three dispatches. `workflow_dispatch` only:
+   this is key custody and real money, and no merge or tag should be able to
+   trigger it. It is idempotent — a network that already has the code is skipped
+   — so a partial run is fixed by running it again rather than by unpicking
+   anything.
 2. **Verify.** `RegistryDeployChainTest` passes only once every **released**
    suite is live on every supported network, with the code that release froze.
    This repo has released none, so today it has nothing to check and passes; it
