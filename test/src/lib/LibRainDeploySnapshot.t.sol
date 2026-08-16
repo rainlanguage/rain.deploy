@@ -302,6 +302,103 @@ contract LibRainDeploySnapshotTest is Test {
         assertTrue(exists);
     }
 
+    /// The alias lib this repo's `AddressRegistry` snapshot is re-exported
+    /// through, and the only file the alias emitter writes here.
+    ///
+    /// `writeAliasLib` derives its path from the contract name and takes no
+    /// root, so driving it against a real contract writes the COMMITTED file.
+    /// That is what makes an alias lib whose text has drifted from what the
+    /// generator emits a failure rather than a diff nobody looks at — and the
+    /// alias emitter is otherwise the one generator path in this repo that
+    /// nothing anywhere executes, because only `script/Build.sol` calls it and
+    /// nothing may call that.
+    string constant ALIAS_LIB_PATH = "src/lib/LibAddressRegistryDeploy.sol";
+
+    /// The import block MUST alias exactly the two pins an alias lib
+    /// re-exports, out of the snapshot directory it is pointed at.
+    ///
+    /// Both constants are renamed on import because the lib exports its own
+    /// names for them in the same file, so a dropped alias is not a compile
+    /// error but a constant silently bound to whatever else is in scope. All
+    /// three parameters are asserted to reach the output distinctly: a block
+    /// that ignored `dir` would alias the rolling snapshot forever, including
+    /// where a frozen tag was asked for.
+    function testAliasImportBlockAliasesBothPins() external pure {
+        assertEq(
+            LibRainDeploySnapshot.aliasImportBlock(
+                "AddressRegistry", "ADDRESS_REGISTRY", LibRainDeploySnapshot.CANDIDATE
+            ),
+            "import {\n" "    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_ADDR,\n"
+            "    BYTECODE_HASH as ADDRESS_REGISTRY_HASH\n" "} from \"../generated/candidate/AddressRegistry.sol\";\n\n"
+        );
+
+        assertEq(
+            LibRainDeploySnapshot.aliasImportBlock("MockDeployable", "MOCK_DEPLOYABLE", "0_1_7"),
+            "import {\n" "    DEPLOYED_ADDRESS as MOCK_DEPLOYABLE_ADDR,\n" "    BYTECODE_HASH as MOCK_DEPLOYABLE_HASH\n"
+            "} from \"../generated/0_1_7/MockDeployable.sol\";\n\n"
+        );
+    }
+
+    /// The library block MUST re-export BOTH pins under the consumer-facing
+    /// names, from the aliases the import block bound.
+    ///
+    /// The address and the code hash are what every consumer of this repo
+    /// resolves and verifies against, and they are the whole content of the
+    /// file. A block that emitted one of them, or bound one to the other's
+    /// alias, is a lib that compiles and lies.
+    function testAliasLibraryBlockReExportsBothPins() external pure {
+        assertEq(
+            LibRainDeploySnapshot.aliasLibraryBlock("AddressRegistry", "ADDRESS_REGISTRY", "LibAddressRegistryDeploy"),
+            "/// @title LibAddressRegistryDeploy\n"
+            "/// @notice The deterministic Zoltu deploy address and code hash of\n"
+            "/// `AddressRegistry`, aliased from its generated snapshot so that snapshot stays the\n"
+            "/// single source of truth. The import path never moves, so consumers are\n"
+            "/// unaffected by which snapshot it names.\n" "library LibAddressRegistryDeploy {\n"
+            "    address constant ADDRESS_REGISTRY_DEPLOYED_ADDRESS = ADDRESS_REGISTRY_ADDR;\n"
+            "    bytes32 constant ADDRESS_REGISTRY_DEPLOYED_CODEHASH = ADDRESS_REGISTRY_HASH;\n" "}\n"
+        );
+
+        assertEq(
+            LibRainDeploySnapshot.aliasLibraryBlock("MockDeployable", "MOCK_DEPLOYABLE", "LibMockDeployableDeploy"),
+            "/// @title LibMockDeployableDeploy\n"
+            "/// @notice The deterministic Zoltu deploy address and code hash of\n"
+            "/// `MockDeployable`, aliased from its generated snapshot so that snapshot stays the\n"
+            "/// single source of truth. The import path never moves, so consumers are\n"
+            "/// unaffected by which snapshot it names.\n" "library LibMockDeployableDeploy {\n"
+            "    address constant MOCK_DEPLOYABLE_DEPLOYED_ADDRESS = MOCK_DEPLOYABLE_ADDR;\n"
+            "    bytes32 constant MOCK_DEPLOYABLE_DEPLOYED_CODEHASH = MOCK_DEPLOYABLE_HASH;\n" "}\n"
+        );
+    }
+
+    /// The alias lib MUST land at the path derived from the contract name,
+    /// holding exactly the header, import block and library block the emitters
+    /// produce.
+    ///
+    /// Run against this repo's REAL contract and its real rolling snapshot, so
+    /// what it writes is the committed generated file and the assertion is that
+    /// the committed file IS what the generator emits today. Nothing else in
+    /// the suite can see that: the alias lib's VALUES are anchored by the pins
+    /// tests that read them, and its TEXT by nothing at all.
+    ///
+    /// Restored BEFORE the assertions run, because forge-std assertions revert:
+    /// restoring afterwards restores in every case except a failure, which is
+    /// the only case where the tree is dirty and the one this test exists to
+    /// report.
+    function testWriteAliasLibWritesTheLibAtItsPath() external {
+        string memory before = vm.readFile(ALIAS_LIB_PATH);
+
+        string memory written = LibRainDeploySnapshot.writeAliasLib(
+            vm, "AddressRegistry", "ADDRESS_REGISTRY", LibRainDeploySnapshot.CANDIDATE
+        );
+        string memory emitted = vm.readFile(ALIAS_LIB_PATH);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(ALIAS_LIB_PATH, before);
+
+        assertEq(written, ALIAS_LIB_PATH);
+        assertEq(emitted, before);
+    }
+
     /// Where the released-lib record fixture is built. Its own tree rather
     /// than `FIXTURE_ROOT`: forge runs the tests in a contract concurrently,
     /// and two of them writing one record root see each other's releases.
