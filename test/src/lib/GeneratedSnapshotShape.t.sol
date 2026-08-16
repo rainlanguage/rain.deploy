@@ -123,7 +123,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// declaration whose snapshot is somebody else's.
     /// @param candidate The candidate to name.
     /// @return The contract name.
-    function candidateContractName(DeployCandidate memory candidate) internal view returns (string memory) {
+    function candidateContractName(DeployCandidate memory candidate) internal pure returns (string memory) {
         string[] memory components = vm.split(candidate.snapshot.artifactPath, ":");
         return components[components.length - 1];
     }
