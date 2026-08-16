@@ -22,7 +22,15 @@ library LibRainDeploy {
     /// Thrown when a dependency is missing on a network before deployment.
     error MissingDependency(string network, address dependency);
 
-    /// Thrown when the deployed address does not match the expected address.
+    /// Thrown when an address does not match the address the deploy expects.
+    /// Raised at two distinct points, and nothing is deployed at the first of
+    /// them: before any fork, when the address the creation code derives is not
+    /// the expected one, and after broadcasting, when the address deployed to
+    /// is not the expected one.
+    /// @param expected The `expectedAddress` the caller passed to
+    /// `deployToNetworks` or `deployAndBroadcast`, at both sites.
+    /// @param actual The address the creation code derives, before any fork, or
+    /// the address actually deployed to, after broadcasting.
     error UnexpectedDeployedAddress(address expected, address actual);
 
     /// Thrown when the deployed code hash does not match the expected code hash.
