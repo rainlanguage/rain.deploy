@@ -123,7 +123,7 @@ contract Build is Script, RegistryDeploySuites {
         for (uint256 i = 0; i < contracts.length; i++) {
             contractNames[i] = contracts[i].contractName;
         }
-        LibRainDeploySnapshot.freeze(vm, regenerateCandidates, contractNames);
+        LibRainDeploySnapshot.freeze(vm, LibRainDeploySnapshot.LIB_FS_ROOT, regenerateCandidates, contractNames);
         regenerateLibs();
     }
 

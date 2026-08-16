@@ -191,11 +191,20 @@ library LibRainDeploySnapshot {
     /// `testRecordRootIsTheRootTheWriterWritesTo` pins.
     string constant LIB_FS_ROOT = "src/generated";
 
-    /// The directory holding a snapshot, rolling or frozen.
+    /// The directory holding a snapshot, rolling or frozen, under a record
+    /// root.
+    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// @return The directory path.
+    function dirForSnapshot(string memory root, string memory dir) internal pure returns (string memory) {
+        return string.concat(root, "/", dir);
+    }
+
+    /// The directory holding a snapshot in a repo's REAL record.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @return The directory path.
     function dirForSnapshot(string memory dir) internal pure returns (string memory) {
-        return string.concat(LIB_FS_ROOT, "/", dir);
+        return dirForSnapshot(LIB_FS_ROOT, dir);
     }
 
     /// The contract name that places a generated file inside a snapshot
@@ -208,7 +217,29 @@ library LibRainDeploySnapshot {
         return string.concat(dir, "/", contractName);
     }
 
-    /// The path of a contract's generated file within a snapshot.
+    /// The path of a contract's generated file within a snapshot, under a
+    /// record root.
+    ///
+    /// `LibFs` writes under `LIB_FS_ROOT` and takes no root, so it cannot spell
+    /// this one — but the two MUST be one path where the root is the real one,
+    /// and `testSnapshotPathsAgreeWithTheWriter` is where that is held. This is
+    /// the only other spelling of a snapshot path there is, so a reader
+    /// pointed at a record root and a writer pointed at the real one cannot
+    /// drift by more than that one assertion.
+    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// @param contractName The name of the contract.
+    /// @return The file path.
+    function pathForSnapshot(string memory root, string memory dir, string memory contractName)
+        internal
+        pure
+        returns (string memory)
+    {
+        return string.concat(dirForSnapshot(root, dir), "/", contractName, ".sol");
+    }
+
+    /// The path of a contract's generated file within a snapshot in a repo's
+    /// REAL record.
     ///
     /// Delegated to `LibFs` rather than concatenated here, so the path this
     /// library freezes FROM is the same definition `LibFs` writes TO. Two
@@ -328,10 +359,17 @@ library LibRainDeploySnapshot {
     /// There is no output root to choose. `LibFs.pathForContract` hardcodes
     /// `LIB_FS_ROOT` and takes a contract name rather than a path, and this is
     /// the repo's real deploy record, which belongs under that root and nowhere
-    /// else. A test that wants a record tree of its own writes one with
-    /// `vm.writeFile` and reads it with `frozenSnapshotPaths`, which does take a
-    /// root, because reading somebody else's tree is a thing a walk genuinely
-    /// does and writing this repo's record somewhere else is not.
+    /// else. This is the one place a snapshot's bytes come into existence, and
+    /// they come from the compiler rather than from another tree, so there is
+    /// nothing for a root to select between.
+    ///
+    /// `freeze` does take a root and that is not the same freedom: it COPIES,
+    /// within one record tree, reading a rolling snapshot under the root it is
+    /// handed and writing the frozen copy under that same root. Pointing a
+    /// copier at a tree of its own is a thing a test genuinely needs, exactly
+    /// as pointing `frozenSnapshotPaths` at one is; GENERATING this repo's
+    /// record anywhere but under `LIB_FS_ROOT` remains something nothing here
+    /// can express.
     ///
     /// The dependency list is frozen here with the rest, and it is not
     /// metadata. `RainDeployBroadcast.run` hands a suite's `dependencies` to
@@ -924,12 +962,24 @@ library LibRainDeploySnapshot {
     /// "the record matches the candidate" is true by construction rather than
     /// by a comparison afterwards.
     /// @param vm The Vm instance for file operations.
+    /// @param root The record root to freeze into — `LIB_FS_ROOT` for a repo's
+    /// real record. A parameter for the same reason `frozenSnapshotPaths` and
+    /// `writeReleasedSuitesLib` take one, and required rather than defaulted
+    /// for the same reason they do not default it: a freeze that can only be
+    /// pointed at the real record can only be tested against it, and the real
+    /// record is one a test must not leave a release in.
+    ///
+    /// It is the root of a whole record tree rather than an output directory
+    /// to choose: the rolling snapshot is read from under it and the frozen
+    /// copy written under it, so a freeze reads and writes ONE tree and there
+    /// is no arrangement in which a release is cut from another repo's
+    /// candidate.
     /// @param regenerate Rewrites the rolling snapshot. Run first, always.
     /// @param contractNames The contracts whose generated files form this
     /// release's record.
-    function freeze(Vm vm, function() internal regenerate, string[] memory contractNames) internal {
+    function freeze(Vm vm, string memory root, function() internal regenerate, string[] memory contractNames) internal {
         string memory tag = deployTag(vm);
-        string memory frozenDir = dirForSnapshot(tag);
+        string memory frozenDir = dirForSnapshot(root, tag);
         if (vm.exists(frozenDir)) {
             revert SnapshotAlreadyFrozen(tag, frozenDir);
         }
@@ -937,10 +987,12 @@ library LibRainDeploySnapshot {
             revert EmptyRelease(tag);
         }
         // The record this release is appended to is the one it is written into,
-        // so the root is `LIB_FS_ROOT` and not a caller's choice: a guard that
-        // could be pointed at another tree is a guard that could be pointed
-        // away from the record it is protecting.
-        checkReleaseFollowsRecord(vm, LIB_FS_ROOT, tag);
+        // so the guard reads `root` — the same tree the frozen copy lands
+        // under, and the same one the rolling snapshot is read from. A guard
+        // pointed at any other tree is a guard pointed away from the record it
+        // is protecting: it would pass on a record it is not appending to while
+        // the append it is guarding lands somewhere it never looked.
+        checkReleaseFollowsRecord(vm, root, tag);
 
         regenerate();
 
@@ -948,7 +1000,7 @@ library LibRainDeploySnapshot {
         // call can fail is now behind it, so what follows is writes only.
         string[] memory records = new string[](contractNames.length);
         for (uint256 i = 0; i < contractNames.length; i++) {
-            string memory rollingPath = pathForSnapshot(CANDIDATE, contractNames[i]);
+            string memory rollingPath = pathForSnapshot(root, CANDIDATE, contractNames[i]);
             if (!vm.exists(rollingPath)) {
                 revert NothingToFreeze(rollingPath);
             }
@@ -959,7 +1011,7 @@ library LibRainDeploySnapshot {
         vm.createDir(frozenDir, true);
         for (uint256 i = 0; i < contractNames.length; i++) {
             //forge-lint: disable-next-line(unsafe-cheatcode)
-            vm.writeFile(pathForSnapshot(tag, contractNames[i]), records[i]);
+            vm.writeFile(pathForSnapshot(root, tag, contractNames[i]), records[i]);
         }
     }
 }
