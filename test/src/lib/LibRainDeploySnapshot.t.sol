@@ -399,6 +399,74 @@ contract LibRainDeploySnapshotTest is Test {
         assertTrue(exists);
     }
 
+    /// The directory the licence-header fixture snapshot is written into. Not
+    /// tag shaped, for the reason `testWriteSnapshotWritesTheSnapshotAtItsPath`
+    /// gives, and drawn from the tag alphabet because the writer places files
+    /// only in directories whose names are.
+    string constant HEADER_FIXTURE_DIR = "writeSnapshotHeaderNotATag";
+
+    /// A written snapshot MUST declare the licence and the copyright holder it
+    /// was HANDED, each in its own tag.
+    ///
+    /// They are parameters of this library rather than constants inside it
+    /// because `rain-deploy` is published and deploy repos in other orgs consume
+    /// it, so a header chosen here would land in THEIR
+    /// `src/generated/<tag>/` — append-only, so permanently. That freedom is
+    /// only worth having if what is handed in is what comes out, and the two are
+    /// strings of the same type in adjacent positions: a call that swapped them
+    /// compiles, and writes a file carrying both values, in the wrong tags.
+    ///
+    /// The alias and released emitters each have a byte-for-byte assertion that
+    /// covers this. The snapshot writer had none. Everything else in the suite
+    /// that reads a snapshot header reads the COMMITTED file, which is evidence
+    /// about a generation that already happened rather than about what the
+    /// writer emits now — so a swap here would reach a consumer's frozen record
+    /// with a green suite behind it.
+    ///
+    /// The expected text is spelled out rather than taken from
+    /// `LibCodeGen.filePrefix`, so the oracle does not come from the code that
+    /// wrote the file. `pragma` is the first byte of the header that is neither
+    /// parameter, so splitting there is the whole of what the two of them
+    /// produce — an assertion on the header ENTIRE rather than on either value
+    /// appearing somewhere in it.
+    ///
+    /// Split across `string.concat` so `reuse lint` does not read the expected
+    /// text as a licence declaration this test file is making about itself.
+    ///
+    /// Read before the fixture is removed and asserted after, because forge-std
+    /// assertions revert: cleaning up afterwards cleans up in every case except
+    /// a failure, which is the one case that leaves a directory under the real
+    /// `src/generated/` for every suite that walks it.
+    function testWriteSnapshotDeclaresTheLicenceItWasHanded() external {
+        string memory source = vm.readFile(
+            LibRainDeploySnapshot.writeSnapshot(
+                vm,
+                HEADER_FIXTURE_DIR,
+                FIXTURE_CONTRACT,
+                GENERATED_SPDX_LICENSE_IDENTIFIER,
+                GENERATED_COPYRIGHT_TEXT,
+                type(MockDeployable).creationCode,
+                new address[](0)
+            )
+        );
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(HEADER_FIXTURE_DIR), true);
+
+        assertEq(
+            vm.split(source, "pragma")[0],
+            string.concat(
+                "// SPDX-License",
+                "-Identifier: ",
+                GENERATED_SPDX_LICENSE_IDENTIFIER,
+                "\n",
+                "// SPDX-FileCopyrightText: ",
+                GENERATED_COPYRIGHT_TEXT,
+                "\n"
+            )
+        );
+    }
+
     /// The alias lib this repo's `AddressRegistry` snapshot is re-exported
     /// through, and the only file the alias emitter writes here.
     ///
