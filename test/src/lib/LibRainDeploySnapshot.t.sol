@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.1/src/Test.sol";
+import {Test} from "forge-std-1.16.2/src/Test.sol";
 
+import {GENERATED_COPYRIGHT_TEXT, GENERATED_SPDX_LICENSE_IDENTIFIER} from "../../../script/Build.sol";
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     EmptyRelease,
@@ -58,6 +59,34 @@ contract LibRainDeploySnapshotTest is Test {
     /// @param tag The release tag being cut.
     function externalCheckReleaseFollowsRecord(string memory recordRoot, string memory tag) external view {
         LibRainDeploySnapshot.checkReleaseFollowsRecord(vm, recordRoot, tag);
+    }
+
+    /// External wrapper for the ROOT-AWARE snapshot path, so a refusal is a
+    /// failed call rather than a reverted test and the two spellings can be
+    /// compared over the whole fuzz domain.
+    /// @param root The record root.
+    /// @param dir The snapshot directory name.
+    /// @param contractName The name of the contract.
+    /// @return The file path.
+    function externalPathForSnapshotAt(string memory root, string memory dir, string memory contractName)
+        external
+        pure
+        returns (string memory)
+    {
+        return LibRainDeploySnapshot.pathForSnapshot(root, dir, contractName);
+    }
+
+    /// External wrapper for the WRITER's snapshot path, the counterpart to
+    /// `externalPathForSnapshotAt`.
+    /// @param dir The snapshot directory name.
+    /// @param contractName The name of the contract.
+    /// @return The file path.
+    function externalPathForSnapshot(string memory dir, string memory contractName)
+        external
+        pure
+        returns (string memory)
+    {
+        return LibRainDeploySnapshot.pathForSnapshot(dir, contractName);
     }
 
     /// A release tag from its components, as `tagForVersion` spells one.
@@ -249,7 +278,6 @@ contract LibRainDeploySnapshotTest is Test {
     /// Snapshot paths MUST agree with `LibFs`, which is what writes them.
     function testSnapshotPathsAgreeWithTheWriter() external pure {
         assertEq(LibRainDeploySnapshot.dirForSnapshot("0_1_7"), "src/generated/0_1_7");
-        assertEq(LibRainDeploySnapshot.snapshotName("0_1_7", "Foo"), "0_1_7/Foo");
         assertEq(LibRainDeploySnapshot.pathForSnapshot("0_1_7", "Foo"), "src/generated/0_1_7/Foo.sol");
 
         // The same two paths under a record root that is not the real one, so
@@ -275,29 +303,50 @@ contract LibRainDeploySnapshotTest is Test {
     /// property is about every path either could produce, not about a chosen
     /// one: a divergence that only appears for some names is exactly the
     /// silence this is here to remove.
+    ///
+    /// Both spellings now REFUSE names they cannot place, so agreeing on the
+    /// bytes is only half of being one path — one that accepted what the other
+    /// refuses would read a fixture record at a path no writer can produce, and
+    /// no assertion about accepted names would see it. Compared as OUTCOMES:
+    /// each call either reverts or returns, and the revert data is compared too,
+    /// so the two also agree on WHICH name was the wrong one. That is what makes
+    /// the whole fuzz domain assertable rather than only the accepted part of
+    /// it, and it needs no restatement here of which names are accepted — a
+    /// restated rule is a third spelling, and the two being held together is the
+    /// entire point.
     /// @param dir The snapshot directory name.
     /// @param contractName The name of the contract.
     function testRootAwareSnapshotPathIsTheWritersAtTheRealRoot(string memory dir, string memory contractName)
         external
-        pure
+        view
     {
-        assertEq(
-            LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.LIB_FS_ROOT, dir, contractName),
-            LibRainDeploySnapshot.pathForSnapshot(dir, contractName)
-        );
+        (bool rootAwareOk, bytes memory rootAware) = address(this)
+            .staticcall(
+                abi.encodeCall(this.externalPathForSnapshotAt, (LibRainDeploySnapshot.LIB_FS_ROOT, dir, contractName))
+            );
+        (bool writerOk, bytes memory writer) =
+            address(this).staticcall(abi.encodeCall(this.externalPathForSnapshot, (dir, contractName)));
+
+        assertEq(rootAwareOk, writerOk, "one spelling accepted a name the other refused");
+        assertEq(rootAware, writer);
     }
 
-    /// The root the record is WALKED from MUST be the root the writer WRITES
-    /// to. They are two constants — `LIB_FS_ROOT` here, and the one
-    /// `LibFs.pathForContract` hardcodes in a package this repo does not own —
-    /// and a walk of a root nothing writes to returns nothing, which every
-    /// record-anchored assertion then passes on. Silence is the failure mode,
-    /// so it is asserted rather than observed.
+    /// The record is WALKED from the root the writer WRITES to, and each of its
+    /// files is exactly `<root>/<dir>/<Name>.sol`. A walk of a root nothing
+    /// writes to returns nothing, which every record-anchored assertion then
+    /// passes on, and a snapshot one segment deeper or shallower than the walk
+    /// looks is the same silence.
     ///
-    /// Compared through `pathForSnapshot`, which is what a snapshot is written
-    /// through, so the right hand side is the writer's own root rather than a
-    /// third restatement of it. The contract name is arbitrary — the path is
-    /// built by concatenation and names no artifact.
+    /// `LIB_FS_ROOT` is now `LibFs`'s own `GENERATED_DIR` rather than a second
+    /// constant held equal to it, so the root itself cannot diverge and is not
+    /// what this asserts. What it asserts is the LAYOUT the writer interpolates
+    /// that root into: `pathForSnapshot` and `dirForSnapshot` are both
+    /// `rain-sol-codegen`'s, in a package this repo does not own, so how deep a
+    /// snapshot lands and how deep the walk reads are two decisions in two repos
+    /// that a version bump can move independently.
+    ///
+    /// The contract name is arbitrary — the path is built by concatenation and
+    /// names no artifact.
     function testRecordRootIsTheRootTheWriterWritesTo() external pure {
         assertEq(
             LibRainDeploySnapshot.pathForSnapshot("0_1_7", "Foo"),
@@ -319,14 +368,26 @@ contract LibRainDeploySnapshotTest is Test {
     /// walks from other contracts that forge runs in parallel with this one, so
     /// a tag-shaped name here would be a release those contracts have to fail
     /// on for as long as it exists.
+    ///
+    /// Not tag SHAPED, but still drawn from `LibFs`'s tag ALPHABET, which the
+    /// writer requires of every directory it will place a file in. The two rules
+    /// are different: the alphabet is what makes a name safe to interpolate into
+    /// a path, and being a strict `X_Y_Z` triple on top of that is what makes it
+    /// a release.
     function testWriteSnapshotWritesTheSnapshotAtItsPath() external {
-        string memory dir = "write-snapshot-not-a-tag";
+        string memory dir = "writeSnapshotNotATag";
         assertFalse(LibRainDeploySnapshot.isTag(dir));
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(LibRainDeploySnapshot.dirForSnapshot(dir), true);
 
         string memory written = LibRainDeploySnapshot.writeSnapshot(
-            vm, dir, "MockDeployable", type(MockDeployable).creationCode, new address[](0)
+            vm,
+            dir,
+            "MockDeployable",
+            GENERATED_SPDX_LICENSE_IDENTIFIER,
+            GENERATED_COPYRIGHT_TEXT,
+            type(MockDeployable).creationCode,
+            new address[](0)
         );
         // Read while the snapshot is still there, asserted once it is gone.
         bool exists = vm.exists(written);
@@ -416,6 +477,13 @@ contract LibRainDeploySnapshotTest is Test {
     /// the suite can see that: the alias lib's VALUES are anchored by the pins
     /// tests that read them, and its TEXT by nothing at all.
     ///
+    /// Emitted with `script/Build.sol`'s OWN licence constants, so this is also
+    /// where those are held to producing the header the committed generated
+    /// files actually carry. They are the calling repo's to state and reach
+    /// `LibCodeGen.filePrefix` unchecked by anything else here — a wrong
+    /// identifier is otherwise only a `reuse lint` failure on a file that has
+    /// already been written and committed.
+    ///
     /// Restored BEFORE the assertions run, because forge-std assertions revert:
     /// restoring afterwards restores in every case except a failure, which is
     /// the only case where the tree is dirty and the one this test exists to
@@ -424,7 +492,12 @@ contract LibRainDeploySnapshotTest is Test {
         string memory before = vm.readFile(ALIAS_LIB_PATH);
 
         string memory written = LibRainDeploySnapshot.writeAliasLib(
-            vm, "AddressRegistry", "ADDRESS_REGISTRY", LibRainDeploySnapshot.CANDIDATE
+            vm,
+            "AddressRegistry",
+            "ADDRESS_REGISTRY",
+            LibRainDeploySnapshot.CANDIDATE,
+            GENERATED_SPDX_LICENSE_IDENTIFIER,
+            GENERATED_COPYRIGHT_TEXT
         );
         string memory emitted = vm.readFile(ALIAS_LIB_PATH);
 
@@ -716,8 +789,10 @@ contract LibRainDeploySnapshotTest is Test {
     /// shaped, for the reason `testWriteSnapshotWritesTheSnapshotAtItsPath`
     /// gives: the record root is the real `src/generated/`, walked by the
     /// inherited record check in contracts forge runs in parallel with this
-    /// one, so a tag-shaped name here is a release they have to fail on.
-    string constant DEPENDENCIES_FIXTURE_DIR = "write-dependencies-not-a-tag";
+    /// one, so a tag-shaped name here is a release they have to fail on. Drawn
+    /// from the tag alphabet even so, because the writer places files only in
+    /// directories whose names are.
+    string constant DEPENDENCIES_FIXTURE_DIR = "writeDependenciesNotATag";
 
     /// Freezes `dependencies` into a snapshot and returns the source written.
     ///
@@ -734,7 +809,13 @@ contract LibRainDeploySnapshotTest is Test {
         uint256 state = vm.snapshotState();
         string memory source = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
-                vm, DEPENDENCIES_FIXTURE_DIR, FIXTURE_CONTRACT, type(MockDeployable).creationCode, dependencies
+                vm,
+                DEPENDENCIES_FIXTURE_DIR,
+                FIXTURE_CONTRACT,
+                GENERATED_SPDX_LICENSE_IDENTIFIER,
+                GENERATED_COPYRIGHT_TEXT,
+                type(MockDeployable).creationCode,
+                dependencies
             )
         );
         assertTrue(vm.revertToState(state), "the deploy state did not roll back");
@@ -954,15 +1035,24 @@ contract LibRainDeploySnapshotTest is Test {
         string memory path = string.concat("src/lib/", libraryName, ".sol");
 
         string memory written = LibRainDeploySnapshot.writeReleasedSuitesLib(
-            vm, RELEASED_FIXTURE_ROOT, FIXTURE_CONTRACT, emitterTemplate()
+            vm,
+            RELEASED_FIXTURE_ROOT,
+            FIXTURE_CONTRACT,
+            GENERATED_SPDX_LICENSE_IDENTIFIER,
+            GENERATED_COPYRIGHT_TEXT,
+            emitterTemplate()
         );
 
         string memory emitted = vm.readFile(path);
         // Built while the fixture record is still there: both emitters read it.
         string memory expected = string.concat(
             "// SPDX-License",
-            "-Identifier: LicenseRef-DCL-1.0\n",
-            "// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd\n",
+            "-Identifier: ",
+            GENERATED_SPDX_LICENSE_IDENTIFIER,
+            "\n",
+            "// SPDX-FileCopyrightText: ",
+            GENERATED_COPYRIGHT_TEXT,
+            "\n",
             "pragma solidity ^0.8.25;\n\n",
             "// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.\n\n",
             LibRainDeploySnapshot.releasedImportBlock(vm, paths),
@@ -996,7 +1086,12 @@ contract LibRainDeploySnapshotTest is Test {
         string memory before = vm.readFile(path);
 
         string memory written = LibRainDeploySnapshot.writeReleasedSuitesLib(
-            vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT, emitterTemplate()
+            vm,
+            LibRainDeploySnapshot.LIB_FS_ROOT,
+            EMITTED_CONTRACT,
+            GENERATED_SPDX_LICENSE_IDENTIFIER,
+            GENERATED_COPYRIGHT_TEXT,
+            emitterTemplate()
         );
         string memory emitted = vm.readFile(path);
 
@@ -1004,8 +1099,12 @@ contract LibRainDeploySnapshotTest is Test {
             LibRainDeploySnapshot.recordPathsForContract(vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT);
         string memory expected = string.concat(
             "// SPDX-License",
-            "-Identifier: LicenseRef-DCL-1.0\n",
-            "// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd\n",
+            "-Identifier: ",
+            GENERATED_SPDX_LICENSE_IDENTIFIER,
+            "\n",
+            "// SPDX-FileCopyrightText: ",
+            GENERATED_COPYRIGHT_TEXT,
+            "\n",
             "pragma solidity ^0.8.25;\n\n",
             "// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.\n\n",
             LibRainDeploySnapshot.releasedImportBlock(vm, paths),
