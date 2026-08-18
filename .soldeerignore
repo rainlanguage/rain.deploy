@@ -21,4 +21,5 @@ CLAUDE.md
 /remappings.txt
 /slither.config.json
 /soldeer.lock
+/fixture-lib
 /test

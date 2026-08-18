@@ -47,6 +47,8 @@ contract Build is BuildScript, RegistryDeploySuites {
     }
 
     /// @inheritdoc BuildScript
+    /// @dev In declaration order — the order the aggregate emits its entries
+    /// in. Read by the freeze and the aggregate.
     function snapshotContractNames() internal pure override returns (string[] memory contractNames) {
         GeneratedContract[] memory contracts = generatedContracts();
         contractNames = new string[](contracts.length);
@@ -56,6 +58,8 @@ contract Build is BuildScript, RegistryDeploySuites {
     }
 
     /// @inheritdoc BuildScript
+    /// @dev Every alias lib, every released-suites lib and the aggregate over
+    /// them.
     function regenerateLibs() internal override {
         GeneratedContract[] memory contracts = generatedContracts();
         for (uint256 i = 0; i < contracts.length; i++) {
@@ -66,6 +70,7 @@ contract Build is BuildScript, RegistryDeploySuites {
                 vm, recordRoot(), contracts[i].contractName, contracts[i].candidate.snapshot
             );
         }
+        LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, LibRainDeploySnapshot.LIB_DIR, snapshotContractNames());
     }
 
     /// @inheritdoc BuildScript

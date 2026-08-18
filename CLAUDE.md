@@ -13,9 +13,9 @@ relocated.
 - **Broadcasting is key custody and real money.** Nothing automatic ever
   broadcasts: `Manual sol artifacts` is `workflow_dispatch` only, and no merge,
   tag or schedule may be given a path to it.
-- **A `sol-v*` tag is the sole release trigger.** `[package].version` in
-  `foundry.toml` is the version of the LAST Soldeer publish, not a next-version
-  slot, so an ordinary PR does not bump it.
+- **A `sol-v*` tag is the sole release trigger.**
+  `[external.package].version` in `foundry.toml` is the version of the LAST
+  Soldeer publish, not a next-version slot, so an ordinary PR does not bump it.
 - **`src/generated/<tag>/` is an append-only record.** `cutRelease()` writes a
   tag directory once. A cut tag can never be un-cut and consumers pin what it
   holds, so a frozen record is never edited, renamed or deleted.

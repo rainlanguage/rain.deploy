@@ -401,9 +401,9 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
 
 This is a deploy repo: it carries deployed concretes whose addresses and
 codehashes consumers pin, so releases are **manual `sol-v*` tags**, not merges.
-`[package].version` is the version of the LAST Soldeer publish, and only a
-release moves it. A release cut under this lifecycle also names the frozen
-`src/generated/<tag>/` record `cutRelease()` wrote for it. Every version
+`[external.package].version` is the version of the LAST Soldeer publish, and
+only a release moves it. A release cut under this lifecycle also names the
+frozen `src/generated/<tag>/` record `cutRelease()` wrote for it. Every version
 published under the previous merge-driven lifecycle predates that record and has
 none, so `src/generated/` holds no directory for it; those versions stay
 published, and consumers pin exact versions and are unaffected.
