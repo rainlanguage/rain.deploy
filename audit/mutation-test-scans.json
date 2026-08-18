@@ -18,5 +18,28 @@
       "confirmed": 3,
       "filed": ["#16", "#17", "#18"]
     }
+  },
+  {
+    "timestamp": "2026-08-18T13:31:09Z",
+    "commit": "ed91bfa5161fa94c5180d57a54e2a4341ba8e876",
+    "publishedTag": "sol-v0.1.5",
+    "commitsAheadOfTag": 211,
+    "scope": "whole repo",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.33.0",
+    "summary": {
+      "units": 15,
+      "behaviours": 264,
+      "killedByExistingTests": 234,
+      "gapsFilled": 7,
+      "equivalentMutants": 7,
+      "unkillableDefensiveGuards": 3,
+      "notExecutedBySuite": 11,
+      "nonTerminating": 2,
+      "candidates": 1,
+      "confirmed": 1,
+      "filed": [],
+      "alreadyFiled": ["#135"]
+    }
   }
 ]
