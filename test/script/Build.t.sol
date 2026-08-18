@@ -5,6 +5,8 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.16.2/src/Test.sol";
 import {GeneratedContract} from "../../script/Build.sol";
 import {DeployCandidate} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
+import {LibReleasedSuitesAggregate} from "../lib/LibReleasedSuitesAggregate.sol";
 import {BuildHarness} from "../concrete/BuildHarness.sol";
 
 /// @title BuildTest
@@ -36,7 +38,7 @@ import {BuildHarness} from "../concrete/BuildHarness.sol";
 /// Deliberately nothing here calls `run()` or `cutRelease()`. Both write
 /// `src/lib/Lib*Released.sol`, which `LibRainDeploySnapshotTest` also writes,
 /// and forge runs test contracts in parallel — two contracts writing one file
-/// is a race, not a check. Everything below is pure.
+/// is a race, not a check. Nothing below writes anything.
 contract BuildTest is Test {
     /// The harness the two declarations are read through.
     BuildHarness internal sBuild;
@@ -141,6 +143,45 @@ contract BuildTest is Test {
                     generated[i].constantPrefix, generated[j].constantPrefix, "two entries share a constant prefix"
                 );
             }
+        }
+    }
+
+    /// PROPERTY: the committed aggregate imports the generated contracts in
+    /// `generatedContracts()`'s ORDER, not merely as a set.
+    ///
+    /// Declaration order is claimed twice — the emitted library documents its
+    /// entries as being "in declaration order" and `generatedContractNames()`
+    /// documents itself as giving "the order the aggregate emits its entries
+    /// in" — and nothing else pins it.
+    /// `testTheCommittedAggregateIsWhatTheGeneratorEmits` takes the contract
+    /// list from the committed file itself, so it holds for any permutation of
+    /// it, and `testEverySnapshotIsInTheReleasedAggregate` matches sets. So the
+    /// two imports and the two `released<N>` locals can be swapped in the
+    /// committed file — byte-exactly what the generator emits for the reversed
+    /// list — and the whole suite stays green while the aggregate returns the
+    /// releases in an order the declaration does not give, which is the order
+    /// `suiteNames()` reports them in.
+    ///
+    /// Positional, because the SET is already matched by the two tests this
+    /// names and the order is the whole of what is left.
+    function testTheCommittedAggregateIsInDeclarationOrder() external view {
+        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
+        string[] memory imported = LibReleasedSuitesAggregate.declaredContractNames(
+            vm, vm.readFile(LibRainDeploySnapshot.pathForLib(LibRainDeploySnapshot.RELEASED_SUITES_LIBRARY))
+        );
+
+        assertEq(
+            imported.length,
+            generated.length,
+            "the committed aggregate imports a different number of contracts than the generator names"
+        );
+
+        for (uint256 i = 0; i < generated.length; i++) {
+            assertEq(
+                imported[i],
+                generated[i].contractName,
+                "the committed aggregate is not in the generator's declaration order"
+            );
         }
     }
 }

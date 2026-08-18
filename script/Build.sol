@@ -26,7 +26,8 @@ struct GeneratedContract {
 /// deploys.
 ///
 /// - `run()` rewrites the rolling snapshots under `src/generated/candidate/`,
-///   the alias libs pointing at them, and the released-suites libs.
+///   the alias libs pointing at them, the released-suites libs and the
+///   aggregate over them.
 /// - `cutRelease()` does the same, freezing the rolling snapshots as
 ///   `src/generated/<tag>/` in between.
 ///
@@ -35,8 +36,8 @@ struct GeneratedContract {
 /// The frozen `<tag>/` directories are what
 /// `RegistryDeploySuites.releasedSuites()` enumerates.
 ///
-/// `generatedContracts()` is the only list, read by the regeneration, both lib
-/// writers and the freeze.
+/// `generatedContracts()` is the only list, read by the regeneration, all three
+/// lib writers and the freeze.
 contract Build is Script, RegistryDeploySuites {
     /// Every contract this repo generates deploy pins for.
     /// @return contracts The generated contracts.
@@ -52,8 +53,19 @@ contract Build is Script, RegistryDeploySuites {
         });
     }
 
-    /// @notice Regenerate the rolling snapshots, their alias libs and the
-    /// released-suites libs.
+    /// Every generated contract's name, in declaration order — the order the
+    /// aggregate emits its entries in. Read by the freeze and the aggregate.
+    /// @return names The contract names.
+    function generatedContractNames() internal pure returns (string[] memory names) {
+        GeneratedContract[] memory contracts = generatedContracts();
+        names = new string[](contracts.length);
+        for (uint256 i = 0; i < contracts.length; i++) {
+            names[i] = contracts[i].contractName;
+        }
+    }
+
+    /// @notice Regenerate the rolling snapshots, their alias libs, the
+    /// released-suites libs and the aggregate over them.
     function run() external {
         regenerateCandidates();
         regenerateLibs();
@@ -63,16 +75,14 @@ contract Build is Script, RegistryDeploySuites {
     /// `src/generated/<tag>/`, then rewrite the libs from the record, so the
     /// release being cut is in them.
     function cutRelease() external {
-        GeneratedContract[] memory contracts = generatedContracts();
-        string[] memory contractNames = new string[](contracts.length);
-        for (uint256 i = 0; i < contracts.length; i++) {
-            contractNames[i] = contracts[i].contractName;
-        }
-        LibRainDeploySnapshot.freeze(vm, LibRainDeploySnapshot.LIB_FS_ROOT, regenerateCandidates, contractNames);
+        LibRainDeploySnapshot.freeze(
+            vm, LibRainDeploySnapshot.LIB_FS_ROOT, regenerateCandidates, generatedContractNames()
+        );
         regenerateLibs();
     }
 
-    /// @notice Rewrite every alias lib and every released-suites lib.
+    /// @notice Rewrite every alias lib, every released-suites lib and the
+    /// aggregate over them.
     function regenerateLibs() internal {
         GeneratedContract[] memory contracts = generatedContracts();
         for (uint256 i = 0; i < contracts.length; i++) {
@@ -83,6 +93,7 @@ contract Build is Script, RegistryDeploySuites {
                 vm, LibRainDeploySnapshot.LIB_FS_ROOT, contracts[i].contractName, contracts[i].candidate.snapshot
             );
         }
+        LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, LibRainDeploySnapshot.LIB_DIR, generatedContractNames());
     }
 
     /// @notice Rewrite every `src/generated/candidate/` snapshot from what this
