@@ -272,8 +272,25 @@ contract LibRainDeploySnapshotTest is Test {
     function testDeployTagUsesTheGuardedConversion() external view {
         assertEq(
             LibRainDeploySnapshot.deployTag(vm),
-            LibRainDeploySnapshot.tagForVersion(vm.parseTomlString(vm.readFile("foundry.toml"), ".package.version"))
+            LibRainDeploySnapshot.tagForVersion(
+                vm.parseTomlString(vm.readFile("foundry.toml"), ".external.package.version")
+            )
         );
+    }
+
+    /// PROPERTY: the release version lives at `[external.package].version`, and
+    /// `foundry.toml` carries no top-level `[package]` section.
+    ///
+    /// `external` is the only unreserved root section foundry ignores; every
+    /// other one it reads as a profile and warns about on every invocation,
+    /// and `forge config --fix` rewrites into `[profile.*]`. Both halves are
+    /// asserted because the release read and the silence are separate: a repo
+    /// that gained a second copy of the version under `[package]` would read
+    /// correctly and warn anyway.
+    function testReleaseVersionLivesUnderTheExternalSection() external view {
+        string memory config = vm.readFile("foundry.toml");
+        assertTrue(vm.keyExistsToml(config, ".external.package.version"));
+        assertFalse(vm.keyExistsToml(config, ".package"));
     }
 
     /// Snapshot paths MUST agree with `LibFs`, which is what writes them.

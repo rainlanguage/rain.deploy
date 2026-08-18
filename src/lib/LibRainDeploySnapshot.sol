@@ -12,10 +12,10 @@ import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.36/src/lib/LibFs.sol";
 import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 
-/// Thrown when `[package].version` is not strict `X.Y.Z`. A version like
-/// `0.1.7-rc1` maps to the directory `0_1_7-rc1`, which the append-only gate's
-/// tag predicate ignores forever — an orphan snapshot nothing protects. Refused
-/// rather than frozen.
+/// Thrown when `[external.package].version` is not strict `X.Y.Z`. A version
+/// like `0.1.7-rc1` maps to the directory `0_1_7-rc1`, which the append-only
+/// gate's tag predicate ignores forever — an orphan snapshot nothing protects.
+/// Refused rather than frozen.
 /// @param version The version read from `foundry.toml`.
 error UnreleasableVersion(string version);
 
@@ -54,8 +54,8 @@ error NonMonotonicRelease(string tag, string newestFrozenTag);
 /// frozen. Release machinery, not code generation.
 ///
 /// It lives here rather than in `rain-sol-codegen` deliberately. Emitting a
-/// Solidity constant is codegen; reading `[package].version`, deciding a
-/// release directory and making that directory immutable is the deploy
+/// Solidity constant is codegen; reading `[external.package].version`, deciding
+/// a release directory and making that directory immutable is the deploy
 /// lifecycle, which is this repo's subject. `LibCodeGen` still emits every
 /// constant — that split is the point, not an oversight.
 ///
@@ -79,8 +79,9 @@ error NonMonotonicRelease(string tag, string newestFrozenTag);
 /// that freezes without regenerating, so "freeze, then regenerate" has nowhere
 /// to be written.
 ///
-/// @dev The consuming repo's `foundry.toml` must grant read access to itself so
-/// `deployTag` can read the release version from it:
+/// @dev The consuming repo's `foundry.toml` must declare the release version
+/// at `[external.package].version` and grant read access to itself so
+/// `deployTag` can read it:
 /// `fs_permissions = [{ access = "read", path = "./foundry.toml" }, ...]`
 /// alongside read-write access to `./src`.
 library LibRainDeploySnapshot {
@@ -90,15 +91,15 @@ library LibRainDeploySnapshot {
     /// looking.
     string constant CANDIDATE = "candidate";
 
-    /// The canonical release tag: `foundry.toml` `[package].version` with dots
-    /// converted to underscores (`0.1.7` -> `0_1_7`) for the Solidity directory
-    /// form. The single definition of the tag form — the version in
+    /// The canonical release tag: `foundry.toml` `[external.package].version`
+    /// with dots converted to underscores (`0.1.7` -> `0_1_7`) for the Solidity
+    /// directory form. The single definition of the tag form — the version in
     /// `foundry.toml` is the one source of truth for which release is being
     /// built, so every path derives from it rather than restating it.
     /// @param vm The Vm instance for file operations.
     /// @return The tag.
     function deployTag(Vm vm) internal view returns (string memory) {
-        return tagForVersion(vm.parseTomlString(vm.readFile("foundry.toml"), ".package.version"));
+        return tagForVersion(vm.parseTomlString(vm.readFile("foundry.toml"), ".external.package.version"));
     }
 
     /// Whether `subject` is three numbers joined by exactly two `separator`s,

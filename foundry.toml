@@ -1,4 +1,8 @@
-[package]
+# Release metadata, not foundry config: `LibRainDeploySnapshot.deployTag` reads
+# `version` as the release being built, and `rainix-tag-release` rewrites it
+# from the tag. `[external.*]` is the section foundry reserves for another
+# tool's config: it never merges it into a profile and never warns about it.
+[external.package]
 name = "rain-deploy"
 # Deploy repo: this is the version of the LAST Soldeer publish, not a
 # next-version slot. A normal PR does not bump it; only a `sol-v*` tag release
