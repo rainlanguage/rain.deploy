@@ -4,3 +4,4 @@ out
 .fixes
 .env
 .pre-commit-config.yaml
+fixture-lib

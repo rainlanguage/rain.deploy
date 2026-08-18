@@ -43,6 +43,11 @@ fs_permissions = [
   # inherited record check reads that root from contracts forge runs in
   # parallel, so a fixture release there would be one they have to fail on.
   { access = "read-write", path = "./test" },
+  # LibRainDeploySnapshotTest points the two lib writers here, one directory per
+  # test. Its own root, outside both compiled trees: a generated lib imports
+  # ../generated/ and ../abstract/, which resolve from src/lib and nowhere else,
+  # so the copy a failing test leaves behind would break every other suite.
+  { access = "read-write", path = "./fixture-lib" },
   # GeneratedSnapshotShapeTest reads the compiler's AST out of the artifact.
   { access = "read", path = "./out" },
 ]

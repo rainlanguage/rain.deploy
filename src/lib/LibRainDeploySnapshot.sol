@@ -195,6 +195,15 @@ library LibRainDeploySnapshot {
     /// assertion was standing in for.
     string constant LIB_FS_ROOT = GENERATED_DIR;
 
+    /// The directory a repo's REAL alias and released-suites libs are written
+    /// into, and the only directory the text they hold compiles in.
+    ///
+    /// Both emit imports relative to it — the alias lib reaches
+    /// `../generated/`, the released lib `../abstract/` — so a lib written
+    /// anywhere else names files that are not there, and one left under a
+    /// compiled root fails the whole build.
+    string constant LIB_DIR = "src/lib";
+
     /// The directory holding a snapshot, rolling or frozen, under a record
     /// root.
     ///
@@ -531,9 +540,8 @@ library LibRainDeploySnapshot {
     /// The constant prefix is passed rather than derived. Deriving
     /// `ADDRESS_REGISTRY` from `AddressRegistry` means camelCase to
     /// SCREAMING_SNAKE in Solidity, which is a byte loop with an acronym
-    /// problem, to save a caller one short string. The library name and output
-    /// path ARE derived, because `Lib<Contract>Deploy` at `src/lib/` is
-    /// mechanical.
+    /// problem, to save a caller one short string. The library NAME is derived,
+    /// because `Lib<Contract>Deploy` is mechanical.
     ///
     /// The header comes from `LibCodeGen.filePrefix`, the same one `LibFs`
     /// gives a snapshot, so an alias lib and a snapshot say they are generated
@@ -541,6 +549,11 @@ library LibRainDeploySnapshot {
     /// copyright holder are the calling repo's, for the reason `writeSnapshot`
     /// gives, and reach `filePrefix` from here unchanged.
     /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory to write the lib into — `LIB_DIR` for a
+    /// repo's real tree. A parameter for the same reason `recordRoot` is one on
+    /// `writeReleasedSuitesLib`: a writer that can only be pointed at the
+    /// committed tree can only be tested by overwriting it, and the directory
+    /// MUST already exist.
     /// @param contractName The contract the snapshot describes.
     /// @param constantPrefix The prefix for the emitted constants, e.g.
     /// `ADDRESS_REGISTRY`.
@@ -551,6 +564,7 @@ library LibRainDeploySnapshot {
     /// @return The path written.
     function writeAliasLib(
         Vm vm,
+        string memory libDir,
         string memory contractName,
         string memory constantPrefix,
         string memory dir,
@@ -558,7 +572,7 @@ library LibRainDeploySnapshot {
         string memory copyrightText
     ) internal returns (string memory) {
         string memory libraryName = string.concat("Lib", contractName, "Deploy");
-        string memory path = string.concat("src/lib/", libraryName, ".sol");
+        string memory path = string.concat(libDir, "/", libraryName, ".sol");
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeFile(
@@ -576,15 +590,22 @@ library LibRainDeploySnapshot {
     /// `writeAliasLib` applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
     /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
     /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory to write the lib into — `LIB_DIR` for a
+    /// repo's real tree.
     /// @param contractName The contract the alias lib is written for.
     /// @param constantPrefix The prefix for the emitted constants.
     /// @param dir The snapshot directory to alias.
     /// @return The path written.
-    function writeAliasLib(Vm vm, string memory contractName, string memory constantPrefix, string memory dir)
-        internal
-        returns (string memory)
-    {
-        return writeAliasLib(vm, contractName, constantPrefix, dir, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT);
+    function writeAliasLib(
+        Vm vm,
+        string memory libDir,
+        string memory contractName,
+        string memory constantPrefix,
+        string memory dir
+    ) internal returns (string memory) {
+        return writeAliasLib(
+            vm, libDir, contractName, constantPrefix, dir, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT
+        );
     }
 
     /// The release tag a record path sits under.
@@ -894,8 +915,8 @@ library LibRainDeploySnapshot {
     /// would notice, and generating both here is what makes that check pass by
     /// construction rather than by remembering.
     ///
-    /// Written beside the alias lib, under the same `Lib<Contract>` naming, so
-    /// all generated non-snapshot Solidity is in one directory.
+    /// Named `Lib<Contract>Released`, the same `Lib<Contract>` shape the alias
+    /// lib is named with, into the directory it is handed.
     ///
     /// Five fields per entry come from the frozen snapshot and two from
     /// `template`. Those two — the key and the artifact path — are explorer and
@@ -912,6 +933,9 @@ library LibRainDeploySnapshot {
     /// ones that release was cut with. It is frozen into the snapshot by
     /// `writeSnapshot` and aliased back out here.
     /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory to write the lib into — `LIB_DIR` for a
+    /// repo's real tree. A parameter for the same reason `recordRoot` is one,
+    /// and the directory MUST already exist.
     /// @param recordRoot The record root to read releases from — `LIB_FS_ROOT`
     /// for a repo's real record. A parameter for the same reason
     /// `frozenSnapshotPaths` takes one: a writer that can only be pointed at
@@ -925,6 +949,7 @@ library LibRainDeploySnapshot {
     /// @return The path written.
     function writeReleasedSuitesLib(
         Vm vm,
+        string memory libDir,
         string memory recordRoot,
         string memory contractName,
         string memory spdxLicenseIdentifier,
@@ -932,25 +957,25 @@ library LibRainDeploySnapshot {
         DeploySuite memory template
     ) internal returns (string memory) {
         string memory libraryName = string.concat("Lib", contractName, "Released");
-        string memory path = string.concat("src/lib/", libraryName, ".sol");
-        string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
+        string memory path = string.concat(libDir, "/", libraryName, ".sol");
+        string memory body;
+        {
+            string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
+            body = string.concat(
+                releasedImportBlock(vm, paths), releasedLibraryBlock(vm, libraryName, contractName, paths, template)
+            );
+        }
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.writeFile(
-            path,
-            string.concat(
-                LibCodeGen.filePrefix(spdxLicenseIdentifier, copyrightText),
-                "\n",
-                releasedImportBlock(vm, paths),
-                releasedLibraryBlock(vm, libraryName, contractName, paths, template)
-            )
-        );
+        vm.writeFile(path, string.concat(LibCodeGen.filePrefix(spdxLicenseIdentifier, copyrightText), "\n", body));
         return path;
     }
 
     /// `writeReleasedSuitesLib` applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
     /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
     /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory to write the lib into — `LIB_DIR` for a
+    /// repo's real tree.
     /// @param recordRoot The record root — `LIB_FS_ROOT` for a repo's real
     /// record.
     /// @param contractName The contract the released lib is written for.
@@ -959,12 +984,13 @@ library LibRainDeploySnapshot {
     /// @return The path written.
     function writeReleasedSuitesLib(
         Vm vm,
+        string memory libDir,
         string memory recordRoot,
         string memory contractName,
         DeploySuite memory template
     ) internal returns (string memory) {
         return writeReleasedSuitesLib(
-            vm, recordRoot, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, template
+            vm, libDir, recordRoot, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, template
         );
     }
 

@@ -77,10 +77,18 @@ contract Build is Script, RegistryDeploySuites {
         GeneratedContract[] memory contracts = generatedContracts();
         for (uint256 i = 0; i < contracts.length; i++) {
             LibRainDeploySnapshot.writeAliasLib(
-                vm, contracts[i].contractName, contracts[i].constantPrefix, LibRainDeploySnapshot.CANDIDATE
+                vm,
+                LibRainDeploySnapshot.LIB_DIR,
+                contracts[i].contractName,
+                contracts[i].constantPrefix,
+                LibRainDeploySnapshot.CANDIDATE
             );
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, LibRainDeploySnapshot.LIB_FS_ROOT, contracts[i].contractName, contracts[i].candidate.snapshot
+                vm,
+                LibRainDeploySnapshot.LIB_DIR,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
+                contracts[i].contractName,
+                contracts[i].candidate.snapshot
             );
         }
     }
