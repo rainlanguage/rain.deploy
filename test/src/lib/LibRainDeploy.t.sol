@@ -11,6 +11,7 @@ import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
 import {MockDirtyWordOwner} from "../../concrete/MockDirtyWordOwner.sol";
 import {MockRawAnswerOwner} from "../../concrete/MockRawAnswerOwner.sol";
 import {MockRevertingAnswerOwner} from "../../concrete/MockRevertingAnswerOwner.sol";
+import {MockChainDependentOwner} from "../../concrete/MockChainDependentOwner.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
@@ -1263,6 +1264,42 @@ contract LibRainDeployTest is Test {
             )
         );
         this.externalCheckResolvedAddressesOnNetworks(networks, address(consumer), ownerReadCalls(), expected(wrong));
+    }
+
+    /// `checkResolvedAddressesOnNetworks` MUST advance past the first network.
+    ///
+    /// The passing case above is a deployment that answers the same thing
+    /// everywhere, which a loop that only ever forked the first network passes
+    /// just as happily — and the mismatch case above is one network, so it
+    /// cannot tell them apart either. What separates them is a target that
+    /// answers differently on a LATER network, which is exactly the deployment
+    /// this matrix exists for: one chain of five holding a value nobody looked
+    /// at.
+    ///
+    /// The first network is the one the target agrees on, so nothing fails
+    /// before the loop has to advance, and the failure names the SECOND network
+    /// rather than a fixed one.
+    function testCheckResolvedAddressesOnNetworksReachesEveryNetwork() external {
+        address account = address(0xf00);
+        address wrong = address(0xba4);
+        MockChainDependentOwner target = new MockChainDependentOwner(account, wrong, ARBITRUM_ONE_CHAIN_ID);
+        vm.makePersistent(address(target));
+
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                LibRainDeploy.BASE,
+                address(target),
+                uint256(0),
+                account,
+                wrong
+            )
+        );
+        this.externalCheckResolvedAddressesOnNetworks(networks, address(target), ownerReadCalls(), expected(account));
     }
 
     /// `deployToNetworks` MUST deploy when every dependency has code on the
