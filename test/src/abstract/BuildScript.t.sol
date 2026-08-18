@@ -26,6 +26,19 @@ contract BuildScriptTest is Test {
     /// Where the lib-ordering fixture's record is built.
     string constant LIBS_FIXTURE_ROOT = "test/generated-buildscript-libs";
 
+    /// Clears a fixture record an earlier failure left behind.
+    ///
+    /// A cheatcode write is not undone by a revert, so a failing test leaves
+    /// its markers on disk and the next run reads THOSE — an assertion about
+    /// the previous run rather than about this one.
+    /// @param root The fixture record root to clear.
+    function resetFixture(string memory root) internal {
+        if (vm.exists(root)) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(root, true);
+        }
+    }
+
     /// PROPERTY: `run()` regenerates everything and freezes NOTHING.
     ///
     /// This is the entry point CI calls on every push. A `run()` that cut a
@@ -35,6 +48,7 @@ contract BuildScriptTest is Test {
     /// The lib marker also carries the order: the libs are written after the
     /// snapshots, from a record that holds no release.
     function testRunRegeneratesAndFreezesNothing() external {
+        resetFixture(RUN_FIXTURE_ROOT);
         BuildScriptHarness harness = new BuildScriptHarness(RUN_FIXTURE_ROOT, FIXTURE_CONTRACT);
         harness.run();
 
@@ -62,6 +76,7 @@ contract BuildScriptTest is Test {
     /// release recording bytes its own deploy did not produce is silent
     /// afterwards — the immutability guard only fires on a re-cut.
     function testCutReleaseFreezesTheRegeneratedSnapshot() external {
+        resetFixture(CUT_FIXTURE_ROOT);
         BuildScriptHarness harness = new BuildScriptHarness(CUT_FIXTURE_ROOT, FIXTURE_CONTRACT);
         string memory stale = harness.marker("stale");
         //forge-lint: disable-next-line(unsafe-cheatcode)
@@ -94,6 +109,7 @@ contract BuildScriptTest is Test {
     /// ago, and the release publishes a declaration that omits itself — which
     /// every check downstream then reads as a release nobody ever made.
     function testCutReleaseRegeneratesLibsFromTheRecordJustCut() external {
+        resetFixture(LIBS_FIXTURE_ROOT);
         BuildScriptHarness harness = new BuildScriptHarness(LIBS_FIXTURE_ROOT, FIXTURE_CONTRACT);
         harness.cutRelease();
 
