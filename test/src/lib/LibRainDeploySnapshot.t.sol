@@ -485,17 +485,90 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
-    /// The alias lib this repo's `AddressRegistry` snapshot is re-exported
-    /// through, and the only file the alias emitter writes here.
-    ///
-    /// `writeAliasLib` derives its path from the contract name and takes no
-    /// root, so driving it against a real contract writes the COMMITTED file.
-    /// That is what makes an alias lib whose text has drifted from what the
-    /// generator emits a failure rather than a diff nobody looks at — and the
-    /// alias emitter is otherwise the one generator path in this repo that
-    /// nothing anywhere executes, because only `script/Build.sol` calls it and
-    /// nothing may call that.
+    /// The committed alias lib this repo's `AddressRegistry` snapshot is
+    /// re-exported through. Read here, never written.
     string constant ALIAS_LIB_PATH = "src/lib/LibAddressRegistryDeploy.sol";
+
+    /// The committed released lib this repo's `AddressRegistry` record is
+    /// enumerated through. Read here, never written.
+    string constant RELEASED_LIB_PATH = "src/lib/LibAddressRegistryReleased.sol";
+
+    /// Where every lib writer — alias, released-suites and aggregate — is
+    /// pointed when the writer is what is under test.
+    ///
+    /// Outside `src/` and `test/`, which is everything `fs_permissions`
+    /// otherwise grants and both of which are compiled: a generated lib imports
+    /// `../generated/`, `../abstract/` and `./Lib<Contract>Released.sol`, which
+    /// resolve from `src/lib` and nowhere else, so a copy under either root
+    /// fails the build for every suite — including the copy a failing test
+    /// deliberately leaves behind. `foundry.toml` grants this root for exactly
+    /// that, and nothing compiles it.
+    ///
+    /// Each writer test takes a subdirectory of its own, for the reason
+    /// `RELEASED_FIXTURE_ROOT` is not `FIXTURE_ROOT`: forge runs the tests in a
+    /// contract concurrently, and two of them writing one lib path read each
+    /// other's output.
+    string constant FIXTURE_LIB_ROOT = "fixture-lib";
+
+    /// `LIB_DIR` is the directory a build points every lib writer at, so the
+    /// committed libs MUST be the files that directory holds. A `LIB_DIR`
+    /// naming anywhere else is a build that rewrites nothing the compiler
+    /// reads, leaving the committed libs stale forever.
+    ///
+    /// The two per-contract libs here; the aggregate's own committed path is
+    /// pinned by `testTheCommittedAggregateIsWhatTheGeneratorEmits`, which
+    /// reads it through `pathForLib` and asserts the path it gets.
+    function testTheCommittedLibsAreInTheLibDir() external pure {
+        assertEq(string.concat(LibRainDeploySnapshot.LIB_DIR, "/LibAddressRegistryDeploy.sol"), ALIAS_LIB_PATH);
+        assertEq(string.concat(LibRainDeploySnapshot.LIB_DIR, "/LibAddressRegistryReleased.sol"), RELEASED_LIB_PATH);
+    }
+
+    /// The COMMITTED alias lib MUST be exactly what the emitters produce for
+    /// this repo's `AddressRegistry` today. That is what makes an alias lib
+    /// whose text has drifted from the generator a failure rather than a diff
+    /// nobody looks at — the alias emitter is otherwise the one generator path
+    /// in this repo that nothing anywhere executes, because only
+    /// `script/Build.sol` calls it and nothing may call that.
+    ///
+    /// Reads and writes nothing. A check that regenerated the file first would
+    /// pass on a stale one by overwriting it, and the file is committed source
+    /// several other suites compile against.
+    function testTheCommittedAliasLibIsWhatTheGeneratorEmits() external view {
+        assertEq(
+            vm.readFile(ALIAS_LIB_PATH),
+            string.concat(
+                generatedFilePrefix(),
+                LibRainDeploySnapshot.aliasImportBlock(
+                    EMITTED_CONTRACT, "ADDRESS_REGISTRY", LibRainDeploySnapshot.CANDIDATE
+                ),
+                LibRainDeploySnapshot.aliasLibraryBlock(
+                    EMITTED_CONTRACT, "ADDRESS_REGISTRY", "LibAddressRegistryDeploy"
+                )
+            )
+        );
+    }
+
+    /// The COMMITTED released lib MUST be exactly what the emitters produce
+    /// from this repo's REAL record today. That is the whole of what makes a
+    /// stale generated file a test failure rather than a silent one.
+    ///
+    /// Reads and writes nothing, for the reason
+    /// `testTheCommittedAliasLibIsWhatTheGeneratorEmits` does not write.
+    function testTheCommittedReleasedLibIsWhatTheGeneratorEmits() external view {
+        string[] memory paths =
+            LibRainDeploySnapshot.recordPathsForContract(vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT);
+
+        assertEq(
+            vm.readFile(RELEASED_LIB_PATH),
+            string.concat(
+                generatedFilePrefix(),
+                LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+                LibRainDeploySnapshot.releasedLibraryBlock(
+                    vm, EMITTED_LIBRARY, EMITTED_CONTRACT, paths, emitterTemplate()
+                )
+            )
+        );
+    }
 
     /// The import block MUST alias exactly the two pins an alias lib
     /// re-exports, out of the snapshot directory it is pointed at.
@@ -553,28 +626,40 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
-    /// The alias lib MUST land at the path derived from the contract name,
-    /// holding exactly the header, import block and library block the emitters
-    /// produce.
+    /// The alias lib MUST land at `Lib<Contract>Deploy.sol` under the directory
+    /// it is handed, holding exactly the header, import block and library block
+    /// the emitters produce.
     ///
-    /// Runs against this repo's real contract and rolling snapshot, so it
-    /// overwrites the committed generated file and asserts that file is what
-    /// the generator emits today — header constants included.
+    /// A fixture contract name, so the library name in the path is asserted to
+    /// be derived from it rather than to be this repo's own.
     ///
-    /// The file is restored BEFORE the assertions, which revert on failure.
+    /// The directory is removed BEFORE the assertions, because forge-std
+    /// assertions revert: removing afterwards removes in every case except a
+    /// failure, which is the only case that leaves a directory behind.
     function testWriteAliasLibWritesTheLibAtItsPath() external {
-        string memory before = vm.readFile(ALIAS_LIB_PATH);
+        string memory libDir = string.concat(FIXTURE_LIB_ROOT, "/alias-path");
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(libDir, true);
 
         string memory written = LibRainDeploySnapshot.writeAliasLib(
-            vm, "AddressRegistry", "ADDRESS_REGISTRY", LibRainDeploySnapshot.CANDIDATE
+            vm, libDir, FIXTURE_CONTRACT, "MOCK_DEPLOYABLE", LibRainDeploySnapshot.CANDIDATE
         );
-        string memory emitted = vm.readFile(ALIAS_LIB_PATH);
+        string memory emitted = vm.readFile(written);
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.writeFile(ALIAS_LIB_PATH, before);
+        vm.removeDir(libDir, true);
 
-        assertEq(written, ALIAS_LIB_PATH);
-        assertEq(emitted, before);
+        assertEq(written, string.concat(libDir, "/LibMockDeployableDeploy.sol"));
+        assertEq(
+            emitted,
+            string.concat(
+                generatedFilePrefix(),
+                LibRainDeploySnapshot.aliasImportBlock(
+                    FIXTURE_CONTRACT, "MOCK_DEPLOYABLE", LibRainDeploySnapshot.CANDIDATE
+                ),
+                LibRainDeploySnapshot.aliasLibraryBlock(FIXTURE_CONTRACT, "MOCK_DEPLOYABLE", "LibMockDeployableDeploy")
+            )
+        );
     }
 
     /// Where the released-lib record fixture is built. Its own tree rather
@@ -586,10 +671,11 @@ contract LibRainDeploySnapshotTest is Test {
     /// `RELEASED_FIXTURE_ROOT` is not `FIXTURE_ROOT`.
     string constant SELECTED_FIXTURE_ROOT = "test/generated-selected";
 
-    /// The contract the fixture record freezes, and the one the writer is
-    /// pointed at there. NOT this repo's own `AddressRegistry`: the writer
-    /// derives the file it writes from the contract name, and the committed
-    /// declaration is not a file a fixture gets to overwrite.
+    /// The contract the fixture record freezes, and the one the writers are
+    /// pointed at. NOT this repo's own `AddressRegistry`: the writers derive
+    /// the file they write from the contract name, so a name a committed lib
+    /// also carries would leave a writer test unable to tell a derived name
+    /// from a hard-coded one.
     string constant FIXTURE_CONTRACT = "MockDeployable";
 
     /// A second contract frozen under one of the fixture record's tags, as a
@@ -619,11 +705,12 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
-    /// The contract every emitter test emits a released lib for.
+    /// This repo's own contract: the one the committed libs are generated from,
+    /// and the one every emitter test emits for.
     string constant EMITTED_CONTRACT = "AddressRegistry";
 
-    /// The library every emitter test emits, derived from `EMITTED_CONTRACT`
-    /// exactly as `writeReleasedSuitesLib` derives it.
+    /// The library the committed released lib declares, derived from
+    /// `EMITTED_CONTRACT` exactly as `writeReleasedSuitesLib` derives it.
     string constant EMITTED_LIBRARY = "LibAddressRegistryReleased";
 
     /// The candidate declaration the emitted metadata comes from.
@@ -1105,12 +1192,19 @@ contract LibRainDeploySnapshotTest is Test {
     /// whole, the file it writes says so. The fixture record is written newest
     /// tag first, so the emitted order is the sort's and not the walk's.
     ///
-    /// A fixture contract name, so the file written is the fixture's own and
-    /// not this repo's committed declaration. Removed BEFORE the assertions,
-    /// because an emitted lib importing a record that only a test wrote does
-    /// not compile, and forge-std assertions revert — undoing afterwards is
-    /// undoing in every case except the one this test exists to report.
+    /// A fixture contract name and a fixture lib directory, so the file written
+    /// is the fixture's own and lands nowhere the compiler reads. Both are
+    /// removed BEFORE the assertions, because forge-std assertions revert —
+    /// undoing afterwards is undoing in every case except the one this test
+    /// exists to report.
+    ///
+    /// The path it lands at is also the assertion that the library name is
+    /// derived from the contract and the directory is the one handed in.
     function testWriteReleasedSuitesLibReadsTheRecordItIsHanded() external {
+        string memory libDir = string.concat(FIXTURE_LIB_ROOT, "/released-record");
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(libDir, true);
+
         writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol"));
         writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT, ".sol"));
         writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT_SECOND, ".sol"));
@@ -1126,10 +1220,11 @@ contract LibRainDeploySnapshotTest is Test {
         paths[1] = string.concat(RELEASED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol");
 
         string memory libraryName = string.concat("Lib", FIXTURE_CONTRACT, "Released");
-        string memory path = string.concat("src/lib/", libraryName, ".sol");
+        string memory path = string.concat(libDir, "/", libraryName, ".sol");
 
         string memory written = LibRainDeploySnapshot.writeReleasedSuitesLib(
             vm,
+            libDir,
             RELEASED_FIXTURE_ROOT,
             FIXTURE_CONTRACT,
             RAIN_SPDX_LICENSE_IDENTIFIER,
@@ -1146,7 +1241,7 @@ contract LibRainDeploySnapshotTest is Test {
         );
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeFile(path);
+        vm.removeDir(libDir, true);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(RELEASED_FIXTURE_ROOT, true);
 
@@ -1155,40 +1250,6 @@ contract LibRainDeploySnapshotTest is Test {
         assertFalse(vm.contains(emitted, FIXTURE_CONTRACT_SECOND));
         assertFalse(vm.contains(emitted, LibRainDeploySnapshot.CANDIDATE));
         assertFalse(vm.contains(emitted, "collision-guard"));
-    }
-
-    /// The released lib MUST land beside the alias lib, under the name derived
-    /// from the contract, holding exactly the prefix, imports and library the
-    /// emitters produce.
-    ///
-    /// Run against this repo's REAL record and its real contract, so what it
-    /// writes is the committed generated file — that is the whole of what makes
-    /// a stale generated file a test failure rather than a silent one. Restored
-    /// BEFORE the assertions run, because forge-std assertions revert: restoring
-    /// afterwards restores in every case except a failure, which is the only
-    /// case where the tree is dirty and the one this test exists to report.
-    function testWriteReleasedSuitesLibWritesTheLibAtItsPath() external {
-        string memory path = "src/lib/LibAddressRegistryReleased.sol";
-        string memory before = vm.readFile(path);
-
-        string memory written = LibRainDeploySnapshot.writeReleasedSuitesLib(
-            vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT, emitterTemplate()
-        );
-        string memory emitted = vm.readFile(path);
-
-        string[] memory paths =
-            LibRainDeploySnapshot.recordPathsForContract(vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT);
-        string memory expected = string.concat(
-            generatedFilePrefix(),
-            LibRainDeploySnapshot.releasedImportBlock(vm, paths),
-            LibRainDeploySnapshot.releasedLibraryBlock(vm, EMITTED_LIBRARY, EMITTED_CONTRACT, paths, emitterTemplate())
-        );
-
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.writeFile(path, before);
-
-        assertEq(written, path);
-        assertEq(emitted, expected);
     }
 
     /// The contracts the aggregate emitter tests are handed, as a repo's
@@ -1346,22 +1407,22 @@ contract LibRainDeploySnapshotTest is Test {
     /// contract, and a writer aimed at that file would be rewriting it
     /// underneath both of them.
     ///
-    /// Not under `src/` or `test/`, which is everything `fs_permissions`
-    /// otherwise grants, because the writer names the file it emits
-    /// `LibReleasedSuites.sol` and that file imports
-    /// `./Lib<Contract>Released.sol` and
-    /// `../abstract/RainDeploySuitesBase.sol` — paths that resolve from
-    /// `src/lib` and nowhere else. Both roots are compiled, so a copy left
-    /// behind by a failure there fails the whole build, on every test in the
-    /// repo, until it is deleted by hand. `foundry.toml` grants `fixture-lib`
-    /// for these two.
+    /// Under `FIXTURE_LIB_ROOT` rather than `src/` or `test/`, and a
+    /// subdirectory of its own within it, for the reasons that constant gives:
+    /// the aggregate imports `./Lib<Contract>Released.sol` and
+    /// `../abstract/RainDeploySuitesBase.sol`, which resolve from `src/lib` and
+    /// nowhere else, so a copy left behind by a failure under a compiled root
+    /// fails the whole build until it is deleted by hand. Spelled out rather
+    /// than concatenated from `FIXTURE_LIB_ROOT`, because solc refuses
+    /// `string.concat` in a constant initialiser.
     string constant AGGREGATE_PATH_FIXTURE_DIR = "fixture-lib/aggregate-path";
 
     /// Where `testWriteReleasedSuitesAggregateDefaultsToTheOrgHeader` points
     /// the writer, for the reason `RELEASED_FIXTURE_ROOT` is not
     /// `FIXTURE_ROOT`: forge runs the tests in a contract concurrently, and two
     /// of them creating, writing, reading and removing one directory see each
-    /// other's files and each other's removals.
+    /// other's files and each other's removals. Under `FIXTURE_LIB_ROOT`,
+    /// spelled out for the reason `AGGREGATE_PATH_FIXTURE_DIR` gives.
     string constant AGGREGATE_DEFAULTS_FIXTURE_DIR = "fixture-lib/aggregate-defaults";
 
     /// The aggregate MUST land at `<libDir>/LibReleasedSuites.sol`, holding
@@ -1402,9 +1463,9 @@ contract LibRainDeploySnapshotTest is Test {
     ///
     /// That is what makes a hand edit to it, and a generator nobody re-ran, a
     /// test failure rather than a silent one — the same thing
-    /// `testWriteReleasedSuitesLibWritesTheLibAtItsPath` does for one released
-    /// lib, and needed here for the same reason: the aggregate is the only file
-    /// the whole released declaration is read through.
+    /// `testTheCommittedReleasedLibIsWhatTheGeneratorEmits` does for one
+    /// released lib, and needed here for the same reason: the aggregate is the
+    /// only file the whole released declaration is read through.
     ///
     /// The contract list is the committed file's own, so this says the file is
     /// what the generator makes of the contracts it names. That those ARE the
@@ -1967,19 +2028,24 @@ contract LibRainDeploySnapshotTest is Test {
     }
 
     /// As `testWriteSnapshotDefaultsToTheOrgHeader`, for the alias lib.
+    ///
+    /// Both arities write one path, so the directory is this test's own.
     function testWriteAliasLibDefaultsToTheOrgHeader() external {
-        string memory before = vm.readFile(ALIAS_LIB_PATH);
+        string memory libDir = string.concat(FIXTURE_LIB_ROOT, "/alias-header");
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(libDir, true);
 
         string memory defaulted = vm.readFile(
             LibRainDeploySnapshot.writeAliasLib(
-                vm, "AddressRegistry", "ADDRESS_REGISTRY", LibRainDeploySnapshot.CANDIDATE
+                vm, libDir, FIXTURE_CONTRACT, "MOCK_DEPLOYABLE", LibRainDeploySnapshot.CANDIDATE
             )
         );
         string memory explicitly = vm.readFile(
             LibRainDeploySnapshot.writeAliasLib(
                 vm,
-                "AddressRegistry",
-                "ADDRESS_REGISTRY",
+                libDir,
+                FIXTURE_CONTRACT,
+                "MOCK_DEPLOYABLE",
                 LibRainDeploySnapshot.CANDIDATE,
                 RAIN_SPDX_LICENSE_IDENTIFIER,
                 RAIN_COPYRIGHT_TEXT
@@ -1987,26 +2053,30 @@ contract LibRainDeploySnapshotTest is Test {
         );
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.writeFile(ALIAS_LIB_PATH, before);
+        vm.removeDir(libDir, true);
 
         assertEq(defaulted, explicitly);
     }
 
     /// As `testWriteSnapshotDefaultsToTheOrgHeader`, for the released lib.
+    ///
+    /// Both arities write one path, so the directory is this test's own.
     function testWriteReleasedSuitesLibDefaultsToTheOrgHeader() external {
-        string memory path = "src/lib/LibAddressRegistryReleased.sol";
-        string memory before = vm.readFile(path);
+        string memory libDir = string.concat(FIXTURE_LIB_ROOT, "/released-header");
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(libDir, true);
 
         string memory defaulted = vm.readFile(
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT, emitterTemplate()
+                vm, libDir, LibRainDeploySnapshot.LIB_FS_ROOT, FIXTURE_CONTRACT, emitterTemplate()
             )
         );
         string memory explicitly = vm.readFile(
             LibRainDeploySnapshot.writeReleasedSuitesLib(
                 vm,
+                libDir,
                 LibRainDeploySnapshot.LIB_FS_ROOT,
-                EMITTED_CONTRACT,
+                FIXTURE_CONTRACT,
                 RAIN_SPDX_LICENSE_IDENTIFIER,
                 RAIN_COPYRIGHT_TEXT,
                 emitterTemplate()
@@ -2014,7 +2084,7 @@ contract LibRainDeploySnapshotTest is Test {
         );
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.writeFile(path, before);
+        vm.removeDir(libDir, true);
 
         assertEq(defaulted, explicitly);
     }

@@ -66,10 +66,18 @@ contract Build is BuildScript, RegistryDeploySuites {
         GeneratedContract[] memory contracts = generatedContracts();
         for (uint256 i = 0; i < contracts.length; i++) {
             LibRainDeploySnapshot.writeAliasLib(
-                vm, contracts[i].contractName, contracts[i].constantPrefix, LibRainDeploySnapshot.CANDIDATE
+                vm,
+                LibRainDeploySnapshot.LIB_DIR,
+                contracts[i].contractName,
+                contracts[i].constantPrefix,
+                LibRainDeploySnapshot.CANDIDATE
             );
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, recordRoot(), contracts[i].contractName, contracts[i].candidate.snapshot
+                vm,
+                LibRainDeploySnapshot.LIB_DIR,
+                recordRoot(),
+                contracts[i].contractName,
+                contracts[i].candidate.snapshot
             );
         }
         LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, LibRainDeploySnapshot.LIB_DIR, snapshotContractNames());

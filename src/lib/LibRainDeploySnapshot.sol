@@ -276,14 +276,20 @@ library LibRainDeploySnapshot {
         return LibFs.pathForTaggedContract(dir, contractName);
     }
 
-    /// Where every generated non-snapshot lib is written — the alias libs, the
-    /// per-contract released libs and the aggregate over them.
+    /// Where every generated non-snapshot lib in a repo's REAL tree is written
+    /// — the alias libs, the per-contract released libs and the aggregate over
+    /// them — and the only directory the text any of them holds compiles in.
     ///
     /// ONE constant rather than one per writer, because the aggregate imports
     /// the per-contract libs as `./Lib<Contract>Released.sol` — a sibling path,
-    /// which is only a sibling path while both writers agree on this directory.
-    /// Two spellings of it is a generated file that stops compiling the moment
-    /// one of them moves.
+    /// which is only a sibling path while every writer is pointed at this one
+    /// directory. Two spellings of it is a generated file that stops compiling
+    /// the moment one of them moves.
+    ///
+    /// The other imports are parent-relative and constrain it further still:
+    /// an alias lib reaches `../generated/`, a released lib and the aggregate
+    /// `../abstract/`. So a lib written anywhere else names files that are not
+    /// there, and one left under a compiled root fails the whole build.
     string constant LIB_DIR = "src/lib";
 
     /// The generated aggregate's library name, and the file it is written to.
@@ -568,9 +574,8 @@ library LibRainDeploySnapshot {
     /// The constant prefix is passed rather than derived. Deriving
     /// `ADDRESS_REGISTRY` from `AddressRegistry` means camelCase to
     /// SCREAMING_SNAKE in Solidity, which is a byte loop with an acronym
-    /// problem, to save a caller one short string. The library name and output
-    /// path ARE derived, because `Lib<Contract>Deploy` at `src/lib/` is
-    /// mechanical.
+    /// problem, to save a caller one short string. The library NAME is derived,
+    /// because `Lib<Contract>Deploy` is mechanical.
     ///
     /// The header comes from `LibCodeGen.filePrefix`, the same one `LibFs`
     /// gives a snapshot, so an alias lib and a snapshot say they are generated
@@ -578,6 +583,11 @@ library LibRainDeploySnapshot {
     /// copyright holder are the calling repo's, for the reason `writeSnapshot`
     /// gives, and reach `filePrefix` from here unchanged.
     /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory to write the lib into — `LIB_DIR` for a
+    /// repo's real tree. A parameter for the same reason `recordRoot` is one on
+    /// `writeReleasedSuitesLib`: a writer that can only be pointed at the
+    /// committed tree can only be tested by overwriting it, and the directory
+    /// MUST already exist.
     /// @param contractName The contract the snapshot describes.
     /// @param constantPrefix The prefix for the emitted constants, e.g.
     /// `ADDRESS_REGISTRY`.
@@ -588,6 +598,7 @@ library LibRainDeploySnapshot {
     /// @return The path written.
     function writeAliasLib(
         Vm vm,
+        string memory libDir,
         string memory contractName,
         string memory constantPrefix,
         string memory dir,
@@ -595,7 +606,7 @@ library LibRainDeploySnapshot {
         string memory copyrightText
     ) internal returns (string memory) {
         string memory libraryName = string.concat("Lib", contractName, "Deploy");
-        string memory path = pathForLib(libraryName);
+        string memory path = pathForLib(libDir, libraryName);
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeFile(
@@ -613,15 +624,22 @@ library LibRainDeploySnapshot {
     /// `writeAliasLib` applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
     /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
     /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory to write the lib into — `LIB_DIR` for a
+    /// repo's real tree.
     /// @param contractName The contract the alias lib is written for.
     /// @param constantPrefix The prefix for the emitted constants.
     /// @param dir The snapshot directory to alias.
     /// @return The path written.
-    function writeAliasLib(Vm vm, string memory contractName, string memory constantPrefix, string memory dir)
-        internal
-        returns (string memory)
-    {
-        return writeAliasLib(vm, contractName, constantPrefix, dir, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT);
+    function writeAliasLib(
+        Vm vm,
+        string memory libDir,
+        string memory contractName,
+        string memory constantPrefix,
+        string memory dir
+    ) internal returns (string memory) {
+        return writeAliasLib(
+            vm, libDir, contractName, constantPrefix, dir, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT
+        );
     }
 
     /// The release tag a record path sits under.
@@ -946,8 +964,8 @@ library LibRainDeploySnapshot {
     /// would notice, and generating both here is what makes that check pass by
     /// construction rather than by remembering.
     ///
-    /// Written beside the alias lib, under the same `Lib<Contract>` naming, so
-    /// all generated non-snapshot Solidity is in one directory.
+    /// Named `Lib<Contract>Released`, the same `Lib<Contract>` shape the alias
+    /// lib is named with, into the directory it is handed.
     ///
     /// Five fields per entry come from the frozen snapshot and two from
     /// `template`. Those two — the key and the artifact path — are explorer and
@@ -964,6 +982,9 @@ library LibRainDeploySnapshot {
     /// ones that release was cut with. It is frozen into the snapshot by
     /// `writeSnapshot` and aliased back out here.
     /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory to write the lib into — `LIB_DIR` for a
+    /// repo's real tree. A parameter for the same reason `recordRoot` is one,
+    /// and the directory MUST already exist.
     /// @param recordRoot The record root to read releases from — `LIB_FS_ROOT`
     /// for a repo's real record. A parameter for the same reason
     /// `frozenSnapshotPaths` takes one: a writer that can only be pointed at
@@ -977,6 +998,7 @@ library LibRainDeploySnapshot {
     /// @return The path written.
     function writeReleasedSuitesLib(
         Vm vm,
+        string memory libDir,
         string memory recordRoot,
         string memory contractName,
         string memory spdxLicenseIdentifier,
@@ -984,25 +1006,30 @@ library LibRainDeploySnapshot {
         DeploySuite memory template
     ) internal returns (string memory) {
         string memory libraryName = releasedLibraryName(contractName);
-        string memory path = pathForLib(libraryName);
-        string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
+        string memory path = pathForLib(libDir, libraryName);
+        // `paths` is scoped away before the write, and the body built first,
+        // because `libDir` is one local past what this function's stack frame
+        // holds: inlined into the `writeFile` call the way the other writers
+        // spell it, solc 0.8.25 without `--via-ir` refuses it as stack too
+        // deep. Not a style choice — the flat form does not compile.
+        string memory body;
+        {
+            string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
+            body = string.concat(
+                releasedImportBlock(vm, paths), releasedLibraryBlock(vm, libraryName, contractName, paths, template)
+            );
+        }
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.writeFile(
-            path,
-            string.concat(
-                LibCodeGen.filePrefix(spdxLicenseIdentifier, copyrightText),
-                "\n",
-                releasedImportBlock(vm, paths),
-                releasedLibraryBlock(vm, libraryName, contractName, paths, template)
-            )
-        );
+        vm.writeFile(path, string.concat(LibCodeGen.filePrefix(spdxLicenseIdentifier, copyrightText), "\n", body));
         return path;
     }
 
     /// `writeReleasedSuitesLib` applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
     /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
     /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory to write the lib into — `LIB_DIR` for a
+    /// repo's real tree.
     /// @param recordRoot The record root — `LIB_FS_ROOT` for a repo's real
     /// record.
     /// @param contractName The contract the released lib is written for.
@@ -1011,12 +1038,13 @@ library LibRainDeploySnapshot {
     /// @return The path written.
     function writeReleasedSuitesLib(
         Vm vm,
+        string memory libDir,
         string memory recordRoot,
         string memory contractName,
         DeploySuite memory template
     ) internal returns (string memory) {
         return writeReleasedSuitesLib(
-            vm, recordRoot, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, template
+            vm, libDir, recordRoot, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, template
         );
     }
 
@@ -1146,17 +1174,17 @@ library LibRainDeploySnapshot {
     /// @param libDir The directory the per-contract released libs were written
     /// to, which this is written into as well — `LIB_DIR` for a repo's real
     /// libs, and the only directory the emitted file COMPILES in.
-    /// `writeReleasedSuitesLib` and `writeAliasLib` write to
-    /// `pathForLib(libraryName)`, which takes no directory and is always
-    /// `LIB_DIR`, so `LIB_DIR` is the only place the emitted sibling
-    /// `./Lib<Contract>Released.sol` imports resolve; the emitted
+    /// `writeReleasedSuitesLib` takes the same `libDir`, so a build handing
+    /// both the one directory is what makes the emitted sibling
+    /// `./Lib<Contract>Released.sol` imports resolve, and only `LIB_DIR` holds
+    /// the rest of the tree they need; the emitted
     /// `../abstract/RainDeploySuitesBase.sol` import is parent-relative and
-    /// constrains the directory further still. A parameter anyway, for the same
-    /// reason `writeReleasedSuitesLib` takes a record root: a writer that can
-    /// only be pointed at the committed declaration can only be tested by
-    /// overwriting it, and a test that overwrites a file the rest of the suite
-    /// reads is a test that fails on timing. Any other directory holds a file
-    /// no build can compile, so it has to be a directory nothing compiles.
+    /// constrains the directory further still. A parameter for the same reason
+    /// `writeReleasedSuitesLib` takes a record root: a writer that can only be
+    /// pointed at the committed declaration can only be tested by overwriting
+    /// it, and a test that overwrites a file the rest of the suite reads is a
+    /// test that fails on timing. Any other directory holds a file no build can
+    /// compile, so it has to be a directory nothing compiles.
     /// @param spdxLicenseIdentifier The SPDX licence identifier the written lib
     /// declares. The calling repo's, for the reason `writeSnapshot` gives.
     /// @param copyrightText The copyright text the written lib declares.

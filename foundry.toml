@@ -47,12 +47,15 @@ fs_permissions = [
   # inherited record check reads that root from contracts forge runs in
   # parallel, so a fixture release there would be one they have to fail on.
   { access = "read-write", path = "./test" },
-  # LibRainDeploySnapshotTest points the aggregate writer here, one directory
-  # per test. NOT ./src or ./test: the writer names the file it emits
-  # LibReleasedSuites.sol and that file imports ./Lib<Contract>Released.sol and
-  # ../abstract/RainDeploySuitesBase.sol, which resolve from src/lib and nowhere
-  # else, so a copy left behind by a failure under a compiled root fails the
-  # whole build until it is deleted by hand. Nothing compiles this root.
+  # LibRainDeploySnapshotTest points the lib writers here — the alias writer,
+  # the released-suites writer and the aggregate writer — one directory per
+  # test. Its own root, NOT ./src or ./test: every lib these emit imports paths
+  # that resolve from src/lib and nowhere else (the alias lib reaches
+  # ../generated/, the released lib ../abstract/, and the aggregate
+  # LibReleasedSuites.sol both ./Lib<Contract>Released.sol and
+  # ../abstract/RainDeploySuitesBase.sol), so a copy left behind by a failure
+  # under a compiled root fails the whole build until it is deleted by hand.
+  # Nothing compiles this root.
   { access = "read-write", path = "./fixture-lib" },
   # GeneratedSnapshotShapeTest reads the compiler's AST out of the artifact.
   { access = "read", path = "./out" },

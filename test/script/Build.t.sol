@@ -36,10 +36,11 @@ import {LibStringSet} from "../lib/LibStringSet.sol";
 /// properties of the generator's own entries that decide which file each
 /// contract's pins are written into.
 ///
-/// Deliberately nothing here calls `run()` or `cutRelease()`. Both write
-/// `src/lib/Lib*Released.sol`, which `LibRainDeploySnapshotTest` also writes,
-/// and forge runs test contracts in parallel — two contracts writing one file
-/// is a race, not a check. Nothing below writes anything.
+/// Deliberately nothing here calls `run()` or `cutRelease()`. Both rewrite the
+/// committed `src/generated/` snapshots and `src/lib/` libs that other test
+/// contracts read, and forge runs test contracts in parallel — a contract
+/// rewriting what another one is reading is a race, not a check. Nothing below
+/// writes anything.
 contract BuildTest is Test {
     /// The harness the two declarations are read through.
     BuildHarness internal sBuild;
