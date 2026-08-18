@@ -510,10 +510,14 @@ contract LibRainDeploySnapshotTest is Test {
     /// other's output.
     string constant FIXTURE_LIB_ROOT = "fixture-lib";
 
-    /// `LIB_DIR` is the directory a build points both writers at, so the
+    /// `LIB_DIR` is the directory a build points every lib writer at, so the
     /// committed libs MUST be the files that directory holds. A `LIB_DIR`
     /// naming anywhere else is a build that rewrites nothing the compiler
     /// reads, leaving the committed libs stale forever.
+    ///
+    /// The two per-contract libs here; the aggregate's own committed path is
+    /// pinned by `testTheCommittedAggregateIsWhatTheGeneratorEmits`, which
+    /// reads it through `pathForLib` and asserts the path it gets.
     function testTheCommittedLibsAreInTheLibDir() external pure {
         assertEq(string.concat(LibRainDeploySnapshot.LIB_DIR, "/LibAddressRegistryDeploy.sol"), ALIAS_LIB_PATH);
         assertEq(string.concat(LibRainDeploySnapshot.LIB_DIR, "/LibAddressRegistryReleased.sol"), RELEASED_LIB_PATH);

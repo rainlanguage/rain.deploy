@@ -1007,6 +1007,11 @@ library LibRainDeploySnapshot {
     ) internal returns (string memory) {
         string memory libraryName = releasedLibraryName(contractName);
         string memory path = pathForLib(libDir, libraryName);
+        // `paths` is scoped away before the write, and the body built first,
+        // because `libDir` is one local past what this function's stack frame
+        // holds: inlined into the `writeFile` call the way the other writers
+        // spell it, solc 0.8.25 without `--via-ir` refuses it as stack too
+        // deep. Not a style choice — the flat form does not compile.
         string memory body;
         {
             string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
