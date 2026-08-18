@@ -4,11 +4,23 @@ pragma solidity =0.8.25;
 
 import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV1.sol";
 
+/// @dev One writer's record of one migration. Written whole, so a record can
+/// never hold one half of itself.
+struct MigrationRecord {
+    /// The moment recorded against the migration. Zero means never applied,
+    /// which neither write records.
+    uint256 appliedAt;
+    /// The head the namespace was at when the record was written. Zero means
+    /// never applied: a head is genesis or an applied id, both nonzero.
+    bytes32 appliedOnto;
+}
+
 /// @title MigrationRegistry
 /// @notice The whole of `IMigrationRegistryV1`: a writer applies one of its own
-/// migrations onto the head it believes its namespace is at, and anyone reads
-/// when a given writer applied a given migration, or where that writer's
-/// namespace has got to.
+/// migrations onto the head it believes its namespace is at, at the moment it
+/// says the migration ran, and anyone reads when a given writer applied a given
+/// migration, what it applied it onto, or where that writer's namespace has got
+/// to.
 ///
 /// There is deliberately nothing else. No removal, no upgrade, no pause, and no
 /// authority at all — which is the difference from `AddressRegistry`, and the
@@ -35,23 +47,33 @@ import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../interface/IMigrat
 /// on a chain.
 ///
 /// A record is append-only per writer, and a head only ever moves forward onto
-/// something new. `applyMigration` refuses a migration the caller has already
-/// applied, which is what makes re-running a migration fail rather than repeat,
-/// and refuses one applied onto anything but the namespace's current head, which
-/// is what makes a skipped or out-of-order migration fail rather than diverge.
-/// There is no way to unrecord one — a record describes something that happened,
-/// and nothing that happened stops having happened.
+/// something new. Both writes refuse a migration the caller has already applied,
+/// which is what makes re-running a migration fail rather than repeat, and
+/// refuse one applied onto anything but the namespace's current head, which is
+/// what makes a skipped or out-of-order migration fail rather than diverge.
+/// There is no way to unrecord one, and no way to rewrite one — a record
+/// describes something that happened, and nothing that happened stops having
+/// happened.
 ///
-/// Neither storage mapping is `public`. `applied` and `head` refuse the zero
-/// writer, `applied` refuses the two ids a migration can never be, and a public
-/// mapping's generated getter would answer all of them with zero — which for
-/// `applied` is "not applied" and for `head` is a value no head can ever hold,
-/// i.e. exactly the silent wrong-branch this contract reverts to prevent.
+/// The moment is the CALLER's on `applyMigrationHistory`, so a migration that
+/// ran before this contract reached the chain is recordable with the time it
+/// actually ran. The order is not the caller's: each record keeps the head it
+/// was applied onto, so a namespace's records are a chain from `head` back to
+/// `MIGRATION_HEAD_GENESIS` whatever moments they carry. The moments run with
+/// that chain rather than against it — a record is never earlier than the one
+/// it was applied onto, though it may be equal to it.
+///
+/// Neither storage mapping is `public`. `applied`, `appliedOnto` and `head`
+/// refuse the zero writer, the two record readers refuse the two ids a
+/// migration can never be, and a public mapping's generated getter would answer
+/// all of them with zero — which for a record is "not applied" and for `head`
+/// is a value no head can ever hold, i.e. exactly the silent wrong-branch this
+/// contract reverts to prevent.
 contract MigrationRegistry is IMigrationRegistryV1 {
-    /// When each record landed, namespaced by writer. Zero means never. Not
-    /// `public`: the only reader is `applied`, which refuses the two inputs that
-    /// can only be mistakes.
-    mapping(address writer => mapping(bytes32 migration => uint256 appliedAt)) internal sApplied;
+    /// Every record, namespaced by writer. A zero `appliedAt` means never
+    /// applied. Not `public`: the only readers are `applied` and `appliedOnto`,
+    /// which refuse the inputs that can only be mistakes.
+    mapping(address writer => mapping(bytes32 migration => MigrationRecord record)) internal sRecords;
 
     /// The most recent migration applied under each writer. Zero means the
     /// namespace is empty, which reads out as `MIGRATION_HEAD_GENESIS` — the
@@ -61,10 +83,30 @@ contract MigrationRegistry is IMigrationRegistryV1 {
     mapping(address writer => bytes32 head) internal sHead;
 
     /// @inheritdoc IMigrationRegistryV1
-    /// @dev The refusals run caller-input first and environment last: the two
-    /// that describe a mistake in the call are true whatever block this lands
-    /// in, so they are what a caller is told about first.
+    /// @dev The block is the moment, so a caller that has nothing to say about
+    /// when its migration ran does not have to say it.
+    // slither-disable-next-line timestamp
+    // forge-lint: disable-next-line(block-timestamp)
     function applyMigration(bytes32 expectedHead, bytes32 migration) external {
+        applyMigrationRecord(expectedHead, migration, block.timestamp);
+    }
+
+    /// @inheritdoc IMigrationRegistryV1
+    function applyMigrationHistory(bytes32 expectedHead, bytes32 migration, uint256 appliedAt) external {
+        applyMigrationRecord(expectedHead, migration, appliedAt);
+    }
+
+    /// Reached by `applyMigration` and by `applyMigrationHistory`, so there is
+    /// one record and one set of refusals whichever of them supplied the moment.
+    ///
+    /// The refusals run from the ones that describe the call alone, through the
+    /// ones that describe the namespace it arrives at, to the one that
+    /// describes the block it lands in — which is the order in which a caller
+    /// can do something about them.
+    /// @param expectedHead The head the caller believes its namespace is at.
+    /// @param migration The migration to apply.
+    /// @param appliedAt The moment to record against it.
+    function applyMigrationRecord(bytes32 expectedHead, bytes32 migration, uint256 appliedAt) internal {
         // Checked before everything else, so an uninitialised id is reported as
         // the mistake it is rather than as a first record of zero.
         if (migration == bytes32(0)) {
@@ -78,6 +120,24 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         if (migration == MIGRATION_HEAD_GENESIS) {
             revert GenesisMigration();
         }
+        // Beside the two id refusals because it is the same kind of mistake in
+        // the same kind of value: an uninitialised `uint256`, refused whatever
+        // namespace it arrives at and whatever block it lands in. Zero is the
+        // one moment a record cannot carry — `applied` would answer it as
+        // "never applied" while the head had moved and the migration could
+        // never be applied again. Reached by `applyMigration` as well, in a
+        // block whose timestamp is zero: a test can warp to zero and a chain
+        // can be configured from a zero genesis.
+        //
+        // Slither flags a strict equality on anything reaching it from
+        // `block.timestamp`, which `applyMigration` does. Zero is the only
+        // value this refuses and the only one it can refuse, so there is no
+        // window for a validator to nudge the clock across. Suppressed on this
+        // comparison rather than turned off for the repo.
+        // slither-disable-next-line incorrect-equality
+        if (appliedAt == 0) {
+            revert ZeroTimestamp();
+        }
         // There is deliberately no zero-writer case here. `msg.sender` cannot
         // be the zero address, so the zero namespace is unreachable for writes
         // and a guard on it would be unreachable code pretending to be a check.
@@ -90,50 +150,85 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         // say to a re-dispatched script. It is also not implied by the head
         // check: re-applying a migration whose successor has landed presents a
         // matching head, and would drag the head backwards and overwrite the
-        // original timestamp.
-        if (sApplied[msg.sender][migration] != 0) {
+        // original record.
+        if (sRecords[msg.sender][migration].appliedAt != 0) {
             revert MigrationAlreadyApplied(msg.sender, migration);
         }
         bytes32 actualHead = head(msg.sender);
         if (expectedHead != actualHead) {
             revert UnexpectedMigrationHead(msg.sender, expectedHead, actualHead);
         }
-        // A zero timestamp is the one value a record cannot carry: `applied`
-        // would answer it as "never applied" while the head had moved and the
-        // migration could never be applied again. Not unreachable — a test can
-        // warp to zero and a chain can be configured from a zero genesis — so
-        // this is a real check rather than a decorative one.
+        // Last of the refusals about the namespace, because it is the only one
+        // that reads a RECORD rather than a key, and the record it reads is the
+        // one at the head the check above has just confirmed.
         //
-        // The usual hazard behind a `block.timestamp` comparison — the one both
-        // the static analysers flag here — is a validator nudging the clock
-        // across a threshold. There is no threshold here and no nudge
-        // available: zero is not a value a validator on a live chain can
-        // produce at all, which is why this is an equality against it rather
-        // than a window around it, and why all three warnings are suppressed on
-        // this one comparison rather than turned off for the repo.
+        // At genesis there is nothing to be before. Genesis can never be
+        // applied, so the record at it is empty in every namespace forever and
+        // this comparison against zero can only pass — which is the same
+        // statement a genesis branch would make, made by the value itself.
         //
-        // Slither's two are a start/end pair rather than a next-line because
-        // only one comment fits immediately above the `if`, `forge fmt` moves a
-        // trailing one inside the braces, and forge-lint has no pair form.
-        // slither-disable-start incorrect-equality,timestamp
-        // forge-lint: disable-next-line(block-timestamp)
-        if (block.timestamp == 0) {
-            revert ZeroTimestamp();
+        // Neither the head nor its own moment is restated in the error: the
+        // caller named the head, and was told above if it named the wrong one.
+        uint256 headAppliedAt = sRecords[msg.sender][actualHead].appliedAt;
+        if (appliedAt < headAppliedAt) {
+            revert TimestampBeforeHead(appliedAt, headAppliedAt);
         }
-        // slither-disable-end incorrect-equality,timestamp
-        sApplied[msg.sender][migration] = block.timestamp;
+        // Last, because it is the only refusal here that time itself resolves:
+        // every other one describes something wrong with the call or with where
+        // the namespace is, and this one describes a moment that has not
+        // arrived yet.
+        //
+        // The usual hazard behind a `block.timestamp` comparison — the one the
+        // static analysers flag here — is a validator nudging the clock across a
+        // threshold. The nudge is available and it is harmless: a validator that
+        // moves the clock forward admits a record a second earlier than it would
+        // otherwise have been admitted, of a migration that has run either way,
+        // and moving it backwards is not something a chain lets a proposer do.
+        // So the warnings are suppressed on this one comparison rather than
+        // turned off for the repo.
+        //
+        // Slither's is a start/end pair rather than a next-line because only one
+        // comment fits immediately above the `if`, `forge fmt` moves a trailing
+        // one inside the braces, and forge-lint has no pair form.
+        // slither-disable-start timestamp
+        // forge-lint: disable-next-line(block-timestamp)
+        if (appliedAt > block.timestamp) {
+            revert FutureTimestamp(appliedAt, block.timestamp);
+        }
+        // slither-disable-end timestamp
+        // Written whole, so the moment and the predecessor cannot land apart.
+        sRecords[msg.sender][migration] = MigrationRecord({appliedAt: appliedAt, appliedOnto: actualHead});
         sHead[msg.sender] = migration;
-        emit Migrated(msg.sender, migration);
+        emit Migrated(msg.sender, migration, appliedAt);
     }
 
     /// @inheritdoc IMigrationRegistryV1
     /// @dev All three refusals are about a caller that has not supplied what it
     /// thinks it has. None can ever be a real record: nothing originates from
-    /// the zero address, and `applyMigration` will write neither the zero id nor
-    /// the genesis one — so answering zero for any of them would be answering a
+    /// the zero address, and neither write records the zero id or the genesis
+    /// one — so answering zero for any of them would be answering a
     /// question the caller did not mean to ask, and answering it with the value
     /// that sends it down its pre-migration branch.
     function applied(address writer, bytes32 migration) external view returns (uint256) {
+        checkRecordKey(writer, migration);
+        return sRecords[writer][migration].appliedAt;
+    }
+
+    /// @inheritdoc IMigrationRegistryV1
+    /// @dev The same three refusals as `applied`, for the same reason and on
+    /// the same key: a zero answer here reads as "never applied" exactly as a
+    /// zero moment does.
+    function appliedOnto(address writer, bytes32 migration) external view returns (bytes32) {
+        checkRecordKey(writer, migration);
+        return sRecords[writer][migration].appliedOnto;
+    }
+
+    /// Refuses the three inputs that can only be a mistake in the caller rather
+    /// than a record to read. One function, so the two readers of a record
+    /// cannot drift into refusing different things.
+    /// @param writer The namespace being read.
+    /// @param migration The migration being asked about.
+    function checkRecordKey(address writer, bytes32 migration) internal pure {
         if (writer == address(0)) {
             revert ZeroWriter();
         }
@@ -143,7 +238,6 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         if (migration == MIGRATION_HEAD_GENESIS) {
             revert GenesisMigration();
         }
-        return sApplied[writer][migration];
     }
 
     /// @inheritdoc IMigrationRegistryV1
@@ -154,12 +248,12 @@ contract MigrationRegistry is IMigrationRegistryV1 {
     ///
     /// The empty-namespace zero is translated to genesis here and nowhere else,
     /// which is why this is one `public` function rather than a reader beside an
-    /// internal helper: `applyMigration` compares against exactly what a caller
-    /// reads, so the two cannot drift into different ideas of where a namespace
-    /// that has applied nothing is.
+    /// internal helper: a write compares against exactly what a caller reads, so
+    /// the two cannot drift into different ideas of where a namespace that has
+    /// applied nothing is.
     ///
-    /// `applyMigration` reaches it as `head(msg.sender)`, which can never be the
-    /// zero address, so the refusal is redundant on that path. It is one
+    /// A write reaches it as `head(msg.sender)`, which can never be the zero
+    /// address, so the refusal is redundant on that path. It is one
     /// function, so it is one refusal, and the reachable path is the one it is
     /// there for.
     function head(address writer) public view returns (bytes32) {

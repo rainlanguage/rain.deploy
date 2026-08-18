@@ -21,8 +21,9 @@ It answers:
 - Is every version I have ever released still live, with the code I compiled, on
   every network I support?
 - Which operational migrations have actually been applied on this chain, and
-  when, so a test can assert the state they imply instead of guessing from a
-  date?
+  when they ran — including the ones that ran before there was anywhere to write
+  them down — so a test can assert the state they imply instead of guessing from
+  a date?
 - Can a migration be skipped, repeated or applied out of order on one chain and
   not another?
 
@@ -39,8 +40,8 @@ Approach:
 - An address registry, read at run time rather than compiled into creation code,
   and a post-deploy check that every target network's deployment took the
   address it was supposed to.
-- A migration registry, so operational scripts record what they applied and
-  when, each onto the head it is applying to, and tests assert the state that
+- A migration registry, so operational scripts record what they applied and when
+  it ran, each onto the head it is applying to, and tests assert the state that
   implies rather than branching on a deadline.
 - One inherited deploy-pin verification, parameterized over versions, rather
   than assertions hand-enumerated per version and per chain in every deploy
@@ -205,11 +206,20 @@ library supplies the fork loop and the comparison.
 
 ## Migration registry
 
-`MigrationRegistry` records that a migration has been applied, and when: a
-writer applies one of its own onto the migration it believes ran last
-(`applyMigration`), anyone reads when a given writer applied a given one
-(`applied`), and anyone reads where a given writer's sequence has got to
+`MigrationRegistry` records that a migration has been applied, when, and onto
+what: a writer applies one of its own onto the migration it believes ran last
+(`applyMigration`, or `applyMigrationHistory` for one that already ran), anyone
+reads when a given writer applied a given one (`applied`), what that writer
+applied it onto (`appliedOnto`), and where a given writer's sequence has got to
 (`head`). There is no removal and no upgrade.
+
+The two writes differ in exactly one thing: where the recorded moment comes
+from. `applyMigration` stamps the block the record lands in, for a script
+applying its own migration in the same atomic unit as the migration itself.
+`applyMigrationHistory` takes the moment as an argument, so a migration that ran
+before the registry reached the chain is recordable with the time it actually
+ran. They write the same record, into the same namespace, and make the same
+refusals.
 
 It exists because prod-state tests otherwise decide what to assert by reading
 the **clock**. The pattern that emerges without it is a dual-state invariant —
@@ -237,9 +247,51 @@ frequently "which invariant applies _yet_": a cliff that starts at the
 migration, a rate that changes a week after it. A flag sends a consumer that
 needs the moment back to a hardcoded date, which is the thing this registry
 exists to delete. Zero and nonzero carry the same two distinct facts a flag did,
-with the nonzero case saying more — and zero stays unambiguous because a record
-is refused outright in a block whose timestamp is zero rather than written as
-one that reads back as no record.
+with the nonzero case saying more — and zero stays unambiguous because a zero
+moment is refused outright rather than written as a record that reads back as no
+record.
+
+**The moment is the caller's, inside a window the registry enforces.** The fact
+being recorded is that a migration RAN, and the moment it ran is not in general
+the moment anybody gets to write it down. A registry that could only stamp its
+own block offers a writer with history two options and no third: record a time
+that is false for every past migration, or record nothing — and recording
+nothing strands the namespace, because the registry refuses anything not applied
+onto the current head, so a writer that skipped its past migrations cannot
+record its next one either.
+
+What a reader gives up is **not** authenticity. A record is namespaced by the
+account that wrote it and no authority checks it, so every entry is already
+exactly as trustworthy as its writer and no more; a writer free to invent an id
+was always free to invent the fact. What a reader gives up is precisely that
+`appliedAt` is the block the record landed in. Everything else is kept, by three
+refusals:
+
+- **Never zero** (`ZeroTimestamp`), or the record would read back through
+  `applied` as no record while the head had moved and the migration could never
+  be applied again.
+- **Never after the block it is written in** (`FutureTimestamp`). A migration
+  that has run has run, so a moment still to come is not a late record of
+  anything, and a consumer measuring an interval since the migration — a cliff,
+  a grace period, a rate that changes a week later — can subtract it from the
+  current block without underflowing.
+- **Never before the record it is applied onto** (`TimestampBeforeHead`), so a
+  namespace's moments never go backwards along its chain and the gap between two
+  of its migrations subtracts in chain order without underflowing either. The
+  first migration in a namespace is applied onto `MIGRATION_HEAD_GENESIS`, which
+  holds no record and so bounds nothing.
+
+Equal is allowed wherever there is a neighbour. A moment may be exactly the
+block it is written in, and two records may carry the same moment: two
+migrations applied in one transaction share a block, and two backfilled to the
+same day share a moment, so forcing them apart would demand a precision the
+moments do not have. Which of them ran first is the chain, not the moments —
+total order comes from `appliedOnto`, and the bound above only stops a record
+claiming to predate the one it is chained onto.
+
+Both writes get all three, `block.timestamp` included: a block whose timestamp
+is zero is `ZeroTimestamp` on `applyMigration`, which a test that warps to zero
+and a chain configured from a zero genesis both reach.
 
 **A set of applied migrations, not a high-water mark.** A mark needs a total
 order consumers do not have: two migrations authored on one day collide, and one
@@ -251,17 +303,24 @@ dependency actually lives.
 
 **A head, so a step cannot be skipped or repeated.** A namespace has a head: the
 migration it applied most recently, or `MIGRATION_HEAD_GENESIS` if it has
-applied none. `applyMigration` names the head it is applying onto, so a chain
-that never got the predecessor fails at the moment of applying rather than
-diverging silently, and two migrations dispatched at once cannot land in the
-wrong order.
+applied none. Both writes name the head they are applying onto, so a chain that
+never got the predecessor fails at the moment of applying rather than diverging
+silently, and two migrations dispatched at once cannot land in the wrong order.
 
 ```solidity
-// The first migration in a namespace.
+// The first migration in a namespace, applied in this transaction.
 LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, MIGRATION_V1);
 // Every later one names its predecessor.
 LibMigrationRegistry.applyMigration(MIGRATION_V1, MIGRATION_V2);
+// One that ran before the registry reached this chain names the moment it ran.
+LibMigrationRegistry.applyMigrationHistory(MIGRATION_V2, MIGRATION_V3, 1750000000);
 ```
+
+Each record also keeps the head it was applied onto, which `appliedOnto` reads
+back, so a namespace is a chain in storage rather than a set of moments to sort:
+from `head`, each answer names the record before it, down to
+`MIGRATION_HEAD_GENESIS`. That chain is the order the migrations ran in whatever
+moments the records carry.
 
 Genesis is deliberately **not zero**. Zero is what an uninitialised `bytes32`
 constant reads as, and a zero genesis would make a mis-set predecessor constant
@@ -297,11 +356,12 @@ say the invariant holds — a multisig can act out of band and nothing here move
 Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
-`LibMigrationRegistry` is the surface — `applied`, `head` and `applyMigration`,
-all verifying the registry's code hash first. There is deliberately **no
-broadcast runner**: the dominant real shape is a Safe executing a bundle that
-never broadcasts, and such a script appends `applyMigration` to the bundle it is
-already emitting, which makes the record atomic with the migration it describes.
+`LibMigrationRegistry` is the surface — `applied`, `appliedOnto`, `head`,
+`applyMigration` and `applyMigrationHistory`, each verifying the registry's code
+hash before it reads or writes. There is deliberately **no broadcast runner**:
+the dominant real shape is a Safe executing a bundle that never broadcasts, and
+such a script appends `applyMigration` to the bundle it is already emitting,
+which makes the record atomic with the migration it describes.
 
 ## Deploying, and then releasing
 

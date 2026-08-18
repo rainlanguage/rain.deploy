@@ -5,9 +5,9 @@ pragma solidity =0.8.25;
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
 
 /// @title MockMigrationApplier
-/// @notice A consumer in the shape `LibMigrationRegistry.applyMigration` is
-/// designed for: it calls the library and nothing else, so the record lands
-/// under THIS contract's address.
+/// @notice A consumer in the shape `LibMigrationRegistry`'s writes are designed
+/// for: it calls the library and nothing else, so the record lands under THIS
+/// contract's address.
 ///
 /// It exists so the namespace can be exercised as the property it is. The
 /// library's functions are `internal` and inline into whatever executes them,
@@ -28,12 +28,29 @@ contract MockMigrationApplier {
         LibMigrationRegistry.applyMigration(expectedHead, migration);
     }
 
+    /// Applies `migration` under this contract, onto `expectedHead`, at
+    /// `appliedAt`.
+    /// @param expectedHead The head this contract believes it is at.
+    /// @param migration The migration to apply.
+    /// @param appliedAt The moment the migration was applied.
+    function applyMigrationHistory(bytes32 expectedHead, bytes32 migration, uint256 appliedAt) external {
+        LibMigrationRegistry.applyMigrationHistory(expectedHead, migration, appliedAt);
+    }
+
     /// When `writer` applied `migration`.
     /// @param writer The namespace to read.
     /// @param migration The migration to ask about.
-    /// @return The timestamp it was applied at, or zero.
+    /// @return The moment it was applied at, or zero.
     function applied(address writer, bytes32 migration) external view returns (uint256) {
         return LibMigrationRegistry.applied(writer, migration);
+    }
+
+    /// What `writer` applied `migration` onto.
+    /// @param writer The namespace to read.
+    /// @param migration The migration to ask about.
+    /// @return The head it was applied onto, or zero.
+    function appliedOnto(address writer, bytes32 migration) external view returns (bytes32) {
+        return LibMigrationRegistry.appliedOnto(writer, migration);
     }
 
     /// The head of `writer`'s namespace.
