@@ -2,9 +2,13 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {Vm} from "forge-std-1.16.1/src/Vm.sol";
-import {LibCodeGen} from "rain-sol-codegen-0.1.6/src/lib/LibCodeGen.sol";
-import {LibFs} from "rain-sol-codegen-0.1.6/src/lib/LibFs.sol";
+import {Vm} from "forge-std-1.16.2/src/Vm.sol";
+import {
+    LibCodeGen,
+    RAIN_COPYRIGHT_TEXT,
+    RAIN_SPDX_LICENSE_IDENTIFIER
+} from "rain-sol-codegen-0.1.36/src/lib/LibCodeGen.sol";
+import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.36/src/lib/LibFs.sol";
 import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 
@@ -180,41 +184,45 @@ library LibRainDeploySnapshot {
         return string(tagBytes);
     }
 
-    /// The output root `LibFs` writes to, and the only one it can write to:
-    /// `LibFs.pathForContract` hardcodes it.
+    /// The output root `LibFs` writes to, and the only one it can write to.
     ///
-    /// The only spelling of that root in this library. Everything here that
-    /// names the root — the directory a snapshot is written into, and the tree
-    /// the frozen record is walked from — reads it, so a root this library
-    /// walks that is not a root it writes to is not a state it can be in. The
-    /// remaining pair, this and `LibFs`'s own, is what
-    /// `testRecordRootIsTheRootTheWriterWritesTo` pins.
-    string constant LIB_FS_ROOT = "src/generated";
+    /// `LibFs`'s own constant rather than a copy of its text. Everything here
+    /// that names the root — the directory a snapshot is written into, and the
+    /// tree the frozen record is walked from — reads it, so a root this library
+    /// walks that is not a root it writes to is not a state it can be in. It
+    /// was a second constant held equal to `LibFs`'s by an assertion until
+    /// `rain-sol-codegen` exported its own; one constant is the thing an
+    /// assertion was standing in for.
+    string constant LIB_FS_ROOT = GENERATED_DIR;
 
     /// The directory holding a snapshot, rolling or frozen, under a record
     /// root.
+    ///
+    /// Refuses a directory name `LibFs` would refuse to write into, through
+    /// `LibFs.requireTag` rather than through a rule restated here. A reader
+    /// that admitted a name the writer refuses is a reader pointed at a path
+    /// nothing can ever have written, and a fixture record that admitted one
+    /// would be a fixture of a layout the real record cannot hold.
     /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// MUST be drawn from `LibFs`'s tag alphabet.
     /// @return The directory path.
     function dirForSnapshot(string memory root, string memory dir) internal pure returns (string memory) {
+        LibFs.requireTag(dir);
         return string.concat(root, "/", dir);
     }
 
     /// The directory holding a snapshot in a repo's REAL record.
+    ///
+    /// `LibFs`'s own spelling of it, so the directory this library names is the
+    /// directory the writer creates and writes into. The root-aware spelling
+    /// above is the only other one there is, and
+    /// `testRecordRootIsTheRootTheWriterWritesTo` is where the two are held to
+    /// being one path.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @return The directory path.
     function dirForSnapshot(string memory dir) internal pure returns (string memory) {
-        return dirForSnapshot(LIB_FS_ROOT, dir);
-    }
-
-    /// The contract name that places a generated file inside a snapshot
-    /// directory. `LibFs` derives its own path from a contract name and takes
-    /// no path, so the snapshot directory is folded into the name it is given.
-    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
-    /// @param contractName The name of the contract.
-    /// @return The name to pass to `LibFs.buildFileForContract`.
-    function snapshotName(string memory dir, string memory contractName) internal pure returns (string memory) {
-        return string.concat(dir, "/", contractName);
+        return LibFs.dirForTag(dir);
     }
 
     /// The path of a contract's generated file within a snapshot, under a
@@ -222,20 +230,30 @@ library LibRainDeploySnapshot {
     ///
     /// `LibFs` writes under `LIB_FS_ROOT` and takes no root, so it cannot spell
     /// this one — but the two MUST be one path where the root is the real one,
-    /// and `testSnapshotPathsAgreeWithTheWriter` is where that is held. This is
-    /// the only other spelling of a snapshot path there is, so a reader
-    /// pointed at a record root and a writer pointed at the real one cannot
-    /// drift by more than that one assertion.
+    /// and `testRootAwareSnapshotPathIsTheWritersAtTheRealRoot` is where that is
+    /// held. This is the only other spelling of a snapshot path there is, so a
+    /// reader pointed at a record root and a writer pointed at the real one
+    /// cannot drift by more than that one assertion.
+    ///
+    /// Both guards are `LibFs.pathForTaggedContract`'s, asked in its order —
+    /// the directory first, so a call that gets both wrong names the directory.
+    /// That is what makes the two spellings agree on which paths EXIST as well
+    /// as on how they are spelled: a reader that accepted what the writer
+    /// refuses is the same divergence one step quieter.
     /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
-    /// @param contractName The name of the contract.
+    /// MUST be drawn from `LibFs`'s tag alphabet.
+    /// @param contractName The name of the contract. MUST be a Solidity
+    /// identifier.
     /// @return The file path.
     function pathForSnapshot(string memory root, string memory dir, string memory contractName)
         internal
         pure
         returns (string memory)
     {
-        return string.concat(dirForSnapshot(root, dir), "/", contractName, ".sol");
+        string memory snapshotDir = dirForSnapshot(root, dir);
+        LibCodeGen.requireIdentifier(contractName);
+        return string.concat(snapshotDir, "/", contractName, ".sol");
     }
 
     /// The path of a contract's generated file within a snapshot in a repo's
@@ -244,11 +262,17 @@ library LibRainDeploySnapshot {
     /// Delegated to `LibFs` rather than concatenated here, so the path this
     /// library freezes FROM is the same definition `LibFs` writes TO. Two
     /// spellings of one path is how a freeze silently reads nothing.
+    ///
+    /// `pathForTaggedContract` is the entry point that exists for this layout:
+    /// the snapshot directory is an ARGUMENT, so it is checked as a directory
+    /// name. It replaced folding the directory into the contract name, which
+    /// smuggled a path separator through an argument documented to be a
+    /// Solidity identifier and is refused outright now.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The name of the contract.
     /// @return The file path.
     function pathForSnapshot(string memory dir, string memory contractName) internal pure returns (string memory) {
-        return LibFs.pathForContract(snapshotName(dir, contractName));
+        return LibFs.pathForTaggedContract(dir, contractName);
     }
 
     /// Every file in the FROZEN record: everything inside a release-tag
@@ -309,7 +333,7 @@ library LibRainDeploySnapshot {
     }
 
     /// The constants a snapshot declares below the `BYTECODE_HASH` that
-    /// `LibFs.buildFileForContract` writes itself: the deploy address, the
+    /// `LibFs.buildFileForTaggedContract` writes itself: the deploy address, the
     /// creation code, the runtime code and the frozen dependency list, in that
     /// order.
     ///
@@ -356,12 +380,12 @@ library LibRainDeploySnapshot {
 
     /// Generate one snapshot for one contract.
     ///
-    /// There is no output root to choose. `LibFs.pathForContract` hardcodes
-    /// `LIB_FS_ROOT` and takes a contract name rather than a path, and this is
-    /// the repo's real deploy record, which belongs under that root and nowhere
-    /// else. This is the one place a snapshot's bytes come into existence, and
-    /// they come from the compiler rather than from another tree, so there is
-    /// nothing for a root to select between.
+    /// There is no output root to choose. `LibFs.buildFileForTaggedContract`
+    /// derives its directory from `LIB_FS_ROOT` and the snapshot directory it is
+    /// handed, and this is the repo's real deploy record, which belongs under
+    /// that root and nowhere else. This is the one place a snapshot's bytes come
+    /// into existence, and they come from the compiler rather than from another
+    /// tree, so there is nothing for a root to select between.
     ///
     /// `freeze` does take a root and that is not the same freedom: it COPIES,
     /// within one record tree, reading a rolling snapshot under the root it is
@@ -384,6 +408,44 @@ library LibRainDeploySnapshot {
     /// `abi.encode`d because Solidity has no file-scope constant of dynamic
     /// array type. The consumer is `releasedLibraryBlock`, which emits the
     /// matching `abi.decode`.
+    /// A snapshot lands in the calling repo's own tree, so the header is that
+    /// repo's statement. Repos outside this org call this overload; repos
+    /// inside it call the one that defaults to the org's values.
+    /// @param vm The Vm instance for file operations.
+    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// @param contractName The contract the snapshot describes.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written
+    /// snapshot declares.
+    /// @param copyrightText The copyright text the written snapshot declares.
+    /// @param creationCode That contract's creation code.
+    /// @param dependencies The addresses that must already have code on a
+    /// network before this contract can be broadcast there.
+    /// @return The path written.
+    function writeSnapshot(
+        Vm vm,
+        string memory dir,
+        string memory contractName,
+        string memory spdxLicenseIdentifier,
+        string memory copyrightText,
+        bytes memory creationCode,
+        address[] memory dependencies
+    ) internal returns (string memory) {
+        LibRainDeploy.etchZoltuFactory(vm);
+
+        address deployed = LibRainDeploy.deployZoltu(creationCode);
+        string memory constants = snapshotConstants(vm, deployed, creationCode, dependencies);
+
+        // The directory is created by the writer, from the same tag this path is
+        // derived from, so there is no `createDir` here to disagree with it.
+        LibFs.buildFileForTaggedContract(
+            vm, deployed, dir, contractName, spdxLicenseIdentifier, copyrightText, constants
+        );
+
+        return pathForSnapshot(dir, contractName);
+    }
+
+    /// `writeSnapshot` applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
+    /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
     /// @param vm The Vm instance for file operations.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
@@ -398,17 +460,9 @@ library LibRainDeploySnapshot {
         bytes memory creationCode,
         address[] memory dependencies
     ) internal returns (string memory) {
-        LibRainDeploy.etchZoltuFactory(vm);
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.createDir(dirForSnapshot(dir), true);
-
-        address deployed = LibRainDeploy.deployZoltu(creationCode);
-
-        LibFs.buildFileForContract(
-            vm, deployed, snapshotName(dir, contractName), snapshotConstants(vm, deployed, creationCode, dependencies)
+        return writeSnapshot(
+            vm, dir, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, creationCode, dependencies
         );
-
-        return pathForSnapshot(dir, contractName);
     }
 
     /// The import block of a generated alias lib.
@@ -483,17 +537,26 @@ library LibRainDeploySnapshot {
     ///
     /// The header comes from `LibCodeGen.filePrefix`, the same one `LibFs`
     /// gives a snapshot, so an alias lib and a snapshot say they are generated
-    /// in identical words and neither restates the other.
+    /// in identical words and neither restates the other. The licence and the
+    /// copyright holder are the calling repo's, for the reason `writeSnapshot`
+    /// gives, and reach `filePrefix` from here unchanged.
     /// @param vm The Vm instance for file operations.
     /// @param contractName The contract the snapshot describes.
     /// @param constantPrefix The prefix for the emitted constants, e.g.
     /// `ADDRESS_REGISTRY`.
     /// @param dir The snapshot directory to alias — ordinarily `CANDIDATE`.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written lib
+    /// declares.
+    /// @param copyrightText The copyright text the written lib declares.
     /// @return The path written.
-    function writeAliasLib(Vm vm, string memory contractName, string memory constantPrefix, string memory dir)
-        internal
-        returns (string memory)
-    {
+    function writeAliasLib(
+        Vm vm,
+        string memory contractName,
+        string memory constantPrefix,
+        string memory dir,
+        string memory spdxLicenseIdentifier,
+        string memory copyrightText
+    ) internal returns (string memory) {
         string memory libraryName = string.concat("Lib", contractName, "Deploy");
         string memory path = string.concat("src/lib/", libraryName, ".sol");
 
@@ -501,13 +564,27 @@ library LibRainDeploySnapshot {
         vm.writeFile(
             path,
             string.concat(
-                LibCodeGen.filePrefix(),
+                LibCodeGen.filePrefix(spdxLicenseIdentifier, copyrightText),
                 "\n",
                 aliasImportBlock(contractName, constantPrefix, dir),
                 aliasLibraryBlock(contractName, constantPrefix, libraryName)
             )
         );
         return path;
+    }
+
+    /// `writeAliasLib` applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
+    /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
+    /// @param vm The Vm instance for file operations.
+    /// @param contractName The contract the alias lib is written for.
+    /// @param constantPrefix The prefix for the emitted constants.
+    /// @param dir The snapshot directory to alias.
+    /// @return The path written.
+    function writeAliasLib(Vm vm, string memory contractName, string memory constantPrefix, string memory dir)
+        internal
+        returns (string memory)
+    {
+        return writeAliasLib(vm, contractName, constantPrefix, dir, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT);
     }
 
     /// The release tag a record path sits under.
@@ -841,12 +918,17 @@ library LibRainDeploySnapshot {
     /// the real record can only be tested against it, and a repo that has cut
     /// no release has nothing there to test against.
     /// @param contractName The contract the released record describes.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written lib
+    /// declares. The calling repo's, for the reason `writeSnapshot` gives.
+    /// @param copyrightText The copyright text the written lib declares.
     /// @param template The candidate declaration the metadata comes from.
     /// @return The path written.
     function writeReleasedSuitesLib(
         Vm vm,
         string memory recordRoot,
         string memory contractName,
+        string memory spdxLicenseIdentifier,
+        string memory copyrightText,
         DeploySuite memory template
     ) internal returns (string memory) {
         string memory libraryName = string.concat("Lib", contractName, "Released");
@@ -857,13 +939,33 @@ library LibRainDeploySnapshot {
         vm.writeFile(
             path,
             string.concat(
-                LibCodeGen.filePrefix(),
+                LibCodeGen.filePrefix(spdxLicenseIdentifier, copyrightText),
                 "\n",
                 releasedImportBlock(vm, paths),
                 releasedLibraryBlock(vm, libraryName, contractName, paths, template)
             )
         );
         return path;
+    }
+
+    /// `writeReleasedSuitesLib` applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
+    /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
+    /// @param vm The Vm instance for file operations.
+    /// @param recordRoot The record root — `LIB_FS_ROOT` for a repo's real
+    /// record.
+    /// @param contractName The contract the released lib is written for.
+    /// @param template The suite the released entries take their key and
+    /// artifact path from.
+    /// @return The path written.
+    function writeReleasedSuitesLib(
+        Vm vm,
+        string memory recordRoot,
+        string memory contractName,
+        DeploySuite memory template
+    ) internal returns (string memory) {
+        return writeReleasedSuitesLib(
+            vm, recordRoot, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, template
+        );
     }
 
     /// The newest release in a record: the greatest tag any of its files sits
