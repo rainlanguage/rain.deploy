@@ -1,2 +1,2 @@
 forge-std-1.16.2/=dependencies/forge-std-1.16.2/
-rain-sol-codegen-0.1.35/=dependencies/rain-sol-codegen-0.1.35/
+rain-sol-codegen-0.1.36/=dependencies/rain-sol-codegen-0.1.36/

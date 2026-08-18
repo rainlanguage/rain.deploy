@@ -3,8 +3,8 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.16.2/src/Vm.sol";
-import {LibCodeGen} from "rain-sol-codegen-0.1.35/src/lib/LibCodeGen.sol";
-import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.35/src/lib/LibFs.sol";
+import {LibCodeGen} from "rain-sol-codegen-0.1.36/src/lib/LibCodeGen.sol";
+import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.36/src/lib/LibFs.sol";
 import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 
