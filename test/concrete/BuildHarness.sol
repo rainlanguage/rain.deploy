@@ -20,6 +20,12 @@ contract BuildHarness is Build {
         return generatedContracts();
     }
 
+    /// The name list the freeze and the aggregate are emitted from.
+    /// @return The generated contract names.
+    function externalGeneratedContractNames() external pure returns (string[] memory) {
+        return generatedContractNames();
+    }
+
     /// The deploy declaration's list, through the same guarded reader every
     /// other consumer of the declaration uses.
     /// @return The declared candidates.
