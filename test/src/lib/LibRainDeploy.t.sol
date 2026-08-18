@@ -194,16 +194,18 @@ contract LibRainDeployTest is Test {
         );
     }
 
-    /// `supportedNetworks` MUST return exactly 5 networks in the expected
+    /// `supportedNetworks` MUST return exactly 7 networks in the expected
     /// order matching the library constants.
     function testSupportedNetworks() external pure {
         string[] memory networks = LibRainDeploy.supportedNetworks();
-        assertEq(networks.length, 5);
+        assertEq(networks.length, 7);
         assertEq(networks[0], LibRainDeploy.ARBITRUM_ONE);
         assertEq(networks[1], LibRainDeploy.BASE);
         assertEq(networks[2], LibRainDeploy.BASE_SEPOLIA);
-        assertEq(networks[3], LibRainDeploy.FLARE);
-        assertEq(networks[4], LibRainDeploy.POLYGON);
+        assertEq(networks[3], LibRainDeploy.ETHEREUM);
+        assertEq(networks[4], LibRainDeploy.FLARE);
+        assertEq(networks[5], LibRainDeploy.HYPEREVM);
+        assertEq(networks[6], LibRainDeploy.POLYGON);
     }
 
     /// PROPERTY: `[rpc_endpoints]` and `[etherscan]` in `foundry.toml` are
@@ -1223,7 +1225,7 @@ contract LibRainDeployTest is Test {
     ///
     /// Two networks rather than `supportedNetworks()`. What is under test is
     /// that the loop visits every network it is given, which two prove as well
-    /// as five; the roster itself is `testSupportedNetworks`'s job. These are
+    /// as seven; the roster itself is `testSupportedNetworks`'s job. These are
     /// the two networks the rest of this suite forks, so the test does not
     /// depend on the reliability of RPC endpoints nothing else here touches.
     function testCheckResolvedAddressesOnNetworksEachNetwork() external {
@@ -1273,7 +1275,7 @@ contract LibRainDeployTest is Test {
     /// just as happily — and the mismatch case above is one network, so it
     /// cannot tell them apart either. What separates them is a target that
     /// answers differently on a LATER network, which is exactly the deployment
-    /// this matrix exists for: one chain of five holding a value nobody looked
+    /// this matrix exists for: one chain of seven holding a value nobody looked
     /// at.
     ///
     /// The first network is the one the target agrees on, so nothing fails

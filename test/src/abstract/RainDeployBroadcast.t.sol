@@ -152,9 +152,9 @@ contract RainDeployBroadcastTest is Test {
         //
         // A fixture that names ONE network, so that where the broadcast went is
         // observable at all. `sDeploy` takes the default target set, and a suite
-        // deployed to all five chains and a suite deployed to the one chain the
+        // deployed to all seven chains and a suite deployed to the one chain the
         // repo asked for are indistinguishable from a fixture that asks for all
-        // five.
+        // seven.
         ExampleDeploySingleNetwork single = new ExampleDeploySingleNetwork();
 
         // Derived here from the same source the declaration derives them from,
@@ -198,7 +198,7 @@ contract RainDeployBroadcastTest is Test {
         // arbitrum for this fixture's single-element override, polygon for the
         // default. That is the whole of the difference an assertion can see, and
         // an override `run()` ignored is a repo that asked for one chain getting
-        // a suite on five — with a revert partway through leaving a dispatch
+        // a suite on seven — with a revert partway through leaving a dispatch
         // half done.
         //
         // `testDeployNetworksDefaultsToSupportedNetworks` asserts the default
@@ -258,7 +258,7 @@ contract RainDeployBroadcastTest is Test {
     /// before the `CREATE2` goes out compares the recorded address against the
     /// recorded creation code, both of which come out of the same generated
     /// file. That catches a stale PIN and cannot catch a snapshot of the wrong
-    /// CONTRACT, so without this the bytes reaching five chains are whatever the
+    /// CONTRACT, so without this the bytes reaching seven chains are whatever the
     /// generated file happens to hold. `CREATE2` at a zero salt makes that
     /// permanent: the wrong bytes take the wrong bytes' own address, on every
     /// chain the dispatch reached, and the dispatch is `workflow_dispatch` on a

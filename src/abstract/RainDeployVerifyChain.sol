@@ -36,8 +36,8 @@ error CodeHashMismatchOnNetwork(
 ///
 /// This is the only group that can catch a suite that never deployed to a
 /// network, or that is not there any more. Neither is a fact the repo can hold:
-/// both can go false with nobody touching it — a release that reached four
-/// chains of five, a chain added to `supportedNetworks()` after a release that
+/// both can go false with nobody touching it — a release that reached six
+/// chains of seven, a chain added to `supportedNetworks()` after a release that
 /// therefore never got it, a deploy that silently failed.
 ///
 /// ## Released only, for the same reason source anchors the candidate only
@@ -108,7 +108,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// expectation.
     /// @param derived The derivation of every suite to check.
     function checkDeployedOnSupportedNetworks(DerivedDeploy[] memory derived) internal {
-        // Nothing to check is not a reason to touch five RPC endpoints. Forking
+        // Nothing to check is not a reason to touch seven RPC endpoints. Forking
         // to check nothing turns an outage into the failure of an assertion
         // that has no subject, which is the one failure this contract is
         // supposed to be legible against.

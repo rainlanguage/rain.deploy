@@ -33,11 +33,13 @@ on:
       networks:
         type: string
         required: true
-        default: arbitrum base base-sepolia flare polygon
+        default: arbitrum base base-sepolia mainnet flare hyperliquid polygon
         description: |
           Which explorers to submit to. FOUNDRY's chain names, not the
-          `[rpc_endpoints]` aliases: `base-sepolia` is a chain name and
-          `base_sepolia` is rejected outright. The default is
+          `[rpc_endpoints]` aliases, and the two differ on three of the seven:
+          the aliases `base_sepolia`, `ethereum` and `hyperevm` are rejected
+          outright, and the chain names are `base-sepolia`, `mainnet` and
+          `hyperliquid`. The default is
           `LibRainDeploy.supportedNetworks()` spelled that way, i.e. every
           network the deploy broadcasts to, so it has to move when that does.
 jobs:
