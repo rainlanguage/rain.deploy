@@ -85,8 +85,14 @@ library LibRainDeploy {
     /// Config name for Base Sepolia testnet.
     string constant BASE_SEPOLIA = "base_sepolia";
 
+    /// Config name for Ethereum mainnet.
+    string constant ETHEREUM = "ethereum";
+
     /// Config name for Flare network.
     string constant FLARE = "flare";
+
+    /// Config name for HyperEVM network.
+    string constant HYPEREVM = "hyperevm";
 
     /// Config name for Polygon network.
     string constant POLYGON = "polygon";
@@ -251,12 +257,14 @@ library LibRainDeploy {
     /// Returns the list of networks currently supported by Rain deployments.
     /// @return The list of supported network names.
     function supportedNetworks() internal pure returns (string[] memory) {
-        string[] memory networks = new string[](5);
+        string[] memory networks = new string[](7);
         networks[0] = ARBITRUM_ONE;
         networks[1] = BASE;
         networks[2] = BASE_SEPOLIA;
-        networks[3] = FLARE;
-        networks[4] = POLYGON;
+        networks[3] = ETHEREUM;
+        networks[4] = FLARE;
+        networks[5] = HYPEREVM;
+        networks[6] = POLYGON;
         return networks;
     }
 

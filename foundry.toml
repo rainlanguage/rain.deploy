@@ -77,7 +77,9 @@ recursive_deps = false
 arbitrum = "${ARBITRUM_RPC_URL}"
 base = "${BASE_RPC_URL}"
 base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
+ethereum = "${ETHEREUM_RPC_URL}"
 flare = "${FLARE_RPC_URL}"
+hyperevm = "${HYPEREVM_RPC_URL}"
 polygon = "${POLYGON_RPC_URL}"
 
 # `rainix-manual-sol-artifacts` passes `--verify` by default and exports exactly
@@ -88,9 +90,18 @@ polygon = "${POLYGON_RPC_URL}"
 # Both sections are checked against `LibRainDeploy.supportedNetworks()`, in both
 # directions, by `testSupportedNetworksAreFullyConfigured`. Adding a network is
 # an edit to all three or a red test, not a broadcast that discovers it.
+#
+# `chain` is stated on the entries whose alias foundry does not itself resolve
+# to a chain. An entry with neither `chain` nor `url` under such an alias is not
+# a missing key, it is a config error — "At least one of `url` or `chain` must
+# be present for Etherscan config with unknown alias" — raised while resolving
+# the section, so it takes down verification for every network in it and not
+# only its own.
 [etherscan]
 arbitrum = { key = "${CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY}" }
 base = { key = "${CI_DEPLOY_BASE_ETHERSCAN_API_KEY}" }
 base_sepolia = { key = "${CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY}" }
+ethereum = { key = "${CI_DEPLOY_ETHEREUM_ETHERSCAN_API_KEY}", chain = 1 }
 flare = { key = "${CI_DEPLOY_FLARE_ETHERSCAN_API_KEY}" }
+hyperevm = { key = "${CI_DEPLOY_HYPEREVM_ETHERSCAN_API_KEY}", chain = 999 }
 polygon = { key = "${CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY}" }

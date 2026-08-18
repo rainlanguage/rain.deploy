@@ -22,7 +22,7 @@ address constant ABSENT_DEPENDENCY = address(0xdeadbee5);
 /// dependency check by design and would say nothing about the list.
 ///
 /// One network, so the refusal names a chain that is the whole target set
-/// rather than the first of five. Keyed `second-address-candidate` for the
+/// rather than the first of seven. Keyed `second-address-candidate` for the
 /// reason `StalePinDeploy` gives.
 contract MissingDependencyDeploy is RainDeployBroadcast {
     /// @inheritdoc RainDeployBroadcast
