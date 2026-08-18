@@ -10,6 +10,7 @@ import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFa
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
 import {MockDirtyWordOwner} from "../../concrete/MockDirtyWordOwner.sol";
 import {MockRawAnswerOwner} from "../../concrete/MockRawAnswerOwner.sol";
+import {MockRevertingAnswerOwner} from "../../concrete/MockRevertingAnswerOwner.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
@@ -1007,6 +1008,34 @@ contract LibRainDeployTest is Test {
             )
         );
         this.externalCheckResolvedAddresses("test_network", address(consumer), readCalls, expected(account));
+    }
+
+    /// A read that REVERTS carrying exactly the bytes a successful answer would
+    /// have carried MUST be refused.
+    ///
+    /// Nothing in the payload separates the two: same length, same word, same
+    /// address, and it is the address the check is looking for. Only whether
+    /// the call SUCCEEDED does — which is why the success flag is part of the
+    /// condition rather than left to the length check, and this is the one case
+    /// where the length check has nothing to say. It is not a contrived
+    /// payload: a custom error with one address argument is exactly this shape,
+    /// and so is any revert that bubbles a callee's return data.
+    ///
+    /// The reverting read above carries EMPTY data, so it fails the length
+    /// check and says nothing about the success flag.
+    function testCheckResolvedAddressesRevertingAddressAnswerReverts(address account) external {
+        MockRevertingAnswerOwner target = new MockRevertingAnswerOwner(abi.encode(account));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector,
+                "test_network",
+                address(target),
+                uint256(0),
+                abi.encode(account)
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(target), ownerReadCalls(), expected(account));
     }
 
     /// A read that answers with one word whose upper 96 bits are dirty has not
