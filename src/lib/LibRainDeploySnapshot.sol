@@ -1029,13 +1029,14 @@ library LibRainDeploySnapshot {
     /// file also compiles only from a directory whose parent holds
     /// `abstract/RainDeploySuitesBase.sol`.
     /// @param contractNames The contracts whose released libs to aggregate.
-    /// @return imports The import block.
-    function aggregateImportBlock(string[] memory contractNames) internal pure returns (string memory imports) {
-        imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
+    /// @return The import block.
+    function aggregateImportBlock(string[] memory contractNames) internal pure returns (string memory) {
+        string memory imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
         for (uint256 i = 0; i < contractNames.length; i++) {
             string memory libraryName = releasedLibraryName(contractNames[i]);
             imports = string.concat(imports, "import {", libraryName, "} from \"./", libraryName, ".sol\";\n\n");
         }
+        return imports;
     }
 
     /// The library block of the generated aggregate lib: every per-contract
@@ -1095,10 +1096,10 @@ library LibRainDeploySnapshot {
             "/// release every check quietly stops asking about.\nlibrary ",
             RELEASED_SUITES_LIBRARY,
             " {\n    /// Every released suite, in declaration order.\n",
-            "    /// @return suites The released suites.\n",
-            "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n",
+            "    /// @return The released suites.\n",
+            "    function releasedSuites() internal pure returns (DeploySuite[] memory) {\n",
             contractNames.length == 0
-                ? "        suites = new DeploySuite[](0);\n"
+                ? "        return new DeploySuite[](0);\n"
                 : string.concat(
                     "        DeploySuite[][] memory released = new DeploySuite[][](",
                     vm.toString(contractNames.length),
@@ -1108,14 +1109,15 @@ library LibRainDeploySnapshot {
                     "        for (uint256 i = 0; i < released.length; i++) {\n",
                     "            total += released[i].length;\n",
                     "        }\n\n",
-                    "        suites = new DeploySuite[](total);\n\n",
+                    "        DeploySuite[] memory suites = new DeploySuite[](total);\n\n",
                     "        uint256 offset = 0;\n",
                     "        for (uint256 i = 0; i < released.length; i++) {\n",
                     "            for (uint256 j = 0; j < released[i].length; j++) {\n",
                     "                suites[offset + j] = released[i][j];\n",
                     "            }\n",
                     "            offset += released[i].length;\n",
-                    "        }\n"
+                    "        }\n\n",
+                    "        return suites;\n"
                 ),
             "    }\n}\n"
         );

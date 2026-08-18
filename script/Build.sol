@@ -56,13 +56,14 @@ contract Build is Script, RegistryDeploySuites {
 
     /// Every generated contract's name, in declaration order — the order the
     /// aggregate emits its entries in. Read by the freeze and the aggregate.
-    /// @return names The contract names.
-    function generatedContractNames() internal pure returns (string[] memory names) {
+    /// @return The contract names.
+    function generatedContractNames() internal pure returns (string[] memory) {
         GeneratedContract[] memory contracts = generatedContracts();
-        names = new string[](contracts.length);
+        string[] memory names = new string[](contracts.length);
         for (uint256 i = 0; i < contracts.length; i++) {
             names[i] = contracts[i].contractName;
         }
+        return names;
     }
 
     /// @notice Regenerate the rolling snapshots, their alias libs, the
