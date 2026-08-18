@@ -3,29 +3,10 @@
 pragma solidity =0.8.25;
 
 import {Script} from "forge-std-1.16.2/src/Script.sol";
+import {RAIN_COPYRIGHT_TEXT, RAIN_SPDX_LICENSE_IDENTIFIER} from "rain-sol-codegen-0.1.36/src/lib/LibCodeGen.sol";
 import {DeployCandidate} from "../src/abstract/RainDeploySuitesBase.sol";
 import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../src/lib/LibRainDeploySnapshot.sol";
-
-/// @dev The SPDX licence identifier every file this script generates declares.
-///
-/// THIS repo's licence, declared by THIS repo, which is the whole point of it
-/// being here. `LibRainDeploySnapshot` and `rain-sol-codegen` beneath it take it
-/// as a parameter rather than choosing one, because both are dependencies of
-/// deploy repos in other orgs, and a header either of them chose would land in
-/// those repos' `src/generated/<tag>/` — append-only, so permanently — under a
-/// licence and a copyright holder that are not theirs.
-///
-/// `reuse lint` reads the emitted files, so an identifier here with no text in
-/// `LICENSES/` fails the legal job. What ties it to the header the committed
-/// generated files actually carry is `testWriteAliasLibWritesTheLibAtItsPath`,
-/// which emits with these and asserts the result is the committed file byte for
-/// byte.
-string constant GENERATED_SPDX_LICENSE_IDENTIFIER = "LicenseRef-DCL-1.0";
-
-/// @dev The copyright holder every file this script generates names. This repo's, for
-/// the reason `GENERATED_SPDX_LICENSE_IDENTIFIER` is.
-string constant GENERATED_COPYRIGHT_TEXT = "Copyright (c) 2020 Rain Open Source Software Ltd";
 
 /// One contract's generated files: the rolling snapshot, the alias lib that
 /// re-exports its pins and the released-suites lib emitted from its record.
@@ -102,6 +83,26 @@ struct GeneratedContract {
 /// generated-lib writers all come from `LibRainDeploySnapshot`, which in turn
 /// emits every constant through `LibCodeGen` and writes snapshots through
 /// `LibFs`. This script is the declaration and the sequencing, nothing else.
+///
+/// ## The header the generated files declare
+///
+/// Every file emitted here declares `RAIN_SPDX_LICENSE_IDENTIFIER` and
+/// `RAIN_COPYRIGHT_TEXT`, named from `rain-sol-codegen` rather than restated,
+/// so Rain's header has one definition and no second copy here to drift from
+/// it.
+///
+/// `LibRainDeploySnapshot` and `LibFs` beneath it take the header as parameters
+/// rather than choosing one, because both are dependencies of deploy repos in
+/// other orgs, and a header either of them chose would land in those repos'
+/// `src/generated/<tag>/` — append-only, so permanently — under a licence and a
+/// copyright holder that are not theirs. This repo is one of the org's own, so
+/// it names the org's values at the call site.
+///
+/// `reuse lint` reads the emitted files, so an identifier with no text in
+/// `LICENSES/` fails the legal job. What ties these to the header the committed
+/// generated files actually carry is `testWriteAliasLibWritesTheLibAtItsPath`,
+/// which emits with them and asserts the result is the committed file byte for
+/// byte.
 contract Build is Script, RegistryDeploySuites {
     /// Every contract this repo generates deploy pins for, declared ONCE.
     /// @return contracts The generated contracts.
@@ -158,15 +159,15 @@ contract Build is Script, RegistryDeploySuites {
                 contracts[i].contractName,
                 contracts[i].constantPrefix,
                 LibRainDeploySnapshot.CANDIDATE,
-                GENERATED_SPDX_LICENSE_IDENTIFIER,
-                GENERATED_COPYRIGHT_TEXT
+                RAIN_SPDX_LICENSE_IDENTIFIER,
+                RAIN_COPYRIGHT_TEXT
             );
             LibRainDeploySnapshot.writeReleasedSuitesLib(
                 vm,
                 LibRainDeploySnapshot.LIB_FS_ROOT,
                 contracts[i].contractName,
-                GENERATED_SPDX_LICENSE_IDENTIFIER,
-                GENERATED_COPYRIGHT_TEXT,
+                RAIN_SPDX_LICENSE_IDENTIFIER,
+                RAIN_COPYRIGHT_TEXT,
                 contracts[i].candidate.snapshot
             );
         }
@@ -181,8 +182,8 @@ contract Build is Script, RegistryDeploySuites {
                 vm,
                 LibRainDeploySnapshot.CANDIDATE,
                 contracts[i].contractName,
-                GENERATED_SPDX_LICENSE_IDENTIFIER,
-                GENERATED_COPYRIGHT_TEXT,
+                RAIN_SPDX_LICENSE_IDENTIFIER,
+                RAIN_COPYRIGHT_TEXT,
                 contracts[i].candidate.sourceCreationCode,
                 contracts[i].candidate.snapshot.dependencies
             );
