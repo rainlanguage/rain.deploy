@@ -453,9 +453,7 @@ contract LibMigrationRegistryTest is Test {
     /// A migration recorded with a supplied moment reads back as that moment
     /// through the library, so what `applyMigrationHistory` writes is what
     /// `applied` finds — and it is not the block the write landed in.
-    function testApplyMigrationHistoryThenApplied(bytes32 migration, uint32 appliedAt, uint32 writtenAt)
-        external
-    {
+    function testApplyMigrationHistoryThenApplied(bytes32 migration, uint32 appliedAt, uint32 writtenAt) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(appliedAt != 0);
         vm.assume(writtenAt > appliedAt);
@@ -652,9 +650,7 @@ contract LibMigrationRegistryTest is Test {
 
     /// `applyMigrationHistory` checks the code hash too, so a backfill is never
     /// written to a chain with no registry.
-    function testApplyMigrationHistoryNoRegistry(bytes32 expectedHead, bytes32 migration, uint256 appliedAt)
-        external
-    {
+    function testApplyMigrationHistoryNoRegistry(bytes32 expectedHead, bytes32 migration, uint256 appliedAt) external {
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
 
         vm.expectRevert(

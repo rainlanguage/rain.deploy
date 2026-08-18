@@ -566,7 +566,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// in order ARE its chain of heads. It does carry the moment, which the
     /// block a log entry sits in does not — that block says when the record was
     /// written, and the moment says when the migration ran.
-    function testApplyMigrationHistoryEvent(address writer, bytes32 migration, uint32 appliedAt, uint32 writtenAt) external {
+    function testApplyMigrationHistoryEvent(address writer, bytes32 migration, uint32 appliedAt, uint32 writtenAt)
+        external
+    {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(appliedAt != 0);
@@ -746,9 +748,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// run, so a future one is not a late record of anything, and a consumer
     /// measuring an interval since the migration would be subtracting a moment
     /// later than the one it is measuring from.
-    function testApplyMigrationHistoryFutureTimestampReverts(address writer, bytes32 migration, uint32 now_, uint256 appliedAt)
-        external
-    {
+    function testApplyMigrationHistoryFutureTimestampReverts(
+        address writer,
+        bytes32 migration,
+        uint32 now_,
+        uint256 appliedAt
+    ) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         vm.warp(now_);
@@ -807,7 +812,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// refused as a moment, and every other moment is still in the future. The
     /// head does not move, so the namespace goes on describing something true
     /// and the migration is still applicable once the clock has moved.
-    function testApplyMigrationHistoryZeroBlockRecordsNothing(address writer, bytes32 migration, uint256 appliedAt) external {
+    function testApplyMigrationHistoryZeroBlockRecordsNothing(address writer, bytes32 migration, uint256 appliedAt)
+        external
+    {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(appliedAt != 0);
