@@ -1319,12 +1319,30 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
-    /// Where the aggregate writer is pointed. Its own directory rather than the
-    /// real `LIB_DIR`: the committed aggregate is read by the assertions below
-    /// and by `GeneratedSnapshotShapeTest`, which forge runs in parallel with
-    /// this contract, and a writer aimed at that file would be rewriting it
+    /// Where `testWriteReleasedSuitesAggregateWritesTheLibAtItsPath` points the
+    /// aggregate writer. Its own directory rather than the real `LIB_DIR`: the
+    /// committed aggregate is read by the assertions below and by
+    /// `GeneratedSnapshotShapeTest`, which forge runs in parallel with this
+    /// contract, and a writer aimed at that file would be rewriting it
     /// underneath both of them.
-    string constant AGGREGATE_FIXTURE_DIR = "test/generated-aggregate";
+    ///
+    /// Not under `src/` or `test/`, which is everything `fs_permissions`
+    /// otherwise grants, because the writer names the file it emits
+    /// `LibReleasedSuites.sol` and that file imports
+    /// `./Lib<Contract>Released.sol` and
+    /// `../abstract/RainDeploySuitesBase.sol` -- paths that resolve from
+    /// `src/lib` and nowhere else. Both roots are compiled, so a copy left
+    /// behind by a failure there fails the whole build, on every test in the
+    /// repo, until it is deleted by hand. `foundry.toml` grants `fixture-lib`
+    /// for these two.
+    string constant AGGREGATE_PATH_FIXTURE_DIR = "fixture-lib/aggregate-path";
+
+    /// Where `testWriteReleasedSuitesAggregateDefaultsToTheOrgHeader` points
+    /// the writer, for the reason `RELEASED_FIXTURE_ROOT` is not
+    /// `FIXTURE_ROOT`: forge runs the tests in a contract concurrently, and two
+    /// of them creating, writing, reading and removing one directory see each
+    /// other's files and each other's removals.
+    string constant AGGREGATE_DEFAULTS_FIXTURE_DIR = "fixture-lib/aggregate-defaults";
 
     /// The aggregate MUST land at `<libDir>/LibReleasedSuites.sol`, holding
     /// exactly the prefix, imports and library the emitters produce for the
@@ -1338,16 +1356,17 @@ contract LibRainDeploySnapshotTest is Test {
     /// exists to report.
     function testWriteReleasedSuitesAggregateWritesTheLibAtItsPath() external {
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.createDir(AGGREGATE_FIXTURE_DIR, true);
+        vm.createDir(AGGREGATE_PATH_FIXTURE_DIR, true);
         string[] memory names = aggregateNames(3);
 
-        string memory written = LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, AGGREGATE_FIXTURE_DIR, names);
+        string memory written =
+            LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, AGGREGATE_PATH_FIXTURE_DIR, names);
         string memory emitted = vm.readFile(written);
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeDir(AGGREGATE_FIXTURE_DIR, true);
+        vm.removeDir(AGGREGATE_PATH_FIXTURE_DIR, true);
 
-        assertEq(written, string.concat(AGGREGATE_FIXTURE_DIR, "/LibReleasedSuites.sol"));
+        assertEq(written, string.concat(AGGREGATE_PATH_FIXTURE_DIR, "/LibReleasedSuites.sol"));
         assertEq(
             emitted,
             string.concat(
@@ -1982,22 +2001,22 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// As `testWriteSnapshotDefaultsToTheOrgHeader`, for the aggregate. The
     /// defaulting arity keeps `libDir`, and is pointed at
-    /// `AGGREGATE_FIXTURE_DIR` for the reason that constant gives.
+    /// `AGGREGATE_DEFAULTS_FIXTURE_DIR` for the reason that constant gives.
     function testWriteReleasedSuitesAggregateDefaultsToTheOrgHeader() external {
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.createDir(AGGREGATE_FIXTURE_DIR, true);
+        vm.createDir(AGGREGATE_DEFAULTS_FIXTURE_DIR, true);
         string[] memory names = aggregateNames(3);
 
         string memory defaulted =
-            vm.readFile(LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, AGGREGATE_FIXTURE_DIR, names));
+            vm.readFile(LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, AGGREGATE_DEFAULTS_FIXTURE_DIR, names));
         string memory explicitly = vm.readFile(
             LibRainDeploySnapshot.writeReleasedSuitesAggregate(
-                vm, AGGREGATE_FIXTURE_DIR, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, names
+                vm, AGGREGATE_DEFAULTS_FIXTURE_DIR, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, names
             )
         );
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeDir(AGGREGATE_FIXTURE_DIR, true);
+        vm.removeDir(AGGREGATE_DEFAULTS_FIXTURE_DIR, true);
 
         assertEq(defaulted, explicitly);
     }

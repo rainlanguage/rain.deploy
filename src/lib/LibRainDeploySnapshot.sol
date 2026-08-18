@@ -1019,9 +1019,11 @@ library LibRainDeploySnapshot {
     /// The import block of the generated aggregate lib.
     ///
     /// One import per contract, of the released lib `writeReleasedSuitesLib`
-    /// emitted for it, by sibling path — both writers emit into `LIB_DIR`, and
-    /// naming the sibling rather than the directory is what keeps that true of
-    /// a repo that moves the directory.
+    /// emitted for it, by sibling path — both writers emit into `LIB_DIR`, so
+    /// the released libs are siblings of the aggregate wherever `LIB_DIR` is.
+    /// The `DeploySuite` import above them is parent-relative, so the emitted
+    /// file also compiles only from a directory whose parent holds
+    /// `abstract/RainDeploySuitesBase.sol`.
     /// @param contractNames The contracts whose released libs to aggregate.
     /// @return imports The import block.
     function aggregateImportBlock(string[] memory contractNames) internal pure returns (string memory imports) {
@@ -1130,12 +1132,18 @@ library LibRainDeploySnapshot {
     /// @param vm The Vm instance for file operations.
     /// @param libDir The directory the per-contract released libs were written
     /// to, which this is written into as well — `LIB_DIR` for a repo's real
-    /// libs. A parameter for the same reason `writeReleasedSuitesLib` takes a
-    /// record root: a writer that can only be pointed at the committed
-    /// declaration can only be tested by overwriting it, and a test that
-    /// overwrites a file the rest of the suite reads is a test that fails on
-    /// timing. Sibling imports are what make any directory correct, so the
-    /// caller's only obligation is to name the one the released libs went to.
+    /// libs, and the only directory the emitted file COMPILES in.
+    /// `writeReleasedSuitesLib` and `writeAliasLib` write to
+    /// `pathForLib(libraryName)`, which takes no directory and is always
+    /// `LIB_DIR`, so `LIB_DIR` is the only place the emitted sibling
+    /// `./Lib<Contract>Released.sol` imports resolve; the emitted
+    /// `../abstract/RainDeploySuitesBase.sol` import is parent-relative and
+    /// constrains the directory further still. A parameter anyway, for the same
+    /// reason `writeReleasedSuitesLib` takes a record root: a writer that can
+    /// only be pointed at the committed declaration can only be tested by
+    /// overwriting it, and a test that overwrites a file the rest of the suite
+    /// reads is a test that fails on timing. Any other directory holds a file
+    /// no build can compile, so it has to be a directory nothing compiles.
     /// @param spdxLicenseIdentifier The SPDX licence identifier the written lib
     /// declares. The calling repo's, for the reason `writeSnapshot` gives.
     /// @param copyrightText The copyright text the written lib declares.
@@ -1167,9 +1175,8 @@ library LibRainDeploySnapshot {
     /// `RAIN_SPDX_LICENSE_IDENTIFIER` and `RAIN_COPYRIGHT_TEXT`, for a repo
     /// this org owns.
     /// @param vm The Vm instance for file operations.
-    /// @param libDir The directory the per-contract released libs were written
-    /// to, which this is written into as well — `LIB_DIR` for a repo's real
-    /// libs.
+    /// @param libDir The directory to write into, under the constraint the
+    /// arity above states — `LIB_DIR` for a repo's real libs.
     /// @param contractNames The contracts whose released libs to aggregate.
     /// @return The path written.
     function writeReleasedSuitesAggregate(Vm vm, string memory libDir, string[] memory contractNames)
