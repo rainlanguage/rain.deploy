@@ -698,8 +698,8 @@ contract LibRainDeploySnapshotTest is Test {
         "/// record. A moved source path retroactively updates every entry's artifact\n"
         "/// path, which is intended: the alternative is parsing this generated file\n"
         "/// back in to preserve what it last said.\n" "library LibAddressRegistryReleased {\n"
-        "    /// Every frozen release, in tag order.\n" "    /// @return suites The released suites.\n"
-        "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n";
+        "    /// Every frozen release, in tag order.\n" "    /// @return The released suites.\n"
+        "    function releasedSuites() internal pure returns (DeploySuite[] memory) {\n";
 
     /// The entry one release contributes.
     /// @param index The entry's index.
@@ -769,7 +769,11 @@ contract LibRainDeploySnapshotTest is Test {
             LibRainDeploySnapshot.releasedLibraryBlock(
                 vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(0), emitterTemplate()
             ),
-            string.concat(EXPECTED_LIBRARY_HEADER, "        suites = new DeploySuite[](0);\n", "    }\n}\n")
+            string.concat(
+                EXPECTED_LIBRARY_HEADER,
+                "        DeploySuite[] memory suites = new DeploySuite[](0);\n",
+                "        return suites;\n    }\n}\n"
+            )
         );
 
         assertEq(
@@ -778,9 +782,9 @@ contract LibRainDeploySnapshotTest is Test {
             ),
             string.concat(
                 EXPECTED_LIBRARY_HEADER,
-                "        suites = new DeploySuite[](1);\n",
+                "        DeploySuite[] memory suites = new DeploySuite[](1);\n",
                 expectedEntry("0", "0_0_1"),
-                "    }\n}\n"
+                "        return suites;\n    }\n}\n"
             )
         );
 
@@ -790,10 +794,10 @@ contract LibRainDeploySnapshotTest is Test {
             ),
             string.concat(
                 EXPECTED_LIBRARY_HEADER,
-                "        suites = new DeploySuite[](2);\n",
+                "        DeploySuite[] memory suites = new DeploySuite[](2);\n",
                 expectedEntry("0", "0_0_1"),
                 expectedEntry("1", "0_0_2"),
-                "    }\n}\n"
+                "        return suites;\n    }\n}\n"
             )
         );
     }
@@ -1226,8 +1230,8 @@ contract LibRainDeploySnapshotTest is Test {
         "/// so a contract that is generated, aliased and frozen cannot be missing\n"
         "/// from the declaration, and a release missing from the declaration is a\n"
         "/// release every check quietly stops asking about.\n" "library LibReleasedSuites {\n"
-        "    /// Every released suite, in declaration order.\n" "    /// @return suites The released suites.\n"
-        "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n";
+        "    /// Every released suite, in declaration order.\n" "    /// @return The released suites.\n"
+        "    function releasedSuites() internal pure returns (DeploySuite[] memory) {\n";
 
     /// The aggregate's text from below the released libs it reads to the end of
     /// `releasedSuites`: the sum of their lengths, the array that sum
@@ -1236,11 +1240,11 @@ contract LibRainDeploySnapshotTest is Test {
     /// every line the same width however many contracts there are.
     string constant EXPECTED_AGGREGATE_CONCATENATION = "\n        uint256 total = 0;\n"
         "        for (uint256 i = 0; i < released.length; i++) {\n" "            total += released[i].length;\n"
-        "        }\n\n" "        suites = new DeploySuite[](total);\n\n" "        uint256 offset = 0;\n"
-        "        for (uint256 i = 0; i < released.length; i++) {\n"
+        "        }\n\n" "        DeploySuite[] memory suites = new DeploySuite[](total);\n\n"
+        "        uint256 offset = 0;\n" "        for (uint256 i = 0; i < released.length; i++) {\n"
         "            for (uint256 j = 0; j < released[i].length; j++) {\n"
         "                suites[offset + j] = released[i][j];\n" "            }\n"
-        "            offset += released[i].length;\n" "        }\n";
+        "            offset += released[i].length;\n" "        }\n\n" "        return suites;\n";
 
     /// The aggregate MUST import the released lib of EVERY contract it is
     /// handed, by the sibling path the released writer wrote it to, and nothing
@@ -1283,7 +1287,7 @@ contract LibRainDeploySnapshotTest is Test {
     function testAggregateLibraryBlockDeclaresNothingForNoContracts() external pure {
         assertEq(
             LibRainDeploySnapshot.aggregateLibraryBlock(vm, aggregateNames(0)),
-            string.concat(EXPECTED_AGGREGATE_HEADER, "        suites = new DeploySuite[](0);\n", "    }\n}\n")
+            string.concat(EXPECTED_AGGREGATE_HEADER, "        return new DeploySuite[](0);\n", "    }\n}\n")
         );
     }
 

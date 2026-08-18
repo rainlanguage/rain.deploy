@@ -33,9 +33,9 @@ struct GeneratedContract {
 /// `generatedContracts()` is the only list, read by every hook below.
 contract Build is BuildScript, RegistryDeploySuites {
     /// Every contract this repo generates deploy pins for.
-    /// @return contracts The generated contracts.
-    function generatedContracts() internal pure returns (GeneratedContract[] memory contracts) {
-        contracts = new GeneratedContract[](2);
+    /// @return The generated contracts.
+    function generatedContracts() internal pure returns (GeneratedContract[] memory) {
+        GeneratedContract[] memory contracts = new GeneratedContract[](2);
         contracts[0] = GeneratedContract({
             contractName: "AddressRegistry", constantPrefix: "ADDRESS_REGISTRY", candidate: addressRegistryCandidate()
         });
@@ -44,17 +44,19 @@ contract Build is BuildScript, RegistryDeploySuites {
             constantPrefix: "MIGRATION_REGISTRY",
             candidate: migrationRegistryCandidate()
         });
+        return contracts;
     }
 
     /// @inheritdoc BuildScript
     /// @dev In declaration order — the order the aggregate emits its entries
     /// in. Read by the freeze and the aggregate.
-    function snapshotContractNames() internal pure override returns (string[] memory contractNames) {
+    function snapshotContractNames() internal pure override returns (string[] memory) {
         GeneratedContract[] memory contracts = generatedContracts();
-        contractNames = new string[](contracts.length);
+        string[] memory names = new string[](contracts.length);
         for (uint256 i = 0; i < contracts.length; i++) {
-            contractNames[i] = contracts[i].contractName;
+            names[i] = contracts[i].contractName;
         }
+        return names;
     }
 
     /// @inheritdoc BuildScript

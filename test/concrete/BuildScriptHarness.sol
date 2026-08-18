@@ -85,9 +85,10 @@ contract BuildScriptHarness is BuildScript {
     }
 
     /// @inheritdoc BuildScript
-    function snapshotContractNames() internal view override returns (string[] memory contractNames) {
-        contractNames = new string[](1);
+    function snapshotContractNames() internal view override returns (string[] memory) {
+        string[] memory contractNames = new string[](1);
         contractNames[0] = sContractName;
+        return contractNames;
     }
 
     /// @inheritdoc BuildScript

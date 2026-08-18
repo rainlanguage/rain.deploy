@@ -89,8 +89,8 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     ///   against itself, and every chain would pass whether or not anything is
     ///   deployed there.
     /// @param suite The suite to derive from.
-    /// @return derived The address and code hash the creation code produces.
-    function deriveDeployment(DeploySuite memory suite) internal returns (DerivedDeploy memory derived) {
+    /// @return The address and code hash the creation code produces.
+    function deriveDeployment(DeploySuite memory suite) internal returns (DerivedDeploy memory) {
         address formulaAddress = LibRainDeploy.zoltuAddress(suite.creationCode);
 
         uint256 snapshotId = vm.snapshotState();
@@ -107,7 +107,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
             revert ZoltuDerivationMismatch(suite.suite, formulaAddress, factoryAddress);
         }
 
-        derived =
+        DerivedDeploy memory derived =
             DerivedDeploy({suite: suite.suite, deployedAddress: formulaAddress, bytecodeHash: factoryAddress.codehash});
 
         // A failed revert is unrecoverable, not a warning to silence. The etch
@@ -117,6 +117,8 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         if (!vm.revertToState(snapshotId)) {
             revert DerivationSnapshotRevertFailed(suite.suite, snapshotId);
         }
+
+        return derived;
     }
 
     /// Derives every suite once, before anything forks. Callers that compare
@@ -124,11 +126,12 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     /// EVM, because on a fork the derived address is exactly the address the
     /// deployment under test occupies.
     /// @param suites The suites to derive.
-    /// @return derived The derivation of each, positionally paired.
-    function deriveDeployments(DeploySuite[] memory suites) internal returns (DerivedDeploy[] memory derived) {
-        derived = new DerivedDeploy[](suites.length);
+    /// @return The derivation of each, positionally paired.
+    function deriveDeployments(DeploySuite[] memory suites) internal returns (DerivedDeploy[] memory) {
+        DerivedDeploy[] memory derived = new DerivedDeploy[](suites.length);
         for (uint256 i = 0; i < suites.length; i++) {
             derived[i] = deriveDeployment(suites[i]);
         }
+        return derived;
     }
 }

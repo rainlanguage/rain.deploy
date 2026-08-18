@@ -9,6 +9,8 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {ExampleDeploySingleNetwork} from "../../concrete/ExampleDeploySingleNetwork.sol";
 import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
+import {StalePinDeploy, STALE_PIN_ADDRESS} from "../../concrete/StalePinDeploy.sol";
+import {MissingDependencyDeploy, ABSENT_DEPENDENCY} from "../../concrete/MissingDependencyDeploy.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 
@@ -107,6 +109,15 @@ contract RainDeployBroadcastTest is Test {
     /// Here rather than in a test of its own for the reason the first two are
     /// here: this leg has to SET `DEPLOYMENT_SUITE`, and a second test doing
     /// that is a second test racing the first over one process-global variable.
+    ///
+    /// ## Carrying the suite's own pins and its own dependencies
+    ///
+    /// Two further legs drive declarations whose selected suite differs from the
+    /// one above in exactly one field: a recorded address its creation code does
+    /// not derive, and a dependency that is on no network. Both answer to the
+    /// `DEPLOYMENT_SUITE` this test has already set, so neither adds a writer of
+    /// it, and both fail where a `run()` that derived the pins or dropped the
+    /// list would not.
     function testRunSelectsTheSuiteFromTheEnvBeforeTheKeyNeverDefaultsAndBroadcastsIt() external {
         // `DEPLOYMENT_SUITE` has to be ABSENT and no cheatcode makes it so, so
         // the precondition is asserted: a value set outside this test reports
@@ -194,6 +205,47 @@ contract RainDeployBroadcastTest is Test {
         // VALUE of that function; nothing until here asserted that `run()` is
         // what consults it.
         assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
+
+        // ## The pins it carries are the ones the suite RECORDS
+        //
+        // `deployToNetworks` compares the recorded address against the address
+        // the creation code derives before it forks anything, and that guard is
+        // worth exactly nothing if `run()` hands it a value derived here: a
+        // comparison of a value against itself passes on every suite, stale
+        // pins included, and the deploy lands wherever the code happens to go
+        // rather than where the repo's constants say. The suite above records
+        // pins that are correct, so it cannot tell the two apart; this one
+        // records an address its own creation code does not derive, and the
+        // refusal naming both is the whole of the difference.
+        //
+        // It answers to the same `DEPLOYMENT_SUITE` already set, so this leg
+        // adds no second writer of a process-wide variable.
+        StalePinDeploy stale = new StalePinDeploy();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedAddress.selector,
+                STALE_PIN_ADDRESS,
+                LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode)
+            )
+        );
+        stale.run();
+
+        // ## And so is the dependency list
+        //
+        // A suite's dependencies are the addresses that MUST already hold code
+        // on a network before it is broadcast there — a constructor that bakes
+        // in a beacon, a fallback that delegatecalls a facet — so a `run()` that
+        // dropped them broadcasts a deployment that is born broken, on every
+        // chain the dispatch reached, at an address `CREATE2` makes permanent.
+        // Every suite above declares none, so none of them can tell a list that
+        // was carried from a list that was replaced with an empty one.
+        MissingDependencyDeploy dependent = new MissingDependencyDeploy();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, ABSENT_DEPENDENCY
+            )
+        );
+        dependent.run();
     }
 
     /// The broadcast MUST refuse a candidate that is not the contract this repo

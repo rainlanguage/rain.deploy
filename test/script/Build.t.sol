@@ -173,7 +173,7 @@ contract BuildTest is Test {
     /// `generatedContracts()`'s ORDER, not merely as a set.
     ///
     /// Declaration order is claimed twice — the emitted library documents its
-    /// entries as being "in declaration order" and `generatedContractNames()`
+    /// entries as being "in declaration order" and `snapshotContractNames()`
     /// documents itself as giving "the order the aggregate emits its entries
     /// in" — and nothing else pins it.
     /// `testTheCommittedAggregateIsWhatTheGeneratorEmits` takes the contract
@@ -205,6 +205,27 @@ contract BuildTest is Test {
                 generated[i].contractName,
                 "the committed aggregate is not in the generator's declaration order"
             );
+        }
+    }
+
+    /// PROPERTY: `snapshotContractNames()` is every `generatedContracts()`
+    /// entry's `contractName`, positionally.
+    ///
+    /// It is the list `cutRelease` freezes and the list the aggregate is
+    /// emitted from, and both reach it only through `forge script`. A name
+    /// list shorter than the declaration freezes one contract fewer and emits
+    /// an aggregate that declares that contract's releases as nothing at all,
+    /// and every other assertion here is still green: the tests above read
+    /// `generatedContracts()` and the committed file, neither of which this
+    /// list passes through.
+    function testSnapshotContractNamesAreTheDeclarationInOrder() external view {
+        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
+        string[] memory names = sBuild.externalSnapshotContractNames();
+
+        assertEq(names.length, generated.length, "a different number of names than generated contracts");
+
+        for (uint256 i = 0; i < generated.length; i++) {
+            assertEq(names[i], generated[i].contractName, "the names are not the declaration in order");
         }
     }
 }

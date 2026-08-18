@@ -471,6 +471,86 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
         this.externalCheckInternallyConsistent(suite);
     }
 
+    /// The record is matched on the address a released suite's creation code
+    /// DERIVES, never on the address that suite RECORDS.
+    ///
+    /// The two are the same in a consistent set, which is what makes this worth
+    /// stating: a suite whose recorded address has gone stale still deployed
+    /// what its creation code deploys, so it still declares that release — and
+    /// the stale field is `checkInternallyConsistent`'s to catch, with an error
+    /// that names it. Matching on the recorded field instead reports a declared
+    /// release as one nobody declared, and sends the reader to
+    /// `releasedSuites()` to add an entry that is already there.
+    ///
+    /// The suite here is the record's own release with that one field broken,
+    /// so the derivation is the only thing left that can match it.
+    function testFrozenSnapshotMatchesTheDerivationNotTheRecordedAddress() external view {
+        DeploySuite[] memory released = new DeploySuite[](1);
+        released[0] = consistentSuite();
+        released[0].storedDeployedAddress = address(0xdead);
+
+        // It really is the record's release, and it really does record
+        // something else.
+        assertEq(LibRainDeploy.zoltuAddress(released[0].creationCode), ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
+        assertNotEq(released[0].storedDeployedAddress, ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
+
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), released);
+    }
+
+    /// The inherited internal-consistency check MUST reach EVERY declared
+    /// suite.
+    ///
+    /// Every negative case above drives `checkInternallyConsistent` with one
+    /// suite handed to it, so all of them pass on a check that only ever looked
+    /// at the first — and a repo declares one suite until the day it declares
+    /// several, which is the day a snapshot regenerated for one contract and
+    /// not the other appears. The suite broken here is not the first, so a loop
+    /// that stopped there would find nothing to fail on.
+    ///
+    /// Broken through the factory rather than by editing a field, because the
+    /// declaration this contract inherits is the passing case for the inherited
+    /// tests and cannot be broken in place. The mock is
+    /// `testZoltuDerivationMismatchReverts`'s, keyed on the creation code of the
+    /// suite being reached rather than of the first one.
+    function testSnapshotInternallyConsistentReachesEverySuite() external {
+        DeploySuite[] memory suites = allSuites();
+        assertEq(suites[1].suite, "second-address");
+        assertNotEq(keccak256(suites[0].creationCode), keccak256(suites[1].creationCode));
+
+        vm.mockCall(
+            LibRainDeploy.ZOLTU_FACTORY, suites[1].creationCode, abi.encodePacked(bytes20(LibRainDeploy.ZOLTU_FACTORY))
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ZoltuDerivationMismatch.selector,
+                "second-address",
+                suites[1].storedDeployedAddress,
+                LibRainDeploy.ZOLTU_FACTORY
+            )
+        );
+        this.testSnapshotInternallyConsistent();
+    }
+
+    /// The derivation MUST clear the derived address's NONCE, not only its
+    /// code.
+    ///
+    /// `CREATE2` collides on a non-zero nonce exactly as it does on non-empty
+    /// code, and the nonce is the half that leaves nothing to see: an account
+    /// with a nonce and no code reads as empty everywhere else, so a derivation
+    /// that cleared only the code would report a deployment failure for a
+    /// creation code that deploys perfectly well. The Zoltu factory is
+    /// permissionless, so whether anything has ever transacted from the address
+    /// a suite derives is nobody's to control.
+    function testDerivationClearsTheDerivedNonce() external {
+        DeploySuite memory suite = consistentSuite();
+        vm.setNonce(suite.storedDeployedAddress, 1);
+        assertEq(vm.getNonce(suite.storedDeployedAddress), 1);
+        assertEq(suite.storedDeployedAddress.code.length, 0);
+
+        this.externalCheckInternallyConsistent(suite);
+    }
+
     /// The derivation MUST leave nothing behind. A local deploy that survived
     /// would be compared against itself by the chain-anchored group, and every
     /// network would pass whether or not anything is deployed there.
