@@ -5,7 +5,6 @@ pragma solidity ^0.8.25;
 import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {AddressRegistry} from "../concrete/AddressRegistry.sol";
 import {MigrationRegistry} from "../concrete/MigrationRegistry.sol";
-import {MigrationRegistryV2} from "../concrete/MigrationRegistryV2.sol";
 import {
     CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE_CANDIDATE
@@ -14,16 +13,10 @@ import {
     CREATION_CODE as MIGRATION_REGISTRY_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as MIGRATION_REGISTRY_RUNTIME_CODE_CANDIDATE
 } from "../generated/candidate/MigrationRegistry.sol";
-import {
-    CREATION_CODE as MIGRATION_REGISTRY_V2_CREATION_CODE_CANDIDATE,
-    RUNTIME_CODE as MIGRATION_REGISTRY_V2_RUNTIME_CODE_CANDIDATE
-} from "../generated/candidate/MigrationRegistryV2.sol";
 import {LibAddressRegistryDeploy} from "../lib/LibAddressRegistryDeploy.sol";
 import {LibAddressRegistryReleased} from "../lib/LibAddressRegistryReleased.sol";
 import {LibMigrationRegistryDeploy} from "../lib/LibMigrationRegistryDeploy.sol";
 import {LibMigrationRegistryReleased} from "../lib/LibMigrationRegistryReleased.sol";
-import {LibMigrationRegistryV2Deploy} from "../lib/LibMigrationRegistryV2Deploy.sol";
-import {LibMigrationRegistryV2Released} from "../lib/LibMigrationRegistryV2Released.sol";
 
 /// @title RegistryDeploySuites
 /// @notice Everything this repo deploys, declared ONCE.
@@ -72,43 +65,29 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// that took the record whole would give another contract's snapshot this
     /// contract's suite key and collide with its own entry for that tag.
     ///
-    /// Flattened by a loop over the libs rather than by a run of index
-    /// arithmetic per lib, so a contract is added by adding one entry to the
-    /// group list and nothing else here moves.
-    ///
-    /// All are empty until the first release is cut. The rolling `candidate/`
+    /// Both are empty until the first release is cut. The rolling `candidate/`
     /// snapshots are not releases and do exist.
     function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        DeploySuite[][] memory groups = new DeploySuite[][](3);
-        groups[0] = LibAddressRegistryReleased.releasedSuites();
-        groups[1] = LibMigrationRegistryReleased.releasedSuites();
-        groups[2] = LibMigrationRegistryV2Released.releasedSuites();
+        DeploySuite[] memory addressRegistry = LibAddressRegistryReleased.releasedSuites();
+        DeploySuite[] memory migrationRegistry = LibMigrationRegistryReleased.releasedSuites();
 
-        uint256 total = 0;
-        for (uint256 i = 0; i < groups.length; i++) {
-            total += groups[i].length;
+        suites = new DeploySuite[](addressRegistry.length + migrationRegistry.length);
+        for (uint256 i = 0; i < addressRegistry.length; i++) {
+            suites[i] = addressRegistry[i];
         }
-
-        suites = new DeploySuite[](total);
-        uint256 next = 0;
-        for (uint256 i = 0; i < groups.length; i++) {
-            for (uint256 j = 0; j < groups[i].length; j++) {
-                suites[next] = groups[i][j];
-                next++;
-            }
+        for (uint256 i = 0; i < migrationRegistry.length; i++) {
+            suites[addressRegistry.length + i] = migrationRegistry[i];
         }
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    /// @dev One entry per contract this repo deploys. A further deployed
-    /// contract is a further named candidate below, a further entry here, a
-    /// further group in `releasedSuites` above, and a further entry in
-    /// `script/Build.sol`'s generated-contract list — nothing else.
+    /// @dev One entry per contract this repo deploys. A third deployed contract
+    /// is a third named candidate below, a third entry here, and a third entry
+    /// in `script/Build.sol`'s generated-contract list — nothing else.
     function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](3);
+        candidates = new DeployCandidate[](2);
         candidates[0] = addressRegistryCandidate();
         candidates[1] = migrationRegistryCandidate();
-        candidates[2] = migrationRegistryV2Candidate();
     }
 
     /// This repo's rolling `AddressRegistry` candidate.
@@ -174,40 +153,6 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 dependencies: new address[](0)
             }),
             sourceCreationCode: type(MigrationRegistry).creationCode
-        });
-    }
-
-    /// This repo's rolling `MigrationRegistryV2` candidate.
-    ///
-    /// Everything said about the `AddressRegistry` candidate holds here
-    /// unchanged: the pins are aliased from the generated snapshot, the
-    /// creation and runtime code are recorded rather than derived, and the
-    /// source anchor is what says the record describes THIS contract.
-    ///
-    /// It is a separate suite from `migration-registry` rather than a newer
-    /// spelling of it. The creation code is what the Zoltu factory takes, so two
-    /// creation codes are two addresses and two deployments; both are broadcast,
-    /// both are verified against every chain, and a consumer pins whichever one
-    /// it reads.
-    ///
-    /// `MigrationRegistryV2` has no constructor argument, no compile-time
-    /// authority and no dependency to be on chain first — the namespace is
-    /// `msg.sender`, so there is nothing to configure and nothing to resolve.
-    /// That is also why it is deployable to a new network the day the network
-    /// is added, with no follow-up transaction to make it useful.
-    /// @return The candidate.
-    function migrationRegistryV2Candidate() internal pure returns (DeployCandidate memory) {
-        return DeployCandidate({
-            snapshot: DeploySuite({
-                suite: "migration-registry-v2",
-                creationCode: MIGRATION_REGISTRY_V2_CREATION_CODE_CANDIDATE,
-                storedDeployedAddress: LibMigrationRegistryV2Deploy.MIGRATION_REGISTRY_V2_DEPLOYED_ADDRESS,
-                storedBytecodeHash: LibMigrationRegistryV2Deploy.MIGRATION_REGISTRY_V2_DEPLOYED_CODEHASH,
-                storedRuntimeCode: MIGRATION_REGISTRY_V2_RUNTIME_CODE_CANDIDATE,
-                artifactPath: "src/concrete/MigrationRegistryV2.sol:MigrationRegistryV2",
-                dependencies: new address[](0)
-            }),
-            sourceCreationCode: type(MigrationRegistryV2).creationCode
         });
     }
 }

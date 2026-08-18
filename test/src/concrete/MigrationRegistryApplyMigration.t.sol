@@ -9,9 +9,10 @@ import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
 /// @title MigrationRegistryApplyMigrationTest
-/// @notice A test suite for `MigrationRegistry.applyMigration`: who a record
-/// belongs to, that a migration is applied at most once and only onto the head
-/// its caller named, what a record carries, and what it may never become.
+/// @notice A test suite for both forms of `MigrationRegistry.applyMigration`:
+/// who a record belongs to, that a migration is applied at most once and only
+/// onto the head its caller named, which moments a record may carry, what a
+/// record carries, and what it may never become.
 contract MigrationRegistryApplyMigrationTest is Test {
     /// The registry under test. Stateful, so a fresh one per test.
     MigrationRegistry internal sRegistry;
@@ -33,7 +34,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
     }
 
-    /// A record IS the block timestamp it landed in, which is the whole
+    /// The two-argument form records the block it landed in, which is the whole
     /// difference from a flag: a consumer whose invariant starts AT the
     /// migration — a cliff, a rate change, a grace period — reads the moment
     /// from the chain rather than from a constant somebody guessed.
@@ -72,11 +73,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.applied(writer, migrationB), 2000);
     }
 
-    /// A record refuses to be written at all in a block whose timestamp is zero,
-    /// rather than write one that `applied` would read back as no record. The
-    /// head does not move and the migration can still be applied, which is the
-    /// only outcome that leaves the namespace describing something true.
-    function testApplyMigrationZeroTimestampReverts(address writer, bytes32 migration) external {
+    /// The two-argument form refuses to write at all in a block whose timestamp
+    /// is zero, rather than write a record that `applied` would read back as no
+    /// record. The head does not move and the migration can still be applied,
+    /// which is the only outcome that leaves the namespace describing something
+    /// true.
+    function testApplyMigrationZeroBlockReverts(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         vm.warp(0);
@@ -94,13 +96,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.applied(writer, migration), 1);
     }
 
-    /// The zero timestamp is checked LAST, after every refusal that describes a
-    /// mistake in the call. Those are true whatever block the call lands in, so
-    /// a caller in a zero-timestamp block is told which of its arguments is
-    /// wrong rather than told to come back later — and only a caller whose
-    /// arguments are all right is told about the block, which is the one
-    /// refusal that goes away on its own.
-    function testApplyMigrationZeroTimestampCheckedLast(
+    /// The zero moment is checked after the two id refusals and before anything
+    /// about the namespace, on the two-argument form as on the other. An id is
+    /// what a record is ABOUT, so a call with no subject has nothing to say a
+    /// moment for; everything after describes a namespace no writable record
+    /// will reach.
+    function testApplyMigrationZeroBlockCheckedAfterIdsAndBeforeTheNamespace(
         address writer,
         bytes32 migrationA,
         bytes32 migrationB,
@@ -125,26 +126,18 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.prank(writer);
         sRegistry.applyMigration(anyHead, MIGRATION_HEAD_GENESIS);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV1.MigrationAlreadyApplied.selector, writer, migrationA)
-        );
+        // Already applied, in a block that can hold no record: told about the
+        // moment, because the record could not be written whatever namespace it
+        // arrived at.
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                IMigrationRegistryV1.UnexpectedMigrationHead.selector, writer, MIGRATION_HEAD_GENESIS, migrationA
-            )
-        );
-        vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationB);
-
-        // With nothing left to say about the call, the block. This is what
-        // makes the four refusals above statements about the ORDER rather than
-        // about a check that was not live in this block at all.
+        // A head the namespace has moved on from, in the same block: told about
+        // the moment.
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
         vm.prank(writer);
-        sRegistry.applyMigration(migrationA, migrationB);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationB);
     }
 
     /// A record is confined to the caller's namespace. Applying under one
@@ -564,15 +557,44 @@ contract MigrationRegistryApplyMigrationTest is Test {
     }
 
     /// `Migrated` is emitted with the writer and migration both indexed, so the
-    /// log can be filtered by either. The log is the only enumeration of the
-    /// registry, so a record that does not emit is a record nobody can find.
+    /// log can be filtered by either, and carries the moment as data. The log is
+    /// the only enumeration of the registry, so a record that does not emit is a
+    /// record nobody can find.
     ///
-    /// It carries no head and no timestamp because the log already holds both:
-    /// one writer's entries in order ARE its chain of heads, and the timestamp
-    /// is the block's.
-    function testApplyMigrationEvent(address writer, bytes32 migration) external {
+    /// It carries no head because the log already holds it: one writer's entries
+    /// in order ARE its chain of heads. It does carry the moment, which the
+    /// block a log entry sits in does not — that block says when the record was
+    /// written, and the moment says when the migration ran.
+    function testApplyMigrationEvent(address writer, bytes32 migration, uint32 appliedAt, uint32 writtenAt) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
+        vm.assume(appliedAt != 0);
+        vm.assume(writtenAt > appliedAt);
+        vm.warp(writtenAt);
+
+        vm.recordLogs();
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, appliedAt);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        assertEq(entries.length, 1);
+        assertEq(entries[0].emitter, address(sRegistry));
+        assertEq(entries[0].topics.length, 3);
+        assertEq(entries[0].topics[0], keccak256("Migrated(address,bytes32,uint256)"));
+        assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
+        assertEq(entries[0].topics[2], migration);
+        assertEq(entries[0].data, abi.encode(uint256(appliedAt)));
+    }
+
+    /// The two-argument form emits the same event, carrying the block it stamped
+    /// — so a reader of the log never has to know which form wrote a record.
+    function testApplyMigrationEventFromTheBlockStampingForm(address writer, bytes32 migration, uint32 now_)
+        external
+    {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        vm.assume(now_ != 0);
+        vm.warp(now_);
 
         vm.recordLogs();
         vm.prank(writer);
@@ -580,12 +602,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 1);
-        assertEq(entries[0].emitter, address(sRegistry));
-        assertEq(entries[0].topics.length, 3);
-        assertEq(entries[0].topics[0], keccak256("Migrated(address,bytes32)"));
-        assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
-        assertEq(entries[0].topics[2], migration);
-        assertEq(entries[0].data.length, 0);
+        assertEq(entries[0].topics[0], keccak256("Migrated(address,bytes32,uint256)"));
+        assertEq(entries[0].data, abi.encode(uint256(now_)));
     }
 
     /// A refused `applyMigration` emits nothing, so a failed apply can never be
@@ -627,5 +645,424 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, keccak256(abi.encode(migration)));
         assertEq(vm.getRecordedLogs().length, 0);
+
+        vm.recordLogs();
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(migration, keccak256(abi.encode(migration)), 0);
+        assertEq(vm.getRecordedLogs().length, 0);
+
+        vm.recordLogs();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMigrationRegistryV1.FutureTimestamp.selector, block.timestamp + 1, block.timestamp
+            )
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(migration, keccak256(abi.encode(migration)), block.timestamp + 1);
+        assertEq(vm.getRecordedLogs().length, 0);
+    }
+
+    /// The three-argument form records the moment the CALLER supplied, which is
+    /// what lets a migration that already ran be recorded with the time it ran
+    /// rather than the time it was written down. The block the record lands in
+    /// is not the value, and a record written long after the fact says so.
+    function testApplyMigrationRecordsTheSuppliedMoment(
+        address writer,
+        bytes32 migration,
+        uint32 appliedAt,
+        uint32 writtenAt
+    ) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        vm.assume(appliedAt != 0);
+        vm.assume(writtenAt > appliedAt);
+        vm.warp(writtenAt);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, appliedAt);
+
+        assertEq(sRegistry.applied(writer, migration), appliedAt);
+        assertTrue(sRegistry.applied(writer, migration) != block.timestamp);
+    }
+
+    /// The moment of the current block is an ordinary value for the parameter,
+    /// which is what a caller reaching for the three-argument form to record a
+    /// migration running now passes.
+    function testApplyMigrationCurrentBlockIsAccepted(address writer, bytes32 migration, uint32 now_) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        vm.assume(now_ != 0);
+        vm.warp(now_);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, block.timestamp);
+
+        assertEq(sRegistry.applied(writer, migration), now_);
+    }
+
+    /// The two forms write the SAME record when the moment is this block, down
+    /// to the head each was applied onto — which is what makes the two-argument
+    /// form the other one with today's argument rather than a second way to
+    /// write a record.
+    function testApplyMigrationBothFormsWriteTheSameRecord(
+        address writer,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        uint32 now_
+    ) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+        vm.assume(now_ != 0);
+        vm.warp(now_);
+
+        MigrationRegistry stamping = new MigrationRegistry();
+        MigrationRegistry supplied = new MigrationRegistry();
+
+        vm.prank(writer);
+        stamping.applyMigration(MIGRATION_HEAD_GENESIS, migrationA);
+        vm.prank(writer);
+        supplied.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, block.timestamp);
+
+        vm.prank(writer);
+        stamping.applyMigration(migrationA, migrationB);
+        vm.prank(writer);
+        supplied.applyMigration(migrationA, migrationB, block.timestamp);
+
+        assertEq(stamping.applied(writer, migrationB), supplied.applied(writer, migrationB));
+        assertEq(stamping.appliedOnto(writer, migrationB), supplied.appliedOnto(writer, migrationB));
+        assertEq(stamping.head(writer), supplied.head(writer));
+    }
+
+    /// A moment that has not arrived is refused. A record says a migration HAS
+    /// run, so a future one is not a late record of anything, and a consumer
+    /// measuring an interval since the migration would be subtracting a moment
+    /// later than the one it is measuring from.
+    function testApplyMigrationFutureTimestampReverts(address writer, bytes32 migration, uint32 now_, uint256 appliedAt)
+        external
+    {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        vm.warp(now_);
+        appliedAt = bound(appliedAt, uint256(now_) + 1, type(uint256).max);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, appliedAt, uint256(now_))
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, appliedAt);
+
+        assertEq(sRegistry.applied(writer, migration), 0);
+        assertEq(sRegistry.appliedOnto(writer, migration), bytes32(0));
+        assertEq(sRegistry.head(writer), MIGRATION_HEAD_GENESIS);
+    }
+
+    /// One second past the current block is refused, and the current block is
+    /// not: the boundary is the block's own timestamp, inclusive.
+    function testApplyMigrationFutureBoundary(address writer, bytes32 migration, uint32 now_) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        vm.assume(now_ != 0);
+        vm.warp(now_);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, uint256(now_) + 1);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, uint256(now_));
+        assertEq(sRegistry.applied(writer, migration), now_);
+    }
+
+    /// A supplied zero is refused, rather than written as a record that
+    /// `applied` would read back as no record. The head does not move and the
+    /// migration can still be applied.
+    function testApplyMigrationZeroTimestampReverts(address writer, bytes32 migration, uint32 now_) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        vm.assume(now_ != 0);
+        vm.warp(now_);
+
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, 0);
+
+        assertEq(sRegistry.applied(writer, migration), 0);
+        assertEq(sRegistry.head(writer), MIGRATION_HEAD_GENESIS);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, 1);
+        assertEq(sRegistry.applied(writer, migration), 1);
+    }
+
+    /// A block whose timestamp is zero can hold no record at all: zero is
+    /// refused as a moment, and every other moment is still in the future. The
+    /// head does not move, so the namespace goes on describing something true
+    /// and the migration is still applicable once the clock has moved.
+    function testApplyMigrationZeroBlockRecordsNothing(address writer, bytes32 migration, uint256 appliedAt) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        vm.assume(appliedAt != 0);
+        vm.warp(0);
+
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, 0);
+
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, appliedAt, 0));
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, appliedAt);
+
+        assertEq(sRegistry.applied(writer, migration), 0);
+        assertEq(sRegistry.head(writer), MIGRATION_HEAD_GENESIS);
+
+        vm.warp(1);
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, 1);
+        assertEq(sRegistry.applied(writer, migration), 1);
+    }
+
+    /// The zero moment is refused BEFORE anything about the namespace is read,
+    /// so an uninitialised argument is reported as itself rather than as
+    /// whatever the namespace happens to make of it. Fuzzed over the head and
+    /// checked against a namespace that has moved on, because a head the
+    /// namespace happens to be at is accepted whichever check runs first.
+    function testApplyMigrationZeroTimestampCheckedBeforeTheNamespace(
+        address writer,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        bytes32 anyHead
+    ) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, block.timestamp);
+
+        // Already applied, and a zero moment: told about the moment.
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, 0);
+
+        // A head that has moved on, and a zero moment: told about the moment.
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(anyHead, migrationB, 0);
+    }
+
+    /// The two id refusals come before the moment, so a caller that has zeroed
+    /// both an id and a moment is told about the id: an id is what the record is
+    /// ABOUT, and a call with no subject has nothing to say a moment for.
+    function testApplyMigrationIdCheckedBeforeTimestamp(address writer, bytes32 anyHead) external {
+        vm.assume(writer != address(0));
+
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(anyHead, bytes32(0), 0);
+
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(anyHead, MIGRATION_HEAD_GENESIS, 0);
+    }
+
+    /// The refusals that describe the NAMESPACE come before the future-moment
+    /// one, so a re-dispatched script is told its migration already ran, and a
+    /// script at the wrong point in the sequence is told where the namespace is,
+    /// rather than either of them being sent to look at a clock.
+    function testApplyMigrationNamespaceCheckedBeforeTheFuture(
+        address writer,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        bytes32 skipped
+    ) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        LibMigrationFuzz.assumeMigration(vm, skipped);
+        vm.assume(migrationA != migrationB);
+        vm.assume(skipped != migrationA);
+        vm.assume(skipped != migrationB);
+
+        vm.warp(9000);
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, 5000);
+
+        // Already applied, and in the future: told it already ran.
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV1.MigrationAlreadyApplied.selector, writer, migrationA)
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationA, 9001);
+
+        // The wrong head, and in the future: told where the namespace is.
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV1.UnexpectedMigrationHead.selector, writer, skipped, migrationA)
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(skipped, migrationB, 9001);
+    }
+
+    /// A record may carry a moment EARLIER than the record before it in the
+    /// chain. Nothing orders the moments, because the chain does: a namespace
+    /// backfilled out of order, or one whose writer learned of an older
+    /// migration late, records what it knows rather than being refused for
+    /// contradicting a sequence it is not the source of.
+    function testApplyMigrationMomentsMayGoBackwards(
+        address writer,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        uint32 now_,
+        uint256 earlier
+    ) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+        vm.assume(now_ > 1);
+        vm.warp(now_);
+        earlier = bound(earlier, 1, uint256(now_) - 1);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, uint256(now_));
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB, earlier);
+
+        assertEq(sRegistry.applied(writer, migrationA), uint256(now_));
+        assertEq(sRegistry.applied(writer, migrationB), earlier);
+        assertEq(sRegistry.head(writer), migrationB);
+    }
+
+    /// Two records may carry the SAME moment. Two migrations applied in one
+    /// transaction share a block, and two backfilled migrations known only to
+    /// the same day share a moment; the chain is what orders them, so the
+    /// moments are not asked to.
+    function testApplyMigrationMomentsMayBeEqual(
+        address writer,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        uint32 appliedAt
+    ) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+        vm.assume(appliedAt != 0);
+        vm.warp(appliedAt);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, appliedAt);
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB, appliedAt);
+
+        assertEq(sRegistry.applied(writer, migrationA), appliedAt);
+        assertEq(sRegistry.applied(writer, migrationB), appliedAt);
+    }
+
+    /// A record keeps the head it was applied onto, which is what makes the
+    /// order structural. The first record in a namespace holds
+    /// `MIGRATION_HEAD_GENESIS`, and each later one holds the migration before
+    /// it — the value the caller named and the registry checked, not one the
+    /// caller could have chosen freely.
+    function testApplyMigrationRecordsTheHeadItWasAppliedOnto(
+        address writer,
+        bytes32 migrationA,
+        bytes32 migrationB
+    ) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+
+        assertEq(sRegistry.appliedOnto(writer, migrationA), bytes32(0));
+
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA);
+        assertEq(sRegistry.appliedOnto(writer, migrationA), MIGRATION_HEAD_GENESIS);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB);
+        assertEq(sRegistry.appliedOnto(writer, migrationB), migrationA);
+        assertEq(sRegistry.appliedOnto(writer, migrationA), MIGRATION_HEAD_GENESIS);
+    }
+
+    /// The chain is the order the migrations ran in, and it says so while the
+    /// moments say the opposite. Three records written newest-moment-first walk
+    /// back from the head in the order they were APPLIED, ending at genesis.
+    function testApplyMigrationChainIsTheOrderWhateverTheMoments(
+        address writer,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        bytes32 migrationC
+    ) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationC);
+        vm.assume(migrationA != migrationB);
+        vm.assume(migrationB != migrationC);
+        vm.assume(migrationA != migrationC);
+
+        vm.warp(9000);
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, 3000);
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB, 2000);
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationB, migrationC, 1000);
+
+        // Every moment is below the one before it, so nothing about the order
+        // can be read out of them.
+        assertEq(sRegistry.applied(writer, migrationA), 3000);
+        assertEq(sRegistry.applied(writer, migrationB), 2000);
+        assertEq(sRegistry.applied(writer, migrationC), 1000);
+
+        // The chain still says exactly what happened.
+        bytes32 cursor = sRegistry.head(writer);
+        assertEq(cursor, migrationC);
+        cursor = sRegistry.appliedOnto(writer, cursor);
+        assertEq(cursor, migrationB);
+        cursor = sRegistry.appliedOnto(writer, cursor);
+        assertEq(cursor, migrationA);
+        cursor = sRegistry.appliedOnto(writer, cursor);
+        assertEq(cursor, MIGRATION_HEAD_GENESIS);
+    }
+
+    /// A chain belongs to one namespace. Another writer applying the same
+    /// migrations builds its own chain, and neither reaches the other.
+    function testApplyMigrationChainIsPerWriter(
+        address writer,
+        address other,
+        bytes32 migrationA,
+        bytes32 migrationB
+    ) external {
+        vm.assume(writer != address(0));
+        vm.assume(other != address(0));
+        vm.assume(writer != other);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA);
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB);
+
+        // The other namespace applies them in the opposite order, so a chain
+        // that leaked would be visibly the first one's.
+        vm.prank(other);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationB);
+        vm.prank(other);
+        sRegistry.applyMigration(migrationB, migrationA);
+
+        assertEq(sRegistry.appliedOnto(writer, migrationA), MIGRATION_HEAD_GENESIS);
+        assertEq(sRegistry.appliedOnto(writer, migrationB), migrationA);
+        assertEq(sRegistry.appliedOnto(other, migrationB), MIGRATION_HEAD_GENESIS);
+        assertEq(sRegistry.appliedOnto(other, migrationA), migrationB);
     }
 }
