@@ -68,7 +68,7 @@ contract BuildScriptHarness is BuildScript {
 
     /// What `regenerateSnapshots` writes over whatever was there.
     /// @return The regenerated rolling snapshot.
-    function regeneratedSnapshot() external pure returns (string memory) {
+    function regeneratedSnapshot() public pure returns (string memory) {
         return marker("regenerated");
     }
 
@@ -92,7 +92,7 @@ contract BuildScriptHarness is BuildScript {
 
     /// @inheritdoc BuildScript
     function regenerateSnapshots() internal override {
-        writeFixture(rollingPath(), marker("regenerated"));
+        writeFixture(rollingPath(), regeneratedSnapshot());
     }
 
     /// @inheritdoc BuildScript
