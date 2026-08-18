@@ -63,6 +63,13 @@ abstract contract MyDeploySuites is RainDeploySuitesBase {
 // script/Deploy.sol
 contract Deploy is MyDeploySuites, RainDeployBroadcast {}
 
+// script/Build.sol
+contract Build is MyDeploySuites, BuildScript {
+    function regenerateSnapshots() internal override;
+    function regenerateLibs() internal override;
+    function snapshotContractNames() internal view override returns (string[] memory);
+}
+
 // test/src/abstract/MyDeploySnapshot.t.sol
 contract MyDeploySnapshotTest is MyDeploySuites, RainDeployVerifySnapshot {}
 
@@ -75,6 +82,12 @@ one contract while the tests verify another" is therefore not a statement that
 can be true — not because something checks for it, but because there is nothing
 for it to disagree with. A repo that wrote its suites out twice would have that
 bug available to it; this one does not.
+
+`BuildScript` carries both build entry points concrete. `run()` regenerates the
+generated sources and freezes nothing; `cutRelease()` regenerates, freezes the
+release as `src/generated/<tag>/`, then regenerates from the record that now
+holds it. Neither is `virtual`, so the entry point CI runs on every push has no
+way to cut a release.
 
 Suites are a **registry the abstract iterates**, not a chain of `else if`.
 Adding a suite is adding an array entry. A mistyped `DEPLOYMENT_SUITE` reports
@@ -391,8 +404,8 @@ codehashes consumers pin, so releases are **manual `sol-v*` tags**, not merges.
 `[external.package].version` is the version of the LAST Soldeer publish, and
 only a release moves it. A release cut under this lifecycle also names the
 frozen `src/generated/<tag>/` record `cutRelease()` wrote for it. Every version
-published under the previous merge-driven lifecycle predates that record and
-has none, so `src/generated/` holds no directory for it; those versions stay
+published under the previous merge-driven lifecycle predates that record and has
+none, so `src/generated/` holds no directory for it; those versions stay
 published, and consumers pin exact versions and are unaffected.
 
 ## Install

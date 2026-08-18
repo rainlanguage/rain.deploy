@@ -8,6 +8,7 @@ import {DeployCandidate} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {LibReleasedSuitesAggregate} from "../lib/LibReleasedSuitesAggregate.sol";
 import {BuildHarness} from "../concrete/BuildHarness.sol";
+import {LibStringSet} from "../lib/LibStringSet.sol";
 
 /// @title BuildTest
 /// @notice `script/Build.sol`'s own declaration.
@@ -100,6 +101,28 @@ contract BuildTest is Test {
         }
     }
 
+    /// PROPERTY: the names a release freezes are EXACTLY the generator's
+    /// contracts.
+    ///
+    /// `snapshotContractNames()` is the list `cutRelease()` hands `freeze`, and
+    /// it is the only thing that decides what a release records. A generated
+    /// contract missing from it is regenerated on every push and then absent
+    /// from the frozen tag, which `SnapshotAlreadyFrozen` makes unrepairable.
+    function testSnapshotContractNamesAreTheGeneratedContracts() external view {
+        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
+        string[] memory names = sBuild.externalSnapshotContractNames();
+
+        assertEq(
+            names.length, generated.length, "a generated contract is not frozen, or a frozen name is not generated"
+        );
+        for (uint256 i = 0; i < generated.length; i++) {
+            assertTrue(
+                LibStringSet.holds(names, generated[i].contractName),
+                string.concat("generated contract is not frozen by a release: ", generated[i].contractName)
+            );
+        }
+    }
+
     /// PROPERTY: `contractName` is the name the snapshot path and both
     /// generated libs are built from, and it MUST be the contract the
     /// candidate's artifact path names. A disagreement writes one contract's
@@ -150,7 +173,7 @@ contract BuildTest is Test {
     /// `generatedContracts()`'s ORDER, not merely as a set.
     ///
     /// Declaration order is claimed twice — the emitted library documents its
-    /// entries as being "in declaration order" and `generatedContractNames()`
+    /// entries as being "in declaration order" and `snapshotContractNames()`
     /// documents itself as giving "the order the aggregate emits its entries
     /// in" — and nothing else pins it.
     /// `testTheCommittedAggregateIsWhatTheGeneratorEmits` takes the contract
@@ -185,7 +208,7 @@ contract BuildTest is Test {
         }
     }
 
-    /// PROPERTY: `generatedContractNames()` is every `generatedContracts()`
+    /// PROPERTY: `snapshotContractNames()` is every `generatedContracts()`
     /// entry's `contractName`, positionally.
     ///
     /// It is the list `cutRelease` freezes and the list the aggregate is
@@ -195,9 +218,9 @@ contract BuildTest is Test {
     /// and every other assertion here is still green: the tests above read
     /// `generatedContracts()` and the committed file, neither of which this
     /// list passes through.
-    function testGeneratedContractNamesAreTheDeclarationInOrder() external view {
+    function testSnapshotContractNamesAreTheDeclarationInOrder() external view {
         GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
-        string[] memory names = sBuild.externalGeneratedContractNames();
+        string[] memory names = sBuild.externalSnapshotContractNames();
 
         assertEq(names.length, generated.length, "a different number of names than generated contracts");
 

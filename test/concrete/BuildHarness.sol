@@ -20,10 +20,10 @@ contract BuildHarness is Build {
         return generatedContracts();
     }
 
-    /// The name list the freeze and the aggregate are emitted from.
-    /// @return The generated contract names.
-    function externalGeneratedContractNames() external pure returns (string[] memory) {
-        return generatedContractNames();
+    /// The names a release cut from this script freezes.
+    /// @return The snapshot contract names.
+    function externalSnapshotContractNames() external pure returns (string[] memory) {
+        return snapshotContractNames();
     }
 
     /// The deploy declaration's list, through the same guarded reader every
