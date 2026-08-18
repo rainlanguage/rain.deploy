@@ -155,12 +155,12 @@ contract BuildTest is Test {
     /// in" — and nothing else pins it.
     /// `testTheCommittedAggregateIsWhatTheGeneratorEmits` takes the contract
     /// list from the committed file itself, so it holds for any permutation of
-    /// it, and `testEverySnapshotIsInTheReleasedAggregate` matches sets. So
-    /// the two imports and the two `released<N>` locals can be
-    /// swapped in the committed file — byte-exactly what the generator emits
-    /// for the reversed list — and the whole suite stays green while the
-    /// aggregate returns the releases in an order the declaration does not
-    /// give, which is the order `suiteNames()` reports them in.
+    /// it, and `testEverySnapshotIsInTheReleasedAggregate` matches sets. So the
+    /// two imports and the two `released<N>` locals can be swapped in the
+    /// committed file — byte-exactly what the generator emits for the reversed
+    /// list — and the whole suite stays green while the aggregate returns the
+    /// releases in an order the declaration does not give, which is the order
+    /// `suiteNames()` reports them in.
     ///
     /// Positional, because the SET is already matched by the two tests this
     /// names and the order is the whole of what is left.

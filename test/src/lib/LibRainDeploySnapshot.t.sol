@@ -1330,7 +1330,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// otherwise grants, because the writer names the file it emits
     /// `LibReleasedSuites.sol` and that file imports
     /// `./Lib<Contract>Released.sol` and
-    /// `../abstract/RainDeploySuitesBase.sol` -- paths that resolve from
+    /// `../abstract/RainDeploySuitesBase.sol` — paths that resolve from
     /// `src/lib` and nowhere else. Both roots are compiled, so a copy left
     /// behind by a failure there fails the whole build, on every test in the
     /// repo, until it is deleted by hand. `foundry.toml` grants `fixture-lib`
