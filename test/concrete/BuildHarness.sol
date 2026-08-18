@@ -20,6 +20,12 @@ contract BuildHarness is Build {
         return generatedContracts();
     }
 
+    /// The names a release cut from this script freezes.
+    /// @return The snapshot contract names.
+    function externalSnapshotContractNames() external pure returns (string[] memory) {
+        return snapshotContractNames();
+    }
+
     /// The deploy declaration's list, through the same guarded reader every
     /// other consumer of the declaration uses.
     /// @return The declared candidates.

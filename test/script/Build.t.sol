@@ -6,6 +6,7 @@ import {Test} from "forge-std-1.16.2/src/Test.sol";
 import {GeneratedContract} from "../../script/Build.sol";
 import {DeployCandidate} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {BuildHarness} from "../concrete/BuildHarness.sol";
+import {LibStringSet} from "../lib/LibStringSet.sol";
 
 /// @title BuildTest
 /// @notice `script/Build.sol`'s own declaration.
@@ -95,6 +96,28 @@ contract BuildTest is Test {
                 }
             }
             assertTrue(found, string.concat("declared candidate is not generated: ", candidates[j].snapshot.suite));
+        }
+    }
+
+    /// PROPERTY: the names a release freezes are EXACTLY the generator's
+    /// contracts.
+    ///
+    /// `snapshotContractNames()` is the list `cutRelease()` hands `freeze`, and
+    /// it is the only thing that decides what a release records. A generated
+    /// contract missing from it is regenerated on every push and then absent
+    /// from the frozen tag, which `SnapshotAlreadyFrozen` makes unrepairable.
+    function testSnapshotContractNamesAreTheGeneratedContracts() external view {
+        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
+        string[] memory names = sBuild.externalSnapshotContractNames();
+
+        assertEq(
+            names.length, generated.length, "a generated contract is not frozen, or a frozen name is not generated"
+        );
+        for (uint256 i = 0; i < generated.length; i++) {
+            assertTrue(
+                LibStringSet.holds(names, generated[i].contractName),
+                string.concat("generated contract is not frozen by a release: ", generated[i].contractName)
+            );
         }
     }
 
