@@ -59,7 +59,9 @@ struct MigrationRecord {
 /// ran before this contract reached the chain is recordable with the time it
 /// actually ran. The order is not the caller's: each record keeps the head it
 /// was applied onto, so a namespace's records are a chain from `head` back to
-/// `MIGRATION_HEAD_GENESIS` whatever moments they carry.
+/// `MIGRATION_HEAD_GENESIS` whatever moments they carry. The moments run with
+/// that chain rather than against it — a record is never earlier than the one
+/// it was applied onto, though it may be equal to it.
 ///
 /// Neither storage mapping is `public`. `applied`, `appliedOnto` and `head`
 /// refuse the zero writer, the two record readers refuse the two ids a
@@ -148,6 +150,21 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         bytes32 actualHead = head(msg.sender);
         if (expectedHead != actualHead) {
             revert UnexpectedMigrationHead(msg.sender, expectedHead, actualHead);
+        }
+        // Last of the refusals about the namespace, because it is the only one
+        // that reads a RECORD rather than a key, and the record it reads is the
+        // one at the head the check above has just confirmed.
+        //
+        // At genesis there is nothing to be before. Genesis can never be
+        // applied, so the record at it is empty in every namespace forever and
+        // this comparison against zero can only pass — which is the same
+        // statement a genesis branch would make, made by the value itself.
+        //
+        // Neither the head nor its own moment is restated in the error: the
+        // caller named the head, and was told above if it named the wrong one.
+        uint256 headAppliedAt = sRecords[msg.sender][actualHead].appliedAt;
+        if (appliedAt < headAppliedAt) {
+            revert TimestampBeforeHead(appliedAt, headAppliedAt);
         }
         // Last, because it is the only refusal here that time itself resolves:
         // every other one describes something wrong with the call or with where

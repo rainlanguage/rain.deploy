@@ -588,9 +588,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
     /// The two-argument form emits the same event, carrying the block it stamped
     /// — so a reader of the log never has to know which form wrote a record.
-    function testApplyMigrationEventFromTheBlockStampingForm(address writer, bytes32 migration, uint32 now_)
-        external
-    {
+    function testApplyMigrationEventFromTheBlockStampingForm(address writer, bytes32 migration, uint32 now_) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(now_ != 0);
@@ -612,6 +610,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     function testApplyMigrationNoEventOnRevert(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
+        vm.warp(1000);
 
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
@@ -654,12 +653,18 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.recordLogs();
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IMigrationRegistryV1.FutureTimestamp.selector, block.timestamp + 1, block.timestamp
-            )
+            abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, block.timestamp + 1, block.timestamp)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migration, keccak256(abi.encode(migration)), block.timestamp + 1);
+        assertEq(vm.getRecordedLogs().length, 0);
+
+        vm.recordLogs();
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV1.TimestampBeforeHead.selector, block.timestamp - 1, 1000)
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(migration, keccak256(abi.encode(migration)), block.timestamp - 1);
         assertEq(vm.getRecordedLogs().length, 0);
     }
 
@@ -748,9 +753,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.warp(now_);
         appliedAt = bound(appliedAt, uint256(now_) + 1, type(uint256).max);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, appliedAt, uint256(now_))
-        );
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, appliedAt, uint256(now_)));
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, appliedAt);
 
@@ -908,12 +911,10 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigration(skipped, migrationB, 9001);
     }
 
-    /// A record may carry a moment EARLIER than the record before it in the
-    /// chain. Nothing orders the moments, because the chain does: a namespace
-    /// backfilled out of order, or one whose writer learned of an older
-    /// migration late, records what it knows rather than being refused for
-    /// contradicting a sequence it is not the source of.
-    function testApplyMigrationMomentsMayGoBackwards(
+    /// A record may NOT carry a moment earlier than the record it is applied
+    /// onto. Nothing is written and the head does not move, so the migration is
+    /// still applicable with a moment the chain admits.
+    function testApplyMigrationMomentBeforeHeadReverts(
         address writer,
         bytes32 migrationA,
         bytes32 migrationB,
@@ -930,12 +931,180 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, uint256(now_));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV1.TimestampBeforeHead.selector, earlier, uint256(now_))
+        );
         vm.prank(writer);
         sRegistry.applyMigration(migrationA, migrationB, earlier);
 
-        assertEq(sRegistry.applied(writer, migrationA), uint256(now_));
-        assertEq(sRegistry.applied(writer, migrationB), earlier);
+        assertEq(sRegistry.applied(writer, migrationB), 0);
+        assertEq(sRegistry.appliedOnto(writer, migrationB), bytes32(0));
+        assertEq(sRegistry.head(writer), migrationA);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB, uint256(now_));
+        assertEq(sRegistry.applied(writer, migrationB), uint256(now_));
         assertEq(sRegistry.head(writer), migrationB);
+    }
+
+    /// The boundary is the head's own moment, inclusive: exactly it is
+    /// accepted, and one second below it is refused.
+    function testApplyMigrationBeforeHeadBoundary(
+        address writer,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        uint32 headAppliedAt
+    ) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+        vm.assume(headAppliedAt > 1);
+        vm.warp(headAppliedAt);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, uint256(headAppliedAt));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMigrationRegistryV1.TimestampBeforeHead.selector, uint256(headAppliedAt) - 1, uint256(headAppliedAt)
+            )
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB, uint256(headAppliedAt) - 1);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB, uint256(headAppliedAt));
+        assertEq(sRegistry.applied(writer, migrationB), uint256(headAppliedAt));
+    }
+
+    /// A moment AFTER the head's is the ordinary case, and it is the moment the
+    /// record carries rather than anything derived from the one before it.
+    function testApplyMigrationMomentAfterHeadIsAccepted(
+        address writer,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        uint32 first,
+        uint32 second
+    ) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+        vm.assume(first != 0);
+        vm.assume(second > first);
+        vm.warp(second);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, uint256(first));
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB, uint256(second));
+
+        assertEq(sRegistry.applied(writer, migrationA), uint256(first));
+        assertEq(sRegistry.applied(writer, migrationB), uint256(second));
+        assertEq(sRegistry.head(writer), migrationB);
+    }
+
+    /// The first migration in a namespace is compared to nothing. It is applied
+    /// onto `MIGRATION_HEAD_GENESIS`, which is refused as a migration and so
+    /// holds no record in any namespace ever — which is why the smallest moment
+    /// a record may carry is accepted at genesis in the latest block.
+    function testApplyMigrationNoMomentBoundAtGenesis(address writer, bytes32 migration, uint32 now_) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        vm.assume(now_ != 0);
+        vm.warp(now_);
+
+        // Nothing can put a record at genesis to be bounded by.
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, MIGRATION_HEAD_GENESIS, uint256(now_));
+
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, 1);
+
+        assertEq(sRegistry.applied(writer, migration), 1);
+        assertEq(sRegistry.appliedOnto(writer, migration), MIGRATION_HEAD_GENESIS);
+    }
+
+    /// The refusals that read the namespace's KEYS come before the one that
+    /// reads its RECORD, so a re-dispatched script is told its migration already
+    /// ran and a script at the wrong point is told where the namespace is,
+    /// rather than either being told about the moment of a record it was never
+    /// going to be chained onto. The zero moment still comes before all of them.
+    function testApplyMigrationNamespaceCheckedBeforeTheHeadsMoment(
+        address writer,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        bytes32 skipped
+    ) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        LibMigrationFuzz.assumeMigration(vm, skipped);
+        vm.assume(migrationA != migrationB);
+        vm.assume(skipped != migrationA);
+        vm.assume(skipped != migrationB);
+
+        vm.warp(9000);
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, 9000);
+
+        // Already applied, and before the head's moment: told it already ran.
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV1.MigrationAlreadyApplied.selector, writer, migrationA)
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationA, 1);
+
+        // The wrong head, and before the head's moment: told where the
+        // namespace is.
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV1.UnexpectedMigrationHead.selector, writer, skipped, migrationA)
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(skipped, migrationB, 1);
+
+        // A zero moment, which is also before the head's: told about the zero.
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB, 0);
+
+        // With nothing else wrong, the head's moment is what refuses it.
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.TimestampBeforeHead.selector, 1, 9000));
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB, 1);
+    }
+
+    /// A head's moment bounds only its own namespace. Another writer at genesis
+    /// is bounded by nothing, whatever moment the first namespace recorded.
+    function testApplyMigrationHeadMomentIsPerWriter(
+        address writer,
+        address other,
+        bytes32 migrationA,
+        bytes32 migrationB
+    ) external {
+        vm.assume(writer != address(0));
+        vm.assume(other != address(0));
+        vm.assume(writer != other);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+
+        vm.warp(9000);
+        vm.prank(writer);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, 9000);
+
+        vm.prank(other);
+        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationB, 1);
+
+        assertEq(sRegistry.applied(other, migrationB), 1);
+
+        // And the other namespace's own head bounds it from there.
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.TimestampBeforeHead.selector, 1, 9000));
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, migrationB, 1);
     }
 
     /// Two records may carry the SAME moment. Two migrations applied in one
@@ -969,11 +1138,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// `MIGRATION_HEAD_GENESIS`, and each later one holds the migration before
     /// it — the value the caller named and the registry checked, not one the
     /// caller could have chosen freely.
-    function testApplyMigrationRecordsTheHeadItWasAppliedOnto(
-        address writer,
-        bytes32 migrationA,
-        bytes32 migrationB
-    ) external {
+    function testApplyMigrationRecordsTheHeadItWasAppliedOnto(address writer, bytes32 migrationA, bytes32 migrationB)
+        external
+    {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migrationA);
         LibMigrationFuzz.assumeMigration(vm, migrationB);
@@ -991,9 +1158,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.appliedOnto(writer, migrationA), MIGRATION_HEAD_GENESIS);
     }
 
-    /// The chain is the order the migrations ran in, and it says so while the
-    /// moments say the opposite. Three records written newest-moment-first walk
-    /// back from the head in the order they were APPLIED, ending at genesis.
+    /// The chain is the order the migrations ran in, and it says so where the
+    /// moments cannot. Three records carrying one moment walk back from the head
+    /// in the order they were APPLIED, ending at genesis.
     function testApplyMigrationChainIsTheOrderWhateverTheMoments(
         address writer,
         bytes32 migrationA,
@@ -1012,15 +1179,15 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, 3000);
         vm.prank(writer);
-        sRegistry.applyMigration(migrationA, migrationB, 2000);
+        sRegistry.applyMigration(migrationA, migrationB, 3000);
         vm.prank(writer);
-        sRegistry.applyMigration(migrationB, migrationC, 1000);
+        sRegistry.applyMigration(migrationB, migrationC, 3000);
 
-        // Every moment is below the one before it, so nothing about the order
-        // can be read out of them.
+        // Every moment is the same as the one before it, so nothing about the
+        // order can be read out of them.
         assertEq(sRegistry.applied(writer, migrationA), 3000);
-        assertEq(sRegistry.applied(writer, migrationB), 2000);
-        assertEq(sRegistry.applied(writer, migrationC), 1000);
+        assertEq(sRegistry.applied(writer, migrationB), 3000);
+        assertEq(sRegistry.applied(writer, migrationC), 3000);
 
         // The chain still says exactly what happened.
         bytes32 cursor = sRegistry.head(writer);
@@ -1035,12 +1202,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
     /// A chain belongs to one namespace. Another writer applying the same
     /// migrations builds its own chain, and neither reaches the other.
-    function testApplyMigrationChainIsPerWriter(
-        address writer,
-        address other,
-        bytes32 migrationA,
-        bytes32 migrationB
-    ) external {
+    function testApplyMigrationChainIsPerWriter(address writer, address other, bytes32 migrationA, bytes32 migrationB)
+        external
+    {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
         vm.assume(writer != other);

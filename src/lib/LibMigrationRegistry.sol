@@ -149,9 +149,8 @@ library LibMigrationRegistry {
     /// not applied it.
     function appliedOnto(address writer, bytes32 migration) internal view returns (bytes32) {
         checkCodeHash();
-        return IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS).appliedOnto(
-            writer, migration
-        );
+        return IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .appliedOnto(writer, migration);
     }
 
     /// The migration `writer` applied most recently, or `MIGRATION_HEAD_GENESIS`
@@ -214,8 +213,9 @@ library LibMigrationRegistry {
     ///
     /// Everything the two-argument form says about the namespace, the code-hash
     /// check and the registry's refusals holds here unchanged. The registry
-    /// refuses the two moments a record cannot carry as well: zero, and one
-    /// after the block this lands in.
+    /// refuses the three moments a record cannot carry as well: zero, one after
+    /// the block this lands in, and one before the record at the head it is
+    /// applied onto.
     /// @param expectedHead The migration the caller believes it applied last,
     /// or `MIGRATION_HEAD_GENESIS` for the first in this namespace.
     /// @param migration The migration to apply. Never zero, never

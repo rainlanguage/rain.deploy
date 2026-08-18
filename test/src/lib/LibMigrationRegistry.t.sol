@@ -526,12 +526,26 @@ contract LibMigrationRegistryTest is Test {
         this.externalApplyMigration(MIGRATION_HEAD_GENESIS, migration, uint256(now_) + 1);
     }
 
+    /// The registry's before-the-head refusal arrives unmodified through
+    /// `applyMigration`, so a consumer backfilling its history out of order is
+    /// told which moment it contradicted.
+    function testApplyMigrationTimestampBeforeHeadReverts(bytes32 migrationA, bytes32 migrationB) external {
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+        deployRegistry();
+        vm.warp(9000);
+
+        LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, 2000);
+
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.TimestampBeforeHead.selector, 1999, 2000));
+        this.externalApplyMigration(migrationA, migrationB, 1999);
+    }
+
     /// The namespace of the `appliedAt` form is the calling CONTRACT too, so a
     /// consumer backfilling its history writes its own namespace and nobody
     /// else's.
-    function testApplyMigrationWithAppliedAtLandsUnderTheCallingContract(bytes32 migration, uint32 appliedAt)
-        external
-    {
+    function testApplyMigrationWithAppliedAtLandsUnderTheCallingContract(bytes32 migration, uint32 appliedAt) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(appliedAt != 0);
         deployRegistry();

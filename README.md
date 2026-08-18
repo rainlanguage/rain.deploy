@@ -206,20 +206,19 @@ library supplies the fork loop and the comparison.
 
 ## Migration registry
 
-`MigrationRegistry` and `MigrationRegistryV2` each record that a migration has
-been applied, and when: a writer applies one of its own onto the migration it
-believes ran last (`applyMigration`), anyone reads when a given writer applied a
-given one (`applied`), and anyone reads where a given writer's sequence has got
-to (`head`). There is no removal and no upgrade.
+`MigrationRegistry` records that a migration has been applied, when, and onto
+what: a writer applies one of its own onto the migration it believes ran last
+(`applyMigration`), anyone reads when a given writer applied a given one
+(`applied`), what that writer applied it onto (`appliedOnto`), and where a given
+writer's sequence has got to (`head`). There is no removal and no upgrade.
 
-They differ in exactly one thing, and everything below holds for both except
-where it says otherwise: where the recorded moment comes from.
-`MigrationRegistry` stamps the block the record lands in, so it can only say a
-migration ran now. `MigrationRegistryV2` takes the moment as an argument, so a
+`applyMigration` has two forms, differing in exactly one thing: where the
+recorded moment comes from. The two-argument form stamps the block the record
+lands in, for a script applying its own migration in the same atomic unit as the
+migration itself. The three-argument form takes the moment as an argument, so a
 migration that ran before the registry reached the chain is recordable with the
-time it actually ran. Two creation codes are two addresses and two deployments;
-a consumer pins whichever one it reads, and a writer's namespace under one is a
-different namespace from its namespace under the other.
+time it actually ran. They write the same record, into the same namespace, and
+make the same refusals.
 
 It exists because prod-state tests otherwise decide what to assert by reading
 the **clock**. The pattern that emerges without it is a dual-state invariant —
@@ -251,14 +250,14 @@ with the nonzero case saying more — and zero stays unambiguous because a zero
 moment is refused outright rather than written as a record that reads back as no
 record.
 
-**The moment is the caller's, inside a window `MigrationRegistryV2` enforces.**
-The fact being recorded is that a migration RAN, and the moment it ran is not in
-general the moment anybody gets to write it down. A registry that could only
-stamp its own block offers a writer with history two options and no third:
-record a time that is false for every past migration, or record nothing — and
-recording nothing strands the namespace, because `applyMigration` refuses
-anything not applied onto the current head, so a writer that skipped its past
-migrations cannot record its next one either.
+**The moment is the caller's, inside a window the registry enforces.** The fact
+being recorded is that a migration RAN, and the moment it ran is not in general
+the moment anybody gets to write it down. A registry that could only stamp its
+own block offers a writer with history two options and no third: record a time
+that is false for every past migration, or record nothing — and recording
+nothing strands the namespace, because `applyMigration` refuses anything not
+applied onto the current head, so a writer that skipped its past migrations
+cannot record its next one either.
 
 What a reader gives up is **not** authenticity. A record is namespaced by the
 account that wrote it and no authority checks it, so every entry is already
@@ -275,19 +274,23 @@ refusals:
   anything, and a consumer measuring an interval since the migration — a cliff,
   a grace period, a rate that changes a week later — can subtract it from the
   current block without underflowing.
-- **Never before the record of the head it is applied onto**
-  (`TimestampBeforeHead`), so a namespace's records read in head order never go
-  backwards.
+- **Never before the record it is applied onto** (`TimestampBeforeHead`), so a
+  namespace's moments never go backwards along its chain and the gap between two
+  of its migrations subtracts in chain order without underflowing either. The
+  first migration in a namespace is applied onto `MIGRATION_HEAD_GENESIS`, which
+  holds no record and so bounds nothing.
 
-Equal is allowed at both ends. Two migrations applied in one transaction share a
-block, and two backfilled to the same day share a moment; the head chain is what
-orders them, so forcing the moments apart would make them carry an ordering they
-do not have.
+Equal is allowed wherever there is a neighbour. A moment may be exactly the
+block it is written in, and two records may carry the same moment: two
+migrations applied in one transaction share a block, and two backfilled to the
+same day share a moment, so forcing them apart would demand a precision the
+moments do not have. Which of them ran first is the chain, not the moments —
+total order comes from `appliedOnto`, and the bound above only stops a record
+claiming to predate the one it is chained onto.
 
-There is one way to write a record. A script recording a migration as it runs
-passes `block.timestamp`, which is the same statement as any other `appliedAt`
-and gets the same three refusals — so a second entry point could express nothing
-the argument does not.
+Both entry points get all three, `block.timestamp` included: a block whose
+timestamp is zero is `ZeroTimestamp` on the two-argument form, which a test that
+warps to zero and a chain configured from a zero genesis both reach.
 
 **A set of applied migrations, not a high-water mark.** A mark needs a total
 order consumers do not have: two migrations authored on one day collide, and one
@@ -305,13 +308,19 @@ diverging silently, and two migrations dispatched at once cannot land in the
 wrong order.
 
 ```solidity
-// The first migration in a namespace.
-LibMigrationRegistryV2.applyMigration(MIGRATION_HEAD_GENESIS, MIGRATION_V1, block.timestamp);
+// The first migration in a namespace, applied in this transaction.
+LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, MIGRATION_V1);
 // Every later one names its predecessor.
-LibMigrationRegistryV2.applyMigration(MIGRATION_V1, MIGRATION_V2, block.timestamp);
+LibMigrationRegistry.applyMigration(MIGRATION_V1, MIGRATION_V2);
 // One that ran before the registry reached this chain names the moment it ran.
-LibMigrationRegistryV2.applyMigration(MIGRATION_V2, MIGRATION_V3, 1750000000);
+LibMigrationRegistry.applyMigration(MIGRATION_V2, MIGRATION_V3, 1750000000);
 ```
+
+Each record also keeps the head it was applied onto, which `appliedOnto` reads
+back, so a namespace is a chain in storage rather than a set of moments to sort:
+from `head`, each answer names the record before it, down to
+`MIGRATION_HEAD_GENESIS`. That chain is the order the migrations ran in whatever
+moments the records carry.
 
 Genesis is deliberately **not zero**. Zero is what an uninitialised `bytes32`
 constant reads as, and a zero genesis would make a mis-set predecessor constant
@@ -347,13 +356,12 @@ say the invariant holds — a multisig can act out of band and nothing here move
 Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
-`LibMigrationRegistry` and `LibMigrationRegistryV2` are the surfaces —
-`applied`, `head` and `applyMigration`, each verifying its own registry's code
-hash first, and each reading only the deployment it pins. There is deliberately
-**no broadcast runner**: the dominant real shape is a Safe executing a bundle
-that never broadcasts, and such a script appends `applyMigration` to the bundle
-it is already emitting, which makes the record atomic with the migration it
-describes.
+`LibMigrationRegistry` is the surface — `applied`, `appliedOnto`, `head` and
+both forms of `applyMigration`, each verifying the registry's code hash before
+it reads or writes. There is deliberately **no broadcast runner**: the dominant
+real shape is a Safe executing a bundle that never broadcasts, and such a script
+appends `applyMigration` to the bundle it is already emitting, which makes the
+record atomic with the migration it describes.
 
 ## Deploying, and then releasing
 
@@ -363,11 +371,10 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
    [`Manual sol artifacts`](.github/workflows/manual-sol-artifacts.yaml)
    workflow, choosing a `suite`. It runs `script/Deploy.sol` and broadcasts that
    suite to every network in `supportedNetworks()`. One suite per dispatch, so
-   this repo's three registries are three dispatches. `workflow_dispatch` only:
-   this is key custody and real money, and no merge or tag should be able to
-   trigger it. It is idempotent — a network that already has the code is skipped
-   — so a partial run is fixed by running it again rather than by unpicking
-   anything.
+   this repo's two registries are two dispatches. `workflow_dispatch` only: this
+   is key custody and real money, and no merge or tag should be able to trigger
+   it. It is idempotent — a network that already has the code is skipped — so a
+   partial run is fixed by running it again rather than by unpicking anything.
 2. **Verify.** `RegistryDeployChainTest` passes only once every **released**
    suite is live on every supported network, with the code that release froze.
    This repo has released none, so today it has nothing to check and passes; it

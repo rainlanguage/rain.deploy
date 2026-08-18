@@ -74,7 +74,7 @@ bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.hea
 /// does not become proof of anything, for the same reason reading the record
 /// back does not.
 ///
-/// ## A moment is data, bounded at both ends
+/// ## A moment is data, and it is bounded
 ///
 /// A moment supplied by the caller is not authenticated, and nothing else in a
 /// record is either. A record is namespaced by the account that wrote it and no
@@ -91,10 +91,19 @@ bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.hea
 ///   the block asking, and a consumer whose invariant is an interval since the
 ///   migration — a cliff, a grace period, a rate that changes a week later —
 ///   subtracts it from the current block without underflowing.
+/// - NEVER BEFORE THE RECORD IT IS APPLIED ONTO (`TimestampBeforeHead`). A
+///   namespace's moments therefore never go backwards along its chain, so a
+///   consumer measuring the gap between two of its migrations subtracts them
+///   in chain order without underflowing either. The first migration in a
+///   namespace is applied onto `MIGRATION_HEAD_GENESIS`, which holds no record
+///   and so bounds nothing.
 ///
-/// Nothing else constrains it. Two records may carry the same moment, and a
-/// record may carry a moment earlier than the record before it in the chain.
-/// The order the migrations ran in is the chain, not the moments.
+/// Nothing else constrains it, and EQUAL is accepted at both of the bounds that
+/// have a neighbour: a moment may be exactly the block it is written in, and
+/// two records may carry the same moment. Two migrations applied in one
+/// transaction share a block and two backfilled to the same day share a
+/// moment, so forcing them apart would demand a precision the moments do not
+/// have. Which of them ran first is the chain, not the moments.
 ///
 /// ## `applied` answers WHEN, and zero still means "not applied"
 ///
@@ -278,6 +287,30 @@ interface IMigrationRegistryV1 {
     /// @param blockTimestamp The timestamp of the block the call landed in.
     error FutureTimestamp(uint256 appliedAt, uint256 blockTimestamp);
 
+    /// Thrown when `applyMigration` is given an `appliedAt` before the moment
+    /// recorded against the head it is being applied onto. A record says its
+    /// migration ran after the one before it in the chain, so an earlier moment
+    /// contradicts the sequence the same call just named, and a consumer
+    /// measuring the gap between two migrations would be subtracting the later
+    /// moment from the earlier one.
+    ///
+    /// Equal is accepted. Two migrations applied in one transaction share a
+    /// block, and two backfilled migrations known only to the same day share a
+    /// moment; the chain is what tells those apart, so refusing them would
+    /// demand a precision the moments do not have.
+    ///
+    /// The first migration in a namespace is never refused this way: it is
+    /// applied onto `MIGRATION_HEAD_GENESIS`, which is a head rather than a
+    /// migration and so holds no record and no moment to be before.
+    ///
+    /// Neither the head nor the caller is named, because both are values the
+    /// caller handed in and was told about first: `msg.sender` is the
+    /// namespace, and a wrong head is `UnexpectedMigrationHead`.
+    /// @param appliedAt The moment supplied.
+    /// @param headAppliedAt The moment recorded against the head it is being
+    /// applied onto.
+    error TimestampBeforeHead(uint256 appliedAt, uint256 headAppliedAt);
+
     /// Emitted every time a migration is applied. A migration is applied at
     /// most once per writer, so the log is the complete history of the registry
     /// and the only way to discover a record without already knowing the id.
@@ -328,8 +361,10 @@ interface IMigrationRegistryV1 {
     /// `GenesisMigration` if it is `MIGRATION_HEAD_GENESIS`, `ZeroTimestamp` if
     /// `appliedAt` is zero, `MigrationAlreadyApplied` if the caller has already
     /// applied it, `UnexpectedMigrationHead` if the caller's namespace is not at
-    /// `expectedHead`, and `FutureTimestamp` if `appliedAt` is after
-    /// `block.timestamp`. It MUST NOT provide any way to unrecord a migration,
+    /// `expectedHead`, `TimestampBeforeHead` if `appliedAt` is before the moment
+    /// recorded against `expectedHead`, and `FutureTimestamp` if `appliedAt` is
+    /// after `block.timestamp`. It MUST NOT provide any way to unrecord a
+    /// migration,
     /// to move a head backwards, or to move a record once written. On success it
     /// MUST record `appliedAt` and `expectedHead` against `migration`, make
     /// `migration` the caller's new head, and emit `Migrated`.
