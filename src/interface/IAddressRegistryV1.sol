@@ -82,6 +82,6 @@ interface IAddressRegistryV1 {
     /// does. Reading at the point of use instead means reading whatever root
     /// has bound most recently.
     /// @param name The name to read.
-    /// @return account The address bound to `name`. Never the zero address.
-    function get(bytes32 name) external view returns (address account);
+    /// @return The address bound to `name`. Never the zero address.
+    function get(bytes32 name) external view returns (address);
 }

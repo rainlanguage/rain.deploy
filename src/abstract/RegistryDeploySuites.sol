@@ -82,10 +82,11 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// fourth place to edit: `script/Build.sol` generates the per-contract
     /// released lib AND the aggregate `releasedSuites()` reads from that one
     /// list.
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](2);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = addressRegistryCandidate();
         candidates[1] = migrationRegistryCandidate();
+        return candidates;
     }
 
     /// This repo's rolling `AddressRegistry` candidate.

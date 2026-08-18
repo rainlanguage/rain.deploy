@@ -331,8 +331,8 @@ library LibRainDeploySnapshot {
     ///   filter on, because nothing else has any business being in there.
     /// @param vm The Vm instance for file operations.
     /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
-    /// @return paths Every frozen record file.
-    function frozenSnapshotPaths(Vm vm, string memory root) internal view returns (string[] memory paths) {
+    /// @return Every frozen record file.
+    function frozenSnapshotPaths(Vm vm, string memory root) internal view returns (string[] memory) {
         // A repo with no generated directory at all has released nothing. That
         // is a real state — it is this repo's own, before its first release —
         // rather than a missing file to fail on.
@@ -362,10 +362,11 @@ library LibRainDeploySnapshot {
             count++;
         }
 
-        paths = new string[](count);
+        string[] memory paths = new string[](count);
         for (uint256 i = 0; i < count; i++) {
             paths[i] = found[i];
         }
+        return paths;
     }
 
     /// The constants a snapshot declares below the `BYTECODE_HASH` that
@@ -728,9 +729,9 @@ library LibRainDeploySnapshot {
     /// nothing sorts a list that short faster than it takes to say so.
     /// @param vm The Vm instance for string operations.
     /// @param paths The record's files, in any order.
-    /// @return sorted The same files, in release order.
-    function sortedRecordPaths(Vm vm, string[] memory paths) internal pure returns (string[] memory sorted) {
-        sorted = new string[](paths.length);
+    /// @return The same files, in release order.
+    function sortedRecordPaths(Vm vm, string[] memory paths) internal pure returns (string[] memory) {
+        string[] memory sorted = new string[](paths.length);
         for (uint256 i = 0; i < paths.length; i++) {
             uint256 j = i;
             while (j > 0 && recordPrecedes(vm, paths[i], sorted[j - 1])) {
@@ -739,6 +740,7 @@ library LibRainDeploySnapshot {
             }
             sorted[j] = paths[i];
         }
+        return sorted;
     }
 
     /// One contract's releases out of a record, in tag order.
@@ -833,12 +835,13 @@ library LibRainDeploySnapshot {
     /// written anywhere but into the immutable record.
     /// @param vm The Vm instance for string operations.
     /// @param paths The record's files, in the order they are emitted.
-    /// @return imports The import block.
-    function releasedImportBlock(Vm vm, string[] memory paths) internal pure returns (string memory imports) {
-        imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
+    /// @return The import block.
+    function releasedImportBlock(Vm vm, string[] memory paths) internal pure returns (string memory) {
+        string memory imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
         for (uint256 i = 0; i < paths.length; i++) {
             imports = string.concat(imports, releasedImport(vm, paths[i]));
         }
+        return imports;
     }
 
     /// The library block of a generated released-suites lib.
@@ -921,13 +924,13 @@ library LibRainDeploySnapshot {
             "/// path, which is intended: the alternative is parsing this generated file\n"
             "/// back in to preserve what it last said.\nlibrary ",
             libraryName,
-            " {\n    /// Every frozen release, in tag order.\n" "    /// @return suites The released suites.\n"
-            "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n"
-            "        suites = new DeploySuite[](",
+            " {\n    /// Every frozen release, in tag order.\n" "    /// @return The released suites.\n"
+            "    function releasedSuites() internal pure returns (DeploySuite[] memory) {\n"
+            "        DeploySuite[] memory suites = new DeploySuite[](",
             vm.toString(paths.length),
             ");\n",
             entries,
-            "    }\n}\n"
+            "        return suites;\n    }\n}\n"
         );
     }
 
@@ -1026,13 +1029,14 @@ library LibRainDeploySnapshot {
     /// file also compiles only from a directory whose parent holds
     /// `abstract/RainDeploySuitesBase.sol`.
     /// @param contractNames The contracts whose released libs to aggregate.
-    /// @return imports The import block.
-    function aggregateImportBlock(string[] memory contractNames) internal pure returns (string memory imports) {
-        imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
+    /// @return The import block.
+    function aggregateImportBlock(string[] memory contractNames) internal pure returns (string memory) {
+        string memory imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
         for (uint256 i = 0; i < contractNames.length; i++) {
             string memory libraryName = releasedLibraryName(contractNames[i]);
             imports = string.concat(imports, "import {", libraryName, "} from \"./", libraryName, ".sol\";\n\n");
         }
+        return imports;
     }
 
     /// The library block of the generated aggregate lib: every per-contract
@@ -1092,10 +1096,10 @@ library LibRainDeploySnapshot {
             "/// release every check quietly stops asking about.\nlibrary ",
             RELEASED_SUITES_LIBRARY,
             " {\n    /// Every released suite, in declaration order.\n",
-            "    /// @return suites The released suites.\n",
-            "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n",
+            "    /// @return The released suites.\n",
+            "    function releasedSuites() internal pure returns (DeploySuite[] memory) {\n",
             contractNames.length == 0
-                ? "        suites = new DeploySuite[](0);\n"
+                ? "        return new DeploySuite[](0);\n"
                 : string.concat(
                     "        DeploySuite[][] memory released = new DeploySuite[][](",
                     vm.toString(contractNames.length),
@@ -1105,14 +1109,15 @@ library LibRainDeploySnapshot {
                     "        for (uint256 i = 0; i < released.length; i++) {\n",
                     "            total += released[i].length;\n",
                     "        }\n\n",
-                    "        suites = new DeploySuite[](total);\n\n",
+                    "        DeploySuite[] memory suites = new DeploySuite[](total);\n\n",
                     "        uint256 offset = 0;\n",
                     "        for (uint256 i = 0; i < released.length; i++) {\n",
                     "            for (uint256 j = 0; j < released[i].length; j++) {\n",
                     "                suites[offset + j] = released[i][j];\n",
                     "            }\n",
                     "            offset += released[i].length;\n",
-                    "        }\n"
+                    "        }\n\n",
+                    "        return suites;\n"
                 ),
             "    }\n}\n"
         );
@@ -1210,15 +1215,21 @@ library LibRainDeploySnapshot {
     /// @param vm The Vm instance for file operations.
     /// @param recordRoot The record root — `LIB_FS_ROOT` for a repo's real
     /// record.
-    /// @return newest The newest frozen tag, or `""` if nothing is frozen.
-    function newestFrozenTag(Vm vm, string memory recordRoot) internal view returns (string memory newest) {
+    /// @return The newest frozen tag, or `""` if nothing is frozen.
+    function newestFrozenTag(Vm vm, string memory recordRoot) internal view returns (string memory) {
         string[] memory paths = frozenSnapshotPaths(vm, recordRoot);
-        for (uint256 i = 0; i < paths.length; i++) {
+        if (paths.length == 0) {
+            return "";
+        }
+
+        string memory newest = tagForRecordPath(vm, paths[0]);
+        for (uint256 i = 1; i < paths.length; i++) {
             string memory tag = tagForRecordPath(vm, paths[i]);
-            if (bytes(newest).length == 0 || tagPrecedes(vm, newest, tag)) {
+            if (tagPrecedes(vm, newest, tag)) {
                 newest = tag;
             }
         }
+        return newest;
     }
 
     /// Refuse a release tag that does not strictly follow every tag already in

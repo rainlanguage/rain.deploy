@@ -69,10 +69,11 @@ contract AddressRegistry is IAddressRegistryV1 {
     /// @dev Returns whatever root has bound most recently. A caller that needs
     /// an answer that cannot move reads once and stores it, which is what a
     /// consumer resolving a name in its constructor does.
-    function get(bytes32 name) external view returns (address account) {
-        account = sAddresses[name];
+    function get(bytes32 name) external view returns (address) {
+        address account = sAddresses[name];
         if (account == address(0)) {
             revert NameNotRegistered(name);
         }
+        return account;
     }
 }

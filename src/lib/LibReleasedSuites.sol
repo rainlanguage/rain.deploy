@@ -25,8 +25,8 @@ import {LibMigrationRegistryReleased} from "./LibMigrationRegistryReleased.sol";
 /// release every check quietly stops asking about.
 library LibReleasedSuites {
     /// Every released suite, in declaration order.
-    /// @return suites The released suites.
-    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {
+    /// @return The released suites.
+    function releasedSuites() internal pure returns (DeploySuite[] memory) {
         DeploySuite[][] memory released = new DeploySuite[][](2);
         released[0] = LibAddressRegistryReleased.releasedSuites();
         released[1] = LibMigrationRegistryReleased.releasedSuites();
@@ -36,7 +36,7 @@ library LibReleasedSuites {
             total += released[i].length;
         }
 
-        suites = new DeploySuite[](total);
+        DeploySuite[] memory suites = new DeploySuite[](total);
 
         uint256 offset = 0;
         for (uint256 i = 0; i < released.length; i++) {
@@ -45,5 +45,7 @@ library LibReleasedSuites {
             }
             offset += released[i].length;
         }
+
+        return suites;
     }
 }
