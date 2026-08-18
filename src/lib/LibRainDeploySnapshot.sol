@@ -3,7 +3,11 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.16.2/src/Vm.sol";
-import {LibCodeGen} from "rain-sol-codegen-0.1.36/src/lib/LibCodeGen.sol";
+import {
+    LibCodeGen,
+    RAIN_COPYRIGHT_TEXT,
+    RAIN_SPDX_LICENSE_IDENTIFIER
+} from "rain-sol-codegen-0.1.36/src/lib/LibCodeGen.sol";
 import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.36/src/lib/LibFs.sol";
 import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
@@ -404,12 +408,9 @@ library LibRainDeploySnapshot {
     /// `abi.encode`d because Solidity has no file-scope constant of dynamic
     /// array type. The consumer is `releasedLibraryBlock`, which emits the
     /// matching `abi.decode`.
-    /// The licence and the copyright holder are the CALLING repo's, so they are
-    /// parameters here exactly as they are parameters of `LibCodeGen.filePrefix`
-    /// beneath. A snapshot is a file in the consuming repo's own tree, and this
-    /// library is a dependency of deploy repos that are not this one — a header
-    /// decided here would stamp this repo's licence into theirs, permanently,
-    /// into the one part of their tree that is append-only.
+    /// A snapshot lands in the calling repo's own tree, so the header is that
+    /// repo's statement. Repos outside this org call this overload; repos
+    /// inside it call the one that defaults to the org's values.
     /// @param vm The Vm instance for file operations.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
@@ -441,6 +442,27 @@ library LibRainDeploySnapshot {
         );
 
         return pathForSnapshot(dir, contractName);
+    }
+
+    /// `writeSnapshot` applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
+    /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
+    /// @param vm The Vm instance for file operations.
+    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// @param contractName The contract the snapshot describes.
+    /// @param creationCode That contract's creation code.
+    /// @param dependencies The addresses that must already have code on a
+    /// network before this contract can be broadcast there.
+    /// @return The path written.
+    function writeSnapshot(
+        Vm vm,
+        string memory dir,
+        string memory contractName,
+        bytes memory creationCode,
+        address[] memory dependencies
+    ) internal returns (string memory) {
+        return writeSnapshot(
+            vm, dir, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, creationCode, dependencies
+        );
     }
 
     /// The import block of a generated alias lib.
@@ -549,6 +571,20 @@ library LibRainDeploySnapshot {
             )
         );
         return path;
+    }
+
+    /// `writeAliasLib` applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
+    /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
+    /// @param vm The Vm instance for file operations.
+    /// @param contractName The contract the alias lib is written for.
+    /// @param constantPrefix The prefix for the emitted constants.
+    /// @param dir The snapshot directory to alias.
+    /// @return The path written.
+    function writeAliasLib(Vm vm, string memory contractName, string memory constantPrefix, string memory dir)
+        internal
+        returns (string memory)
+    {
+        return writeAliasLib(vm, contractName, constantPrefix, dir, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT);
     }
 
     /// The release tag a record path sits under.
@@ -910,6 +946,26 @@ library LibRainDeploySnapshot {
             )
         );
         return path;
+    }
+
+    /// `writeReleasedSuitesLib` applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
+    /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
+    /// @param vm The Vm instance for file operations.
+    /// @param recordRoot The record root — `LIB_FS_ROOT` for a repo's real
+    /// record.
+    /// @param contractName The contract the released lib is written for.
+    /// @param template The suite the released entries take their key and
+    /// artifact path from.
+    /// @return The path written.
+    function writeReleasedSuitesLib(
+        Vm vm,
+        string memory recordRoot,
+        string memory contractName,
+        DeploySuite memory template
+    ) internal returns (string memory) {
+        return writeReleasedSuitesLib(
+            vm, recordRoot, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, template
+        );
     }
 
     /// The newest release in a record: the greatest tag any of its files sits

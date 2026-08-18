@@ -548,12 +548,7 @@ contract LibRainDeploySnapshotTest is Test {
         string memory before = vm.readFile(ALIAS_LIB_PATH);
 
         string memory written = LibRainDeploySnapshot.writeAliasLib(
-            vm,
-            "AddressRegistry",
-            "ADDRESS_REGISTRY",
-            LibRainDeploySnapshot.CANDIDATE,
-            RAIN_SPDX_LICENSE_IDENTIFIER,
-            RAIN_COPYRIGHT_TEXT
+            vm, "AddressRegistry", "ADDRESS_REGISTRY", LibRainDeploySnapshot.CANDIDATE
         );
         string memory emitted = vm.readFile(ALIAS_LIB_PATH);
 
@@ -1142,12 +1137,7 @@ contract LibRainDeploySnapshotTest is Test {
         string memory before = vm.readFile(path);
 
         string memory written = LibRainDeploySnapshot.writeReleasedSuitesLib(
-            vm,
-            LibRainDeploySnapshot.LIB_FS_ROOT,
-            EMITTED_CONTRACT,
-            RAIN_SPDX_LICENSE_IDENTIFIER,
-            RAIN_COPYRIGHT_TEXT,
-            emitterTemplate()
+            vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT, emitterTemplate()
         );
         string memory emitted = vm.readFile(path);
 
@@ -1670,5 +1660,96 @@ contract LibRainDeploySnapshotTest is Test {
             vm.expectRevert(abi.encodeWithSelector(NonMonotonicRelease.selector, tag, FROZEN_FIXTURE_NEWEST));
         }
         this.externalCheckReleaseFollowsRecord(FROZEN_FIXTURE_ROOT, tag);
+    }
+
+    /// The defaulting `writeSnapshot` MUST write exactly what the parameterised
+    /// one writes when handed this org's two values, in that order. A swap or a
+    /// wrong constant is otherwise only visible as a header nobody reads.
+    ///
+    /// State is reverted between the two writes because the Zoltu deploy is
+    /// CREATE2: writing one creation code twice would otherwise land on an
+    /// address that already has code. The files are on disk, so they outlive
+    /// the revert.
+    function testWriteSnapshotDefaultsToTheOrgHeader() external {
+        string memory dir = "writeSnapshotDefaults";
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(LibRainDeploySnapshot.dirForSnapshot(dir), true);
+
+        uint256 undeployed = vm.snapshotState();
+        string memory defaulted = vm.readFile(
+            LibRainDeploySnapshot.writeSnapshot(
+                vm, dir, "MockDeployable", type(MockDeployable).creationCode, new address[](0)
+            )
+        );
+        vm.revertToState(undeployed);
+        string memory explicitly = vm.readFile(
+            LibRainDeploySnapshot.writeSnapshot(
+                vm,
+                dir,
+                "MockDeployable",
+                RAIN_SPDX_LICENSE_IDENTIFIER,
+                RAIN_COPYRIGHT_TEXT,
+                type(MockDeployable).creationCode,
+                new address[](0)
+            )
+        );
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(dir), true);
+
+        assertEq(defaulted, explicitly);
+    }
+
+    /// As `testWriteSnapshotDefaultsToTheOrgHeader`, for the alias lib.
+    function testWriteAliasLibDefaultsToTheOrgHeader() external {
+        string memory before = vm.readFile(ALIAS_LIB_PATH);
+
+        string memory defaulted = vm.readFile(
+            LibRainDeploySnapshot.writeAliasLib(
+                vm, "AddressRegistry", "ADDRESS_REGISTRY", LibRainDeploySnapshot.CANDIDATE
+            )
+        );
+        string memory explicitly = vm.readFile(
+            LibRainDeploySnapshot.writeAliasLib(
+                vm,
+                "AddressRegistry",
+                "ADDRESS_REGISTRY",
+                LibRainDeploySnapshot.CANDIDATE,
+                RAIN_SPDX_LICENSE_IDENTIFIER,
+                RAIN_COPYRIGHT_TEXT
+            )
+        );
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(ALIAS_LIB_PATH, before);
+
+        assertEq(defaulted, explicitly);
+    }
+
+    /// As `testWriteSnapshotDefaultsToTheOrgHeader`, for the released lib.
+    function testWriteReleasedSuitesLibDefaultsToTheOrgHeader() external {
+        string memory path = "src/lib/LibAddressRegistryReleased.sol";
+        string memory before = vm.readFile(path);
+
+        string memory defaulted = vm.readFile(
+            LibRainDeploySnapshot.writeReleasedSuitesLib(
+                vm, LibRainDeploySnapshot.LIB_FS_ROOT, EMITTED_CONTRACT, emitterTemplate()
+            )
+        );
+        string memory explicitly = vm.readFile(
+            LibRainDeploySnapshot.writeReleasedSuitesLib(
+                vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
+                EMITTED_CONTRACT,
+                RAIN_SPDX_LICENSE_IDENTIFIER,
+                RAIN_COPYRIGHT_TEXT,
+                emitterTemplate()
+            )
+        );
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(path, before);
+
+        assertEq(defaulted, explicitly);
     }
 }

@@ -3,7 +3,6 @@
 pragma solidity =0.8.25;
 
 import {Script} from "forge-std-1.16.2/src/Script.sol";
-import {RAIN_COPYRIGHT_TEXT, RAIN_SPDX_LICENSE_IDENTIFIER} from "rain-sol-codegen-0.1.36/src/lib/LibCodeGen.sol";
 import {DeployCandidate} from "../src/abstract/RainDeploySuitesBase.sol";
 import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../src/lib/LibRainDeploySnapshot.sol";
@@ -78,20 +77,10 @@ contract Build is Script, RegistryDeploySuites {
         GeneratedContract[] memory contracts = generatedContracts();
         for (uint256 i = 0; i < contracts.length; i++) {
             LibRainDeploySnapshot.writeAliasLib(
-                vm,
-                contracts[i].contractName,
-                contracts[i].constantPrefix,
-                LibRainDeploySnapshot.CANDIDATE,
-                RAIN_SPDX_LICENSE_IDENTIFIER,
-                RAIN_COPYRIGHT_TEXT
+                vm, contracts[i].contractName, contracts[i].constantPrefix, LibRainDeploySnapshot.CANDIDATE
             );
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm,
-                LibRainDeploySnapshot.LIB_FS_ROOT,
-                contracts[i].contractName,
-                RAIN_SPDX_LICENSE_IDENTIFIER,
-                RAIN_COPYRIGHT_TEXT,
-                contracts[i].candidate.snapshot
+                vm, LibRainDeploySnapshot.LIB_FS_ROOT, contracts[i].contractName, contracts[i].candidate.snapshot
             );
         }
     }
@@ -105,8 +94,6 @@ contract Build is Script, RegistryDeploySuites {
                 vm,
                 LibRainDeploySnapshot.CANDIDATE,
                 contracts[i].contractName,
-                RAIN_SPDX_LICENSE_IDENTIFIER,
-                RAIN_COPYRIGHT_TEXT,
                 contracts[i].candidate.sourceCreationCode,
                 contracts[i].candidate.snapshot.dependencies
             );
