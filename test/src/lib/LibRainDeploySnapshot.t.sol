@@ -539,23 +539,11 @@ contract LibRainDeploySnapshotTest is Test {
     /// holding exactly the header, import block and library block the emitters
     /// produce.
     ///
-    /// Run against this repo's REAL contract and its real rolling snapshot, so
-    /// what it writes is the committed generated file and the assertion is that
-    /// the committed file IS what the generator emits today. Nothing else in
-    /// the suite can see that: the alias lib's VALUES are anchored by the pins
-    /// tests that read them, and its TEXT by nothing at all.
+    /// Runs against this repo's real contract and rolling snapshot, so it
+    /// overwrites the committed generated file and asserts that file is what
+    /// the generator emits today — header constants included.
     ///
-    /// Emitted with the same header constants `script/Build.sol` names, so this
-    /// is also where those are held to producing the header the committed
-    /// generated files actually carry. They reach `LibCodeGen.filePrefix`
-    /// unchecked by anything else here — a wrong identifier is otherwise only a
-    /// `reuse lint` failure on a file that has already been written and
-    /// committed.
-    ///
-    /// Restored BEFORE the assertions run, because forge-std assertions revert:
-    /// restoring afterwards restores in every case except a failure, which is
-    /// the only case where the tree is dirty and the one this test exists to
-    /// report.
+    /// The file is restored BEFORE the assertions, which revert on failure.
     function testWriteAliasLibWritesTheLibAtItsPath() external {
         string memory before = vm.readFile(ALIAS_LIB_PATH);
 
