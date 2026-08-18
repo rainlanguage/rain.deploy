@@ -659,8 +659,8 @@ contract LibRainDeploySnapshotTest is Test {
         "/// record. A moved source path retroactively updates every entry's artifact\n"
         "/// path, which is intended: the alternative is parsing this generated file\n"
         "/// back in to preserve what it last said.\n" "library LibAddressRegistryReleased {\n"
-        "    /// Every frozen release, in tag order.\n" "    /// @return suites The released suites.\n"
-        "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n";
+        "    /// Every frozen release, in tag order.\n" "    /// @return The released suites.\n"
+        "    function releasedSuites() internal pure returns (DeploySuite[] memory) {\n";
 
     /// The entry one release contributes.
     /// @param index The entry's index.
@@ -730,7 +730,7 @@ contract LibRainDeploySnapshotTest is Test {
             LibRainDeploySnapshot.releasedLibraryBlock(
                 vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(0), emitterTemplate()
             ),
-            string.concat(EXPECTED_LIBRARY_HEADER, "        suites = new DeploySuite[](0);\n", "    }\n}\n")
+            string.concat(EXPECTED_LIBRARY_HEADER, "        DeploySuite[] memory suites = new DeploySuite[](0);\n", "        return suites;\n    }\n}\n")
         );
 
         assertEq(
@@ -739,9 +739,9 @@ contract LibRainDeploySnapshotTest is Test {
             ),
             string.concat(
                 EXPECTED_LIBRARY_HEADER,
-                "        suites = new DeploySuite[](1);\n",
+                "        DeploySuite[] memory suites = new DeploySuite[](1);\n",
                 expectedEntry("0", "0_0_1"),
-                "    }\n}\n"
+                "        return suites;\n    }\n}\n"
             )
         );
 
@@ -751,10 +751,10 @@ contract LibRainDeploySnapshotTest is Test {
             ),
             string.concat(
                 EXPECTED_LIBRARY_HEADER,
-                "        suites = new DeploySuite[](2);\n",
+                "        DeploySuite[] memory suites = new DeploySuite[](2);\n",
                 expectedEntry("0", "0_0_1"),
                 expectedEntry("1", "0_0_2"),
-                "    }\n}\n"
+                "        return suites;\n    }\n}\n"
             )
         );
     }

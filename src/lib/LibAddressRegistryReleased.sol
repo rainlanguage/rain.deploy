@@ -24,8 +24,9 @@ import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 /// back in to preserve what it last said.
 library LibAddressRegistryReleased {
     /// Every frozen release, in tag order.
-    /// @return suites The released suites.
-    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](0);
+    /// @return The released suites.
+    function releasedSuites() internal pure returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](0);
+        return suites;
     }
 }
