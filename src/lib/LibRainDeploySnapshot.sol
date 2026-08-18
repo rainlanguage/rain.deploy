@@ -1040,8 +1040,16 @@ library LibRainDeploySnapshot {
     /// It emits the concatenation rather than computing one, because the
     /// entries are only known when the emitted source RUNS: a released lib
     /// declares its own releases, and how many it has is not a thing this
-    /// emitter can see or should have to. So the lengths are summed and the
-    /// offsets are spelled as expressions over them.
+    /// emitter can see or should have to. So the emitted code reads every
+    /// released lib into one array of arrays, sums their lengths at runtime,
+    /// and copies each one in at the offset the libs before it end at.
+    ///
+    /// That sum and that copy are loops over the array of arrays rather than
+    /// expressions naming every contract, so no emitted line is wider for a
+    /// repo with more contracts in it. The emitted file is committed, and both
+    /// `forge fmt --check` and a byte-for-byte comparison against what this
+    /// emits read it: a line wide enough for the formatter to wrap is a file
+    /// that cannot satisfy them both.
     ///
     /// A repo with no generated contracts emits a lib returning an empty array.
     /// That is the state of a deploy repo whose declaration is not written yet,
@@ -1052,37 +1060,19 @@ library LibRainDeploySnapshot {
     /// @param contractNames The contracts whose released libs to aggregate.
     /// @return The library block.
     function aggregateLibraryBlock(Vm vm, string[] memory contractNames) internal pure returns (string memory) {
-        string memory locals = "";
-        string memory copies = "";
-        // The running sum of the lengths already emitted: the whole array's
-        // length once the loop is done, and the OFFSET of the contract the loop
-        // is on before its own length is added to it.
-        string memory total = "";
+        // One line per contract, reading its released lib into its own slot of
+        // the array of arrays the sum and the copy walk.
+        string memory reads = "";
 
         for (uint256 i = 0; i < contractNames.length; i++) {
-            string memory local = string.concat("released", vm.toString(i));
-
-            locals = string.concat(
-                locals,
-                "        DeploySuite[] memory ",
-                local,
-                " = ",
+            reads = string.concat(
+                reads,
+                "        released[",
+                vm.toString(i),
+                "] = ",
                 releasedLibraryName(contractNames[i]),
                 ".releasedSuites();\n"
             );
-
-            copies = string.concat(
-                copies,
-                "        for (uint256 i = 0; i < ",
-                local,
-                ".length; i++) {\n            suites[",
-                bytes(total).length == 0 ? "" : string.concat(total, " + "),
-                "i] = ",
-                local,
-                "[i];\n        }\n"
-            );
-
-            total = string.concat(total, bytes(total).length == 0 ? "" : " + ", local, ".length");
         }
 
         return string.concat(
@@ -1105,7 +1095,24 @@ library LibRainDeploySnapshot {
             "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n",
             contractNames.length == 0
                 ? "        suites = new DeploySuite[](0);\n"
-                : string.concat(locals, "\n        suites = new DeploySuite[](", total, ");\n\n", copies),
+                : string.concat(
+                    "        DeploySuite[][] memory released = new DeploySuite[][](",
+                    vm.toString(contractNames.length),
+                    ");\n",
+                    reads,
+                    "\n        uint256 total = 0;\n",
+                    "        for (uint256 i = 0; i < released.length; i++) {\n",
+                    "            total += released[i].length;\n",
+                    "        }\n\n",
+                    "        suites = new DeploySuite[](total);\n\n",
+                    "        uint256 offset = 0;\n",
+                    "        for (uint256 i = 0; i < released.length; i++) {\n",
+                    "            for (uint256 j = 0; j < released[i].length; j++) {\n",
+                    "                suites[offset + j] = released[i][j];\n",
+                    "            }\n",
+                    "            offset += released[i].length;\n",
+                    "        }\n"
+                ),
             "    }\n}\n"
         );
     }

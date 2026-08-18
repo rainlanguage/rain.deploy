@@ -27,16 +27,23 @@ library LibReleasedSuites {
     /// Every released suite, in declaration order.
     /// @return suites The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory suites) {
-        DeploySuite[] memory released0 = LibAddressRegistryReleased.releasedSuites();
-        DeploySuite[] memory released1 = LibMigrationRegistryReleased.releasedSuites();
+        DeploySuite[][] memory released = new DeploySuite[][](2);
+        released[0] = LibAddressRegistryReleased.releasedSuites();
+        released[1] = LibMigrationRegistryReleased.releasedSuites();
 
-        suites = new DeploySuite[](released0.length + released1.length);
-
-        for (uint256 i = 0; i < released0.length; i++) {
-            suites[i] = released0[i];
+        uint256 total = 0;
+        for (uint256 i = 0; i < released.length; i++) {
+            total += released[i].length;
         }
-        for (uint256 i = 0; i < released1.length; i++) {
-            suites[released0.length + i] = released1[i];
+
+        suites = new DeploySuite[](total);
+
+        uint256 offset = 0;
+        for (uint256 i = 0; i < released.length; i++) {
+            for (uint256 j = 0; j < released[i].length; j++) {
+                suites[offset + j] = released[i][j];
+            }
+            offset += released[i].length;
         }
     }
 }

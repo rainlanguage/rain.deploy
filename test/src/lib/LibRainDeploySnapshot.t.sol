@@ -1212,6 +1212,19 @@ contract LibRainDeploySnapshotTest is Test {
         "    /// Every released suite, in declaration order.\n" "    /// @return suites The released suites.\n"
         "    function releasedSuites() internal pure returns (DeploySuite[] memory suites) {\n";
 
+    /// The aggregate's text from below the released libs it reads to the end of
+    /// `releasedSuites`: the sum of their lengths, the array that sum
+    /// allocates, and the copy of each lib into it at the offset the ones
+    /// before it end at. The same whatever it aggregates, which is what keeps
+    /// every line the same width however many contracts there are.
+    string constant EXPECTED_AGGREGATE_CONCATENATION = "\n        uint256 total = 0;\n"
+        "        for (uint256 i = 0; i < released.length; i++) {\n" "            total += released[i].length;\n"
+        "        }\n\n" "        suites = new DeploySuite[](total);\n\n" "        uint256 offset = 0;\n"
+        "        for (uint256 i = 0; i < released.length; i++) {\n"
+        "            for (uint256 j = 0; j < released[i].length; j++) {\n"
+        "                suites[offset + j] = released[i][j];\n" "            }\n"
+        "            offset += released[i].length;\n" "        }\n";
+
     /// The aggregate MUST import the released lib of EVERY contract it is
     /// handed, by the sibling path the released writer wrote it to, and nothing
     /// else.
@@ -1257,25 +1270,24 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
-    /// The aggregate MUST read every released lib once and copy all of it, at
-    /// the offset the libs before it end at, in declaration order.
+    /// The aggregate MUST read every released lib once, each into its own slot
+    /// of the array it walks, and copy all of it at the offset the libs before
+    /// it end at, in declaration order.
     ///
-    /// The offsets are the whole of what the emitted code does, and they are
-    /// spelled here literally rather than computed, because a test that
-    /// derived them the way the emitter does would agree with it about a wrong
-    /// answer. An offset that repeated would overwrite one contract's releases
-    /// with another's; one that skipped would leave a zeroed entry the chain
-    /// group then asserts is deployed.
+    /// The slots are the whole of what varies with the list, and the sum and
+    /// copy that read them are spelled here literally rather than computed,
+    /// because a test that derived them the way the emitter does would agree
+    /// with it about a wrong answer. A slot that repeated would overwrite one
+    /// contract's releases with another's; an offset that skipped would leave a
+    /// zeroed entry the chain group then asserts is deployed.
     function testAggregateLibraryBlockConcatenatesEveryReleasedLib() external pure {
         assertEq(
             LibRainDeploySnapshot.aggregateLibraryBlock(vm, aggregateNames(1)),
             string.concat(
                 EXPECTED_AGGREGATE_HEADER,
-                "        DeploySuite[] memory released0 = LibAddressRegistryReleased.releasedSuites();\n",
-                "\n        suites = new DeploySuite[](released0.length);\n\n",
-                "        for (uint256 i = 0; i < released0.length; i++) {\n",
-                "            suites[i] = released0[i];\n",
-                "        }\n",
+                "        DeploySuite[][] memory released = new DeploySuite[][](1);\n",
+                "        released[0] = LibAddressRegistryReleased.releasedSuites();\n",
+                EXPECTED_AGGREGATE_CONCATENATION,
                 "    }\n}\n"
             )
         );
@@ -1284,15 +1296,10 @@ contract LibRainDeploySnapshotTest is Test {
             LibRainDeploySnapshot.aggregateLibraryBlock(vm, aggregateNames(2)),
             string.concat(
                 EXPECTED_AGGREGATE_HEADER,
-                "        DeploySuite[] memory released0 = LibAddressRegistryReleased.releasedSuites();\n",
-                "        DeploySuite[] memory released1 = LibMigrationRegistryReleased.releasedSuites();\n",
-                "\n        suites = new DeploySuite[](released0.length + released1.length);\n\n",
-                "        for (uint256 i = 0; i < released0.length; i++) {\n",
-                "            suites[i] = released0[i];\n",
-                "        }\n",
-                "        for (uint256 i = 0; i < released1.length; i++) {\n",
-                "            suites[released0.length + i] = released1[i];\n",
-                "        }\n",
+                "        DeploySuite[][] memory released = new DeploySuite[][](2);\n",
+                "        released[0] = LibAddressRegistryReleased.releasedSuites();\n",
+                "        released[1] = LibMigrationRegistryReleased.releasedSuites();\n",
+                EXPECTED_AGGREGATE_CONCATENATION,
                 "    }\n}\n"
             )
         );
@@ -1301,19 +1308,11 @@ contract LibRainDeploySnapshotTest is Test {
             LibRainDeploySnapshot.aggregateLibraryBlock(vm, aggregateNames(3)),
             string.concat(
                 EXPECTED_AGGREGATE_HEADER,
-                "        DeploySuite[] memory released0 = LibAddressRegistryReleased.releasedSuites();\n",
-                "        DeploySuite[] memory released1 = LibMigrationRegistryReleased.releasedSuites();\n",
-                "        DeploySuite[] memory released2 = LibThirdRegistryReleased.releasedSuites();\n",
-                "\n        suites = new DeploySuite[](released0.length + released1.length + released2.length);\n\n",
-                "        for (uint256 i = 0; i < released0.length; i++) {\n",
-                "            suites[i] = released0[i];\n",
-                "        }\n",
-                "        for (uint256 i = 0; i < released1.length; i++) {\n",
-                "            suites[released0.length + i] = released1[i];\n",
-                "        }\n",
-                "        for (uint256 i = 0; i < released2.length; i++) {\n",
-                "            suites[released0.length + released1.length + i] = released2[i];\n",
-                "        }\n",
+                "        DeploySuite[][] memory released = new DeploySuite[][](3);\n",
+                "        released[0] = LibAddressRegistryReleased.releasedSuites();\n",
+                "        released[1] = LibMigrationRegistryReleased.releasedSuites();\n",
+                "        released[2] = LibThirdRegistryReleased.releasedSuites();\n",
+                EXPECTED_AGGREGATE_CONCATENATION,
                 "    }\n}\n"
             )
         );
