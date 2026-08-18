@@ -67,27 +67,30 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     ///
     /// Both are empty until the first release is cut. The rolling `candidate/`
     /// snapshots are not releases and do exist.
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
         DeploySuite[] memory addressRegistry = LibAddressRegistryReleased.releasedSuites();
         DeploySuite[] memory migrationRegistry = LibMigrationRegistryReleased.releasedSuites();
 
-        suites = new DeploySuite[](addressRegistry.length + migrationRegistry.length);
+        DeploySuite[] memory suites = new DeploySuite[](addressRegistry.length + migrationRegistry.length);
         for (uint256 i = 0; i < addressRegistry.length; i++) {
             suites[i] = addressRegistry[i];
         }
         for (uint256 i = 0; i < migrationRegistry.length; i++) {
             suites[addressRegistry.length + i] = migrationRegistry[i];
         }
+
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
     /// @dev One entry per contract this repo deploys. A third deployed contract
     /// is a third named candidate below, a third entry here, and a third entry
     /// in `script/Build.sol`'s generated-contract list — nothing else.
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](2);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = addressRegistryCandidate();
         candidates[1] = migrationRegistryCandidate();
+        return candidates;
     }
 
     /// This repo's rolling `AddressRegistry` candidate.

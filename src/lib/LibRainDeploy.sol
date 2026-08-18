@@ -109,19 +109,20 @@ library LibRainDeploy {
     /// @param target The contract address to check.
     /// @param expectedCodeHash The code hash to look for.
     /// @param blockNumber The block number to check.
-    /// @return isStart True if the contract first appears at this block.
+    /// @return True if the contract first appears at this block.
     function isStartBlock(Vm vm, address target, bytes32 expectedCodeHash, uint256 blockNumber)
         internal
-        returns (bool isStart)
+        returns (bool)
     {
         uint256 originalBlock = block.number;
         vm.rollFork(blockNumber);
-        isStart = target.codehash == expectedCodeHash;
+        bool isStart = target.codehash == expectedCodeHash;
         if (isStart && blockNumber > 0) {
             vm.rollFork(blockNumber - 1);
             isStart = target.codehash != expectedCodeHash;
         }
         vm.rollFork(originalBlock);
+        return isStart;
     }
 
     /// Finds the block number at which a contract was first deployed by binary
@@ -154,11 +155,11 @@ library LibRainDeploy {
     /// @param expectedCodeHash The expected code hash of the target contract.
     /// @param startBlock The earliest block to search from. The target MUST
     /// NOT have the expected code hash at this block.
-    /// @return deployBlock The first block number where `target` has the
-    /// expected code hash.
+    /// @return The first block number where `target` has the expected code
+    /// hash.
     function findDeployBlock(Vm vm, address target, bytes32 expectedCodeHash, uint256 startBlock)
         internal
-        returns (uint256 deployBlock)
+        returns (uint256)
     {
         if (target.code.length == 0) {
             revert NotDeployed(target);
@@ -191,8 +192,8 @@ library LibRainDeploy {
             }
         }
 
-        deployBlock = low;
         vm.rollFork(originalBlock);
+        return low;
     }
 
     /// Etches the Zoltu factory bytecode into the factory address. Useful for
@@ -219,9 +220,10 @@ library LibRainDeploy {
     /// Deploys the given creation code via the Zoltu factory.
     /// Handles the return data and errors appropriately.
     /// @param creationCode The creation code to deploy.
-    /// @return deployedAddress The address of the deployed contract.
-    function deployZoltu(bytes memory creationCode) internal returns (address deployedAddress) {
+    /// @return The address of the deployed contract.
+    function deployZoltu(bytes memory creationCode) internal returns (address) {
         address zoltuFactory = ZOLTU_FACTORY;
+        address deployedAddress;
         bool success;
         assembly ("memory-safe") {
             // Zero scratch space so mload(0) reads a clean 32-byte word.
@@ -243,6 +245,7 @@ library LibRainDeploy {
             console2.logBytes32(deployedAddress.codehash);
             revert DeployFailed(success, deployedAddress);
         }
+        return deployedAddress;
     }
 
     /// Returns the list of networks currently supported by Rain deployments.
@@ -415,7 +418,7 @@ library LibRainDeploy {
     /// the address the Zoltu factory derives for `creationCode`.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The addresses that must have code on each network.
-    /// @return deployedAddress The deployed contract address.
+    /// @return The deployed contract address.
     function deployToNetworks(
         Vm vm,
         string[] memory networks,
@@ -425,7 +428,7 @@ library LibRainDeploy {
         address expectedAddress,
         bytes32 expectedCodeHash,
         address[] memory dependencies
-    ) internal returns (address deployedAddress) {
+    ) internal returns (address) {
         if (networks.length == 0) {
             revert NoNetworks();
         }
@@ -439,6 +442,7 @@ library LibRainDeploy {
         if (derivedAddress != expectedAddress) {
             revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);
         }
+        address deployedAddress;
         for (uint256 i = 0; i < networks.length; i++) {
             // createSelectFork returns a fork id that is not needed here; bind
             // and reference it so the unused-return lint stays satisfied.
@@ -493,6 +497,8 @@ library LibRainDeploy {
                 )
             );
         }
+
+        return deployedAddress;
     }
 
     /// Deploys the given creation code via the Zoltu factory to the given
@@ -507,7 +513,7 @@ library LibRainDeploy {
     /// the address the Zoltu factory derives for `creationCode`.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The dependency addresses to check.
-    /// @return deployedAddress The address of the deployed contract.
+    /// @return The address of the deployed contract.
     function deployAndBroadcast(
         Vm vm,
         string[] memory networks,
@@ -517,7 +523,7 @@ library LibRainDeploy {
         address expectedAddress,
         bytes32 expectedCodeHash,
         address[] memory dependencies
-    ) internal returns (address deployedAddress) {
+    ) internal returns (address) {
         if (networks.length == 0) {
             revert NoNetworks();
         }
@@ -525,7 +531,7 @@ library LibRainDeploy {
 
         console2.log("Deploying from address:", deployer);
 
-        deployedAddress = deployToNetworks(
+        return deployToNetworks(
             vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies
         );
     }

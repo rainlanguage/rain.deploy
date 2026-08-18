@@ -168,12 +168,13 @@ abstract contract RainDeploySuitesBase {
     /// Guarding each reader separately would be two spellings of one rule, and
     /// the reader that got the second spelling wrong is the one that silently
     /// stops asserting.
-    /// @return candidates The candidates.
-    function checkedCandidateSuites() internal pure returns (DeployCandidate[] memory candidates) {
-        candidates = candidateSuites();
+    /// @return The candidates.
+    function checkedCandidateSuites() internal pure returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = candidateSuites();
         if (candidates.length == 0) {
             revert NoDeployCandidates();
         }
+        return candidates;
     }
 
     /// EVERY candidate MUST record the creation code this repo compiles.
@@ -232,12 +233,12 @@ abstract contract RainDeploySuitesBase {
     /// One pairwise pass over the whole set, so a candidate colliding with
     /// another candidate is caught by the same code that catches a candidate
     /// colliding with a release — there is no second rule to keep in step.
-    /// @return suites Every declared suite.
-    function allSuites() internal pure returns (DeploySuite[] memory suites) {
+    /// @return Every declared suite.
+    function allSuites() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory released = releasedSuites();
         DeployCandidate[] memory candidates = checkedCandidateSuites();
 
-        suites = new DeploySuite[](released.length + candidates.length);
+        DeploySuite[] memory suites = new DeploySuite[](released.length + candidates.length);
         for (uint256 i = 0; i < released.length; i++) {
             suites[i] = released[i];
         }
@@ -252,15 +253,19 @@ abstract contract RainDeploySuitesBase {
                 }
             }
         }
+
+        return suites;
     }
 
     /// Every declared key, comma separated, for the unknown-suite error.
-    /// @return names The declared keys.
-    function suiteNames() internal pure returns (string memory names) {
+    /// @return The declared keys.
+    function suiteNames() internal pure returns (string memory) {
         DeploySuite[] memory suites = allSuites();
+        string memory names;
         for (uint256 i = 0; i < suites.length; i++) {
             names = i == 0 ? suites[i].suite : string.concat(names, ", ", suites[i].suite);
         }
+        return names;
     }
 
     /// The suite a key selects.
