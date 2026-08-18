@@ -3,9 +3,8 @@
 pragma solidity =0.8.25;
 
 import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBase.sol";
-import {DeployCandidate, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {CandidateSourceMismatch, DeployCandidate, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
-    CandidateSourceMismatch,
     FrozenSnapshotNotReleased,
     FrozenSnapshotUnreadable,
     RainDeployVerifySnapshot,
@@ -15,9 +14,10 @@ import {
 } from "../../../src/abstract/RainDeployVerifySnapshot.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {AddressRegistry} from "../../../src/concrete/AddressRegistry.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
+import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
+import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
 import {
     BYTECODE_HASH as ADDRESS_REGISTRY_BYTECODE_HASH,
     CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE,
@@ -35,29 +35,34 @@ import {
 ///
 /// The rest is what each group CATCHES, and — for the internal group — what it
 /// provably does not. Every case drives the same internal functions the
-/// inherited tests do, through external wrappers so `vm.expectRevert` lands at
-/// the right call depth, with the exemplar data deliberately broken one field at
-/// a time.
+/// inherited tests do, at a call depth `vm.expectRevert` lands at.
+///
+/// The groups that take their subject as an argument are driven with the
+/// exemplar data deliberately broken one field at a time. The source anchor
+/// takes none: it reads the declaration, because `RainDeployBroadcast` runs it
+/// with nothing to hand it. Its negative case is therefore a whole broken
+/// DECLARATION — `SourceMismatchDeploy` — which is also the shape a repo holding
+/// a stale generated file is actually in.
 contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySnapshot {
+    /// A declaration whose second candidate is a consistent snapshot of the
+    /// wrong contract.
+    ///
+    /// A whole declaration rather than a candidate built here, because the
+    /// source anchor reads the declaration itself — it has to, so that the
+    /// broadcast can run the same definition without being handed anything.
+    /// A set passed in as an argument would be a set only a test can supply.
+    SourceMismatchDeploy internal sMismatch;
+
+    /// The broken declaration, as a repo holding a stale generated file has it.
+    function setUp() external {
+        sMismatch = new SourceMismatchDeploy();
+    }
+
     /// External wrapper for `checkInternallyConsistent` so `vm.expectRevert`
     /// works at the correct call depth.
     /// @param suite The suite to check.
     function externalCheckInternallyConsistent(DeploySuite memory suite) external {
         checkInternallyConsistent(suite);
-    }
-
-    /// External wrapper for `checkAnchoredToSource` so `vm.expectRevert` works
-    /// at the correct call depth.
-    /// @param candidate The candidate to check.
-    function externalCheckAnchoredToSource(DeployCandidate memory candidate) external pure {
-        checkAnchoredToSource(candidate);
-    }
-
-    /// External wrapper for `checkCandidatesAnchoredToSource` so
-    /// `vm.expectRevert` works at the correct call depth.
-    /// @param candidates The candidates to check.
-    function externalCheckCandidatesAnchoredToSource(DeployCandidate[] memory candidates) external pure {
-        checkCandidatesAnchoredToSource(candidates);
     }
 
     /// External wrapper for `checkFrozenSnapshotsReleased` so `vm.expectRevert`
@@ -85,6 +90,17 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
     function recordOfTheGeneratedSnapshot() internal pure returns (string[] memory paths) {
         paths = new string[](1);
         paths[0] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry");
+    }
+
+    /// A record of BOTH committed snapshots. `AddressRegistry` is what the
+    /// exemplar's first released suite derives; `MigrationRegistry` is declared
+    /// by no released suite here, so it is a real record file that really is
+    /// undeclared, and the undeclared one is the LAST.
+    /// @return paths The two-file record.
+    function recordOfBothGeneratedSnapshots() internal pure returns (string[] memory paths) {
+        paths = new string[](2);
+        paths[0] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry");
+        paths[1] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "MigrationRegistry");
     }
 
     /// A record declared by a released suite MUST pass, so the failing cases
@@ -214,25 +230,71 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
         this.externalCheckFrozenSnapshotsReleased(paths, releasedSuites());
     }
 
-    /// A consistent snapshot of the WRONG contract: every recorded field is
-    /// `MockDeployable`'s and they all agree with each other, but it is
-    /// presented as the candidate for a repo whose source is
-    /// `MockDeployableV2`. This is the shape of a snapshot generated from a
-    /// stale build, or from the wrong contract in a repo with several.
-    /// @return The wrong-contract candidate.
-    function wrongContractCandidate() internal pure returns (DeployCandidate memory) {
-        return DeployCandidate({
-            snapshot: DeploySuite({
-                suite: "address-registry-candidate",
-                creationCode: ADDRESS_REGISTRY_CREATION_CODE,
-                storedDeployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-                storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
-                storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
-                artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-                dependencies: new address[](0)
-            }),
-            sourceCreationCode: type(MockDeployableV2).creationCode
-        });
+    /// EVERY file in the record MUST be checked, not just the first. The
+    /// undeclared file here is the LAST one, behind a declared one, so a loop
+    /// that stopped after the first path would pass — and a release that
+    /// dropped out of the declaration is exactly what this check exists to
+    /// catch, on a record that grows one file per release.
+    function testFrozenSnapshotCheckReachesEveryRecordFile() external {
+        // The first really is declared, so nothing fails before the loop has to
+        // advance.
+        string[] memory first = new string[](1);
+        first[0] = recordOfBothGeneratedSnapshots()[0];
+        this.externalCheckFrozenSnapshotsReleased(first, releasedSuites());
+
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfBothGeneratedSnapshots()[1]));
+        this.externalCheckFrozenSnapshotsReleased(recordOfBothGeneratedSnapshots(), releasedSuites());
+    }
+
+    /// An unreadable file MUST be named as the file the loop is ON. Its path is
+    /// carried into the read for that error alone, so a loop that advanced but
+    /// kept handing the read `paths[0]` would send the reader to a file that
+    /// reads perfectly well — and every position after the first is where a
+    /// record spends its life from the second release onward.
+    function testFrozenSnapshotUnreadableFileIsNamedAtEveryRecordPosition() external {
+        string[] memory paths = new string[](2);
+        // Declared and readable, so nothing fails before the loop has to
+        // advance.
+        paths[0] = recordOfTheGeneratedSnapshot()[0];
+        paths[1] = "src/concrete/AddressRegistry.sol";
+
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, paths[1]));
+        this.externalCheckFrozenSnapshotsReleased(paths, releasedSuites());
+    }
+
+    /// The inner search MUST reach every released suite, not just the first.
+    /// The suite that declares the record here is the LAST one, so a match that
+    /// only ever looked at `released[0]` would report a declared release as
+    /// undeclared and make the check unusable the moment a repo releases twice.
+    function testFrozenSnapshotCheckReachesEveryReleasedSuite() external view {
+        DeploySuite[] memory released = releasedSuites();
+        // `second-address` first, `address-registry-0-0-1` second.
+        DeploySuite[] memory reordered = new DeploySuite[](2);
+        reordered[0] = released[1];
+        reordered[1] = released[0];
+        assertEq(reordered[1].suite, "address-registry-0-0-1");
+
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), reordered);
+    }
+
+    /// An empty declaration against a record with several files fails on the
+    /// FIRST file, naming it: a repo that declared nothing is not a repo with
+    /// nothing frozen, and the file it names is the one it is on rather than
+    /// the last one in the record.
+    function testFrozenSnapshotEmptyDeclarationFailsOnTheFirstRecordFile() external {
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfBothGeneratedSnapshots()[0]));
+        this.externalCheckFrozenSnapshotsReleased(recordOfBothGeneratedSnapshots(), new DeploySuite[](0));
+    }
+
+    /// A record with no files at all is a repo that has released nothing —
+    /// which is this repo's own state — and MUST pass rather than fail on a
+    /// declaration it has nothing to check against. This is the deliberate
+    /// opposite of the source anchor, which refuses an empty candidate list:
+    /// there, an empty list is a repo whose snapshots nothing anchors; here, it
+    /// is a repo that has frozen nothing yet.
+    function testFrozenSnapshotEmptyRecordPasses() external view {
+        this.externalCheckFrozenSnapshotsReleased(new string[](0), releasedSuites());
+        this.externalCheckFrozenSnapshotsReleased(new string[](0), new DeploySuite[](0));
     }
 
     /// The frozen `0_0_1` release, which every negative case below breaks one
@@ -315,80 +377,60 @@ contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySn
     /// covering the source-anchored one, and what makes the next test the only
     /// thing standing between a stale snapshot and a green suite.
     function testWrongContractSnapshotPassesInternalConsistency() external {
-        DeployCandidate memory candidate = wrongContractCandidate();
+        DeployCandidate memory candidate = sMismatch.externalCheckedCandidateSuites()[1];
 
-        // It really is the wrong contract: the recorded creation code is not
-        // the creation code this repo compiles for the candidate.
-        assertNotEq(keccak256(candidate.snapshot.creationCode), keccak256(type(MockDeployableV2).creationCode));
-        assertEq(keccak256(candidate.snapshot.creationCode), keccak256(type(AddressRegistry).creationCode));
+        // It really is the wrong contract: the snapshot records `MockDeployableV2`
+        // while the source it claims to be is `MockDeployable`.
+        assertEq(keccak256(candidate.snapshot.creationCode), keccak256(type(MockDeployableV2).creationCode));
+        assertEq(keccak256(candidate.sourceCreationCode), keccak256(type(MockDeployable).creationCode));
+        assertNotEq(keccak256(candidate.snapshot.creationCode), keccak256(candidate.sourceCreationCode));
 
         // Every internal check passes anyway.
         this.externalCheckInternallyConsistent(candidate.snapshot);
     }
 
     /// The source-anchored group MUST catch exactly the snapshot the internal
-    /// group just let through, naming the candidate and both creation code
-    /// hashes. This is the only check in the whole suite that can.
-    function testWrongContractSnapshotCaughtBySource() external {
-        DeployCandidate memory candidate = wrongContractCandidate();
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                CandidateSourceMismatch.selector,
-                "address-registry-candidate",
-                keccak256(ADDRESS_REGISTRY_CREATION_CODE),
-                keccak256(type(MockDeployableV2).creationCode)
-            )
-        );
-        this.externalCheckAnchoredToSource(candidate);
-    }
-
-    /// A candidate whose recorded creation code IS the source's MUST pass, so
-    /// the previous test is discriminating rather than a check that always
-    /// fails.
-    function testCandidateAnchoredToSourcePasses() external view {
-        this.externalCheckCandidatesAnchoredToSource(checkedCandidateSuites());
-    }
-
-    /// The source anchor MUST reach EVERY candidate, not just the first.
+    /// group just let through, MUST reach every candidate to do it, and MUST
+    /// name the one that failed. This is the only check in the whole suite that
+    /// can catch any of it.
     ///
-    /// A loop that stops early is invisible while a repo declares one
-    /// candidate, and silently stops anchoring the moment it declares two — and
-    /// a repo with several contracts is precisely where a snapshot generated
-    /// from the wrong one comes from. So the broken candidate is the LAST one,
-    /// behind a good one, and the failure has to name it.
-    function testSourceAnchorReachesEveryCandidate() external {
-        DeployCandidate[] memory candidates = checkedCandidateSuites();
+    /// The broken candidate is the LAST one, behind a genuinely anchored one. A
+    /// loop that stops early is invisible while a repo declares one candidate
+    /// and silently stops anchoring the moment it declares two — and a repo with
+    /// several contracts is precisely where a snapshot generated from the wrong
+    /// one comes from. The failure naming the SECOND key is what separates a
+    /// loop that reached it from one that reported a fixed entry or the first.
+    ///
+    /// The inherited `testSnapshotMatchesSource` is the passing case: it runs
+    /// this same function over `ExampleDeploySuites`, whose candidates are their
+    /// own source.
+    function testWrongContractSnapshotCaughtBySource() external {
+        DeployCandidate[] memory candidates = sMismatch.externalCheckedCandidateSuites();
         assertEq(candidates.length, 2);
 
-        // The first is genuinely fine, so nothing fails before the loop has to
-        // advance.
-        this.externalCheckAnchoredToSource(candidates[0]);
-
-        // The break keeps the SECOND candidate's own key, so the failure names
-        // the entry that actually failed rather than the good one sitting in
-        // front of it — a loop that reported a fixed entry, or the first, would
-        // otherwise be indistinguishable from one that reported the right one.
-        DeployCandidate memory broken = wrongContractCandidate();
-        broken.snapshot.suite = candidates[1].snapshot.suite;
-        assertEq(broken.snapshot.suite, "second-address-candidate");
-        candidates[1] = broken;
+        // The first is genuinely anchored, so nothing fails before the loop has
+        // to advance, and it is a different contract at a different address
+        // rather than the same entry under two keys.
+        assertEq(candidates[0].snapshot.suite, "anchored-candidate");
+        assertEq(keccak256(candidates[0].snapshot.creationCode), keccak256(candidates[0].sourceCreationCode));
+        assertNotEq(candidates[0].snapshot.storedDeployedAddress, candidates[1].snapshot.storedDeployedAddress);
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 CandidateSourceMismatch.selector,
-                "second-address-candidate",
-                keccak256(ADDRESS_REGISTRY_CREATION_CODE),
-                keccak256(type(MockDeployableV2).creationCode)
+                "mismatched-candidate",
+                keccak256(type(MockDeployableV2).creationCode),
+                keccak256(type(MockDeployable).creationCode)
             )
         );
-        this.externalCheckCandidatesAnchoredToSource(candidates);
+        sMismatch.externalCheckCandidatesAnchoredToSource();
     }
 
     /// Two suites that record the SAME creation code MUST both derive, which
     /// is the ordinary state of a repo between a release and the next source
-    /// change. `0_0_2` and the candidate are the same bytes and therefore the
-    /// same address, and the whole set still passes.
+    /// change. `address-registry-0-0-1` and `address-registry-candidate` are
+    /// the same bytes and therefore the same address, and the whole set still
+    /// passes.
     function testSuitesSharingCreationCodeAllDerive() external {
         DeploySuite[] memory suites = allSuites();
         assertEq(suites.length, 4);

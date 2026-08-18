@@ -141,7 +141,9 @@ contract Build is Script, RegistryDeploySuites {
     /// declares is a release that drops out of every check there is, which is
     /// exactly what generating the two from one call removes.
     function cutRelease() external {
-        LibRainDeploySnapshot.freeze(vm, regenerateCandidates, generatedContractNames());
+        LibRainDeploySnapshot.freeze(
+            vm, LibRainDeploySnapshot.LIB_FS_ROOT, regenerateCandidates, generatedContractNames()
+        );
         regenerateLibs();
     }
 

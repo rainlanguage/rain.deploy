@@ -5,10 +5,11 @@ pragma solidity ^0.8.25;
 import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 
 /// @title ExternalDeploySuites
-/// @notice The three registry reads, exposed externally so a plain `Test`
-/// contract can drive them and `vm.expectRevert` lands at the right call depth.
+/// @notice Every reader of the declaration, exposed externally so a plain
+/// `Test` contract can drive them and `vm.expectRevert` lands at the right call
+/// depth.
 ///
-/// Here rather than on each fixture because every fixture needs the same three,
+/// Here rather than on each fixture because every fixture needs all of them,
 /// and a declaration that is refused has to be refused on ALL of them — a
 /// wrapper a fixture forgot to carry is a reader nothing checks that fixture
 /// through.
@@ -32,5 +33,10 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
     /// @return The declared candidates, refusing an empty list.
     function externalCheckedCandidateSuites() external pure returns (DeployCandidate[] memory) {
         return checkedCandidateSuites();
+    }
+
+    /// Runs the source anchor over the fixture's own declaration.
+    function externalCheckCandidatesAnchoredToSource() external pure {
+        checkCandidatesAnchoredToSource();
     }
 }

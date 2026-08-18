@@ -6,6 +6,7 @@ import {Test} from "forge-std-1.16.1/src/Test.sol";
 
 import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV1.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
+import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
 /// @title MigrationRegistryHeadTest
 /// @notice A test suite for `MigrationRegistry.head`: where a namespace is, what
@@ -17,13 +18,6 @@ contract MigrationRegistryHeadTest is Test {
 
     function setUp() external {
         sRegistry = new MigrationRegistry();
-    }
-
-    /// A migration id that is neither of the two values the head space reserves.
-    /// @param migration The fuzzed candidate.
-    function assumeMigration(bytes32 migration) internal pure {
-        vm.assume(migration != bytes32(0));
-        vm.assume(migration != MIGRATION_HEAD_GENESIS);
     }
 
     /// A namespace that has applied nothing is at genesis, which is an ANSWER
@@ -48,8 +42,8 @@ contract MigrationRegistryHeadTest is Test {
     /// one.
     function testHeadFollowsTheRecords(address writer, bytes32 migrationA, bytes32 migrationB) external {
         vm.assume(writer != address(0));
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
 
         vm.prank(writer);
@@ -67,7 +61,7 @@ contract MigrationRegistryHeadTest is Test {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
         vm.assume(writer != other);
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
@@ -82,8 +76,8 @@ contract MigrationRegistryHeadTest is Test {
     /// disagree about where one is.
     function testHeadIsWhatApplyMigrationAccepts(address writer, bytes32 migrationA, bytes32 migrationB) external {
         vm.assume(writer != address(0));
-        assumeMigration(migrationA);
-        assumeMigration(migrationB);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
 
         // Hoisted, because `vm.prank` applies to the next call and reading the
@@ -114,7 +108,7 @@ contract MigrationRegistryHeadTest is Test {
     /// the refusal changes nothing.
     function testHeadZeroWriterRevertsWithRecordsPresent(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
@@ -130,7 +124,7 @@ contract MigrationRegistryHeadTest is Test {
     /// a namespace.
     function testHeadIsNeverZero(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
+        LibMigrationFuzz.assumeMigration(vm, migration);
 
         assertTrue(sRegistry.head(writer) != bytes32(0));
 
@@ -145,8 +139,8 @@ contract MigrationRegistryHeadTest is Test {
     /// that did not happen.
     function testHeadUnmovedByRefusedApplyMigration(address writer, bytes32 migration, bytes32 wrongHead) external {
         vm.assume(writer != address(0));
-        assumeMigration(migration);
-        assumeMigration(wrongHead);
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        LibMigrationFuzz.assumeMigration(vm, wrongHead);
         vm.assume(wrongHead != migration);
 
         vm.expectRevert(
