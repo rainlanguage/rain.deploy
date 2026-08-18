@@ -10,9 +10,9 @@ import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
 /// @title MigrationRegistryAppliedTest
 /// @notice A test suite for `MigrationRegistry.applied`: it answers an applied
-/// migration with the moment it was applied, an unapplied one with zero,
+/// migration with the moment recorded against it, an unapplied one with zero,
 /// refuses the three inputs that can only be mistakes, and is the only reader of
-/// the records.
+/// a record's moment.
 contract MigrationRegistryAppliedTest is Test {
     /// The registry under test. Stateful, so a fresh one per test.
     MigrationRegistry internal sRegistry;
@@ -35,24 +35,54 @@ contract MigrationRegistryAppliedTest is Test {
         assertEq(sRegistry.applied(writer, migration), 0);
     }
 
-    /// An applied migration answers the timestamp of the block it was applied
-    /// in, and keeps answering it as time moves on. The value is when the
-    /// migration was applied, not how long ago or how recently anything was
-    /// asked.
-    function testAppliedIsTheApplicationTimestamp(address writer, bytes32 migration, uint32 appliedAt, uint32 readAt)
-        external
-    {
+    /// An applied migration answers the moment recorded against it, and keeps
+    /// answering it as time moves on. The value is when the migration was
+    /// applied, not when the record was written and not how long ago or how
+    /// recently anything was asked.
+    function testAppliedIsTheRecordedMoment(
+        address writer,
+        bytes32 migration,
+        uint32 appliedAt,
+        uint32 writtenAt,
+        uint32 readAt
+    ) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(appliedAt != 0);
-        vm.assume(readAt >= appliedAt);
+        vm.assume(writtenAt >= appliedAt);
+        vm.assume(readAt >= writtenAt);
 
-        vm.warp(appliedAt);
+        vm.warp(writtenAt);
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
+        sRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt);
 
         vm.warp(readAt);
         assertEq(sRegistry.applied(writer, migration), appliedAt);
+    }
+
+    /// The moment `applied` answers never exceeds the block that asks, whichever
+    /// form wrote it. That is what lets a consumer measuring an interval since a
+    /// migration subtract the answer from the current block without
+    /// underflowing.
+    function testAppliedNeverExceedsTheReadingBlock(
+        address writer,
+        bytes32 migration,
+        uint32 appliedAt,
+        uint32 writtenAt,
+        uint32 readAt
+    ) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        vm.assume(appliedAt != 0);
+        vm.assume(writtenAt >= appliedAt);
+        vm.assume(readAt >= writtenAt);
+
+        vm.warp(writtenAt);
+        vm.prank(writer);
+        sRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt);
+
+        vm.warp(readAt);
+        assertLe(sRegistry.applied(writer, migration), block.timestamp);
     }
 
     /// Reading does not consume or alter a record, so the same question asked
@@ -81,8 +111,7 @@ contract MigrationRegistryAppliedTest is Test {
     }
 
     /// The zero migration id is refused for the same reason in the other
-    /// direction: `applyMigration` will not write it, so it can never be a real
-    /// record.
+    /// direction: neither write records it, so it can never be a real record.
     function testAppliedZeroMigrationReverts(address writer) external {
         vm.assume(writer != address(0));
 
@@ -91,7 +120,7 @@ contract MigrationRegistryAppliedTest is Test {
     }
 
     /// The genesis head is refused as a migration for the same reason again:
-    /// `applyMigration` will not write it either, so asking about it would
+    /// neither write records it either, so asking about it would
     /// answer zero forever to a caller that has confused a head for a migration
     /// — and that caller reads zero as its pre-migration branch.
     function testAppliedGenesisMigrationReverts(address writer) external {
@@ -135,13 +164,14 @@ contract MigrationRegistryAppliedTest is Test {
         assertEq(sRegistry.head(writer), migration);
     }
 
-    /// `applied` is the only reader of the records. The records mapping is not
-    /// `public`, so the getter a `public` mapping would generate — which answers
-    /// the zero writer and both refused ids with zero, the exact silent
-    /// wrong-branch these refusals exist to prevent — does not exist.
+    /// `applied` and `appliedOnto` are the only readers of the records. The
+    /// records mapping is not `public`, so the getter a `public` mapping would
+    /// generate — which answers the zero writer and both refused ids with zero,
+    /// the exact silent wrong-branch these refusals exist to prevent — does not
+    /// exist.
     function testAppliedNoGeneratedMappingGetter(address writer, bytes32 migration) external {
         (bool success,) =
-            address(sRegistry).call(abi.encodeWithSignature("sApplied(address,bytes32)", writer, migration));
+            address(sRegistry).call(abi.encodeWithSignature("sRecords(address,bytes32)", writer, migration));
         assertFalse(success);
     }
 
@@ -154,11 +184,13 @@ contract MigrationRegistryAppliedTest is Test {
     }
 
     /// There is no other entry point at all: no fallback, no receive, and
-    /// nothing beyond the three `IMigrationRegistryV1` functions, so an unknown
+    /// nothing beyond the `IMigrationRegistryV1` functions, so an unknown
     /// selector reverts instead of being silently absorbed.
     function testAppliedNoOtherEntryPoint(bytes4 selector, bytes32 migration) external {
         vm.assume(selector != IMigrationRegistryV1.applied.selector);
+        vm.assume(selector != IMigrationRegistryV1.appliedOnto.selector);
         vm.assume(selector != IMigrationRegistryV1.applyMigration.selector);
+        vm.assume(selector != IMigrationRegistryV1.applyMigrationHistory.selector);
         vm.assume(selector != IMigrationRegistryV1.head.selector);
 
         (bool success,) = address(sRegistry).call(abi.encodeWithSelector(selector, address(this), migration));
