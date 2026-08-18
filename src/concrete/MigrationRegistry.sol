@@ -128,6 +128,13 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         // never be applied again. Reached by the two-argument form as well, in
         // a block whose timestamp is zero: a test can warp to zero and a chain
         // can be configured from a zero genesis.
+        //
+        // Slither flags a strict equality on anything reaching it from
+        // `block.timestamp`, which the two-argument form does. Zero is the only
+        // value this refuses and the only one it can refuse, so there is no
+        // window for a validator to nudge the clock across. Suppressed on this
+        // comparison rather than turned off for the repo.
+        // slither-disable-next-line incorrect-equality
         if (appliedAt == 0) {
             revert ZeroTimestamp();
         }
