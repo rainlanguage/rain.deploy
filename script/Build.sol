@@ -39,9 +39,9 @@ struct GeneratedContract {
 /// writers and the freeze.
 contract Build is Script, RegistryDeploySuites {
     /// Every contract this repo generates deploy pins for.
-    /// @return contracts The generated contracts.
-    function generatedContracts() internal pure returns (GeneratedContract[] memory contracts) {
-        contracts = new GeneratedContract[](2);
+    /// @return The generated contracts.
+    function generatedContracts() internal pure returns (GeneratedContract[] memory) {
+        GeneratedContract[] memory contracts = new GeneratedContract[](2);
         contracts[0] = GeneratedContract({
             contractName: "AddressRegistry", constantPrefix: "ADDRESS_REGISTRY", candidate: addressRegistryCandidate()
         });
@@ -50,6 +50,7 @@ contract Build is Script, RegistryDeploySuites {
             constantPrefix: "MIGRATION_REGISTRY",
             candidate: migrationRegistryCandidate()
         });
+        return contracts;
     }
 
     /// @notice Regenerate the rolling snapshots, their alias libs and the
