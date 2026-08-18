@@ -130,8 +130,8 @@ contract MigrationRegistryAppliedOntoTest is Test {
         sRegistry.appliedOnto(address(0), migration);
     }
 
-    /// The zero migration id is refused: `applyMigration` will not write it, so
-    /// it can never be a real record.
+    /// The zero migration id is refused: neither write records it, so it can
+    /// never be a real record.
     function testAppliedOntoZeroMigrationReverts(address writer) external {
         vm.assume(writer != address(0));
 

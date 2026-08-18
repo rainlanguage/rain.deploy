@@ -59,10 +59,13 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 ///
 /// ## Writing names the head it is applying onto
 ///
-/// `applyMigration` takes the migration the caller believes ran last in its
-/// namespace, so a chain that never got that predecessor refuses the write
-/// instead of silently skipping a step, and two migrations dispatched at once
-/// cannot land in the wrong order. The first migration in a namespace names
+/// `applyMigration` and `applyMigrationHistory` both take the migration the
+/// caller believes ran last in its namespace, so a chain that never got that
+/// predecessor refuses the write instead of silently skipping a step, and two
+/// migrations dispatched at once cannot land in the wrong order. They differ
+/// only in where the recorded moment comes from: the block this lands in, or
+/// the moment the caller supplies for a migration that already ran. The first
+/// migration in a namespace names
 /// `MIGRATION_HEAD_GENESIS`, imported from the interface — never a zero, which
 /// is what an uninitialised constant would be and is refused everywhere.
 ///
@@ -93,7 +96,7 @@ library LibMigrationRegistry {
     /// Every entry point checks, and they check the same way, because each is
     /// worse than useless against unknown code: `applied` would branch a test on
     /// whatever timestamp that code returned, `appliedOnto` and `head` would
-    /// hand back values that are not heads, and `applyMigration` would record a
+    /// hand back values that are not heads, and either write would record a
     /// migration somewhere nothing will ever read it. The check is one function
     /// so they cannot drift into checking different things, and an entry point
     /// added later has one place to call rather than a rule to remember.
@@ -206,12 +209,12 @@ library LibMigrationRegistry {
     /// Applies `migration` under the CALLER's namespace, onto `expectedHead`, as
     /// having been applied at `appliedAt`.
     ///
-    /// This is the form for a migration that already ran — one that ran before
-    /// this registry reached the chain, or before its writer started recording
-    /// at all — so the record carries the moment it ran rather than the moment
-    /// it was written down.
+    /// This is for a migration that already ran — one that ran before this
+    /// registry reached the chain, or before its writer started recording at
+    /// all — so the record carries the moment it ran rather than the moment it
+    /// was written down.
     ///
-    /// Everything the two-argument form says about the namespace, the code-hash
+    /// Everything `applyMigration` says about the namespace, the code-hash
     /// check and the registry's refusals holds here unchanged. The registry
     /// refuses the three moments a record cannot carry as well: zero, one after
     /// the block this lands in, and one before the record at the head it is
@@ -222,9 +225,9 @@ library LibMigrationRegistry {
     /// `MIGRATION_HEAD_GENESIS`.
     /// @param appliedAt The moment `migration` was applied. Never zero, never
     /// after the block this lands in.
-    function applyMigration(bytes32 expectedHead, bytes32 migration, uint256 appliedAt) internal {
+    function applyMigrationHistory(bytes32 expectedHead, bytes32 migration, uint256 appliedAt) internal {
         checkCodeHash();
         IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigration(expectedHead, migration, appliedAt);
+            .applyMigrationHistory(expectedHead, migration, appliedAt);
     }
 }

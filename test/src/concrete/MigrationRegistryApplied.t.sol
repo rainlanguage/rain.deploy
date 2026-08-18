@@ -54,7 +54,7 @@ contract MigrationRegistryAppliedTest is Test {
 
         vm.warp(writtenAt);
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, appliedAt);
+        sRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt);
 
         vm.warp(readAt);
         assertEq(sRegistry.applied(writer, migration), appliedAt);
@@ -79,7 +79,7 @@ contract MigrationRegistryAppliedTest is Test {
 
         vm.warp(writtenAt);
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, appliedAt);
+        sRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt);
 
         vm.warp(readAt);
         assertLe(sRegistry.applied(writer, migration), block.timestamp);
@@ -111,8 +111,7 @@ contract MigrationRegistryAppliedTest is Test {
     }
 
     /// The zero migration id is refused for the same reason in the other
-    /// direction: `applyMigration` will not write it, so it can never be a real
-    /// record.
+    /// direction: neither write records it, so it can never be a real record.
     function testAppliedZeroMigrationReverts(address writer) external {
         vm.assume(writer != address(0));
 
@@ -121,7 +120,7 @@ contract MigrationRegistryAppliedTest is Test {
     }
 
     /// The genesis head is refused as a migration for the same reason again:
-    /// `applyMigration` will not write it either, so asking about it would
+    /// neither write records it either, so asking about it would
     /// answer zero forever to a caller that has confused a head for a migration
     /// — and that caller reads zero as its pre-migration branch.
     function testAppliedGenesisMigrationReverts(address writer) external {
@@ -187,14 +186,11 @@ contract MigrationRegistryAppliedTest is Test {
     /// There is no other entry point at all: no fallback, no receive, and
     /// nothing beyond the `IMigrationRegistryV1` functions, so an unknown
     /// selector reverts instead of being silently absorbed.
-    ///
-    /// The two `applyMigration` selectors are spelled from their signatures
-    /// because `.selector` has no single answer for an overloaded name.
     function testAppliedNoOtherEntryPoint(bytes4 selector, bytes32 migration) external {
         vm.assume(selector != IMigrationRegistryV1.applied.selector);
         vm.assume(selector != IMigrationRegistryV1.appliedOnto.selector);
-        vm.assume(selector != bytes4(keccak256("applyMigration(bytes32,bytes32)")));
-        vm.assume(selector != bytes4(keccak256("applyMigration(bytes32,bytes32,uint256)")));
+        vm.assume(selector != IMigrationRegistryV1.applyMigration.selector);
+        vm.assume(selector != IMigrationRegistryV1.applyMigrationHistory.selector);
         vm.assume(selector != IMigrationRegistryV1.head.selector);
 
         (bool success,) = address(sRegistry).call(abi.encodeWithSelector(selector, address(this), migration));

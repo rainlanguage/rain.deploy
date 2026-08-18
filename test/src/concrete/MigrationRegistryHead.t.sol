@@ -11,7 +11,7 @@ import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 /// @title MigrationRegistryHeadTest
 /// @notice A test suite for `MigrationRegistry.head`: where a namespace is, what
 /// an empty one answers, that the answer is never a value that is not a head,
-/// and that it is the same answer `applyMigration` checks against.
+/// and that it is the same answer a write checks against.
 contract MigrationRegistryHeadTest is Test {
     /// The registry under test. Stateful, so a fresh one per test.
     MigrationRegistry internal sRegistry;
@@ -70,8 +70,8 @@ contract MigrationRegistryHeadTest is Test {
         assertEq(sRegistry.head(other), MIGRATION_HEAD_GENESIS);
     }
 
-    /// The head `head` reports is exactly the head `applyMigration` demands:
-    /// whatever this answers is accepted, and it is the only value that is. The
+    /// The head `head` reports is exactly the head a write demands: whatever
+    /// this answers is accepted, and it is the only value that is. The
     /// two go through one translation of an empty namespace, so they cannot
     /// disagree about where one is.
     function testHeadIsWhatApplyMigrationAccepts(address writer, bytes32 migrationA, bytes32 migrationB) external {

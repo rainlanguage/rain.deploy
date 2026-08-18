@@ -87,13 +87,13 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationRegistry.applyMigration(expectedHead, migration);
     }
 
-    /// External wrapper for the `appliedAt` form of `applyMigration` so that
-    /// `vm.expectRevert` works at the correct call depth.
+    /// External wrapper for `applyMigrationHistory` so that `vm.expectRevert`
+    /// works at the correct call depth.
     /// @param expectedHead The head this contract believes it is at.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment to record against it.
-    function externalApplyMigration(bytes32 expectedHead, bytes32 migration, uint256 appliedAt) external {
-        LibMigrationRegistry.applyMigration(expectedHead, migration, appliedAt);
+    function externalApplyMigrationHistory(bytes32 expectedHead, bytes32 migration, uint256 appliedAt) external {
+        LibMigrationRegistry.applyMigrationHistory(expectedHead, migration, appliedAt);
     }
 
     /// The Zoltu deploy really does land the registry on its pinned address
@@ -451,9 +451,9 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// A migration recorded with a supplied moment reads back as that moment
-    /// through the library, so what the `appliedAt` form writes is what
+    /// through the library, so what `applyMigrationHistory` writes is what
     /// `applied` finds — and it is not the block the write landed in.
-    function testApplyMigrationWithAppliedAtThenApplied(bytes32 migration, uint32 appliedAt, uint32 writtenAt)
+    function testApplyMigrationHistoryThenApplied(bytes32 migration, uint32 appliedAt, uint32 writtenAt)
         external
     {
         LibMigrationFuzz.assumeMigration(vm, migration);
@@ -462,7 +462,7 @@ contract LibMigrationRegistryTest is Test {
         deployRegistry();
         vm.warp(writtenAt);
 
-        LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, appliedAt);
+        LibMigrationRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt);
 
         assertEq(LibMigrationRegistry.applied(address(this), migration), appliedAt);
     }
@@ -472,7 +472,7 @@ contract LibMigrationRegistryTest is Test {
     /// whose migrations ran before this registry reached the chain recording
     /// what actually happened rather than the day it got round to writing it
     /// down.
-    function testApplyMigrationBackfillsAHistoricalSequence(bytes32 migrationA, bytes32 migrationB, bytes32 migrationC)
+    function testApplyMigrationHistoryBackfillsASequence(bytes32 migrationA, bytes32 migrationB, bytes32 migrationC)
         external
     {
         LibMigrationFuzz.assumeMigration(vm, migrationA);
@@ -484,9 +484,9 @@ contract LibMigrationRegistryTest is Test {
         deployRegistry();
         vm.warp(9000);
 
-        LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, 1000);
-        LibMigrationRegistry.applyMigration(migrationA, migrationB, 2000);
-        LibMigrationRegistry.applyMigration(migrationB, migrationC, 3000);
+        LibMigrationRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migrationA, 1000);
+        LibMigrationRegistry.applyMigrationHistory(migrationA, migrationB, 2000);
+        LibMigrationRegistry.applyMigrationHistory(migrationB, migrationC, 3000);
 
         assertEq(LibMigrationRegistry.applied(address(this), migrationA), 1000);
         assertEq(LibMigrationRegistry.applied(address(this), migrationB), 2000);
@@ -503,19 +503,20 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// The registry's zero-moment refusal arrives unmodified through
-    /// `applyMigration`, so a consumer that left its `appliedAt` uninitialised
-    /// is told so rather than writing a record that reads back as none.
-    function testApplyMigrationZeroTimestampReverts(bytes32 migration) external {
+    /// `applyMigrationHistory`, so a consumer that left its `appliedAt`
+    /// uninitialised is told so rather than writing a record that reads back as
+    /// none.
+    function testApplyMigrationHistoryZeroTimestampReverts(bytes32 migration) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
-        this.externalApplyMigration(MIGRATION_HEAD_GENESIS, migration, 0);
+        this.externalApplyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, 0);
     }
 
     /// The registry's future-moment refusal arrives unmodified through
-    /// `applyMigration`.
-    function testApplyMigrationFutureTimestampReverts(bytes32 migration, uint32 now_) external {
+    /// `applyMigrationHistory`.
+    function testApplyMigrationHistoryFutureTimestampReverts(bytes32 migration, uint32 now_) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
         vm.warp(now_);
@@ -523,36 +524,36 @@ contract LibMigrationRegistryTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
         );
-        this.externalApplyMigration(MIGRATION_HEAD_GENESIS, migration, uint256(now_) + 1);
+        this.externalApplyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, uint256(now_) + 1);
     }
 
     /// The registry's before-the-head refusal arrives unmodified through
-    /// `applyMigration`, so a consumer backfilling its history out of order is
-    /// told which moment it contradicted.
-    function testApplyMigrationTimestampBeforeHeadReverts(bytes32 migrationA, bytes32 migrationB) external {
+    /// `applyMigrationHistory`, so a consumer backfilling its history out of
+    /// order is told which moment it contradicted.
+    function testApplyMigrationHistoryTimestampBeforeHeadReverts(bytes32 migrationA, bytes32 migrationB) external {
         LibMigrationFuzz.assumeMigration(vm, migrationA);
         LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
         deployRegistry();
         vm.warp(9000);
 
-        LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, 2000);
+        LibMigrationRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migrationA, 2000);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.TimestampBeforeHead.selector, 1999, 2000));
-        this.externalApplyMigration(migrationA, migrationB, 1999);
+        this.externalApplyMigrationHistory(migrationA, migrationB, 1999);
     }
 
-    /// The namespace of the `appliedAt` form is the calling CONTRACT too, so a
-    /// consumer backfilling its history writes its own namespace and nobody
+    /// The namespace of `applyMigrationHistory` is the calling CONTRACT too, so
+    /// a consumer backfilling its history writes its own namespace and nobody
     /// else's.
-    function testApplyMigrationWithAppliedAtLandsUnderTheCallingContract(bytes32 migration, uint32 appliedAt) external {
+    function testApplyMigrationHistoryLandsUnderTheCallingContract(bytes32 migration, uint32 appliedAt) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(appliedAt != 0);
         deployRegistry();
         vm.warp(appliedAt);
         MockMigrationApplier applier = new MockMigrationApplier();
 
-        applier.applyMigration(MIGRATION_HEAD_GENESIS, migration, appliedAt);
+        applier.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt);
 
         assertEq(LibMigrationRegistry.applied(address(applier), migration), appliedAt);
         assertEq(LibMigrationRegistry.appliedOnto(address(applier), migration), MIGRATION_HEAD_GENESIS);
@@ -649,9 +650,9 @@ contract LibMigrationRegistryTest is Test {
         this.externalAppliedOnto(writer, migration);
     }
 
-    /// The `appliedAt` form checks the code hash too, so a backfill is never
+    /// `applyMigrationHistory` checks the code hash too, so a backfill is never
     /// written to a chain with no registry.
-    function testApplyMigrationWithAppliedAtNoRegistry(bytes32 expectedHead, bytes32 migration, uint256 appliedAt)
+    function testApplyMigrationHistoryNoRegistry(bytes32 expectedHead, bytes32 migration, uint256 appliedAt)
         external
     {
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
@@ -663,11 +664,11 @@ contract LibMigrationRegistryTest is Test {
                 bytes32(0)
             )
         );
-        this.externalApplyMigration(expectedHead, migration, appliedAt);
+        this.externalApplyMigrationHistory(expectedHead, migration, appliedAt);
     }
 
     /// Nor into ordinary occupying code.
-    function testApplyMigrationWithAppliedAtWrongCode(
+    function testApplyMigrationHistoryWrongCode(
         bytes32 expectedHead,
         bytes32 migration,
         uint256 appliedAt,
@@ -684,7 +685,7 @@ contract LibMigrationRegistryTest is Test {
                 keccak256(code)
             )
         );
-        this.externalApplyMigration(expectedHead, migration, appliedAt);
+        this.externalApplyMigrationHistory(expectedHead, migration, appliedAt);
     }
 
     /// Nor into a delegated account.
@@ -692,7 +693,7 @@ contract LibMigrationRegistryTest is Test {
     /// @param migration The migration being applied.
     /// @param appliedAt The moment being recorded.
     /// @param delegate The account the registry address is delegated to.
-    function testApplyMigrationWithAppliedAtDelegatedCode(
+    function testApplyMigrationHistoryDelegatedCode(
         bytes32 expectedHead,
         bytes32 migration,
         uint256 appliedAt,
@@ -709,6 +710,6 @@ contract LibMigrationRegistryTest is Test {
                 keccak256(designator)
             )
         );
-        this.externalApplyMigration(expectedHead, migration, appliedAt);
+        this.externalApplyMigrationHistory(expectedHead, migration, appliedAt);
     }
 }
