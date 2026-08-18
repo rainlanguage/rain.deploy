@@ -3,8 +3,8 @@ name: Package Release
 # carries deployed concretes (`AddressRegistry`, `MigrationRegistry`) whose
 # address + codehash consumers pin, which is exactly the shape
 # rainix-tag-release exists for and exactly the shape rainix-autopublish's
-# merge-driven, next-version lifecycle is wrong for: autopublish bumps
-# [package].version on every merge while the frozen deploy tag only advances at
+# merge-driven, next-version lifecycle is wrong for: autopublish bumps the
+# release version on every merge while the frozen deploy tag only advances at
 # deploy time.
 #
 # The tag names the version; rainix-tag-release runs `cutRelease()`, which

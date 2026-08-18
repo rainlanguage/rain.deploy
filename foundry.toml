@@ -1,4 +1,8 @@
-[package]
+# Release metadata, not foundry config: `LibRainDeploySnapshot.deployTag` reads
+# `version` as the release being built, and `rainix-tag-release` rewrites it
+# from the tag. `[external.*]` is the section foundry reserves for another
+# tool's config: it never merges it into a profile and never warns about it.
+[external.package]
 name = "rain-deploy"
 # Deploy repo: this is the version of the LAST Soldeer publish, not a
 # next-version slot. A normal PR does not bump it; only a `sol-v*` tag release
@@ -43,10 +47,15 @@ fs_permissions = [
   # inherited record check reads that root from contracts forge runs in
   # parallel, so a fixture release there would be one they have to fail on.
   { access = "read-write", path = "./test" },
-  # LibRainDeploySnapshotTest points the two lib writers here, one directory per
-  # test. Its own root, outside both compiled trees: a generated lib imports
-  # ../generated/ and ../abstract/, which resolve from src/lib and nowhere else,
-  # so the copy a failing test leaves behind would break every other suite.
+  # LibRainDeploySnapshotTest points the lib writers here — the alias writer,
+  # the released-suites writer and the aggregate writer — one directory per
+  # test. Its own root, NOT ./src or ./test: every lib these emit imports paths
+  # that resolve from src/lib and nowhere else (the alias lib reaches
+  # ../generated/, the released lib ../abstract/, and the aggregate
+  # LibReleasedSuites.sol both ./Lib<Contract>Released.sol and
+  # ../abstract/RainDeploySuitesBase.sol), so a copy left behind by a failure
+  # under a compiled root fails the whole build until it is deleted by hand.
+  # Nothing compiles this root.
   { access = "read-write", path = "./fixture-lib" },
   # GeneratedSnapshotShapeTest reads the compiler's AST out of the artifact.
   { access = "read", path = "./out" },
