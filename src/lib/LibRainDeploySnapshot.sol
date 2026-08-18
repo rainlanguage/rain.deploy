@@ -988,10 +988,14 @@ library LibRainDeploySnapshot {
     /// @return The newest frozen tag, or `""` if nothing is frozen.
     function newestFrozenTag(Vm vm, string memory recordRoot) internal view returns (string memory) {
         string[] memory paths = frozenSnapshotPaths(vm, recordRoot);
-        string memory newest;
-        for (uint256 i = 0; i < paths.length; i++) {
+        if (paths.length == 0) {
+            return "";
+        }
+
+        string memory newest = tagForRecordPath(vm, paths[0]);
+        for (uint256 i = 1; i < paths.length; i++) {
             string memory tag = tagForRecordPath(vm, paths[i]);
-            if (bytes(newest).length == 0 || tagPrecedes(vm, newest, tag)) {
+            if (tagPrecedes(vm, newest, tag)) {
                 newest = tag;
             }
         }

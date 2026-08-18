@@ -730,7 +730,11 @@ contract LibRainDeploySnapshotTest is Test {
             LibRainDeploySnapshot.releasedLibraryBlock(
                 vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(0), emitterTemplate()
             ),
-            string.concat(EXPECTED_LIBRARY_HEADER, "        DeploySuite[] memory suites = new DeploySuite[](0);\n", "        return suites;\n    }\n}\n")
+            string.concat(
+                EXPECTED_LIBRARY_HEADER,
+                "        DeploySuite[] memory suites = new DeploySuite[](0);\n",
+                "        return suites;\n    }\n}\n"
+            )
         );
 
         assertEq(

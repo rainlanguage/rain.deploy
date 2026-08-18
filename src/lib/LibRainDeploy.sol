@@ -442,7 +442,6 @@ library LibRainDeploy {
         if (derivedAddress != expectedAddress) {
             revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);
         }
-        address deployedAddress;
         for (uint256 i = 0; i < networks.length; i++) {
             // createSelectFork returns a fork id that is not needed here; bind
             // and reference it so the unused-return lint stays satisfied.
@@ -470,7 +469,7 @@ library LibRainDeploy {
 
                 console2.log(" - Deploying via Zoltu");
                 vm.startBroadcast(deployer);
-                deployedAddress = deployZoltu(creationCode);
+                address deployedAddress = deployZoltu(creationCode);
                 vm.stopBroadcast();
                 if (deployedAddress != expectedAddress) {
                     revert UnexpectedDeployedAddress(expectedAddress, deployedAddress);
@@ -482,23 +481,22 @@ library LibRainDeploy {
                 // its dependencies present to remain deployed, which keeps a
                 // rerun a clean no-op here.
                 console2.log(" - Code already exists at expected address, skipping deployment");
-                deployedAddress = expectedAddress;
             }
-            console2.log(" - Final Address:", deployedAddress);
+            console2.log(" - Final Address:", expectedAddress);
             console2.log(" - Verifying code hash");
-            if (expectedCodeHash != deployedAddress.codehash) {
-                revert UnexpectedDeployedCodeHash(expectedCodeHash, deployedAddress.codehash);
+            if (expectedCodeHash != expectedAddress.codehash) {
+                revert UnexpectedDeployedCodeHash(expectedCodeHash, expectedAddress.codehash);
             }
 
             console2.log("manual verification command:");
             console2.log(
                 string.concat(
-                    "forge verify-contract --chain ", networks[i], " ", vm.toString(deployedAddress), " ", contractPath
+                    "forge verify-contract --chain ", networks[i], " ", vm.toString(expectedAddress), " ", contractPath
                 )
             );
         }
 
-        return deployedAddress;
+        return expectedAddress;
     }
 
     /// Deploys the given creation code via the Zoltu factory to the given
