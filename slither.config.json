@@ -1,4 +1,4 @@
 {
-  "filter_paths": "dependencies/forge-std-|src/abstract/(RainDeploy(SuitesBase|Broadcast|VerifyBase|VerifyChain|VerifySnapshot)|RegistryDeploySuites|BuildScript)\\.sol",
+  "filter_paths": "dependencies/forge-std-|src/abstract/(RainDeploy(SuitesBase|Broadcast|VerifyBase|VerifyChain|VerifySnapshotBase|VerifySnapshot)|RegistryDeploySuites|BuildScript)\\.sol",
   "detectors_to_exclude": "assembly"
 }

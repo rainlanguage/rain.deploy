@@ -40,13 +40,6 @@ contract LibRainDeploySnapshotTest is Test {
     function noRegeneration() internal {}
 
     /// External wrapper so `vm.expectRevert` lands at the right call depth, for
-    /// the guards that are about this repo's REAL record.
-    /// @param contractNames The contracts to freeze.
-    function externalFreeze(string[] memory contractNames) external {
-        LibRainDeploySnapshot.freeze(vm, LibRainDeploySnapshot.LIB_FS_ROOT, noRegeneration, contractNames);
-    }
-
-    /// External wrapper so `vm.expectRevert` lands at the right call depth, for
     /// the guards driven against a fixture record.
     /// @param root The record root to freeze into.
     /// @param contractNames The contracts to freeze.
@@ -1491,6 +1484,23 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
+    /// Where the empty-release refusal is driven. Its own tree, for the reason
+    /// every freeze fixture has one: each of these cuts the SAME tag — the real
+    /// `deployTag(vm)`, which is the tag a freeze is about — so two of them
+    /// sharing a root would have whichever ran second refused as a re-cut
+    /// rather than by the guard under test.
+    ///
+    /// NOT `LIB_FS_ROOT`. This repo's real record holds a `<tag>/` from the
+    /// release it cut under this version, and `SnapshotAlreadyFrozen` is
+    /// checked before either guard below, so a freeze pointed at the real root
+    /// is refused for a reason that is not the one being driven. The tag stays
+    /// the real one; it is the ROOT that has to be a fixture's.
+    string constant EMPTY_RELEASE_FIXTURE_ROOT = "test/generated-freeze-empty";
+
+    /// Where the nothing-to-freeze refusal is driven. Its own tree, for the
+    /// reason `EMPTY_RELEASE_FIXTURE_ROOT` is its own tree.
+    string constant NOTHING_TO_FREEZE_FIXTURE_ROOT = "test/generated-freeze-nothing";
+
     /// A freeze that names no contracts MUST be refused. It would write
     /// nothing, report success, and leave `<tag>/` there — and an empty
     /// `<tag>/` is a frozen tag, so the real cut of that release could never
@@ -1499,9 +1509,9 @@ contract LibRainDeploySnapshotTest is Test {
         string memory tag = LibRainDeploySnapshot.deployTag(vm);
 
         vm.expectRevert(abi.encodeWithSelector(EmptyRelease.selector, tag));
-        this.externalFreeze(new string[](0));
+        this.externalFreezeAt(EMPTY_RELEASE_FIXTURE_ROOT, new string[](0));
 
-        assertFalse(vm.exists(LibRainDeploySnapshot.dirForSnapshot(tag)));
+        assertFalse(vm.exists(LibRainDeploySnapshot.dirForSnapshot(EMPTY_RELEASE_FIXTURE_ROOT, tag)));
     }
 
     /// A freeze that throws MUST leave NOTHING behind. Filesystem cheatcodes
@@ -1511,20 +1521,36 @@ contract LibRainDeploySnapshotTest is Test {
     /// The exit from that state is deleting a directory this design calls
     /// append-only, so the ordering here is what keeps a failed release
     /// retryable at all.
+    ///
+    /// The record it is pointed at is a real one — a rolling snapshot is there
+    /// for another contract — so the only thing missing is the snapshot of the
+    /// contract this release names, which is the state a freeze reaches its
+    /// last guard in. A root with nothing under it at all would fail here for
+    /// want of a record rather than for want of one contract's file.
     function testFreezeLeavesNothingBehindWhenThereIsNothingToFreeze() external {
         string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        writeRollingFixture(NOTHING_TO_FREEZE_FIXTURE_ROOT, FIXTURE_CONTRACT);
+
         string[] memory contractNames = new string[](1);
         contractNames[0] = "NoSuchContract";
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 NothingToFreeze.selector,
-                LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, contractNames[0])
+                LibRainDeploySnapshot.pathForSnapshot(
+                    NOTHING_TO_FREEZE_FIXTURE_ROOT, LibRainDeploySnapshot.CANDIDATE, contractNames[0]
+                )
             )
         );
-        this.externalFreeze(contractNames);
+        this.externalFreezeAt(NOTHING_TO_FREEZE_FIXTURE_ROOT, contractNames);
 
-        assertFalse(vm.exists(LibRainDeploySnapshot.dirForSnapshot(tag)));
+        // Read while the fixture is still there, asserted once it is gone.
+        bool cutExists = vm.exists(LibRainDeploySnapshot.dirForSnapshot(NOTHING_TO_FREEZE_FIXTURE_ROOT, tag));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(NOTHING_TO_FREEZE_FIXTURE_ROOT, true);
+
+        assertFalse(cutExists);
     }
 
     /// Where the freeze fixture's record is built. Its own tree, for the same
