@@ -7,11 +7,11 @@ import {CandidateSourceMismatch, DeployCandidate, DeploySuite} from "../../../sr
 import {
     FrozenSnapshotNotReleased,
     FrozenSnapshotUnreadable,
-    RainDeployVerifySnapshot,
+    RainDeployVerifySnapshotBase,
     StoredAddressMismatch,
     StoredCodeHashMismatch,
     StoredRuntimeCodeHashMismatch
-} from "../../../src/abstract/RainDeployVerifySnapshot.sol";
+} from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
@@ -25,13 +25,26 @@ import {
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
 } from "../../../src/generated/candidate/AddressRegistry.sol";
 
-/// @title RainDeployVerifySnapshotTest
-/// @notice `RainDeployVerifySnapshot` inherited by a exemplar repo, so the
+/// @title RainDeployVerifySnapshotBaseTest
+/// @notice `RainDeployVerifySnapshotBase` inherited by a exemplar repo, so the
 /// inherited tests themselves are the passing case: `ExampleDeploySuites`
 /// declares two frozen releases and two candidates, and
 /// `testSnapshotInternallyConsistent` /
 /// `testSnapshotMatchesSource` run over them here exactly as they
 /// would in a consumer.
+///
+/// The base rather than `RainDeployVerifySnapshot`, because that one adds
+/// `testEveryFrozenSnapshotIsReleased`, whose subject is THIS repo's real
+/// frozen record and never the declaration of whatever inherits it. Every
+/// exemplar suite here is a fixture, so inheriting that test would assert that
+/// this repo's real releases are declared by the exemplar — a claim that is
+/// vacuously true while the repo has released nothing and false from its first
+/// release, which is not a thing this contract is about either way. The real
+/// record is bound where the real declaration is, in `RegistryDeploySnapshotTest`.
+///
+/// The record check ITSELF is exercised here, at every position and against
+/// every shape of declaration, because `checkFrozenSnapshotsReleased` takes the
+/// record as an argument and so can be handed one this contract builds.
 ///
 /// The rest is what each group CATCHES, and — for the internal group — what it
 /// provably does not. Every case drives the same internal functions the
@@ -43,7 +56,7 @@ import {
 /// with nothing to hand it. Its negative case is therefore a whole broken
 /// DECLARATION — `SourceMismatchDeploy` — which is also the shape a repo holding
 /// a stale generated file is actually in.
-contract RainDeployVerifySnapshotTest is ExampleDeploySuites, RainDeployVerifySnapshot {
+contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVerifySnapshotBase {
     /// A declaration whose second candidate is a consistent snapshot of the
     /// wrong contract.
     ///

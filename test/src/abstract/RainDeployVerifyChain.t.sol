@@ -158,9 +158,9 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     /// `RainDeployVerifyChainCandidateTest` is the only other contract that
     /// reaches the matrix with a subject, at exactly one, and it forks on its own
     /// before calling, so a matrix that returned without forking is
-    /// indistinguishable there. `RegistryDeployChainTest`'s empty case reads as
-    /// satisfied under that guard, which is what makes one subject the length
-    /// that discriminates.
+    /// indistinguishable there. `RainDeployVerifyChainEmptyTest`'s empty case
+    /// reads as satisfied under that guard, which is what makes one subject the
+    /// length that discriminates.
     ///
     /// This contract is where it belongs because it already forks every
     /// supported network. Asserting it from the empty-set side would hand the
