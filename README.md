@@ -393,11 +393,9 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
    This repo has released none, so today it has nothing to check and passes; it
    gets a subject the moment step 3 freezes one, and is red from then until step
    1 has been run everywhere. That is the order these steps are in.
-3. **Tag.** Push a `sol-v*` tag. `rainix-tag-release` regenerates the snapshot
-   for the version the tag names, verifies the live chains against those fresh
-   pins, publishes to Soldeer and commits the frozen snapshot back to `main`. It
-   verifies and publishes; it never broadcasts, which is exactly why step 1
-   cannot be folded into it.
+3. **Tag.** Push a `sol-v*` tag, the sole release trigger. It verifies and
+   publishes but never broadcasts, which is exactly why step 1 cannot be folded
+   into it. The release mechanics are `rainix-tag-release`'s.
 
 This is a deploy repo: it carries deployed concretes whose addresses and
 codehashes consumers pin, so releases are **manual `sol-v*` tags**, not merges.
