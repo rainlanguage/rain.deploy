@@ -1957,9 +1957,8 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// The newest tag ITSELF MUST be refused: equality is not "follows". The
     /// fail-safe boundary, and the one case `SnapshotAlreadyFrozen` also
-    /// refuses — both must hold, so neither is load bearing alone and this one
-    /// holds against a record root whose directories are not where a freeze
-    /// would look for them.
+    /// refuses — both must hold, and this one holds against a record root
+    /// whose directories are not where a freeze would look for them.
     function testCheckReleaseFollowsRecordRefusesTheNewestTagItself() external {
         writeFixture(string.concat(EQUAL_FIXTURE_ROOT, "/0_2_0/", FIXTURE_CONTRACT, ".sol"));
 
