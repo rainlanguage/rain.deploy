@@ -1282,7 +1282,7 @@ library LibRainDeploySnapshot {
     ///
     /// Strictly greater, so the newest tag itself is refused too: equality is
     /// not "follows". `SnapshotAlreadyFrozen` also refuses that one, and both
-    /// must hold — neither guard is load bearing alone.
+    /// must hold — dropping either one leaves cases the other does not refuse.
     ///
     /// The record root and the tag are parameters, so the refusal is reachable
     /// without a record on disk to re-cut or a `foundry.toml` to rewrite, for
@@ -1307,9 +1307,9 @@ library LibRainDeploySnapshot {
     /// in that order, in one call.
     ///
     /// Every guard runs, and every byte that will be written is in hand, BEFORE
-    /// `<tag>/` is created. That ordering is load bearing rather than tidy.
-    /// Filesystem cheatcodes are not undone by a revert, so a throw once the
-    /// directory exists leaves a partial record behind — and a partial record is
+    /// `<tag>/` is created. Filesystem cheatcodes are not undone by a revert,
+    /// so a throw once the directory exists leaves a partial record behind —
+    /// and a partial record is
     /// a frozen tag, which `SnapshotAlreadyFrozen` then refuses the retry of.
     /// The only exit from that state is deleting a directory this design calls
     /// append-only, so the release is wedged by the failure rather than merely

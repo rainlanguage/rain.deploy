@@ -177,8 +177,8 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// selects is the contract the candidate is anchored to.
     ///
     /// `artifactPath` is the one field of a suite that nothing derives, and
-    /// until this assertion nothing checked either. It is load bearing twice
-    /// over: `LibRainDeploy` prints it as the `forge verify-contract` command a
+    /// until this assertion nothing checked either. Two things read it:
+    /// `LibRainDeploy` prints it as the `forge verify-contract` command a
     /// human runs against a freshly broadcast contract, and
     /// `candidateContractName` above takes the contract this whole shape spec
     /// is about out of it. Only the `:<Name>` half was ever read by a check —
