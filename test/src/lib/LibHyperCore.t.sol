@@ -282,6 +282,33 @@ contract LibHyperCoreTest is Test {
         assertEq(abi.decode(logs[0].data, (uint256)), amount);
     }
 
+    /// PROPERTY: a credit that moved nothing is REFUSED, rather than reported
+    /// as a credit.
+    ///
+    /// Sending from the system contract to the system contract is the only
+    /// input that gets past every guard and still moves no value — a direct
+    /// transfer moves both balances or neither, so the two are the same balance
+    /// only when they are the same account. It is worth refusing on its own
+    /// terms, because a run that credited the system contract's own Core
+    /// account and said it had worked is the silent success this library is
+    /// arranged against.
+    ///
+    /// It is also the ONLY input that reaches the assertion after the transfer,
+    /// which is why there is one of those and not two: whichever side is
+    /// checked first is the side that fires here, and the other side would be
+    /// unreachable by construction and killed by no mutation.
+    function testCreditThatMovesNothingIsRefused() external {
+        arrangeCreditableChain(LibHyperCore.HYPE_SYSTEM_ADDRESS, VALID_CREDIT);
+        uint256 systemBalanceBefore = LibHyperCore.HYPE_SYSTEM_ADDRESS.balance;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibHyperCore.UnexpectedSystemBalance.selector, systemBalanceBefore + VALID_CREDIT, systemBalanceBefore
+            )
+        );
+        this.externalCreditCore(LibHyperCore.HYPE_SYSTEM_ADDRESS, VALID_CREDIT);
+    }
+
     /// PROPERTY: the `hyperevm` alias resolves to HyperEVM, and the contract
     /// live at the system address there is the one both constants describe.
     ///

@@ -115,6 +115,14 @@ library LibHyperCore {
     error InsufficientBalance(address account, uint256 balance, uint256 amount);
 
     /// Thrown when the value transfer to the system contract reverts.
+    ///
+    /// Not reachable through the guards above: the pinned bytecode reverts only
+    /// on a call carrying calldata, this one carries none, and the balance
+    /// guard has already funded it. It is here because an unchecked low-level
+    /// call is a defect on its own terms, and because loosening either pin
+    /// would make it reachable — and because without it a failed transfer would
+    /// be reported as `UnexpectedSystemBalance`, which is the wrong diagnosis
+    /// for it.
     /// @param account The account the credit was sent from.
     /// @param amount The amount sent.
     /// @param returnData The revert data from the system contract.
@@ -123,25 +131,18 @@ library LibHyperCore {
     /// Thrown when the system contract's balance did not rise by exactly the
     /// amount sent. A successful call that did not move the value is not a
     /// credit, and Core reads the transfer rather than the return status.
+    ///
+    /// The one assertion after the transfer, and the SYSTEM side of it rather
+    /// than the sender's, because only one of the two can ever be reached. A
+    /// direct value transfer moves both balances or neither, so the only input
+    /// that reaches either is one where they are the same balance — `account`
+    /// being the system contract itself, which sends to itself and moves
+    /// nothing. Whichever check is written first is the one that fires, and the
+    /// other is unreachable by construction. This is the side that says what
+    /// Core reads.
     /// @param expected The balance before, plus the amount.
     /// @param actual The balance after.
     error UnexpectedSystemBalance(uint256 expected, uint256 actual);
-
-    /// Thrown when the sending account's balance did not fall by at least the
-    /// amount sent.
-    ///
-    /// Core credits the log's `user`, which is the EVM `msg.sender`, so the
-    /// account that PAID is the account that gets credited, and this is what
-    /// says the payer was the account asked for rather than some intermediary
-    /// whose Core account nobody controls.
-    ///
-    /// At least, rather than exactly: whether gas is deducted from the balance
-    /// in a given simulation is forge's business, and the direction is the
-    /// whole of what is being asserted.
-    /// @param account The account the credit was sent from.
-    /// @param maximum The balance before, minus the amount.
-    /// @param actual The balance after.
-    error UnexpectedAccountBalance(address account, uint256 maximum, uint256 actual);
 
     /// HyperEVM's chain id. The only chain any of this means anything on.
     uint256 constant HYPEREVM_CHAIN_ID = 999;
@@ -228,7 +229,6 @@ library LibHyperCore {
         }
 
         uint256 systemBalanceBefore = HYPE_SYSTEM_ADDRESS.balance;
-        uint256 accountBalanceBefore = account.balance;
 
         console2.log("Crediting HyperCore account:", account);
         console2.log(" - HYPE system contract:", HYPE_SYSTEM_ADDRESS);
@@ -248,9 +248,6 @@ library LibHyperCore {
 
         if (HYPE_SYSTEM_ADDRESS.balance != systemBalanceBefore + amount) {
             revert UnexpectedSystemBalance(systemBalanceBefore + amount, HYPE_SYSTEM_ADDRESS.balance);
-        }
-        if (account.balance > accountBalanceBefore - amount) {
-            revert UnexpectedAccountBalance(account, accountBalanceBefore - amount, account.balance);
         }
     }
 
