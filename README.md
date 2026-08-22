@@ -419,7 +419,24 @@ Nothing external has to. HYPE is HyperEVM's native gas token rather than an
 ERC20, and value sent to the system contract at
 `0x2222222222222222222222222222222222222222` is credited on Core to whoever sent
 it. The deployer already holds HYPE, because that is what it pays gas in, so it
-credits itself:
+credits itself.
+
+The canonical way to run it is the
+[`Manual credit hypercore`](.github/workflows/manual-credit-hypercore.yaml)
+workflow. The amount is its `credit-wei` input, typed under its own name —
+which is why this is not a `Manual sol artifacts` dispatch: that workflow
+exports `DEPLOYMENT_SUITE`, `DEPLOYMENT_NETWORK` and `DEPLOYMENT_KEY` and
+nothing else, so an amount of real money could only travel through it under a
+name that means something else. Every dispatch executes the dry run;
+broadcasting takes the `broadcast` input flipped to true as well, and even then
+the dry run still runs and refuses first. Dispatching is admin-gated: GitHub
+itself gates `workflow_dispatch` at write access and nothing finer, so the
+workflow's first step asks GitHub what permission the dispatching actor holds
+on this repo and fails the run unless the answer is `admin` — who dispatched
+and what they held is in the run log either way.
+
+The fallback, for when the workflow itself is what is broken, is the same
+script by hand:
 
 ```sh
 read -rs DEPLOYMENT_KEY && export DEPLOYMENT_KEY
@@ -453,11 +470,9 @@ before anything else, and the code hash at the system address is checked against
 a pin straight after, because a chain id alone does not say the contract behind
 it is the one that emits the log Core credits from.
 
-This is not on `Manual sol artifacts`. That workflow exports `DEPLOYMENT_SUITE`,
-`DEPLOYMENT_NETWORK` and `DEPLOYMENT_KEY` and nothing else, and an amount of
-money travelling under one of those names would be worse than a hand-run script.
-It is run once per deployer address and never again: a HyperCore user does not
-stop being one, so a second run is more money for no further effect.
+However it is run, it is run once per deployer address and never again: a
+HyperCore user does not stop being one, so a second run is more money for no
+further effect.
 
 ## Install
 
