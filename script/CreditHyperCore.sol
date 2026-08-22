@@ -34,9 +34,14 @@ import {LibHyperCore} from "../src/lib/LibHyperCore.sol";
 /// It is run by hand instead:
 ///
 /// ```sh
-/// HYPERCORE_CREDIT_WEI=10000000000000000 DEPLOYMENT_KEY=0x... \
+/// read -rs DEPLOYMENT_KEY && export DEPLOYMENT_KEY
+/// HYPERCORE_CREDIT_WEI=10000000000000000 \
 ///   forge script script/CreditHyperCore.sol:CreditHyperCore --legacy
 /// ```
+///
+/// The key is read rather than written into the command: a
+/// `DEPLOYMENT_KEY=0x...` prefix leaves a private key in the shell's history
+/// file, where it outlives both the run and the terminal.
 ///
 /// Without `--broadcast` that is a dry run against a fork of HyperEVM, which
 /// executes every guard and the transfer itself and sends nothing. Do that
