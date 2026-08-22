@@ -50,6 +50,17 @@ env:
   RAINIX_SHA: c4cf22d9b76600a4ad33b5552f4083f80d9b83de
 jobs:
   big-blocks:
+    # One run at a time, never cancelled mid-run: two racing dispatches would
+    # otherwise leave the final persistent state to exchange-side request
+    # ordering, and the input description promises the state after a run is
+    # what its box said. `cancel-in-progress: false` so a run that may
+    # already have submitted is never killed; a run still QUEUED behind
+    # another is superseded by a newer queued dispatch (GitHub keeps only the
+    # newest pending run), which is the toggle's own semantics — the latest
+    # dispatch decides.
+    concurrency:
+      group: manual-big-blocks
+      cancel-in-progress: false
     runs-on: ubuntu-latest
     steps:
       # GitHub's own gate on `workflow_dispatch` is write access and nothing
