@@ -27,16 +27,22 @@ on:
   workflow_dispatch:
     inputs:
       using-big-blocks:
-        type: boolean
+        type: choice
         required: true
+        options:
+          - "true"
+          - "false"
         description: |
-          Ticked: the deployer's HyperEVM transactions land in big blocks —
+          "true": the deployer's HyperEVM transactions land in big blocks —
           the slow, high-gas-cap blocks a sizeable deployment needs — until
-          this workflow is dispatched again unticked. Unticked: back to small
-          blocks. The flag is persistent per address on HyperCore, so an
-          unticked dispatch is not a no-op — it is the explicit way back OUT
-          of big blocks, and the state after this run is whatever this box
-          says, regardless of what any earlier run set.
+          this workflow is dispatched again with "false". The flag is
+          persistent per address on HyperCore, so "false" is not a no-op —
+          it is the explicit way back OUT of big blocks, and the state after
+          this run is whatever is selected here, regardless of what any
+          earlier run set. A choice with no default rather than a checkbox:
+          GitHub treats an unticked boolean as false, which made a hasty
+          dispatch a live "turn big blocks off" — this forces the choice to
+          be made deliberately.
 # The default token scoped down to the checkout inside nix-cachix-setup. The
 # admin gate's permission lookup needs only metadata read, which every token
 # carries implicitly.
