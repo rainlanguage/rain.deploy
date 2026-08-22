@@ -422,9 +422,14 @@ it. The deployer already holds HYPE, because that is what it pays gas in, so it
 credits itself:
 
 ```sh
-HYPERCORE_CREDIT_WEI=10000000000000000 DEPLOYMENT_KEY=0x... \
+read -rs DEPLOYMENT_KEY && export DEPLOYMENT_KEY
+HYPERCORE_CREDIT_WEI=10000000000000000 \
   nix develop -c forge script script/CreditHyperCore.sol:CreditHyperCore --legacy
 ```
+
+The key is read rather than written into the command, because a
+`DEPLOYMENT_KEY=0x...` prefix is a private key in the shell's history file,
+where it outlives the run and the terminal both.
 
 Run exactly that first, without `--broadcast`: it is a dry run against a fork of
 HyperEVM that executes every guard and the transfer itself and sends nothing, so
