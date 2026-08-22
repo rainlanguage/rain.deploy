@@ -27,11 +27,18 @@ import {LibHyperCore} from "../src/lib/LibHyperCore.sol";
 ///
 /// ## Running it
 ///
-/// Not on `Manual sol artifacts`. That workflow exports `DEPLOYMENT_SUITE`,
+/// The canonical entry is the `Manual credit hypercore` workflow
+/// (`.github/workflows/manual-credit-hypercore.yaml`): `workflow_dispatch`
+/// only, gated to repo admins by its first step, the amount as a typed input
+/// under its own name, and a dry run on every dispatch with the broadcast
+/// behind a separate input that defaults to off.
+///
+/// Not `Manual sol artifacts`. That workflow exports `DEPLOYMENT_SUITE`,
 /// `DEPLOYMENT_NETWORK` and `DEPLOYMENT_KEY` and nothing else, so the amount
 /// has no way through it, and an amount squeezed into one of those names would
 /// be a real-money argument travelling under a name that means something else.
-/// It is run by hand instead:
+///
+/// The fallback, for when the workflow itself is what is broken, is by hand:
 ///
 /// ```sh
 /// read -rs DEPLOYMENT_KEY && export DEPLOYMENT_KEY

@@ -1,0 +1,162 @@
+name: Manual credit hypercore
+# `script/CreditHyperCore.sol`, dispatched by hand: it sends the deployer's own
+# HYPE to the HyperCore system contract, so the deployer becomes a HyperCore
+# user and can opt into the big blocks a sizeable HyperEVM deployment needs.
+# Run once per deployer address: a HyperCore user does not stop being one, so a
+# second run is more money for no further effect.
+#
+# Not a dispatch of `Manual sol artifacts`, and not a caller of
+# `rainix-manual-sol-artifacts` either. That path exports `DEPLOYMENT_SUITE`,
+# `DEPLOYMENT_NETWORK` and `DEPLOYMENT_KEY` and nothing else, and it always
+# passes `--broadcast`. An amount of real money needs a typed input under its
+# own name and a dry run that is not optional, so this workflow carries its own
+# job, assembled from the same rainix composites the reusable is.
+#
+# Deliberately `workflow_dispatch` only, like the deploy: broadcasting is key
+# custody and real money, and no merge, tag or schedule may be given a path to
+# it.
+on:
+  workflow_dispatch:
+    inputs:
+      credit-wei:
+        type: string
+        required: true
+        description: |
+          Exported as `HYPERCORE_CREDIT_WEI`: how much of the deployer's own
+          HYPE to credit to its HyperCore account, in EVM wei (18 decimals).
+          Required with no default, because an amount of real money nobody
+          typed is not an amount to send. It has to be a whole multiple of
+          `10 ** 10` — one Core wei — because HYPE carries 8 decimals on Core
+          against 18 on the EVM and the remainder would be BURNED;
+          `LibHyperCore.CreditNotRound` refuses anything else. A string rather
+          than a `number` input: number inputs pass through JSON number
+          parsing, and an amount of money does not go near float precision.
+      broadcast:
+        type: boolean
+        required: false
+        default: false
+        description: |
+          `false` — the default — dispatches the dry run only: a fork of
+          HyperEVM executes every guard and the transfer itself and sends
+          nothing. `true` broadcasts for real, and still runs that same dry
+          run first, so anything the real run would refuse is refused before
+          anything is paid for.
+# The default token scoped down to the checkout inside nix-cachix-setup. The
+# admin gate's permission lookup needs only metadata read, which every token
+# carries implicitly.
+permissions:
+  contents: read
+env:
+  # The rainix commit whose `#sol-shell` runs forge, pinned exactly as the
+  # rainix reusables pin it — this is the SHA `rainix-manual-sol-artifacts`
+  # carries today, so the deploy and the credit run on the same toolchain.
+  RAINIX_SHA: c4cf22d9b76600a4ad33b5552f4083f80d9b83de
+jobs:
+  credit:
+    runs-on: ubuntu-latest
+    steps:
+      # GitHub's own gate on `workflow_dispatch` is write access and nothing
+      # finer, so admin-only is enforced here, first, before any other step
+      # runs. Both the original dispatcher (`github.actor`) and whoever
+      # pressed re-run (`github.triggering_actor`) have to hold `admin`: a
+      # re-run reuses the original run's inputs, so a re-run by a non-admin
+      # would be a dispatch by a non-admin. Fail closed: any answer that is
+      # not exactly `admin` — including no answer, because a failed API call
+      # fails the step under `set -euo pipefail` — refuses the run. The
+      # `permission` field is read rather than `role_name` because it
+      # collapses `maintain` to `write`, so a maintainer is refused too.
+      - name: Fail unless every actor is an admin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Actor names travel as env rather than inline `${{ }}` in the
+          # script body, so they are data to the shell, never syntax.
+          DISPATCHER: ${{ github.actor }}
+          RERUNNER: ${{ github.triggering_actor }}
+        run: |
+          set -euo pipefail
+          for actor in $(printf '%s\n%s\n' "$DISPATCHER" "$RERUNNER" | sort -u); do
+            permission="$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${actor}/permission" --jq .permission)"
+            echo "${actor} holds '${permission}' on ${GITHUB_REPOSITORY}."
+            if [[ "$permission" != "admin" ]]; then
+              echo "::error::${actor} is not an admin of ${GITHUB_REPOSITORY}; refusing to run."
+              exit 1
+            fi
+          done
+      # Everything about the VALUE — zero, roundness, whether the deployer can
+      # still pay gas — is `LibHyperCore`'s to refuse, deliberately not
+      # re-implemented here. This only refuses an amount that is not a decimal
+      # integer at all, so a typo fails in seconds instead of after the whole
+      # nix preamble.
+      - name: Fail unless the amount is a decimal integer
+        env:
+          CREDIT_WEI: ${{ inputs.credit-wei }}
+        run: |
+          set -euo pipefail
+          if [[ ! "$CREDIT_WEI" =~ ^[0-9]+$ ]]; then
+            echo "::error::credit-wei must be a decimal integer in EVM wei, got '${CREDIT_WEI}'."
+            exit 1
+          fi
+      # Shared nix + cachix CI preamble (checkout, nix-quick-install, Cachix,
+      # cache-nix-action) — pinned action SHAs live in the composite.
+      - uses: rainlanguage/rainix/.github/actions/nix-cachix-setup@main
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      # Cache Foundry's incremental compilation cache + artifacts so unchanged
+      # contracts aren't recompiled (forge build is the dominant CI cost).
+      - name: Cache Foundry build
+        uses: rainlanguage/rainix/.github/actions/cache@main
+        with:
+          path: |
+            cache
+            out
+          key: foundry-full-${{ runner.os }}-${{ hashFiles('src/**/*.sol', 'test/**/*.sol', 'script/**/*.sol', 'foundry.toml', 'soldeer.lock', 'remappings.txt') }}
+          restore-keys: |
+            foundry-full-${{ runner.os }}-
+      - name: Install soldeer dependencies
+        run: nix develop github:rainlanguage/rainix/${{ env.RAINIX_SHA }}#sol-shell -c forge soldeer install
+      # archive: false — this only ever reads head state. The preflight probes
+      # every network this repo's files mention, not just the one this script
+      # forks, and a probed network whose whole candidate pool is unhealthy
+      # fails the job — so every network's candidates are passed, exactly as
+      # `rainix-manual-sol-artifacts` passes them. Candidate URLs travel as
+      # env, never as `with:` inputs, because GitHub renders a composite's
+      # resolved inputs into the log.
+      - name: RPC preflight
+        uses: rainlanguage/rainix/.github/actions/rpc-preflight@main
+        with:
+          archive: 'false'
+        env:
+          RAINIX_RPC_SECRET_ARBITRUM: ${{ secrets.RPC_URL_ARBITRUM_FORK }}
+          RAINIX_RPC_VARS_ARBITRUM: ${{ vars.RPC_URL_ARBITRUM_FORK }}
+          RAINIX_RPC_SECRET_BASE: ${{ secrets.RPC_URL_BASE_FORK }}
+          RAINIX_RPC_VARS_BASE: ${{ vars.RPC_URL_BASE_FORK }}
+          RAINIX_RPC_SECRET_BASE_SEPOLIA: ${{ secrets.RPC_URL_BASE_SEPOLIA_FORK }}
+          RAINIX_RPC_VARS_BASE_SEPOLIA: ${{ vars.RPC_URL_BASE_SEPOLIA_FORK }}
+          RAINIX_RPC_SECRET_ETHEREUM: ${{ secrets.RPC_URL_ETHEREUM_FORK }}
+          RAINIX_RPC_VARS_ETHEREUM: ${{ vars.RPC_URL_ETHEREUM_FORK }}
+          RAINIX_RPC_SECRET_FLARE: ${{ secrets.RPC_URL_FLARE_FORK }}
+          RAINIX_RPC_VARS_FLARE: ${{ vars.RPC_URL_FLARE_FORK }}
+          RAINIX_RPC_SECRET_HYPEREVM: ${{ secrets.RPC_URL_HYPEREVM_FORK }}
+          RAINIX_RPC_VARS_HYPEREVM: ${{ vars.RPC_URL_HYPEREVM_FORK }}
+          RAINIX_RPC_SECRET_POLYGON: ${{ secrets.RPC_URL_POLYGON_FORK }}
+          RAINIX_RPC_VARS_POLYGON: ${{ vars.RPC_URL_POLYGON_FORK }}
+      # Always, even when broadcasting: it is the same code path, so anything
+      # the real run would refuse is refused here for free. No `--rpc-url`:
+      # the script forks the `hyperevm` alias the preflight above bound.
+      # `--legacy` because HyperEVM's RPC rejects the fee-history ranges
+      # EIP-1559 estimation asks for — the same reason the deploy workflow
+      # carries a `legacy` input.
+      - name: Dry run
+        run: nix develop github:rainlanguage/rainix/${{ env.RAINIX_SHA }}#sol-shell -c forge script script/CreditHyperCore.sol:CreditHyperCore -vvvvv --legacy
+        env:
+          DEPLOYMENT_KEY: ${{ secrets.PRIVATE_KEY }}
+          HYPERCORE_CREDIT_WEI: ${{ inputs.credit-wei }}
+      # The one step that spends, and it is unreachable unless the `broadcast`
+      # input was set AND the dry run above passed. `--slow` as the deploy
+      # passes it: wait for each receipt before the next send.
+      - name: Broadcast
+        if: ${{ inputs.broadcast }}
+        run: nix develop github:rainlanguage/rainix/${{ env.RAINIX_SHA }}#sol-shell -c forge script script/CreditHyperCore.sol:CreditHyperCore -vvvvv --slow --broadcast --legacy
+        env:
+          DEPLOYMENT_KEY: ${{ secrets.PRIVATE_KEY }}
+          HYPERCORE_CREDIT_WEI: ${{ inputs.credit-wei }}
