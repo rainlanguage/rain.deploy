@@ -1,0 +1,121 @@
+name: Manual big blocks
+# Hyperliquid's `evmUserModify` action for the deployer, dispatched by hand: it
+# signs `{"type": "evmUserModify", "usingBigBlocks": <flag>}` with the
+# deployment key and POSTs it to HyperCore's exchange endpoint, steering the
+# deployer's HyperEVM transactions into big blocks — or back out of them. The
+# flag is persistent per address on HyperCore, nothing expires it, which is why
+# ONE workflow both sets and unsets: opt in for a sizeable deploy, opt back out
+# after it, because small blocks are where ordinary transactions confirm fast.
+#
+# HyperCore accepts the action only from an address it already knows — one
+# holding a Core asset. `Manual credit hypercore` is how the deployer became
+# that address; it runs first, once, and this runs after, as often as the
+# toggle is needed.
+#
+# The signing scheme is Hyperliquid's L1-action scheme — msgpack of the action
+# and nonce, keccak, an EIP-712 "phantom agent" — and is deliberately NOT
+# hand-rolled here: `tools/hyperliquid-big-blocks` is a thin caller of the
+# official Hyperliquid Rust SDK, pinned to an exact git rev. That crate's
+# manifest says why the Rust SDK and why a rev rather than a crates.io
+# version; `rainix.yaml` builds and tests it on every push, so the first
+# dispatch is not the first compile.
+#
+# Deliberately `workflow_dispatch` only, like the deploy and the credit:
+# signing with the deployment key is key custody, and no merge, tag or
+# schedule may be given a path to it.
+on:
+  workflow_dispatch:
+    inputs:
+      using-big-blocks:
+        type: choice
+        required: true
+        options:
+          - "true"
+          - "false"
+        description: |
+          "true": the deployer's HyperEVM transactions land in big blocks —
+          the slow, high-gas-cap blocks a sizeable deployment needs — until
+          this workflow is dispatched again with "false". The flag is
+          persistent per address on HyperCore, so "false" is not a no-op —
+          it is the explicit way back OUT of big blocks, and the state after
+          this run is whatever is selected here, regardless of what any
+          earlier run set. A choice with no default rather than a checkbox:
+          GitHub treats an unticked boolean as false, which made a hasty
+          dispatch a live "turn big blocks off" — this forces the choice to
+          be made deliberately.
+# The default token scoped down to the checkout inside nix-cachix-setup. The
+# admin gate's permission lookup needs only metadata read, which every token
+# carries implicitly.
+permissions:
+  contents: read
+env:
+  # The rainix commit whose `#rust-shell` runs cargo, pinned exactly as the
+  # rainix reusables pin it — the same SHA `Manual credit hypercore` and the
+  # `big-blocks-tool` CI job carry, so the dispatch signs on the same
+  # toolchain CI builds and tests the tool with.
+  RAINIX_SHA: c4cf22d9b76600a4ad33b5552f4083f80d9b83de
+jobs:
+  big-blocks:
+    # One run at a time, never cancelled mid-run: two racing dispatches would
+    # otherwise leave the final persistent state to exchange-side request
+    # ordering, and the input description promises the state after a run is
+    # what its box said. `cancel-in-progress: false` so a run that may
+    # already have submitted is never killed; a run still QUEUED behind
+    # another is superseded by a newer queued dispatch (GitHub keeps only the
+    # newest pending run), which is the toggle's own semantics — the latest
+    # dispatch decides.
+    concurrency:
+      group: manual-big-blocks
+      cancel-in-progress: false
+    runs-on: ubuntu-latest
+    steps:
+      # GitHub's own gate on `workflow_dispatch` is write access and nothing
+      # finer, so admin-only is enforced here, first, before any other step
+      # runs. Both the original dispatcher (`github.actor`) and whoever
+      # pressed re-run (`github.triggering_actor`) have to hold `admin`: a
+      # re-run reuses the original run's inputs, so a re-run by a non-admin
+      # would be a dispatch by a non-admin. Fail closed: any answer that is
+      # not exactly `admin` — including no answer, because a failed API call
+      # fails the step under `set -euo pipefail` — refuses the run. The
+      # `permission` field is read rather than `role_name` because it
+      # collapses `maintain` to `write`, so a maintainer is refused too.
+      - name: Fail unless every actor is an admin
+        env:
+          GH_TOKEN: ${{ github.token }}
+          # Actor names travel as env rather than inline `${{ }}` in the
+          # script body, so they are data to the shell, never syntax.
+          DISPATCHER: ${{ github.actor }}
+          RERUNNER: ${{ github.triggering_actor }}
+        run: |
+          set -euo pipefail
+          for actor in $(printf '%s\n%s\n' "$DISPATCHER" "$RERUNNER" | sort -u); do
+            permission="$(gh api "repos/${GITHUB_REPOSITORY}/collaborators/${actor}/permission" --jq .permission)"
+            echo "${actor} holds '${permission}' on ${GITHUB_REPOSITORY}."
+            if [[ "$permission" != "admin" ]]; then
+              echo "::error::${actor} is not an admin of ${GITHUB_REPOSITORY}; refusing to run."
+              exit 1
+            fi
+          done
+      # Shared nix + cachix CI preamble (checkout, nix-quick-install, Cachix,
+      # cache-nix-action) — pinned action SHAs live in the composite.
+      - uses: rainlanguage/rainix/.github/actions/nix-cachix-setup@main
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      # Cargo registry/git caches so the dispatch does not re-download the
+      # world. The `Cargo.lock` in the tree, enforced by `--locked`, decides
+      # what is built either way.
+      - uses: rainlanguage/rainix/.github/actions/rust-cache@main
+      # The submit itself. The tool exits nonzero unless the exchange answers
+      # `"status": "ok"`, and prints the full parsed response either way.
+      # There is no info-endpoint query that reads `usingBigBlocks` back —
+      # nothing in the Hyperliquid docs, and the obvious candidate type names
+      # are refused by the API — so the logged response IS the record of what
+      # was set, and the flag's real observable afterwards is which blocks the
+      # deployer's next transactions land in. The key travels as env, never an
+      # input and never echoed; the tool prints only the address derived from
+      # it.
+      - name: Sign and submit evmUserModify
+        run: nix develop github:rainlanguage/rainix/${{ env.RAINIX_SHA }}#rust-shell -c cargo run --locked --manifest-path tools/hyperliquid-big-blocks/Cargo.toml
+        env:
+          DEPLOYMENT_KEY: ${{ secrets.PRIVATE_KEY }}
+          USING_BIG_BLOCKS: ${{ inputs.using-big-blocks }}
