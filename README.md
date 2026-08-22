@@ -406,6 +406,54 @@ published under the previous merge-driven lifecycle predates that record and has
 none, so `src/generated/` holds no directory for it; those versions stay
 published, and consumers pin exact versions and are unaffected.
 
+## Crediting the deployer's HyperCore account
+
+HyperEVM interleaves small fast blocks with large slow ones, and a deployment
+too big for the fast block's gas cap has to go in a big block. Big blocks are
+opted into with an `evmUserModify` action, which HyperCore accepts only from an
+address it already knows — one that holds a Core asset. A deployer funded purely
+to pay EVM gas is not that address, so the deploy above cannot reach HyperEVM at
+all until something puts an asset on Core for it.
+
+Nothing external has to. HYPE is HyperEVM's native gas token rather than an
+ERC20, and value sent to the system contract at
+`0x2222222222222222222222222222222222222222` is credited on Core to whoever sent
+it. The deployer already holds HYPE, because that is what it pays gas in, so it
+credits itself:
+
+```sh
+HYPERCORE_CREDIT_WEI=10000000000000000 DEPLOYMENT_KEY=0x... \
+  nix develop -c forge script script/CreditHyperCore.sol:CreditHyperCore --legacy
+```
+
+Run exactly that first, without `--broadcast`: it is a dry run against a fork of
+HyperEVM that executes every guard and the transfer itself and sends nothing, so
+anything the real run would refuse is refused there for free. Add `--broadcast`
+to send it. `--legacy` for the same reason the deploy workflow carries a
+`legacy` input — HyperEVM's RPC rejects the fee-history ranges EIP-1559
+estimation asks for. No `--rpc-url`: the script forks the `hyperevm` alias
+itself.
+
+`HYPERCORE_CREDIT_WEI` is EVM wei, and required — an amount of real money is not
+something to default. It has to be a whole number of Core wei, which is
+`10 ** 10` EVM wei, because HYPE has 8 wei decimals on Core against 18 on the
+EVM and the remainder is **burned** rather than credited. An amount smaller than
+that is burned in full: the transfer succeeds, the HYPE is gone, and the address
+is still not a HyperCore user. `LibHyperCore` refuses it rather than rounding.
+
+It also refuses to run anywhere but chain 999. That address is a system contract
+on HyperEVM and an ordinary unowned address on every other chain, where value
+sent to it is not rejected, just unrecoverable — so the chain id is checked
+before anything else, and the code hash at the system address is checked against
+a pin straight after, because a chain id alone does not say the contract behind
+it is the one that emits the log Core credits from.
+
+This is not on `Manual sol artifacts`. That workflow exports `DEPLOYMENT_SUITE`,
+`DEPLOYMENT_NETWORK` and `DEPLOYMENT_KEY` and nothing else, and an amount of
+money travelling under one of those names would be worse than a hand-run script.
+It is run once per deployer address and never again: a HyperCore user does not
+stop being one, so a second run is more money for no further effect.
+
 ## Install
 
 Via [soldeer](https://soldeer.xyz):
