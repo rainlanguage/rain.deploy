@@ -1,0 +1,30 @@
+[package]
+name = "hyperliquid-big-blocks"
+version = "0.0.0"
+edition = "2021"
+publish = false
+
+[dependencies]
+# Exactly the SDK's own alloy spec — same version bound, same feature set — so
+# feature unification resolves to one alloy and the `PrivateKeySigner` this
+# crate hands the SDK is the type the SDK signs with.
+alloy = { version = "1.0", default-features = false, features = [
+  "dyn-abi",
+  "sol-types",
+  "signer-local",
+] }
+# The official Hyperliquid SDK's L1-action signing (msgpack of the action and
+# nonce, keccak, the EIP-712 "phantom agent"), which this repo deliberately
+# does NOT hand-roll. Rust rather than the Python SDK because this org's
+# tooling is Rust in nix, and the Rust SDK carries the action. A git rev
+# rather than a crates.io version because `EvmUserModify` landed on master in
+# hyperliquid-rust-sdk#114 (2025-07-02) and no release since carries it — the
+# latest publish, 0.6.0 (2025-05-16), predates it — so the exact pin is this
+# rev (master head at time of writing), which `Cargo.lock` holds together
+# with the resolved commit of every transitive dependency, enforced by
+# `--locked` everywhere this crate is built.
+hyperliquid_rust_sdk = { git = "https://github.com/hyperliquid-dex/hyperliquid-rust-sdk", rev = "aac75585daf12d0a3761126cc7da7a5e035b5853" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread"] }
+
+[dev-dependencies]
+serde_json = "1"

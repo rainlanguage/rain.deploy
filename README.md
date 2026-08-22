@@ -423,20 +423,20 @@ credits itself.
 
 The canonical way to run it is the
 [`Manual credit hypercore`](.github/workflows/manual-credit-hypercore.yaml)
-workflow. The amount is its `credit-wei` input, typed under its own name —
-which is why this is not a `Manual sol artifacts` dispatch: that workflow
-exports `DEPLOYMENT_SUITE`, `DEPLOYMENT_NETWORK` and `DEPLOYMENT_KEY` and
-nothing else, so an amount of real money could only travel through it under a
-name that means something else. Every dispatch executes the dry run;
-broadcasting takes the `broadcast` input flipped to true as well, and even then
-the dry run still runs and refuses first. Dispatching is admin-gated: GitHub
-itself gates `workflow_dispatch` at write access and nothing finer, so the
-workflow's first step asks GitHub what permission the dispatching actor holds
-on this repo and fails the run unless the answer is `admin` — who dispatched
-and what they held is in the run log either way.
+workflow. The amount is its `credit-wei` input, typed under its own name — which
+is why this is not a `Manual sol artifacts` dispatch: that workflow exports
+`DEPLOYMENT_SUITE`, `DEPLOYMENT_NETWORK` and `DEPLOYMENT_KEY` and nothing else,
+so an amount of real money could only travel through it under a name that means
+something else. Every dispatch executes the dry run; broadcasting takes the
+`broadcast` input flipped to true as well, and even then the dry run still runs
+and refuses first. Dispatching is admin-gated: GitHub itself gates
+`workflow_dispatch` at write access and nothing finer, so the workflow's first
+step asks GitHub what permission the dispatching actor holds on this repo and
+fails the run unless the answer is `admin` — who dispatched and what they held
+is in the run log either way.
 
-The fallback, for when the workflow itself is what is broken, is the same
-script by hand:
+The fallback, for when the workflow itself is what is broken, is the same script
+by hand:
 
 ```sh
 read -rs DEPLOYMENT_KEY && export DEPLOYMENT_KEY
@@ -473,6 +473,50 @@ it is the one that emits the log Core credits from.
 However it is run, it is run once per deployer address and never again: a
 HyperCore user does not stop being one, so a second run is more money for no
 further effect.
+
+## Toggling big blocks
+
+Crediting made the deployer a HyperCore user; opting into big blocks is a
+separate action on that user, and the one the credit exists to make possible.
+`{"type": "evmUserModify", "usingBigBlocks": true}`, signed by the deployer key
+and POSTed to HyperCore's exchange endpoint, sends the deployer's HyperEVM
+transactions to big blocks from then on. The flag is persistent per address:
+nothing expires it, so the same action with `false` is how the deployer gets
+back OUT of big blocks once the sizeable deploy is done — which is why one
+workflow serves both directions and its `using-big-blocks` input is required
+rather than defaulted.
+
+The canonical way to toggle it is the
+[`Manual big blocks`](.github/workflows/manual-big-blocks.yaml) workflow,
+admin-gated exactly as `Manual credit hypercore` is, and `workflow_dispatch`
+only for the same reason: signing with the deployment key is key custody. The
+signing scheme — msgpack of the action and nonce, keccak, an EIP-712 "phantom
+agent" — is the official Hyperliquid Rust SDK's, called by the small
+[`tools/hyperliquid-big-blocks`](tools/hyperliquid-big-blocks/) crate and
+deliberately not hand-rolled: an encoding wrong by one byte still yields a
+signature that recovers as some OTHER address, which is not a failure mode to
+meet live. The SDK is pinned to an exact git rev in the crate's manifest, which
+also says why a rev rather than a crates.io version, and the `big-blocks-tool`
+CI job builds and tests the crate on every push, so the first dispatch is not
+the first compile.
+
+The run fails unless the exchange answers `"status": "ok"`, and the full
+response is in the run log. That log line is the record: Hyperliquid has no
+info-endpoint query that reads `usingBigBlocks` back, so the only observable of
+the flag afterwards is which blocks the deployer's next transactions land in.
+
+The fallback, for when the workflow itself is what is broken, is the same crate
+by hand — the key read rather than written into the command, for the same
+shell-history reason as the credit:
+
+```sh
+read -rs DEPLOYMENT_KEY && export DEPLOYMENT_KEY
+USING_BIG_BLOCKS=true nix develop github:rainlanguage/rainix#rust-shell \
+  -c cargo run --locked --manifest-path tools/hyperliquid-big-blocks/Cargo.toml
+```
+
+`rust-shell` comes from rainix directly because this repo's own dev shell is the
+slim `sol-shell`, which carries no cargo.
 
 ## Install
 
@@ -515,13 +559,17 @@ forge soldeer install # install deps declared in foundry.toml
 forge test
 ```
 
-The three CI jobs are rainix reusable workflows, not commands in the shell. What
-each of them runs, which is what reproduces it locally:
+Three of the CI jobs are rainix reusable workflows, not commands in the shell,
+and the fourth is repo-local. What each of them runs, which is what reproduces
+it locally:
 
 - `rainix-sol-test` — `forge test -vvv`
 - `rainix-sol-legal` — `reuse lint`
 - `rainix-sol-static` — `slither .`, `forge fmt --check`, then
   `rainix-sol-single-contract`
+- `big-blocks-tool` — `cargo fmt --all -- --check`, `cargo clippy` and
+  `cargo test --locked` in `tools/hyperliquid-big-blocks/`, in rainix's
+  `rust-shell`
 
 Use the nix-pinned `forge` for all development.
 
