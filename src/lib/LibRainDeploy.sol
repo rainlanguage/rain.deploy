@@ -254,6 +254,33 @@ library LibRainDeploy {
         return deployedAddress;
     }
 
+    /// Creates a fork for every network, returning their ids in list order.
+    /// Nothing is selected here: the caller selects each in turn.
+    ///
+    /// Creating them all BEFORE the first one is selected is the whole point.
+    /// Foundry captures the account set of the pre-fork EVM when the first fork
+    /// is selected, and seeds every fork CREATED after that capture with it, so
+    /// any address the calling script touched beforehand is carried onto the
+    /// second and later networks as the empty account the default 31337 EVM has
+    /// for it. A `dep.code.length` read added to a deploy script for logging is
+    /// enough. Forks created before the capture read their chain, which is why
+    /// the first network was always right and every one after it was wrong.
+    ///
+    /// Closed here rather than by a rule about what a deploy script may read,
+    /// because the trap is invisible from where a consumer sits: the read is
+    /// ordinary, the failure names a real address on a network that really has
+    /// it, and nothing connects the two.
+    /// @param vm The Vm instance to fork with.
+    /// @param networks The network names to fork, as `[rpc_endpoints]` aliases.
+    /// @return The fork id of each network, positionally paired.
+    function createForks(Vm vm, string[] memory networks) internal returns (uint256[] memory) {
+        uint256[] memory forkIds = new uint256[](networks.length);
+        for (uint256 i = 0; i < networks.length; i++) {
+            forkIds[i] = vm.createFork(networks[i]);
+        }
+        return forkIds;
+    }
+
     /// Returns the list of networks currently supported by Rain deployments.
     /// @return The list of supported network names.
     function supportedNetworks() internal pure returns (string[] memory) {
@@ -390,11 +417,9 @@ library LibRainDeploy {
         if (readCalls.length == 0) {
             revert NoResolvedAddressReads(target);
         }
+        uint256[] memory forkIds = createForks(vm, networks);
         for (uint256 i = 0; i < networks.length; i++) {
-            // createSelectFork returns a fork id that is not needed here; bind
-            // and reference it so the unused-return lint stays satisfied.
-            uint256 forkId = vm.createSelectFork(networks[i]);
-            (forkId);
+            vm.selectFork(forkIds[i]);
             console2.log("Checking resolved addresses on network:", networks[i]);
             checkResolvedAddresses(networks[i], target, readCalls, expectedAddresses);
         }
@@ -415,8 +440,13 @@ library LibRainDeploy {
     /// already-deployed dependency as missing and abort an otherwise-valid
     /// deploy. Each network is handled independently: the Zoltu deploy is
     /// idempotent (an existing contract is skipped), so a failure on one network
-    /// leaves the others intact and the script can simply be re-run, which is why
-    /// no separate all-network pre-flight is needed.
+    /// leaves the others intact and the script can simply be re-run.
+    ///
+    /// The forks themselves are all created up front, before any is selected —
+    /// `createForks` says why it has to be that way round. Endpoint reachability
+    /// is therefore the one thing that IS all-network: an alias that cannot be
+    /// forked stops the run before anything is broadcast, rather than partway
+    /// through it.
     /// @param vm The Vm instance to use for forking and broadcasting.
     /// @param networks The list of network names to deploy to.
     /// @param deployer The deployer address.
@@ -450,11 +480,9 @@ library LibRainDeploy {
         if (derivedAddress != expectedAddress) {
             revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);
         }
+        uint256[] memory forkIds = createForks(vm, networks);
         for (uint256 i = 0; i < networks.length; i++) {
-            // createSelectFork returns a fork id that is not needed here; bind
-            // and reference it so the unused-return lint stays satisfied.
-            uint256 forkId = vm.createSelectFork(networks[i]);
-            (forkId);
+            vm.selectFork(forkIds[i]);
             console2.log("Deploying to network:", networks[i]);
             console2.log("Block number:", block.number);
 

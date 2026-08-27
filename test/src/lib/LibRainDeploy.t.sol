@@ -235,6 +235,67 @@ contract LibRainDeployTest is Test {
         assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
     }
 
+    /// `createForks` MUST create every fork and select NONE of them, because
+    /// creating them all before the first select is the whole of what it is for.
+    ///
+    /// Foundry captures the account set of the pre-fork EVM when the first fork
+    /// is SELECTED, and seeds every fork created after that capture with it. A
+    /// `createForks` that selected as it went would put every fork but the first
+    /// on the wrong side of that capture, which is the defect it exists to
+    /// remove.
+    function testCreateForksSelectsNothing() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+
+        uint256[] memory forkIds = LibRainDeploy.createForks(vm, networks);
+        assertEq(forkIds.length, 2);
+
+        // `activeFork()` reverts when nothing is selected, so the call failing
+        // is the assertion. Made low level for that reason: a plain `vm` call
+        // would take the test down with it.
+        (bool active,) = address(vm).call(abi.encodeWithSignature("activeFork()"));
+        assertFalse(active, "createForks selected a fork");
+
+        // Every id it handed back is a real fork of the network in that
+        // position, so nothing was skipped or forked twice.
+        vm.selectFork(forkIds[0]);
+        assertEq(block.chainid, BASE_CHAIN_ID);
+        vm.selectFork(forkIds[1]);
+        assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
+    }
+
+    /// A read the caller made BEFORE any fork existed MUST NOT decide what a
+    /// `createForks` fork holds, on any network.
+    ///
+    /// The read here is the one a deploy script makes for logging, and on the
+    /// default 31337 EVM it answers zero for an address that is on every chain
+    /// this repo deploys to. Forks created after the first select are seeded
+    /// with that answer, so the whole difference between a network that reads
+    /// its chain and one that reports the Zoltu factory missing is the order
+    /// the forks were created in.
+    function testCreateForksIgnoresAPreForkRead() external {
+        // The poisoning read, before anything is forked.
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+
+        uint256[] memory forkIds = LibRainDeploy.createForks(vm, networks);
+
+        // The SECOND network is the one that reads the pre-fork answer when the
+        // forks are created as the loop reaches them. Both are asserted so a
+        // first network that broke would be seen as well.
+        vm.selectFork(forkIds[0]);
+        assertEq(block.chainid, BASE_CHAIN_ID);
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
+
+        vm.selectFork(forkIds[1]);
+        assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
+    }
+
     /// External wrapper for `deployAndBroadcast` so that
     /// `vm.expectRevert` works at the correct call depth.
     /// @param networks The list of network names to deploy to.
@@ -318,6 +379,50 @@ contract LibRainDeployTest is Test {
         assertEq(block.chainid, BASE_CHAIN_ID);
         assertEq(result.codehash, mockDeployableCodeHash());
 
+        vm.selectFork(1);
+        assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
+        assertEq(result.codehash, mockDeployableCodeHash());
+    }
+
+    /// A read of a declared dependency BEFORE any fork exists MUST NOT change
+    /// what `deployToNetworks` sees on any network.
+    ///
+    /// This is rainlanguage/rain.deploy#157 end to end. A deploy script that
+    /// logs `dependencies[i].code.length` executes that read on the default
+    /// 31337 EVM, where the account is empty, and every fork created after the
+    /// first select is seeded with it — so the first network read its chain and
+    /// every one after it reverted `MissingDependency` against a dependency
+    /// that demonstrably has code there. It cost several failed production
+    /// deploy runs to diagnose, because the check itself is sound and the
+    /// address it names is real.
+    ///
+    /// The dependency is the Zoltu factory because it is the one address this
+    /// repo knows is live on every supported network, so the second network
+    /// disagreeing with the first can only be the defect and never the chain.
+    function testDeployToNetworksIgnoresAPreForkDependencyRead() external {
+        // The read a deploy script makes for logging, before anything forks.
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+
+        address[] memory dependencies = new address[](1);
+        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
+
+        address result = this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            dependencies
+        );
+        assertEq(result, mockDeployableAddress());
+
+        // The second network is the one the pre-fork read used to take out, and
+        // a deploy landed on it.
         vm.selectFork(1);
         assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
         assertEq(result.codehash, mockDeployableCodeHash());
@@ -1249,6 +1354,46 @@ contract LibRainDeployTest is Test {
             )
         );
         this.externalCheckResolvedAddressesOnNetworks(networks, address(target), ownerReadCalls(), expected(account));
+    }
+
+    /// `checkResolvedAddressesOnNetworks` MUST create every fork BEFORE it
+    /// checks anything on any of them, for the reason `createForks` gives: a
+    /// fork created after the first select is seeded with whatever the caller
+    /// read before the call, so a target it logged would read as having no code
+    /// on every network but the first.
+    ///
+    /// A run that fails on the FIRST network is what makes the order visible
+    /// from outside. The loop never reached the second network, so a fork of it
+    /// exists only if it was created up front.
+    function testCheckResolvedAddressesOnNetworksCreatesEveryForkFirst() external {
+        bytes32 name = keccak256("testCheckResolvedAddressesOnNetworksCreatesEveryForkFirst");
+        address account = address(0xf00);
+        address wrong = address(0xba4);
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+        vm.makePersistent(address(consumer));
+
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                address(consumer),
+                uint256(0),
+                wrong,
+                account
+            )
+        );
+        this.externalCheckResolvedAddressesOnNetworks(networks, address(consumer), ownerReadCalls(), expected(wrong));
+
+        // This test forks nothing of its own, so ids 0 and 1 are the call's, in
+        // the order it was given. Selecting id 1 at all is the assertion; the
+        // chain id says it is the second network rather than another fork of
+        // the first.
+        vm.selectFork(1);
+        assertEq(block.chainid, BASE_CHAIN_ID);
     }
 
     /// `deployToNetworks` MUST deploy when every dependency has code on the

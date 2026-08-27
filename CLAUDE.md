@@ -33,6 +33,9 @@ relocated.
 - **`slither.config.json` filters those abstracts by exact filename, never by
   the `src/abstract/` prefix.** Keep it that way when adding an abstract: a
   prefix filter would silently exempt a deployable file added there later.
-- **A `vm.createSelectFork` failure is not a missing deployment.** It is an
-  unreachable or rate-limited endpoint. Only `NotDeployedOnNetwork`, from a
-  network that forked, says anything about the deployment.
+- **A `vm.createFork` or `vm.createSelectFork` failure is not a missing
+  deployment.** It is an unreachable or rate-limited endpoint. Only
+  `NotDeployedOnNetwork`, from a network that forked, says anything about the
+  deployment. The deploy and the chain matrix create every fork before selecting
+  any, so such a failure takes the whole run before any network is checked
+  rather than stopping partway down the list.
