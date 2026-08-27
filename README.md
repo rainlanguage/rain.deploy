@@ -70,12 +70,20 @@ contract Build is MyDeploySuites, BuildScript {
     function snapshotContractNames() internal view override returns (string[] memory);
 }
 
-// test/src/abstract/MyDeploySnapshot.t.sol
-contract MyDeploySnapshotTest is MyDeploySuites, RainDeployVerifySnapshot {}
-
-// test/src/abstract/MyDeployChain.t.sol
-contract MyDeployChainTest is MyDeploySuites, RainDeployVerifyChain {}
+// test/src/abstract/MyDeployVerify.t.sol
+contract MyDeployVerifyTest is MyDeploySuites, RainDeployVerify {}
 ```
+
+`RainDeployVerify` is the whole of the verification binding, deliberately. It is
+the union of `RainDeployVerifyChain` and `RainDeployVerifySnapshot`, so a check
+added to either — or to the union — reaches every consumer on a version bump
+with no downstream edit. A check a consumer has to remember to bind is a check
+most consumers do not run, so a new assertion goes into something this already
+inherits rather than into an abstract beside it. The pair underneath stays two
+contracts because that split is runtime rather than binding: the chain half
+forks every supported network and the snapshot half touches none, so a job with
+no RPC credentials binds `RainDeployVerifySnapshot` alone and `--match-contract`
+selects it.
 
 The broadcast and the verification read the SAME array. "The deploy script ships
 one contract while the tests verify another" is therefore not a statement that
@@ -113,7 +121,7 @@ Deriving the pins at broadcast time would make that comparison
 derived-against-derived, and a guard that compares a value to itself is not a
 guard.
 
-Four groups, sorted by what each is anchored to and therefore by what each can
+Five groups, sorted by what each is anchored to and therefore by what each can
 catch:
 
 | Group    | Anchored to            | Catches                               | Cannot catch                     |
@@ -122,6 +130,7 @@ catch:
 | Source   | `type(X).creationCode` | a snapshot of the wrong contract      | anything about any chain         |
 | Record   | the frozen record      | a release the declaration missed      | what a declared suite records    |
 | Chain    | the networks           | never deployed, or not there any more | anything about a candidate       |
+| Config   | `foundry.toml`         | a network it cannot fork or verify on | anything about a suite           |
 
 The internal group's blind spot is not a gap to close there: every check in it
 asks the recorded bytes to agree with each other, and the wrong contract's bytes
@@ -169,6 +178,23 @@ everywhere. A constructor that reads `block.chainid` deploys different code per
 chain: deploying through Zoltu buys address predictability, and such a
 constructor spends it. So a per-chain difference fails hard, naming the chain
 and both hashes, and there is deliberately no per-chain code hash to record.
+
+The config group is the only one whose subject is the CONSUMER's own
+`foundry.toml` rather than its suites. `supportedNetworks()` is what the deploy
+broadcasts to and what the chain group forks, `[rpc_endpoints]` is what makes an
+alias forkable and `[etherscan]` is what makes `--verify` resolve, so the three
+lists are one list and drift between them is a defect in either direction: a
+supported network missing from a section broadcasts and then fails after the gas
+is spent, and a section entry no supported network names is config nothing ever
+reads. An `[etherscan]` entry carrying neither `chain` nor `url` under an alias
+foundry cannot resolve is worse than missing — it takes verification down for
+every entry in the section, not only its own.
+
+It reads the raw file rather than forge's resolved config, because the values
+are `${VAR}` interpolations that only exist in CI while the KEYS are the whole
+contract, and the keys are in the text. So it needs no RPC and fails on the pull
+request that drifts rather than at dispatch time. Reading the file at all is
+what a consumer has to allow: see [Install](#install).
 
 ## Address registry
 
@@ -388,7 +414,7 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
    is key custody and real money, and no merge or tag should be able to trigger
    it. It is idempotent — a network that already has the code is skipped — so a
    partial run is fixed by running it again rather than by unpicking anything.
-2. **Verify.** `RegistryDeployChainTest` passes only once every **released**
+2. **Verify.** `RegistryDeployVerifyTest` passes only once every **released**
    suite is live on every supported network, with the code that release froze.
 3. **Tag.** Push a `sol-v*` tag, the sole release trigger. It verifies and
    publishes but never broadcasts, which is exactly why step 1 cannot be folded
@@ -544,6 +570,18 @@ rain-deploy = "<version>"
 The versions have to match: the import paths are version-qualified, which is
 deliberate — it is what stops a consumer's incompatible copy from silently
 satisfying these imports.
+
+The config group reads the CONSUMING repo's `foundry.toml`, so that repo has to
+allow it and has to have the sections to be read:
+
+```toml
+fs_permissions = [{ access = "read", path = "./foundry.toml" }]
+```
+
+`[rpc_endpoints]` and `[etherscan]` then have to name exactly the networks in
+`supportedNetworks()`. Missing permission fails the check rather than skipping
+it, which is the intended direction: a repo that cannot read its own config is a
+repo whose config nothing has checked.
 
 ## Develop
 

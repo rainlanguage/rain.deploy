@@ -27,8 +27,8 @@ import {LibReleasedSuites} from "../lib/LibReleasedSuites.sol";
 ///   released-suites libs from it — the named candidates below are the
 ///   templates it emits from, which is why it inherits the declaration rather
 ///   than restating the key, the artifact path and the dependency list
-/// - `RegistryDeploySnapshotTest` checks its records against its creation code
-/// - `RegistryDeployChainTest` checks it against every chain
+/// - `RegistryDeployVerifyTest` checks its records against its creation code
+///   and against every chain
 /// - `GeneratedSnapshotShapeTest` checks the shape of the files that generation
 ///   writes
 ///
