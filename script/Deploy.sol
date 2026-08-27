@@ -27,10 +27,4 @@ import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 /// skips any network that already has code there, so a partial run — five
 /// chains of seven, one RPC down — is fixed by running it again rather than by
 /// unpicking anything.
-///
-/// `RegistryDeployVerifyTest` is what says whether this has been run and worked
-/// — but only for RELEASED suites, and this repo has released none, so today it
-/// has nothing to check and passes. It gets a subject once a release is frozen,
-/// and then fails until every supported network has that release's code, which
-/// is why the deploy comes before the tag rather than after it.
 contract Deploy is RegistryDeploySuites, RainDeployBroadcast {}
