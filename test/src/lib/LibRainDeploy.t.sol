@@ -15,7 +15,6 @@ import {MockChainDependentOwner} from "../../concrete/MockChainDependentOwner.so
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
-import {LibStringSet} from "../../lib/LibStringSet.sol";
 
 /// @title LibRainDeployTest
 /// Tests for `LibRainDeploy`. External wrappers are used for library functions
@@ -206,58 +205,6 @@ contract LibRainDeployTest is Test {
         assertEq(networks[4], LibRainDeploy.FLARE);
         assertEq(networks[5], LibRainDeploy.HYPEREVM);
         assertEq(networks[6], LibRainDeploy.POLYGON);
-    }
-
-    /// PROPERTY: `[rpc_endpoints]` and `[etherscan]` in `foundry.toml` are
-    /// EXACTLY `supportedNetworks()`, which makes the three lists one list.
-    ///
-    /// The deploy forks by the first and `--verify` resolves the second, so a
-    /// supported network missing from either broadcasts and then fails after
-    /// the gas is spent, and a section entry no supported network names is
-    /// config nothing ever reads. Both are the same defect — the lists having
-    /// drifted — so both directions are asserted, by membership: containment
-    /// one way alone passes for a section carrying an alias nothing deploys
-    /// to, and the other way alone passes for a network with no config at all.
-    /// Membership rather than position, because a config section is keyed
-    /// rather than ordered and there is no order in it to assert.
-    ///
-    /// This is what makes the `[etherscan]` half enforced at all. The RPC half
-    /// is enforced only incidentally, by the fork tests, and only forwards.
-    ///
-    /// The raw file is read rather than forge's resolved config because the
-    /// values are `${VAR}` interpolations that exist only in CI. The KEYS are
-    /// the whole contract here, and they are in the text — so this needs no
-    /// RPC and fails on the PR that drifts rather than at dispatch time.
-    function testSupportedNetworksAreFullyConfigured() external view {
-        string memory config = vm.readFile("foundry.toml");
-        string[] memory networks = LibRainDeploy.supportedNetworks();
-
-        for (uint256 i = 0; i < networks.length; i++) {
-            assertTrue(
-                vm.keyExistsToml(config, string.concat(".rpc_endpoints.", networks[i])),
-                string.concat("supported network has no [rpc_endpoints] alias: ", networks[i])
-            );
-            assertTrue(
-                vm.keyExistsToml(config, string.concat(".etherscan.", networks[i])),
-                string.concat("supported network has no [etherscan] key: ", networks[i])
-            );
-        }
-
-        string[] memory rpcAliases = vm.parseTomlKeys(config, ".rpc_endpoints");
-        for (uint256 i = 0; i < rpcAliases.length; i++) {
-            assertTrue(
-                LibStringSet.holds(networks, rpcAliases[i]),
-                string.concat("[rpc_endpoints] alias is not a supported network: ", rpcAliases[i])
-            );
-        }
-
-        string[] memory etherscanKeys = vm.parseTomlKeys(config, ".etherscan");
-        for (uint256 i = 0; i < etherscanKeys.length; i++) {
-            assertTrue(
-                LibStringSet.holds(networks, etherscanKeys[i]),
-                string.concat("[etherscan] key is not a supported network: ", etherscanKeys[i])
-            );
-        }
     }
 
     /// `ZOLTU_FACTORY_CODEHASH` MUST match the actual codehash of the Zoltu

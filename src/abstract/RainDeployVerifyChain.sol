@@ -81,6 +81,9 @@ error CodeHashMismatchOnNetwork(
 /// missing deployment. A contract boundary is what `forge test
 /// --match-contract` and a CI job select at, and it is structural rather than
 /// conventional — nothing reachable from the snapshot contract forks anything.
+/// `RainDeployVerify` is what a repo binds, and this stays a contract of its
+/// own so that binding the snapshot half alone remains a thing a
+/// credential-free job can do.
 abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// Checks one derived suite against whichever network is currently
     /// selected.

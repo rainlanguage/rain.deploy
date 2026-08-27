@@ -6,7 +6,7 @@ name: Manual sol artifacts
 # pins and never broadcasts. So the deploy has to happen first, and separately,
 # which is this.
 #
-# Order is: dispatch this once per suite, confirm `RegistryDeployChainTest`
+# Order is: dispatch this once per suite, confirm `RegistryDeployVerifyTest`
 # passes on every supported network, then push the `sol-v*` tag.
 #
 # Deliberately `workflow_dispatch` only. Broadcasting is key custody and real

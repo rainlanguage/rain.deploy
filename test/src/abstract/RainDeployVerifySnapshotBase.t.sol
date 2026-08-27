@@ -40,7 +40,7 @@ import {
 /// this repo's real releases are declared by the exemplar — a claim that is
 /// vacuously true while the repo has released nothing and false from its first
 /// release, which is not a thing this contract is about either way. The real
-/// record is bound where the real declaration is, in `RegistryDeploySnapshotTest`.
+/// record is bound where the real declaration is, in `RegistryDeployVerifyTest`.
 ///
 /// The record check ITSELF is exercised here, at every position and against
 /// every shape of declaration, because `checkFrozenSnapshotsReleased` takes the
