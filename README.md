@@ -390,9 +390,6 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
    partial run is fixed by running it again rather than by unpicking anything.
 2. **Verify.** `RegistryDeployChainTest` passes only once every **released**
    suite is live on every supported network, with the code that release froze.
-   This repo has released none, so today it has nothing to check and passes; it
-   gets a subject the moment step 3 freezes one, and is red from then until step
-   1 has been run everywhere. That is the order these steps are in.
 3. **Tag.** Push a `sol-v*` tag, the sole release trigger. It verifies and
    publishes but never broadcasts, which is exactly why step 1 cannot be folded
    into it. The release mechanics are `rainix-tag-release`'s.
