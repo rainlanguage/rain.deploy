@@ -16,7 +16,7 @@ import {
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
-import {LibStringSet} from "../../lib/LibStringSet.sol";
+import {LibStringSet} from "../../../src/lib/LibStringSet.sol";
 
 /// @title LibRainDeploySnapshotTest
 /// @notice The guards on the release machinery every deploy repo inherits.

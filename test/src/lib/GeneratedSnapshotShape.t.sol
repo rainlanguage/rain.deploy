@@ -7,7 +7,7 @@ import {DeployCandidate} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
-import {LibStringSet} from "../../lib/LibStringSet.sol";
+import {LibStringSet} from "../../../src/lib/LibStringSet.sol";
 
 /// @title GeneratedSnapshotShapeTest
 /// @notice What a generated deploy snapshot must look like, asserted against

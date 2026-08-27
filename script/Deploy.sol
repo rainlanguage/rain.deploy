@@ -28,7 +28,7 @@ import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 /// chains of seven, one RPC down — is fixed by running it again rather than by
 /// unpicking anything.
 ///
-/// `RegistryDeployChainTest` is what says whether this has been run and worked
+/// `RegistryDeployVerifyTest` is what says whether this has been run and worked
 /// — but only for RELEASED suites, and this repo has released none, so today it
 /// has nothing to check and passes. It gets a subject once a release is frozen,
 /// and then fails until every supported network has that release's code, which

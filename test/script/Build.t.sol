@@ -8,7 +8,7 @@ import {DeployCandidate} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {LibReleasedSuitesAggregate} from "../lib/LibReleasedSuitesAggregate.sol";
 import {BuildHarness} from "../concrete/BuildHarness.sol";
-import {LibStringSet} from "../lib/LibStringSet.sol";
+import {LibStringSet} from "../../src/lib/LibStringSet.sol";
 
 /// @title BuildTest
 /// @notice `script/Build.sol`'s own declaration.
@@ -26,7 +26,7 @@ import {LibStringSet} from "../lib/LibStringSet.sol";
 /// names, `regenerateLibs()` writes a released-suites lib only for those, and
 /// the release permanently omits that contract. Nothing downstream can see it:
 /// `testEveryFrozenSnapshotIsReleased` walks record -> declaration, so a record
-/// entry never written is invisible to it; `RegistryDeployChainTest` is never
+/// entry never written is invisible to it; `RegistryDeployVerifyTest` is never
 /// handed the omitted suite; and `testEveryCandidateHasASnapshot` compares the
 /// candidate DIRECTORY against the declaration, where the stale committed file
 /// keeps both sides equal. `SnapshotAlreadyFrozen` then makes the hole
