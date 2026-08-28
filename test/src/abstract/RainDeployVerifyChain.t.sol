@@ -112,6 +112,39 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         this.testSuitesLiveOnEverySupportedNetwork();
     }
 
+    /// The matrix MUST create every fork BEFORE it checks anything on any of
+    /// them, for the reason `LibRainDeploy.createForks` gives: a fork created
+    /// after the first select is seeded with whatever was read before it, so a
+    /// deployed address the caller touched first would read as absent on every
+    /// network but the one the matrix reaches first.
+    ///
+    /// A run that fails on that FIRST network is what makes the order visible.
+    /// The matrix never reached the last supported network, so a fork of it
+    /// exists only if it was created up front.
+    function testChainMatrixCreatesEveryForkFirst() external {
+        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"");
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                NotDeployedOnNetwork.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                "address-registry-0-0-1",
+                ADDRESS_REGISTRY_DEPLOYED_ADDRESS
+            )
+        );
+        this.testSuitesLiveOnEverySupportedNetwork();
+
+        // This test forks nothing of its own, so the matrix's forks are ids 0
+        // upwards in `supportedNetworks()` order. Selecting the last of them at
+        // all is the assertion; the chain ids say it is a different network
+        // from the one the failure named, rather than another fork of it.
+        uint256 lastNetwork = LibRainDeploy.supportedNetworks().length - 1;
+        vm.selectFork(0);
+        uint256 firstChainId = block.chainid;
+        vm.selectFork(lastNetwork);
+        assertNotEq(block.chainid, firstChainId);
+    }
+
     /// EVERY suite MUST be checked, not just the first one the matrix
     /// reaches. The version missing here is the LAST one, so a matrix that
     /// stopped after the first version would pass.

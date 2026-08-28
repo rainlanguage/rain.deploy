@@ -120,11 +120,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         }
 
         string[] memory networks = LibRainDeploy.supportedNetworks();
+        uint256[] memory forkIds = LibRainDeploy.createForks(vm, networks);
         for (uint256 i = 0; i < networks.length; i++) {
-            // createSelectFork returns a fork id that is not needed here; bind
-            // and reference it so the unused-return lint stays satisfied.
-            uint256 forkId = vm.createSelectFork(networks[i]);
-            (forkId);
+            vm.selectFork(forkIds[i]);
             for (uint256 j = 0; j < derived.length; j++) {
                 checkDeployedOnNetwork(networks[i], derived[j]);
             }
