@@ -223,11 +223,17 @@ contract MigrationRegistry is IMigrationRegistryV2 {
         // `block.timestamp`, which `applyMigration` does. Zero is the only
         // value this refuses and the only one it can refuse, so there is no
         // window for a validator to nudge the clock across. Suppressed on this
-        // comparison rather than turned off for the repo.
+        // comparison rather than turned off for the repo. The timestamp detector
+        // flags the same comparison now that it sits in its own function with
+        // nothing else for it to attach to, hence the start/end pair: only one
+        // comment fits immediately above the `if`, and `forge fmt` moves a
+        // trailing one inside the braces.
+        // slither-disable-start timestamp
         // slither-disable-next-line incorrect-equality
         if (appliedAt == 0) {
             revert ZeroTimestamp();
         }
+        // slither-disable-end timestamp
     }
 
     /// The refusals that describe the namespace the call arrives at and the
