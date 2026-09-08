@@ -7,6 +7,7 @@ import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV1.sol";
+import {IMigrationRegistryV2, Prerequisite} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
 import {DELEGATION_DESIGNATOR_LENGTH, LibAccountCode} from "../../lib/LibAccountCode.sol";
@@ -94,6 +95,41 @@ contract LibMigrationRegistryTest is Test {
     /// @param appliedAt The moment to record against it.
     function externalApplyMigrationHistory(bytes32 expectedHead, bytes32 migration, uint256 appliedAt) external {
         LibMigrationRegistry.applyMigrationHistory(expectedHead, migration, appliedAt);
+    }
+
+    /// External wrapper for `applyMigrationAfter` so that `vm.expectRevert`
+    /// works at the correct call depth.
+    /// @param expectedHead The head this contract believes it is at.
+    /// @param migration The migration to apply.
+    /// @param prerequisites The migrations that must already be applied.
+    function externalApplyMigrationAfter(bytes32 expectedHead, bytes32 migration, Prerequisite[] memory prerequisites)
+        external
+    {
+        LibMigrationRegistry.applyMigrationAfter(expectedHead, migration, prerequisites);
+    }
+
+    /// External wrapper for `applyMigrationHistoryAfter` so that
+    /// `vm.expectRevert` works at the correct call depth.
+    /// @param expectedHead The head this contract believes it is at.
+    /// @param migration The migration to apply.
+    /// @param appliedAt The moment to record against it.
+    /// @param prerequisites The migrations that must already be applied.
+    function externalApplyMigrationHistoryAfter(
+        bytes32 expectedHead,
+        bytes32 migration,
+        uint256 appliedAt,
+        Prerequisite[] memory prerequisites
+    ) external {
+        LibMigrationRegistry.applyMigrationHistoryAfter(expectedHead, migration, appliedAt, prerequisites);
+    }
+
+    /// One prerequisite, as the list the `After` wrappers take.
+    /// @param writer The prerequisite's namespace.
+    /// @param migration The prerequisite's migration.
+    /// @return prerequisites The one-entry list.
+    function one(address writer, bytes32 migration) internal pure returns (Prerequisite[] memory prerequisites) {
+        prerequisites = new Prerequisite[](1);
+        prerequisites[0] = Prerequisite({writer: writer, migration: migration});
     }
 
     /// The Zoltu deploy really does land the registry on its pinned address
@@ -707,5 +743,277 @@ contract LibMigrationRegistryTest is Test {
             )
         );
         this.externalApplyMigrationHistory(expectedHead, migration, appliedAt);
+    }
+
+    /// `applyMigrationAfter` through the library lands the record once its
+    /// prerequisite is applied, and `applied` reads it back as the block the
+    /// write landed in — the plain write's record.
+    function testApplyMigrationAfterThenApplied(address other, bytes32 migration, bytes32 prerequisite, uint32 now_)
+        external
+    {
+        vm.assume(other != address(0));
+        vm.assume(other != address(this));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        LibMigrationFuzz.assumeMigration(vm, prerequisite);
+        vm.assume(now_ != 0);
+        vm.warp(now_);
+        IMigrationRegistryV1 registry = deployRegistry();
+        vm.prank(other);
+        registry.applyMigration(MIGRATION_HEAD_GENESIS, prerequisite);
+
+        LibMigrationRegistry.applyMigrationAfter(MIGRATION_HEAD_GENESIS, migration, one(other, prerequisite));
+
+        assertEq(LibMigrationRegistry.applied(address(this), migration), now_);
+        assertEq(LibMigrationRegistry.appliedOnto(address(this), migration), MIGRATION_HEAD_GENESIS);
+        assertEq(LibMigrationRegistry.head(address(this)), migration);
+    }
+
+    /// `applyMigrationHistoryAfter` through the library records the supplied
+    /// moment once its prerequisite is applied.
+    function testApplyMigrationHistoryAfterThenApplied(
+        address other,
+        bytes32 migration,
+        bytes32 prerequisite,
+        uint32 appliedAt,
+        uint32 now_
+    ) external {
+        vm.assume(other != address(0));
+        vm.assume(other != address(this));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        LibMigrationFuzz.assumeMigration(vm, prerequisite);
+        vm.assume(appliedAt != 0);
+        vm.assume(now_ >= appliedAt);
+        vm.warp(now_);
+        IMigrationRegistryV1 registry = deployRegistry();
+        vm.prank(other);
+        registry.applyMigration(MIGRATION_HEAD_GENESIS, prerequisite);
+
+        LibMigrationRegistry.applyMigrationHistoryAfter(
+            MIGRATION_HEAD_GENESIS, migration, appliedAt, one(other, prerequisite)
+        );
+
+        assertEq(LibMigrationRegistry.applied(address(this), migration), appliedAt);
+        assertEq(LibMigrationRegistry.head(address(this)), migration);
+    }
+
+    /// The registry's `PrerequisiteNotApplied` reaches the caller unmodified
+    /// through both wrappers, naming the prerequisite, and nothing is
+    /// recorded.
+    function testApplyMigrationAfterPrerequisiteNotApplied(address other, bytes32 migration, bytes32 prerequisite)
+        external
+    {
+        vm.assume(other != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        LibMigrationFuzz.assumeMigration(vm, prerequisite);
+        vm.assume(migration != prerequisite);
+        deployRegistry();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, other, prerequisite)
+        );
+        this.externalApplyMigrationAfter(MIGRATION_HEAD_GENESIS, migration, one(other, prerequisite));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, other, prerequisite)
+        );
+        this.externalApplyMigrationHistoryAfter(
+            MIGRATION_HEAD_GENESIS, migration, block.timestamp, one(other, prerequisite)
+        );
+
+        assertEq(LibMigrationRegistry.applied(address(this), migration), 0);
+        assertEq(LibMigrationRegistry.head(address(this)), MIGRATION_HEAD_GENESIS);
+    }
+
+    /// The registry's `NoPrerequisites` reaches the caller unmodified through
+    /// both wrappers.
+    function testApplyMigrationAfterNoPrerequisites(bytes32 migration) external {
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        deployRegistry();
+
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.NoPrerequisites.selector));
+        this.externalApplyMigrationAfter(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
+
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.NoPrerequisites.selector));
+        this.externalApplyMigrationHistoryAfter(
+            MIGRATION_HEAD_GENESIS, migration, block.timestamp, new Prerequisite[](0)
+        );
+
+        assertEq(LibMigrationRegistry.applied(address(this), migration), 0);
+    }
+
+    /// The namespace of `applyMigrationAfter` is the calling CONTRACT, as it
+    /// is for the plain write, and the prerequisite is read from whichever
+    /// namespace it names — here another consumer's.
+    function testApplyMigrationAfterLandsUnderTheCallingContract(bytes32 migration, bytes32 prerequisite) external {
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        LibMigrationFuzz.assumeMigration(vm, prerequisite);
+        deployRegistry();
+        MockMigrationApplier upstream = new MockMigrationApplier();
+        MockMigrationApplier applier = new MockMigrationApplier();
+        upstream.applyMigration(MIGRATION_HEAD_GENESIS, prerequisite);
+
+        applier.applyMigrationAfter(MIGRATION_HEAD_GENESIS, migration, one(address(upstream), prerequisite));
+
+        assertEq(LibMigrationRegistry.applied(address(applier), migration), block.timestamp);
+        assertEq(LibMigrationRegistry.appliedOnto(address(applier), migration), MIGRATION_HEAD_GENESIS);
+        assertEq(LibMigrationRegistry.applied(address(upstream), migration), 0);
+        assertEq(LibMigrationRegistry.applied(address(this), migration), 0);
+        assertEq(LibMigrationRegistry.head(address(upstream)), prerequisite);
+    }
+
+    /// The same for `applyMigrationHistoryAfter`.
+    function testApplyMigrationHistoryAfterLandsUnderTheCallingContract(
+        bytes32 migration,
+        bytes32 prerequisite,
+        uint32 appliedAt
+    ) external {
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        LibMigrationFuzz.assumeMigration(vm, prerequisite);
+        vm.assume(appliedAt != 0);
+        deployRegistry();
+        vm.warp(appliedAt);
+        MockMigrationApplier upstream = new MockMigrationApplier();
+        MockMigrationApplier applier = new MockMigrationApplier();
+        upstream.applyMigration(MIGRATION_HEAD_GENESIS, prerequisite);
+
+        applier.applyMigrationHistoryAfter(
+            MIGRATION_HEAD_GENESIS, migration, appliedAt, one(address(upstream), prerequisite)
+        );
+
+        assertEq(LibMigrationRegistry.applied(address(applier), migration), appliedAt);
+        assertEq(LibMigrationRegistry.applied(address(upstream), migration), 0);
+        assertEq(LibMigrationRegistry.applied(address(this), migration), 0);
+    }
+
+    /// `applyMigrationAfter` checks the code hash before writing, so a chain
+    /// with no registry is a named revert rather than an anonymous one.
+    function testApplyMigrationAfterNoRegistry(bytes32 expectedHead, bytes32 migration, Prerequisite[] memory prerequisites)
+        external
+    {
+        assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                bytes32(0)
+            )
+        );
+        this.externalApplyMigrationAfter(expectedHead, migration, prerequisites);
+    }
+
+    /// Nor is it written into ordinary occupying code.
+    function testApplyMigrationAfterWrongCode(
+        bytes32 expectedHead,
+        bytes32 migration,
+        Prerequisite[] memory prerequisites,
+        bytes memory code
+    ) external {
+        assumeOrdinaryCode(code);
+        vm.assume(keccak256(code) != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH);
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                keccak256(code)
+            )
+        );
+        this.externalApplyMigrationAfter(expectedHead, migration, prerequisites);
+    }
+
+    /// Nor into a delegated account.
+    /// @param expectedHead The head the writer believes it is at.
+    /// @param migration The migration being applied.
+    /// @param prerequisites The prerequisites being named.
+    /// @param delegate The account the registry address is delegated to.
+    function testApplyMigrationAfterDelegatedCode(
+        bytes32 expectedHead,
+        bytes32 migration,
+        Prerequisite[] memory prerequisites,
+        address delegate
+    ) external {
+        bytes memory designator = assumedDesignator(delegate);
+
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, designator);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                keccak256(designator)
+            )
+        );
+        this.externalApplyMigrationAfter(expectedHead, migration, prerequisites);
+    }
+
+    /// `applyMigrationHistoryAfter` checks the code hash too, so a backfill
+    /// that waits on something is never written to a chain with no registry.
+    function testApplyMigrationHistoryAfterNoRegistry(
+        bytes32 expectedHead,
+        bytes32 migration,
+        uint256 appliedAt,
+        Prerequisite[] memory prerequisites
+    ) external {
+        assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                bytes32(0)
+            )
+        );
+        this.externalApplyMigrationHistoryAfter(expectedHead, migration, appliedAt, prerequisites);
+    }
+
+    /// Nor into ordinary occupying code.
+    function testApplyMigrationHistoryAfterWrongCode(
+        bytes32 expectedHead,
+        bytes32 migration,
+        uint256 appliedAt,
+        Prerequisite[] memory prerequisites,
+        bytes memory code
+    ) external {
+        assumeOrdinaryCode(code);
+        vm.assume(keccak256(code) != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH);
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                keccak256(code)
+            )
+        );
+        this.externalApplyMigrationHistoryAfter(expectedHead, migration, appliedAt, prerequisites);
+    }
+
+    /// Nor into a delegated account.
+    /// @param expectedHead The head the writer believes it is at.
+    /// @param migration The migration being applied.
+    /// @param appliedAt The moment being recorded.
+    /// @param prerequisites The prerequisites being named.
+    /// @param delegate The account the registry address is delegated to.
+    function testApplyMigrationHistoryAfterDelegatedCode(
+        bytes32 expectedHead,
+        bytes32 migration,
+        uint256 appliedAt,
+        Prerequisite[] memory prerequisites,
+        address delegate
+    ) external {
+        bytes memory designator = assumedDesignator(delegate);
+
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, designator);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                keccak256(designator)
+            )
+        );
+        this.externalApplyMigrationHistoryAfter(expectedHead, migration, appliedAt, prerequisites);
     }
 }

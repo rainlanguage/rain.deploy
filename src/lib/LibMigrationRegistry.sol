@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IMigrationRegistryV1} from "../interface/IMigrationRegistryV1.sol";
+import {IMigrationRegistryV2, Prerequisite} from "../interface/IMigrationRegistryV2.sol";
 import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 
 /// @title LibMigrationRegistry
@@ -15,9 +15,10 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 ///
 /// That is the whole library. It answers when a writer applied a migration,
 /// what that writer applied it onto and where that writer's namespace has got
-/// to, and it applies one under the caller. Which writer a test trusts, which
-/// invariant each answer selects, and how an id is derived are entirely the
-/// consumer's business and none of this library's.
+/// to, and it applies one under the caller — plainly, or only once migrations
+/// in other writers' namespaces have been applied. Which writer a test trusts,
+/// which invariant each answer selects, and how an id is derived are entirely
+/// the consumer's business and none of this library's.
 ///
 /// ## There is deliberately no broadcast runner here
 ///
@@ -79,6 +80,16 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// stronger statement than the moments make, because a moment is whatever the
 /// writer supplied and the chain is what the registry enforced.
 ///
+/// `applyMigrationAfter` and `applyMigrationHistoryAfter` are the same two
+/// writes, held back until every migration in a list of other writers'
+/// namespaces has been applied. The registry refuses the write, naming the
+/// first prerequisite that has not been, so a script whose migration depends
+/// on another Safe's or another deployer's states that dependency as a fact
+/// for the registry to check instead of re-reading the other migration's
+/// post-state. With every prerequisite applied, the record written is the
+/// plain write's exactly; the prerequisites go to the log, in
+/// `MigratedAfter`, and nowhere else.
+///
 /// The registry is an INDEX, not proof. It says which invariant applies; it does
 /// not say the invariant holds. A multisig can act out of band and nothing here
 /// moves. Codehash and bytecode pins are what verify the state itself, and this
@@ -133,7 +144,7 @@ library LibMigrationRegistry {
     function applied(address writer, bytes32 migration) internal view returns (uint256) {
         checkCodeHash();
         return
-            IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
                 .applied(writer, migration);
     }
 
@@ -152,7 +163,7 @@ library LibMigrationRegistry {
     /// not applied it.
     function appliedOnto(address writer, bytes32 migration) internal view returns (bytes32) {
         checkCodeHash();
-        return IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+        return IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .appliedOnto(writer, migration);
     }
 
@@ -169,7 +180,7 @@ library LibMigrationRegistry {
     /// @return The head of `writer`'s namespace. Never zero.
     function head(address writer) internal view returns (bytes32) {
         checkCodeHash();
-        return IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS).head(writer);
+        return IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS).head(writer);
     }
 
     /// Applies `migration` under the CALLER's namespace, onto `expectedHead`.
@@ -202,7 +213,7 @@ library LibMigrationRegistry {
     /// `MIGRATION_HEAD_GENESIS`.
     function applyMigration(bytes32 expectedHead, bytes32 migration) internal {
         checkCodeHash();
-        IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .applyMigration(expectedHead, migration);
     }
 
@@ -227,7 +238,62 @@ library LibMigrationRegistry {
     /// after the block this lands in.
     function applyMigrationHistory(bytes32 expectedHead, bytes32 migration, uint256 appliedAt) internal {
         checkCodeHash();
-        IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .applyMigrationHistory(expectedHead, migration, appliedAt);
+    }
+
+    /// `applyMigration`, once every prerequisite has been applied.
+    ///
+    /// Everything `applyMigration` says about the namespace, the code-hash
+    /// check and the registry's refusals holds here unchanged, and the record
+    /// written is the same one. What this adds is the list: the registry
+    /// refuses the write with `PrerequisiteNotApplied`, naming the first entry
+    /// whose migration has not been applied under its writer, refuses an
+    /// empty list as `NoPrerequisites`, and refuses an entry that is not a
+    /// record key — the zero writer, the zero id, `MIGRATION_HEAD_GENESIS` —
+    /// exactly as `applied` refuses the same key. A Safe appends this to the
+    /// bundle it is executing, so the bundle reverts whole if the migration it
+    /// depends on has not landed.
+    ///
+    /// The code-hash check matters more here, not less: occupying code is free
+    /// to answer "applied" to every prerequisite and record nothing.
+    /// @param expectedHead The migration the caller believes it applied last,
+    /// or `MIGRATION_HEAD_GENESIS` for the first in this namespace.
+    /// @param migration The migration to apply. Never zero, never
+    /// `MIGRATION_HEAD_GENESIS`.
+    /// @param prerequisites The migrations, each under its writer, that must
+    /// already be applied. Never empty; every entry a record key.
+    function applyMigrationAfter(bytes32 expectedHead, bytes32 migration, Prerequisite[] memory prerequisites)
+        internal
+    {
+        checkCodeHash();
+        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .applyMigrationAfter(expectedHead, migration, prerequisites);
+    }
+
+    /// `applyMigrationHistory`, once every prerequisite has been applied.
+    ///
+    /// Everything `applyMigrationHistory` says about the moment and
+    /// `applyMigrationAfter` says about the list holds here unchanged. The
+    /// moment is bounded by the caller's own chain and the block, as on
+    /// `applyMigrationHistory`, and by no prerequisite's moment: what is
+    /// checked is that each prerequisite's record exists when this lands.
+    /// @param expectedHead The migration the caller believes it applied last,
+    /// or `MIGRATION_HEAD_GENESIS` for the first in this namespace.
+    /// @param migration The migration to apply. Never zero, never
+    /// `MIGRATION_HEAD_GENESIS`.
+    /// @param appliedAt The moment `migration` was applied. Never zero, never
+    /// after the block this lands in.
+    /// @param prerequisites The migrations, each under its writer, that must
+    /// already be applied. Never empty; every entry a record key.
+    function applyMigrationHistoryAfter(
+        bytes32 expectedHead,
+        bytes32 migration,
+        uint256 appliedAt,
+        Prerequisite[] memory prerequisites
+    ) internal {
+        checkCodeHash();
+        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .applyMigrationHistoryAfter(expectedHead, migration, appliedAt, prerequisites);
     }
 }

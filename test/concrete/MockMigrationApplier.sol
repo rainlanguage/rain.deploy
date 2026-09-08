@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
+import {Prerequisite} from "../../src/interface/IMigrationRegistryV2.sol";
 
 /// @title MockMigrationApplier
 /// @notice A consumer in the shape `LibMigrationRegistry`'s writes are designed
@@ -35,6 +36,32 @@ contract MockMigrationApplier {
     /// @param appliedAt The moment the migration was applied.
     function applyMigrationHistory(bytes32 expectedHead, bytes32 migration, uint256 appliedAt) external {
         LibMigrationRegistry.applyMigrationHistory(expectedHead, migration, appliedAt);
+    }
+
+    /// Applies `migration` under this contract, onto `expectedHead`, once
+    /// every prerequisite is applied.
+    /// @param expectedHead The head this contract believes it is at.
+    /// @param migration The migration to apply.
+    /// @param prerequisites The migrations that must already be applied.
+    function applyMigrationAfter(bytes32 expectedHead, bytes32 migration, Prerequisite[] calldata prerequisites)
+        external
+    {
+        LibMigrationRegistry.applyMigrationAfter(expectedHead, migration, prerequisites);
+    }
+
+    /// Applies `migration` under this contract, onto `expectedHead`, at
+    /// `appliedAt`, once every prerequisite is applied.
+    /// @param expectedHead The head this contract believes it is at.
+    /// @param migration The migration to apply.
+    /// @param appliedAt The moment the migration was applied.
+    /// @param prerequisites The migrations that must already be applied.
+    function applyMigrationHistoryAfter(
+        bytes32 expectedHead,
+        bytes32 migration,
+        uint256 appliedAt,
+        Prerequisite[] calldata prerequisites
+    ) external {
+        LibMigrationRegistry.applyMigrationHistoryAfter(expectedHead, migration, appliedAt, prerequisites);
     }
 
     /// When `writer` applied `migration`.
