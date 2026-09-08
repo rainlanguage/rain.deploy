@@ -5,7 +5,9 @@ pragma solidity =0.8.25;
 import {Test, Vm} from "forge-std-1.16.2/src/Test.sol";
 
 import {
-    IMigrationRegistryV2, Prerequisite, MIGRATION_HEAD_GENESIS
+    IMigrationRegistryV2,
+    Prerequisite,
+    MIGRATION_HEAD_GENESIS
 } from "../../../src/interface/IMigrationRegistryV2.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
@@ -78,8 +80,11 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
     /// @param writer The namespace to apply under.
     /// @param migration The migration to apply.
     function applyUnder(address writer, bytes32 migration) internal {
+        // The head is read before the prank: the read is an external call
+        // of its own and would consume the prank meant for the write.
+        bytes32 head = sRegistry.head(writer);
         vm.prank(writer);
-        sRegistry.applyMigration(sRegistry.head(writer), migration);
+        sRegistry.applyMigration(head, migration);
     }
 
     /// With its one prerequisite applied, `applyMigrationAfter` writes exactly
@@ -111,12 +116,14 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
         vm.prank(other);
         waiting.applyMigration(MIGRATION_HEAD_GENESIS, prerequisite);
 
+        bytes32 plainHead = plain.head(writer);
+        bytes32 waitingHead = waiting.head(writer);
         vm.record();
         vm.prank(writer);
-        plain.applyMigration(plain.head(writer), migration);
+        plain.applyMigration(plainHead, migration);
         (, bytes32[] memory plainWrites) = vm.accesses(address(plain));
         vm.prank(writer);
-        waiting.applyMigrationAfter(waiting.head(writer), migration, one(other, prerequisite));
+        waiting.applyMigrationAfter(waitingHead, migration, one(other, prerequisite));
         (, bytes32[] memory afterWrites) = vm.accesses(address(waiting));
 
         assertEq(waiting.applied(writer, migration), plain.applied(writer, migration));
@@ -141,6 +148,11 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
     ) external {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
+        // The prerequisite is in another namespace, so applying it leaves the
+        // caller's head at genesis, which bounds no moment. A prerequisite in
+        // the caller's own namespace is
+        // `testApplyMigrationAfterOwnEarlierMigrationIsAPrerequisite`.
+        vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
@@ -155,12 +167,14 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
         vm.prank(other);
         waiting.applyMigration(MIGRATION_HEAD_GENESIS, prerequisite);
 
+        bytes32 plainHead = plain.head(writer);
+        bytes32 waitingHead = waiting.head(writer);
         vm.record();
         vm.prank(writer);
-        plain.applyMigrationHistory(plain.head(writer), migration, appliedAt);
+        plain.applyMigrationHistory(plainHead, migration, appliedAt);
         (, bytes32[] memory plainWrites) = vm.accesses(address(plain));
         vm.prank(writer);
-        waiting.applyMigrationHistoryAfter(waiting.head(writer), migration, appliedAt, one(other, prerequisite));
+        waiting.applyMigrationHistoryAfter(waitingHead, migration, appliedAt, one(other, prerequisite));
         (, bytes32[] memory afterWrites) = vm.accesses(address(waiting));
 
         assertEq(waiting.applied(writer, migration), plain.applied(writer, migration));
@@ -186,6 +200,10 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
         vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
+        // The last assertion asks whether `migration` reached the other
+        // namespace, which is only a question when it is not the
+        // prerequisite that was put there.
+        vm.assume(migration != prerequisite);
         vm.warp(1000);
         applyUnder(other, prerequisite);
         vm.warp(2000);
@@ -213,6 +231,11 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
     ) external {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
+        // The prerequisite is in another namespace, so applying it leaves the
+        // caller's head where the same call expects it. A prerequisite in
+        // the caller's own namespace is
+        // `testApplyMigrationAfterOwnEarlierMigrationIsAPrerequisite`.
+        vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
@@ -248,6 +271,11 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
     ) external {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
+        // The prerequisite is in another namespace, so applying it leaves the
+        // caller's head where the same call expects it. A prerequisite in
+        // the caller's own namespace is
+        // `testApplyMigrationAfterOwnEarlierMigrationIsAPrerequisite`.
+        vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
@@ -322,27 +350,27 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
                 continue;
             }
             // Applying any other entry must not apply the unapplied one.
-            vm.assume(
-                prerequisites[i].writer != unapplied.writer || prerequisites[i].migration != unapplied.migration
-            );
+            vm.assume(prerequisites[i].writer != unapplied.writer || prerequisites[i].migration != unapplied.migration);
             if (sRegistry.applied(prerequisites[i].writer, prerequisites[i].migration) == 0) {
                 applyUnder(prerequisites[i].writer, prerequisites[i].migration);
             }
         }
 
+        bytes32 head = sRegistry.head(writer);
         vm.expectRevert(
             abi.encodeWithSelector(
                 IMigrationRegistryV2.PrerequisiteNotApplied.selector, unapplied.writer, unapplied.migration
             )
         );
         vm.prank(writer);
-        sRegistry.applyMigrationAfter(sRegistry.head(writer), migration, prerequisites);
+        sRegistry.applyMigrationAfter(head, migration, prerequisites);
         assertEq(sRegistry.applied(writer, migration), 0);
 
         applyUnder(unapplied.writer, unapplied.migration);
 
+        head = sRegistry.head(writer);
         vm.prank(writer);
-        sRegistry.applyMigrationAfter(sRegistry.head(writer), migration, prerequisites);
+        sRegistry.applyMigrationAfter(head, migration, prerequisites);
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
         assertEq(sRegistry.head(writer), migration);
     }
@@ -374,9 +402,7 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
             if (i == unappliedIndex) {
                 continue;
             }
-            vm.assume(
-                prerequisites[i].writer != unapplied.writer || prerequisites[i].migration != unapplied.migration
-            );
+            vm.assume(prerequisites[i].writer != unapplied.writer || prerequisites[i].migration != unapplied.migration);
             if (sRegistry.applied(prerequisites[i].writer, prerequisites[i].migration) == 0) {
                 applyUnder(prerequisites[i].writer, prerequisites[i].migration);
             }
@@ -436,8 +462,9 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
 
         applyUnder(otherB, prerequisiteB);
 
+        bytes32 head = sRegistry.head(writer);
         vm.prank(writer);
-        sRegistry.applyMigrationAfter(sRegistry.head(writer), migration, prerequisites);
+        sRegistry.applyMigrationAfter(head, migration, prerequisites);
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
     }
 
@@ -639,15 +666,11 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, writer, migration)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, writer, migration));
         vm.prank(writer);
         sRegistry.applyMigrationAfter(MIGRATION_HEAD_GENESIS, migration, one(writer, migration));
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, writer, migration)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, writer, migration));
         vm.prank(writer);
         sRegistry.applyMigrationHistoryAfter(MIGRATION_HEAD_GENESIS, migration, block.timestamp, one(writer, migration));
 
@@ -707,8 +730,9 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
 
         applyUnder(other, prerequisite);
 
+        bytes32 head = sRegistry.head(writer);
         vm.prank(writer);
-        sRegistry.applyMigrationAfter(sRegistry.head(writer), migration, prerequisites);
+        sRegistry.applyMigrationAfter(head, migration, prerequisites);
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
     }
 
@@ -1049,9 +1073,10 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
         }
         Prerequisite[] memory prerequisites = two(otherA, prerequisiteA, otherB, prerequisiteB);
 
+        bytes32 head = sRegistry.head(writer);
         vm.recordLogs();
         vm.prank(writer);
-        sRegistry.applyMigrationAfter(sRegistry.head(writer), migration, prerequisites);
+        sRegistry.applyMigrationAfter(head, migration, prerequisites);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 2);
@@ -1081,6 +1106,11 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
     ) external {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
+        // The prerequisite is in another namespace, so applying it leaves the
+        // caller's head at genesis, which bounds no moment. A prerequisite in
+        // the caller's own namespace is
+        // `testApplyMigrationAfterOwnEarlierMigrationIsAPrerequisite`.
+        vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
@@ -1090,9 +1120,10 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
         applyUnder(other, prerequisite);
         Prerequisite[] memory prerequisites = one(other, prerequisite);
 
+        bytes32 head = sRegistry.head(writer);
         vm.recordLogs();
         vm.prank(writer);
-        sRegistry.applyMigrationHistoryAfter(sRegistry.head(writer), migration, appliedAt, prerequisites);
+        sRegistry.applyMigrationHistoryAfter(head, migration, appliedAt, prerequisites);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 2);
@@ -1122,9 +1153,10 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
         applyUnder(other, prerequisite);
         Prerequisite[] memory prerequisites = two(other, prerequisite, other, prerequisite);
 
+        bytes32 head = sRegistry.head(writer);
         vm.recordLogs();
         vm.prank(writer);
-        sRegistry.applyMigrationAfter(sRegistry.head(writer), migration, prerequisites);
+        sRegistry.applyMigrationAfter(head, migration, prerequisites);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 2);
@@ -1134,9 +1166,12 @@ contract MigrationRegistryApplyMigrationAfterTest is Test {
     /// A refused `After` write emits nothing — neither `Migrated` nor
     /// `MigratedAfter` — for every one of its refusals, the two it adds
     /// included.
-    function testApplyMigrationAfterNoEventOnRevert(address writer, address other, bytes32 migration, bytes32 prerequisite)
-        external
-    {
+    function testApplyMigrationAfterNoEventOnRevert(
+        address writer,
+        address other,
+        bytes32 migration,
+        bytes32 prerequisite
+    ) external {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
         vm.assume(writer != other);

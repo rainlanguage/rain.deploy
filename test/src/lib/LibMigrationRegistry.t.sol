@@ -847,6 +847,10 @@ contract LibMigrationRegistryTest is Test {
     function testApplyMigrationAfterLandsUnderTheCallingContract(bytes32 migration, bytes32 prerequisite) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
+        // The upstream assertion asks whether `migration` reached its
+        // namespace, which is only a question when it is not the
+        // prerequisite that was put there.
+        vm.assume(migration != prerequisite);
         deployRegistry();
         MockMigrationApplier upstream = new MockMigrationApplier();
         MockMigrationApplier applier = new MockMigrationApplier();
@@ -869,6 +873,10 @@ contract LibMigrationRegistryTest is Test {
     ) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
+        // The upstream assertion asks whether `migration` reached its
+        // namespace, which is only a question when it is not the
+        // prerequisite that was put there.
+        vm.assume(migration != prerequisite);
         vm.assume(appliedAt != 0);
         deployRegistry();
         vm.warp(appliedAt);
@@ -887,9 +895,11 @@ contract LibMigrationRegistryTest is Test {
 
     /// `applyMigrationAfter` checks the code hash before writing, so a chain
     /// with no registry is a named revert rather than an anonymous one.
-    function testApplyMigrationAfterNoRegistry(bytes32 expectedHead, bytes32 migration, Prerequisite[] memory prerequisites)
-        external
-    {
+    function testApplyMigrationAfterNoRegistry(
+        bytes32 expectedHead,
+        bytes32 migration,
+        Prerequisite[] memory prerequisites
+    ) external {
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
 
         vm.expectRevert(
