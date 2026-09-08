@@ -379,6 +379,46 @@ of migrations applied from the same account interleave into one chain of heads,
 so a consumer that wants two independent sequences applies them from two
 accounts — the same lever that already decides who a reader trusts.
 
+**A migration may wait on migrations in other namespaces.**
+`applyMigrationAfter` and `applyMigrationHistoryAfter` are the two writes with
+one more argument, a list of `Prerequisite { writer, migration }`, and one more
+refusal: `PrerequisiteNotApplied(writer, migration)` for the first entry whose
+record does not exist on this registry. A dependent script names the migration
+it is waiting on as a fact the registry checks, instead of re-deriving the other
+script's post-state, and the head still orders its own namespace exactly as
+before.
+
+```solidity
+// Lands only once FLEET_SAFE has recorded FLEET_UPGRADE; refused with
+// `PrerequisiteNotApplied(FLEET_SAFE, FLEET_UPGRADE)` until then.
+Prerequisite[] memory prerequisites = new Prerequisite[](1);
+prerequisites[0] = Prerequisite({writer: FLEET_SAFE, migration: FLEET_UPGRADE});
+LibMigrationRegistry.applyMigrationAfter(MIGRATION_V2, MIGRATION_V3, prerequisites);
+```
+
+Nothing is stored about the prerequisites. With every one applied the write is
+the plain write — the same record, the same slots, the same `Migrated` —
+followed by `MigratedAfter(writer, migration, prerequisites)`, so one `Migrated`
+filter is still the complete history and an indexer that wants the
+cross-namespace order reads the sibling entry. A prerequisite is an index check,
+not proof: it says the other writer recorded its migration, not that the state
+it produced holds, and consumers keep their pins. It bounds no moment either — a
+backfilled record may carry an earlier moment than its prerequisite, because
+what is checked is that the record existed when this write landed, which is
+chain order, and the moments in another namespace are that writer's data.
+
+The refusals sit in this order: the caller's own arguments first
+(`ZeroMigration`, `GenesisMigration`, `ZeroTimestamp`); then the list —
+`NoPrerequisites` for an empty one, then every entry as a key (`ZeroWriter`,
+`ZeroMigration`, `GenesisMigration`, exactly as `applied` refuses them) before
+any entry is read, then `PrerequisiteNotApplied` for the first unapplied entry;
+then the plain write's own refusals, unchanged. An empty list is refused because
+a caller that chose the write that waits on something and named nothing has
+mis-set the list, and the plain write is the one for a migration with nothing to
+wait on. Duplicates and entries in the caller's own namespace are ordinary index
+checks, and an entry naming the migration being applied is unapplied by
+construction.
+
 **The namespace is `msg.sender`, and that is the whole access control.** Anyone
 may write, but only under themselves, so a reader asking about the namespace of
 an authority it already trusts is reading something only that authority could
@@ -396,11 +436,12 @@ Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
 `LibMigrationRegistry` is the surface — `applied`, `appliedOnto`, `head`,
-`applyMigration` and `applyMigrationHistory`, each verifying the registry's code
-hash before it reads or writes. There is deliberately **no broadcast runner**:
-the dominant real shape is a Safe executing a bundle that never broadcasts, and
-such a script appends `applyMigration` to the bundle it is already emitting,
-which makes the record atomic with the migration it describes.
+`applyMigration`, `applyMigrationHistory`, `applyMigrationAfter` and
+`applyMigrationHistoryAfter`, each verifying the registry's code hash before it
+reads or writes. There is deliberately **no broadcast runner**: the dominant
+real shape is a Safe executing a bundle that never broadcasts, and such a script
+appends `applyMigration` to the bundle it is already emitting, which makes the
+record atomic with the migration it describes.
 
 ## Deploying, and then releasing
 
