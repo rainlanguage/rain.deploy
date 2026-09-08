@@ -7,6 +7,7 @@ import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV1.sol";
+import {IMigrationRegistryV2} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {IMigrationRegistryV2, Prerequisite} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
@@ -25,9 +26,9 @@ contract LibMigrationRegistryTest is Test {
     /// Deploys `MigrationRegistry` through the Zoltu factory, which lands it at
     /// the pinned address.
     /// @return The deployed registry.
-    function deployRegistry() internal returns (IMigrationRegistryV1) {
+    function deployRegistry() internal returns (IMigrationRegistryV2) {
         LibRainDeploy.etchZoltuFactory(vm);
-        return IMigrationRegistryV1(LibRainDeploy.deployZoltu(type(MigrationRegistry).creationCode));
+        return IMigrationRegistryV2(LibRainDeploy.deployZoltu(type(MigrationRegistry).creationCode));
     }
 
     /// Occupant code that is ORDINARY contract code rather than a delegation
@@ -757,7 +758,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(now_ != 0);
         vm.warp(now_);
-        IMigrationRegistryV1 registry = deployRegistry();
+        IMigrationRegistryV2 registry = deployRegistry();
         vm.prank(other);
         registry.applyMigration(MIGRATION_HEAD_GENESIS, prerequisite);
 
@@ -784,7 +785,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(appliedAt != 0);
         vm.assume(now_ >= appliedAt);
         vm.warp(now_);
-        IMigrationRegistryV1 registry = deployRegistry();
+        IMigrationRegistryV2 registry = deployRegistry();
         vm.prank(other);
         registry.applyMigration(MIGRATION_HEAD_GENESIS, prerequisite);
 
