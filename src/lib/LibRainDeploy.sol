@@ -97,6 +97,12 @@ library LibRainDeploy {
     /// Config name for Polygon network.
     string constant POLYGON = "polygon";
 
+    /// Config name for Robinhood Chain (chain id 4663), an Arbitrum Orbit L2
+    /// settling to Ethereum. The Zoltu factory is deployed there with the
+    /// canonical runtime, so deterministic deploys land at the same addresses
+    /// as on every other supported network.
+    string constant ROBINHOOD = "robinhood";
+
     /// Checks whether a block is the first block where a contract with the
     /// expected code hash exists. True when the target has the expected code
     /// hash at `blockNumber` and does NOT have it at `blockNumber - 1`. At
@@ -284,7 +290,7 @@ library LibRainDeploy {
     /// Returns the list of networks currently supported by Rain deployments.
     /// @return The list of supported network names.
     function supportedNetworks() internal pure returns (string[] memory) {
-        string[] memory networks = new string[](7);
+        string[] memory networks = new string[](8);
         networks[0] = ARBITRUM_ONE;
         networks[1] = BASE;
         networks[2] = BASE_SEPOLIA;
@@ -292,6 +298,7 @@ library LibRainDeploy {
         networks[4] = FLARE;
         networks[5] = HYPEREVM;
         networks[6] = POLYGON;
+        networks[7] = ROBINHOOD;
         return networks;
     }
 

@@ -81,6 +81,7 @@ ethereum = "${ETHEREUM_RPC_URL}"
 flare = "${FLARE_RPC_URL}"
 hyperevm = "${HYPEREVM_RPC_URL}"
 polygon = "${POLYGON_RPC_URL}"
+robinhood = "${ROBINHOOD_RPC_URL}"
 
 # `rainix-manual-sol-artifacts` passes `--verify` by default and exports exactly
 # these variable names, so a deploy without this section broadcasts and then
@@ -105,3 +106,11 @@ ethereum = { key = "${CI_DEPLOY_ETHEREUM_ETHERSCAN_API_KEY}", chain = 1 }
 flare = { key = "${CI_DEPLOY_FLARE_ETHERSCAN_API_KEY}" }
 hyperevm = { key = "${CI_DEPLOY_HYPEREVM_ETHERSCAN_API_KEY}", chain = 999 }
 polygon = { key = "${CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY}" }
+# Robinhood Chain (4663) is not indexed by Etherscan V2. Its Blockscout
+# explorer speaks the Etherscan API, so the entry points there; the key is
+# whatever `CI_DEPLOY_ROBINHOOD_ETHERSCAN_API_KEY` carries (Blockscout ignores
+# it). Blockscout sits behind a browser challenge that has rejected non-browser
+# clients, so if `--verify` fails on this network after a broadcast, verify
+# afterwards through Sourcify (which supports 4663 and which Blockscout
+# imports): `forge verify-contract --verifier sourcify --chain 4663 ...`.
+robinhood = { key = "${CI_DEPLOY_ROBINHOOD_ETHERSCAN_API_KEY}", chain = 4663, url = "https://robinhoodchain.blockscout.com/api" }
