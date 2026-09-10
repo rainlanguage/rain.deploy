@@ -77,10 +77,12 @@ recursive_deps = false
 arbitrum = "${ARBITRUM_RPC_URL}"
 base = "${BASE_RPC_URL}"
 base_sepolia = "${BASE_SEPOLIA_RPC_URL}"
+bsc = "${BSC_RPC_URL}"
 ethereum = "${ETHEREUM_RPC_URL}"
 flare = "${FLARE_RPC_URL}"
 hyperevm = "${HYPEREVM_RPC_URL}"
 polygon = "${POLYGON_RPC_URL}"
+robinhood = "${ROBINHOOD_RPC_URL}"
 
 # `rainix-manual-sol-artifacts` passes `--verify` by default and exports exactly
 # these variable names, so a deploy without this section broadcasts and then
@@ -101,7 +103,16 @@ polygon = "${POLYGON_RPC_URL}"
 arbitrum = { key = "${CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY}" }
 base = { key = "${CI_DEPLOY_BASE_ETHERSCAN_API_KEY}" }
 base_sepolia = { key = "${CI_DEPLOY_BASE_SEPOLIA_ETHERSCAN_API_KEY}" }
+bsc = { key = "${CI_DEPLOY_BSC_ETHERSCAN_API_KEY}", chain = 56 }
 ethereum = { key = "${CI_DEPLOY_ETHEREUM_ETHERSCAN_API_KEY}", chain = 1 }
 flare = { key = "${CI_DEPLOY_FLARE_ETHERSCAN_API_KEY}" }
 hyperevm = { key = "${CI_DEPLOY_HYPEREVM_ETHERSCAN_API_KEY}", chain = 999 }
 polygon = { key = "${CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY}" }
+# Robinhood Chain (4663) is not indexed by Etherscan V2. Its Blockscout
+# explorer speaks the Etherscan API, so the entry points there; the key is
+# whatever `CI_DEPLOY_ROBINHOOD_ETHERSCAN_API_KEY` carries (Blockscout ignores
+# it). Blockscout sits behind a browser challenge that has rejected non-browser
+# clients, so if `--verify` fails on this network after a broadcast, verify
+# afterwards through Sourcify (which supports 4663 and which Blockscout
+# imports): `forge verify-contract --verifier sourcify --chain 4663 ...`.
+robinhood = { key = "${CI_DEPLOY_ROBINHOOD_ETHERSCAN_API_KEY}", chain = 4663, url = "https://robinhoodchain.blockscout.com/api" }

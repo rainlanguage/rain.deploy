@@ -33,13 +33,16 @@ on:
       networks:
         type: string
         required: true
-        default: arbitrum base base-sepolia mainnet flare hyperliquid polygon
+        default: arbitrum base base-sepolia bsc mainnet flare hyperliquid polygon
         description: |
           Which explorers to submit to. FOUNDRY's chain names, not the
-          `[rpc_endpoints]` aliases, and the two differ on three of the seven:
+          `[rpc_endpoints]` aliases, and the two differ on three of the nine:
           the aliases `base_sepolia`, `ethereum` and `hyperevm` are rejected
           outright, and the chain names are `base-sepolia`, `mainnet` and
-          `hyperliquid`. The default is
+          `hyperliquid`. Robinhood Chain (4663) is deliberately absent from
+          the default: Etherscan does not index it, so its Blockscout is the
+          only explorer target and that has rejected non-browser clients —
+          verify it through Sourcify by hand. The default is
           `LibRainDeploy.supportedNetworks()` spelled that way, i.e. every
           network the deploy broadcasts to, so it has to move when that does.
 jobs:

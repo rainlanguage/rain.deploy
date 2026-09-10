@@ -193,18 +193,20 @@ contract LibRainDeployTest is Test {
         );
     }
 
-    /// `supportedNetworks` MUST return exactly 7 networks in the expected
+    /// `supportedNetworks` MUST return exactly 9 networks in the expected
     /// order matching the library constants.
     function testSupportedNetworks() external pure {
         string[] memory networks = LibRainDeploy.supportedNetworks();
-        assertEq(networks.length, 7);
+        assertEq(networks.length, 9);
         assertEq(networks[0], LibRainDeploy.ARBITRUM_ONE);
         assertEq(networks[1], LibRainDeploy.BASE);
         assertEq(networks[2], LibRainDeploy.BASE_SEPOLIA);
-        assertEq(networks[3], LibRainDeploy.ETHEREUM);
-        assertEq(networks[4], LibRainDeploy.FLARE);
-        assertEq(networks[5], LibRainDeploy.HYPEREVM);
-        assertEq(networks[6], LibRainDeploy.POLYGON);
+        assertEq(networks[3], LibRainDeploy.BSC);
+        assertEq(networks[4], LibRainDeploy.ETHEREUM);
+        assertEq(networks[5], LibRainDeploy.FLARE);
+        assertEq(networks[6], LibRainDeploy.HYPEREVM);
+        assertEq(networks[7], LibRainDeploy.POLYGON);
+        assertEq(networks[8], LibRainDeploy.ROBINHOOD);
     }
 
     /// `ZOLTU_FACTORY_CODEHASH` MUST match the actual codehash of the Zoltu
