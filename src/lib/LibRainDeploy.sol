@@ -82,6 +82,11 @@ library LibRainDeploy {
     /// Config name for Base network.
     string constant BASE = "base";
 
+    /// Config name for BNB Smart Chain (chain id 56). The Zoltu factory is
+    /// deployed there with the canonical runtime, so deterministic deploys
+    /// land at the same addresses as on every other supported network.
+    string constant BSC = "bsc";
+
     /// Config name for Base Sepolia testnet.
     string constant BASE_SEPOLIA = "base_sepolia";
 
@@ -290,15 +295,16 @@ library LibRainDeploy {
     /// Returns the list of networks currently supported by Rain deployments.
     /// @return The list of supported network names.
     function supportedNetworks() internal pure returns (string[] memory) {
-        string[] memory networks = new string[](8);
+        string[] memory networks = new string[](9);
         networks[0] = ARBITRUM_ONE;
         networks[1] = BASE;
         networks[2] = BASE_SEPOLIA;
-        networks[3] = ETHEREUM;
-        networks[4] = FLARE;
-        networks[5] = HYPEREVM;
-        networks[6] = POLYGON;
-        networks[7] = ROBINHOOD;
+        networks[3] = BSC;
+        networks[4] = ETHEREUM;
+        networks[5] = FLARE;
+        networks[6] = HYPEREVM;
+        networks[7] = POLYGON;
+        networks[8] = ROBINHOOD;
         return networks;
     }
 
