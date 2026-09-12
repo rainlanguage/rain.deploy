@@ -289,6 +289,8 @@ contract MigrationRegistryAppliedAfterTest is Test {
         vm.assume(writer != address(0));
         vm.assume(otherA != address(0));
         vm.assume(otherB != address(0));
+        vm.assume(writer != otherA);
+        vm.assume(writer != otherB);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisiteA);
         LibMigrationFuzz.assumeMigration(vm, prerequisiteB);
@@ -326,6 +328,7 @@ contract MigrationRegistryAppliedAfterTest is Test {
     {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
+        vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
@@ -368,7 +371,7 @@ contract MigrationRegistryAppliedAfterTest is Test {
         sRegistry.applyMigration(migrationA, listA);
         assertEq(abi.encode(sRegistry.appliedAfter(writer, migrationA)), abi.encode(listA));
 
-        Prerequisite[] memory listB = headThen(writer, migrationA, one(writer, migrationA));
+        Prerequisite[] memory listB = headThen(writer, migrationA, one(other, prerequisite));
         vm.prank(writer);
         sRegistry.applyMigration(migrationB, listB);
 
@@ -382,6 +385,7 @@ contract MigrationRegistryAppliedAfterTest is Test {
     {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
+        vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
@@ -476,6 +480,7 @@ contract MigrationRegistryAppliedAfterTest is Test {
     ) external {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
+        vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);

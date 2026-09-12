@@ -1395,7 +1395,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         // The prerequisite is in another namespace, so applying it leaves the
         // caller's head at genesis, which bounds no moment. A prerequisite in
         // the caller's own namespace is
-        // `testApplyMigrationOwnEarlierMigrationIsAPrerequisite`.
+        // `testApplyMigrationOwnEarlierMigrationIsNotAPrerequisite`.
         vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
@@ -1442,6 +1442,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(writer != address(0));
         vm.assume(otherA != address(0));
         vm.assume(otherB != address(0));
+        vm.assume(writer != otherA);
+        vm.assume(writer != otherB);
         LibMigrationFuzz.assumeMigration(vm, migrationA);
         LibMigrationFuzz.assumeMigration(vm, migrationB);
         LibMigrationFuzz.assumeMigration(vm, prerequisiteA);
@@ -1554,7 +1556,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         // The prerequisite is in another namespace, so applying it leaves the
         // caller's head where the same call expects it. A prerequisite in
         // the caller's own namespace is
-        // `testApplyMigrationOwnEarlierMigrationIsAPrerequisite`.
+        // `testApplyMigrationOwnEarlierMigrationIsNotAPrerequisite`.
         vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
@@ -1599,7 +1601,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         // The prerequisite is in another namespace, so applying it leaves the
         // caller's head where the same call expects it. A prerequisite in
         // the caller's own namespace is
-        // `testApplyMigrationOwnEarlierMigrationIsAPrerequisite`.
+        // `testApplyMigrationOwnEarlierMigrationIsNotAPrerequisite`.
         vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
@@ -1646,6 +1648,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     ) external {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
+        vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         LibMigrationFuzz.assumeMigration(vm, unrelated);
@@ -1660,9 +1663,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
     }
 
     /// Over a list of any length with exactly one entry unapplied, the revert
-    /// names that entry — wherever it sits, whatever namespaces the others are
-    /// in, the caller's own included. Once it is applied too, the write lands
-    /// and the whole list is the record's.
+    /// names that entry — wherever it sits, whatever other namespaces the rest
+    /// are in. Once it is applied too, the write lands and the whole list is
+    /// the record's.
     function testApplyMigrationNamesTheOneUnappliedPrerequisite(
         address writer,
         bytes32 migration,
@@ -1680,6 +1683,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
             // The caller's own migration is never a prerequisite here: applied
             // as one, it would make the second half `MigrationAlreadyApplied`.
             vm.assume(prerequisites[i].migration != migration);
+            // Nor is the caller's own namespace: an own entry after the head
+            // is refused as a key before any record is read.
+            vm.assume(prerequisites[i].writer != writer);
             if (i == unappliedIndex) {
                 continue;
             }
@@ -1779,6 +1785,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(writer != address(0));
         vm.assume(otherA != address(0));
         vm.assume(otherB != address(0));
+        vm.assume(writer != otherA);
+        vm.assume(writer != otherB);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisiteA);
         LibMigrationFuzz.assumeMigration(vm, prerequisiteB);
@@ -1909,6 +1917,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     ) external {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
+        vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         assertEq(sRegistry.applied(other, prerequisite), 0);
@@ -1968,19 +1977,20 @@ contract MigrationRegistryApplyMigrationTest is Test {
         );
     }
 
-    /// A prerequisite naming the migration being applied is unapplied by
-    /// construction — the write that would apply it is the one being refused
-    /// — so it is `PrerequisiteNotApplied(writer, migration)` rather than a
-    /// record, on both writes.
+    /// A prerequisite naming the migration being applied is an entry after the
+    /// head in the caller's own namespace, so it is refused as
+    /// `OwnPrerequisite(migration)` before any record is read — the same
+    /// refusal as any own entry, not the `PrerequisiteNotApplied` it would also
+    /// be by construction. On both writes, and nothing is recorded.
     function testApplyMigrationSelfPrerequisiteReverts(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, writer, migration));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.OwnPrerequisite.selector, migration));
         vm.prank(writer);
         sRegistry.applyMigration(migration, headThen(writer, MIGRATION_HEAD_GENESIS, one(writer, migration)));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, writer, migration));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.OwnPrerequisite.selector, migration));
         vm.prank(writer);
         sRegistry.applyMigrationHistory(
             migration, block.timestamp, headThen(writer, MIGRATION_HEAD_GENESIS, one(writer, migration))
@@ -1990,10 +2000,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.head(writer), MIGRATION_HEAD_GENESIS);
     }
 
-    /// The caller's own namespace is an ordinary namespace to name: an earlier
-    /// migration of its own is a prerequisite like any other, applied or not,
-    /// and is recorded like any other.
-    function testApplyMigrationOwnEarlierMigrationIsAPrerequisite(
+    /// The caller's own namespace is not a namespace to name after the head:
+    /// an earlier migration of its own is refused as `OwnPrerequisite`,
+    /// applied or not, and is never recorded as a prerequisite. The head
+    /// already says everything about the caller's own line, so the earlier
+    /// migration is named there and only there.
+    function testApplyMigrationOwnEarlierMigrationIsNotAPrerequisite(
         address writer,
         bytes32 migrationA,
         bytes32 migrationB
@@ -2003,24 +2015,25 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, writer, migrationA)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.OwnPrerequisite.selector, migrationA));
         vm.prank(writer);
         sRegistry.applyMigration(migrationB, headThen(writer, MIGRATION_HEAD_GENESIS, one(writer, migrationA)));
 
         vm.prank(writer);
         sRegistry.applyMigration(migrationA, onto(writer, MIGRATION_HEAD_GENESIS));
 
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.OwnPrerequisite.selector, migrationA));
         vm.prank(writer);
         sRegistry.applyMigration(migrationB, headThen(writer, migrationA, one(writer, migrationA)));
+        assertEq(sRegistry.applied(writer, migrationB), 0);
+        assertEq(sRegistry.head(writer), migrationA);
+
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationB, onto(writer, migrationA));
 
         assertEq(sRegistry.applied(writer, migrationB), block.timestamp);
         assertEq(sRegistry.appliedOnto(writer, migrationB), migrationA);
-        assertEq(
-            abi.encode(sRegistry.appliedAfter(writer, migrationB)),
-            abi.encode(headThen(writer, migrationA, one(writer, migrationA)))
-        );
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migrationB)), abi.encode(onto(writer, migrationA)));
         assertEq(sRegistry.head(writer), migrationB);
     }
 
@@ -2035,6 +2048,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     ) external {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
+        vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
@@ -2193,6 +2207,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     ) external {
         vm.assume(writer != address(0));
         vm.assume(other != address(0));
+        vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
@@ -2386,6 +2401,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(writer != address(0));
         vm.assume(otherA != address(0));
         vm.assume(otherB != address(0));
+        vm.assume(writer != otherA);
+        vm.assume(writer != otherB);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisiteA);
         LibMigrationFuzz.assumeMigration(vm, prerequisiteB);
@@ -2429,7 +2446,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         // The prerequisite is in another namespace, so applying it leaves the
         // caller's head at genesis, which bounds no moment. A prerequisite in
         // the caller's own namespace is
-        // `testApplyMigrationOwnEarlierMigrationIsAPrerequisite`.
+        // `testApplyMigrationOwnEarlierMigrationIsNotAPrerequisite`.
         vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
