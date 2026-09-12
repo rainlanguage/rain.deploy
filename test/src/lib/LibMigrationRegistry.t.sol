@@ -7,10 +7,10 @@ import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {
-    IMigrationRegistryV1,
+    IMigrationRegistryV2,
     MIGRATION_HEAD_GENESIS,
     Prerequisite
-} from "../../../src/interface/IMigrationRegistryV1.sol";
+} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
 import {DELEGATION_DESIGNATOR_LENGTH, LibAccountCode} from "../../lib/LibAccountCode.sol";
@@ -28,9 +28,9 @@ contract LibMigrationRegistryTest is Test {
     /// Deploys `MigrationRegistry` through the Zoltu factory, which lands it at
     /// the pinned address.
     /// @return The deployed registry.
-    function deployRegistry() internal returns (IMigrationRegistryV1) {
+    function deployRegistry() internal returns (IMigrationRegistryV2) {
         LibRainDeploy.etchZoltuFactory(vm);
-        return IMigrationRegistryV1(LibRainDeploy.deployZoltu(type(MigrationRegistry).creationCode));
+        return IMigrationRegistryV2(LibRainDeploy.deployZoltu(type(MigrationRegistry).creationCode));
     }
 
     /// Occupant code that is ORDINARY contract code rather than a delegation
@@ -155,7 +155,7 @@ contract LibMigrationRegistryTest is Test {
     /// An applied migration answers the moment it was applied — read back
     /// through the library, so what `applyMigration` writes is what `applied`
     /// finds. An empty list is a migration that waits on nothing, and reads
-    /// back as exactly that.
+    /// back as the head alone.
     function testApplyMigrationThenApplied(bytes32 migration, uint32 appliedAt) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(appliedAt != 0);
@@ -165,7 +165,10 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
 
         assertEq(LibMigrationRegistry.applied(address(this), migration), appliedAt);
-        assertEq(LibMigrationRegistry.appliedAfter(address(this), migration).length, 0);
+        assertEq(
+            abi.encode(LibMigrationRegistry.appliedAfter(address(this), migration)),
+            abi.encode(one(address(this), MIGRATION_HEAD_GENESIS))
+        );
     }
 
     /// A namespace that has applied nothing reads back as genesis, and each
@@ -196,7 +199,7 @@ contract LibMigrationRegistryTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV1.UnexpectedMigrationHead.selector, address(this), skipped, MIGRATION_HEAD_GENESIS
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector, address(this), skipped, MIGRATION_HEAD_GENESIS
             )
         );
         this.externalApplyMigration(skipped, migration, new Prerequisite[](0));
@@ -259,7 +262,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV1.MigrationAlreadyApplied.selector, address(this), migration)
+            abi.encodeWithSelector(IMigrationRegistryV2.MigrationAlreadyApplied.selector, address(this), migration)
         );
         this.externalApplyMigration(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
     }
@@ -269,7 +272,7 @@ contract LibMigrationRegistryTest is Test {
     function testApplyMigrationZeroMigrationReverts() external {
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         this.externalApplyMigration(MIGRATION_HEAD_GENESIS, bytes32(0), new Prerequisite[](0));
     }
 
@@ -278,13 +281,13 @@ contract LibMigrationRegistryTest is Test {
     function testApplyMigrationGenesisMigrationReverts() external {
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         this.externalApplyMigration(MIGRATION_HEAD_GENESIS, MIGRATION_HEAD_GENESIS, new Prerequisite[](0));
     }
 
     /// `applyMigration` through the library lands the record once its
     /// prerequisite is applied, `applied` reads it back as the block the write
-    /// landed in, and `prerequisites` reads the list back as listed.
+    /// landed in, and `appliedAfter` reads the head and then the list back.
     function testApplyMigrationWithPrerequisiteThenApplied(
         address other,
         bytes32 migration,
@@ -297,7 +300,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(now_ != 0);
         vm.warp(now_);
-        IMigrationRegistryV1 registry = deployRegistry();
+        IMigrationRegistryV2 registry = deployRegistry();
         vm.prank(other);
         registry.applyMigration(MIGRATION_HEAD_GENESIS, prerequisite, new Prerequisite[](0));
 
@@ -308,9 +311,11 @@ contract LibMigrationRegistryTest is Test {
         assertEq(LibMigrationRegistry.head(address(this)), migration);
 
         Prerequisite[] memory recorded = LibMigrationRegistry.appliedAfter(address(this), migration);
-        assertEq(recorded.length, 1);
-        assertEq(recorded[0].writer, other);
-        assertEq(recorded[0].migration, prerequisite);
+        assertEq(recorded.length, 2);
+        assertEq(recorded[0].writer, address(this));
+        assertEq(recorded[0].migration, MIGRATION_HEAD_GENESIS);
+        assertEq(recorded[1].writer, other);
+        assertEq(recorded[1].migration, prerequisite);
     }
 
     /// The registry's `PrerequisiteNotApplied` reaches the caller unmodified
@@ -323,12 +328,12 @@ contract LibMigrationRegistryTest is Test {
         deployRegistry();
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, other, prerequisite)
+            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, other, prerequisite)
         );
         this.externalApplyMigration(MIGRATION_HEAD_GENESIS, migration, one(other, prerequisite));
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, other, prerequisite)
+            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, other, prerequisite)
         );
         this.externalApplyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, block.timestamp, one(other, prerequisite));
 
@@ -344,21 +349,21 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         this.externalApplyMigration(MIGRATION_HEAD_GENESIS, migration, one(address(0), migration));
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         this.externalApplyMigrationHistory(
             MIGRATION_HEAD_GENESIS, migration, block.timestamp, one(address(0), migration)
         );
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         this.externalApplyMigration(MIGRATION_HEAD_GENESIS, migration, one(other, bytes32(0)));
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         this.externalApplyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, block.timestamp, one(other, bytes32(0)));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         this.externalApplyMigration(MIGRATION_HEAD_GENESIS, migration, one(other, MIGRATION_HEAD_GENESIS));
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         this.externalApplyMigrationHistory(
             MIGRATION_HEAD_GENESIS, migration, block.timestamp, one(other, MIGRATION_HEAD_GENESIS)
         );
@@ -372,7 +377,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         this.externalApplied(address(0), migration);
     }
 
@@ -381,7 +386,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(writer != address(0));
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         this.externalApplied(writer, bytes32(0));
     }
 
@@ -390,7 +395,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(writer != address(0));
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         this.externalApplied(writer, MIGRATION_HEAD_GENESIS);
     }
 
@@ -398,7 +403,7 @@ contract LibMigrationRegistryTest is Test {
     function testHeadZeroWriterReverts() external {
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         this.externalHead(address(0));
     }
 
@@ -606,11 +611,14 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt, new Prerequisite[](0));
 
         assertEq(LibMigrationRegistry.applied(address(this), migration), appliedAt);
-        assertEq(LibMigrationRegistry.appliedAfter(address(this), migration).length, 0);
+        assertEq(
+            abi.encode(LibMigrationRegistry.appliedAfter(address(this), migration)),
+            abi.encode(one(address(this), MIGRATION_HEAD_GENESIS))
+        );
     }
 
     /// `applyMigrationHistory` through the library records the supplied moment
-    /// once its prerequisite is applied, and reads the list back as listed.
+    /// once its prerequisite is applied, and reads the head and then the list back.
     function testApplyMigrationHistoryWithPrerequisiteThenApplied(
         address other,
         bytes32 migration,
@@ -625,7 +633,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(appliedAt != 0);
         vm.assume(now_ >= appliedAt);
         vm.warp(now_);
-        IMigrationRegistryV1 registry = deployRegistry();
+        IMigrationRegistryV2 registry = deployRegistry();
         vm.prank(other);
         registry.applyMigration(MIGRATION_HEAD_GENESIS, prerequisite, new Prerequisite[](0));
 
@@ -637,9 +645,11 @@ contract LibMigrationRegistryTest is Test {
         assertEq(LibMigrationRegistry.head(address(this)), migration);
 
         Prerequisite[] memory recorded = LibMigrationRegistry.appliedAfter(address(this), migration);
-        assertEq(recorded.length, 1);
-        assertEq(recorded[0].writer, other);
-        assertEq(recorded[0].migration, prerequisite);
+        assertEq(recorded.length, 2);
+        assertEq(recorded[0].writer, address(this));
+        assertEq(recorded[0].migration, MIGRATION_HEAD_GENESIS);
+        assertEq(recorded[1].writer, other);
+        assertEq(recorded[1].migration, prerequisite);
     }
 
     /// A namespace backfilled in head order keeps every moment it was given, and
@@ -685,7 +695,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroTimestamp.selector));
         this.externalApplyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, 0, new Prerequisite[](0));
     }
 
@@ -697,7 +707,7 @@ contract LibMigrationRegistryTest is Test {
         vm.warp(now_);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
+            abi.encodeWithSelector(IMigrationRegistryV2.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
         );
         this.externalApplyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, uint256(now_) + 1, new Prerequisite[](0));
     }
@@ -714,7 +724,7 @@ contract LibMigrationRegistryTest is Test {
 
         LibMigrationRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migrationA, 2000, new Prerequisite[](0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.TimestampBeforeHead.selector, 1999, 2000));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.TimestampBeforeHead.selector, 1999, 2000));
         this.externalApplyMigrationHistory(migrationA, migrationB, 1999, new Prerequisite[](0));
     }
 
@@ -765,7 +775,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         this.externalAppliedOnto(address(0), migration);
     }
 
@@ -774,7 +784,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(writer != address(0));
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         this.externalAppliedOnto(writer, bytes32(0));
     }
 
@@ -784,7 +794,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(writer != address(0));
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         this.externalAppliedOnto(writer, MIGRATION_HEAD_GENESIS);
     }
 
@@ -840,8 +850,8 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// An unapplied migration answers an empty list, which is the same "no
-    /// record" answer `applied` gives as a zero moment; `applied` is what tells
-    /// it apart from a record that waited on nothing.
+    /// record" answer `applied` gives as a zero moment: no record was applied
+    /// after anything, and every record was applied after its head.
     function testAppliedAfterUnappliedIsEmpty(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
@@ -856,7 +866,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         this.externalAppliedAfter(address(0), migration);
     }
 
@@ -866,7 +876,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(writer != address(0));
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         this.externalAppliedAfter(writer, bytes32(0));
     }
 
@@ -876,7 +886,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(writer != address(0));
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         this.externalAppliedAfter(writer, MIGRATION_HEAD_GENESIS);
     }
 
@@ -896,7 +906,7 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// Nor is a list read out of ordinary occupying code, which is free to
-    /// answer an empty list for every record and read as "waited on nothing".
+    /// answer an empty list for every record and read as "never applied".
     function testAppliedAfterWrongCode(address writer, bytes32 migration, bytes memory code) external {
         assumeOrdinaryCode(code);
         vm.assume(keccak256(code) != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH);

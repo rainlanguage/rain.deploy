@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IMigrationRegistryV1, Prerequisite} from "../interface/IMigrationRegistryV1.sol";
+import {IMigrationRegistryV2, Prerequisite} from "../interface/IMigrationRegistryV2.sol";
 import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 
 /// @title LibMigrationRegistry
@@ -86,8 +86,8 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// walked from `head` back is the order its migrations ran in — which is a
 /// stronger statement than the moments make, because a moment is whatever the
 /// writer supplied and the chain is what the registry enforced. `appliedAfter`
-/// reads back the list a record was applied after, as listed, so the same walk
-/// crosses namespaces.
+/// reads back everything a record was applied after, the head first and then
+/// the list as listed, so the same walk crosses namespaces.
 ///
 /// The registry is an INDEX, not proof. It says which invariant applies; it does
 /// not say the invariant holds. A multisig can act out of band and nothing here
@@ -144,7 +144,7 @@ library LibMigrationRegistry {
     function applied(address writer, bytes32 migration) internal view returns (uint256) {
         checkCodeHash();
         return
-            IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
                 .applied(writer, migration);
     }
 
@@ -163,27 +163,31 @@ library LibMigrationRegistry {
     /// not applied it.
     function appliedOnto(address writer, bytes32 migration) internal view returns (bytes32) {
         checkCodeHash();
-        return IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+        return IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .appliedOnto(writer, migration);
     }
 
-    /// What `writer` applied `migration` after: the prerequisites the write
-    /// listed, as listed. Empty if it listed none and empty if `writer` never
-    /// applied `migration`; `applied` is what tells those apart.
+    /// What `writer` applied `migration` after: the head it was applied onto,
+    /// under `writer`, then the prerequisites the write listed, as listed.
+    /// Empty if `writer` never applied `migration`.
     ///
     /// Verifies the registry's code hash before reading, for the same reason
     /// `applied` does: occupying code is free to answer an empty list for
-    /// every record, which reads as "waited on nothing".
+    /// every record, which reads as "never applied".
     ///
-    /// This is the step that walks across namespaces. Each entry names a record
-    /// that existed when this one was written, under whichever writer it named.
+    /// This is the step that walks from a record to everything it waited on,
+    /// within its namespace and across them. Each entry after the first names
+    /// a record that existed when this one was written, under whichever
+    /// writer it named; the first names the head, which is
+    /// `MIGRATION_HEAD_GENESIS` for a namespace's first migration.
     /// @param writer The namespace to read. Never the zero address.
     /// @param migration The migration to ask about. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @return The prerequisites `writer` applied `migration` after, as listed.
+    /// @return What `writer` applied `migration` after: the head, then the
+    /// prerequisites as listed.
     function appliedAfter(address writer, bytes32 migration) internal view returns (Prerequisite[] memory) {
         checkCodeHash();
-        return IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+        return IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .appliedAfter(writer, migration);
     }
 
@@ -200,7 +204,7 @@ library LibMigrationRegistry {
     /// @return The head of `writer`'s namespace. Never zero.
     function head(address writer) internal view returns (bytes32) {
         checkCodeHash();
-        return IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS).head(writer);
+        return IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS).head(writer);
     }
 
     /// Applies `migration` under the CALLER's namespace, onto `expectedHead`,
@@ -244,7 +248,7 @@ library LibMigrationRegistry {
     /// entry a record key.
     function applyMigration(bytes32 expectedHead, bytes32 migration, Prerequisite[] memory prerequisites) internal {
         checkCodeHash();
-        IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .applyMigration(expectedHead, migration, prerequisites);
     }
 
@@ -278,7 +282,7 @@ library LibMigrationRegistry {
         Prerequisite[] memory prerequisites
     ) internal {
         checkCodeHash();
-        IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .applyMigrationHistory(expectedHead, migration, appliedAt, prerequisites);
     }
 }

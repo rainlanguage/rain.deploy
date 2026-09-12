@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
-import {Prerequisite} from "../../src/interface/IMigrationRegistryV1.sol";
+import {Prerequisite} from "../../src/interface/IMigrationRegistryV2.sol";
 
 /// @title MockMigrationApplier
 /// @notice A consumer in the shape `LibMigrationRegistry`'s writes are designed
@@ -65,7 +65,7 @@ contract MockMigrationApplier {
     /// What `writer` applied `migration` after.
     /// @param writer The namespace to read.
     /// @param migration The migration to ask about.
-    /// @return The prerequisites it listed, or empty.
+    /// @return The head it was applied onto and the prerequisites it listed, or empty.
     function appliedAfter(address writer, bytes32 migration) external view returns (Prerequisite[] memory) {
         return LibMigrationRegistry.appliedAfter(writer, migration);
     }

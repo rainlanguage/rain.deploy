@@ -251,7 +251,9 @@ ran last, naming the migrations in any namespace it waits on (`applyMigration`,
 or `applyMigrationHistory` for one that already ran), anyone reads when a given
 writer applied a given one (`applied`), what that writer applied it onto
 (`appliedOnto`), what it waited on (`appliedAfter`), and where a given writer's
-sequence has got to (`head`). There is no removal and no upgrade.
+sequence has got to (`head`). There is no removal and no upgrade. The interface
+is `IMigrationRegistryV2`; `IMigrationRegistryV1` is the same registry before
+prerequisites, kept for the release that shipped it.
 
 The two writes differ in exactly one thing: where the recorded moment comes
 from. `applyMigration` stamps the block the record lands in, for a script
@@ -397,18 +399,21 @@ prerequisites[0] = Prerequisite({writer: FLEET_SAFE, migration: FLEET_UPGRADE});
 LibMigrationRegistry.applyMigration(MIGRATION_V2, MIGRATION_V3, prerequisites);
 ```
 
-The list is part of the record, and `appliedAfter` reads it back as listed,
-duplicates included — empty for a record that waited on nothing and for a
-migration never applied, which `applied` tells apart. Within a namespace
-`appliedOnto` walks the chain back to genesis; across namespaces `appliedAfter`
-walks from a record to the records it waited on, so the cross-namespace order is
-on chain and not only in the log. `Migrated` is the one event, as it was: the
-list is in the record, not beside it. A prerequisite is an index check, not
-proof: it says the other writer recorded its migration, not that the state it
-produced holds, and consumers keep their pins. It bounds no moment either — a
-backfilled record may carry an earlier moment than its prerequisite, because
-what is checked is that the record existed when this write landed, which is
-chain order, and the moments in another namespace are that writer's data.
+The list is part of the record, and `appliedAfter` reads back everything the
+record was applied after: the head it was applied onto first, as an entry under
+the writer's own namespace, then the list as listed, duplicates included. A
+root's answer starts with `MIGRATION_HEAD_GENESIS`, the one entry that is a head
+and not a record. Empty only for a migration never applied. Within a namespace
+`appliedOnto` walks the chain back to genesis; `appliedAfter` walks from a
+record to every record it waited on, its predecessor included, so the
+cross-namespace order is on chain and not only in the log. `Migrated` is the one
+event, as it was: the list is in the record, not beside it. A prerequisite is an
+index check, not proof: it says the other writer recorded its migration, not
+that the state it produced holds, and consumers keep their pins. It bounds no
+moment either — a backfilled record may carry an earlier moment than its
+prerequisite, because what is checked is that the record existed when this write
+landed, which is chain order, and the moments in another namespace are that
+writer's data.
 
 The refusals sit in this order: the caller's own arguments first
 (`ZeroMigration`, `GenesisMigration`, `ZeroTimestamp`); then the list — every

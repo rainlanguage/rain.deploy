@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IMigrationRegistryV1, Prerequisite, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV1.sol";
+import {IMigrationRegistryV2, Prerequisite, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV2.sol";
 
 /// @dev One writer's record of one migration. Written in one call, so a record
 /// can never hold one half of itself.
@@ -13,13 +13,14 @@ struct MigrationRecord {
     /// The head the namespace was at when the record was written. Zero means
     /// never applied: a head is genesis or an applied id, both nonzero.
     bytes32 appliedOnto;
-    /// The prerequisites the write listed, as listed. Empty for a migration
-    /// that waited on nothing and for one never applied.
-    Prerequisite[] prerequisites;
+    /// What the migration was applied after: the head it was applied onto,
+    /// under the writer, then the prerequisites the write listed, as listed.
+    /// Empty only for a migration never applied.
+    Prerequisite[] appliedAfter;
 }
 
 /// @title MigrationRegistry
-/// @notice The whole of `IMigrationRegistryV1`: a writer applies one of its own
+/// @notice The whole of `IMigrationRegistryV2`: a writer applies one of its own
 /// migrations onto the head it believes its namespace is at, at the moment it
 /// says the migration ran, after the migrations in any namespace it names —
 /// and anyone reads when a given writer applied a given migration, what it
@@ -69,8 +70,9 @@ struct MigrationRecord {
 ///
 /// Both writes take a list of prerequisites, each a record in any namespace
 /// that must already exist, and refuse the write naming the first that does
-/// not. The list is kept on the record, so what a record waited on is read
-/// back from it exactly as what it was applied onto is.
+/// not. The list is kept on the record behind the head it was applied onto,
+/// so everything a record was applied after is read back from it in one
+/// list, the head first.
 ///
 /// Neither storage mapping is `public`. `applied`, `appliedOnto`,
 /// `appliedAfter` and `head` refuse the zero writer, the three record readers
@@ -78,7 +80,7 @@ struct MigrationRecord {
 /// generated getter would answer all of them with zero — which for a record is
 /// "not applied" and for `head` is a value no head can ever hold, i.e. exactly
 /// the silent wrong-branch this contract reverts to prevent.
-contract MigrationRegistry is IMigrationRegistryV1 {
+contract MigrationRegistry is IMigrationRegistryV2 {
     /// Every record, namespaced by writer. A zero `appliedAt` means never
     /// applied. Not `public`: the only readers are `applied`, `appliedOnto`
     /// and `appliedAfter`, which refuse the inputs that can only be mistakes.
@@ -91,7 +93,7 @@ contract MigrationRegistry is IMigrationRegistryV1 {
     /// the same reason as the records: the untranslated zero is not a head.
     mapping(address writer => bytes32 head) internal sHead;
 
-    /// @inheritdoc IMigrationRegistryV1
+    /// @inheritdoc IMigrationRegistryV2
     /// @dev The block is the moment, so a caller that has nothing to say about
     /// when its migration ran does not have to say it.
     // slither-disable-next-line timestamp
@@ -100,7 +102,7 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         applyMigrationRecord(expectedHead, migration, block.timestamp, prerequisites);
     }
 
-    /// @inheritdoc IMigrationRegistryV1
+    /// @inheritdoc IMigrationRegistryV2
     function applyMigrationHistory(
         bytes32 expectedHead,
         bytes32 migration,
@@ -292,16 +294,18 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         // slither-disable-end timestamp
         record.appliedAt = appliedAt;
         record.appliedOnto = actualHead;
-        // Pushed one at a time: solc does not copy a calldata array of structs
-        // into storage. The record was empty, so this is the whole list.
+        // The head first, then pushed one at a time: solc does not copy a
+        // calldata array of structs into storage. The record was empty, so
+        // this is the whole list.
+        record.appliedAfter.push(Prerequisite({writer: msg.sender, migration: actualHead}));
         for (uint256 i = 0; i < prerequisites.length; i++) {
-            record.prerequisites.push(prerequisites[i]);
+            record.appliedAfter.push(prerequisites[i]);
         }
         sHead[msg.sender] = migration;
         emit Migrated(msg.sender, migration, appliedAt);
     }
 
-    /// @inheritdoc IMigrationRegistryV1
+    /// @inheritdoc IMigrationRegistryV2
     /// @dev All three refusals are about a caller that has not supplied what it
     /// thinks it has. None can ever be a real record: nothing originates from
     /// the zero address, and neither write records the zero id or the genesis
@@ -313,7 +317,7 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         return sRecords[writer][migration].appliedAt;
     }
 
-    /// @inheritdoc IMigrationRegistryV1
+    /// @inheritdoc IMigrationRegistryV2
     /// @dev The same three refusals as `applied`, for the same reason and on
     /// the same key: a zero answer here reads as "never applied" exactly as a
     /// zero moment does.
@@ -322,13 +326,13 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         return sRecords[writer][migration].appliedOnto;
     }
 
-    /// @inheritdoc IMigrationRegistryV1
+    /// @inheritdoc IMigrationRegistryV2
     /// @dev The same three refusals again: an empty answer for a key that can
-    /// never hold a record would read as "waited on nothing" about a record
-    /// the caller did not mean to ask for.
+    /// never hold a record would read as "never applied" about a record the
+    /// caller did not mean to ask for.
     function appliedAfter(address writer, bytes32 migration) external view returns (Prerequisite[] memory) {
         checkRecordKey(writer, migration);
-        return sRecords[writer][migration].prerequisites;
+        return sRecords[writer][migration].appliedAfter;
     }
 
     /// Refuses the three inputs that can only be a mistake in the caller rather
@@ -348,7 +352,7 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         }
     }
 
-    /// @inheritdoc IMigrationRegistryV1
+    /// @inheritdoc IMigrationRegistryV2
     /// @dev The zero namespace is refused rather than answered `genesis`: it is
     /// provably empty forever, so "a namespace nothing has been applied to" is a
     /// true statement about it and a false one about what the caller meant to

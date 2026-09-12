@@ -5,10 +5,10 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.16.2/src/Test.sol";
 
 import {
-    IMigrationRegistryV1,
+    IMigrationRegistryV2,
     Prerequisite,
     MIGRATION_HEAD_GENESIS
-} from "../../../src/interface/IMigrationRegistryV1.sol";
+} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
@@ -65,7 +65,7 @@ contract MigrationRegistryAppliedOntoTest is Test {
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, new Prerequisite[](0));
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV1.UnexpectedMigrationHead.selector, writer, wrongHead, migrationA)
+            abi.encodeWithSelector(IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, wrongHead, migrationA)
         );
         vm.prank(writer);
         sRegistry.applyMigration(wrongHead, migrationB, new Prerequisite[](0));
@@ -130,7 +130,7 @@ contract MigrationRegistryAppliedOntoTest is Test {
     function testAppliedOntoZeroWriterReverts(bytes32 migration) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.appliedOnto(address(0), migration);
     }
 
@@ -139,7 +139,7 @@ contract MigrationRegistryAppliedOntoTest is Test {
     function testAppliedOntoZeroMigrationReverts(address writer) external {
         vm.assume(writer != address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         sRegistry.appliedOnto(writer, bytes32(0));
     }
 
@@ -149,7 +149,7 @@ contract MigrationRegistryAppliedOntoTest is Test {
     function testAppliedOntoGenesisMigrationReverts(address writer) external {
         vm.assume(writer != address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         sRegistry.appliedOnto(writer, MIGRATION_HEAD_GENESIS);
     }
 
@@ -157,10 +157,10 @@ contract MigrationRegistryAppliedOntoTest is Test {
     /// both gets one stable answer rather than one that depends on which check
     /// happens to run — the same order `applied` uses, from the same check.
     function testAppliedOntoZeroWriterCheckedFirst() external {
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.appliedOnto(address(0), bytes32(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.appliedOnto(address(0), MIGRATION_HEAD_GENESIS);
     }
 
@@ -174,13 +174,13 @@ contract MigrationRegistryAppliedOntoTest is Test {
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.appliedOnto(address(0), migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         sRegistry.appliedOnto(writer, bytes32(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         sRegistry.appliedOnto(writer, MIGRATION_HEAD_GENESIS);
 
         assertEq(sRegistry.appliedOnto(writer, migration), MIGRATION_HEAD_GENESIS);

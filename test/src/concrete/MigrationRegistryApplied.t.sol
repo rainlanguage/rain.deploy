@@ -5,10 +5,10 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.16.2/src/Test.sol";
 
 import {
-    IMigrationRegistryV1,
+    IMigrationRegistryV2,
     Prerequisite,
     MIGRATION_HEAD_GENESIS
-} from "../../../src/interface/IMigrationRegistryV1.sol";
+} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
@@ -110,7 +110,7 @@ contract MigrationRegistryAppliedTest is Test {
     function testAppliedZeroWriterReverts(bytes32 migration) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.applied(address(0), migration);
     }
 
@@ -119,7 +119,7 @@ contract MigrationRegistryAppliedTest is Test {
     function testAppliedZeroMigrationReverts(address writer) external {
         vm.assume(writer != address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         sRegistry.applied(writer, bytes32(0));
     }
 
@@ -130,7 +130,7 @@ contract MigrationRegistryAppliedTest is Test {
     function testAppliedGenesisMigrationReverts(address writer) external {
         vm.assume(writer != address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         sRegistry.applied(writer, MIGRATION_HEAD_GENESIS);
     }
 
@@ -138,10 +138,10 @@ contract MigrationRegistryAppliedTest is Test {
     /// both is told about the namespace first and gets one stable answer rather
     /// than one that depends on which check happens to run.
     function testAppliedZeroWriterCheckedFirst() external {
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.applied(address(0), bytes32(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.applied(address(0), MIGRATION_HEAD_GENESIS);
     }
 
@@ -155,13 +155,13 @@ contract MigrationRegistryAppliedTest is Test {
         vm.prank(writer);
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.applied(address(0), migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         sRegistry.applied(writer, bytes32(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         sRegistry.applied(writer, MIGRATION_HEAD_GENESIS);
 
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
@@ -188,15 +188,15 @@ contract MigrationRegistryAppliedTest is Test {
     }
 
     /// There is no other entry point at all: no fallback, no receive, and
-    /// nothing beyond the `IMigrationRegistryV1` functions, so an unknown
+    /// nothing beyond the `IMigrationRegistryV2` functions, so an unknown
     /// selector reverts instead of being silently absorbed.
     function testAppliedNoOtherEntryPoint(bytes4 selector, bytes32 migration) external {
-        vm.assume(selector != IMigrationRegistryV1.applied.selector);
-        vm.assume(selector != IMigrationRegistryV1.appliedOnto.selector);
-        vm.assume(selector != IMigrationRegistryV1.appliedAfter.selector);
-        vm.assume(selector != IMigrationRegistryV1.applyMigration.selector);
-        vm.assume(selector != IMigrationRegistryV1.applyMigrationHistory.selector);
-        vm.assume(selector != IMigrationRegistryV1.head.selector);
+        vm.assume(selector != IMigrationRegistryV2.applied.selector);
+        vm.assume(selector != IMigrationRegistryV2.appliedOnto.selector);
+        vm.assume(selector != IMigrationRegistryV2.appliedAfter.selector);
+        vm.assume(selector != IMigrationRegistryV2.applyMigration.selector);
+        vm.assume(selector != IMigrationRegistryV2.applyMigrationHistory.selector);
+        vm.assume(selector != IMigrationRegistryV2.head.selector);
 
         (bool success,) = address(sRegistry).call(abi.encodeWithSelector(selector, address(this), migration));
         assertFalse(success);
