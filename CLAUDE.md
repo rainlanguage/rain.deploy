@@ -20,11 +20,9 @@ relocated.
 - **`src/generated/<tag>/` is an append-only record.** `cutRelease()` writes a
   tag directory once. A cut tag can never be un-cut and consumers pin what it
   holds, so a frozen record is never edited, renamed or deleted.
-- **`ADDRESS_REGISTRY_ROOT == address(0)` is INTENDED.** It is the rollout
-  state, not a defect: nothing calls from the zero address, so the registry is
-  inert and fails loudly in both directions. Do not "fix" it. The root is welded
-  into the creation code, so setting a real one moves the deploy address, the
-  code hash and the snapshot together, as an ordinary source change.
+- **`ADDRESS_REGISTRY_ROOT` is welded into the creation code.** Rotating it
+  moves the deploy address, the code hash and the snapshot together, as an
+  ordinary source change; the registry at the old address stays where it is.
 - **The deploy/verify abstracts live in `src/`, a SCOPED exception.** This
   repo's PRODUCT is the deploy process, so its machinery is published rather
   than scaffolding. Do not carry the exception into a consumer repo: there

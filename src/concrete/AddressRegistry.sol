@@ -9,17 +9,10 @@ import {IAddressRegistryV1} from "../interface/IAddressRegistryV1.sol";
 /// changing it changes the deterministic deploy address and code hash of
 /// `AddressRegistry` on every network.
 ///
-/// Zero during rollout. Nothing calls from the zero address, so no name can be
-/// bound while root is zero, and `get` reverts on every name that is not bound
-/// — so a registry compiled under this root answers every read with a revert
-/// and cannot answer one with an address. There is no state in which a consumer
-/// silently resolves something wrong from it: a zero root makes the registry
-/// inert, loudly, in every direction.
-///
-/// Setting a real root is an ordinary source change. It moves the creation
-/// code, and therefore the deploy address, the code hash, the snapshot
-/// `script/Build.sol` generates and the release that carries them.
-address constant ADDRESS_REGISTRY_ROOT = address(0);
+/// Rotating it is an ordinary source change that moves the creation code, and
+/// therefore the deploy address, the code hash, the snapshot `script/Build.sol`
+/// generates and the release that carries them.
+address constant ADDRESS_REGISTRY_ROOT = 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c;
 
 /// @title AddressRegistry
 /// @notice The whole of `IAddressRegistryV1`: an immutable root authority binds
