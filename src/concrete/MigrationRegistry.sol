@@ -96,8 +96,8 @@ contract MigrationRegistry is IMigrationRegistryV1 {
     /// when its migration ran does not have to say it.
     // slither-disable-next-line timestamp
     // forge-lint: disable-next-line(block-timestamp)
-    function applyMigration(bytes32 expectedHead, bytes32 migration, Prerequisite[] calldata prerequisites_) external {
-        applyMigrationRecord(expectedHead, migration, block.timestamp, prerequisites_);
+    function applyMigration(bytes32 expectedHead, bytes32 migration, Prerequisite[] calldata prerequisites) external {
+        applyMigrationRecord(expectedHead, migration, block.timestamp, prerequisites);
     }
 
     /// @inheritdoc IMigrationRegistryV1
@@ -105,9 +105,9 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         bytes32 expectedHead,
         bytes32 migration,
         uint256 appliedAt,
-        Prerequisite[] calldata prerequisites_
+        Prerequisite[] calldata prerequisites
     ) external {
-        applyMigrationRecord(expectedHead, migration, appliedAt, prerequisites_);
+        applyMigrationRecord(expectedHead, migration, appliedAt, prerequisites);
     }
 
     /// Reached by both writes, so there is one order whichever of them
@@ -124,16 +124,16 @@ contract MigrationRegistry is IMigrationRegistryV1 {
     /// @param expectedHead The head the caller believes its namespace is at.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment to record against it.
-    /// @param prerequisites_ The records that must exist for it to be written.
+    /// @param prerequisites The records that must exist for it to be written.
     function applyMigrationRecord(
         bytes32 expectedHead,
         bytes32 migration,
         uint256 appliedAt,
-        Prerequisite[] calldata prerequisites_
+        Prerequisite[] calldata prerequisites
     ) internal {
         checkMigrationArguments(migration, appliedAt);
-        checkPrerequisites(prerequisites_);
-        writeMigrationRecord(expectedHead, migration, appliedAt, prerequisites_);
+        checkPrerequisites(prerequisites);
+        writeMigrationRecord(expectedHead, migration, appliedAt, prerequisites);
     }
 
     /// Refuses every prerequisite that is not a record key, in list order,
@@ -147,18 +147,18 @@ contract MigrationRegistry is IMigrationRegistryV1 {
     /// world the caller may only be able to wait for. The key check is
     /// `checkRecordKey`, so a prerequisite is refused exactly as `applied` is
     /// refused the same key.
-    /// @param prerequisites_ The records that must exist.
-    function checkPrerequisites(Prerequisite[] calldata prerequisites_) internal view {
-        for (uint256 i = 0; i < prerequisites_.length; i++) {
-            checkRecordKey(prerequisites_[i].writer, prerequisites_[i].migration);
+    /// @param prerequisites The records that must exist.
+    function checkPrerequisites(Prerequisite[] calldata prerequisites) internal view {
+        for (uint256 i = 0; i < prerequisites.length; i++) {
+            checkRecordKey(prerequisites[i].writer, prerequisites[i].migration);
         }
         // Zero is the one moment no write records, so equality is the exact
         // test for an absent record; slither reads it as a timestamp compare.
         // slither-disable-start timestamp
-        for (uint256 i = 0; i < prerequisites_.length; i++) {
+        for (uint256 i = 0; i < prerequisites.length; i++) {
             // slither-disable-next-line incorrect-equality
-            if (sRecords[prerequisites_[i].writer][prerequisites_[i].migration].appliedAt == 0) {
-                revert PrerequisiteNotApplied(prerequisites_[i].writer, prerequisites_[i].migration);
+            if (sRecords[prerequisites[i].writer][prerequisites[i].migration].appliedAt == 0) {
+                revert PrerequisiteNotApplied(prerequisites[i].writer, prerequisites[i].migration);
             }
         }
         // slither-disable-end timestamp
@@ -223,13 +223,13 @@ contract MigrationRegistry is IMigrationRegistryV1 {
     /// @param expectedHead The head the caller believes its namespace is at.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment to record against it.
-    /// @param prerequisites_ The records it was applied after, every one of
+    /// @param prerequisites The records it was applied after, every one of
     /// which `checkPrerequisites` has found to exist.
     function writeMigrationRecord(
         bytes32 expectedHead,
         bytes32 migration,
         uint256 appliedAt,
-        Prerequisite[] calldata prerequisites_
+        Prerequisite[] calldata prerequisites
     ) internal {
         // There is deliberately no zero-writer case here. `msg.sender` cannot
         // be the zero address, so the zero namespace is unreachable for writes
@@ -294,8 +294,8 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         record.appliedOnto = actualHead;
         // Pushed one at a time: solc does not copy a calldata array of structs
         // into storage. The record was empty, so this is the whole list.
-        for (uint256 i = 0; i < prerequisites_.length; i++) {
-            record.prerequisites.push(prerequisites_[i]);
+        for (uint256 i = 0; i < prerequisites.length; i++) {
+            record.prerequisites.push(prerequisites[i]);
         }
         sHead[msg.sender] = migration;
         emit Migrated(msg.sender, migration, appliedAt);
@@ -326,7 +326,7 @@ contract MigrationRegistry is IMigrationRegistryV1 {
     /// @dev The same three refusals again: an empty answer for a key that can
     /// never hold a record would read as "waited on nothing" about a record
     /// the caller did not mean to ask for.
-    function prerequisites(address writer, bytes32 migration) external view returns (Prerequisite[] memory) {
+    function appliedAfter(address writer, bytes32 migration) external view returns (Prerequisite[] memory) {
         checkRecordKey(writer, migration);
         return sRecords[writer][migration].prerequisites;
     }

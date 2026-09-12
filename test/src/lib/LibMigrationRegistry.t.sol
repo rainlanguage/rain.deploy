@@ -80,8 +80,8 @@ contract LibMigrationRegistryTest is Test {
     /// @param writer The namespace to read.
     /// @param migration The migration to ask about.
     /// @return What `writer` applied `migration` after, or empty.
-    function externalPrerequisites(address writer, bytes32 migration) external view returns (Prerequisite[] memory) {
-        return LibMigrationRegistry.prerequisites(writer, migration);
+    function externalAppliedAfter(address writer, bytes32 migration) external view returns (Prerequisite[] memory) {
+        return LibMigrationRegistry.appliedAfter(writer, migration);
     }
 
     /// External wrapper for `head` so that `vm.expectRevert` works at the
@@ -165,7 +165,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
 
         assertEq(LibMigrationRegistry.applied(address(this), migration), appliedAt);
-        assertEq(LibMigrationRegistry.prerequisites(address(this), migration).length, 0);
+        assertEq(LibMigrationRegistry.appliedAfter(address(this), migration).length, 0);
     }
 
     /// A namespace that has applied nothing reads back as genesis, and each
@@ -307,7 +307,7 @@ contract LibMigrationRegistryTest is Test {
         assertEq(LibMigrationRegistry.appliedOnto(address(this), migration), MIGRATION_HEAD_GENESIS);
         assertEq(LibMigrationRegistry.head(address(this)), migration);
 
-        Prerequisite[] memory recorded = LibMigrationRegistry.prerequisites(address(this), migration);
+        Prerequisite[] memory recorded = LibMigrationRegistry.appliedAfter(address(this), migration);
         assertEq(recorded.length, 1);
         assertEq(recorded[0].writer, other);
         assertEq(recorded[0].migration, prerequisite);
@@ -333,7 +333,7 @@ contract LibMigrationRegistryTest is Test {
         this.externalApplyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, block.timestamp, one(other, prerequisite));
 
         assertEq(LibMigrationRegistry.applied(address(this), migration), 0);
-        assertEq(LibMigrationRegistry.prerequisites(address(this), migration).length, 0);
+        assertEq(LibMigrationRegistry.appliedAfter(address(this), migration).length, 0);
         assertEq(LibMigrationRegistry.head(address(this)), MIGRATION_HEAD_GENESIS);
     }
 
@@ -606,7 +606,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt, new Prerequisite[](0));
 
         assertEq(LibMigrationRegistry.applied(address(this), migration), appliedAt);
-        assertEq(LibMigrationRegistry.prerequisites(address(this), migration).length, 0);
+        assertEq(LibMigrationRegistry.appliedAfter(address(this), migration).length, 0);
     }
 
     /// `applyMigrationHistory` through the library records the supplied moment
@@ -636,7 +636,7 @@ contract LibMigrationRegistryTest is Test {
         assertEq(LibMigrationRegistry.applied(address(this), migration), appliedAt);
         assertEq(LibMigrationRegistry.head(address(this)), migration);
 
-        Prerequisite[] memory recorded = LibMigrationRegistry.prerequisites(address(this), migration);
+        Prerequisite[] memory recorded = LibMigrationRegistry.appliedAfter(address(this), migration);
         assertEq(recorded.length, 1);
         assertEq(recorded[0].writer, other);
         assertEq(recorded[0].migration, prerequisite);
@@ -842,47 +842,47 @@ contract LibMigrationRegistryTest is Test {
     /// An unapplied migration answers an empty list, which is the same "no
     /// record" answer `applied` gives as a zero moment; `applied` is what tells
     /// it apart from a record that waited on nothing.
-    function testPrerequisitesUnappliedIsEmpty(address writer, bytes32 migration) external {
+    function testAppliedAfterUnappliedIsEmpty(address writer, bytes32 migration) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        assertEq(LibMigrationRegistry.prerequisites(writer, migration).length, 0);
+        assertEq(LibMigrationRegistry.appliedAfter(writer, migration).length, 0);
     }
 
     /// The registry's zero-writer refusal arrives unmodified through
     /// `prerequisites`.
-    function testPrerequisitesZeroWriterReverts(bytes32 migration) external {
+    function testAppliedAfterZeroWriterReverts(bytes32 migration) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
-        this.externalPrerequisites(address(0), migration);
+        this.externalAppliedAfter(address(0), migration);
     }
 
     /// The registry's zero-id refusal arrives unmodified through
     /// `prerequisites`.
-    function testPrerequisitesZeroMigrationReverts(address writer) external {
+    function testAppliedAfterZeroMigrationReverts(address writer) external {
         vm.assume(writer != address(0));
         deployRegistry();
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
-        this.externalPrerequisites(writer, bytes32(0));
+        this.externalAppliedAfter(writer, bytes32(0));
     }
 
     /// The registry's genesis-id refusal arrives unmodified through
     /// `prerequisites`.
-    function testPrerequisitesGenesisMigrationReverts(address writer) external {
+    function testAppliedAfterGenesisMigrationReverts(address writer) external {
         vm.assume(writer != address(0));
         deployRegistry();
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
-        this.externalPrerequisites(writer, MIGRATION_HEAD_GENESIS);
+        this.externalAppliedAfter(writer, MIGRATION_HEAD_GENESIS);
     }
 
     /// Reading a record's list off a chain with no registry is refused by the
     /// code hash, with the same named error as every other read.
-    function testPrerequisitesNoRegistry(address writer, bytes32 migration) external {
+    function testAppliedAfterNoRegistry(address writer, bytes32 migration) external {
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
 
         vm.expectRevert(
@@ -892,12 +892,12 @@ contract LibMigrationRegistryTest is Test {
                 bytes32(0)
             )
         );
-        this.externalPrerequisites(writer, migration);
+        this.externalAppliedAfter(writer, migration);
     }
 
     /// Nor is a list read out of ordinary occupying code, which is free to
     /// answer an empty list for every record and read as "waited on nothing".
-    function testPrerequisitesWrongCode(address writer, bytes32 migration, bytes memory code) external {
+    function testAppliedAfterWrongCode(address writer, bytes32 migration, bytes memory code) external {
         assumeOrdinaryCode(code);
         vm.assume(keccak256(code) != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH);
         vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
@@ -909,14 +909,14 @@ contract LibMigrationRegistryTest is Test {
                 keccak256(code)
             )
         );
-        this.externalPrerequisites(writer, migration);
+        this.externalAppliedAfter(writer, migration);
     }
 
     /// Nor out of a delegated account.
     /// @param writer The namespace a reader would ask about.
     /// @param migration The migration a reader would ask about.
     /// @param delegate The account the registry address is delegated to.
-    function testPrerequisitesDelegatedCode(address writer, bytes32 migration, address delegate) external {
+    function testAppliedAfterDelegatedCode(address writer, bytes32 migration, address delegate) external {
         bytes memory designator = assumedDesignator(delegate);
 
         vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, designator);
@@ -928,7 +928,7 @@ contract LibMigrationRegistryTest is Test {
                 keccak256(designator)
             )
         );
-        this.externalPrerequisites(writer, migration);
+        this.externalAppliedAfter(writer, migration);
     }
 
     /// `applyMigrationHistory` checks the code hash too, so a backfill is never

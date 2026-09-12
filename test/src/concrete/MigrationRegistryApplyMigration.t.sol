@@ -1352,8 +1352,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(waiting.appliedOnto(writer, migration), plain.appliedOnto(writer, migration));
         assertEq(waiting.head(writer), plain.head(writer));
         assertEq(waiting.head(writer), migration);
-        assertEq(abi.encode(plain.prerequisites(writer, migration)), abi.encode(new Prerequisite[](0)));
-        assertEq(abi.encode(waiting.prerequisites(writer, migration)), abi.encode(one(other, prerequisite)));
+        assertEq(abi.encode(plain.appliedAfter(writer, migration)), abi.encode(new Prerequisite[](0)));
+        assertEq(abi.encode(waiting.appliedAfter(writer, migration)), abi.encode(one(other, prerequisite)));
     }
 
     /// The same for `applyMigrationHistory`: the supplied moment is what is
@@ -1399,8 +1399,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(waiting.appliedOnto(writer, migration), plain.appliedOnto(writer, migration));
         assertEq(waiting.head(writer), plain.head(writer));
         assertEq(waiting.head(writer), migration);
-        assertEq(abi.encode(plain.prerequisites(writer, migration)), abi.encode(new Prerequisite[](0)));
-        assertEq(abi.encode(waiting.prerequisites(writer, migration)), abi.encode(one(other, prerequisite)));
+        assertEq(abi.encode(plain.appliedAfter(writer, migration)), abi.encode(new Prerequisite[](0)));
+        assertEq(abi.encode(waiting.appliedAfter(writer, migration)), abi.encode(one(other, prerequisite)));
     }
 
     /// A record keeps the list it was applied after, as listed, which is what
@@ -1435,18 +1435,18 @@ contract MigrationRegistryApplyMigrationTest is Test {
         Prerequisite[] memory listA = two(otherA, prerequisiteA, otherB, prerequisiteB);
         Prerequisite[] memory listB = one(otherB, prerequisiteB);
 
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migrationA)), abi.encode(new Prerequisite[](0)));
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migrationA)), abi.encode(new Prerequisite[](0)));
 
         bytes32 head = sRegistry.head(writer);
         vm.prank(writer);
         sRegistry.applyMigration(head, migrationA, listA);
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migrationA)), abi.encode(listA));
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migrationB)), abi.encode(new Prerequisite[](0)));
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migrationA)), abi.encode(listA));
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migrationB)), abi.encode(new Prerequisite[](0)));
 
         vm.prank(writer);
         sRegistry.applyMigration(migrationA, migrationB, listB);
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migrationB)), abi.encode(listB));
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migrationA)), abi.encode(listA));
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migrationB)), abi.encode(listB));
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migrationA)), abi.encode(listA));
     }
 
     /// A list of any length is recorded whole and in order: every key the
@@ -1468,7 +1468,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.prank(writer);
         sRegistry.applyMigration(head, migration, prerequisites);
 
-        Prerequisite[] memory recorded = sRegistry.prerequisites(writer, migration);
+        Prerequisite[] memory recorded = sRegistry.appliedAfter(writer, migration);
         assertEq(recorded.length, prerequisites.length);
         for (uint256 i = 0; i < recorded.length; i++) {
             assertEq(recorded[i].writer, prerequisites[i].writer);
@@ -1503,7 +1503,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         assertEq(sRegistry.applied(other, prerequisite), 1000);
         assertEq(sRegistry.appliedOnto(other, prerequisite), MIGRATION_HEAD_GENESIS);
-        assertEq(abi.encode(sRegistry.prerequisites(other, prerequisite)), abi.encode(new Prerequisite[](0)));
+        assertEq(abi.encode(sRegistry.appliedAfter(other, prerequisite)), abi.encode(new Prerequisite[](0)));
         assertEq(sRegistry.head(other), prerequisite);
         assertEq(sRegistry.applied(other, migration), 0);
     }
@@ -1537,7 +1537,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, one(other, prerequisite));
 
         assertEq(sRegistry.applied(writer, migration), 0);
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migration)), abi.encode(new Prerequisite[](0)));
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migration)), abi.encode(new Prerequisite[](0)));
         assertEq(sRegistry.head(writer), MIGRATION_HEAD_GENESIS);
 
         applyUnder(other, prerequisite);
@@ -1547,7 +1547,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
         assertEq(sRegistry.appliedOnto(writer, migration), MIGRATION_HEAD_GENESIS);
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migration)), abi.encode(one(other, prerequisite)));
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migration)), abi.encode(one(other, prerequisite)));
         assertEq(sRegistry.head(writer), migration);
     }
 
@@ -1590,7 +1590,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt, one(other, prerequisite));
 
         assertEq(sRegistry.applied(writer, migration), appliedAt);
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migration)), abi.encode(one(other, prerequisite)));
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migration)), abi.encode(one(other, prerequisite)));
         assertEq(sRegistry.head(writer), migration);
     }
 
@@ -1666,7 +1666,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.prank(writer);
         sRegistry.applyMigration(head, migration, prerequisites);
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migration)), abi.encode(prerequisites));
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migration)), abi.encode(prerequisites));
         assertEq(sRegistry.head(writer), migration);
     }
 
@@ -1717,7 +1717,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.prank(writer);
         sRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt, prerequisites);
         assertEq(sRegistry.applied(writer, migration), appliedAt);
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migration)), abi.encode(prerequisites));
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migration)), abi.encode(prerequisites));
     }
 
     /// With several unapplied, the FIRST in list order is the one named, and
@@ -1954,7 +1954,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         assertEq(sRegistry.applied(writer, migrationB), block.timestamp);
         assertEq(sRegistry.appliedOnto(writer, migrationB), migrationA);
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migrationB)), abi.encode(one(writer, migrationA)));
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migrationB)), abi.encode(one(writer, migrationA)));
         assertEq(sRegistry.head(writer), migrationB);
     }
 
@@ -1986,8 +1986,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.prank(writer);
         sRegistry.applyMigration(head, migration, prerequisites);
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
-        assertEq(sRegistry.prerequisites(writer, migration).length, 2);
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migration)), abi.encode(prerequisites));
+        assertEq(sRegistry.appliedAfter(writer, migration).length, 2);
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migration)), abi.encode(prerequisites));
     }
 
     /// The caller's own arguments are refused before the list is looked at:
@@ -2106,7 +2106,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, block.timestamp, one(other, prerequisite));
 
         // The refusals recorded nothing over the original record's list.
-        assertEq(abi.encode(sRegistry.prerequisites(writer, migration)), abi.encode(new Prerequisite[](0)));
+        assertEq(abi.encode(sRegistry.appliedAfter(writer, migration)), abi.encode(new Prerequisite[](0)));
     }
 
     /// An unapplied prerequisite is reported over a wrong head, and with the

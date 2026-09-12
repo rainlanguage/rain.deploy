@@ -193,7 +193,7 @@ contract MigrationRegistryAppliedTest is Test {
     function testAppliedNoOtherEntryPoint(bytes4 selector, bytes32 migration) external {
         vm.assume(selector != IMigrationRegistryV1.applied.selector);
         vm.assume(selector != IMigrationRegistryV1.appliedOnto.selector);
-        vm.assume(selector != IMigrationRegistryV1.prerequisites.selector);
+        vm.assume(selector != IMigrationRegistryV1.appliedAfter.selector);
         vm.assume(selector != IMigrationRegistryV1.applyMigration.selector);
         vm.assume(selector != IMigrationRegistryV1.applyMigrationHistory.selector);
         vm.assume(selector != IMigrationRegistryV1.head.selector);

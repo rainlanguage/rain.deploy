@@ -181,10 +181,10 @@ library LibMigrationRegistry {
     /// @param migration The migration to ask about. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
     /// @return The prerequisites `writer` applied `migration` after, as listed.
-    function prerequisites(address writer, bytes32 migration) internal view returns (Prerequisite[] memory) {
+    function appliedAfter(address writer, bytes32 migration) internal view returns (Prerequisite[] memory) {
         checkCodeHash();
         return IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .prerequisites(writer, migration);
+            .appliedAfter(writer, migration);
     }
 
     /// The migration `writer` applied most recently, or `MIGRATION_HEAD_GENESIS`
@@ -239,13 +239,13 @@ library LibMigrationRegistry {
     /// or `MIGRATION_HEAD_GENESIS` for the first in this namespace.
     /// @param migration The migration to apply. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @param prerequisites_ The migrations, each under its writer, that must
+    /// @param prerequisites The migrations, each under its writer, that must
     /// already be applied. Empty for a migration that waits on nothing; every
     /// entry a record key.
-    function applyMigration(bytes32 expectedHead, bytes32 migration, Prerequisite[] memory prerequisites_) internal {
+    function applyMigration(bytes32 expectedHead, bytes32 migration, Prerequisite[] memory prerequisites) internal {
         checkCodeHash();
         IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigration(expectedHead, migration, prerequisites_);
+            .applyMigration(expectedHead, migration, prerequisites);
     }
 
     /// Applies `migration` under the CALLER's namespace, onto `expectedHead`,
@@ -268,17 +268,17 @@ library LibMigrationRegistry {
     /// `MIGRATION_HEAD_GENESIS`.
     /// @param appliedAt The moment `migration` was applied. Never zero, never
     /// after the block this lands in.
-    /// @param prerequisites_ The migrations, each under its writer, that must
+    /// @param prerequisites The migrations, each under its writer, that must
     /// already be applied. Empty for a migration that waits on nothing; every
     /// entry a record key.
     function applyMigrationHistory(
         bytes32 expectedHead,
         bytes32 migration,
         uint256 appliedAt,
-        Prerequisite[] memory prerequisites_
+        Prerequisite[] memory prerequisites
     ) internal {
         checkCodeHash();
         IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigrationHistory(expectedHead, migration, appliedAt, prerequisites_);
+            .applyMigrationHistory(expectedHead, migration, appliedAt, prerequisites);
     }
 }
