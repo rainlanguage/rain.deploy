@@ -350,7 +350,9 @@ entry of their list, under the caller, so a chain that never got the predecessor
 fails at the moment of applying rather than diverging silently, and two
 migrations dispatched at once cannot land in the wrong order. An empty list, a
 first entry under anyone but the caller, or one naming anything but the head is
-`UnexpectedMigrationHead`.
+`UnexpectedMigrationHead`. An entry after the first under the caller's own
+namespace is `OwnPrerequisite`: the head already says everything about the
+caller's own line, so every later entry names another writer's record.
 
 ```solidity
 Prerequisite[] memory after = new Prerequisite[](1);

@@ -2816,4 +2816,31 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.appliedOnto(writer, migrationB), listB[0].migration);
         assertEq(sRegistry.appliedOnto(writer, migrationB), migrationA);
     }
+
+    /// An entry after the head in the caller's own namespace is refused as a
+    /// key, before any record is read, on both writes: the head already says
+    /// everything about the caller's own line.
+    function testApplyMigrationOwnEntryAfterTheHeadReverts(address writer, bytes32 migration, bytes32 own) external {
+        vm.assume(writer != address(0));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        LibMigrationFuzz.assumeMigration(vm, own);
+        vm.assume(migration != own);
+        vm.warp(1000);
+
+        Prerequisite[] memory listed = headThen(writer, MIGRATION_HEAD_GENESIS, one(writer, own));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.OwnPrerequisite.selector, own));
+        vm.prank(writer);
+        sRegistry.applyMigration(migration, listed);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.OwnPrerequisite.selector, own));
+        vm.prank(writer);
+        sRegistry.applyMigrationHistory(migration, 1000, listed);
+
+        // Applied or not makes no difference: it is refused as a key.
+        applyUnder(writer, own);
+        listed = headThen(writer, own, one(writer, own));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.OwnPrerequisite.selector, own));
+        vm.prank(writer);
+        sRegistry.applyMigration(migration, listed);
+        assertEq(sRegistry.applied(writer, migration), 0);
+    }
 }

@@ -149,6 +149,9 @@ contract MigrationRegistry is IMigrationRegistryV2 {
     function checkPrerequisites(Prerequisite[] calldata prerequisites) internal view {
         for (uint256 i = 1; i < prerequisites.length; i++) {
             checkRecordKey(prerequisites[i].writer, prerequisites[i].migration);
+            if (prerequisites[i].writer == msg.sender) {
+                revert OwnPrerequisite(prerequisites[i].migration);
+            }
         }
         // Zero is the one moment no write records, so equality is the exact
         // test for an absent record; slither reads it as a timestamp compare.

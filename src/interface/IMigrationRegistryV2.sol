@@ -418,6 +418,13 @@ interface IMigrationRegistryV2 {
     /// @param migration The migration under it that has not been applied.
     error PrerequisiteNotApplied(address writer, bytes32 migration);
 
+    /// Thrown when an entry after the first names the caller's own namespace.
+    /// The first entry is the caller's head and says everything about its own
+    /// namespace; a later own entry is redundant if applied and unsatisfiable
+    /// if not, so the shape is one own entry then other writers' records.
+    /// @param migration The own migration named after the head.
+    error OwnPrerequisite(bytes32 migration);
+
     /// Emitted every time a migration is applied, by both writes. A migration
     /// is applied at most once per writer, so the log is the complete history
     /// of the registry and the only way to discover a record without already
