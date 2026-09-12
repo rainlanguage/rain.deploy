@@ -224,17 +224,16 @@ struct Prerequisite {
 /// moments'; a moment supplied to `applyMigrationHistory` is bounded by the
 /// caller's own chain and the block, and by nothing else.
 ///
-/// Every entry after the first is a record key, and is refused as `applied`
-/// refuses one: `ZeroWriter`, `ZeroMigration` or `GenesisMigration`, none of
-/// which can name a record and each of which is a constant nobody set or set
-/// to the wrong one. The caller's own namespace is an ordinary namespace to
-/// name there, so an earlier migration of its own is a prerequisite like any
-/// other; a prerequisite listed twice is checked twice and recorded twice; and
-/// a prerequisite naming the migration being applied is unapplied by
-/// construction on a first application, so it is refused as
-/// `PrerequisiteNotApplied` rather than recorded. The first entry is not a
-/// key: it is the head, which may be `MIGRATION_HEAD_GENESIS`, and it is
-/// checked against the namespace rather than read as a record.
+/// Every entry after the first is a record key in another writer's namespace,
+/// and is refused as `applied` refuses one: `ZeroWriter`, `ZeroMigration` or
+/// `GenesisMigration`, none of which can name a record and each of which is a
+/// constant nobody set or set to the wrong one. One under the caller's own
+/// namespace is `OwnPrerequisite`: the first entry already says everything
+/// about the caller's own line, so a later own entry is redundant if applied
+/// and unsatisfiable if not. A prerequisite listed twice is checked twice and
+/// recorded twice. The first entry is not a key: it is the head, which may be
+/// `MIGRATION_HEAD_GENESIS`, and it is checked against the namespace rather
+/// than read as a record.
 ///
 /// ## The namespace is the writer, and that is the whole access control
 ///
@@ -335,10 +334,10 @@ interface IMigrationRegistryV2 {
     /// it: a script consults `applied` before it acts, and this is the backstop
     /// under that consultation.
     ///
-    /// Checked BEFORE the head, because it is the more specific true statement
-    /// about the call and it is true whatever the head is. A re-dispatched
-    /// script is told the migration already ran, rather than told the namespace
-    /// has moved on and left to work out why.
+    /// Checked AFTER the head and the entries after it, so it is reached only
+    /// by a write whose list holds. A re-dispatched script names the head it
+    /// named the first time, which the namespace has since moved past, and is
+    /// told so; one naming the current head is told the migration already ran.
     /// @param writer The namespace, which is the caller.
     /// @param migration The migration already applied under it.
     error MigrationAlreadyApplied(address writer, bytes32 migration);
@@ -350,6 +349,11 @@ interface IMigrationRegistryV2 {
     /// something it did not know about has been — a skipped predecessor, a
     /// concurrent dispatch that landed first, or a chain that is simply
     /// further behind than the script assumed.
+    ///
+    /// Checked first of everything about the list, before any entry after the
+    /// head and before `MigrationAlreadyApplied`: the list is checked in the
+    /// order it is written, and a script at the wrong place in its sequence is
+    /// told so before anything else about it is.
     /// @param writer The namespace, which is the caller.
     /// @param expectedHead The first entry's migration, or zero for an empty
     /// list.
@@ -481,36 +485,36 @@ interface IMigrationRegistryV2 {
     ///
     /// The implementation MUST make the refusals about the arguments first, in
     /// argument order: `ZeroMigration` or `GenesisMigration` for `migration`,
-    /// `ZeroTimestamp` for `appliedAt`, then `ZeroWriter`, `ZeroMigration` or
-    /// `GenesisMigration` for the first entry after the head in
-    /// `prerequisites` that is not a record key. Then it MUST revert
-    /// `PrerequisiteNotApplied` for the first entry after the head whose
-    /// `applied` is zero. Only then does it make the refusals about the
-    /// caller's namespace and the moment, in this order:
-    /// `MigrationAlreadyApplied` if the caller has already applied `migration`,
-    /// `UnexpectedMigrationHead` if the first entry of `prerequisites` is not
-    /// the caller at the head its namespace is at, `TimestampBeforeHead` if
-    /// `appliedAt` is before the moment recorded against that head, and
+    /// `ZeroTimestamp` for `appliedAt`. Then it MUST check `prerequisites` in
+    /// list order: `UnexpectedMigrationHead` if the list is empty or its first
+    /// entry is not the caller at the head its namespace is at; then
+    /// `ZeroWriter`, `ZeroMigration`, `GenesisMigration` or `OwnPrerequisite`
+    /// for the first entry after the head that is not another writer's record
+    /// key; then `PrerequisiteNotApplied` for the first entry after the head
+    /// whose `applied` is zero. Only then does it make the refusals about the
+    /// caller's record and the moment, in this order: `MigrationAlreadyApplied`
+    /// if the caller has already applied `migration`, `TimestampBeforeHead` if
+    /// `appliedAt` is before the moment recorded against the head, and
     /// `FutureTimestamp` if `appliedAt` is after `block.timestamp`. It MUST
     /// NOT provide any way to unrecord a migration, to move a head backwards,
     /// or to move a record once written. On success it MUST record `appliedAt`
     /// and `prerequisites` against `migration`, make `migration` the caller's
     /// new head, and emit `Migrated`.
     ///
-    /// Everything the caller handed in is refused before anything is read,
-    /// because a malformed argument is a mistake the caller can fix now and a
-    /// fact about the world is not. Every entry after the head is read before
-    /// anything about the caller's own namespace is, because they are the
-    /// caller's statement of the world its migration requires: until that
-    /// holds, the migration must not be recorded, whatever the caller's head
-    /// is and whether or not the caller has recorded this migration already —
-    /// and a record that exists while the prerequisites its script now names
-    /// do not is the more alarming fact of the two, not the one to hide behind
-    /// "already applied".
+    /// The caller's own arguments are refused before anything is read, because
+    /// a malformed argument is a mistake the caller can fix now and a fact
+    /// about the world is not. The list is then read as written: the head says
+    /// where the caller is in its own sequence, which is the first thing wrong
+    /// with a skipped or re-dispatched script, and the entries after it are
+    /// the caller's statement of the world its migration requires, which must
+    /// hold before the caller's own record is consulted — a record that exists
+    /// while the prerequisites its script now names do not is the more
+    /// alarming fact of the two, not the one to hide behind "already applied".
     ///
     /// A prerequisite that has been applied stays applied, because nothing can
-    /// be unrecorded. A re-dispatched script therefore passes its prerequisites
-    /// as it did the first time and is told `MigrationAlreadyApplied`.
+    /// be unrecorded. A re-dispatched script therefore passes its list as it
+    /// did the first time and is told `UnexpectedMigrationHead`, the namespace
+    /// having moved past the head it names.
     ///
     /// Nothing is returned: every part of the record is an argument the caller
     /// just handed in.

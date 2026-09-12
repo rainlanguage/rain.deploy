@@ -107,16 +107,8 @@ contract MigrationRegistry is IMigrationRegistryV2 {
     }
 
     /// Reached by both writes, so there is one order whichever of them
-    /// supplied the moment: the caller's own arguments, then every entry after
-    /// the head, then the namespace, then the record.
-    ///
-    /// The prerequisites sit between the arguments and the namespace because
-    /// they are the caller's statement of the world its migration requires.
-    /// Until that holds the record must not be written whatever the caller's
-    /// head is and whether or not the caller has recorded this migration
-    /// already — a record that exists while the prerequisites its script now
-    /// names do not is the more alarming fact, not one to hide behind
-    /// "already applied".
+    /// supplied the moment: the caller's own arguments, then the list in
+    /// order, then the record.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment to record against it.
     /// @param prerequisites The head, then the records that must exist for it
@@ -129,24 +121,27 @@ contract MigrationRegistry is IMigrationRegistryV2 {
         writeMigrationRecord(migration, appliedAt, prerequisites);
     }
 
-    /// Refuses every entry after the head that is not a record key, in list
-    /// order, before reading any of them; then refuses the first, in list
-    /// order, that names a record nobody has written.
-    ///
-    /// The first entry is skipped by both passes: it is the head, which is not
-    /// a key — it may be genesis — and is checked against the namespace by
-    /// `writeMigrationRecord`. An empty list has no head to skip and is
-    /// refused there too.
-    ///
-    /// Two passes rather than one, so that every malformed argument is
-    /// reported before any state is read: a zero writer in the last entry is
-    /// the caller's mistake to fix now, and it is reported ahead of an
-    /// unapplied prerequisite in the first entry, which is a fact about the
-    /// world the caller may only be able to wait for. The key check is
-    /// `checkRecordKey`, so a prerequisite is refused exactly as `applied` is
-    /// refused the same key.
+    /// The whole list, in order. The first entry is the caller's head, which
+    /// may be genesis, checked against the namespace. Every later entry is a
+    /// record key in another writer's namespace: refused as `applied` refuses
+    /// the same key, refused if it is the caller's own, and then, in a second
+    /// pass so every malformed entry is reported before the records are read,
+    /// refused if nobody has written it.
     /// @param prerequisites The head, then the records that must exist.
     function checkPrerequisites(Prerequisite[] calldata prerequisites) internal view {
+        // The first entry is the caller at the head it believes it is at. An
+        // empty list names no head at all, so it is refused as a zero head,
+        // which no namespace can be at; a first entry under anyone but the
+        // caller is not this namespace's head whatever migration it names.
+        bytes32 actualHead = head(msg.sender);
+        if (
+            prerequisites.length == 0 || prerequisites[0].writer != msg.sender
+                || prerequisites[0].migration != actualHead
+        ) {
+            revert UnexpectedMigrationHead(
+                msg.sender, prerequisites.length == 0 ? bytes32(0) : prerequisites[0].migration, actualHead
+            );
+        }
         for (uint256 i = 1; i < prerequisites.length; i++) {
             checkRecordKey(prerequisites[i].writer, prerequisites[i].migration);
             if (prerequisites[i].writer == msg.sender) {
@@ -236,40 +231,21 @@ contract MigrationRegistry is IMigrationRegistryV2 {
         // id, both nonzero, so a zero in the first entry can never match and is
         // already refused below, by an error that names the zero it was handed.
 
-        // Checked before the head, because a migration that has already run has
-        // already run whatever the head is, and that is the more useful thing to
-        // say to a re-dispatched script. It is also not implied by the head
-        // check: re-applying a migration whose successor has landed presents a
-        // matching head, and would drag the head backwards and overwrite the
-        // original record.
+        // A migration that has already run has already run whatever the list
+        // says, and the record it would overwrite is the original.
         MigrationRecord storage record = sRecords[msg.sender][migration];
         if (record.appliedAt != 0) {
             revert MigrationAlreadyApplied(msg.sender, migration);
         }
-        // The first entry is the caller at the head it believes it is at. An
-        // empty list names no head at all, so it is refused as a zero head,
-        // which no namespace can be at; a first entry under anyone but the
-        // caller is not this namespace's head whatever migration it names.
-        bytes32 actualHead = head(msg.sender);
-        if (
-            prerequisites.length == 0 || prerequisites[0].writer != msg.sender
-                || prerequisites[0].migration != actualHead
-        ) {
-            revert UnexpectedMigrationHead(
-                msg.sender, prerequisites.length == 0 ? bytes32(0) : prerequisites[0].migration, actualHead
-            );
-        }
-        // Last of the refusals about the namespace, because it is the only one
-        // that reads a RECORD rather than a key, and the record it reads is the
-        // one at the head the check above has just confirmed.
+        bytes32 actualHead = prerequisites[0].migration;
+        // Reads the record at the head the list named first, which
+        // checkPrerequisites has already confirmed is this namespace's head.
         //
         // At genesis there is nothing to be before. Genesis can never be
         // applied, so the record at it is empty in every namespace forever and
         // this comparison against zero can only pass — which is the same
         // statement a genesis branch would make, made by the value itself.
         //
-        // Neither the head nor its own moment is restated in the error: the
-        // caller named the head, and was told above if it named the wrong one.
         uint256 headAppliedAt = sRecords[msg.sender][actualHead].appliedAt;
         if (appliedAt < headAppliedAt) {
             revert TimestampBeforeHead(appliedAt, headAppliedAt);

@@ -425,14 +425,13 @@ that the record existed when this write landed, which is chain order, and the
 moments in another namespace are that writer's data.
 
 The refusals sit in this order: the caller's own arguments first
-(`ZeroMigration`, `GenesisMigration`, `ZeroTimestamp`); then the entries after
-the head — every one as a key (`ZeroWriter`, `ZeroMigration`,
-`GenesisMigration`, exactly as `applied` refuses them) before any is read, then
-`PrerequisiteNotApplied` for the first unapplied one; then the namespace's own
-refusals (`MigrationAlreadyApplied`, `UnexpectedMigrationHead` over the first
-entry, `TimestampBeforeHead`, `FutureTimestamp`). Duplicates and entries in the
-caller's own namespace are ordinary index checks, and an entry naming the
-migration being applied is unapplied by construction.
+(`ZeroMigration`, `GenesisMigration`, `ZeroTimestamp`); then the list in the
+order it is written — `UnexpectedMigrationHead` over the first entry, then every
+entry after it as another writer's key (`ZeroWriter`, `ZeroMigration`,
+`GenesisMigration` exactly as `applied` refuses them, then `OwnPrerequisite`)
+before any is read, then `PrerequisiteNotApplied` for the first unapplied one;
+then the caller's own record (`MigrationAlreadyApplied`, `TimestampBeforeHead`,
+`FutureTimestamp`). Duplicates are ordinary index checks.
 
 **The namespace is `msg.sender`, and that is the whole access control.** Anyone
 may write, but only under themselves, so a reader asking about the namespace of

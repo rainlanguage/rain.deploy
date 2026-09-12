@@ -267,9 +267,9 @@ contract LibMigrationRegistryTest is Test {
         assertEq(other.head(address(other)), MIGRATION_HEAD_GENESIS);
     }
 
-    /// Applying the same migration twice is refused, and the registry's own
-    /// revert arrives unmodified — the library adds no handling of its own, so
-    /// a re-dispatched migration fails naming the writer and the id.
+    /// Applying the same migration twice, onto the head it became, is refused,
+    /// and the registry's own revert arrives unmodified — the library adds no
+    /// handling of its own, so the refusal names the writer and the id.
     function testApplyMigrationTwiceReverts(bytes32 migration) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
@@ -279,7 +279,7 @@ contract LibMigrationRegistryTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IMigrationRegistryV2.MigrationAlreadyApplied.selector, address(this), migration)
         );
-        this.externalApplyMigration(migration, one(address(this), MIGRATION_HEAD_GENESIS));
+        this.externalApplyMigration(migration, one(address(this), migration));
     }
 
     /// The registry's zero-id refusal arrives unmodified through
