@@ -62,6 +62,10 @@ contract LibMigrationRegistryTest is Test {
         return LibMigrationRegistry.applied(writer, migration);
     }
 
+    function externalPrerequisites(address writer, bytes32 migration) external view returns (Prerequisite[] memory) {
+        return LibMigrationRegistry.prerequisites(writer, migration);
+    }
+
     function externalApplyMigration(bytes32 migration, Prerequisite[] memory prerequisites) external {
         LibMigrationRegistry.applyMigration(migration, prerequisites);
     }
@@ -294,6 +298,43 @@ contract LibMigrationRegistryTest is Test {
 
         vm.expectRevert(unexpectedCodeHash());
         this.externalApplied(writer, migration);
+    }
+
+    /// The list a write stores reads back through the lib, and the read is
+    /// gated like every other.
+    function testPrerequisitesThroughLib(bytes32 migration, bytes32 prerequisite) external {
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        LibMigrationFuzz.assumeMigration(vm, prerequisite);
+        vm.assume(migration != prerequisite);
+        deployRegistry();
+        MockMigrationApplier applier = new MockMigrationApplier();
+        applier.applyMigration(prerequisite, new Prerequisite[](0));
+        applier.applyMigration(migration, LibMigrationFuzz.one(address(applier), prerequisite));
+        Prerequisite[] memory stored = applier.prerequisites(address(applier), migration);
+        assertEq(stored.length, 1);
+        assertEq(stored[0].writer, address(applier));
+        assertEq(stored[0].migration, prerequisite);
+        assertEq(applier.prerequisites(address(applier), prerequisite).length, 0);
+    }
+
+    function testPrerequisitesNoRegistry(address writer, bytes32 migration) external {
+        assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
+        vm.expectRevert(unexpectedCodeHash());
+        this.externalPrerequisites(writer, migration);
+    }
+
+    function testPrerequisitesWrongCode(address writer, bytes32 migration, bytes memory code) external {
+        assumeOrdinaryCode(code);
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
+        vm.expectRevert(unexpectedCodeHash());
+        this.externalPrerequisites(writer, migration);
+    }
+
+    function testPrerequisitesDelegatedCode(address writer, bytes32 migration, address delegate) external {
+        bytes memory designator = assumedDesignator(delegate);
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, designator);
+        vm.expectRevert(unexpectedCodeHash());
+        this.externalPrerequisites(writer, migration);
     }
 
     function testApplyMigrationDelegatedCode(bytes32 migration, Prerequisite[] memory prerequisites, address delegate)

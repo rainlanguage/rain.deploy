@@ -41,4 +41,12 @@ contract MockMigrationApplier {
     function applied(address writer, bytes32 migration) external view returns (uint256) {
         return LibMigrationRegistry.applied(writer, migration);
     }
+
+    /// The prerequisites `writer` named for `migration`.
+    /// @param writer The namespace to read.
+    /// @param migration The migration to ask about.
+    /// @return The list as written.
+    function prerequisites(address writer, bytes32 migration) external view returns (Prerequisite[] memory) {
+        return LibMigrationRegistry.prerequisites(writer, migration);
+    }
 }

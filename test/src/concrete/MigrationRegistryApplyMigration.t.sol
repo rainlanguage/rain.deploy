@@ -470,9 +470,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.applied(other, prerequisite), prerequisiteAt);
     }
 
-    /// Nothing about the prerequisites is stored: a write naming one touches
-    /// the same storage slots as a root write of the same migration.
-    function testApplyMigrationStoresNothingAboutPrerequisites(
+    /// The list is stored as written, duplicates included, and read back by
+    /// `prerequisites`; a root and a migration never applied both read empty.
+    function testApplyMigrationStoresThePrerequisites(
         address writer,
         address other,
         bytes32 migration,
@@ -482,24 +482,32 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeKey(vm, other, prerequisite);
         vm.assume(migration != prerequisite);
 
-        MigrationRegistry root = new MigrationRegistry();
-        MigrationRegistry naming = new MigrationRegistry();
+        assertEq(sRegistry.prerequisites(writer, migration).length, 0);
         vm.prank(other);
-        root.applyMigration(prerequisite, new Prerequisite[](0));
-        vm.prank(other);
-        naming.applyMigration(prerequisite, new Prerequisite[](0));
+        sRegistry.applyMigration(prerequisite, new Prerequisite[](0));
+        assertEq(sRegistry.prerequisites(other, prerequisite).length, 0);
 
-        vm.record();
+        Prerequisite[] memory listed = new Prerequisite[](2);
+        listed[0] = Prerequisite({writer: other, migration: prerequisite});
+        listed[1] = Prerequisite({writer: other, migration: prerequisite});
         vm.prank(writer);
-        root.applyMigration(migration, new Prerequisite[](0));
-        (, bytes32[] memory rootWrites) = vm.accesses(address(root));
-        vm.prank(writer);
-        naming.applyMigration(migration, LibMigrationFuzz.one(other, prerequisite));
-        (, bytes32[] memory afterWrites) = vm.accesses(address(naming));
+        sRegistry.applyMigration(migration, listed);
 
-        assertEq(afterWrites, rootWrites);
-        assertEq(afterWrites.length, 1);
-        assertEq(naming.applied(writer, migration), root.applied(writer, migration));
+        Prerequisite[] memory stored = sRegistry.prerequisites(writer, migration);
+        assertEq(stored.length, 2);
+        for (uint256 i = 0; i < stored.length; i++) {
+            assertEq(stored[i].writer, listed[i].writer);
+            assertEq(stored[i].migration, listed[i].migration);
+        }
+    }
+
+    /// `prerequisites` refuses the keys `applied` refuses.
+    function testPrerequisitesRefusesZeroKeys(address writer, bytes32 migration) external {
+        LibMigrationFuzz.assumeKey(vm, writer, migration);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        sRegistry.prerequisites(address(0), migration);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        sRegistry.prerequisites(writer, bytes32(0));
     }
 
     /// `Migrated`: writer and migration indexed, the moment and the list as

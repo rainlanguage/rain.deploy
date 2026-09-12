@@ -313,14 +313,16 @@ prerequisites[0] = Prerequisite({writer: FLEET_SAFE, migration: FLEET_UPGRADE});
 LibMigrationRegistry.applyMigration(MIGRATION_V3, prerequisites);
 ```
 
-Nothing is stored about the prerequisites. The check reads records that already
-exist, the record written is the same whatever the list, and the list goes to
-the log in `Migrated(writer, migration, appliedAt, prerequisites)`, so an
-indexer can rebuild the order across namespaces from one filter. A prerequisite
-bounds no moment: a backfilled record may carry an earlier moment than its
-prerequisite, because what is checked is that the record existed when this write
-landed, which is chain order, and another namespace's moments are that writer's
-data.
+The list is stored with the record and read back by
+`prerequisites(writer,
+migration)`, so the order across namespaces is walkable
+on chain from any record to its roots; it also goes to the log in
+`Migrated(writer, migration,
+appliedAt, prerequisites)` for an indexer. A
+prerequisite bounds no moment: a backfilled record may carry an earlier moment
+than its prerequisite, because what is checked is that the record existed when
+this write landed, which is chain order, and another namespace's moments are
+that writer's data.
 
 The refusals sit in this order: `ZeroMigration`; then the moment
 (`ZeroTimestamp`, `FutureTimestamp`); then each entry in list order, as a key

@@ -16,13 +16,20 @@ import {IMigrationRegistryV1, Prerequisite} from "../interface/IMigrationRegistr
 /// every chain, so keying by `msg.sender` removes the authority instead of
 /// choosing one and keeps one address for one shared registry.
 ///
-/// The storage mapping is not `public`: `applied` refuses the zero writer and
+/// The storage mapping is not `public`: the reads refuse the zero writer and
 /// the zero migration, and a generated getter would answer both with zero,
 /// which is the silent wrong-branch this contract reverts to prevent.
 contract MigrationRegistry is IMigrationRegistryV1 {
-    /// Every record, namespaced by writer. Zero means never applied, which no
-    /// write records.
-    mapping(address writer => mapping(bytes32 migration => uint256 appliedAt)) internal sApplied;
+    /// One applied migration: when, and after what.
+    struct MigrationRecord {
+        /// Zero means never applied, which no write records.
+        uint256 appliedAt;
+        /// As the write listed them.
+        Prerequisite[] prerequisites;
+    }
+
+    /// Every record, namespaced by writer.
+    mapping(address writer => mapping(bytes32 migration => MigrationRecord record)) internal sRecords;
 
     /// @inheritdoc IMigrationRegistryV1
     // slither-disable-next-line timestamp
@@ -74,21 +81,31 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         // slither-disable-end timestamp
         for (uint256 i = 0; i < prerequisites.length; i++) {
             checkRecordKey(prerequisites[i].writer, prerequisites[i].migration);
-            if (sApplied[prerequisites[i].writer][prerequisites[i].migration] == 0) {
+            if (sRecords[prerequisites[i].writer][prerequisites[i].migration].appliedAt == 0) {
                 revert PrerequisiteNotApplied(prerequisites[i].writer, prerequisites[i].migration);
             }
         }
-        if (sApplied[msg.sender][migration] != 0) {
+        MigrationRecord storage record = sRecords[msg.sender][migration];
+        if (record.appliedAt != 0) {
             revert MigrationAlreadyApplied(msg.sender, migration);
         }
-        sApplied[msg.sender][migration] = appliedAt;
+        record.appliedAt = appliedAt;
+        for (uint256 i = 0; i < prerequisites.length; i++) {
+            record.prerequisites.push(prerequisites[i]);
+        }
         emit Migrated(msg.sender, migration, appliedAt, prerequisites);
     }
 
     /// @inheritdoc IMigrationRegistryV1
     function applied(address writer, bytes32 migration) external view returns (uint256) {
         checkRecordKey(writer, migration);
-        return sApplied[writer][migration];
+        return sRecords[writer][migration].appliedAt;
+    }
+
+    /// @inheritdoc IMigrationRegistryV1
+    function prerequisites(address writer, bytes32 migration) external view returns (Prerequisite[] memory) {
+        checkRecordKey(writer, migration);
+        return sRecords[writer][migration].prerequisites;
     }
 
     /// One function, so the reader and the prerequisite check cannot drift

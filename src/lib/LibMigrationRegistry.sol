@@ -83,6 +83,17 @@ library LibMigrationRegistry {
                 .applied(writer, migration);
     }
 
+    /// The prerequisites `writer` named for `migration`, behind the same
+    /// code-hash check as every other read.
+    /// @param writer The namespace to read. Never the zero address.
+    /// @param migration The migration to ask about. Never zero.
+    /// @return The list as written.
+    function prerequisites(address writer, bytes32 migration) internal view returns (Prerequisite[] memory) {
+        checkCodeHash();
+        return IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .prerequisites(writer, migration);
+    }
+
     /// Applies `migration` under the CALLER's namespace, after `prerequisites`,
     /// as having been applied in the block this lands in.
     ///

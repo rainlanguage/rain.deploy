@@ -205,4 +205,15 @@ interface IMigrationRegistryV1 {
     /// @param migration The migration to ask about. Never zero.
     /// @return The moment `writer` applied `migration` at, or zero.
     function applied(address writer, bytes32 migration) external view returns (uint256);
+
+    /// The prerequisites `writer` named when it applied `migration`, as listed,
+    /// so the order across namespaces is readable from the chain and not only
+    /// from the log. Empty for a root and for a migration never applied.
+    ///
+    /// The implementation MUST revert `ZeroWriter` or `ZeroMigration` rather
+    /// than answering about either.
+    /// @param writer The namespace to read. Never the zero address.
+    /// @param migration The migration to ask about. Never zero.
+    /// @return The prerequisites as the write listed them.
+    function prerequisites(address writer, bytes32 migration) external view returns (Prerequisite[] memory);
 }
