@@ -439,11 +439,11 @@ interface IMigrationRegistryV1 {
     /// first migration in a namespace. Never zero, which can never match.
     /// @param migration The migration to apply. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @param prerequisites The migrations, each under its writer, that MUST
+    /// @param prerequisites_ The migrations, each under its writer, that MUST
     /// have been applied for this write to land. Empty for a migration that
     /// waits on nothing; no entry naming the zero writer, the zero migration
     /// or `MIGRATION_HEAD_GENESIS`.
-    function applyMigration(bytes32 expectedHead, bytes32 migration, Prerequisite[] calldata prerequisites) external;
+    function applyMigration(bytes32 expectedHead, bytes32 migration, Prerequisite[] calldata prerequisites_) external;
 
     /// Applies `migration` under the caller's namespace, onto `expectedHead`,
     /// after `prerequisites`, as having been applied at `appliedAt`.
@@ -493,7 +493,7 @@ interface IMigrationRegistryV1 {
     /// @param appliedAt The moment `migration` was applied. Never zero, never
     /// after the block this call lands in. Not bounded by any prerequisite's
     /// moment.
-    /// @param prerequisites The migrations, each under its writer, that MUST
+    /// @param prerequisites_ The migrations, each under its writer, that MUST
     /// have been applied for this write to land. Empty for a migration that
     /// waits on nothing; no entry naming the zero writer, the zero migration
     /// or `MIGRATION_HEAD_GENESIS`.
@@ -501,7 +501,7 @@ interface IMigrationRegistryV1 {
         bytes32 expectedHead,
         bytes32 migration,
         uint256 appliedAt,
-        Prerequisite[] calldata prerequisites
+        Prerequisite[] calldata prerequisites_
     ) external;
 
     /// When `writer` applied `migration`, as the moment recorded with the

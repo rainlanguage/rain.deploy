@@ -152,11 +152,16 @@ contract MigrationRegistry is IMigrationRegistryV1 {
         for (uint256 i = 0; i < prerequisites_.length; i++) {
             checkRecordKey(prerequisites_[i].writer, prerequisites_[i].migration);
         }
+        // Zero is the one moment no write records, so equality is the exact
+        // test for an absent record; slither reads it as a timestamp compare.
+        // slither-disable-start timestamp
         for (uint256 i = 0; i < prerequisites_.length; i++) {
+            // slither-disable-next-line incorrect-equality
             if (sRecords[prerequisites_[i].writer][prerequisites_[i].migration].appliedAt == 0) {
                 revert PrerequisiteNotApplied(prerequisites_[i].writer, prerequisites_[i].migration);
             }
         }
+        // slither-disable-end timestamp
     }
 
     /// The refusals that describe the call alone: the two ids a migration can
