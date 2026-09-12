@@ -10,28 +10,40 @@ import {Prerequisite} from "../../src/interface/IMigrationRegistryV1.sol";
 /// for: it calls the library and nothing else, so the record lands under THIS
 /// contract's address.
 ///
-/// The library's functions are `internal` and inline into whatever executes
-/// them, so `msg.sender` at the registry is the calling CONTRACT, not whoever
+/// It exists so the namespace can be exercised as the property it is. The
+/// library's functions are `internal` and inline into whatever executes them,
+/// so `msg.sender` at the registry is the calling CONTRACT, not whoever
 /// `vm.prank` last named — a test contract calling the library directly can
-/// only ever write one namespace. Two of these are two namespaces, which is
-/// what makes "a record reaches nobody else" checkable.
+/// therefore only ever write one namespace. Two of these are two namespaces,
+/// which is what makes "a record reaches nobody else" checkable rather than
+/// asserted about a single account.
+///
+/// Two of them are also two heads, which is what makes "one namespace is one
+/// sequence" checkable at all: nothing about one applier's head can be shown
+/// to leave the other's alone from inside a single namespace.
 contract MockMigrationApplier {
-    /// Applies `migration` under this contract, after `prerequisites`.
+    /// Applies `migration` under this contract, onto `expectedHead`, after
+    /// `prerequisites`.
+    /// @param expectedHead The head this contract believes it is at.
     /// @param migration The migration to apply.
-    /// @param prerequisites The migrations that must already be applied.
-    function applyMigration(bytes32 migration, Prerequisite[] calldata prerequisites) external {
-        LibMigrationRegistry.applyMigration(migration, prerequisites);
+    /// @param prerequisites_ The migrations that must already be applied.
+    function applyMigration(bytes32 expectedHead, bytes32 migration, Prerequisite[] calldata prerequisites_) external {
+        LibMigrationRegistry.applyMigration(expectedHead, migration, prerequisites_);
     }
 
-    /// Applies `migration` under this contract, after `prerequisites`, at
-    /// `appliedAt`.
+    /// Applies `migration` under this contract, onto `expectedHead`, at
+    /// `appliedAt`, after `prerequisites`.
+    /// @param expectedHead The head this contract believes it is at.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment the migration was applied.
-    /// @param prerequisites The migrations that must already be applied.
-    function applyMigrationHistory(bytes32 migration, uint256 appliedAt, Prerequisite[] calldata prerequisites)
-        external
-    {
-        LibMigrationRegistry.applyMigrationHistory(migration, appliedAt, prerequisites);
+    /// @param prerequisites_ The migrations that must already be applied.
+    function applyMigrationHistory(
+        bytes32 expectedHead,
+        bytes32 migration,
+        uint256 appliedAt,
+        Prerequisite[] calldata prerequisites_
+    ) external {
+        LibMigrationRegistry.applyMigrationHistory(expectedHead, migration, appliedAt, prerequisites_);
     }
 
     /// When `writer` applied `migration`.
@@ -42,11 +54,26 @@ contract MockMigrationApplier {
         return LibMigrationRegistry.applied(writer, migration);
     }
 
-    /// The prerequisites `writer` named for `migration`.
+    /// What `writer` applied `migration` onto.
     /// @param writer The namespace to read.
     /// @param migration The migration to ask about.
-    /// @return The list as written.
+    /// @return The head it was applied onto, or zero.
+    function appliedOnto(address writer, bytes32 migration) external view returns (bytes32) {
+        return LibMigrationRegistry.appliedOnto(writer, migration);
+    }
+
+    /// What `writer` applied `migration` after.
+    /// @param writer The namespace to read.
+    /// @param migration The migration to ask about.
+    /// @return The prerequisites it listed, or empty.
     function prerequisites(address writer, bytes32 migration) external view returns (Prerequisite[] memory) {
         return LibMigrationRegistry.prerequisites(writer, migration);
+    }
+
+    /// The head of `writer`'s namespace.
+    /// @param writer The namespace to read.
+    /// @return The head.
+    function head(address writer) external view returns (bytes32) {
+        return LibMigrationRegistry.head(writer);
     }
 }
