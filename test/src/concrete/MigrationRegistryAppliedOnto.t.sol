@@ -25,6 +25,15 @@ contract MigrationRegistryAppliedOntoTest is Test {
         sRegistry = new MigrationRegistry();
     }
 
+    /// The list a write under `writer` onto `head` after nothing else passes.
+    /// @param writer The namespace the record is in.
+    /// @param head The head it is applied onto.
+    /// @return prerequisites The one-entry list.
+    function onto(address writer, bytes32 head) internal pure returns (Prerequisite[] memory prerequisites) {
+        prerequisites = new Prerequisite[](1);
+        prerequisites[0] = Prerequisite({writer: writer, migration: head});
+    }
+
     /// An unapplied migration answers zero rather than reverting, exactly as
     /// `applied` does. Zero is not a head — a head is genesis or an applied id,
     /// both nonzero — so it says "no record" and nothing else.
@@ -42,15 +51,15 @@ contract MigrationRegistryAppliedOntoTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
+        sRegistry.applyMigration(migration, onto(writer, MIGRATION_HEAD_GENESIS));
 
         assertEq(sRegistry.appliedOnto(writer, migration), MIGRATION_HEAD_GENESIS);
     }
 
     /// A later migration answers the migration before it, which is the head the
     /// registry itself checked rather than a value the caller was free to
-    /// choose: a caller that names anything else is refused, so the record can
-    /// only ever hold where the namespace actually was.
+    /// choose: a caller whose first entry names anything else is refused, so
+    /// the record can only ever hold where the namespace actually was.
     function testAppliedOntoIsTheCheckedHead(address writer, bytes32 migrationA, bytes32 migrationB, bytes32 wrongHead)
         external
     {
@@ -62,18 +71,95 @@ contract MigrationRegistryAppliedOntoTest is Test {
         vm.assume(wrongHead != migrationA);
 
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, new Prerequisite[](0));
+        sRegistry.applyMigration(migrationA, onto(writer, MIGRATION_HEAD_GENESIS));
 
         vm.expectRevert(
             abi.encodeWithSelector(IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, wrongHead, migrationA)
         );
         vm.prank(writer);
-        sRegistry.applyMigration(wrongHead, migrationB, new Prerequisite[](0));
+        sRegistry.applyMigration(migrationB, onto(writer, wrongHead));
 
         vm.prank(writer);
-        sRegistry.applyMigration(migrationA, migrationB, new Prerequisite[](0));
+        sRegistry.applyMigration(migrationB, onto(writer, migrationA));
 
         assertEq(sRegistry.appliedOnto(writer, migrationB), migrationA);
+    }
+
+    /// The first entry is the caller at its head, not merely the head: the
+    /// right migration under another writer is refused as the wrong head, so
+    /// what this answers is always a head of the writer's own namespace.
+    function testAppliedOntoFirstEntryUnderAnotherWriterReverts(
+        address writer,
+        address other,
+        bytes32 migrationA,
+        bytes32 migrationB
+    ) external {
+        vm.assume(writer != address(0));
+        vm.assume(other != address(0));
+        vm.assume(writer != other);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
+                writer,
+                MIGRATION_HEAD_GENESIS,
+                MIGRATION_HEAD_GENESIS
+            )
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, onto(other, MIGRATION_HEAD_GENESIS));
+        assertEq(sRegistry.appliedOnto(writer, migrationA), bytes32(0));
+
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, onto(writer, MIGRATION_HEAD_GENESIS));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, migrationA, migrationA
+            )
+        );
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationB, onto(other, migrationA));
+        assertEq(sRegistry.appliedOnto(writer, migrationB), bytes32(0));
+    }
+
+    /// The answer is the first entry of `appliedAfter`, whatever the rest of
+    /// the list holds: one record, read two ways.
+    function testAppliedOntoIsTheFirstEntryOfAppliedAfter(
+        address writer,
+        address other,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        bytes32 prerequisite
+    ) external {
+        vm.assume(writer != address(0));
+        vm.assume(other != address(0));
+        vm.assume(writer != other);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        LibMigrationFuzz.assumeMigration(vm, prerequisite);
+        vm.assume(migrationA != migrationB);
+
+        vm.prank(other);
+        sRegistry.applyMigration(prerequisite, onto(other, MIGRATION_HEAD_GENESIS));
+        assertEq(sRegistry.appliedOnto(other, prerequisite), sRegistry.appliedAfter(other, prerequisite)[0].migration);
+
+        Prerequisite[] memory prerequisites = new Prerequisite[](2);
+        prerequisites[0] = Prerequisite({writer: writer, migration: MIGRATION_HEAD_GENESIS});
+        prerequisites[1] = Prerequisite({writer: other, migration: prerequisite});
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationA, prerequisites);
+        assertEq(sRegistry.appliedOnto(writer, migrationA), MIGRATION_HEAD_GENESIS);
+        assertEq(sRegistry.appliedOnto(writer, migrationA), sRegistry.appliedAfter(writer, migrationA)[0].migration);
+
+        prerequisites[0] = Prerequisite({writer: writer, migration: migrationA});
+        vm.prank(writer);
+        sRegistry.applyMigration(migrationB, prerequisites);
+        assertEq(sRegistry.appliedOnto(writer, migrationB), migrationA);
+        assertEq(sRegistry.appliedOnto(writer, migrationB), sRegistry.appliedAfter(writer, migrationB)[0].migration);
     }
 
     /// A record never moves. The answer for an earlier migration is the same
@@ -86,11 +172,11 @@ contract MigrationRegistryAppliedOntoTest is Test {
         vm.assume(migrationA != migrationB);
 
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, new Prerequisite[](0));
+        sRegistry.applyMigration(migrationA, onto(writer, MIGRATION_HEAD_GENESIS));
         assertEq(sRegistry.appliedOnto(writer, migrationA), MIGRATION_HEAD_GENESIS);
 
         vm.prank(writer);
-        sRegistry.applyMigration(migrationA, migrationB, new Prerequisite[](0));
+        sRegistry.applyMigration(migrationB, onto(writer, migrationA));
 
         assertEq(sRegistry.appliedOnto(writer, migrationA), MIGRATION_HEAD_GENESIS);
         assertEq(sRegistry.appliedOnto(writer, migrationB), migrationA);
@@ -102,7 +188,7 @@ contract MigrationRegistryAppliedOntoTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
+        sRegistry.applyMigration(migration, onto(writer, MIGRATION_HEAD_GENESIS));
 
         assertEq(sRegistry.appliedOnto(writer, migration), MIGRATION_HEAD_GENESIS);
         assertEq(sRegistry.appliedOnto(writer, migration), MIGRATION_HEAD_GENESIS);
@@ -117,7 +203,7 @@ contract MigrationRegistryAppliedOntoTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
+        sRegistry.applyMigration(migration, onto(writer, MIGRATION_HEAD_GENESIS));
 
         assertEq(sRegistry.appliedOnto(writer, migration), MIGRATION_HEAD_GENESIS);
         assertEq(sRegistry.appliedOnto(other, migration), bytes32(0));
@@ -172,7 +258,7 @@ contract MigrationRegistryAppliedOntoTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
+        sRegistry.applyMigration(migration, onto(writer, MIGRATION_HEAD_GENESIS));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.appliedOnto(address(0), migration);
@@ -201,7 +287,7 @@ contract MigrationRegistryAppliedOntoTest is Test {
         assertEq(sRegistry.appliedOnto(writer, migrationA), bytes32(0));
 
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migrationA, new Prerequisite[](0));
+        sRegistry.applyMigration(migrationA, onto(writer, MIGRATION_HEAD_GENESIS));
 
         assertTrue(sRegistry.applied(writer, migrationA) != 0);
         assertTrue(sRegistry.appliedOnto(writer, migrationA) != bytes32(0));

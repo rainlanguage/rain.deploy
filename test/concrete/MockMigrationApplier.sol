@@ -22,28 +22,24 @@ import {Prerequisite} from "../../src/interface/IMigrationRegistryV2.sol";
 /// sequence" checkable at all: nothing about one applier's head can be shown
 /// to leave the other's alone from inside a single namespace.
 contract MockMigrationApplier {
-    /// Applies `migration` under this contract, onto `expectedHead`, after
-    /// `prerequisites`.
-    /// @param expectedHead The head this contract believes it is at.
+    /// Applies `migration` under this contract, after `prerequisites`.
     /// @param migration The migration to apply.
-    /// @param prerequisites The migrations that must already be applied.
-    function applyMigration(bytes32 expectedHead, bytes32 migration, Prerequisite[] calldata prerequisites) external {
-        LibMigrationRegistry.applyMigration(expectedHead, migration, prerequisites);
+    /// @param prerequisites This contract at the head it believes it is at,
+    /// then the migrations that must already be applied.
+    function applyMigration(bytes32 migration, Prerequisite[] calldata prerequisites) external {
+        LibMigrationRegistry.applyMigration(migration, prerequisites);
     }
 
-    /// Applies `migration` under this contract, onto `expectedHead`, at
-    /// `appliedAt`, after `prerequisites`.
-    /// @param expectedHead The head this contract believes it is at.
+    /// Applies `migration` under this contract, at `appliedAt`, after
+    /// `prerequisites`.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment the migration was applied.
-    /// @param prerequisites The migrations that must already be applied.
-    function applyMigrationHistory(
-        bytes32 expectedHead,
-        bytes32 migration,
-        uint256 appliedAt,
-        Prerequisite[] calldata prerequisites
-    ) external {
-        LibMigrationRegistry.applyMigrationHistory(expectedHead, migration, appliedAt, prerequisites);
+    /// @param prerequisites This contract at the head it believes it is at,
+    /// then the migrations that must already be applied.
+    function applyMigrationHistory(bytes32 migration, uint256 appliedAt, Prerequisite[] calldata prerequisites)
+        external
+    {
+        LibMigrationRegistry.applyMigrationHistory(migration, appliedAt, prerequisites);
     }
 
     /// When `writer` applied `migration`.
@@ -65,7 +61,7 @@ contract MockMigrationApplier {
     /// What `writer` applied `migration` after.
     /// @param writer The namespace to read.
     /// @param migration The migration to ask about.
-    /// @return The head it was applied onto and the prerequisites it listed, or empty.
+    /// @return The list the write gave, or empty.
     function appliedAfter(address writer, bytes32 migration) external view returns (Prerequisite[] memory) {
         return LibMigrationRegistry.appliedAfter(writer, migration);
     }

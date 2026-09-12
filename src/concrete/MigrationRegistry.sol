@@ -10,22 +10,19 @@ struct MigrationRecord {
     /// The moment recorded against the migration. Zero means never applied,
     /// which no write records.
     uint256 appliedAt;
-    /// The head the namespace was at when the record was written. Zero means
-    /// never applied: a head is genesis or an applied id, both nonzero.
-    bytes32 appliedOnto;
-    /// What the migration was applied after: the head it was applied onto,
-    /// under the writer, then the prerequisites the write listed, as listed.
-    /// Empty only for a migration never applied.
+    /// The list the write gave, as given: the head it was applied onto under
+    /// the writer, then the prerequisites. Empty only for a migration never
+    /// applied.
     Prerequisite[] appliedAfter;
 }
 
 /// @title MigrationRegistry
 /// @notice The whole of `IMigrationRegistryV2`: a writer applies one of its own
-/// migrations onto the head it believes its namespace is at, at the moment it
-/// says the migration ran, after the migrations in any namespace it names —
-/// and anyone reads when a given writer applied a given migration, what it
-/// applied it onto, what it applied it after, or where that writer's namespace
-/// has got to.
+/// migrations after one list — the head it believes its namespace is at, then
+/// the migrations in any namespace it names — at the moment it says the
+/// migration ran, and anyone reads when a given writer applied a given
+/// migration, what it applied it onto, what it applied it after, or where
+/// that writer's namespace has got to.
 ///
 /// There is deliberately nothing else. No removal, no upgrade, no pause, and no
 /// authority at all — which is the difference from `AddressRegistry`, and the
@@ -68,11 +65,11 @@ struct MigrationRecord {
 /// that chain rather than against it — a record is never earlier than the one
 /// it was applied onto, though it may be equal to it.
 ///
-/// Both writes take a list of prerequisites, each a record in any namespace
-/// that must already exist, and refuse the write naming the first that does
-/// not. The list is kept on the record behind the head it was applied onto,
-/// so everything a record was applied after is read back from it in one
-/// list, the head first.
+/// Both writes take one list: the head under the caller first, then a
+/// record in any namespace that must already exist, and refuse the write
+/// naming the first of those that does not. The list is the record, so
+/// everything a record was applied after is read back exactly as it was
+/// written.
 ///
 /// Neither storage mapping is `public`. `applied`, `appliedOnto`,
 /// `appliedAfter` and `head` refuse the zero writer, the three record readers
@@ -98,23 +95,20 @@ contract MigrationRegistry is IMigrationRegistryV2 {
     /// when its migration ran does not have to say it.
     // slither-disable-next-line timestamp
     // forge-lint: disable-next-line(block-timestamp)
-    function applyMigration(bytes32 expectedHead, bytes32 migration, Prerequisite[] calldata prerequisites) external {
-        applyMigrationRecord(expectedHead, migration, block.timestamp, prerequisites);
+    function applyMigration(bytes32 migration, Prerequisite[] calldata prerequisites) external {
+        applyMigrationRecord(migration, block.timestamp, prerequisites);
     }
 
     /// @inheritdoc IMigrationRegistryV2
-    function applyMigrationHistory(
-        bytes32 expectedHead,
-        bytes32 migration,
-        uint256 appliedAt,
-        Prerequisite[] calldata prerequisites
-    ) external {
-        applyMigrationRecord(expectedHead, migration, appliedAt, prerequisites);
+    function applyMigrationHistory(bytes32 migration, uint256 appliedAt, Prerequisite[] calldata prerequisites)
+        external
+    {
+        applyMigrationRecord(migration, appliedAt, prerequisites);
     }
 
     /// Reached by both writes, so there is one order whichever of them
-    /// supplied the moment: the caller's own arguments, then every
-    /// prerequisite, then the namespace, then the record.
+    /// supplied the moment: the caller's own arguments, then every entry after
+    /// the head, then the namespace, then the record.
     ///
     /// The prerequisites sit between the arguments and the namespace because
     /// they are the caller's statement of the world its migration requires.
@@ -123,24 +117,26 @@ contract MigrationRegistry is IMigrationRegistryV2 {
     /// already — a record that exists while the prerequisites its script now
     /// names do not is the more alarming fact, not one to hide behind
     /// "already applied".
-    /// @param expectedHead The head the caller believes its namespace is at.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment to record against it.
-    /// @param prerequisites The records that must exist for it to be written.
-    function applyMigrationRecord(
-        bytes32 expectedHead,
-        bytes32 migration,
-        uint256 appliedAt,
-        Prerequisite[] calldata prerequisites
-    ) internal {
+    /// @param prerequisites The head, then the records that must exist for it
+    /// to be written.
+    function applyMigrationRecord(bytes32 migration, uint256 appliedAt, Prerequisite[] calldata prerequisites)
+        internal
+    {
         checkMigrationArguments(migration, appliedAt);
         checkPrerequisites(prerequisites);
-        writeMigrationRecord(expectedHead, migration, appliedAt, prerequisites);
+        writeMigrationRecord(migration, appliedAt, prerequisites);
     }
 
-    /// Refuses every prerequisite that is not a record key, in list order,
-    /// before reading any of them; then refuses the first, in list order, that
-    /// names a record nobody has written.
+    /// Refuses every entry after the head that is not a record key, in list
+    /// order, before reading any of them; then refuses the first, in list
+    /// order, that names a record nobody has written.
+    ///
+    /// The first entry is skipped by both passes: it is the head, which is not
+    /// a key — it may be genesis — and is checked against the namespace by
+    /// `writeMigrationRecord`. An empty list has no head to skip and is
+    /// refused there too.
     ///
     /// Two passes rather than one, so that every malformed argument is
     /// reported before any state is read: a zero writer in the last entry is
@@ -149,15 +145,15 @@ contract MigrationRegistry is IMigrationRegistryV2 {
     /// world the caller may only be able to wait for. The key check is
     /// `checkRecordKey`, so a prerequisite is refused exactly as `applied` is
     /// refused the same key.
-    /// @param prerequisites The records that must exist.
+    /// @param prerequisites The head, then the records that must exist.
     function checkPrerequisites(Prerequisite[] calldata prerequisites) internal view {
-        for (uint256 i = 0; i < prerequisites.length; i++) {
+        for (uint256 i = 1; i < prerequisites.length; i++) {
             checkRecordKey(prerequisites[i].writer, prerequisites[i].migration);
         }
         // Zero is the one moment no write records, so equality is the exact
         // test for an absent record; slither reads it as a timestamp compare.
         // slither-disable-start timestamp
-        for (uint256 i = 0; i < prerequisites.length; i++) {
+        for (uint256 i = 1; i < prerequisites.length; i++) {
             // slither-disable-next-line incorrect-equality
             if (sRecords[prerequisites[i].writer][prerequisites[i].migration].appliedAt == 0) {
                 revert PrerequisiteNotApplied(prerequisites[i].writer, prerequisites[i].migration);
@@ -222,22 +218,19 @@ contract MigrationRegistry is IMigrationRegistryV2 {
     /// that describes the record at its head, to the one that describes the
     /// block — which is the order in which a caller can do something about
     /// them.
-    /// @param expectedHead The head the caller believes its namespace is at.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment to record against it.
-    /// @param prerequisites The records it was applied after, every one of
-    /// which `checkPrerequisites` has found to exist.
-    function writeMigrationRecord(
-        bytes32 expectedHead,
-        bytes32 migration,
-        uint256 appliedAt,
-        Prerequisite[] calldata prerequisites
-    ) internal {
+    /// @param prerequisites The head the caller believes its namespace is
+    /// at, then the records it was applied after, every one of which
+    /// `checkPrerequisites` has found to exist.
+    function writeMigrationRecord(bytes32 migration, uint256 appliedAt, Prerequisite[] calldata prerequisites)
+        internal
+    {
         // There is deliberately no zero-writer case here. `msg.sender` cannot
         // be the zero address, so the zero namespace is unreachable for writes
         // and a guard on it would be unreachable code pretending to be a check.
         // Nor is there a zero-head case: a head is either genesis or an applied
-        // id, both nonzero, so a zero `expectedHead` can never match and is
+        // id, both nonzero, so a zero in the first entry can never match and is
         // already refused below, by an error that names the zero it was handed.
 
         // Checked before the head, because a migration that has already run has
@@ -250,9 +243,18 @@ contract MigrationRegistry is IMigrationRegistryV2 {
         if (record.appliedAt != 0) {
             revert MigrationAlreadyApplied(msg.sender, migration);
         }
+        // The first entry is the caller at the head it believes it is at. An
+        // empty list names no head at all, so it is refused as a zero head,
+        // which no namespace can be at; a first entry under anyone but the
+        // caller is not this namespace's head whatever migration it names.
         bytes32 actualHead = head(msg.sender);
-        if (expectedHead != actualHead) {
-            revert UnexpectedMigrationHead(msg.sender, expectedHead, actualHead);
+        if (
+            prerequisites.length == 0 || prerequisites[0].writer != msg.sender
+                || prerequisites[0].migration != actualHead
+        ) {
+            revert UnexpectedMigrationHead(
+                msg.sender, prerequisites.length == 0 ? bytes32(0) : prerequisites[0].migration, actualHead
+            );
         }
         // Last of the refusals about the namespace, because it is the only one
         // that reads a RECORD rather than a key, and the record it reads is the
@@ -293,11 +295,8 @@ contract MigrationRegistry is IMigrationRegistryV2 {
         }
         // slither-disable-end timestamp
         record.appliedAt = appliedAt;
-        record.appliedOnto = actualHead;
-        // The head first, then pushed one at a time: solc does not copy a
-        // calldata array of structs into storage. The record was empty, so
-        // this is the whole list.
-        record.appliedAfter.push(Prerequisite({writer: msg.sender, migration: actualHead}));
+        // Pushed one at a time: solc does not copy a calldata array of structs
+        // into storage. The record was empty, so this is the whole list.
         for (uint256 i = 0; i < prerequisites.length; i++) {
             record.appliedAfter.push(prerequisites[i]);
         }
@@ -320,10 +319,12 @@ contract MigrationRegistry is IMigrationRegistryV2 {
     /// @inheritdoc IMigrationRegistryV2
     /// @dev The same three refusals as `applied`, for the same reason and on
     /// the same key: a zero answer here reads as "never applied" exactly as a
-    /// zero moment does.
+    /// zero moment does. The head is the first entry of the stored list, and
+    /// the list is empty exactly when the record is.
     function appliedOnto(address writer, bytes32 migration) external view returns (bytes32) {
         checkRecordKey(writer, migration);
-        return sRecords[writer][migration].appliedOnto;
+        Prerequisite[] storage appliedAfterList = sRecords[writer][migration].appliedAfter;
+        return appliedAfterList.length == 0 ? bytes32(0) : appliedAfterList[0].migration;
     }
 
     /// @inheritdoc IMigrationRegistryV2
@@ -337,7 +338,8 @@ contract MigrationRegistry is IMigrationRegistryV2 {
 
     /// Refuses the three inputs that can only be a mistake in the caller rather
     /// than a record to read. One function, so the three readers of a record
-    /// and the prerequisite check cannot drift into refusing different things.
+    /// and the check on every entry after the head cannot drift into refusing
+    /// different things.
     /// @param writer The namespace being read.
     /// @param migration The migration being asked about.
     function checkRecordKey(address writer, bytes32 migration) internal pure {

@@ -25,6 +25,15 @@ contract MigrationRegistryAppliedTest is Test {
         sRegistry = new MigrationRegistry();
     }
 
+    /// The list a write under `writer` onto `head` after nothing else passes.
+    /// @param writer The namespace the record is in.
+    /// @param head The head it is applied onto.
+    /// @return prerequisites The one-entry list.
+    function onto(address writer, bytes32 head) internal pure returns (Prerequisite[] memory prerequisites) {
+        prerequisites = new Prerequisite[](1);
+        prerequisites[0] = Prerequisite({writer: writer, migration: head});
+    }
+
     /// An unapplied migration answers zero rather than reverting. This is
     /// the deliberate difference from a registry whose reads revert on an
     /// unknown key: "not applied here" is the ordinary state of every migration
@@ -58,7 +67,7 @@ contract MigrationRegistryAppliedTest is Test {
 
         vm.warp(writtenAt);
         vm.prank(writer);
-        sRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt, new Prerequisite[](0));
+        sRegistry.applyMigrationHistory(migration, appliedAt, onto(writer, MIGRATION_HEAD_GENESIS));
 
         vm.warp(readAt);
         assertEq(sRegistry.applied(writer, migration), appliedAt);
@@ -83,7 +92,7 @@ contract MigrationRegistryAppliedTest is Test {
 
         vm.warp(writtenAt);
         vm.prank(writer);
-        sRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt, new Prerequisite[](0));
+        sRegistry.applyMigrationHistory(migration, appliedAt, onto(writer, MIGRATION_HEAD_GENESIS));
 
         vm.warp(readAt);
         assertLe(sRegistry.applied(writer, migration), block.timestamp);
@@ -96,7 +105,7 @@ contract MigrationRegistryAppliedTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
+        sRegistry.applyMigration(migration, onto(writer, MIGRATION_HEAD_GENESIS));
 
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
@@ -153,7 +162,7 @@ contract MigrationRegistryAppliedTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration, new Prerequisite[](0));
+        sRegistry.applyMigration(migration, onto(writer, MIGRATION_HEAD_GENESIS));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.applied(address(0), migration);

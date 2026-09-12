@@ -29,17 +29,20 @@ pragma solidity ^0.8.25;
 /// the two values a migration id may not be.
 bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.head.genesis");
 
-/// @dev A record in some writer's namespace, named by a write as something it
-/// waits on and answered by `appliedAfter` as something a record was applied
-/// after. It is the key `applied` takes, so anything `applied` refuses to
-/// answer about is refused as a prerequisite.
+/// @dev One entry in the list a record was applied after. A write takes the
+/// list and `appliedAfter` answers it, and they are the same list: the first
+/// entry is the head the record is applied onto, under the writer, and every
+/// later entry is a record in some namespace the write waited on. A later
+/// entry is the key `applied` takes, so anything `applied` refuses to answer
+/// about is refused as a prerequisite.
 struct Prerequisite {
-    /// The namespace to read. Never the zero address.
+    /// The namespace. Never the zero address; in the first entry, the writer
+    /// itself.
     address writer;
-    /// The migration under it. As an argument, one that must have been
-    /// applied: never zero, never `MIGRATION_HEAD_GENESIS`. As the first entry
-    /// `appliedAfter` answers, the head the record was applied onto, which is
-    /// `MIGRATION_HEAD_GENESIS` for the first migration in a namespace.
+    /// The migration under it. In the first entry, the head the record is
+    /// applied onto, which is `MIGRATION_HEAD_GENESIS` for the first migration
+    /// in a namespace. In every later entry, one that must have been applied:
+    /// never zero, never `MIGRATION_HEAD_GENESIS`.
     bytes32 migration;
 }
 
@@ -48,17 +51,17 @@ struct Prerequisite {
 /// records in any namespace it waits on, and a record answers what it was
 /// applied after.
 ///
-/// A per-writer record of which migrations have been applied, when,
-/// onto what and after what, with exactly six operations: a writer applies one
-/// of its own migrations onto the head it believes its namespace is at, naming
-/// the migrations in any namespace it waits on, either as applied now
+/// A per-writer record of which migrations have been applied, when and
+/// after what, with exactly six operations: a writer applies one of its own
+/// migrations after one list — the head it believes its namespace is at, then
+/// the migrations in any namespace it waits on — either as applied now
 /// (`applyMigration`) or as already applied at a moment it supplies
 /// (`applyMigrationHistory`); anyone reads when a given writer applied a given
 /// migration (`applied`), what that writer applied it onto (`appliedOnto`),
-/// what it waited on (`appliedAfter`), and where that writer's namespace
-/// currently is (`head`). There is no removal, no upgrade and no authority
-/// beyond the writer over its own namespace, and an implementation MUST NOT
-/// add any.
+/// what it applied it after (`appliedAfter`), and where that writer's
+/// namespace currently is (`head`). There is no removal, no upgrade and no
+/// authority beyond the writer over its own namespace, and an implementation
+/// MUST NOT add any.
 ///
 /// The two writes differ only in where the recorded moment comes from.
 /// `applyMigration` records the block it lands in, for a script applying its
@@ -149,16 +152,16 @@ struct Prerequisite {
 /// ## The head is what makes an ordered sequence ordered
 ///
 /// A namespace has a HEAD: the migration most recently applied under it, or
-/// `MIGRATION_HEAD_GENESIS` if it has never applied one. Every write takes the
-/// head the caller believes its namespace is at and refuses to write unless that
-/// is where the namespace actually is; on success the applied migration becomes
-/// the new head.
+/// `MIGRATION_HEAD_GENESIS` if it has never applied one. Every write names, as
+/// the first entry of its list, the head the caller believes its namespace is
+/// at, and refuses to write unless that is where the namespace actually is; on
+/// success the applied migration becomes the new head.
 ///
-/// Each record keeps the head it was applied onto, which `appliedOnto` reads
-/// back. A namespace's records are therefore a chain in storage: from `head`,
-/// each `appliedOnto` names the record before it, down to
-/// `MIGRATION_HEAD_GENESIS`. That chain IS the order the migrations ran in, and
-/// it is exact whatever moments the records carry.
+/// Each record keeps that first entry with the rest of its list, and
+/// `appliedOnto` reads it back. A namespace's records are therefore a chain
+/// in storage: from `head`, each `appliedOnto` names the record before it,
+/// down to `MIGRATION_HEAD_GENESIS`. That chain IS the order the migrations
+/// ran in, and it is exact whatever moments the records carry.
 ///
 /// This is what blocks a SKIPPED step. A migration script names its predecessor,
 /// so a chain that never got the predecessor is a loud revert at the moment of
@@ -194,9 +197,10 @@ struct Prerequisite {
 /// otherwise held back by the applying script re-reading the other migration's
 /// post-state, or by a runbook.
 ///
-/// Every write takes a list of `Prerequisite`s and reverts
-/// `PrerequisiteNotApplied` for the first one whose `applied` is zero. An empty
-/// list is a migration that waits on nothing.
+/// Every write takes a list of `Prerequisite`s whose first entry is the head
+/// under the caller, and reverts `PrerequisiteNotApplied` for the first entry
+/// after it whose `applied` is zero. A list of the head alone is a migration
+/// that waits on nothing but its own predecessor.
 ///
 /// A prerequisite is still an index, not proof. It says the other writer
 /// RECORDED its migration, not that the state that migration produced holds,
@@ -204,14 +208,14 @@ struct Prerequisite {
 /// keeps its pins. What the prerequisite removes is the dependent script
 /// carrying a hand-written copy of its prerequisite's post-state read.
 ///
-/// The list is part of the record, and `appliedAfter` reads back everything
-/// the record was applied after: the head it was applied onto first, as an
-/// entry under the writer's own namespace, then the list as listed. Within one
-/// namespace `appliedOnto` walks the chain back to genesis; `appliedAfter`
-/// walks from any record to every record it waited on, its predecessor
-/// included, so the order across writers is on chain and not only in the
-/// log. It says which records EXISTED when this one was written, which is a
-/// fact about the record and nothing about the state around it.
+/// The list is the record, and `appliedAfter` reads it back exactly as the
+/// write gave it: the head under the writer's own namespace first, then what
+/// it waited on, as listed. Within one namespace `appliedOnto` walks the chain
+/// back to genesis; `appliedAfter` walks from any record to every record it
+/// waited on, its predecessor included, so the order across writers is on
+/// chain and not only in the log. It says which records EXISTED when this one
+/// was written, which is a fact about the record and nothing about the state
+/// around it.
 ///
 /// A prerequisite bounds no moment. The moments in another namespace are that
 /// writer's data, and a bound against them would let one writer's invented
@@ -220,15 +224,17 @@ struct Prerequisite {
 /// moments'; a moment supplied to `applyMigrationHistory` is bounded by the
 /// caller's own chain and the block, and by nothing else.
 ///
-/// A prerequisite is a record key, and is refused as `applied` refuses one:
-/// `ZeroWriter`, `ZeroMigration` or `GenesisMigration`, none of which can name
-/// a record and each of which is a constant nobody set or set to the wrong one.
-/// The caller's own namespace is an ordinary namespace to name, so an earlier
-/// migration of its own is a prerequisite like any other; a prerequisite listed
-/// twice is checked twice and recorded twice; and a prerequisite naming the
-/// migration being applied is unapplied by construction on a first
-/// application, so it is refused as `PrerequisiteNotApplied` rather than
-/// recorded.
+/// Every entry after the first is a record key, and is refused as `applied`
+/// refuses one: `ZeroWriter`, `ZeroMigration` or `GenesisMigration`, none of
+/// which can name a record and each of which is a constant nobody set or set
+/// to the wrong one. The caller's own namespace is an ordinary namespace to
+/// name there, so an earlier migration of its own is a prerequisite like any
+/// other; a prerequisite listed twice is checked twice and recorded twice; and
+/// a prerequisite naming the migration being applied is unapplied by
+/// construction on a first application, so it is refused as
+/// `PrerequisiteNotApplied` rather than recorded. The first entry is not a
+/// key: it is the head, which may be `MIGRATION_HEAD_GENESIS`, and it is
+/// checked against the namespace rather than read as a record.
 ///
 /// ## The namespace is the writer, and that is the whole access control
 ///
@@ -285,11 +291,12 @@ interface IMigrationRegistryV2 {
     /// zero would be refused as unapplied forever rather than as the mistake it
     /// is.
     ///
-    /// There is no matching refusal for a zero HEAD, and adding one would be a
-    /// guard on something already impossible: a head is either
-    /// `MIGRATION_HEAD_GENESIS` or an applied id, both nonzero, so a zero head
-    /// can never match and is already refused by `UnexpectedMigrationHead` —
-    /// which names the zero it was handed, so nothing about the mistake is lost.
+    /// There is no matching refusal for a zero HEAD in the first entry, and
+    /// adding one would be a guard on something already impossible: a head is
+    /// either `MIGRATION_HEAD_GENESIS` or an applied id, both nonzero, so a
+    /// zero head can never match and is already refused by
+    /// `UnexpectedMigrationHead` — which names the zero it was handed, so
+    /// nothing about the mistake is lost.
     error ZeroMigration();
 
     /// Thrown when a write is called with `MIGRATION_HEAD_GENESIS` as the
@@ -318,7 +325,8 @@ interface IMigrationRegistryV2 {
     /// There is no matching case on the writer of any write: `msg.sender` is
     /// never zero, so the zero namespace cannot be written to in the first
     /// place. A prerequisite's writer is an argument, not `msg.sender`, which
-    /// is why it is checked.
+    /// is why it is checked. The first entry's writer must BE `msg.sender`,
+    /// so a zero there is `UnexpectedMigrationHead` rather than this.
     error ZeroWriter();
 
     /// Thrown when a writer applies a migration it has already applied. This
@@ -335,13 +343,16 @@ interface IMigrationRegistryV2 {
     /// @param migration The migration already applied under it.
     error MigrationAlreadyApplied(address writer, bytes32 migration);
 
-    /// Thrown when a writer applies onto a head its namespace is not at. Either
-    /// something the caller believed had been applied has not been, or something
-    /// it did not know about has been — a skipped predecessor, a concurrent
-    /// dispatch that landed first, or a chain that is simply further behind than
-    /// the script assumed.
+    /// Thrown when the first entry of a write's list is not the head the
+    /// caller's namespace is at, under the caller: the list is empty, the
+    /// entry's writer is not the caller, or its migration is not the head.
+    /// Either something the caller believed had been applied has not been, or
+    /// something it did not know about has been — a skipped predecessor, a
+    /// concurrent dispatch that landed first, or a chain that is simply
+    /// further behind than the script assumed.
     /// @param writer The namespace, which is the caller.
-    /// @param expectedHead The head the caller said it was applying onto.
+    /// @param expectedHead The first entry's migration, or zero for an empty
+    /// list.
     /// @param actualHead The head the namespace is actually at.
     error UnexpectedMigrationHead(address writer, bytes32 expectedHead, bytes32 actualHead);
 
@@ -387,11 +398,11 @@ interface IMigrationRegistryV2 {
     /// applied onto.
     error TimestampBeforeHead(uint256 appliedAt, uint256 headAppliedAt);
 
-    /// Thrown when a write is given a prerequisite that has not been applied:
-    /// `applied(writer, migration)` is zero. The first such entry in list order
-    /// is the one named, and nothing after it has been read, so a caller
-    /// waiting on several is told about one at a time — the one it has to wait
-    /// for first.
+    /// Thrown when an entry after the first of a write's list has not been
+    /// applied: `applied(writer, migration)` is zero. The first such entry in
+    /// list order is the one named, and nothing after it has been read, so a
+    /// caller waiting on several is told about one at a time — the one it has
+    /// to wait for first.
     ///
     /// Named in full because the list is the caller's and can be long: which
     /// writer's which migration is the whole of what a caller needs to know to
@@ -415,8 +426,8 @@ interface IMigrationRegistryV2 {
     /// It carries no head, because the log is ordered and one writer's entries
     /// in order ARE that writer's chain of heads — each entry's migration is the
     /// head the next one was applied onto, and the first was applied onto
-    /// `MIGRATION_HEAD_GENESIS`. It carries no prerequisites either: they are
-    /// in the record, read back by `appliedAfter`.
+    /// `MIGRATION_HEAD_GENESIS`. It carries no list either: the list is the
+    /// record, read back by `appliedAfter`.
     ///
     /// It does carry `appliedAt`, which the log does not otherwise hold: the
     /// block a log entry sits in says when the record was written, and
@@ -426,9 +437,9 @@ interface IMigrationRegistryV2 {
     /// @param appliedAt The moment recorded against it.
     event Migrated(address indexed writer, bytes32 indexed migration, uint256 appliedAt);
 
-    /// Applies `migration` under the caller's namespace, onto `expectedHead`,
-    /// after `prerequisites`, as having been applied in the block this call
-    /// lands in.
+    /// Applies `migration` under the caller's namespace, after
+    /// `prerequisites`, as having been applied in the block this call lands
+    /// in.
     ///
     /// This is for a script applying its own migration, so the record lands in
     /// the same atomic unit as the change it describes — a Safe
@@ -443,19 +454,20 @@ interface IMigrationRegistryV2 {
     /// refusals in the same order, against `block.timestamp` as the moment —
     /// so a block whose timestamp is zero is `ZeroTimestamp`, and the moment
     /// can never be in the future.
-    /// @param expectedHead The head the caller believes its namespace is at:
-    /// the migration it is applying onto, or `MIGRATION_HEAD_GENESIS` for the
-    /// first migration in a namespace. Never zero, which can never match.
     /// @param migration The migration to apply. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @param prerequisites The migrations, each under its writer, that MUST
-    /// have been applied for this write to land. Empty for a migration that
-    /// waits on nothing; no entry naming the zero writer, the zero migration
-    /// or `MIGRATION_HEAD_GENESIS`.
-    function applyMigration(bytes32 expectedHead, bytes32 migration, Prerequisite[] calldata prerequisites) external;
+    /// @param prerequisites What `migration` is applied after, which is what
+    /// `appliedAfter` will answer for it. The first entry is the caller and
+    /// the head the caller believes its namespace is at: the migration it is
+    /// applying onto, or `MIGRATION_HEAD_GENESIS` for the first migration in
+    /// a namespace. Every later entry is a migration, under its writer, that
+    /// MUST have been applied for this write to land: none naming the zero
+    /// writer, the zero migration or `MIGRATION_HEAD_GENESIS`. The head alone
+    /// for a migration that waits on nothing else.
+    function applyMigration(bytes32 migration, Prerequisite[] calldata prerequisites) external;
 
-    /// Applies `migration` under the caller's namespace, onto `expectedHead`,
-    /// after `prerequisites`, as having been applied at `appliedAt`.
+    /// Applies `migration` under the caller's namespace, after
+    /// `prerequisites`, as having been applied at `appliedAt`.
     ///
     /// This is for a migration that ALREADY ran, which records the moment it ran
     /// rather than the moment it was written down.
@@ -463,29 +475,30 @@ interface IMigrationRegistryV2 {
     /// The implementation MUST make the refusals about the arguments first, in
     /// argument order: `ZeroMigration` or `GenesisMigration` for `migration`,
     /// `ZeroTimestamp` for `appliedAt`, then `ZeroWriter`, `ZeroMigration` or
-    /// `GenesisMigration` for the first entry of `prerequisites` that is not a
-    /// record key. Then it MUST revert `PrerequisiteNotApplied` for the first
-    /// entry whose `applied` is zero. Only then does it make the refusals about
-    /// the caller's namespace and the moment, in this order:
+    /// `GenesisMigration` for the first entry after the head in
+    /// `prerequisites` that is not a record key. Then it MUST revert
+    /// `PrerequisiteNotApplied` for the first entry after the head whose
+    /// `applied` is zero. Only then does it make the refusals about the
+    /// caller's namespace and the moment, in this order:
     /// `MigrationAlreadyApplied` if the caller has already applied `migration`,
-    /// `UnexpectedMigrationHead` if the caller's namespace is not at
-    /// `expectedHead`, `TimestampBeforeHead` if `appliedAt` is before the
-    /// moment recorded against `expectedHead`, and `FutureTimestamp` if
-    /// `appliedAt` is after `block.timestamp`. It MUST NOT provide any way to
-    /// unrecord a migration, to move a head backwards, or to move a record
-    /// once written. On success it MUST record `appliedAt`, `expectedHead` and
-    /// `prerequisites` against `migration`, make `migration` the caller's new
-    /// head, and emit `Migrated`.
+    /// `UnexpectedMigrationHead` if the first entry of `prerequisites` is not
+    /// the caller at the head its namespace is at, `TimestampBeforeHead` if
+    /// `appliedAt` is before the moment recorded against that head, and
+    /// `FutureTimestamp` if `appliedAt` is after `block.timestamp`. It MUST
+    /// NOT provide any way to unrecord a migration, to move a head backwards,
+    /// or to move a record once written. On success it MUST record `appliedAt`
+    /// and `prerequisites` against `migration`, make `migration` the caller's
+    /// new head, and emit `Migrated`.
     ///
     /// Everything the caller handed in is refused before anything is read,
     /// because a malformed argument is a mistake the caller can fix now and a
-    /// fact about the world is not. Every prerequisite is read before anything
-    /// about the caller's own namespace is, because the list is the caller's
-    /// statement of the world its migration requires: until that holds, the
-    /// migration must not be recorded, whatever the caller's head is and
-    /// whether or not the caller has recorded this migration already — and a
-    /// record that exists while the prerequisites its script now names do not
-    /// is the more alarming fact of the two, not the one to hide behind
+    /// fact about the world is not. Every entry after the head is read before
+    /// anything about the caller's own namespace is, because they are the
+    /// caller's statement of the world its migration requires: until that
+    /// holds, the migration must not be recorded, whatever the caller's head
+    /// is and whether or not the caller has recorded this migration already —
+    /// and a record that exists while the prerequisites its script now names
+    /// do not is the more alarming fact of the two, not the one to hide behind
     /// "already applied".
     ///
     /// A prerequisite that has been applied stays applied, because nothing can
@@ -494,24 +507,14 @@ interface IMigrationRegistryV2 {
     ///
     /// Nothing is returned: every part of the record is an argument the caller
     /// just handed in.
-    /// @param expectedHead The head the caller believes its namespace is at:
-    /// the migration it is applying onto, or `MIGRATION_HEAD_GENESIS` for the
-    /// first migration in a namespace. Never zero, which can never match.
     /// @param migration The migration to apply. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
     /// @param appliedAt The moment `migration` was applied. Never zero, never
     /// after the block this call lands in. Not bounded by any prerequisite's
     /// moment.
-    /// @param prerequisites The migrations, each under its writer, that MUST
-    /// have been applied for this write to land. Empty for a migration that
-    /// waits on nothing; no entry naming the zero writer, the zero migration
-    /// or `MIGRATION_HEAD_GENESIS`.
-    function applyMigrationHistory(
-        bytes32 expectedHead,
-        bytes32 migration,
-        uint256 appliedAt,
-        Prerequisite[] calldata prerequisites
-    ) external;
+    /// @param prerequisites What `migration` is applied after, in the shape
+    /// `applyMigration` takes.
+    function applyMigrationHistory(bytes32 migration, uint256 appliedAt, Prerequisite[] calldata prerequisites) external;
 
     /// When `writer` applied `migration`, as the moment recorded with the
     /// record. Zero if it never did.
@@ -541,7 +544,8 @@ interface IMigrationRegistryV2 {
     function applied(address writer, bytes32 migration) external view returns (uint256);
 
     /// What `writer` applied `migration` ONTO: the head that namespace was at
-    /// when the record was written. Zero if `writer` never applied `migration`.
+    /// when the record was written, which is the first entry of
+    /// `appliedAfter`. Zero if `writer` never applied `migration`.
     ///
     /// The implementation MUST revert `ZeroWriter`, `ZeroMigration` or
     /// `GenesisMigration` rather than answering about any of them, and MUST
@@ -562,11 +566,11 @@ interface IMigrationRegistryV2 {
     /// not applied it.
     function appliedOnto(address writer, bytes32 migration) external view returns (bytes32);
 
-    /// What `writer` applied `migration` AFTER: first the head it was applied
-    /// onto, as an entry naming `writer` and `appliedOnto`, then the
-    /// prerequisites the write listed, in the order it listed them, duplicates
-    /// included. Never empty for an applied migration, and empty if `writer`
-    /// never applied `migration`.
+    /// What `writer` applied `migration` AFTER: the list the write gave,
+    /// exactly as given. The first entry is `writer` at the head it applied
+    /// onto, and every later entry is a record it waited on, in the order
+    /// listed, duplicates included. Never empty for an applied migration, and
+    /// empty if `writer` never applied `migration`.
     ///
     /// The implementation MUST revert `ZeroWriter`, `ZeroMigration` or
     /// `GenesisMigration` rather than answering about any of them, and MUST
@@ -583,8 +587,8 @@ interface IMigrationRegistryV2 {
     /// @param writer The namespace to read. Never the zero address.
     /// @param migration The migration to ask about. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @return What `writer` applied `migration` after: the head, then the
-    /// prerequisites as listed.
+    /// @return The list `writer` applied `migration` after, as the write gave
+    /// it.
     function appliedAfter(address writer, bytes32 migration) external view returns (Prerequisite[] memory);
 
     /// Where `writer`'s namespace currently is: the migration it applied most
