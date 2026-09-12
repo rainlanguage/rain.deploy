@@ -333,6 +333,7 @@ contract LibMigrationRegistryTest is Test {
     /// through both writes, naming the prerequisite, and nothing is recorded.
     function testApplyMigrationPrerequisiteNotApplied(address other, bytes32 migration, bytes32 prerequisite) external {
         vm.assume(other != address(0));
+        vm.assume(other != address(this));
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
