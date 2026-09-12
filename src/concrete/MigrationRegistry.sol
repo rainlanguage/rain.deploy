@@ -2,10 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IMigrationRegistryV2, Prerequisite} from "../interface/IMigrationRegistryV2.sol";
+import {IMigrationRegistryV1, Prerequisite} from "../interface/IMigrationRegistryV1.sol";
 
 /// @title MigrationRegistry
-/// @notice The whole of `IMigrationRegistryV2`: a writer applies one of its own
+/// @notice The whole of `IMigrationRegistryV1`: a writer applies one of its own
 /// migrations after the migrations it names, at the moment it says the
 /// migration ran, and anyone reads when a given writer applied a given
 /// migration.
@@ -19,19 +19,19 @@ import {IMigrationRegistryV2, Prerequisite} from "../interface/IMigrationRegistr
 /// The storage mapping is not `public`: `applied` refuses the zero writer and
 /// the zero migration, and a generated getter would answer both with zero,
 /// which is the silent wrong-branch this contract reverts to prevent.
-contract MigrationRegistry is IMigrationRegistryV2 {
+contract MigrationRegistry is IMigrationRegistryV1 {
     /// Every record, namespaced by writer. Zero means never applied, which no
     /// write records.
     mapping(address writer => mapping(bytes32 migration => uint256 appliedAt)) internal sApplied;
 
-    /// @inheritdoc IMigrationRegistryV2
+    /// @inheritdoc IMigrationRegistryV1
     // slither-disable-next-line timestamp
     // forge-lint: disable-next-line(block-timestamp)
     function applyMigration(bytes32 migration, Prerequisite[] calldata prerequisites) external {
         writeMigrationRecord(migration, block.timestamp, prerequisites);
     }
 
-    /// @inheritdoc IMigrationRegistryV2
+    /// @inheritdoc IMigrationRegistryV1
     function applyMigrationHistory(bytes32 migration, uint256 appliedAt, Prerequisite[] calldata prerequisites)
         external
     {
@@ -85,7 +85,7 @@ contract MigrationRegistry is IMigrationRegistryV2 {
         emit Migrated(msg.sender, migration, appliedAt, prerequisites);
     }
 
-    /// @inheritdoc IMigrationRegistryV2
+    /// @inheritdoc IMigrationRegistryV1
     function applied(address writer, bytes32 migration) external view returns (uint256) {
         checkRecordKey(writer, migration);
         return sApplied[writer][migration];

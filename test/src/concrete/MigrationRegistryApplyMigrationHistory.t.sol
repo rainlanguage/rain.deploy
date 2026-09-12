@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.16.2/src/Test.sol";
 
-import {IMigrationRegistryV2, Prerequisite} from "../../../src/interface/IMigrationRegistryV2.sol";
+import {IMigrationRegistryV1, Prerequisite} from "../../../src/interface/IMigrationRegistryV1.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
@@ -95,7 +95,7 @@ contract MigrationRegistryApplyMigrationHistoryTest is Test {
         vm.warp(now_);
         appliedAt = bound(appliedAt, uint256(now_) + 1, type(uint256).max);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.FutureTimestamp.selector, appliedAt, now_));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, appliedAt, now_));
         vm.prank(writer);
         sRegistry.applyMigrationHistory(migration, appliedAt, new Prerequisite[](0));
 
@@ -109,7 +109,7 @@ contract MigrationRegistryApplyMigrationHistoryTest is Test {
         vm.warp(now_);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
+            abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
         );
         vm.prank(writer);
         sRegistry.applyMigrationHistory(migration, uint256(now_) + 1, new Prerequisite[](0));
@@ -123,7 +123,7 @@ contract MigrationRegistryApplyMigrationHistoryTest is Test {
         LibMigrationFuzz.assumeKey(vm, writer, migration);
         vm.warp(now_);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroTimestamp.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
         vm.prank(writer);
         sRegistry.applyMigrationHistory(migration, 0, new Prerequisite[](0));
 
@@ -139,9 +139,9 @@ contract MigrationRegistryApplyMigrationHistoryTest is Test {
         vm.warp(0);
 
         if (appliedAt == 0) {
-            vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroTimestamp.selector));
+            vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
         } else {
-            vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.FutureTimestamp.selector, appliedAt, 0));
+            vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, appliedAt, 0));
         }
         vm.prank(writer);
         sRegistry.applyMigrationHistory(migration, appliedAt, new Prerequisite[](0));
@@ -154,7 +154,7 @@ contract MigrationRegistryApplyMigrationHistoryTest is Test {
     function testApplyMigrationHistoryIdCheckedBeforeTimestamp(address writer, bytes32 other) external {
         vm.assume(writer != address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
         vm.prank(writer);
         sRegistry.applyMigrationHistory(bytes32(0), 0, LibMigrationFuzz.one(address(0), other));
     }
@@ -174,12 +174,12 @@ contract MigrationRegistryApplyMigrationHistoryTest is Test {
         sRegistry.applyMigration(migration, new Prerequisite[](0));
         Prerequisite[] memory malformed = LibMigrationFuzz.one(address(0), other);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroTimestamp.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
         vm.prank(writer);
         sRegistry.applyMigrationHistory(migration, 0, malformed);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
+            abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
         );
         vm.prank(writer);
         sRegistry.applyMigrationHistory(migration, uint256(now_) + 1, malformed);
@@ -203,13 +203,13 @@ contract MigrationRegistryApplyMigrationHistoryTest is Test {
         sRegistry.applyMigration(migration, new Prerequisite[](0));
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, other, prerequisite)
+            abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, other, prerequisite)
         );
         vm.prank(writer);
         sRegistry.applyMigrationHistory(migration, now_, LibMigrationFuzz.one(other, prerequisite));
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.MigrationAlreadyApplied.selector, writer, migration)
+            abi.encodeWithSelector(IMigrationRegistryV1.MigrationAlreadyApplied.selector, writer, migration)
         );
         vm.prank(writer);
         sRegistry.applyMigrationHistory(migration, now_, new Prerequisite[](0));
@@ -242,7 +242,7 @@ contract MigrationRegistryApplyMigrationHistoryTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.PrerequisiteNotApplied.selector,
+                IMigrationRegistryV1.PrerequisiteNotApplied.selector,
                 prerequisites[index].writer,
                 prerequisites[index].migration
             )
@@ -317,13 +317,13 @@ contract MigrationRegistryApplyMigrationHistoryTest is Test {
         vm.warp(1000);
 
         vm.recordLogs();
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroTimestamp.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
         vm.prank(writer);
         sRegistry.applyMigrationHistory(migration, 0, new Prerequisite[](0));
         assertEq(vm.getRecordedLogs().length, 0);
 
         vm.recordLogs();
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.FutureTimestamp.selector, 1001, 1000));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, 1001, 1000));
         vm.prank(writer);
         sRegistry.applyMigrationHistory(migration, 1001, new Prerequisite[](0));
         assertEq(vm.getRecordedLogs().length, 0);

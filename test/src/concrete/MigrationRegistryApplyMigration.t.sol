@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.16.2/src/Test.sol";
 
-import {IMigrationRegistryV2, Prerequisite} from "../../../src/interface/IMigrationRegistryV2.sol";
+import {IMigrationRegistryV1, Prerequisite} from "../../../src/interface/IMigrationRegistryV1.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
@@ -60,7 +60,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeKey(vm, writer, migration);
         vm.warp(0);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroTimestamp.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
         vm.prank(writer);
         sRegistry.applyMigration(migration, new Prerequisite[](0));
 
@@ -95,7 +95,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.warp(2000);
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.MigrationAlreadyApplied.selector, writer, migration)
+            abi.encodeWithSelector(IMigrationRegistryV1.MigrationAlreadyApplied.selector, writer, migration)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migration, new Prerequisite[](0));
@@ -106,7 +106,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     function testApplyMigrationZeroMigrationReverts(address writer, Prerequisite[] memory prerequisites) external {
         vm.assume(writer != address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
         vm.prank(writer);
         sRegistry.applyMigration(bytes32(0), prerequisites);
     }
@@ -117,7 +117,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(writer != address(0));
         vm.warp(0);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
         vm.prank(writer);
         sRegistry.applyMigration(bytes32(0), LibMigrationFuzz.one(address(0), other));
     }
@@ -134,7 +134,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         applyUnder(writer, migration);
         vm.warp(0);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroTimestamp.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.one(address(0), other));
     }
@@ -184,7 +184,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         Prerequisite[] memory prerequisites = LibMigrationFuzz.one(other, prerequisite);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, other, prerequisite)
+            abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, other, prerequisite)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migration, prerequisites);
@@ -212,7 +212,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         applyUnder(other, applied);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, other, prerequisite)
+            abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, other, prerequisite)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.one(other, prerequisite));
@@ -229,7 +229,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         Prerequisite[] memory predecessor = LibMigrationFuzz.one(writer, migrationA);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, writer, migrationA)
+            abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, writer, migrationA)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migrationB, predecessor);
@@ -244,7 +244,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     function testApplyMigrationSelfPrerequisiteReverts(address writer, bytes32 migration) external {
         LibMigrationFuzz.assumeKey(vm, writer, migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, writer, migration));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, writer, migration));
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.one(writer, migration));
     }
@@ -273,7 +273,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.PrerequisiteNotApplied.selector,
+                IMigrationRegistryV1.PrerequisiteNotApplied.selector,
                 prerequisites[index].writer,
                 prerequisites[index].migration
             )
@@ -303,13 +303,13 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(otherA != otherB || prerequisiteA != prerequisiteB);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, otherA, prerequisiteA)
+            abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, otherA, prerequisiteA)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.two(otherA, prerequisiteA, otherB, prerequisiteB));
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, otherB, prerequisiteB)
+            abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, otherB, prerequisiteB)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.two(otherB, prerequisiteB, otherA, prerequisiteA));
@@ -321,7 +321,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeKey(vm, writer, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.one(address(0), prerequisite));
     }
@@ -332,7 +332,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeKey(vm, writer, migration);
         vm.assume(other != address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.one(other, bytes32(0)));
     }
@@ -342,7 +342,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     function testApplyMigrationPrerequisiteKeyRefusalOrder(address writer, bytes32 migration) external {
         LibMigrationFuzz.assumeKey(vm, writer, migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.one(address(0), bytes32(0)));
     }
@@ -361,16 +361,16 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(migration != prerequisite);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, other, prerequisite)
+            abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, other, prerequisite)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.two(other, prerequisite, address(0), prerequisite));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.two(address(0), prerequisite, other, prerequisite));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.two(other, bytes32(0), other, prerequisite));
     }
@@ -387,7 +387,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         Prerequisite[] memory twice = LibMigrationFuzz.two(other, prerequisite, other, prerequisite);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, other, prerequisite)
+            abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, other, prerequisite)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migration, twice);
@@ -412,12 +412,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
         applyUnder(writer, migration);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, other, prerequisite)
+            abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, other, prerequisite)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.one(other, prerequisite));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.one(address(0), prerequisite));
     }
@@ -439,7 +439,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigration(migration, prerequisites);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.MigrationAlreadyApplied.selector, writer, migration)
+            abi.encodeWithSelector(IMigrationRegistryV1.MigrationAlreadyApplied.selector, writer, migration)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migration, prerequisites);
@@ -559,27 +559,27 @@ contract MigrationRegistryApplyMigrationTest is Test {
         Prerequisite[] memory prerequisites = LibMigrationFuzz.one(other, prerequisite);
 
         vm.recordLogs();
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
         vm.prank(writer);
         sRegistry.applyMigration(bytes32(0), prerequisites);
         assertEq(vm.getRecordedLogs().length, 0);
 
         vm.recordLogs();
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.PrerequisiteNotApplied.selector, other, prerequisite)
+            abi.encodeWithSelector(IMigrationRegistryV1.PrerequisiteNotApplied.selector, other, prerequisite)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migration, prerequisites);
         assertEq(vm.getRecordedLogs().length, 0);
 
         vm.recordLogs();
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.one(address(0), prerequisite));
         assertEq(vm.getRecordedLogs().length, 0);
 
         vm.recordLogs();
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
         vm.prank(writer);
         sRegistry.applyMigration(migration, LibMigrationFuzz.one(other, bytes32(0)));
         assertEq(vm.getRecordedLogs().length, 0);
@@ -590,7 +590,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.recordLogs();
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV2.MigrationAlreadyApplied.selector, writer, migration)
+            abi.encodeWithSelector(IMigrationRegistryV1.MigrationAlreadyApplied.selector, writer, migration)
         );
         vm.prank(writer);
         sRegistry.applyMigration(migration, prerequisites);
@@ -598,7 +598,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.warp(0);
         vm.recordLogs();
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroTimestamp.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
         vm.prank(writer);
         sRegistry.applyMigration(keccak256(abi.encode(migration)), prerequisites);
         assertEq(vm.getRecordedLogs().length, 0);

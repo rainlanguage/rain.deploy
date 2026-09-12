@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
-import {Prerequisite} from "../../src/interface/IMigrationRegistryV2.sol";
+import {Prerequisite} from "../../src/interface/IMigrationRegistryV1.sol";
 
 /// @title MockMigrationApplier
 /// @notice A consumer in the shape `LibMigrationRegistry`'s writes are designed

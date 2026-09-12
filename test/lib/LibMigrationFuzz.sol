@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.16.2/src/Vm.sol";
 
-import {Prerequisite} from "../../src/interface/IMigrationRegistryV2.sol";
+import {Prerequisite} from "../../src/interface/IMigrationRegistryV1.sol";
 
 /// @title LibMigrationFuzz
 /// @notice The fuzz domain of a record key, declared once so every migration

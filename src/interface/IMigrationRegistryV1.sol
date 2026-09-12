@@ -12,7 +12,7 @@ struct Prerequisite {
     bytes32 migration;
 }
 
-/// @title IMigrationRegistryV2
+/// @title IMigrationRegistryV1
 /// @notice A per-writer record of which migrations have been applied and when.
 /// A writer applies one of its own migrations, naming the migrations it comes
 /// after, either as applied now (`applyMigration`) or as already applied at a
@@ -102,7 +102,7 @@ struct Prerequisite {
 /// script so a rename does not change the id it was applied under; a
 /// prerequisite is that constant, imported from wherever the other script
 /// keeps it.
-interface IMigrationRegistryV2 {
+interface IMigrationRegistryV1 {
     /// Thrown when a write is given the zero migration id, or a prerequisite
     /// naming it, and by `applied` when asked about it. The zero id is what an
     /// uninitialised `bytes32` constant reads as, and a read answering zero

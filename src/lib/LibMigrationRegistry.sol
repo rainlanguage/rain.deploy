@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IMigrationRegistryV2, Prerequisite} from "../interface/IMigrationRegistryV2.sol";
+import {IMigrationRegistryV1, Prerequisite} from "../interface/IMigrationRegistryV1.sol";
 import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 
 /// @title LibMigrationRegistry
@@ -79,7 +79,7 @@ library LibMigrationRegistry {
     function applied(address writer, bytes32 migration) internal view returns (uint256) {
         checkCodeHash();
         return
-            IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
                 .applied(writer, migration);
     }
 
@@ -103,7 +103,7 @@ library LibMigrationRegistry {
     /// a root.
     function applyMigration(bytes32 migration, Prerequisite[] memory prerequisites) internal {
         checkCodeHash();
-        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+        IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .applyMigration(migration, prerequisites);
     }
 
@@ -118,7 +118,7 @@ library LibMigrationRegistry {
     /// already be applied. Empty for a root.
     function applyMigrationHistory(bytes32 migration, uint256 appliedAt, Prerequisite[] memory prerequisites) internal {
         checkCodeHash();
-        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+        IMigrationRegistryV1(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .applyMigrationHistory(migration, appliedAt, prerequisites);
     }
 }
