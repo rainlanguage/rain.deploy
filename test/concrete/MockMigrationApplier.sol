@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
+import {Prerequisite} from "../../src/interface/IMigrationRegistryV2.sol";
 
 /// @title MockMigrationApplier
 /// @notice A consumer in the shape `LibMigrationRegistry`'s writes are designed
@@ -21,20 +22,24 @@ import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
 /// sequence" checkable at all: nothing about one applier's head can be shown
 /// to leave the other's alone from inside a single namespace.
 contract MockMigrationApplier {
-    /// Applies `migration` under this contract, onto `expectedHead`.
-    /// @param expectedHead The head this contract believes it is at.
+    /// Applies `migration` under this contract, after `prerequisites`.
     /// @param migration The migration to apply.
-    function applyMigration(bytes32 expectedHead, bytes32 migration) external {
-        LibMigrationRegistry.applyMigration(expectedHead, migration);
+    /// @param prerequisites This contract at the head it believes it is at,
+    /// then the migrations that must already be applied.
+    function applyMigration(bytes32 migration, Prerequisite[] calldata prerequisites) external {
+        LibMigrationRegistry.applyMigration(migration, prerequisites);
     }
 
-    /// Applies `migration` under this contract, onto `expectedHead`, at
-    /// `appliedAt`.
-    /// @param expectedHead The head this contract believes it is at.
+    /// Applies `migration` under this contract, at `appliedAt`, after
+    /// `prerequisites`.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment the migration was applied.
-    function applyMigrationHistory(bytes32 expectedHead, bytes32 migration, uint256 appliedAt) external {
-        LibMigrationRegistry.applyMigrationHistory(expectedHead, migration, appliedAt);
+    /// @param prerequisites This contract at the head it believes it is at,
+    /// then the migrations that must already be applied.
+    function applyMigrationHistory(bytes32 migration, uint256 appliedAt, Prerequisite[] calldata prerequisites)
+        external
+    {
+        LibMigrationRegistry.applyMigrationHistory(migration, appliedAt, prerequisites);
     }
 
     /// When `writer` applied `migration`.
@@ -51,6 +56,14 @@ contract MockMigrationApplier {
     /// @return The head it was applied onto, or zero.
     function appliedOnto(address writer, bytes32 migration) external view returns (bytes32) {
         return LibMigrationRegistry.appliedOnto(writer, migration);
+    }
+
+    /// What `writer` applied `migration` after.
+    /// @param writer The namespace to read.
+    /// @param migration The migration to ask about.
+    /// @return The list the write gave, or empty.
+    function appliedAfter(address writer, bytes32 migration) external view returns (Prerequisite[] memory) {
+        return LibMigrationRegistry.appliedAfter(writer, migration);
     }
 
     /// The head of `writer`'s namespace.

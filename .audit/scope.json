@@ -23,6 +23,7 @@
     "src/generated/candidate/MigrationRegistry.sol",
     "src/interface/IAddressRegistryV1.sol",
     "src/interface/IMigrationRegistryV1.sol",
+    "src/interface/IMigrationRegistryV2.sol",
     "src/lib/LibAddressRegistryDeploy.sol",
     "src/lib/LibAddressRegistryReleased.sol",
     "src/lib/LibAddressRegistry.sol",

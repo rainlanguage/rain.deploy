@@ -16,7 +16,11 @@
       "unkillableDefensiveGuards": 1,
       "candidates": 3,
       "confirmed": 3,
-      "filed": ["#16", "#17", "#18"]
+      "filed": [
+        "#16",
+        "#17",
+        "#18"
+      ]
     }
   },
   {
@@ -39,7 +43,33 @@
       "candidates": 1,
       "confirmed": 1,
       "filed": [],
-      "alreadyFiled": ["#135"]
+      "alreadyFiled": [
+        "#135"
+      ]
+    }
+  },
+  {
+    "timestamp": "2026-09-12T21:44:24Z",
+    "commit": "ec3f95a8fa20ec929a6f88e42bc8ac3513ef674d",
+    "testsAfterCommit": "ec3f95a8fa20ec929a6f88e42bc8ac3513ef674d",
+    "publishedTag": "sol-v0.1.7",
+    "commitsAheadOfTag": 49,
+    "scope": "migration registry: src/concrete/MigrationRegistry.sol, src/lib/LibMigrationRegistry.sol, src/interface/IMigrationRegistryV2.sol (PR #160)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 44,
+      "killedByExistingTests": 44,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
     }
   }
 ]

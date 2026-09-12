@@ -239,12 +239,15 @@ library supplies the fork loop and the comparison.
 
 ## Migration registry
 
-`MigrationRegistry` records that a migration has been applied, when, and onto
-what: a writer applies one of its own onto the migration it believes ran last
-(`applyMigration`, or `applyMigrationHistory` for one that already ran), anyone
-reads when a given writer applied a given one (`applied`), what that writer
-applied it onto (`appliedOnto`), and where a given writer's sequence has got to
-(`head`). There is no removal and no upgrade.
+`MigrationRegistry` records that a migration has been applied, when, and after
+what: a writer applies one of its own after one list — the migration it believes
+ran last, then the migrations in any namespace it waits on (`applyMigration`, or
+`applyMigrationHistory` for one that already ran), anyone reads when a given
+writer applied a given one (`applied`), what that writer applied it onto
+(`appliedOnto`), what it applied it after (`appliedAfter`), and where a given
+writer's sequence has got to (`head`). There is no removal and no upgrade. The
+interface is `IMigrationRegistryV2`; `IMigrationRegistryV1` is the same registry
+before prerequisites, kept for the release that shipped it.
 
 The two writes differ in exactly one thing: where the recorded moment comes
 from. `applyMigration` stamps the block the record lands in, for a script
@@ -336,22 +339,31 @@ dependency actually lives.
 
 **A head, so a step cannot be skipped or repeated.** A namespace has a head: the
 migration it applied most recently, or `MIGRATION_HEAD_GENESIS` if it has
-applied none. Both writes name the head they are applying onto, so a chain that
-never got the predecessor fails at the moment of applying rather than diverging
-silently, and two migrations dispatched at once cannot land in the wrong order.
+applied none. Both writes name the head they are applying onto as the first
+entry of their list, under the caller, so a chain that never got the predecessor
+fails at the moment of applying rather than diverging silently, and two
+migrations dispatched at once cannot land in the wrong order. An empty list, a
+first entry under anyone but the caller, or one naming anything but the head is
+`UnexpectedMigrationHead`. An entry after the first under the caller's own
+namespace is `OwnPrerequisite`: the head already says everything about the
+caller's own line, so every later entry names another writer's record.
 
 ```solidity
+Prerequisite[] memory after = new Prerequisite[](1);
 // The first migration in a namespace, applied in this transaction.
-LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, MIGRATION_V1);
+after[0] = Prerequisite({writer: address(this), migration: MIGRATION_HEAD_GENESIS});
+LibMigrationRegistry.applyMigration(MIGRATION_V1, after);
 // Every later one names its predecessor.
-LibMigrationRegistry.applyMigration(MIGRATION_V1, MIGRATION_V2);
+after[0] = Prerequisite({writer: address(this), migration: MIGRATION_V1});
+LibMigrationRegistry.applyMigration(MIGRATION_V2, after);
 // One that ran before the registry reached this chain names the moment it ran.
-LibMigrationRegistry.applyMigrationHistory(MIGRATION_V2, MIGRATION_V3, 1750000000);
+after[0] = Prerequisite({writer: address(this), migration: MIGRATION_V2});
+LibMigrationRegistry.applyMigrationHistory(MIGRATION_V3, 1750000000, after);
 ```
 
-Each record also keeps the head it was applied onto, which `appliedOnto` reads
-back, so a namespace is a chain in storage rather than a set of moments to sort:
-from `head`, each answer names the record before it, down to
+Each record keeps that first entry, which `appliedOnto` reads back, so a
+namespace is a chain in storage rather than a set of moments to sort: from
+`head`, each answer names the record before it, down to
 `MIGRATION_HEAD_GENESIS`. That chain is the order the migrations ran in whatever
 moments the records carry.
 
@@ -373,6 +385,48 @@ of migrations applied from the same account interleave into one chain of heads,
 so a consumer that wants two independent sequences applies them from two
 accounts — the same lever that already decides who a reader trusts.
 
+**A migration may wait on migrations in other namespaces.** Every entry after
+the head in the list of `Prerequisite { writer, migration }` is one, and both
+writes make one refusal over them: `PrerequisiteNotApplied(writer, migration)`
+for the first entry whose record does not exist on this registry. The head alone
+is a migration that waits on nothing else. A dependent script names the
+migration it is waiting on as a fact the registry checks, instead of re-deriving
+the other script's post-state, and the head still orders its own namespace
+exactly as before.
+
+```solidity
+// Lands only once FLEET_SAFE has recorded FLEET_UPGRADE; refused with
+// `PrerequisiteNotApplied(FLEET_SAFE, FLEET_UPGRADE)` until then.
+Prerequisite[] memory after = new Prerequisite[](2);
+after[0] = Prerequisite({writer: address(this), migration: MIGRATION_V2});
+after[1] = Prerequisite({writer: FLEET_SAFE, migration: FLEET_UPGRADE});
+LibMigrationRegistry.applyMigration(MIGRATION_V3, after);
+```
+
+The list is the record, and `appliedAfter` reads it back exactly as the write
+gave it: the head under the writer's own namespace first, then the prerequisites
+as listed, duplicates included. A root's answer starts with
+`MIGRATION_HEAD_GENESIS`, the one entry that is a head and not a record. Empty
+only for a migration never applied. Within a namespace `appliedOnto` walks the
+chain back to genesis; `appliedAfter` walks from a record to every record it
+waited on, its predecessor included, so the cross-namespace order is on chain
+and not only in the log. `Migrated` is the one event, as it was: the list is in
+the record, not beside it. A prerequisite is an index check, not proof: it says
+the other writer recorded its migration, not that the state it produced holds,
+and consumers keep their pins. It bounds no moment either — a backfilled record
+may carry an earlier moment than its prerequisite, because what is checked is
+that the record existed when this write landed, which is chain order, and the
+moments in another namespace are that writer's data.
+
+The refusals sit in this order: the caller's own arguments first
+(`ZeroMigration`, `GenesisMigration`, `ZeroTimestamp`); then the list in the
+order it is written — `UnexpectedMigrationHead` over the first entry, then every
+entry after it as another writer's key (`ZeroWriter`, `ZeroMigration`,
+`GenesisMigration` exactly as `applied` refuses them, then `OwnPrerequisite`)
+before any is read, then `PrerequisiteNotApplied` for the first unapplied one;
+then the caller's own record (`MigrationAlreadyApplied`, `TimestampBeforeHead`,
+`FutureTimestamp`). Duplicates are ordinary index checks.
+
 **The namespace is `msg.sender`, and that is the whole access control.** Anyone
 may write, but only under themselves, so a reader asking about the namespace of
 an authority it already trusts is reading something only that authority could
@@ -389,12 +443,13 @@ say the invariant holds — a multisig can act out of band and nothing here move
 Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
-`LibMigrationRegistry` is the surface — `applied`, `appliedOnto`, `head`,
-`applyMigration` and `applyMigrationHistory`, each verifying the registry's code
-hash before it reads or writes. There is deliberately **no broadcast runner**:
-the dominant real shape is a Safe executing a bundle that never broadcasts, and
-such a script appends `applyMigration` to the bundle it is already emitting,
-which makes the record atomic with the migration it describes.
+`LibMigrationRegistry` is the surface — `applied`, `appliedOnto`,
+`appliedAfter`, `head`, `applyMigration` and `applyMigrationHistory`, each
+verifying the registry's code hash before it reads or writes. There is
+deliberately **no broadcast runner**: the dominant real shape is a Safe
+executing a bundle that never broadcasts, and such a script appends
+`applyMigration` to the bundle it is already emitting, which makes the record
+atomic with the migration it describes.
 
 ## Deploying, and then releasing
 

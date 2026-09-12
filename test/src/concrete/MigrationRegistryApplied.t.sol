@@ -4,7 +4,11 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.2/src/Test.sol";
 
-import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV1.sol";
+import {
+    IMigrationRegistryV2,
+    Prerequisite,
+    MIGRATION_HEAD_GENESIS
+} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
@@ -19,6 +23,15 @@ contract MigrationRegistryAppliedTest is Test {
 
     function setUp() external {
         sRegistry = new MigrationRegistry();
+    }
+
+    /// The list a write under `writer` onto `head` after nothing else passes.
+    /// @param writer The namespace the record is in.
+    /// @param head The head it is applied onto.
+    /// @return prerequisites The one-entry list.
+    function onto(address writer, bytes32 head) internal pure returns (Prerequisite[] memory prerequisites) {
+        prerequisites = new Prerequisite[](1);
+        prerequisites[0] = Prerequisite({writer: writer, migration: head});
     }
 
     /// An unapplied migration answers zero rather than reverting. This is
@@ -54,7 +67,7 @@ contract MigrationRegistryAppliedTest is Test {
 
         vm.warp(writtenAt);
         vm.prank(writer);
-        sRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt);
+        sRegistry.applyMigrationHistory(migration, appliedAt, onto(writer, MIGRATION_HEAD_GENESIS));
 
         vm.warp(readAt);
         assertEq(sRegistry.applied(writer, migration), appliedAt);
@@ -79,7 +92,7 @@ contract MigrationRegistryAppliedTest is Test {
 
         vm.warp(writtenAt);
         vm.prank(writer);
-        sRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, appliedAt);
+        sRegistry.applyMigrationHistory(migration, appliedAt, onto(writer, MIGRATION_HEAD_GENESIS));
 
         vm.warp(readAt);
         assertLe(sRegistry.applied(writer, migration), block.timestamp);
@@ -92,7 +105,7 @@ contract MigrationRegistryAppliedTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
+        sRegistry.applyMigration(migration, onto(writer, MIGRATION_HEAD_GENESIS));
 
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
@@ -106,7 +119,7 @@ contract MigrationRegistryAppliedTest is Test {
     function testAppliedZeroWriterReverts(bytes32 migration) external {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.applied(address(0), migration);
     }
 
@@ -115,7 +128,7 @@ contract MigrationRegistryAppliedTest is Test {
     function testAppliedZeroMigrationReverts(address writer) external {
         vm.assume(writer != address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         sRegistry.applied(writer, bytes32(0));
     }
 
@@ -126,7 +139,7 @@ contract MigrationRegistryAppliedTest is Test {
     function testAppliedGenesisMigrationReverts(address writer) external {
         vm.assume(writer != address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         sRegistry.applied(writer, MIGRATION_HEAD_GENESIS);
     }
 
@@ -134,10 +147,10 @@ contract MigrationRegistryAppliedTest is Test {
     /// both is told about the namespace first and gets one stable answer rather
     /// than one that depends on which check happens to run.
     function testAppliedZeroWriterCheckedFirst() external {
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.applied(address(0), bytes32(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.applied(address(0), MIGRATION_HEAD_GENESIS);
     }
 
@@ -149,26 +162,26 @@ contract MigrationRegistryAppliedTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
+        sRegistry.applyMigration(migration, onto(writer, MIGRATION_HEAD_GENESIS));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         sRegistry.applied(address(0), migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         sRegistry.applied(writer, bytes32(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         sRegistry.applied(writer, MIGRATION_HEAD_GENESIS);
 
         assertEq(sRegistry.applied(writer, migration), block.timestamp);
         assertEq(sRegistry.head(writer), migration);
     }
 
-    /// `applied` and `appliedOnto` are the only readers of the records. The
-    /// records mapping is not `public`, so the getter a `public` mapping would
-    /// generate — which answers the zero writer and both refused ids with zero,
-    /// the exact silent wrong-branch these refusals exist to prevent — does not
-    /// exist.
+    /// `applied`, `appliedOnto` and `prerequisites` are the only readers of the
+    /// records. The records mapping is not `public`, so the getter a `public`
+    /// mapping would generate — which answers the zero writer and both refused
+    /// ids with zero, the exact silent wrong-branch these refusals exist to
+    /// prevent — does not exist.
     function testAppliedNoGeneratedMappingGetter(address writer, bytes32 migration) external {
         (bool success,) =
             address(sRegistry).call(abi.encodeWithSignature("sRecords(address,bytes32)", writer, migration));
@@ -184,14 +197,15 @@ contract MigrationRegistryAppliedTest is Test {
     }
 
     /// There is no other entry point at all: no fallback, no receive, and
-    /// nothing beyond the `IMigrationRegistryV1` functions, so an unknown
+    /// nothing beyond the `IMigrationRegistryV2` functions, so an unknown
     /// selector reverts instead of being silently absorbed.
     function testAppliedNoOtherEntryPoint(bytes4 selector, bytes32 migration) external {
-        vm.assume(selector != IMigrationRegistryV1.applied.selector);
-        vm.assume(selector != IMigrationRegistryV1.appliedOnto.selector);
-        vm.assume(selector != IMigrationRegistryV1.applyMigration.selector);
-        vm.assume(selector != IMigrationRegistryV1.applyMigrationHistory.selector);
-        vm.assume(selector != IMigrationRegistryV1.head.selector);
+        vm.assume(selector != IMigrationRegistryV2.applied.selector);
+        vm.assume(selector != IMigrationRegistryV2.appliedOnto.selector);
+        vm.assume(selector != IMigrationRegistryV2.appliedAfter.selector);
+        vm.assume(selector != IMigrationRegistryV2.applyMigration.selector);
+        vm.assume(selector != IMigrationRegistryV2.applyMigrationHistory.selector);
+        vm.assume(selector != IMigrationRegistryV2.head.selector);
 
         (bool success,) = address(sRegistry).call(abi.encodeWithSelector(selector, address(this), migration));
         assertFalse(success);

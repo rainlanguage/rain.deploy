@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.16.2/src/Vm.sol";
 
-import {MIGRATION_HEAD_GENESIS} from "../../src/interface/IMigrationRegistryV1.sol";
+import {MIGRATION_HEAD_GENESIS} from "../../src/interface/IMigrationRegistryV2.sol";
 
 /// @title LibMigrationFuzz
 /// @notice The fuzz domain of a migration id: every `bytes32` except the two
