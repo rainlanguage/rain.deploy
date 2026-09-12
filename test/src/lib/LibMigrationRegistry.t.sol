@@ -6,7 +6,7 @@ import {Test} from "forge-std-1.16.2/src/Test.sol";
 import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {IMigrationRegistryV1, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV1.sol";
+import {IMigrationRegistryV2, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {IMigrationRegistryV2, Prerequisite} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
@@ -199,7 +199,7 @@ contract LibMigrationRegistryTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV1.UnexpectedMigrationHead.selector, address(this), skipped, MIGRATION_HEAD_GENESIS
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector, address(this), skipped, MIGRATION_HEAD_GENESIS
             )
         );
         this.externalApplyMigration(skipped, migration);
@@ -251,7 +251,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationRegistry.applyMigration(MIGRATION_HEAD_GENESIS, migration);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV1.MigrationAlreadyApplied.selector, address(this), migration)
+            abi.encodeWithSelector(IMigrationRegistryV2.MigrationAlreadyApplied.selector, address(this), migration)
         );
         this.externalApplyMigration(MIGRATION_HEAD_GENESIS, migration);
     }
@@ -261,7 +261,7 @@ contract LibMigrationRegistryTest is Test {
     function testApplyMigrationZeroMigrationReverts() external {
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         this.externalApplyMigration(MIGRATION_HEAD_GENESIS, bytes32(0));
     }
 
@@ -270,7 +270,7 @@ contract LibMigrationRegistryTest is Test {
     function testApplyMigrationGenesisMigrationReverts() external {
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         this.externalApplyMigration(MIGRATION_HEAD_GENESIS, MIGRATION_HEAD_GENESIS);
     }
 
@@ -279,7 +279,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         this.externalApplied(address(0), migration);
     }
 
@@ -288,7 +288,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(writer != address(0));
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         this.externalApplied(writer, bytes32(0));
     }
 
@@ -297,7 +297,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(writer != address(0));
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         this.externalApplied(writer, MIGRATION_HEAD_GENESIS);
     }
 
@@ -305,7 +305,7 @@ contract LibMigrationRegistryTest is Test {
     function testHeadZeroWriterReverts() external {
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         this.externalHead(address(0));
     }
 
@@ -544,7 +544,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroTimestamp.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroTimestamp.selector));
         this.externalApplyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, 0);
     }
 
@@ -556,7 +556,7 @@ contract LibMigrationRegistryTest is Test {
         vm.warp(now_);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV1.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
+            abi.encodeWithSelector(IMigrationRegistryV2.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
         );
         this.externalApplyMigrationHistory(MIGRATION_HEAD_GENESIS, migration, uint256(now_) + 1);
     }
@@ -573,7 +573,7 @@ contract LibMigrationRegistryTest is Test {
 
         LibMigrationRegistry.applyMigrationHistory(MIGRATION_HEAD_GENESIS, migrationA, 2000);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.TimestampBeforeHead.selector, 1999, 2000));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.TimestampBeforeHead.selector, 1999, 2000));
         this.externalApplyMigrationHistory(migrationA, migrationB, 1999);
     }
 
@@ -610,7 +610,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
         this.externalAppliedOnto(address(0), migration);
     }
 
@@ -619,7 +619,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(writer != address(0));
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
         this.externalAppliedOnto(writer, bytes32(0));
     }
 
@@ -629,7 +629,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(writer != address(0));
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV1.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
         this.externalAppliedOnto(writer, MIGRATION_HEAD_GENESIS);
     }
 

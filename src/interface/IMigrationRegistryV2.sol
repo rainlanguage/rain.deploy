@@ -2,10 +2,32 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-// Exported for convenience: the genesis head is the same value under every
-// version of this interface, and a consumer of this one imports one file.
-//forge-lint: disable-next-line(unused-import)
-import {MIGRATION_HEAD_GENESIS} from "./IMigrationRegistryV1.sol";
+/// @dev The head of a namespace that has never applied a migration. The first
+/// migration a writer applies names this, and every later one names the
+/// migration before it.
+///
+/// It is deliberately NOT zero. Zero is what an uninitialised `bytes32` constant
+/// reads as, and a genesis of zero would make an uninitialised predecessor
+/// constant a SUCCESSFUL first application on any namespace that happens to be
+/// empty — which is the state of every namespace on every chain the consumer
+/// has not migrated yet, i.e. exactly where a mis-set constant is most likely
+/// and most expensive. Under a nonzero genesis that same constant is a revert
+/// in every namespace state, empty or not, for the same reason `ZeroMigration`
+/// and `ZeroWriter` exist: an uninitialised value is a mistake to be reported,
+/// never a question to be answered.
+///
+/// It is one shared value rather than anything derived per writer or per
+/// consumer, so it configures nothing and cannot fragment the implementation's
+/// deterministic address.
+///
+/// It is not a migration, and an implementation MUST refuse it as one. A head
+/// holds exactly two kinds of value: an applied migration, or this. Letting a
+/// migration BE this would put a namespace that has applied something at a head
+/// indistinguishable from one that has applied nothing, which is the same
+/// collapse of two distinct facts into one value that `ZeroMigration` exists to
+/// refuse — the two values a head can hold that are not migrations are exactly
+/// the two values a migration id may not be.
+bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.head.genesis");
 
 /// @dev A migration in some writer's namespace, named by a write as something
 /// it waits on. It is the key `applied` takes, so anything `applied` refuses to
@@ -30,11 +52,6 @@ struct Prerequisite {
 /// it onto (`appliedOnto`), and where that writer's namespace currently is
 /// (`head`). There is no removal, no upgrade and no authority beyond the writer
 /// over its own namespace, and an implementation MUST NOT add any.
-///
-/// This is `IMigrationRegistryV1` plus the two `After` writes, the
-/// `Prerequisite` they take, the two refusals they add and the event they emit
-/// beside `Migrated`. Everything `IMigrationRegistryV1` declares is declared
-/// here unchanged, so a caller of that interface is a caller of this one.
 ///
 /// The two plain writes differ only in where the recorded moment comes from.
 /// `applyMigration` records the block it lands in, for a script applying its
@@ -414,9 +431,9 @@ interface IMigrationRegistryV2 {
     /// block a log entry sits in says when the record was written, and
     /// `appliedAt` says when the migration ran.
     ///
-    /// It is unchanged from `IMigrationRegistryV1`, and the `After` writes emit
-    /// it as the plain writes do rather than a variant of it, so one filter on
-    /// this event is the complete history whichever write wrote each record.
+    /// The `After` writes emit it as the plain writes do rather than a variant
+    /// of it, so one filter on this event is the complete history whichever
+    /// write wrote each record.
     /// What an `After` write has to add goes in `MigratedAfter`, beside it.
     /// @param writer The namespace, which is the caller.
     /// @param migration The migration applied.
