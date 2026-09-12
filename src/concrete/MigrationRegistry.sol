@@ -73,7 +73,7 @@ struct MigrationRecord {
 /// back from it exactly as what it was applied onto is.
 ///
 /// Neither storage mapping is `public`. `applied`, `appliedOnto`,
-/// `prerequisites` and `head` refuse the zero writer, the three record readers
+/// `appliedAfter` and `head` refuse the zero writer, the three record readers
 /// refuse the two ids a migration can never be, and a public mapping's
 /// generated getter would answer all of them with zero — which for a record is
 /// "not applied" and for `head` is a value no head can ever hold, i.e. exactly
@@ -81,7 +81,7 @@ struct MigrationRecord {
 contract MigrationRegistry is IMigrationRegistryV1 {
     /// Every record, namespaced by writer. A zero `appliedAt` means never
     /// applied. Not `public`: the only readers are `applied`, `appliedOnto`
-    /// and `prerequisites`, which refuse the inputs that can only be mistakes.
+    /// and `appliedAfter`, which refuse the inputs that can only be mistakes.
     mapping(address writer => mapping(bytes32 migration => MigrationRecord record)) internal sRecords;
 
     /// The most recent migration applied under each writer. Zero means the

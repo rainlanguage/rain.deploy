@@ -85,7 +85,7 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// `appliedOnto` reads back the head a record was applied onto, so a namespace
 /// walked from `head` back is the order its migrations ran in — which is a
 /// stronger statement than the moments make, because a moment is whatever the
-/// writer supplied and the chain is what the registry enforced. `prerequisites`
+/// writer supplied and the chain is what the registry enforced. `appliedAfter`
 /// reads back the list a record was applied after, as listed, so the same walk
 /// crosses namespaces.
 ///
@@ -105,7 +105,7 @@ library LibMigrationRegistry {
     ///
     /// Every entry point checks, and they check the same way, because each is
     /// worse than useless against unknown code: `applied` would branch a test on
-    /// whatever timestamp that code returned, `appliedOnto`, `prerequisites`
+    /// whatever timestamp that code returned, `appliedOnto`, `appliedAfter`
     /// and `head` would hand back values that are not records, and either
     /// write would record a migration somewhere nothing will ever read it. The
     /// check is one function so they cannot drift into checking different

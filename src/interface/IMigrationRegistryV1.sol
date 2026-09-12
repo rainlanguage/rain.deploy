@@ -48,7 +48,7 @@ struct Prerequisite {
 /// (`applyMigration`) or as already applied at a moment it supplies
 /// (`applyMigrationHistory`); anyone reads when a given writer applied a given
 /// migration (`applied`), what that writer applied it onto (`appliedOnto`),
-/// what it waited on (`prerequisites`), and where that writer's namespace
+/// what it waited on (`appliedAfter`), and where that writer's namespace
 /// currently is (`head`). There is no removal, no upgrade and no authority
 /// beyond the writer over its own namespace, and an implementation MUST NOT
 /// add any.
@@ -197,9 +197,9 @@ struct Prerequisite {
 /// keeps its pins. What the prerequisite removes is the dependent script
 /// carrying a hand-written copy of its prerequisite's post-state read.
 ///
-/// The list is part of the record, and `prerequisites` reads it back as
+/// The list is part of the record, and `appliedAfter` reads it back as
 /// listed. Within one namespace `appliedOnto` walks the chain back to genesis;
-/// across namespaces `prerequisites` walks from any record to the records it
+/// across namespaces `appliedAfter` walks from any record to the records it
 /// waited on, so the order across writers is on chain and not only in the
 /// log. It says which records EXISTED when this one was written, which is a
 /// fact about the record and nothing about the state around it.
@@ -268,7 +268,7 @@ struct Prerequisite {
 interface IMigrationRegistryV1 {
     /// Thrown when a write is called with the zero migration id or given a
     /// prerequisite naming it, and by `applied`, `appliedOnto` and
-    /// `prerequisites` when asked about one. The zero id is what an
+    /// `appliedAfter` when asked about one. The zero id is what an
     /// uninitialised `bytes32` constant reads as, and an uninitialised id is
     /// never a migration anybody meant to name. Rejected in every direction
     /// because the read is the dangerous one: answering zero would silently
@@ -285,7 +285,7 @@ interface IMigrationRegistryV1 {
 
     /// Thrown when a write is called with `MIGRATION_HEAD_GENESIS` as the
     /// migration or given a prerequisite naming it, and by `applied`,
-    /// `appliedOnto` and `prerequisites` when asked about it. Genesis is a
+    /// `appliedOnto` and `appliedAfter` when asked about it. Genesis is a
     /// head, not a migration: applying it would leave a namespace that has
     /// applied something at a head no different from one that has applied
     /// nothing, and asking `applied` about it would answer zero forever for a
@@ -407,7 +407,7 @@ interface IMigrationRegistryV1 {
     /// in order ARE that writer's chain of heads — each entry's migration is the
     /// head the next one was applied onto, and the first was applied onto
     /// `MIGRATION_HEAD_GENESIS`. It carries no prerequisites either: they are
-    /// in the record, read back by `prerequisites`.
+    /// in the record, read back by `appliedAfter`.
     ///
     /// It does carry `appliedAt`, which the log does not otherwise hold: the
     /// block a log entry sits in says when the record was written, and

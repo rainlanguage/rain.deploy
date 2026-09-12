@@ -250,7 +250,7 @@ and after what: a writer applies one of its own onto the migration it believes
 ran last, naming the migrations in any namespace it waits on (`applyMigration`,
 or `applyMigrationHistory` for one that already ran), anyone reads when a given
 writer applied a given one (`applied`), what that writer applied it onto
-(`appliedOnto`), what it waited on (`prerequisites`), and where a given writer's
+(`appliedOnto`), what it waited on (`appliedAfter`), and where a given writer's
 sequence has got to (`head`). There is no removal and no upgrade.
 
 The two writes differ in exactly one thing: where the recorded moment comes
@@ -397,10 +397,10 @@ prerequisites[0] = Prerequisite({writer: FLEET_SAFE, migration: FLEET_UPGRADE});
 LibMigrationRegistry.applyMigration(MIGRATION_V2, MIGRATION_V3, prerequisites);
 ```
 
-The list is part of the record, and `prerequisites` reads it back as listed,
+The list is part of the record, and `appliedAfter` reads it back as listed,
 duplicates included — empty for a record that waited on nothing and for a
 migration never applied, which `applied` tells apart. Within a namespace
-`appliedOnto` walks the chain back to genesis; across namespaces `prerequisites`
+`appliedOnto` walks the chain back to genesis; across namespaces `appliedAfter`
 walks from a record to the records it waited on, so the cross-namespace order is
 on chain and not only in the log. `Migrated` is the one event, as it was: the
 list is in the record, not beside it. A prerequisite is an index check, not
@@ -437,7 +437,7 @@ Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
 `LibMigrationRegistry` is the surface — `applied`, `appliedOnto`,
-`prerequisites`, `head`, `applyMigration` and `applyMigrationHistory`, each
+`appliedAfter`, `head`, `applyMigration` and `applyMigrationHistory`, each
 verifying the registry's code hash before it reads or writes. There is
 deliberately **no broadcast runner**: the dominant real shape is a Safe
 executing a bundle that never broadcasts, and such a script appends
