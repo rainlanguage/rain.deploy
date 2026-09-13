@@ -75,7 +75,7 @@
   {
     "timestamp": "2026-09-12T22:53:52Z",
     "commit": "9c9174ac26884b85dabf72ae5329162d0647e194",
-    "testsAfterCommit": "9c9174ac26884b85dabf72ae5329162d0647e194",
+    "testsAfterCommit": "fefc166dfbbf95e9894040f5c69ae75a1c5943f8",
     "publishedTag": "sol-v0.1.7",
     "commitsAheadOfTag": 60,
     "scope": "migration registry: src/concrete/MigrationRegistry.sol, src/lib/LibMigrationRegistry.sol, src/interface/IMigrationRegistryV2.sol (PR #165, namespaces)",
@@ -83,9 +83,9 @@
     "skillVersion": "0.35.0",
     "summary": {
       "units": 2,
-      "behaviours": 65,
+      "behaviours": 66,
       "killedByExistingTests": 65,
-      "gapsFilled": 0,
+      "gapsFilled": 1,
       "equivalentMutants": 0,
       "unkillableDefensiveGuards": 0,
       "notExecutedBySuite": 0,
