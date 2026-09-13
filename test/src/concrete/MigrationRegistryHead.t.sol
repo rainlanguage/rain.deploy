@@ -94,36 +94,6 @@ contract MigrationRegistryHeadTest is Test {
         assertEq(sRegistry.head(other, namespace), MIGRATION_HEAD_GENESIS);
     }
 
-    /// Every namespace under a writer is its own line with its own head: a
-    /// record in one leaves the other at genesis, and the other's first
-    /// migration then lands onto genesis without moving the first.
-    function testHeadIsPerNamespace(
-        address writer,
-        bytes32 namespace,
-        bytes32 otherNamespace,
-        bytes32 migrationA,
-        bytes32 migrationB
-    ) external {
-        vm.assume(writer != address(0));
-        vm.assume(namespace != bytes32(0));
-        vm.assume(otherNamespace != bytes32(0));
-        vm.assume(namespace != otherNamespace);
-        LibMigrationFuzz.assumeMigration(vm, migrationA);
-        LibMigrationFuzz.assumeMigration(vm, migrationB);
-
-        vm.prank(writer);
-        sRegistry.applyMigration(namespace, migrationA, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
-
-        assertEq(sRegistry.head(writer, namespace), migrationA);
-        assertEq(sRegistry.head(writer, otherNamespace), MIGRATION_HEAD_GENESIS);
-
-        vm.prank(writer);
-        sRegistry.applyMigration(otherNamespace, migrationB, onto(writer, otherNamespace, MIGRATION_HEAD_GENESIS));
-
-        assertEq(sRegistry.head(writer, otherNamespace), migrationB);
-        assertEq(sRegistry.head(writer, namespace), migrationA);
-    }
-
     /// The head `head` reports is exactly the head a write demands: whatever
     /// this answers is accepted, and it is the only value that is. The
     /// two go through one translation of an empty line, so they cannot

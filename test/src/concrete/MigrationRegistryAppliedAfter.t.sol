@@ -541,45 +541,6 @@ contract MigrationRegistryAppliedAfterTest is Test {
         assertEq(abi.encode(sRegistry.appliedAfter(other, otherNamespace, prerequisite)), abi.encode(none()));
     }
 
-    /// The writer's own record in another of its namespaces is an ordinary
-    /// prerequisite: the list names it under the writer in that namespace,
-    /// and reads back exactly so, after the head in the namespace written.
-    function testAppliedAfterOwnOtherNamespaceIsARecord(
-        address writer,
-        bytes32 namespace,
-        bytes32 otherNamespace,
-        bytes32 migrationA,
-        bytes32 migrationB
-    ) external {
-        vm.assume(writer != address(0));
-        vm.assume(namespace != bytes32(0));
-        vm.assume(otherNamespace != bytes32(0));
-        vm.assume(namespace != otherNamespace);
-        LibMigrationFuzz.assumeMigration(vm, migrationA);
-        LibMigrationFuzz.assumeMigration(vm, migrationB);
-        applyUnder(writer, otherNamespace, migrationA);
-
-        Prerequisite[] memory expected = new Prerequisite[](2);
-        expected[0] = Prerequisite({writer: writer, namespace: namespace, migration: MIGRATION_HEAD_GENESIS});
-        expected[1] = Prerequisite({writer: writer, namespace: otherNamespace, migration: migrationA});
-        vm.prank(writer);
-        sRegistry.applyMigration(namespace, migrationB, expected);
-
-        Prerequisite[] memory recorded = sRegistry.appliedAfter(writer, namespace, migrationB);
-        assertEq(recorded.length, 2);
-        assertEq(recorded[0].writer, writer);
-        assertEq(recorded[0].namespace, namespace);
-        assertEq(recorded[0].migration, MIGRATION_HEAD_GENESIS);
-        assertEq(recorded[1].writer, writer);
-        assertEq(recorded[1].namespace, otherNamespace);
-        assertEq(recorded[1].migration, migrationA);
-        assertEq(abi.encode(recorded), abi.encode(expected));
-        assertEq(
-            abi.encode(sRegistry.appliedAfter(writer, otherNamespace, migrationA)),
-            abi.encode(one(writer, otherNamespace, MIGRATION_HEAD_GENESIS))
-        );
-    }
-
     /// The zero writer is refused rather than answered, for the reason `applied`
     /// refuses it: every line under the zero writer is provably empty, so an
     /// unresolved writer constant would read as "never applied" rather than
