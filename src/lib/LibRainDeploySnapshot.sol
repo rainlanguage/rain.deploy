@@ -7,8 +7,8 @@ import {
     LibCodeGen,
     RAIN_COPYRIGHT_TEXT,
     RAIN_SPDX_LICENSE_IDENTIFIER
-} from "rain-sol-codegen-0.1.36/src/lib/LibCodeGen.sol";
-import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.36/src/lib/LibFs.sol";
+} from "rain-sol-codegen-0.1.37/src/lib/LibCodeGen.sol";
+import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.37/src/lib/LibFs.sol";
 import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 
