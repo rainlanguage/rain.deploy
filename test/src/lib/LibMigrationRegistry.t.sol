@@ -328,7 +328,7 @@ contract LibMigrationRegistryTest is Test {
     /// for itself — heads included, so one consumer's sequence neither blocks
     /// nor unblocks another's. This is the whole of the access control: a
     /// reader's choice of writer is the whole of who it trusts.
-    function testApplyMigrationDoesNotReachAnotherNamespace(bytes32 namespace, bytes32 migration) external {
+    function testApplyMigrationDoesNotReachAnotherWriter(bytes32 namespace, bytes32 migration) external {
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();

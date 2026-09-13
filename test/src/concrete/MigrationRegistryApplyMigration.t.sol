@@ -225,7 +225,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// what a record is ABOUT, so a call with no subject has nothing to say a
     /// moment for; everything after describes a line no writable record
     /// will reach.
-    function testApplyMigrationZeroBlockCheckedAfterIdsAndBeforeTheNamespace(
+    function testApplyMigrationZeroBlockCheckedAfterIdsAndBeforeTheLine(
         address writer,
         bytes32 namespace,
         bytes32 migrationA,
@@ -270,7 +270,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// writer says nothing about any other, which is what makes a reader's
     /// choice of writer the whole of who it trusts — a hostile caller can
     /// apply whatever it likes and reach nobody.
-    function testApplyMigrationDoesNotReachAnotherNamespace(
+    function testApplyMigrationDoesNotReachAnotherWriter(
         address writer,
         bytes32 namespace,
         address other,
@@ -484,7 +484,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// uninitialised predecessor constant is a revert in every line state,
     /// rather than a successful first application on every chain that happens
     /// to be empty.
-    function testApplyMigrationZeroHeadRevertsOnEmptyNamespace(address writer, bytes32 namespace, bytes32 migration)
+    function testApplyMigrationZeroHeadRevertsOnEmptyLine(address writer, bytes32 namespace, bytes32 migration)
         external
     {
         vm.assume(writer != address(0));
@@ -508,7 +508,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     }
 
     /// And on a line that has applied something.
-    function testApplyMigrationZeroHeadRevertsOnUsedNamespace(
+    function testApplyMigrationZeroHeadRevertsOnUsedLine(
         address writer,
         bytes32 namespace,
         bytes32 migrationA,
@@ -1128,7 +1128,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// whatever the line happens to make of it. Fuzzed over the head and
     /// checked against a line that has moved on, because a head the
     /// line happens to be at is accepted whichever check runs first.
-    function testApplyMigrationHistoryZeroTimestampCheckedBeforeTheNamespace(
+    function testApplyMigrationHistoryZeroTimestampCheckedBeforeTheLine(
         address writer,
         bytes32 namespace,
         bytes32 migrationA,
@@ -1175,11 +1175,11 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigrationHistory(namespace, MIGRATION_HEAD_GENESIS, 0, onto(writer, namespace, anyHead));
     }
 
-    /// The refusals that describe the NAMESPACE come before the future-moment
+    /// The refusals that describe the LINE come before the future-moment
     /// one, so a re-dispatched script is told its migration already ran, and a
     /// script at the wrong point in the sequence is told where the line is,
     /// rather than either of them being sent to look at a clock.
-    function testApplyMigrationHistoryNamespaceCheckedBeforeTheFuture(
+    function testApplyMigrationHistoryLineCheckedBeforeTheFuture(
         address writer,
         bytes32 namespace,
         bytes32 migrationA,
@@ -1362,7 +1362,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// ran and a script at the wrong point is told where the line is,
     /// rather than either being told about the moment of a record it was never
     /// going to be chained onto. The zero moment still comes before all of them.
-    function testApplyMigrationHistoryNamespaceCheckedBeforeTheHeadsMoment(
+    function testApplyMigrationHistoryLineCheckedBeforeTheHeadsMoment(
         address writer,
         bytes32 namespace,
         bytes32 migrationA,
@@ -2158,7 +2158,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// The prerequisite's own line is read and not written: after the
     /// dependent write lands, the prerequisite's writer has the head and the
     /// record it had before.
-    function testApplyMigrationPrerequisiteNamespaceIsLeftAlone(
+    function testApplyMigrationPrerequisiteLineIsLeftAlone(
         address writer,
         bytes32 namespace,
         address other,
@@ -2302,7 +2302,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// A prerequisite is a particular migration, not a line that has
     /// applied something. A writer that has applied other migrations and not
     /// the one named is refused exactly as an empty line is.
-    function testApplyMigrationPrerequisiteIsTheMigrationNotTheNamespace(
+    function testApplyMigrationPrerequisiteIsTheMigrationNotTheLine(
         address writer,
         bytes32 namespace,
         address other,

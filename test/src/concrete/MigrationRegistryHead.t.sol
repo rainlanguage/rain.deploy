@@ -43,7 +43,7 @@ contract MigrationRegistryHeadTest is Test {
     /// rather than a revert for the same reason an unapplied migration answers
     /// zero: it is the ordinary state of every line before its first
     /// migration, and of every line on a chain that never got one.
-    function testHeadEmptyNamespaceIsGenesis(address writer, bytes32 namespace) external view {
+    function testHeadEmptyLineIsGenesis(address writer, bytes32 namespace) external view {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
 
