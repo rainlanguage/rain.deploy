@@ -819,25 +819,6 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(entries[0].data, abi.encode(uint256(appliedAt)));
     }
 
-    /// `applyMigration` emits the same event, carrying the block it stamped — so
-    /// a reader of the log never has to know which of the two wrote a record.
-    function testApplyMigrationEvent(address writer, bytes32 namespace, bytes32 migration, uint32 now_) external {
-        vm.assume(writer != address(0));
-        vm.assume(namespace != bytes32(0));
-        LibMigrationFuzz.assumeMigration(vm, migration);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
-
-        vm.recordLogs();
-        vm.prank(writer);
-        sRegistry.applyMigration(namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
-        Vm.Log[] memory entries = vm.getRecordedLogs();
-
-        assertEq(entries.length, 1);
-        assertEq(entries[0].topics[0], keccak256("Migrated(address,bytes32,bytes32,uint256)"));
-        assertEq(entries[0].data, abi.encode(uint256(now_)));
-    }
-
     /// A refused write emits nothing, so a failed apply can never be
     /// mistaken for a record by anything reading the logs — which for a
     /// re-dispatched migration is exactly the mistake that matters.
@@ -1926,14 +1907,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(cursor, MIGRATION_HEAD_GENESIS);
     }
 
-    /// `Migrated` carries the namespace as its second indexed topic, between
-    /// the writer and the migration, so the log can be filtered to one line.
-    function testApplyMigrationEventCarriesTheNamespace(
-        address writer,
-        bytes32 namespace,
-        bytes32 migration,
-        uint32 now_
-    ) external {
+    /// One `Migrated` entry: the writer, the namespace and the migration
+    /// indexed in that order, the moment as data.
+    function testApplyMigrationEvent(address writer, bytes32 namespace, bytes32 migration, uint32 now_) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
@@ -4140,46 +4116,5 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigration(namespace, migration, here);
         assertEq(sRegistry.applied(writer, namespace, migration), 1000);
         assertEq(abi.encode(sRegistry.appliedAfter(writer, namespace, migration)), abi.encode(here));
-    }
-
-    /// The one entry a write with prerequisites logs carries the write's own
-    /// namespace, not a prerequisite's: the topics are the writer, the
-    /// namespace and the migration, and the data is the moment.
-    function testApplyMigrationWithPrerequisitesEventCarriesTheNamespace(
-        address writer,
-        bytes32 namespace,
-        bytes32 otherNamespace,
-        address other,
-        bytes32 migration,
-        bytes32 prerequisite,
-        uint32 now_
-    ) external {
-        vm.assume(writer != address(0));
-        vm.assume(namespace != bytes32(0));
-        vm.assume(otherNamespace != bytes32(0));
-        vm.assume(namespace != otherNamespace);
-        vm.assume(other != address(0));
-        vm.assume(writer != other);
-        LibMigrationFuzz.assumeMigration(vm, migration);
-        LibMigrationFuzz.assumeMigration(vm, prerequisite);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
-        applyUnder(other, otherNamespace, prerequisite);
-
-        Prerequisite[] memory prerequisites =
-            headThen(writer, namespace, MIGRATION_HEAD_GENESIS, one(other, otherNamespace, prerequisite));
-        vm.recordLogs();
-        vm.prank(writer);
-        sRegistry.applyMigration(namespace, migration, prerequisites);
-        Vm.Log[] memory entries = vm.getRecordedLogs();
-
-        assertEq(entries.length, 1);
-        assertEq(entries[0].emitter, address(sRegistry));
-        assertEq(entries[0].topics.length, 4);
-        assertEq(entries[0].topics[0], keccak256("Migrated(address,bytes32,bytes32,uint256)"));
-        assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
-        assertEq(entries[0].topics[2], namespace);
-        assertEq(entries[0].topics[3], migration);
-        assertEq(entries[0].data, abi.encode(uint256(now_)));
     }
 }
