@@ -278,6 +278,7 @@ contract LibMigrationRegistryTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 address(this),
                 namespace,
+                namespace,
                 skipped,
                 MIGRATION_HEAD_GENESIS
             )
@@ -1347,6 +1348,7 @@ contract LibMigrationRegistryTest is Test {
                 address(this),
                 namespace,
                 bytes32(0),
+                bytes32(0),
                 MIGRATION_HEAD_GENESIS
             )
         );
@@ -1356,6 +1358,7 @@ contract LibMigrationRegistryTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 address(this),
                 namespace,
+                bytes32(0),
                 bytes32(0),
                 MIGRATION_HEAD_GENESIS
             )

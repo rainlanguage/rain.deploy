@@ -406,10 +406,14 @@ interface IMigrationRegistryV2 {
     /// told so before anything else about it is.
     /// @param writer The writer, which is the caller.
     /// @param namespace The namespace the write named.
+    /// @param expectedNamespace The first entry's namespace, or zero for an
+    /// empty list.
     /// @param expectedHead The first entry's migration, or zero for an empty
     /// list.
     /// @param actualHead The head the line is actually at.
-    error UnexpectedMigrationHead(address writer, bytes32 namespace, bytes32 expectedHead, bytes32 actualHead);
+    error UnexpectedMigrationHead(
+        address writer, bytes32 namespace, bytes32 expectedNamespace, bytes32 expectedHead, bytes32 actualHead
+    );
 
     /// Thrown when a write would record a zero moment: `applyMigrationHistory`
     /// given zero, or `applyMigration` in a block whose timestamp is zero. A

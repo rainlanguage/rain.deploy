@@ -393,7 +393,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, skipped, migrationA
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, namespace, skipped, migrationA
             )
         );
         vm.prank(writer);
@@ -425,6 +425,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
             abi.encodeWithSelector(
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
+                namespace,
                 namespace,
                 MIGRATION_HEAD_GENESIS,
                 migrationA
@@ -464,6 +465,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 other,
                 namespace,
+                namespace,
                 migrationA,
                 MIGRATION_HEAD_GENESIS
             )
@@ -494,6 +496,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                namespace,
                 bytes32(0),
                 MIGRATION_HEAD_GENESIS
             )
@@ -522,7 +525,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, bytes32(0), migrationA
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
+                writer,
+                namespace,
+                namespace,
+                bytes32(0),
+                migrationA
             )
         );
         vm.prank(writer);
@@ -612,6 +620,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
             abi.encodeWithSelector(
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
+                namespace,
                 namespace,
                 MIGRATION_HEAD_GENESIS,
                 migrationB
@@ -866,6 +875,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
             abi.encodeWithSelector(
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
+                namespace,
                 namespace,
                 MIGRATION_HEAD_GENESIS,
                 migration
@@ -1199,7 +1209,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         // The wrong head, and in the future: told where the line is.
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, skipped, migrationA
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, namespace, skipped, migrationA
             )
         );
         vm.prank(writer);
@@ -1383,7 +1393,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         // line is.
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, skipped, migrationA
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, namespace, skipped, migrationA
             )
         );
         vm.prank(writer);
@@ -1670,6 +1680,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
                 otherNamespace,
+                otherNamespace,
                 migrationA,
                 MIGRATION_HEAD_GENESIS
             )
@@ -1684,7 +1695,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, migrationB, migrationA
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
+                writer,
+                namespace,
+                namespace,
+                migrationB,
+                migrationA
             )
         );
         vm.prank(writer);
@@ -1795,6 +1811,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                otherNamespace,
                 MIGRATION_HEAD_GENESIS,
                 MIGRATION_HEAD_GENESIS
             )
@@ -1815,6 +1832,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                otherNamespace,
                 migrationB,
                 MIGRATION_HEAD_GENESIS
             )
@@ -3044,6 +3062,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                namespace,
                 wrongHead,
                 MIGRATION_HEAD_GENESIS
             )
@@ -3057,6 +3076,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
             abi.encodeWithSelector(
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
+                namespace,
                 namespace,
                 wrongHead,
                 MIGRATION_HEAD_GENESIS
@@ -3185,6 +3205,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
             abi.encodeWithSelector(
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
+                namespace,
                 namespace,
                 MIGRATION_HEAD_GENESIS,
                 migrationB
@@ -3477,6 +3498,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                namespace,
                 MIGRATION_HEAD_GENESIS,
                 migration
             )
@@ -3526,6 +3548,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
                 writer,
                 namespace,
                 bytes32(0),
+                bytes32(0),
                 MIGRATION_HEAD_GENESIS
             )
         );
@@ -3536,6 +3559,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                bytes32(0),
                 bytes32(0),
                 MIGRATION_HEAD_GENESIS
             )
@@ -3549,14 +3573,24 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, bytes32(0), migrationA
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
+                writer,
+                namespace,
+                bytes32(0),
+                bytes32(0),
+                migrationA
             )
         );
         vm.prank(writer);
         sRegistry.applyMigration(namespace, migrationB, empty);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, bytes32(0), migrationA
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
+                writer,
+                namespace,
+                bytes32(0),
+                bytes32(0),
+                migrationA
             )
         );
         vm.prank(writer);
@@ -3589,6 +3623,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                namespace,
                 MIGRATION_HEAD_GENESIS,
                 MIGRATION_HEAD_GENESIS
             )
@@ -3599,6 +3634,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
             abi.encodeWithSelector(
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
+                namespace,
                 namespace,
                 MIGRATION_HEAD_GENESIS,
                 MIGRATION_HEAD_GENESIS
@@ -3613,7 +3649,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, migrationA, migrationA
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
+                writer,
+                namespace,
+                namespace,
+                migrationA,
+                migrationA
             )
         );
         vm.prank(writer);
@@ -3643,6 +3684,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                namespace,
                 MIGRATION_HEAD_GENESIS,
                 MIGRATION_HEAD_GENESIS
             )
@@ -3654,6 +3696,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
             abi.encodeWithSelector(
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
+                namespace,
                 namespace,
                 bytes32(0),
                 MIGRATION_HEAD_GENESIS
@@ -3669,6 +3712,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
             abi.encodeWithSelector(
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
+                namespace,
                 namespace,
                 MIGRATION_HEAD_GENESIS,
                 migrationA
@@ -3705,6 +3749,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                namespace,
                 wrongHead,
                 MIGRATION_HEAD_GENESIS
             )
@@ -3718,6 +3763,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
             abi.encodeWithSelector(
                 IMigrationRegistryV2.UnexpectedMigrationHead.selector,
                 writer,
+                namespace,
                 namespace,
                 wrongHead,
                 MIGRATION_HEAD_GENESIS
@@ -3766,14 +3812,24 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, bytes32(0), migration
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
+                writer,
+                namespace,
+                bytes32(0),
+                bytes32(0),
+                migration
             )
         );
         vm.prank(writer);
         sRegistry.applyMigration(namespace, migration, new Prerequisite[](0));
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector, writer, namespace, bytes32(0), migration
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
+                writer,
+                namespace,
+                bytes32(0),
+                bytes32(0),
+                migration
             )
         );
         vm.prank(writer);

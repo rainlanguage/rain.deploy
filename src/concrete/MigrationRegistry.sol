@@ -152,7 +152,11 @@ contract MigrationRegistry is IMigrationRegistryV2 {
                 || prerequisites[0].namespace != namespace || prerequisites[0].migration != actualHead
         ) {
             revert UnexpectedMigrationHead(
-                msg.sender, namespace, prerequisites.length == 0 ? bytes32(0) : prerequisites[0].migration, actualHead
+                msg.sender,
+                namespace,
+                prerequisites.length == 0 ? bytes32(0) : prerequisites[0].namespace,
+                prerequisites.length == 0 ? bytes32(0) : prerequisites[0].migration,
+                actualHead
             );
         }
         for (uint256 i = 1; i < prerequisites.length; i++) {
