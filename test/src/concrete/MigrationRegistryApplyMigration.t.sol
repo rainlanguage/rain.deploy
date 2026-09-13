@@ -3854,6 +3854,38 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.applied(writer, namespace, migration), 0);
     }
 
+    /// An own-line entry is checked as a key before it is checked as the
+    /// caller.s own: a zero or genesis migration under the caller in the
+    /// line being written is `ZeroMigration` or `GenesisMigration`, not
+    /// `OwnPrerequisite`, on both writes.
+    function testApplyMigrationOwnEntryKeyCheckedBeforeOwn(address writer, bytes32 namespace, bytes32 migration)
+        external
+    {
+        vm.assume(writer != address(0));
+        vm.assume(namespace != bytes32(0));
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        vm.warp(1000);
+
+        Prerequisite[] memory zero =
+            headThen(writer, namespace, MIGRATION_HEAD_GENESIS, one(writer, namespace, bytes32(0)));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(namespace, migration, zero);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
+        vm.prank(writer);
+        sRegistry.applyMigrationHistory(namespace, migration, 1000, zero);
+
+        Prerequisite[] memory genesis =
+            headThen(writer, namespace, MIGRATION_HEAD_GENESIS, one(writer, namespace, MIGRATION_HEAD_GENESIS));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
+        vm.prank(writer);
+        sRegistry.applyMigration(namespace, migration, genesis);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
+        vm.prank(writer);
+        sRegistry.applyMigrationHistory(namespace, migration, 1000, genesis);
+        assertEq(sRegistry.applied(writer, namespace, migration), 0);
+    }
+
     /// The caller's own record in another namespace is an ordinary
     /// prerequisite: once applied there, a write in `namespace` waiting on it
     /// lands with the list as given, and the other line's head is where it
