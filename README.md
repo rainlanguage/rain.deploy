@@ -420,14 +420,13 @@ listed, duplicates included. A root's answer starts with
 only for a migration never applied. Within a line `appliedOnto` walks the chain
 back to genesis; `appliedAfter` walks from a record to every record it waited
 on, its predecessor included, so the cross-line order is on chain and not only
-in the log. `Migrated` is the one event, carrying the writer, the namespace, the
-migration and the moment: the list is in the record, not beside it. A
-prerequisite is an index check, not proof: it says the other writer recorded its
-migration, not that the state it produced holds, and consumers keep their pins.
-It bounds no moment either — a backfilled record may carry an earlier moment
-than its prerequisite, because what is checked is that the record existed when
-this write landed, which is chain order, and the moments in another line are
-that writer's data.
+in the log. `Migrated` says nothing about the list: it is in the record, not
+beside it. A prerequisite is an index check, not proof: it says the other writer
+recorded its migration, not that the state it produced holds, and consumers keep
+their pins. It bounds no moment either — a backfilled record may carry an
+earlier moment than its prerequisite, because what is checked is that the record
+existed when this write landed, which is chain order, and the moments in another
+line are that writer's data.
 
 The refusals sit in this order: the caller's own arguments first
 (`ZeroNamespace`, `ZeroMigration`, `GenesisMigration`, `ZeroTimestamp`); then
