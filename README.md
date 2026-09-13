@@ -386,15 +386,13 @@ alone those histories would land in one line with one head: a migration in one
 repo would name, as its head, whatever the last migration in some other repo
 was, every dispatch across the repos would contend on one compare-and-set, and a
 stalled line in one repo would hold the head for all of them. So records are
-keyed by `(writer, namespace, migration)`, with a head per
-`(writer,
-namespace)`, and the same key keeps one line per repo. A namespace is
-an opaque `bytes32` the repo declares beside its migration ids, one named
-constant per repo; the registry refuses only zero (`ZeroNamespace`), on every
-write and every read, for the same reason it refuses the zero writer. There is
-no plain line outside the namespaces: every write names one, and the caller's
-other namespaces are other lines, which a write may wait on exactly as it waits
-on another writer's.
+keyed by `(writer, namespace, migration)`, with a head per writer and namespace,
+and the same key keeps one line per repo. A namespace is an opaque `bytes32` the
+repo declares beside its migration ids, one named constant per repo; the
+registry refuses only zero (`ZeroNamespace`), on every write and every read, for
+the same reason it refuses the zero writer. There is no plain line outside the
+namespaces: every write names one, and the caller's other namespaces are other
+lines, which a write may wait on exactly as it waits on another writer's.
 
 **A migration may wait on migrations in other lines.** Every entry after the
 head in the list of `Prerequisite { writer, namespace, migration }` is one, and
