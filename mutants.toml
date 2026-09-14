@@ -1,0 +1,426 @@
+[suite]
+root = "."
+command = ["sh", "check.sh"]
+proof = '(\d+) passed; (\d+) failed'
+fail-pattern = '\[FAIL.*?\] (test\w+)\('
+timeout-secs = 900
+
+[[mutants]]
+name = "M52 DEPENDENCIES comment text changed"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = '"/// @dev The addresses that MUST already have code on a network before\n"'
+replacement = '"/// @dev The addresses that must already have code on a network before\n"'
+
+[[mutants]]
+name = "M53 writeSnapshot does not etch the Zoltu factory"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        LibRainDeploy.etchZoltuFactory(vm);\n"
+replacement = ""
+
+[[mutants]]
+name = "M54 writeSnapshot deploys with CREATE instead of Zoltu"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        address deployed = LibRainDeploy.deployZoltu(creationCode);"
+replacement = """
+        address deployed;
+        assembly ("memory-safe") {
+            deployed := create(0, add(creationCode, 0x20), mload(creationCode))
+        }"""
+
+[[mutants]]
+name = "M55 BYTECODE_HASH instance is address(this) not deployed"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "vm, deployed, dir, contractName, spdxLicenseIdentifier, copyrightText, constants"
+replacement = "vm, address(this), dir, contractName, spdxLicenseIdentifier, copyrightText, constants"
+
+[[mutants]]
+name = "M56 writeSnapshot writes into CANDIDATE not dir"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "vm, deployed, dir, contractName, spdxLicenseIdentifier, copyrightText, constants"
+replacement = "vm, deployed, CANDIDATE, contractName, spdxLicenseIdentifier, copyrightText, constants"
+
+[[mutants]]
+name = "M57 writeSnapshot swaps spdx and copyright"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "vm, deployed, dir, contractName, spdxLicenseIdentifier, copyrightText, constants"
+replacement = "vm, deployed, dir, contractName, copyrightText, spdxLicenseIdentifier, constants"
+
+[[mutants]]
+name = "M58 writeSnapshot body is empty"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "vm, deployed, dir, contractName, spdxLicenseIdentifier, copyrightText, constants"
+replacement = "vm, deployed, dir, contractName, spdxLicenseIdentifier, copyrightText, \"\""
+
+[[mutants]]
+name = "M59 writeSnapshot returns the CANDIDATE path"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        return pathForSnapshot(dir, contractName);"
+replacement = "        return pathForSnapshot(CANDIDATE, contractName);"
+
+[[mutants]]
+name = "M60 writeSnapshot(5) swaps the org defaults"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "vm, dir, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, creationCode, dependencies"
+replacement = "vm, dir, contractName, RAIN_COPYRIGHT_TEXT, RAIN_SPDX_LICENSE_IDENTIFIER, creationCode, dependencies"
+
+[[mutants]]
+name = "M61 aliasImportBlock swaps the two aliases"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+            "_ADDR,\\n    BYTECODE_HASH as ",
+            constantPrefix,
+            "_HASH\\n} from \\"../generated/","""
+replacement = """
+            "_HASH,\\n    BYTECODE_HASH as ",
+            constantPrefix,
+            "_ADDR\\n} from \\"../generated/","""
+
+[[mutants]]
+name = "M62 aliasImportBlock import path is ./generated"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = '"_HASH\n} from \"../generated/",'
+replacement = '"_HASH\n} from \"./generated/",'
+
+[[mutants]]
+name = "M63 aliasImportBlock ends with a single newline"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+            contractName,
+            ".sol\\";\\n\\n"
+        );
+    }
+
+    /// The library block of a generated alias lib."""
+replacement = """
+            contractName,
+            ".sol\\";\\n"
+        );
+    }
+
+    /// The library block of a generated alias lib."""
+
+[[mutants]]
+name = "M64 aliasLibraryBlock names the library after the contract"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+            "/// unaffected by which snapshot it names.\\nlibrary ",
+            libraryName,"""
+replacement = """
+            "/// unaffected by which snapshot it names.\\nlibrary ",
+            contractName,"""
+
+[[mutants]]
+name = "M65 aliasLibraryBlock binds the address to _HASH"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+            "_DEPLOYED_ADDRESS = ",
+            constantPrefix,
+            "_ADDR;\\n    bytes32 constant ","""
+replacement = """
+            "_DEPLOYED_ADDRESS = ",
+            constantPrefix,
+            "_HASH;\\n    bytes32 constant ","""
+
+[[mutants]]
+name = "M66 writeAliasLib library suffix Released"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = 'string memory libraryName = string.concat("Lib", contractName, "Deploy");'
+replacement = 'string memory libraryName = string.concat("Lib", contractName, "Released");'
+
+[[mutants]]
+name = "M67 writeAliasLib hardcodes LIB_DIR"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+        string memory libraryName = string.concat("Lib", contractName, "Deploy");
+        string memory path = pathForLib(libDir, libraryName);"""
+replacement = """
+        string memory libraryName = string.concat("Lib", contractName, "Deploy");
+        string memory path = pathForLib(LIB_DIR, libraryName);"""
+
+[[mutants]]
+name = "M68 writeAliasLib drops the blank line after the header"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+                LibCodeGen.filePrefix(spdxLicenseIdentifier, copyrightText),
+                "\\n",
+                aliasImportBlock(contractName, constantPrefix, dir),"""
+replacement = """
+                LibCodeGen.filePrefix(spdxLicenseIdentifier, copyrightText),
+                aliasImportBlock(contractName, constantPrefix, dir),"""
+
+[[mutants]]
+name = "M69 writeAliasLib always aliases CANDIDATE"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "                aliasImportBlock(contractName, constantPrefix, dir),"
+replacement = "                aliasImportBlock(contractName, constantPrefix, CANDIDATE),"
+
+[[mutants]]
+name = "M70 writeAliasLib returns the library name"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+        return path;
+    }
+
+    /// `writeAliasLib` applied to"""
+replacement = """
+        return libraryName;
+    }
+
+    /// `writeAliasLib` applied to"""
+
+[[mutants]]
+name = "M71 writeAliasLib(5) swaps the org defaults"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "vm, libDir, contractName, constantPrefix, dir, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT"
+replacement = "vm, libDir, contractName, constantPrefix, dir, RAIN_COPYRIGHT_TEXT, RAIN_SPDX_LICENSE_IDENTIFIER"
+
+[[mutants]]
+name = "M72 tagForRecordPath takes the last component"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        return components[components.length - 2];"
+replacement = "        return components[components.length - 1];"
+
+[[mutants]]
+name = "M73 contractForRecordPath keeps .sol"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = '        return vm.replace(components[components.length - 1], ".sol", "");'
+replacement = '        return components[components.length - 1];'
+
+[[mutants]]
+name = "M74 releasedConstantPrefix is tag first"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = '        return string.concat(contractForRecordPath(vm, path), "_", tagForRecordPath(vm, path));'
+replacement = '        return string.concat(tagForRecordPath(vm, path), "_", contractForRecordPath(vm, path));'
+
+[[mutants]]
+name = "M75 tagPrecedes compares the first byte as text"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+            uint256 leftComponent = vm.parseUint(left[i]);
+            uint256 rightComponent = vm.parseUint(right[i]);"""
+replacement = """
+            uint256 leftComponent = uint256(uint8(bytes(left[i])[0]));
+            uint256 rightComponent = uint256(uint8(bytes(right[i])[0]));"""
+
+[[mutants]]
+name = "M76 tagPrecedes returns greater"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "                return leftComponent < rightComponent;"
+replacement = "                return leftComponent > rightComponent;"
+
+[[mutants]]
+name = "M77 tagPrecedes stops at an equal component"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+            if (leftComponent != rightComponent) {
+                return leftComponent < rightComponent;
+            }"""
+replacement = """
+            if (leftComponent != rightComponent) {
+                return leftComponent < rightComponent;
+            }
+            return false;"""
+
+[[mutants]]
+name = "M78 tagPrecedes skips the major"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        for (uint256 i = 0; i < left.length; i++) {"
+replacement = "        for (uint256 i = 1; i < left.length; i++) {"
+
+[[mutants]]
+name = "M79 tagPrecedes skips the patch"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        for (uint256 i = 0; i < left.length; i++) {"
+replacement = "        for (uint256 i = 0; i < left.length - 1; i++) {"
+
+[[mutants]]
+name = "M80 tagPrecedes is not strict"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+        return false;
+    }
+
+    /// Whether record file `a` is emitted before record file `b`"""
+replacement = """
+        return true;
+    }
+
+    /// Whether record file `a` is emitted before record file `b`"""
+
+[[mutants]]
+name = "M81 recordPrecedes drops the a-precedes-b tag branch"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+        if (tagPrecedes(vm, leftTag, rightTag)) {
+            return true;
+        }
+"""
+replacement = ""
+
+[[mutants]]
+name = "M82 recordPrecedes drops the b-precedes-a tag branch"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+        if (tagPrecedes(vm, rightTag, leftTag)) {
+            return false;
+        }
+"""
+replacement = ""
+
+[[mutants]]
+name = "M83 recordPrecedes path byte order inverted"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "                return aBytes[i] < bBytes[i];"
+replacement = "                return aBytes[i] > bBytes[i];"
+
+[[mutants]]
+name = "M84a recordPrecedes longer prefix path first"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        return aBytes.length < bBytes.length;"
+replacement = "        return aBytes.length > bBytes.length;"
+
+[[mutants]]
+name = "M84b recordPrecedes identical paths precede"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        return aBytes.length < bBytes.length;"
+replacement = "        return aBytes.length <= bBytes.length;"
+
+[[mutants]]
+name = "M85 recordPrecedes loops over the longer path"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        uint256 shortest = aBytes.length < bBytes.length ? aBytes.length : bBytes.length;"
+replacement = "        uint256 shortest = aBytes.length > bBytes.length ? aBytes.length : bBytes.length;"
+
+[[mutants]]
+name = "M86 sortedRecordPaths returns the input"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        return sorted;"
+replacement = "        return paths;"
+
+[[mutants]]
+name = "M87 sortedRecordPaths never displaces the first"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "            while (j > 0 && "
+replacement = "            while (j > 1 && "
+
+[[mutants]]
+name = "M88 sortedRecordPaths refuses an empty input"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        string[] memory sorted = new string[](paths.length);"
+replacement = """
+        require(paths.length > 0);
+        string[] memory sorted = new string[](paths.length);"""
+
+[[mutants]]
+name = "M89 recordPathsForContract reads LIB_FS_ROOT"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        string[] memory paths = frozenSnapshotPaths(vm, recordRoot);"
+replacement = "        string[] memory paths = frozenSnapshotPaths(vm, LIB_FS_ROOT);"
+
+[[mutants]]
+name = "M90 recordPathsForContract keeps every contract"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+            if (keccak256(bytes(contractForRecordPath(vm, paths[i]))) != keccak256(bytes(contractName))) {
+                continue;
+            }
+"""
+replacement = ""
+
+[[mutants]]
+name = "M91 recordPathsForContract returns the untrimmed buffer"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        return sortedRecordPaths(vm, selected);"
+replacement = "        return sortedRecordPaths(vm, found);"
+
+[[mutants]]
+name = "M92 recordPathsForContract returns unsorted"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        return sortedRecordPaths(vm, selected);"
+replacement = "        return selected;"
+
+[[mutants]]
+name = "M93 recordPathsForContract reverts on no release"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "        string[] memory selected = new string[](count);"
+replacement = """
+        require(count > 0);
+        string[] memory selected = new string[](count);"""
+
+[[mutants]]
+name = "M94 releasedLibraryName suffix Deploy"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = '        return string.concat("Lib", contractName, "Released");'
+replacement = '        return string.concat("Lib", contractName, "Deploy");'
+
+[[mutants]]
+name = "M95 releasedImport drops DEPENDENCIES"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+            "_RUNTIME_CODE,\\n    DEPENDENCIES as ",
+            prefix,
+            "_DEPENDENCIES\\n} from \\"../generated/","""
+replacement = """
+            "_RUNTIME_CODE\\n} from \\"../generated/","""
+
+[[mutants]]
+name = "M96 releasedImport swaps tag and contract in the path"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+            tagForRecordPath(vm, path),
+            "/",
+            contractForRecordPath(vm, path),
+            ".sol\\";\\n\\n\""""
+replacement = """
+            contractForRecordPath(vm, path),
+            "/",
+            tagForRecordPath(vm, path),
+            ".sol\\";\\n\\n\""""
+
+[[mutants]]
+name = "M97 releasedImport ends with a single newline"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+            contractForRecordPath(vm, path),
+            ".sol\\";\\n\\n\""""
+replacement = """
+            contractForRecordPath(vm, path),
+            ".sol\\";\\n\""""
+
+[[mutants]]
+name = "M98 releasedImportBlock drops the DeploySuite import"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = '        string memory imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";'
+replacement = '        string memory imports = "";'
+
+[[mutants]]
+name = "M99 releasedImportBlock skips the last record"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+        for (uint256 i = 0; i < paths.length; i++) {
+            imports = string.concat(imports, releasedImport(vm, paths[i]));"""
+replacement = """
+        for (uint256 i = 0; i + 1 < paths.length; i++) {
+            imports = string.concat(imports, releasedImport(vm, paths[i]));"""
+
+[[mutants]]
+name = "M100 releasedLibraryBlock indexes from one"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = "            string memory index = vm.toString(i);"
+replacement = "            string memory index = vm.toString(i + 1);"
+
+[[mutants]]
+name = "M101 releasedLibraryBlock key drops the tag"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = """
+                "@",
+                tagForRecordPath(vm, paths[i]),"""
+replacement = """
+                "",
+                "","""
+
+[[mutants]]
+name = "M102 releasedLibraryBlock creationCode aliases RUNTIME_CODE"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = '"_CREATION_CODE,\n            storedDeployedAddress: ",'
+replacement = '"_RUNTIME_CODE,\n            storedDeployedAddress: ",'
