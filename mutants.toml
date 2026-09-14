@@ -2,6 +2,7 @@
 root = "."
 command = ["sh", "check.sh"]
 proof = '(\d+) passed; (\d+) failed'
+fail-pattern = '\[FAIL[^\]]*\] (\S+)\('
 timeout-secs = 900
 
 [[mutants]]
