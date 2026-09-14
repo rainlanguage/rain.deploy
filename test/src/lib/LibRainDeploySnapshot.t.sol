@@ -233,6 +233,65 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
+    /// Where the depth rule is driven. Its own tree, for the reason
+    /// `MISSING_FIXTURE_ROOT` is not `FIXTURE_ROOT`: forge runs the tests in a
+    /// contract concurrently, and a walk asserted to find exactly one file
+    /// counts another test's fixture the moment it is in the tree being read.
+    string constant NESTED_FIXTURE_ROOT = "test/generated-nested";
+
+    /// A record file is a file DIRECTLY inside a release directory. One a level
+    /// deeper is not in the record, even where the directory holding it is
+    /// itself tag shaped.
+    ///
+    /// The tag a record path carries is the name of the directory the file sits
+    /// in, and the path handed back is rebuilt from that tag rather than taken
+    /// from the walk. So a walk that reached a level deeper would report
+    /// `<root>/0_0_1/0_0_2/Deep.sol` as a release `0_0_2` and spell it
+    /// `<root>/0_0_2/Deep.sol` — a path with no file at it, naming a release
+    /// nobody cut, in a record every downstream check treats as the complete
+    /// history. A tag-shaped directory INSIDE a release is what makes that
+    /// reachable, so that is what this builds.
+    function testFrozenSnapshotPathsIgnoresWhatIsNestedInsideARelease() external {
+        writeFixture(string.concat(NESTED_FIXTURE_ROOT, "/0_0_1/", FIXTURE_CONTRACT, ".sol"));
+        writeFixture(string.concat(NESTED_FIXTURE_ROOT, "/0_0_1/0_0_2/Deep.sol"));
+
+        string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, NESTED_FIXTURE_ROOT);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(NESTED_FIXTURE_ROOT, true);
+
+        assertTrue(LibStringSet.holds(paths, string.concat(NESTED_FIXTURE_ROOT, "/0_0_1/", FIXTURE_CONTRACT, ".sol")));
+        assertEq(paths.length, 1);
+    }
+
+    /// Where a record root whose own last segment is tag shaped is built. See
+    /// `NESTED_FIXTURE_ROOT` for why it is a tree of its own.
+    string constant TAG_SHAPED_FIXTURE_PARENT = "test/generated-tag-shaped";
+
+    /// A file loose in the root is not in the record, whatever the root is
+    /// called.
+    ///
+    /// The tag a record path carries is the directory the file sits in, which
+    /// for a file loose in the root is the root's OWN last segment. Where that
+    /// segment is tag shaped — a record rooted inside a release directory,
+    /// which is what pointing the walk at a subtree produces — being tag shaped
+    /// no longer excludes anything, and the file is reported as a release named
+    /// after the root, at a path that does not exist. Being a file directly
+    /// inside a release directory is the rule that still holds there.
+    function testFrozenSnapshotPathsIgnoresAFileLooseInTheRoot() external {
+        string memory root = string.concat(TAG_SHAPED_FIXTURE_PARENT, "/9_9_9");
+        writeFixture(string.concat(root, "/Loose.sol"));
+        writeFixture(string.concat(root, "/0_0_1/", FIXTURE_CONTRACT, ".sol"));
+
+        string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, root);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(TAG_SHAPED_FIXTURE_PARENT, true);
+
+        assertTrue(LibStringSet.holds(paths, string.concat(root, "/0_0_1/", FIXTURE_CONTRACT, ".sol")));
+        assertEq(paths.length, 1);
+    }
+
     /// A strict `X.Y.Z` version MUST become its directory form.
     function testTagForVersionConvertsDots() external pure {
         assertEq(LibRainDeploySnapshot.tagForVersion("0.1.7"), "0_1_7");
@@ -476,6 +535,128 @@ contract LibRainDeploySnapshotTest is Test {
                 "\n"
             )
         );
+    }
+
+    /// Where the deploy-record round trip writes its snapshot. NOT tag shaped,
+    /// for the reason `testWriteSnapshotWritesTheSnapshotAtItsPath` gives, and
+    /// a directory of its own because forge runs the tests in a contract
+    /// concurrently and a snapshot is read back out of the file it wrote.
+    string constant RECORD_FIXTURE_DIR = "writeSnapshotRecordNotATag";
+
+    /// Where the constant-order assertion writes its snapshot. See
+    /// `RECORD_FIXTURE_DIR`.
+    string constant ORDER_FIXTURE_DIR = "writeSnapshotOrderNotATag";
+
+    /// The value a snapshot's `bytes` constant `name` holds, read back out of
+    /// the source the generator wrote.
+    /// @param source The snapshot source.
+    /// @param name The constant's name.
+    /// @return The value it holds.
+    function snapshotBytesConstant(string memory source, string memory name) internal view returns (bytes memory) {
+        string memory declaration = string.concat("bytes constant ", name, " =");
+        assertTrue(vm.contains(source, declaration), string.concat("snapshot declares no bytes ", name));
+        string[] memory afterOpen = vm.split(vm.split(source, declaration)[1], "hex\"");
+        return vm.parseBytes(string.concat("0x", vm.split(afterOpen[1], "\"")[0]));
+    }
+
+    /// The value a snapshot's `address` constant `name` holds, read back out of
+    /// the source the generator wrote.
+    /// @param source The snapshot source.
+    /// @param name The constant's name.
+    /// @return The value it holds.
+    function snapshotAddressConstant(string memory source, string memory name) internal view returns (address) {
+        string memory declaration = string.concat("address constant ", name, " =");
+        assertTrue(vm.contains(source, declaration), string.concat("snapshot declares no address ", name));
+        string[] memory afterOpen = vm.split(vm.split(source, declaration)[1], "address(");
+        return vm.parseAddress(vm.split(afterOpen[1], ")")[0]);
+    }
+
+    /// A snapshot MUST record the deployment it describes: the address the
+    /// creation code it was handed deployed to, that creation code, and the
+    /// runtime code found AT that address.
+    ///
+    /// These three are the whole of what a frozen record is, and nothing else
+    /// in the suite asserts them of the GENERATOR. Everything else that reads a
+    /// snapshot reads a COMMITTED file, which is evidence about a generation
+    /// that already happened — so a constant renamed, zeroed, or filled from
+    /// the wrong side of the deploy goes on reading correctly here while every
+    /// record written from then on, in this repo and in every consumer's
+    /// append-only tree, records something else.
+    ///
+    /// Read out of the FILE rather than returned by the writer, for the reason
+    /// `testWriteSnapshotFreezesTheDependencyList` gives: the bytes on disk are
+    /// what a repo whose source has since changed still has.
+    ///
+    /// Creation code and runtime code are different bytes for any contract with
+    /// a constructor, and that is asserted rather than assumed: it is what makes
+    /// one of them standing in for the other visible at all.
+    function testWriteSnapshotRecordsTheDeployment() external {
+        bytes memory creationCode = type(MockDeployable).creationCode;
+
+        string memory source = vm.readFile(
+            LibRainDeploySnapshot.writeSnapshot(
+                vm, RECORD_FIXTURE_DIR, FIXTURE_CONTRACT, creationCode, new address[](0)
+            )
+        );
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(RECORD_FIXTURE_DIR), true);
+
+        // The deploy is EVM state, so it outlives the file the snapshot was
+        // read out of and the address can be resolved after the cleanup.
+        address recorded = snapshotAddressConstant(source, "DEPLOYED_ADDRESS");
+        bytes memory runtimeCode = recorded.code;
+
+        assertNotEq(recorded, address(0), "the snapshot records no deploy address");
+        assertNotEq(runtimeCode.length, 0, "nothing is deployed at the recorded address");
+        assertNotEq(keccak256(runtimeCode), keccak256(creationCode), "the two codes are the same bytes");
+
+        assertEq(snapshotBytesConstant(source, "CREATION_CODE"), creationCode);
+        assertEq(snapshotBytesConstant(source, "RUNTIME_CODE"), runtimeCode);
+    }
+
+    /// A snapshot MUST declare the five constants a deploy record is, in this
+    /// order, as the GENERATOR emits them now.
+    ///
+    /// `GeneratedSnapshotShapeTest` states the same shape of the COMMITTED
+    /// snapshots. That is the right place for it and it is not this: a reorder
+    /// in the emitter reaches a committed file only when somebody regenerates
+    /// one, and until then every record this library writes — including the
+    /// ones it writes in repos this one never sees — carries the new order with
+    /// nothing anywhere to say so.
+    ///
+    /// `BYTECODE_HASH` is `LibFs`'s, written by the file builder above whatever
+    /// body it is handed, so it leads and its position is part of the shape.
+    function testWriteSnapshotDeclaresTheDeployConstantsInOrder() external {
+        string memory source = vm.readFile(
+            LibRainDeploySnapshot.writeSnapshot(
+                vm, ORDER_FIXTURE_DIR, FIXTURE_CONTRACT, type(MockDeployable).creationCode, new address[](0)
+            )
+        );
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(ORDER_FIXTURE_DIR), true);
+
+        // Each declaration is looked for in what FOLLOWED the previous one, so
+        // the five are held to this order rather than merely to being present,
+        // and a split that does not give exactly two parts is a declaration
+        // that is missing, duplicated, or out of place.
+        string[] memory rest = vm.split(source, "\nbytes32 constant BYTECODE_HASH =");
+        assertEq(rest.length, 2, "BYTECODE_HASH is not declared exactly once, first");
+        rest = vm.split(rest[1], "\naddress constant DEPLOYED_ADDRESS =");
+        assertEq(rest.length, 2, "DEPLOYED_ADDRESS is not declared exactly once, after BYTECODE_HASH");
+        rest = vm.split(rest[1], "\nbytes constant CREATION_CODE =");
+        assertEq(rest.length, 2, "CREATION_CODE is not declared exactly once, after DEPLOYED_ADDRESS");
+        rest = vm.split(rest[1], "\nbytes constant RUNTIME_CODE =");
+        assertEq(rest.length, 2, "RUNTIME_CODE is not declared exactly once, after CREATION_CODE");
+        rest = vm.split(rest[1], "\nbytes constant DEPENDENCIES =");
+        assertEq(rest.length, 2, "DEPENDENCIES is not declared exactly once, after RUNTIME_CODE");
+
+        // And nothing else is declared. Counted by type at the start of a line,
+        // because the word `constant` also occurs in the prose above
+        // `DEPENDENCIES`.
+        assertEq(vm.split(source, "\nbytes32 constant ").length, 2, "an unexpected bytes32 constant");
+        assertEq(vm.split(source, "\naddress constant ").length, 2, "an unexpected address constant");
+        assertEq(vm.split(source, "\nbytes constant ").length, 4, "an unexpected bytes constant");
     }
 
     /// The committed alias lib this repo's `AddressRegistry` snapshot is
