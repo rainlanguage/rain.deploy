@@ -1,0 +1,348 @@
+[suite]
+root = "."
+command = ["sh", "check.sh"]
+proof = '(\d+) passed; (\d+) failed'
+fail-pattern = '\[FAIL.*\] (test\w+)\('
+timeout-secs = 900
+
+[[mutants]]
+name = "M01 aggregate drops the address-registry lib"
+file = "src/lib/LibReleasedSuites.sol"
+target = '''new DeploySuite[][](2);
+        released[0] = LibAddressRegistryReleased.releasedSuites();
+        released[1] = LibMigrationRegistryReleased.releasedSuites();'''
+replacement = '''new DeploySuite[][](1);
+        released[0] = LibMigrationRegistryReleased.releasedSuites();'''
+
+[[mutants]]
+name = "M02 aggregate drops the migration-registry lib"
+file = "src/lib/LibReleasedSuites.sol"
+target = '''new DeploySuite[][](2);
+        released[0] = LibAddressRegistryReleased.releasedSuites();
+        released[1] = LibMigrationRegistryReleased.releasedSuites();'''
+replacement = '''new DeploySuite[][](1);
+        released[0] = LibAddressRegistryReleased.releasedSuites();'''
+
+[[mutants]]
+name = "M03a aggregate body concatenates migration before address"
+file = "src/lib/LibReleasedSuites.sol"
+target = '''        released[0] = LibAddressRegistryReleased.releasedSuites();
+        released[1] = LibMigrationRegistryReleased.releasedSuites();'''
+replacement = '''        released[0] = LibMigrationRegistryReleased.releasedSuites();
+        released[1] = LibAddressRegistryReleased.releasedSuites();'''
+
+[[mutants]]
+name = "M03b aggregate imports migration before address"
+file = "src/lib/LibReleasedSuites.sol"
+target = '''import {LibAddressRegistryReleased} from "./LibAddressRegistryReleased.sol";
+
+import {LibMigrationRegistryReleased} from "./LibMigrationRegistryReleased.sol";'''
+replacement = '''import {LibMigrationRegistryReleased} from "./LibMigrationRegistryReleased.sol";
+
+import {LibAddressRegistryReleased} from "./LibAddressRegistryReleased.sol";'''
+
+[[mutants]]
+name = "M04 total counts libs not entries"
+file = "src/lib/LibReleasedSuites.sol"
+target = "            total += released[i].length;"
+replacement = "            total += 1;"
+
+[[mutants]]
+name = "M05 offset never advances"
+file = "src/lib/LibReleasedSuites.sol"
+target = "            offset += released[i].length;"
+replacement = "            offset += 0;"
+
+[[mutants]]
+name = "M06 inner copy skips the last entry"
+file = "src/lib/LibReleasedSuites.sol"
+target = "j < released[i].length; j++"
+replacement = "j + 1 < released[i].length; j++"
+
+[[mutants]]
+name = "M07 copy loop stops after the first lib"
+file = "src/lib/LibReleasedSuites.sol"
+target = '''        for (uint256 i = 0; i < released.length; i++) {
+            for (uint256 j'''
+replacement = '''        for (uint256 i = 0; i < 1; i++) {
+            for (uint256 j'''
+
+[[mutants]]
+name = "M08 aggregate returns the first lib alone"
+file = "src/lib/LibReleasedSuites.sol"
+target = "        return suites;"
+replacement = "        return released[0];"
+
+[[mutants]]
+name = "M09 address-registry released drops the 0_1_10 entry"
+file = "src/lib/LibAddressRegistryReleased.sol"
+target = "        return suites;"
+replacement = '''        assembly ("memory-safe") {
+            mstore(suites, 2)
+        }
+        return suites;'''
+
+[[mutants]]
+name = "M10 address-registry released entries 0_1_8 and 0_1_10 swapped"
+file = "src/lib/LibAddressRegistryReleased.sol"
+target = '''        suites[1] = DeploySuite({
+            suite: "address-registry@0_1_8",
+            creationCode: AddressRegistry_0_1_8_CREATION_CODE,
+            storedDeployedAddress: AddressRegistry_0_1_8_DEPLOYED_ADDRESS,
+            storedBytecodeHash: AddressRegistry_0_1_8_BYTECODE_HASH,
+            storedRuntimeCode: AddressRegistry_0_1_8_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: abi.decode(AddressRegistry_0_1_8_DEPENDENCIES, (address[]))
+        });
+        suites[2] = DeploySuite({
+            suite: "address-registry@0_1_10",
+            creationCode: AddressRegistry_0_1_10_CREATION_CODE,
+            storedDeployedAddress: AddressRegistry_0_1_10_DEPLOYED_ADDRESS,
+            storedBytecodeHash: AddressRegistry_0_1_10_BYTECODE_HASH,
+            storedRuntimeCode: AddressRegistry_0_1_10_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: abi.decode(AddressRegistry_0_1_10_DEPENDENCIES, (address[]))
+        });'''
+replacement = '''        suites[1] = DeploySuite({
+            suite: "address-registry@0_1_10",
+            creationCode: AddressRegistry_0_1_10_CREATION_CODE,
+            storedDeployedAddress: AddressRegistry_0_1_10_DEPLOYED_ADDRESS,
+            storedBytecodeHash: AddressRegistry_0_1_10_BYTECODE_HASH,
+            storedRuntimeCode: AddressRegistry_0_1_10_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: abi.decode(AddressRegistry_0_1_10_DEPENDENCIES, (address[]))
+        });
+        suites[2] = DeploySuite({
+            suite: "address-registry@0_1_8",
+            creationCode: AddressRegistry_0_1_8_CREATION_CODE,
+            storedDeployedAddress: AddressRegistry_0_1_8_DEPLOYED_ADDRESS,
+            storedBytecodeHash: AddressRegistry_0_1_8_BYTECODE_HASH,
+            storedRuntimeCode: AddressRegistry_0_1_8_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: abi.decode(AddressRegistry_0_1_8_DEPENDENCIES, (address[]))
+        });'''
+
+[[mutants]]
+name = "M11a address-registry 0_1_8 key duplicates 0_1_7"
+file = "src/lib/LibAddressRegistryReleased.sol"
+target = 'suite: "address-registry@0_1_8",'
+replacement = 'suite: "address-registry@0_1_7",'
+
+[[mutants]]
+name = "M11b address-registry 0_1_10 key duplicates the candidate"
+file = "src/lib/LibAddressRegistryReleased.sol"
+target = 'suite: "address-registry@0_1_10",'
+replacement = 'suite: "address-registry",'
+
+[[mutants]]
+name = "M12 address-registry 0_1_10 creation code from 0_1_8"
+file = "src/lib/LibAddressRegistryReleased.sol"
+target = "creationCode: AddressRegistry_0_1_10_CREATION_CODE,"
+replacement = "creationCode: AddressRegistry_0_1_8_CREATION_CODE,"
+
+[[mutants]]
+name = "M13 address-registry 0_1_10 stored address from 0_1_8"
+file = "src/lib/LibAddressRegistryReleased.sol"
+target = "storedDeployedAddress: AddressRegistry_0_1_10_DEPLOYED_ADDRESS,"
+replacement = "storedDeployedAddress: AddressRegistry_0_1_8_DEPLOYED_ADDRESS,"
+
+[[mutants]]
+name = "M14 address-registry 0_1_10 stored hash from 0_1_8"
+file = "src/lib/LibAddressRegistryReleased.sol"
+target = "storedBytecodeHash: AddressRegistry_0_1_10_BYTECODE_HASH,"
+replacement = "storedBytecodeHash: AddressRegistry_0_1_8_BYTECODE_HASH,"
+
+[[mutants]]
+name = "M15 address-registry 0_1_10 runtime code from 0_1_8"
+file = "src/lib/LibAddressRegistryReleased.sol"
+target = "storedRuntimeCode: AddressRegistry_0_1_10_RUNTIME_CODE,"
+replacement = "storedRuntimeCode: AddressRegistry_0_1_8_RUNTIME_CODE,"
+
+[[mutants]]
+name = "M16 address-registry 0_1_10 artifact path changed"
+file = "src/lib/LibAddressRegistryReleased.sol"
+target = '''storedRuntimeCode: AddressRegistry_0_1_10_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",'''
+replacement = '''storedRuntimeCode: AddressRegistry_0_1_10_RUNTIME_CODE,
+            artifactPath: "src/concrete/Registry.sol:AddressRegistry",'''
+
+[[mutants]]
+name = "M17 address-registry 0_1_10 dependencies not decoded from the record"
+file = "src/lib/LibAddressRegistryReleased.sol"
+target = "dependencies: abi.decode(AddressRegistry_0_1_10_DEPENDENCIES, (address[]))"
+replacement = "dependencies: new address[](0)"
+
+[[mutants]]
+name = "M18 migration-registry released drops the 0_1_10 entry"
+file = "src/lib/LibMigrationRegistryReleased.sol"
+target = "        return suites;"
+replacement = '''        assembly ("memory-safe") {
+            mstore(suites, 2)
+        }
+        return suites;'''
+
+[[mutants]]
+name = "M19 migration-registry released entries 0_1_8 and 0_1_10 swapped"
+file = "src/lib/LibMigrationRegistryReleased.sol"
+target = '''        suites[1] = DeploySuite({
+            suite: "migration-registry@0_1_8",
+            creationCode: MigrationRegistry_0_1_8_CREATION_CODE,
+            storedDeployedAddress: MigrationRegistry_0_1_8_DEPLOYED_ADDRESS,
+            storedBytecodeHash: MigrationRegistry_0_1_8_BYTECODE_HASH,
+            storedRuntimeCode: MigrationRegistry_0_1_8_RUNTIME_CODE,
+            artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
+            dependencies: abi.decode(MigrationRegistry_0_1_8_DEPENDENCIES, (address[]))
+        });
+        suites[2] = DeploySuite({
+            suite: "migration-registry@0_1_10",
+            creationCode: MigrationRegistry_0_1_10_CREATION_CODE,
+            storedDeployedAddress: MigrationRegistry_0_1_10_DEPLOYED_ADDRESS,
+            storedBytecodeHash: MigrationRegistry_0_1_10_BYTECODE_HASH,
+            storedRuntimeCode: MigrationRegistry_0_1_10_RUNTIME_CODE,
+            artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
+            dependencies: abi.decode(MigrationRegistry_0_1_10_DEPENDENCIES, (address[]))
+        });'''
+replacement = '''        suites[1] = DeploySuite({
+            suite: "migration-registry@0_1_10",
+            creationCode: MigrationRegistry_0_1_10_CREATION_CODE,
+            storedDeployedAddress: MigrationRegistry_0_1_10_DEPLOYED_ADDRESS,
+            storedBytecodeHash: MigrationRegistry_0_1_10_BYTECODE_HASH,
+            storedRuntimeCode: MigrationRegistry_0_1_10_RUNTIME_CODE,
+            artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
+            dependencies: abi.decode(MigrationRegistry_0_1_10_DEPENDENCIES, (address[]))
+        });
+        suites[2] = DeploySuite({
+            suite: "migration-registry@0_1_8",
+            creationCode: MigrationRegistry_0_1_8_CREATION_CODE,
+            storedDeployedAddress: MigrationRegistry_0_1_8_DEPLOYED_ADDRESS,
+            storedBytecodeHash: MigrationRegistry_0_1_8_BYTECODE_HASH,
+            storedRuntimeCode: MigrationRegistry_0_1_8_RUNTIME_CODE,
+            artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
+            dependencies: abi.decode(MigrationRegistry_0_1_8_DEPENDENCIES, (address[]))
+        });'''
+
+[[mutants]]
+name = "M20a migration-registry 0_1_8 key duplicates 0_1_7"
+file = "src/lib/LibMigrationRegistryReleased.sol"
+target = 'suite: "migration-registry@0_1_8",'
+replacement = 'suite: "migration-registry@0_1_7",'
+
+[[mutants]]
+name = "M20b migration-registry 0_1_10 key duplicates the candidate"
+file = "src/lib/LibMigrationRegistryReleased.sol"
+target = 'suite: "migration-registry@0_1_10",'
+replacement = 'suite: "migration-registry",'
+
+[[mutants]]
+name = "M21 migration-registry 0_1_10 creation code from 0_1_8"
+file = "src/lib/LibMigrationRegistryReleased.sol"
+target = "creationCode: MigrationRegistry_0_1_10_CREATION_CODE,"
+replacement = "creationCode: MigrationRegistry_0_1_8_CREATION_CODE,"
+
+[[mutants]]
+name = "M22 migration-registry 0_1_10 stored address from 0_1_8"
+file = "src/lib/LibMigrationRegistryReleased.sol"
+target = "storedDeployedAddress: MigrationRegistry_0_1_10_DEPLOYED_ADDRESS,"
+replacement = "storedDeployedAddress: MigrationRegistry_0_1_8_DEPLOYED_ADDRESS,"
+
+[[mutants]]
+name = "M23 migration-registry 0_1_10 stored hash from 0_1_8"
+file = "src/lib/LibMigrationRegistryReleased.sol"
+target = "storedBytecodeHash: MigrationRegistry_0_1_10_BYTECODE_HASH,"
+replacement = "storedBytecodeHash: MigrationRegistry_0_1_8_BYTECODE_HASH,"
+
+[[mutants]]
+name = "M24 migration-registry 0_1_10 runtime code from 0_1_8"
+file = "src/lib/LibMigrationRegistryReleased.sol"
+target = "storedRuntimeCode: MigrationRegistry_0_1_10_RUNTIME_CODE,"
+replacement = "storedRuntimeCode: MigrationRegistry_0_1_8_RUNTIME_CODE,"
+
+[[mutants]]
+name = "M25 migration-registry 0_1_10 artifact path changed"
+file = "src/lib/LibMigrationRegistryReleased.sol"
+target = '''storedRuntimeCode: MigrationRegistry_0_1_10_RUNTIME_CODE,
+            artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",'''
+replacement = '''storedRuntimeCode: MigrationRegistry_0_1_10_RUNTIME_CODE,
+            artifactPath: "src/concrete/Registry.sol:MigrationRegistry",'''
+
+[[mutants]]
+name = "M26 migration-registry 0_1_10 dependencies not decoded from the record"
+file = "src/lib/LibMigrationRegistryReleased.sol"
+target = "dependencies: abi.decode(MigrationRegistry_0_1_10_DEPENDENCIES, (address[]))"
+replacement = "dependencies: new address[](0)"
+
+[[mutants]]
+name = "M27 address-registry deploy address off by one"
+file = "src/lib/LibAddressRegistryDeploy.sol"
+target = "ADDRESS_REGISTRY_DEPLOYED_ADDRESS = ADDRESS_REGISTRY_ADDR;"
+replacement = "ADDRESS_REGISTRY_DEPLOYED_ADDRESS = address(uint160(ADDRESS_REGISTRY_ADDR) + 1);"
+
+[[mutants]]
+name = "M28 address-registry deploy codehash flipped"
+file = "src/lib/LibAddressRegistryDeploy.sol"
+target = "ADDRESS_REGISTRY_DEPLOYED_CODEHASH = ADDRESS_REGISTRY_HASH;"
+replacement = "ADDRESS_REGISTRY_DEPLOYED_CODEHASH = ~ADDRESS_REGISTRY_HASH;"
+
+[[mutants]]
+name = "M29 migration-registry deploy address off by one"
+file = "src/lib/LibMigrationRegistryDeploy.sol"
+target = "MIGRATION_REGISTRY_DEPLOYED_ADDRESS = MIGRATION_REGISTRY_ADDR;"
+replacement = "MIGRATION_REGISTRY_DEPLOYED_ADDRESS = address(uint160(MIGRATION_REGISTRY_ADDR) + 1);"
+
+[[mutants]]
+name = "M30 migration-registry deploy codehash flipped"
+file = "src/lib/LibMigrationRegistryDeploy.sol"
+target = "MIGRATION_REGISTRY_DEPLOYED_CODEHASH = MIGRATION_REGISTRY_HASH;"
+replacement = "MIGRATION_REGISTRY_DEPLOYED_CODEHASH = ~MIGRATION_REGISTRY_HASH;"
+
+[[mutants]]
+name = "M31a address-registry deploy aliases the 0_1_8 tag not the candidate"
+file = "src/lib/LibAddressRegistryDeploy.sol"
+target = '"../generated/candidate/AddressRegistry.sol"'
+replacement = '"../generated/0_1_8/AddressRegistry.sol"'
+
+[[mutants]]
+name = "M31b migration-registry deploy aliases the 0_1_8 tag not the candidate"
+file = "src/lib/LibMigrationRegistryDeploy.sol"
+target = '"../generated/candidate/MigrationRegistry.sol"'
+replacement = '"../generated/0_1_8/MigrationRegistry.sol"'
+
+[[mutants]]
+name = "M32a aggregate loses the generated marker"
+file = "src/lib/LibReleasedSuites.sol"
+target = '''// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.
+
+'''
+replacement = ""
+
+[[mutants]]
+name = "M32b address-registry released loses the generated marker"
+file = "src/lib/LibAddressRegistryReleased.sol"
+target = '''// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.
+
+'''
+replacement = ""
+
+[[mutants]]
+name = "M32c migration-registry released loses the generated marker"
+file = "src/lib/LibMigrationRegistryReleased.sol"
+target = '''// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.
+
+'''
+replacement = ""
+
+[[mutants]]
+name = "M32d address-registry deploy loses the generated marker"
+file = "src/lib/LibAddressRegistryDeploy.sol"
+target = '''// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.
+
+'''
+replacement = ""
+
+[[mutants]]
+name = "M32e migration-registry deploy loses the generated marker"
+file = "src/lib/LibMigrationRegistryDeploy.sol"
+target = '''// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.
+
+'''
+replacement = ""
