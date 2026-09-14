@@ -9,6 +9,11 @@ import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {LibReleasedSuitesAggregate} from "../lib/LibReleasedSuitesAggregate.sol";
 import {BuildHarness} from "../concrete/BuildHarness.sol";
 import {LibStringSet} from "../../src/lib/LibStringSet.sol";
+import {
+    LibCodeGen,
+    RAIN_COPYRIGHT_TEXT,
+    RAIN_SPDX_LICENSE_IDENTIFIER
+} from "rain-sol-codegen-0.1.37/src/lib/LibCodeGen.sol";
 
 /// @title BuildTest
 /// @notice `script/Build.sol`'s own declaration.
@@ -227,6 +232,50 @@ contract BuildTest is Test {
 
         for (uint256 i = 0; i < generated.length; i++) {
             assertEq(names[i], generated[i].contractName, "the names are not the declaration in order");
+        }
+    }
+
+    /// PROPERTY: for EVERY generated contract, the committed alias lib is
+    /// byte-exactly what the generator emits from THAT ENTRY — its
+    /// `contractName`, its `constantPrefix` and the candidate directory.
+    ///
+    /// `constantPrefix` is otherwise only ever asserted to be non-empty and
+    /// distinct, and neither says what it must be. It names every constant the
+    /// alias lib exports, so a prefix that is merely unique — `ADDRESS_REG` for
+    /// `ADDRESS_REGISTRY` — is a rename of the whole public surface
+    /// `LibAddressRegistry` and every consumer pins, and the next regeneration
+    /// is what performs it. Nothing else in the suite reads the declared prefix
+    /// at all: the emitter checks hard-code their own, so they agree with a
+    /// declaration they never read.
+    ///
+    /// Per entry rather than for one contract, because the emitter checks are
+    /// written for `AddressRegistry` alone and the second contract's alias lib
+    /// is therefore pinned by nothing — a generator that stopped emitting for
+    /// it, or emitted it under another prefix, is silent until a consumer fails
+    /// to compile.
+    ///
+    /// Reads only. The file this compares against is committed source other
+    /// suites compile, and regenerating it first would pass on a stale one by
+    /// overwriting it.
+    function testTheCommittedAliasLibsAreWhatTheDeclarationEmits() external view {
+        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
+
+        for (uint256 i = 0; i < generated.length; i++) {
+            string memory libraryName = string.concat("Lib", generated[i].contractName, "Deploy");
+            assertEq(
+                vm.readFile(LibRainDeploySnapshot.pathForLib(libraryName)),
+                string.concat(
+                    LibCodeGen.filePrefix(RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT),
+                    "\n",
+                    LibRainDeploySnapshot.aliasImportBlock(
+                        generated[i].contractName, generated[i].constantPrefix, LibRainDeploySnapshot.CANDIDATE
+                    ),
+                    LibRainDeploySnapshot.aliasLibraryBlock(
+                        generated[i].contractName, generated[i].constantPrefix, libraryName
+                    )
+                ),
+                string.concat("the committed alias lib is not what this entry emits: ", libraryName)
+            );
         }
     }
 }
