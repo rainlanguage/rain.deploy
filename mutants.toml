@@ -2,8 +2,8 @@
 root = "."
 command = ["sh", "check.sh"]
 proof = '(\d+) passed; (\d+) failed'
-fail-pattern = '\[FAIL[^\]]*\] (\w+)\('
-timeout-secs = 900
+fail-pattern = '\[FAIL[^\]]*\] (test\w+)\('
+timeout-secs = 1800
 
 [[mutants]]
 name = "M079 checkResolvedAddresses reverts after every read matched"
@@ -230,8 +230,8 @@ replacement = "                    \"forge verify-contract --chain \", networks[
 [[mutants]]
 name = "M111 deployToNetworks derived address guard only when nothing is deployed"
 file = "src/lib/LibRainDeploy.sol"
-target = "        address derivedAddress = zoltuAddress(creationCode);\n        if (derivedAddress != expectedAddress) {\n            revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);\n        }\n        uint256[] memory forkIds = createForks(vm, networks);"
-replacement = "        uint256[] memory forkIds = createForks(vm, networks);"
+target = "        address derivedAddress = zoltuAddress(creationCode);\n        if (derivedAddress != expectedAddress) {\n            revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);\n        }\n        uint256[] memory forkIds = createForks(vm, networks);\n        for (uint256 i = 0; i < networks.length; i++) {\n            vm.selectFork(forkIds[i]);\n            console2.log(\"Deploying to network:\", networks[i]);\n            console2.log(\"Block number:\", block.number);\n\n            if (expectedAddress.code.length == 0) {"
+replacement = "        address derivedAddress = zoltuAddress(creationCode);\n        uint256[] memory forkIds = createForks(vm, networks);\n        for (uint256 i = 0; i < networks.length; i++) {\n            vm.selectFork(forkIds[i]);\n            console2.log(\"Deploying to network:\", networks[i]);\n            console2.log(\"Block number:\", block.number);\n\n            if (expectedAddress.code.length == 0) {\n                if (derivedAddress != expectedAddress) {\n                    revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);\n                }"
 
 [[mutants]]
 name = "M112 deployAndBroadcast NoNetworks check dropped"
