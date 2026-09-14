@@ -1620,4 +1620,37 @@ contract LibRainDeployTest is Test {
         assertEq(deployedWord, uint256(uint160(0x7DA611e4146dCf0107407Bb331599acC53E8B62c)));
         assertEq(deployed.codehash, mockDeployableCodeHash());
     }
+
+    /// `isStartBlock` MUST read the code hash at the block it is handed, not at
+    /// the one after it. The block immediately before the Zoltu factory deploy
+    /// block has no code at the factory address at all, so it is not a start
+    /// block, however the block after it reads.
+    function testIsStartBlockOneBlockBeforeDeployBlock() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        assertFalse(
+            LibRainDeploy.isStartBlock(
+                vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, ZOLTU_BASE_DEPLOY_BLOCK - 1
+            )
+        );
+    }
+
+    /// `findDeployBlock` MUST answer with a block it has read the expected code
+    /// hash at, and MUST narrow the search on every step.
+    ///
+    /// The window here is the three blocks around the Zoltu factory deploy
+    /// block, so the very first block the search reads IS the answer. A search
+    /// that discards the block it just matched at answers with the block below
+    /// it, and one that cannot narrow a window this small never settles at all,
+    /// which is why the call is given a stipend: a search that halves its range
+    /// reads a handful of blocks, and anything that does not runs out of gas
+    /// instead of running forever.
+    function testFindDeployBlockWhereTheFirstReadIsTheAnswer() external {
+        vm.createSelectFork(LibRainDeploy.BASE, ZOLTU_BASE_DEPLOY_BLOCK + 1);
+        assertEq(
+            this.externalFindDeployBlock{gas: 1_000_000}(
+                LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, ZOLTU_BASE_DEPLOY_BLOCK - 1
+            ),
+            ZOLTU_BASE_DEPLOY_BLOCK
+        );
+    }
 }
