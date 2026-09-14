@@ -390,3 +390,15 @@ name = "Z124 aggregate writer hardcodes LIB_DIR"
 file = "src/lib/LibRainDeploySnapshot.sol"
 target = 'string memory path = pathForLib(libDir, RELEASED_SUITES_LIBRARY);'
 replacement = 'string memory path = pathForLib(LIB_DIR, RELEASED_SUITES_LIBRARY);'
+
+[[mutants]]
+name = "B103b storedDeployedAddress emits a literal address"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = '"_CREATION_CODE,\n            storedDeployedAddress: ",'
+replacement = '"_CREATION_CODE,\n            storedDeployedAddress: address(0), // ",'
+
+[[mutants]]
+name = "B107b dependencies emitted as an empty literal"
+file = "src/lib/LibRainDeploySnapshot.sol"
+target = '"\",\n            dependencies: abi.decode(",'
+replacement = '"\",\n            dependencies: new address[](0), // abi.decode(",'
