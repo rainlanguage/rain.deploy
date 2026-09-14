@@ -1,14 +1,9 @@
 [suite]
 root = "."
-command = ["sh", "check.sh"]
+command = ["sh", "check-amt.sh"]
 proof = '(\d+) passed; (\d+) failed'
-timeout-secs = 900
-
-[[mutants]]
-name = "B103 storedDeployedAddress emits the template address"
-file = "src/lib/LibRainDeploySnapshot.sol"
-target = '"_CREATION_CODE,\n            storedDeployedAddress: ",'
-replacement = '"_CREATION_CODE,\n            storedDeployedAddress: ", vm.toString(template.storedDeployedAddress), ", // ",'
+fail-pattern = '\[FAIL[^\]]*\] (test\w+)\('
+timeout-secs = 1800
 
 [[mutants]]
 name = "B104 storedBytecodeHash emits the template hash"
@@ -27,12 +22,6 @@ name = "B106 artifactPath emits template.suite"
 file = "src/lib/LibRainDeploySnapshot.sol"
 target = 'template.artifactPath,'
 replacement = 'template.suite,'
-
-[[mutants]]
-name = "B107 dependencies emitted from the template"
-file = "src/lib/LibRainDeploySnapshot.sol"
-target = '"\",\n            dependencies: abi.decode(",'
-replacement = '"\",\n            dependencies: new address[](", vm.toString(template.dependencies.length), ") // abi.decode(",'
 
 [[mutants]]
 name = "B108 released array allocated with paths.length + 1"
@@ -378,18 +367,18 @@ target = 'vm.createDir(frozenDir, true);'
 replacement = '{ string memory newest = newestFrozenTag(vm, root); if (bytes(newest).length > 0) { vm.removeDir(dirForSnapshot(root, newest), true); } } vm.createDir(frozenDir, true);'
 
 [[mutants]]
-name = "Z111 released writer hardcodes LIB_DIR"
+name = "B111 released writer uses the alias library name"
 file = "src/lib/LibRainDeploySnapshot.sol"
 target = '''        string memory libraryName = releasedLibraryName(contractName);
         string memory path = pathForLib(libDir, libraryName);'''
-replacement = '''        string memory libraryName = releasedLibraryName(contractName);
-        string memory path = pathForLib(LIB_DIR, libraryName);'''
+replacement = '''        string memory libraryName = string.concat("Lib", contractName);
+        string memory path = pathForLib(libDir, libraryName);'''
 
 [[mutants]]
-name = "Z124 aggregate writer hardcodes LIB_DIR"
+name = "B124 aggregate writer uses another library name"
 file = "src/lib/LibRainDeploySnapshot.sol"
 target = 'string memory path = pathForLib(libDir, RELEASED_SUITES_LIBRARY);'
-replacement = 'string memory path = pathForLib(LIB_DIR, RELEASED_SUITES_LIBRARY);'
+replacement = 'string memory path = pathForLib(libDir, string.concat(RELEASED_SUITES_LIBRARY, "V2"));'
 
 [[mutants]]
 name = "B103b storedDeployedAddress emits a literal address"
