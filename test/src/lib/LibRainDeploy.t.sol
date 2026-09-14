@@ -337,6 +337,18 @@ contract LibRainDeployTest is Test {
         this.externalDeployAndBroadcast(networks, 1, hex"", "", address(0), bytes32(0), dependencies);
     }
 
+    /// `deployAndBroadcast` MUST refuse an empty network set BEFORE it touches
+    /// the key. A zero private key has no wallet to remember, so a call with
+    /// neither a network to deploy to nor a usable key is what makes the order
+    /// observable from outside: the answer is `NoNetworks`, and the key is
+    /// never reached to report anything of its own.
+    function testDeployAndBroadcastNoNetworksBeforeTheKey() external {
+        string[] memory networks = new string[](0);
+        address[] memory dependencies = new address[](0);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        this.externalDeployAndBroadcast(networks, 0, hex"", "", address(0), bytes32(0), dependencies);
+    }
+
     /// `deployToNetworks` MUST revert with `NoNetworks` when given an empty
     /// networks array, before any other input is checked.
     function testDeployToNetworksNoNetworksReverts() external {
@@ -1242,6 +1254,19 @@ contract LibRainDeployTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalCheckResolvedAddressesOnNetworks(networks, address(this), ownerReadCalls(), expected(account));
+    }
+
+    /// `checkResolvedAddressesOnNetworks` MUST report the OUTERMOST refusal
+    /// when more than one applies at once. Given no networks, no reads and no
+    /// expected addresses, every refusal it has is true together, and the one
+    /// it names is `NoNetworks`: the network set is what the call is for, so a
+    /// caller that supplied nothing at all is told that rather than told about
+    /// reads it would only have run once it had a network to run them on.
+    function testCheckResolvedAddressesOnNetworksNoNetworksBeatsNoReads() external {
+        string[] memory networks = new string[](0);
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        this.externalCheckResolvedAddressesOnNetworks(networks, address(this), new bytes[](0), new address[](0));
     }
 
     /// `checkResolvedAddressesOnNetworks` MUST check the reads and expected
