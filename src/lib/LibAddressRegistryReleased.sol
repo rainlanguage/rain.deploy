@@ -23,12 +23,12 @@ import {
 } from "../generated/0_1_8/AddressRegistry.sol";
 
 import {
-    DEPLOYED_ADDRESS as AddressRegistry_0_1_9_DEPLOYED_ADDRESS,
-    BYTECODE_HASH as AddressRegistry_0_1_9_BYTECODE_HASH,
-    CREATION_CODE as AddressRegistry_0_1_9_CREATION_CODE,
-    RUNTIME_CODE as AddressRegistry_0_1_9_RUNTIME_CODE,
-    DEPENDENCIES as AddressRegistry_0_1_9_DEPENDENCIES
-} from "../generated/0_1_9/AddressRegistry.sol";
+    DEPLOYED_ADDRESS as AddressRegistry_0_1_10_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as AddressRegistry_0_1_10_BYTECODE_HASH,
+    CREATION_CODE as AddressRegistry_0_1_10_CREATION_CODE,
+    RUNTIME_CODE as AddressRegistry_0_1_10_RUNTIME_CODE,
+    DEPENDENCIES as AddressRegistry_0_1_10_DEPENDENCIES
+} from "../generated/0_1_10/AddressRegistry.sol";
 
 /// @title LibAddressRegistryReleased
 /// @notice Every frozen release of `AddressRegistry`: one entry per file in
@@ -70,13 +70,13 @@ library LibAddressRegistryReleased {
             dependencies: abi.decode(AddressRegistry_0_1_8_DEPENDENCIES, (address[]))
         });
         suites[2] = DeploySuite({
-            suite: "address-registry@0_1_9",
-            creationCode: AddressRegistry_0_1_9_CREATION_CODE,
-            storedDeployedAddress: AddressRegistry_0_1_9_DEPLOYED_ADDRESS,
-            storedBytecodeHash: AddressRegistry_0_1_9_BYTECODE_HASH,
-            storedRuntimeCode: AddressRegistry_0_1_9_RUNTIME_CODE,
+            suite: "address-registry@0_1_10",
+            creationCode: AddressRegistry_0_1_10_CREATION_CODE,
+            storedDeployedAddress: AddressRegistry_0_1_10_DEPLOYED_ADDRESS,
+            storedBytecodeHash: AddressRegistry_0_1_10_BYTECODE_HASH,
+            storedRuntimeCode: AddressRegistry_0_1_10_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-            dependencies: abi.decode(AddressRegistry_0_1_9_DEPENDENCIES, (address[]))
+            dependencies: abi.decode(AddressRegistry_0_1_10_DEPENDENCIES, (address[]))
         });
         return suites;
     }
