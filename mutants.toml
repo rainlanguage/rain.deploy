@@ -314,8 +314,14 @@ replacement = """
 [[mutants]]
 name = "M89 recordPathsForContract reads LIB_FS_ROOT"
 file = "src/lib/LibRainDeploySnapshot.sol"
-target = "        string[] memory paths = frozenSnapshotPaths(vm, recordRoot);"
-replacement = "        string[] memory paths = frozenSnapshotPaths(vm, LIB_FS_ROOT);"
+target = '''
+        string[] memory paths = frozenSnapshotPaths(vm, recordRoot);
+
+        string[] memory found = new string[](paths.length);'''
+replacement = '''
+        string[] memory paths = frozenSnapshotPaths(vm, LIB_FS_ROOT);
+
+        string[] memory found = new string[](paths.length);'''
 
 [[mutants]]
 name = "M90 recordPathsForContract keeps every contract"
@@ -390,8 +396,12 @@ replacement = """
 [[mutants]]
 name = "M98 releasedImportBlock drops the DeploySuite import"
 file = "src/lib/LibRainDeploySnapshot.sol"
-target = '        string memory imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";'
-replacement = '        string memory imports = "";'
+target = '''
+        string memory imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
+        for (uint256 i = 0; i < paths.length; i++) {'''
+replacement = '''
+        string memory imports = "";
+        for (uint256 i = 0; i < paths.length; i++) {'''
 
 [[mutants]]
 name = "M99 releasedImportBlock skips the last record"
