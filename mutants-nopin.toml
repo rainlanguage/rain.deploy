@@ -2,7 +2,7 @@
 root = "."
 command = ["sh", "check-nopin.sh"]
 proof = '(\d+) passed; (\d+) failed'
-fail-pattern = '\[FAIL[^\]]*\] (test\w+)\('
+fail-pattern = '\[FAIL.*?\] (test\w+)\('
 timeout-secs = 1800
 
 # ------------------------------------------------------- register: authority
@@ -288,3 +288,9 @@ name = "M22 fallback added"
 file = "src/concrete/AddressRegistry.sol"
 target = "mapping(bytes32 name => address account) internal sAddresses;"
 replacement = "mapping(bytes32 name => address account) internal sAddresses;\n\n    fallback() external {}"
+
+[[mutants]]
+name = "M22b receive added"
+file = "src/concrete/AddressRegistry.sol"
+target = "mapping(bytes32 name => address account) internal sAddresses;"
+replacement = "mapping(bytes32 name => address account) internal sAddresses;\n\n    receive() external payable {}"

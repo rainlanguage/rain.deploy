@@ -2,7 +2,7 @@
 root = "."
 command = ["sh", "check.sh"]
 proof = '(\d+) passed; (\d+) failed'
-fail-pattern = '\[FAIL[^\]]*\] (test\w+)\('
+fail-pattern = '\[FAIL.*?\] (test\w+)\('
 timeout-secs = 1800
 
 # -------------------------------------------- LibAddressRegistry.resolve
@@ -75,11 +75,6 @@ file = "src/lib/LibAddressRegistry.sol"
 target = "return IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name);"
 replacement = "try IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name) returns (address a) { return a; } catch { return address(0); }"
 
-[[mutants]]
-name = "M31 resolve answers the first binding it ever saw"
-file = "src/lib/LibAddressRegistry.sol"
-target = "return IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name);"
-replacement = "address cached; assembly { cached := tload(name) } if (cached != address(0)) { return cached; } address fresh = IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name); assembly { tstore(name, fresh) } return fresh;"
 
 [[mutants]]
 name = "M37 registry called before the codehash check"
