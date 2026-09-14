@@ -1,6 +1,6 @@
 [suite]
 root = "."
-command = ["sh", "check.sh"]
+command = ["sh", "probe.sh"]
 proof = '(\d+) passed; (\d+) failed'
 fail-pattern = '\[FAIL.*?\] (test\w+)\('
 timeout-secs = 900
