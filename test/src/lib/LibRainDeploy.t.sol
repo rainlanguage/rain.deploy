@@ -1590,4 +1590,34 @@ contract LibRainDeployTest is Test {
 
         assertEq(vm.getNonce(deployer), nonceBefore + 1);
     }
+
+    /// `findDeployBlock` MUST report `NotDeployed` for a target with no code,
+    /// rather than a code hash mismatch against the hash an empty account
+    /// answers with. Nothing at the address is not a deployment whose hash is
+    /// wrong, and the two are only told apart when the expected hash is not
+    /// the zero hash.
+    function testFindDeployBlockNotDeployedTakesPrecedenceOverCodeHash() external {
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NotDeployed.selector, address(0xdead)));
+        this.externalFindDeployBlock(address(0xdead), bytes32(uint256(1)), 0);
+    }
+
+    /// `deployZoltu` MUST answer with a clean address word even when the
+    /// scratch space it reads the factory's answer out of is dirty on entry.
+    /// The factory answers with a raw 20 byte address, so the 12 bytes above
+    /// it in the word are whatever was in scratch before the call.
+    function testDeployZoltuAnswersACleanWordOverDirtyScratch() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        assembly ("memory-safe") {
+            mstore(0, not(0))
+        }
+        address deployed = LibRainDeploy.deployZoltu(type(MockDeployable).creationCode);
+        uint256 deployedWord;
+        assembly ("memory-safe") {
+            deployedWord := deployed
+        }
+        // Pinned literal, the same address `testDeployZoltu` pins against the
+        // live factory on a fork.
+        assertEq(deployedWord, uint256(uint160(0x7DA611e4146dCf0107407Bb331599acC53E8B62c)));
+        assertEq(deployed.codehash, mockDeployableCodeHash());
+    }
 }
