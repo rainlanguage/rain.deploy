@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.16.2/src/Test.sol";
 import {GeneratedContract} from "../../script/Build.sol";
 import {DeployCandidate} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {LibCodeGen} from "rain-sol-codegen-0.1.37/src/lib/LibCodeGen.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {LibReleasedSuitesAggregate} from "../lib/LibReleasedSuitesAggregate.sol";
 import {BuildHarness} from "../concrete/BuildHarness.sol";
@@ -227,6 +228,80 @@ contract BuildTest is Test {
 
         for (uint256 i = 0; i < generated.length; i++) {
             assertEq(names[i], generated[i].contractName, "the names are not the declaration in order");
+        }
+    }
+
+    /// PROPERTY: EVERY generated contract's committed alias lib is byte-exactly
+    /// what the generator emits for it today.
+    ///
+    /// `LibRainDeploySnapshotTest.testTheCommittedAliasLibIsWhatTheGeneratorEmits`
+    /// asserts this of `AddressRegistry` by name, so every other contract's
+    /// alias lib is pinned by nothing at all: its two constants are the deploy
+    /// address and code hash every consumer resolves against, and a hand edit
+    /// to either, or a generator nobody re-ran after the snapshot moved, is a
+    /// lib that compiles and lies while the whole suite stays green.
+    ///
+    /// Driven from `generatedContracts()` rather than from a list here, so a
+    /// contract is covered by having been declared.
+    function testEveryCommittedAliasLibIsWhatTheGeneratorEmits() external view {
+        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
+
+        for (uint256 i = 0; i < generated.length; i++) {
+            string memory libraryName = string.concat("Lib", generated[i].contractName, "Deploy");
+
+            assertEq(
+                vm.readFile(LibRainDeploySnapshot.pathForLib(libraryName)),
+                string.concat(
+                    LibCodeGen.filePrefix(),
+                    "\n",
+                    LibRainDeploySnapshot.aliasImportBlock(
+                        generated[i].contractName, generated[i].constantPrefix, LibRainDeploySnapshot.CANDIDATE
+                    ),
+                    LibRainDeploySnapshot.aliasLibraryBlock(
+                        generated[i].contractName, generated[i].constantPrefix, libraryName
+                    )
+                ),
+                string.concat("committed alias lib is not what the generator emits: ", generated[i].contractName)
+            );
+        }
+    }
+
+    /// PROPERTY: EVERY generated contract's committed released-suites lib is
+    /// byte-exactly what the generator emits from this repo's real record
+    /// today.
+    ///
+    /// `LibRainDeploySnapshotTest.testTheCommittedReleasedLibIsWhatTheGeneratorEmits`
+    /// asserts this of `AddressRegistry` by name, so every other contract's
+    /// released lib is pinned only by what the record check can reach through
+    /// it. That check walks record -> declaration by DERIVED ADDRESS, so it
+    /// sees a release dropped from the declaration and nothing else: the order
+    /// the entries are declared in, the suite key and artifact path emitted
+    /// beside them, the `abi.decode` of the frozen dependency list, and the
+    /// generated-file header are all outside it, and a hand edit to any of them
+    /// is a diff nobody looks at.
+    ///
+    /// Driven from `generatedContracts()` for the reason the alias half is.
+    function testEveryCommittedReleasedLibIsWhatTheGeneratorEmits() external view {
+        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
+
+        for (uint256 i = 0; i < generated.length; i++) {
+            string memory libraryName = LibRainDeploySnapshot.releasedLibraryName(generated[i].contractName);
+            string[] memory paths = LibRainDeploySnapshot.recordPathsForContract(
+                vm, LibRainDeploySnapshot.LIB_FS_ROOT, generated[i].contractName
+            );
+
+            assertEq(
+                vm.readFile(LibRainDeploySnapshot.pathForLib(libraryName)),
+                string.concat(
+                    LibCodeGen.filePrefix(),
+                    "\n",
+                    LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+                    LibRainDeploySnapshot.releasedLibraryBlock(
+                        vm, libraryName, generated[i].contractName, paths, generated[i].candidate.snapshot
+                    )
+                ),
+                string.concat("committed released lib is not what the generator emits: ", generated[i].contractName)
+            );
         }
     }
 }
