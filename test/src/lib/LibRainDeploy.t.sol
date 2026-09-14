@@ -1590,4 +1590,94 @@ contract LibRainDeployTest is Test {
 
         assertEq(vm.getNonce(deployer), nonceBefore + 1);
     }
+
+    /// `deployToNetworks` MUST verify the code hash on a network it SKIPS, not
+    /// only on one it deploys to.
+    ///
+    /// The skip branch exists because the Zoltu deploy is idempotent, and it is
+    /// entered on the strength of `expectedAddress` holding ANY code at all.
+    /// Code that is not the expected contract is the one case where that
+    /// reasoning does not hold: the deterministic address is burned, a rerun
+    /// can never take it back, and reporting it as an already-deployed success
+    /// is what would let a migration be pointed at it.
+    ///
+    /// Every other skip test in this suite skips something the deploy really
+    /// did put there, so the hash matched for a reason that has nothing to do
+    /// with the check, and the check could have been anywhere.
+    function testDeployToNetworksSkipBranchChecksTheCodeHash() external {
+        vm.makePersistent(address(this));
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+
+        address expectedAddress = mockDeployableAddress();
+        // Absent on the fork before the etch, so what the call reads is the
+        // foreign code this test put there rather than anything arbitrum holds.
+        assertEq(expectedAddress.code.length, 0);
+        vm.etch(expectedAddress, hex"00");
+        vm.makePersistent(expectedAddress);
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedCodeHash.selector, mockDeployableCodeHash(), keccak256(hex"00")
+            )
+        );
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            expectedAddress,
+            mockDeployableCodeHash(),
+            dependencies
+        );
+    }
+
+    /// `deployAndBroadcast` MUST REMEMBER the private key, not merely derive
+    /// the address it belongs to.
+    ///
+    /// A broadcast is only sent if the wallet holds a key that can sign for the
+    /// sender, and `vm.rememberKey` is what puts it there. Deriving the same
+    /// address with `vm.addr` names an account nothing can sign for, which a
+    /// test that only watches the sender cannot tell apart, because forge
+    /// attributes the calls either way and only a real `--broadcast` run needs
+    /// the signature.
+    function testDeployAndBroadcastRemembersTheKey() external {
+        uint256 deployerPrivateKey = 0xB0B;
+        address deployer = vm.addr(deployerPrivateKey);
+        // Stated rather than assumed: the key is not in the wallet before the
+        // call, so finding it there afterwards is what the call did.
+        assertFalse(walletsHold(deployer));
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        this.externalDeployAndBroadcast(
+            networks,
+            deployerPrivateKey,
+            type(MockDeployable).creationCode,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            dependencies
+        );
+
+        assertTrue(walletsHold(deployer));
+    }
+
+    /// Whether the forge wallet holds a key for the given address.
+    /// @param account The address to look for.
+    /// @return Whether the wallet holds it.
+    function walletsHold(address account) internal view returns (bool) {
+        address[] memory wallets = vm.getWallets();
+        for (uint256 i = 0; i < wallets.length; i++) {
+            if (wallets[i] == account) {
+                return true;
+            }
+        }
+        return false;
+    }
 }
