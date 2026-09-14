@@ -1,0 +1,288 @@
+[suite]
+root = "."
+command = ["sh", "check.sh"]
+proof = '(\d+) passed; (\d+) failed'
+fail-pattern = '\[FAIL[^\]]*\] (\w+)\('
+timeout-secs = 900
+
+[[mutants]]
+name = "M079 checkResolvedAddresses reverts after every read matched"
+file = "src/lib/LibRainDeploy.sol"
+target = "                revert UnexpectedResolvedAddress(network, target, i, expectedAddresses[i], actual);\n            }\n        }\n    }"
+replacement = "                revert UnexpectedResolvedAddress(network, target, i, expectedAddresses[i], actual);\n            }\n        }\n        revert NoResolvedAddressReads(target);\n    }"
+
+[[mutants]]
+name = "M080 checkResolvedAddresses truncates the word to uint160 before the range check"
+file = "src/lib/LibRainDeploy.sol"
+target = "            uint256 word = abi.decode(returnData, (uint256));"
+replacement = "            uint256 word = uint256(uint160(abi.decode(returnData, (uint256))));"
+
+[[mutants]]
+name = "M081 checkResolvedAddressesOnNetworks accepts zero networks"
+file = "src/lib/LibRainDeploy.sol"
+target = "            revert NoNetworks();\n        }\n        // Checked before any fork"
+replacement = "        }\n        // Checked before any fork"
+
+[[mutants]]
+name = "M082 checkResolvedAddressesOnNetworks pairing check dropped pre-fork"
+file = "src/lib/LibRainDeploy.sol"
+target = "        // than after an RPC round trip.\n        if (readCalls.length != expectedAddresses.length) {\n            revert ResolvedAddressesLengthMismatch(readCalls.length, expectedAddresses.length);\n        }"
+replacement = "        // than after an RPC round trip."
+
+[[mutants]]
+name = "M083 checkResolvedAddressesOnNetworks empty read check dropped pre-fork"
+file = "src/lib/LibRainDeploy.sol"
+target = "        // so it cannot be masked by an outage on the first network.\n        if (readCalls.length == 0) {\n            revert NoResolvedAddressReads(target);\n        }"
+replacement = "        // so it cannot be masked by an outage on the first network."
+
+[[mutants]]
+name = "M084 checkResolvedAddressesOnNetworks checks empty reads before NoNetworks"
+file = "src/lib/LibRainDeploy.sol"
+target = "    ) internal {\n        if (networks.length == 0) {\n            revert NoNetworks();\n        }"
+replacement = "    ) internal {\n        if (readCalls.length == 0) {\n            revert NoResolvedAddressReads(target);\n        }\n        if (networks.length == 0) {\n            revert NoNetworks();\n        }"
+
+[[mutants]]
+name = "M085 checkResolvedAddressesOnNetworks createSelectFork inside the loop"
+file = "src/lib/LibRainDeploy.sol"
+target = "        uint256[] memory forkIds = createForks(vm, networks);\n        for (uint256 i = 0; i < networks.length; i++) {\n            vm.selectFork(forkIds[i]);\n            console2.log(\"Checking resolved addresses on network:\", networks[i]);"
+replacement = "        for (uint256 i = 0; i < networks.length; i++) {\n            vm.createSelectFork(networks[i]);\n            console2.log(\"Checking resolved addresses on network:\", networks[i]);"
+
+[[mutants]]
+name = "M086 checkResolvedAddressesOnNetworks selects fork 0 every iteration"
+file = "src/lib/LibRainDeploy.sol"
+target = "            vm.selectFork(forkIds[i]);\n            console2.log(\"Checking resolved addresses on network:\", networks[i]);"
+replacement = "            vm.selectFork(forkIds[0]);\n            console2.log(\"Checking resolved addresses on network:\", networks[i]);"
+
+[[mutants]]
+name = "M087 checkResolvedAddressesOnNetworks names networks[0] on every network"
+file = "src/lib/LibRainDeploy.sol"
+target = "            checkResolvedAddresses(networks[i], target, readCalls, expectedAddresses);"
+replacement = "            checkResolvedAddresses(networks[0], target, readCalls, expectedAddresses);"
+
+[[mutants]]
+name = "M088 checkResolvedAddressesOnNetworks skips the last network"
+file = "src/lib/LibRainDeploy.sol"
+target = "        for (uint256 i = 0; i < networks.length; i++) {\n            vm.selectFork(forkIds[i]);\n            console2.log(\"Checking resolved addresses on network:\", networks[i]);"
+replacement = "        for (uint256 i = 0; i + 1 < networks.length; i++) {\n            vm.selectFork(forkIds[i]);\n            console2.log(\"Checking resolved addresses on network:\", networks[i]);"
+
+[[mutants]]
+name = "M089 deployToNetworks accepts zero networks"
+file = "src/lib/LibRainDeploy.sol"
+target = "    ) internal returns (address) {\n        if (networks.length == 0) {\n            revert NoNetworks();\n        }\n        // The Zoltu factory deploys"
+replacement = "    ) internal returns (address) {\n        if (networks.length == 0) {\n        }\n        // The Zoltu factory deploys"
+
+[[mutants]]
+name = "M090a deployToNetworks derived address guard dropped"
+file = "src/lib/LibRainDeploy.sol"
+target = "        if (derivedAddress != expectedAddress) {\n            revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);\n        }"
+replacement = "        if (derivedAddress != expectedAddress) {\n        }"
+
+[[mutants]]
+name = "M090b deployToNetworks derived address guard swaps the error args"
+file = "src/lib/LibRainDeploy.sol"
+target = "            revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);"
+replacement = "            revert UnexpectedDeployedAddress(derivedAddress, expectedAddress);"
+
+[[mutants]]
+name = "M090c deployToNetworks derived address guard compares against zero"
+file = "src/lib/LibRainDeploy.sol"
+target = "        if (derivedAddress != expectedAddress) {\n            revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);\n        }"
+replacement = "        if (derivedAddress == address(0)) {\n            revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);\n        }"
+
+[[mutants]]
+name = "M091 deployToNetworks derived address guard moved after createForks"
+file = "src/lib/LibRainDeploy.sol"
+target = "        address derivedAddress = zoltuAddress(creationCode);\n        if (derivedAddress != expectedAddress) {\n            revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);\n        }\n        uint256[] memory forkIds = createForks(vm, networks);"
+replacement = "        uint256[] memory forkIds = createForks(vm, networks);\n        address derivedAddress = zoltuAddress(creationCode);\n        if (derivedAddress != expectedAddress) {\n            revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);\n        }"
+
+[[mutants]]
+name = "M092 deployToNetworks createSelectFork inside the loop"
+file = "src/lib/LibRainDeploy.sol"
+target = "        uint256[] memory forkIds = createForks(vm, networks);\n        for (uint256 i = 0; i < networks.length; i++) {\n            vm.selectFork(forkIds[i]);\n            console2.log(\"Deploying to network:\", networks[i]);"
+replacement = "        for (uint256 i = 0; i < networks.length; i++) {\n            vm.createSelectFork(networks[i]);\n            console2.log(\"Deploying to network:\", networks[i]);"
+
+[[mutants]]
+name = "M093 deployToNetworks selects fork 0 every iteration"
+file = "src/lib/LibRainDeploy.sol"
+target = "            vm.selectFork(forkIds[i]);\n            console2.log(\"Deploying to network:\", networks[i]);"
+replacement = "            vm.selectFork(forkIds[0]);\n            console2.log(\"Deploying to network:\", networks[i]);"
+
+[[mutants]]
+name = "M094 deployToNetworks deploy/skip branch inverted"
+file = "src/lib/LibRainDeploy.sol"
+target = "            if (expectedAddress.code.length == 0) {\n                // Nothing is deployed here yet"
+replacement = "            if (expectedAddress.code.length != 0) {\n                // Nothing is deployed here yet"
+
+[[mutants]]
+name = "M095 deployToNetworks missing Zoltu factory check dropped"
+file = "src/lib/LibRainDeploy.sol"
+target = "                if (ZOLTU_FACTORY.code.length == 0) {\n                    revert MissingDependency(networks[i], ZOLTU_FACTORY);\n                }"
+replacement = "                if (ZOLTU_FACTORY.code.length == 0) {\n                }"
+
+[[mutants]]
+name = "M096a deployToNetworks factory codehash check dropped"
+file = "src/lib/LibRainDeploy.sol"
+target = "                if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {\n                    revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);\n                }"
+replacement = "                if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {\n                }"
+
+[[mutants]]
+name = "M096b deployToNetworks factory codehash error swaps the hashes"
+file = "src/lib/LibRainDeploy.sol"
+target = "                    revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);"
+replacement = "                    revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY.codehash, ZOLTU_FACTORY_CODEHASH);"
+
+[[mutants]]
+name = "M097 deployToNetworks codehash check precedes the code length check"
+file = "src/lib/LibRainDeploy.sol"
+target = "                if (ZOLTU_FACTORY.code.length == 0) {\n                    revert MissingDependency(networks[i], ZOLTU_FACTORY);\n                }\n                if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {\n                    revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);\n                }"
+replacement = "                if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {\n                    revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);\n                }\n                if (ZOLTU_FACTORY.code.length == 0) {\n                    revert MissingDependency(networks[i], ZOLTU_FACTORY);\n                }"
+
+[[mutants]]
+name = "M098a deployToNetworks dependency loop dropped"
+file = "src/lib/LibRainDeploy.sol"
+target = "                    if (dependencies[j].code.length == 0) {\n                        revert MissingDependency(networks[i], dependencies[j]);\n                    }"
+replacement = "                    if (dependencies[j].code.length == 0) {\n                    }"
+
+[[mutants]]
+name = "M098b deployToNetworks missing dependency error names dependencies[0]"
+file = "src/lib/LibRainDeploy.sol"
+target = "                        revert MissingDependency(networks[i], dependencies[j]);"
+replacement = "                        revert MissingDependency(networks[i], dependencies[0]);"
+
+[[mutants]]
+name = "M098c deployToNetworks dependency check inverted"
+file = "src/lib/LibRainDeploy.sol"
+target = "                    if (dependencies[j].code.length == 0) {\n                        revert MissingDependency(networks[i], dependencies[j]);"
+replacement = "                    if (dependencies[j].code.length != 0) {\n                        revert MissingDependency(networks[i], dependencies[j]);"
+
+[[mutants]]
+name = "M099 deployToNetworks skips the last dependency"
+file = "src/lib/LibRainDeploy.sol"
+target = "                for (uint256 j = 0; j < dependencies.length; j++) {"
+replacement = "                for (uint256 j = 0; j + 1 < dependencies.length; j++) {"
+
+[[mutants]]
+name = "M101a deployToNetworks broadcasts from address(this)"
+file = "src/lib/LibRainDeploy.sol"
+target = "                vm.startBroadcast(deployer);"
+replacement = "                vm.startBroadcast(address(this));"
+
+[[mutants]]
+name = "M101b deployToNetworks drops startBroadcast and stopBroadcast"
+file = "src/lib/LibRainDeploy.sol"
+target = "                vm.startBroadcast(deployer);\n                address deployedAddress = deployZoltu(creationCode);\n                vm.stopBroadcast();"
+replacement = "                address deployedAddress = deployZoltu(creationCode);"
+
+[[mutants]]
+name = "M102a deployToNetworks deployed address check dropped"
+file = "src/lib/LibRainDeploy.sol"
+target = "                if (deployedAddress != expectedAddress) {\n                    revert UnexpectedDeployedAddress(expectedAddress, deployedAddress);\n                }"
+replacement = "                if (deployedAddress != expectedAddress) {\n                }"
+
+[[mutants]]
+name = "M102b deployToNetworks deployed address error swaps the args"
+file = "src/lib/LibRainDeploy.sol"
+target = "                    revert UnexpectedDeployedAddress(expectedAddress, deployedAddress);"
+replacement = "                    revert UnexpectedDeployedAddress(deployedAddress, expectedAddress);"
+
+[[mutants]]
+name = "M103 deployToNetworks deploys in the skip branch too"
+file = "src/lib/LibRainDeploy.sol"
+target = "                console2.log(\" - Code already exists at expected address, skipping deployment\");"
+replacement = "                console2.log(\" - Code already exists at expected address, skipping deployment\");\n                vm.startBroadcast(deployer);\n                deployZoltu(creationCode);\n                vm.stopBroadcast();"
+
+[[mutants]]
+name = "M104a deployToNetworks final codehash check dropped"
+file = "src/lib/LibRainDeploy.sol"
+target = "            if (expectedCodeHash != expectedAddress.codehash) {\n                revert UnexpectedDeployedCodeHash(expectedCodeHash, expectedAddress.codehash);\n            }"
+replacement = "            if (expectedCodeHash != expectedAddress.codehash) {\n            }"
+
+[[mutants]]
+name = "M104b deployToNetworks final codehash error swaps the args"
+file = "src/lib/LibRainDeploy.sol"
+target = "                revert UnexpectedDeployedCodeHash(expectedCodeHash, expectedAddress.codehash);"
+replacement = "                revert UnexpectedDeployedCodeHash(expectedAddress.codehash, expectedCodeHash);"
+
+[[mutants]]
+name = "M107 deployToNetworks skips the last network"
+file = "src/lib/LibRainDeploy.sol"
+target = "        for (uint256 i = 0; i < networks.length; i++) {\n            vm.selectFork(forkIds[i]);\n            console2.log(\"Deploying to network:\", networks[i]);"
+replacement = "        for (uint256 i = 0; i + 1 < networks.length; i++) {\n            vm.selectFork(forkIds[i]);\n            console2.log(\"Deploying to network:\", networks[i]);"
+
+[[mutants]]
+name = "M108 deployToNetworks refuses empty dependencies"
+file = "src/lib/LibRainDeploy.sol"
+target = "                for (uint256 j = 0; j < dependencies.length; j++) {"
+replacement = "                if (dependencies.length == 0) {\n                    revert MissingDependency(networks[i], address(0));\n                }\n                for (uint256 j = 0; j < dependencies.length; j++) {"
+
+[[mutants]]
+name = "M109 deployToNetworks returns address zero"
+file = "src/lib/LibRainDeploy.sol"
+target = "        return expectedAddress;"
+replacement = "        return address(0);"
+
+[[mutants]]
+name = "M110 deployToNetworks verification log drops the contract path"
+file = "src/lib/LibRainDeploy.sol"
+target = "                    \"forge verify-contract --chain \", networks[i], \" \", vm.toString(expectedAddress), \" \", contractPath"
+replacement = "                    \"forge verify-contract --chain \", networks[i], \" \", vm.toString(expectedAddress), \" \", \"\""
+
+[[mutants]]
+name = "M111 deployToNetworks derived address guard only when nothing is deployed"
+file = "src/lib/LibRainDeploy.sol"
+target = "        address derivedAddress = zoltuAddress(creationCode);\n        if (derivedAddress != expectedAddress) {\n            revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);\n        }\n        uint256[] memory forkIds = createForks(vm, networks);"
+replacement = "        uint256[] memory forkIds = createForks(vm, networks);"
+
+[[mutants]]
+name = "M112 deployAndBroadcast NoNetworks check dropped"
+file = "src/lib/LibRainDeploy.sol"
+target = "            revert NoNetworks();\n        }\n        address deployer = vm.rememberKey(deployerPrivateKey);"
+replacement = "        }\n        address deployer = vm.rememberKey(deployerPrivateKey);"
+
+[[mutants]]
+name = "M113a deployAndBroadcast derives the deployer with vm.addr"
+file = "src/lib/LibRainDeploy.sol"
+target = "        address deployer = vm.rememberKey(deployerPrivateKey);"
+replacement = "        address deployer = vm.addr(deployerPrivateKey);"
+
+[[mutants]]
+name = "M113b deployAndBroadcast uses a constant deployer"
+file = "src/lib/LibRainDeploy.sol"
+target = "        address deployer = vm.rememberKey(deployerPrivateKey);"
+replacement = "        address deployer = address(uint160(deployerPrivateKey));"
+
+[[mutants]]
+name = "M114a deployAndBroadcast passes empty dependencies"
+file = "src/lib/LibRainDeploy.sol"
+target = "            vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies\n        );"
+replacement = "            vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, new address[](0)\n        );"
+
+[[mutants]]
+name = "M114b deployAndBroadcast passes a zero code hash"
+file = "src/lib/LibRainDeploy.sol"
+target = "            vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies\n        );"
+replacement = "            vm, networks, deployer, creationCode, contractPath, expectedAddress, bytes32(0), dependencies\n        );"
+
+[[mutants]]
+name = "M115 deployAndBroadcast returns address zero"
+file = "src/lib/LibRainDeploy.sol"
+target = "        return deployToNetworks(\n            vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies\n        );"
+replacement = "        deployToNetworks(\n            vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies\n        );\n        return address(0);"
+
+[[mutants]]
+name = "M100 deployToNetworks dependency checks hoisted above the skip branch"
+file = "src/lib/LibRainDeploy.sol"
+target = "            if (expectedAddress.code.length == 0) {\n                // Nothing is deployed here yet"
+replacement = "            for (uint256 j = 0; j < dependencies.length; j++) {\n                if (dependencies[j].code.length == 0) {\n                    revert MissingDependency(networks[i], dependencies[j]);\n                }\n            }\n            if (expectedAddress.code.length == 0) {\n                // Nothing is deployed here yet"
+
+[[mutants]]
+name = "M105 deployToNetworks codehash check only in the deploy branch"
+file = "src/lib/LibRainDeploy.sol"
+target = "            } else {\n                // Already deployed on this network. The Zoltu deploy is\n                // idempotent, so skip it without checking dependencies: an\n                // already-deployed network needs neither the Zoltu factory nor\n                // its dependencies present to remain deployed, which keeps a\n                // rerun a clean no-op here.\n                console2.log(\" - Code already exists at expected address, skipping deployment\");\n            }\n            console2.log(\" - Final Address:\", expectedAddress);\n            console2.log(\" - Verifying code hash\");\n            if (expectedCodeHash != expectedAddress.codehash) {\n                revert UnexpectedDeployedCodeHash(expectedCodeHash, expectedAddress.codehash);\n            }"
+replacement = "                if (expectedCodeHash != expectedAddress.codehash) {\n                    revert UnexpectedDeployedCodeHash(expectedCodeHash, expectedAddress.codehash);\n                }\n            } else {\n                console2.log(\" - Code already exists at expected address, skipping deployment\");\n            }\n            console2.log(\" - Final Address:\", expectedAddress);\n            console2.log(\" - Verifying code hash\");"
+
+[[mutants]]
+name = "M106 deployToNetworks codehash check only in the skip branch"
+file = "src/lib/LibRainDeploy.sol"
+target = "            } else {\n                // Already deployed on this network. The Zoltu deploy is\n                // idempotent, so skip it without checking dependencies: an\n                // already-deployed network needs neither the Zoltu factory nor\n                // its dependencies present to remain deployed, which keeps a\n                // rerun a clean no-op here.\n                console2.log(\" - Code already exists at expected address, skipping deployment\");\n            }\n            console2.log(\" - Final Address:\", expectedAddress);\n            console2.log(\" - Verifying code hash\");\n            if (expectedCodeHash != expectedAddress.codehash) {\n                revert UnexpectedDeployedCodeHash(expectedCodeHash, expectedAddress.codehash);\n            }"
+replacement = "            } else {\n                console2.log(\" - Code already exists at expected address, skipping deployment\");\n                if (expectedCodeHash != expectedAddress.codehash) {\n                    revert UnexpectedDeployedCodeHash(expectedCodeHash, expectedAddress.codehash);\n                }\n            }\n            console2.log(\" - Final Address:\", expectedAddress);\n            console2.log(\" - Verifying code hash\");"
