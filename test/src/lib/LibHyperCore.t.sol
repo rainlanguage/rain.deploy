@@ -6,6 +6,7 @@ import {Test, Vm} from "forge-std-1.16.2/src/Test.sol";
 
 import {LibHyperCore} from "../../../src/lib/LibHyperCore.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibAccountCode} from "../../lib/LibAccountCode.sol";
 
 /// @title LibHyperCoreTest
 /// @notice The EVM -> Core credit, driven both against the system contract's
@@ -156,6 +157,7 @@ contract LibHyperCoreTest is Test {
 
         vm.assume(code.length > 0);
         vm.assume(keccak256(code) != LibHyperCore.HYPE_SYSTEM_CODEHASH);
+        vm.assume(!LibAccountCode.hasDelegationPrefix(code));
         vm.etch(LibHyperCore.HYPE_SYSTEM_ADDRESS, code);
         vm.expectRevert(
             abi.encodeWithSelector(
