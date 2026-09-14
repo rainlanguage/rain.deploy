@@ -33,8 +33,8 @@ import {RainDeployVerifySnapshot} from "../../../src/abstract/RainDeployVerifySn
 ///
 /// This contract binds neither half itself. Binding one would inherit its test
 /// functions here, which is a second place they run rather than anything said
-/// about the union, and binding the chain half would put seven RPC endpoints
-/// behind a statement about a type.
+/// about the union, and binding the chain half would put an RPC endpoint per
+/// supported network behind a statement about a type.
 contract RainDeployVerifyTest is Test {
     /// A `RainDeployVerify` binding MUST be a `RainDeployVerifyChain` and a
     /// `RainDeployVerifySnapshot`, both at once.
