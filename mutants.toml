@@ -1,0 +1,80 @@
+[suite]
+root = "."
+command = ["sh", "check.sh"]
+proof = '(\d+) passed; (\d+) failed'
+timeout-secs = 900
+
+[[mutants]]
+name = "M01 holds never returns true on a match"
+file = "src/lib/LibStringSet.sol"
+target = "                return true;"
+replacement = "                return false;"
+
+[[mutants]]
+name = "M02 holds returns true after a full miss"
+file = "src/lib/LibStringSet.sol"
+target = "        return false;"
+replacement = "        return true;"
+
+[[mutants]]
+name = "M03 empty haystack reports held"
+file = "src/lib/LibStringSet.sol"
+target = "        return false;"
+replacement = "        return haystack.length == 0;"
+
+[[mutants]]
+name = "M04 loop skips index 0"
+file = "src/lib/LibStringSet.sol"
+target = "uint256 i = 0; i < haystack.length"
+replacement = "uint256 i = 1; i < haystack.length"
+
+[[mutants]]
+name = "M05 loop skips the last index"
+file = "src/lib/LibStringSet.sol"
+target = "i < haystack.length; i++"
+replacement = "i + 1 < haystack.length; i++"
+
+[[mutants]]
+name = "M06 compares length only"
+file = "src/lib/LibStringSet.sol"
+target = "keccak256(bytes(haystack[i])) == keccak256(bytes(needle))"
+replacement = "bytes(haystack[i]).length == bytes(needle).length"
+
+[[mutants]]
+name = "M07 compares length and first byte only"
+file = "src/lib/LibStringSet.sol"
+target = "keccak256(bytes(haystack[i])) == keccak256(bytes(needle))"
+replacement = "bytes(haystack[i]).length == bytes(needle).length && (bytes(needle).length == 0 || bytes(haystack[i])[0] == bytes(needle)[0])"
+
+[[mutants]]
+name = "M08 empty needle is always held"
+file = "src/lib/LibStringSet.sol"
+target = "        for (uint256 i = 0; i < haystack.length; i++) {"
+replacement = "        if (bytes(needle).length == 0) return true;\n        for (uint256 i = 0; i < haystack.length; i++) {"
+
+[[mutants]]
+name = "M09 equality by memory pointer identity not value"
+file = "src/lib/LibStringSet.sol"
+target = "            if (keccak256(bytes(haystack[i])) == keccak256(bytes(needle))) {"
+replacement = "            bool same;\n            string memory h = haystack[i];\n            assembly (\"memory-safe\") {\n                same := eq(h, needle)\n            }\n            if (same) {"
+
+[[mutants]]
+name = "M10 keeps looping and returns the last comparison"
+file = "src/lib/LibStringSet.sol"
+target = """        for (uint256 i = 0; i < haystack.length; i++) {
+            if (keccak256(bytes(haystack[i])) == keccak256(bytes(needle))) {
+                return true;
+            }
+        }
+        return false;"""
+replacement = """        bool found;
+        for (uint256 i = 0; i < haystack.length; i++) {
+            found = keccak256(bytes(haystack[i])) == keccak256(bytes(needle));
+        }
+        return found;"""
+
+[[mutants]]
+name = "M11 compares only the first 32 bytes of content"
+file = "src/lib/LibStringSet.sol"
+target = "            if (keccak256(bytes(haystack[i])) == keccak256(bytes(needle))) {"
+replacement = "            bytes32 hw;\n            bytes32 nw;\n            string memory h = haystack[i];\n            assembly (\"memory-safe\") {\n                hw := mload(add(h, 0x20))\n                nw := mload(add(needle, 0x20))\n            }\n            if (bytes(h).length == bytes(needle).length && hw == nw) {"
