@@ -1422,9 +1422,9 @@ contract LibRainDeployTest is Test {
     ///
     /// Two networks rather than `supportedNetworks()`. What is under test is
     /// that the loop visits every network it is given, which two prove as well
-    /// as seven; the roster itself is `testSupportedNetworks`'s job. These are
-    /// the two networks the rest of this suite forks, so the test does not
-    /// depend on the reliability of RPC endpoints nothing else here touches.
+    /// as the whole roster; the roster itself is `testSupportedNetworks`'s job.
+    /// These are the two networks the rest of this suite forks, so the test does
+    /// not depend on the reliability of RPC endpoints nothing else here touches.
     function testCheckResolvedAddressesOnNetworksEachNetwork() external {
         bytes32 name = keccak256("testCheckResolvedAddressesOnNetworksEachNetwork");
         address account = address(0xf00);
@@ -1472,8 +1472,8 @@ contract LibRainDeployTest is Test {
     /// just as happily — and the mismatch case above is one network, so it
     /// cannot tell them apart either. What separates them is a target that
     /// answers differently on a LATER network, which is exactly the deployment
-    /// this matrix exists for: one chain of seven holding a value nobody looked
-    /// at.
+    /// this matrix exists for: one chain of the roster holding a value nobody
+    /// looked at.
     ///
     /// The first network is the one the target agrees on, so nothing fails
     /// before the loop has to advance, and the failure names the SECOND network
