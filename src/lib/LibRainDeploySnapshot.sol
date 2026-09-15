@@ -392,6 +392,24 @@ library LibRainDeploySnapshot {
         return paths;
     }
 
+    /// Every file in the FROZEN record of a repo's REAL record.
+    ///
+    /// The spelling a repo's own checks call, so the root is not something
+    /// their call sites hand over and cannot be what one of them gets wrong. A
+    /// walk of a root nothing writes to finds nothing, forever and silently, so
+    /// pointing one somewhere else is how a record-anchored check is made inert
+    /// while it still reports green. The rooted spelling above is for a FIXTURE
+    /// record, a tree a test builds rather than the tree a repo asks about
+    /// itself.
+    ///
+    /// `testFrozenSnapshotPathsDefaultToTheWritersRecord` is where this default
+    /// is held to the writer's own paths.
+    /// @param vm The Vm instance for file operations.
+    /// @return Every frozen record file.
+    function frozenSnapshotPaths(Vm vm) internal view returns (string[] memory) {
+        return frozenSnapshotPaths(vm, LIB_FS_ROOT);
+    }
+
     /// The constants a snapshot declares below the `BYTECODE_HASH` that
     /// `LibFs.buildFileForTaggedContract` writes itself: the deploy address, the
     /// creation code, the runtime code and the frozen dependency list, in that

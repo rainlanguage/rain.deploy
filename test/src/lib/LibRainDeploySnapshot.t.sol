@@ -259,6 +259,41 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
+    /// The walk that takes NO root MUST read the tree the writer WRITES to.
+    ///
+    /// `testEveryFrozenSnapshotIsReleased` is that walk with nothing standing
+    /// behind it: pointed at any other root it returns an empty list forever
+    /// and passes with no subject, so what the default IS has to be asserted
+    /// rather than left to there being one spelling of the root.
+    ///
+    /// The oracle is `LibFs`'s own spelling of a record path rather than this
+    /// library's root, which is the constant a wrong default would have been
+    /// written instead of. Every path the default walk returns is one the
+    /// writer spells, and `0_1_7/AddressRegistry.sol` is one the writer has
+    /// already written — the record is append-only, so a repo that has cut a
+    /// release can never read as a repo that has not.
+    function testFrozenSnapshotPathsDefaultToTheWritersRecord() external view {
+        string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm);
+
+        MemoryKV pathSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < paths.length; i++) {
+            string[] memory components = vm.split(paths[i], "/");
+            assertEq(
+                paths[i],
+                LibRainDeploySnapshot.pathForSnapshot(
+                    components[components.length - 2], vm.replace(components[components.length - 1], ".sol", "")
+                )
+            );
+            pathSet = pathSet.set(MemoryKVKey.wrap(keccak256(bytes(paths[i]))), MemoryKVVal.wrap(0));
+        }
+
+        assertTrue(
+            pathSet.has(
+                MemoryKVKey.wrap(keccak256(bytes(LibRainDeploySnapshot.pathForSnapshot("0_1_7", "AddressRegistry"))))
+            )
+        );
+    }
+
     /// Where the depth rule is driven. Its own tree, for the reason
     /// `MISSING_FIXTURE_ROOT` is not `FIXTURE_ROOT`: forge runs the tests in a
     /// contract concurrently, and a walk asserted to find exactly one file
