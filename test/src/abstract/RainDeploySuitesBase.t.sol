@@ -68,9 +68,6 @@ contract RainDeploySuitesBaseTest is Test {
         }
     }
 
-    /// Two suites that record the SAME creation code MUST still be selectable
-    /// apart: they are separately deployable records, so the key is the only
-    /// thing that distinguishes them.
     function testSuitesSharingCreationCodeSelectApart() external view {
         DeploySuite memory released = sSuites.externalSuiteByName("address-registry@0_0_1");
         DeploySuite memory candidate = sSuites.externalSuiteByName("address-registry-candidate");
@@ -120,10 +117,7 @@ contract RainDeploySuitesBaseTest is Test {
     ///
     /// Refused where the key rules already are rather than at the substitution,
     /// so the guarantee holds for every `suiteByName` caller and not only for
-    /// `run()` — the argument `NoDeployCandidates` is already made of. It is
-    /// the key ALPHABET that refuses it, which admits no key of no bytes; a
-    /// length check beside that alphabet would be a second rule for one
-    /// property, and the two could disagree.
+    /// `run()` — the argument `NoDeployCandidates` is already made of.
     ///
     /// The reported index is asserted, not just the refusal. It is 1, the
     /// CANDIDATE, behind a released suite that is keyed properly: a check that
@@ -154,14 +148,6 @@ contract RainDeploySuitesBaseTest is Test {
     }
 
     /// A ONE BYTE key MUST be an ordinary key.
-    ///
-    /// The alphabet is about what a key may SAY, and carries no length floor
-    /// above the one byte it takes to say anything. Every other declaration in
-    /// this repo spells its keys at six bytes or more, so a refusal written
-    /// against any other short-key threshold passes all of them while refusing
-    /// a declaration that is entirely legal — and the repo would find that out
-    /// from the consumer that chose short keys, at the point it could no longer
-    /// deploy.
     function testShortestKeysSelectApart() external {
         ShortestKeyDeploySuites shortest = new ShortestKeyDeploySuites();
 
@@ -301,21 +287,6 @@ contract RainDeploySuitesBaseTest is Test {
         sameLength.externalSuiteByName("same-length-qqq");
     }
 
-    /// A key carrying the comma the key list is joined on MUST be refused, on
-    /// every reader.
-    ///
-    /// That list exists so a caller who does NOT already know the valid keys is
-    /// told them. Joined on `", "`, the TWO suite registry keyed `a,b` and `c`
-    /// renders `a,b, c` — which is what a THREE suite registry keyed `a`, `b`
-    /// and `c` says. The reader is told a different number of suites exist than
-    /// do, and `b`, declared nowhere, is handed to them as valid. The
-    /// declaration is refused rather than rendered, because a list that reads
-    /// back as a different set than the one it names is the hardcoded string
-    /// this registry replaces, spelled differently.
-    ///
-    /// The offending key is the RELEASED one here and the CANDIDATE in
-    /// `testEmptySuiteKeyReverts`, so between them a check that ran over either
-    /// side of the registry alone is caught.
     function testSeparatorKeyIsRefused() external {
         SeparatorKeyDeploySuites separated = new SeparatorKeyDeploySuites();
 
@@ -325,24 +296,13 @@ contract RainDeploySuitesBaseTest is Test {
         vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, 0, "a,b"));
         separated.externalSuiteNames();
 
-        // The key this declaration DOES name, refused with it: what is wrong is
-        // the declaration, not any one lookup against it.
         vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, 0, "a,b"));
         separated.externalSuiteByName("c");
 
-        // And the phantom the rendering invents. A registry that rendered this
-        // answers `b` with a list that names `b` as valid.
         vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, 0, "a,b"));
         separated.externalSuiteByName("b");
     }
 
-    /// The keys the alphabet ACCEPTS.
-    ///
-    /// A table rather than a declaration contract apiece: a fixture is sixty
-    /// lines to say one string, and the fixtures are what pin that the rule
-    /// runs on every reader. What is left to pin is WHICH keys it decides which
-    /// way, and the accepting half is what keeps the rule from being narrowed
-    /// into refusing the release keys `LibRainDeploySnapshot` generates.
     function testSuiteKeyAlphabetAccepts() external view {
         string[7] memory accepted =
             ["address-registry", "a", "a-b-c", "address-registry@0_1_10", "tofu-token-decimals@0_1_0", "a@z", "a@-_9"];
@@ -352,12 +312,6 @@ contract RainDeploySuitesBaseTest is Test {
         }
     }
 
-    /// The keys the alphabet REFUSES, each naming its own position back.
-    ///
-    /// The index is asserted with the key on every entry. It is the only handle
-    /// on which suite is at fault when the key itself is empty, and a refusal
-    /// reporting a fixed position would still pass a test that only asked
-    /// whether it reverted.
     function testSuiteKeyAlphabetRefuses() external {
         string[14] memory refused = [
             "",

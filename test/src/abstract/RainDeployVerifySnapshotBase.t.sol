@@ -438,7 +438,6 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// undeclared and make the check unusable the moment a repo releases twice.
     function testFrozenSnapshotCheckReachesEveryReleasedSuite() external view {
         DeploySuite[] memory released = releasedSuites();
-        // `second-address` first, `address-registry@0_0_1` second.
         DeploySuite[] memory reordered = new DeploySuite[](2);
         reordered[0] = released[1];
         reordered[1] = released[0];
@@ -596,9 +595,6 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         sMismatch.externalCheckCandidatesAnchoredToSource();
     }
 
-    /// Two suites that record the SAME creation code MUST both derive, which
-    /// is the ordinary state of a repo between a release and the next source
-    /// change.
     function testSuitesSharingCreationCodeAllDerive() external {
         DeploySuite[] memory suites = allSuites();
         assertEq(suites.length, 4);

@@ -30,8 +30,6 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
         return suiteNames();
     }
 
-    /// @param index Position in `allSuites()`, for the refusal to name.
-    /// @param suite The key to check.
     function externalCheckSuiteKey(uint256 index, string memory suite) external pure {
         checkSuiteKey(index, suite);
     }

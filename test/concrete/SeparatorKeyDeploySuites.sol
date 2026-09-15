@@ -13,15 +13,6 @@ import {
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
 } from "../../src/generated/candidate/AddressRegistry.sol";
 
-/// @title SeparatorKeyDeploySuites
-/// A TWO suite declaration whose RELEASED key carries the comma
-/// `suiteNames()` joins on, so the list renders `a,b, c` and reads back as the
-/// THREE keys `a`, `b` and `c` — `b` being declared nowhere and handed to a
-/// caller as valid.
-///
-/// The offending key is the released one, where `EmptyKeyDeploySuites` puts its
-/// own at the candidate, so between them a check that ran over either side of
-/// the registry alone is caught.
 contract SeparatorKeyDeploySuites is ExternalDeploySuites {
     /// @inheritdoc RainDeploySuitesBase
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
