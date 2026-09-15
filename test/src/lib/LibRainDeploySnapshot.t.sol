@@ -32,6 +32,86 @@ import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.
 contract LibRainDeploySnapshotTest is Test {
     using LibMemoryKV for MemoryKV;
 
+    /// A run MUST NOT inherit the fixtures of the run before it.
+    ///
+    /// Every test here reads before it removes and asserts after, so that an
+    /// assertion that reverts still reverts on a clean tree. A mismatched
+    /// `vm.expectRevert` is the case that discipline cannot cover: it fires at
+    /// the guarded call, which is upstream of the removal, so the run that
+    /// leaves a fixture behind is a run that already failed. What is left is
+    /// then read by the NEXT run as if the test had put it there — a leftover
+    /// `<tag>/` refuses the cut as `SnapshotAlreadyFrozen` before `freeze`
+    /// reaches the guard a test is there to observe, so one failure turns a
+    /// repeatable test into a permanently red one naming a cause that is not
+    /// its own.
+    ///
+    /// Clearing at the START of the run, rather than at the end of each test,
+    /// is what makes the outcome independent of the runs before it. It is also
+    /// the only point where clearing is safe: the roots are split one per test
+    /// because forge runs the tests in a contract concurrently, and forge runs
+    /// `setUp` once per contract before any of them, so nothing here is
+    /// removing a directory a test is holding.
+    function setUp() external {
+        string[] memory roots = fixtureRoots();
+        for (uint256 i = 0; i < roots.length; i++) {
+            clearFixtureRoot(roots[i]);
+        }
+    }
+
+    /// Removes one fixture root and everything under it, if it is there.
+    /// @param root The root to clear.
+    function clearFixtureRoot(string memory root) internal {
+        if (vm.exists(root)) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(root, true);
+        }
+    }
+
+    /// Every directory this contract writes fixtures into.
+    ///
+    /// `FROZEN_FIXTURE_ROOT` is deliberately absent: it is a committed fixture
+    /// rather than one a test writes, so clearing it would delete it from the
+    /// tree. A root added to this contract and not added here is a root that
+    /// keeps the defect this list exists to close.
+    /// @return The fixture roots, in no particular order.
+    function fixtureRoots() internal pure returns (string[] memory) {
+        string[] memory roots = new string[](33);
+        roots[0] = FIXTURE_ROOT;
+        roots[1] = MISSING_FIXTURE_ROOT;
+        roots[2] = NESTED_FIXTURE_ROOT;
+        roots[3] = TAG_SHAPED_FIXTURE_PARENT;
+        roots[4] = RELEASED_FIXTURE_ROOT;
+        roots[5] = SELECTED_FIXTURE_ROOT;
+        roots[6] = EMPTY_RELEASE_FIXTURE_ROOT;
+        roots[7] = NOTHING_TO_FREEZE_FIXTURE_ROOT;
+        roots[8] = FREEZE_FIXTURE_ROOT;
+        roots[9] = FREEZE_MULTI_FIXTURE_ROOT;
+        roots[10] = RECUT_FIXTURE_ROOT;
+        roots[11] = RECUT_EMPTY_FIXTURE_ROOT;
+        roots[12] = FREEZE_GUARD_FIXTURE_ROOT;
+        roots[13] = STALE_CUT_FIXTURE_ROOT;
+        roots[14] = GUARD_ORDER_FIXTURE_ROOT;
+        roots[15] = REFUSED_REGENERATION_FIXTURE_ROOT;
+        roots[16] = REGENERATION_COUNT_FIXTURE_ROOT;
+        roots[17] = LATE_FAILURE_FIXTURE_ROOT;
+        roots[18] = BAD_NAME_FIXTURE_ROOT;
+        roots[19] = APPEND_FIXTURE_ROOT;
+        roots[20] = NEWEST_FIXTURE_ROOT;
+        roots[21] = UNRELEASED_FIXTURE_ROOT;
+        roots[22] = BELOW_FIXTURE_ROOT;
+        roots[23] = EQUAL_FIXTURE_ROOT;
+        roots[24] = GREATER_FIXTURE_ROOT;
+        roots[25] = FIXTURE_LIB_ROOT;
+        roots[26] = LibRainDeploySnapshot.dirForSnapshot(SNAPSHOT_PATH_FIXTURE_DIR);
+        roots[27] = LibRainDeploySnapshot.dirForSnapshot(SNAPSHOT_DEFAULTS_FIXTURE_DIR);
+        roots[28] = LibRainDeploySnapshot.dirForSnapshot(HEADER_FIXTURE_DIR);
+        roots[29] = LibRainDeploySnapshot.dirForSnapshot(RECORD_FIXTURE_DIR);
+        roots[30] = LibRainDeploySnapshot.dirForSnapshot(ORDER_FIXTURE_DIR);
+        roots[31] = LibRainDeploySnapshot.dirForSnapshot(DEPENDENCIES_FIXTURE_DIR);
+        roots[32] = LibRainDeploySnapshot.dirForSnapshot(CONSENSUS_FIXTURE_DIR);
+        return roots;
+    }
+
     /// External wrapper so `vm.expectRevert` lands at the right call depth.
     /// @param version The version to convert.
     /// @return The tag.
@@ -472,6 +552,10 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
+    /// Where `testWriteSnapshotWritesTheSnapshotAtItsPath` points the writer.
+    /// Its own directory, for the reason `HEADER_FIXTURE_DIR` has one.
+    string constant SNAPSHOT_PATH_FIXTURE_DIR = "writeSnapshotNotATag";
+
     /// A snapshot MUST land at the path this library says it does, and writing
     /// one over a directory that is already there is the ORDINARY case: the
     /// rolling snapshot is regenerated into the same `candidate/` on every
@@ -489,7 +573,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// a path, and being a strict `X_Y_Z` triple on top of that is what makes it
     /// a release.
     function testWriteSnapshotWritesTheSnapshotAtItsPath() external {
-        string memory dir = "writeSnapshotNotATag";
+        string memory dir = SNAPSHOT_PATH_FIXTURE_DIR;
         assertFalse(LibRainDeploySnapshot.isTag(dir));
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(LibRainDeploySnapshot.dirForSnapshot(dir), true);
@@ -2310,6 +2394,51 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(record.length, 1);
     }
 
+    /// Where the run-start clear is driven, holding the residue a failed run of
+    /// `testFreezeChecksTheRecordItIsAppendingTo` leaves. Its own tree, for the
+    /// reason the other freeze fixtures have theirs, and because this one is
+    /// deliberately dirty before it is used.
+    string constant STALE_CUT_FIXTURE_ROOT = "test/generated-freeze-stale";
+
+    /// Clearing a fixture root MUST take the whole tree under it, so a cut left
+    /// by an earlier run cannot decide this one.
+    ///
+    /// The residue is the exact shape `freeze` leaves when its refusal does not
+    /// fire: a real `<tag>/` cut holding a record. That directory is what
+    /// `freeze` looks for FIRST, so a clear that missed it — or that removed
+    /// only an empty root — would answer `SnapshotAlreadyFrozen` here, and the
+    /// ordering guard this fixture is built to reach would never run. The
+    /// refusal is spelled out in full rather than asserted as "it reverted",
+    /// because a test that accepted any revert would accept that one.
+    function testClearingAFixtureRootRemovesAStaleCut() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        writeFixture(string.concat(STALE_CUT_FIXTURE_ROOT, "/", tag, "/", FIXTURE_CONTRACT, ".sol"));
+
+        clearFixtureRoot(STALE_CUT_FIXTURE_ROOT);
+        bool staleCutExists = vm.exists(LibRainDeploySnapshot.dirForSnapshot(STALE_CUT_FIXTURE_ROOT, tag));
+
+        // The fixture the freeze-guard test builds, on the tree the clear just
+        // ran over: a release newer than the tag being cut, and a rolling
+        // snapshot ready to freeze.
+        writeFixture(string.concat(STALE_CUT_FIXTURE_ROOT, "/9_9_9/", FIXTURE_CONTRACT, ".sol"));
+        writeRollingFixture(STALE_CUT_FIXTURE_ROOT, FIXTURE_CONTRACT);
+
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = FIXTURE_CONTRACT;
+
+        vm.expectRevert(abi.encodeWithSelector(NonMonotonicRelease.selector, tag, "9_9_9"));
+        this.externalFreezeAt(STALE_CUT_FIXTURE_ROOT, contractNames);
+
+        // Read while the fixture is still there, asserted once it is gone.
+        string[] memory record = LibRainDeploySnapshot.frozenSnapshotPaths(vm, STALE_CUT_FIXTURE_ROOT);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(STALE_CUT_FIXTURE_ROOT, true);
+
+        assertFalse(staleCutExists);
+        assertEq(record.length, 1);
+    }
+
     /// Where the guard ORDER is driven: a record that is already frozen, cut
     /// by a call that also names no contracts. Its own tree, for the reason
     /// the other freeze fixtures have theirs.
@@ -2702,6 +2831,10 @@ contract LibRainDeploySnapshotTest is Test {
         this.externalCheckReleaseFollowsRecord(FROZEN_FIXTURE_ROOT, tag);
     }
 
+    /// Where `testWriteSnapshotDefaultsToTheOrgHeader` points the writer. Its
+    /// own directory, for the reason `HEADER_FIXTURE_DIR` has one.
+    string constant SNAPSHOT_DEFAULTS_FIXTURE_DIR = "writeSnapshotDefaults";
+
     /// The defaulting `writeSnapshot` MUST write exactly what the parameterised
     /// one writes when handed this org's two values, in that order. A swap or a
     /// wrong constant is otherwise only visible as a header nobody reads.
@@ -2711,7 +2844,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// address that already has code. The files are on disk, so they outlive
     /// the revert.
     function testWriteSnapshotDefaultsToTheOrgHeader() external {
-        string memory dir = "writeSnapshotDefaults";
+        string memory dir = SNAPSHOT_DEFAULTS_FIXTURE_DIR;
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(LibRainDeploySnapshot.dirForSnapshot(dir), true);
 
