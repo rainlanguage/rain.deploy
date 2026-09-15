@@ -21,7 +21,7 @@ import {
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
-import {LibStringSet} from "../../../src/lib/LibStringSet.sol";
+import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.4/src/lib/LibMemoryKV.sol";
 
 /// @title LibRainDeploySnapshotTest
 /// @notice The guards on the release machinery every deploy repo inherits.
@@ -30,6 +30,8 @@ import {LibStringSet} from "../../../src/lib/LibStringSet.sol";
 /// nothing else exercises them — and a guard nobody has seen fire is a guard
 /// nobody knows works. Each is driven here directly.
 contract LibRainDeploySnapshotTest is Test {
+    using LibMemoryKV for MemoryKV;
+
     /// External wrapper so `vm.expectRevert` lands at the right call depth.
     /// @param version The version to convert.
     /// @return The tag.
@@ -205,9 +207,18 @@ contract LibRainDeploySnapshotTest is Test {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(FIXTURE_ROOT, true);
 
-        assertTrue(LibStringSet.holds(paths, string.concat(FIXTURE_ROOT, "/0_0_1/MockDeployable.sol")));
-        assertTrue(LibStringSet.holds(paths, string.concat(FIXTURE_ROOT, "/0_0_2/MockDeployableV2.sol")));
-        assertTrue(LibStringSet.holds(paths, string.concat(FIXTURE_ROOT, "/0_0_2/Second.sol")));
+        MemoryKV pathSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < paths.length; i++) {
+            pathSet = pathSet.set(MemoryKVKey.wrap(keccak256(bytes(paths[i]))), MemoryKVVal.wrap(0));
+        }
+
+        assertTrue(
+            pathSet.has(MemoryKVKey.wrap(keccak256(bytes(string.concat(FIXTURE_ROOT, "/0_0_1/MockDeployable.sol")))))
+        );
+        assertTrue(
+            pathSet.has(MemoryKVKey.wrap(keccak256(bytes(string.concat(FIXTURE_ROOT, "/0_0_2/MockDeployableV2.sol")))))
+        );
+        assertTrue(pathSet.has(MemoryKVKey.wrap(keccak256(bytes(string.concat(FIXTURE_ROOT, "/0_0_2/Second.sol"))))));
         assertEq(paths.length, 3);
     }
 
@@ -230,10 +241,20 @@ contract LibRainDeploySnapshotTest is Test {
     /// would make the candidate a release that has to be declared and deployed.
     function testFrozenSnapshotPathsExcludesTheRollingSnapshot() external view {
         assertTrue(vm.exists(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry")));
+
+        string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, LibRainDeploySnapshot.LIB_FS_ROOT);
+        MemoryKV pathSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < paths.length; i++) {
+            pathSet = pathSet.set(MemoryKVKey.wrap(keccak256(bytes(paths[i]))), MemoryKVVal.wrap(0));
+        }
+
         assertFalse(
-            LibStringSet.holds(
-                LibRainDeploySnapshot.frozenSnapshotPaths(vm, LibRainDeploySnapshot.LIB_FS_ROOT),
-                LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry")
+            pathSet.has(
+                MemoryKVKey.wrap(
+                    keccak256(
+                        bytes(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry"))
+                    )
+                )
             )
         );
     }
@@ -265,7 +286,18 @@ contract LibRainDeploySnapshotTest is Test {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(NESTED_FIXTURE_ROOT, true);
 
-        assertTrue(LibStringSet.holds(paths, string.concat(NESTED_FIXTURE_ROOT, "/0_0_1/", FIXTURE_CONTRACT, ".sol")));
+        MemoryKV pathSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < paths.length; i++) {
+            pathSet = pathSet.set(MemoryKVKey.wrap(keccak256(bytes(paths[i]))), MemoryKVVal.wrap(0));
+        }
+
+        assertTrue(
+            pathSet.has(
+                MemoryKVKey.wrap(
+                    keccak256(bytes(string.concat(NESTED_FIXTURE_ROOT, "/0_0_1/", FIXTURE_CONTRACT, ".sol")))
+                )
+            )
+        );
         assertEq(paths.length, 1);
     }
 
@@ -293,7 +325,14 @@ contract LibRainDeploySnapshotTest is Test {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(TAG_SHAPED_FIXTURE_PARENT, true);
 
-        assertTrue(LibStringSet.holds(paths, string.concat(root, "/0_0_1/", FIXTURE_CONTRACT, ".sol")));
+        MemoryKV pathSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < paths.length; i++) {
+            pathSet = pathSet.set(MemoryKVKey.wrap(keccak256(bytes(paths[i]))), MemoryKVVal.wrap(0));
+        }
+
+        assertTrue(
+            pathSet.has(MemoryKVKey.wrap(keccak256(bytes(string.concat(root, "/0_0_1/", FIXTURE_CONTRACT, ".sol")))))
+        );
         assertEq(paths.length, 1);
     }
 
@@ -2141,8 +2180,13 @@ contract LibRainDeploySnapshotTest is Test {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(FREEZE_MULTI_FIXTURE_ROOT, true);
 
+        MemoryKV recordSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < record.length; i++) {
+            recordSet = recordSet.set(MemoryKVKey.wrap(keccak256(bytes(record[i]))), MemoryKVVal.wrap(0));
+        }
+
         for (uint256 i = 0; i < contractNames.length; i++) {
-            assertTrue(LibStringSet.holds(record, frozenPaths[i]));
+            assertTrue(recordSet.has(MemoryKVKey.wrap(keccak256(bytes(frozenPaths[i])))));
             assertEq(frozen[i], rollingFor(contractNames[i]));
         }
         assertEq(record.length, 2);
@@ -2482,11 +2526,16 @@ contract LibRainDeploySnapshotTest is Test {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(APPEND_FIXTURE_ROOT, true);
 
+        MemoryKV recordSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < record.length; i++) {
+            recordSet = recordSet.set(MemoryKVKey.wrap(keccak256(bytes(record[i]))), MemoryKVVal.wrap(0));
+        }
+
         assertTrue(earlierExists);
         assertEq(earlier, fixtureSnapshot("earlier release"));
         assertEq(record.length, 2);
-        assertTrue(LibStringSet.holds(record, earlierPath));
-        assertTrue(LibStringSet.holds(record, cutPath));
+        assertTrue(recordSet.has(MemoryKVKey.wrap(keccak256(bytes(earlierPath)))));
+        assertTrue(recordSet.has(MemoryKVKey.wrap(keccak256(bytes(cutPath)))));
     }
 
     /// Every record the ordering guard is driven against gets a root of its

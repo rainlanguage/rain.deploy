@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {RainDeployVerifySnapshotBase} from "./RainDeployVerifySnapshotBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
-import {LibStringSet} from "../lib/LibStringSet.sol";
+import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.4/src/lib/LibMemoryKV.sol";
 
 /// @title RainDeployVerifySnapshot
 /// @notice What a deploy repo inherits: every assertion that needs no network,
@@ -20,6 +20,8 @@ import {LibStringSet} from "../lib/LibStringSet.sol";
 /// FIXTURE — the record is not its subject, and see the base for why asking it
 /// about the record asserts something false.
 abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
+    using LibMemoryKV for MemoryKV;
+
     /// Every release in the frozen record MUST be declared, so that the set the
     /// chain group checks is every release this repo has ever cut rather than
     /// the ones somebody remembered to list.
@@ -87,6 +89,11 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
         string memory config = vm.readFile("foundry.toml");
         string[] memory networks = LibRainDeploy.supportedNetworks();
 
+        MemoryKV networkSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < networks.length; i++) {
+            networkSet = networkSet.set(MemoryKVKey.wrap(keccak256(bytes(networks[i]))), MemoryKVVal.wrap(0));
+        }
+
         for (uint256 i = 0; i < networks.length; i++) {
             assertTrue(
                 vm.keyExistsToml(config, string.concat(".rpc_endpoints.", networks[i])),
@@ -101,7 +108,7 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
         string[] memory rpcAliases = vm.parseTomlKeys(config, ".rpc_endpoints");
         for (uint256 i = 0; i < rpcAliases.length; i++) {
             assertTrue(
-                LibStringSet.holds(networks, rpcAliases[i]),
+                networkSet.has(MemoryKVKey.wrap(keccak256(bytes(rpcAliases[i])))),
                 string.concat("[rpc_endpoints] alias is not a supported network: ", rpcAliases[i])
             );
         }
@@ -109,7 +116,7 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
         string[] memory etherscanKeys = vm.parseTomlKeys(config, ".etherscan");
         for (uint256 i = 0; i < etherscanKeys.length; i++) {
             assertTrue(
-                LibStringSet.holds(networks, etherscanKeys[i]),
+                networkSet.has(MemoryKVKey.wrap(keccak256(bytes(etherscanKeys[i])))),
                 string.concat("[etherscan] key is not a supported network: ", etherscanKeys[i])
             );
         }

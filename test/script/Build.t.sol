@@ -8,7 +8,7 @@ import {DeployCandidate} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {LibReleasedSuitesAggregate} from "../lib/LibReleasedSuitesAggregate.sol";
 import {BuildHarness} from "../concrete/BuildHarness.sol";
-import {LibStringSet} from "../../src/lib/LibStringSet.sol";
+import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.4/src/lib/LibMemoryKV.sol";
 
 /// @title BuildTest
 /// @notice `script/Build.sol`'s own declaration.
@@ -42,6 +42,8 @@ import {LibStringSet} from "../../src/lib/LibStringSet.sol";
 /// rewriting what another one is reading is a race, not a check. Nothing below
 /// writes anything.
 contract BuildTest is Test {
+    using LibMemoryKV for MemoryKV;
+
     /// The harness the two declarations are read through.
     BuildHarness internal sBuild;
 
@@ -116,9 +118,15 @@ contract BuildTest is Test {
         assertEq(
             names.length, generated.length, "a generated contract is not frozen, or a frozen name is not generated"
         );
+
+        MemoryKV nameSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < names.length; i++) {
+            nameSet = nameSet.set(MemoryKVKey.wrap(keccak256(bytes(names[i]))), MemoryKVVal.wrap(0));
+        }
+
         for (uint256 i = 0; i < generated.length; i++) {
             assertTrue(
-                LibStringSet.holds(names, generated[i].contractName),
+                nameSet.has(MemoryKVKey.wrap(keccak256(bytes(generated[i].contractName)))),
                 string.concat("generated contract is not frozen by a release: ", generated[i].contractName)
             );
         }
