@@ -24,7 +24,7 @@ import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 ///
 /// Deploying is idempotent by construction. `deployToNetworks` checks the
 /// recorded address against the creation code before it forks anything, then
-/// skips any network that already has code there, so a partial run — five
-/// chains of seven, one RPC down — is fixed by running it again rather than by
-/// unpicking anything.
+/// skips any network that already has code there, so a partial run — some
+/// chains reached and not others, one RPC down — is fixed by running it again
+/// rather than by unpicking anything.
 contract Deploy is RegistryDeploySuites, RainDeployBroadcast {}

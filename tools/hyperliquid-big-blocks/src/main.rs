@@ -26,7 +26,7 @@
 //! printed response is the record, and the flag's observable afterwards is
 //! which blocks the deployer's transactions land in.
 
-use std::env;
+use std::env::{self, VarError};
 use std::process::ExitCode;
 
 use alloy::signers::local::PrivateKeySigner;
@@ -76,6 +76,15 @@ fn classify_response(response: &ExchangeResponseStatus) -> Result<(), String> {
     }
 }
 
+/// The offending value is never echoed back: one of the two variables this
+/// reports on is a private key.
+fn describe_var_error(name: &str, error: VarError) -> String {
+    match error {
+        VarError::NotPresent => format!("{name} is not set."),
+        VarError::NotUnicode(_) => format!("{name} is set to a value that is not valid UTF-8."),
+    }
+}
+
 #[tokio::main]
 async fn main() -> ExitCode {
     let using_big_blocks = match env::var("USING_BIG_BLOCKS") {
@@ -86,8 +95,8 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         },
-        Err(_) => {
-            eprintln!("::error::USING_BIG_BLOCKS is not set.");
+        Err(error) => {
+            eprintln!("::error::{}", describe_var_error("USING_BIG_BLOCKS", error));
             return ExitCode::FAILURE;
         }
     };
@@ -103,8 +112,8 @@ async fn main() -> ExitCode {
                 return ExitCode::FAILURE;
             }
         },
-        Err(_) => {
-            eprintln!("::error::DEPLOYMENT_KEY is not set.");
+        Err(error) => {
+            eprintln!("::error::{}", describe_var_error("DEPLOYMENT_KEY", error));
             return ExitCode::FAILURE;
         }
     };
