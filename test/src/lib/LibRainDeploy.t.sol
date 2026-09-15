@@ -464,7 +464,8 @@ contract LibRainDeployTest is Test {
     /// @param contractPath The contract path for verification commands.
     /// @param expectedAddress The expected deterministic address.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
-    /// @param dependencies The addresses that must have code on each network.
+    /// @param dependencies The addresses that must already have code on a
+    /// network before this contract can be broadcast there.
     /// @return deployedAddress The deployed contract address.
     function externalDeployToNetworks(
         string[] memory networks,
@@ -661,6 +662,43 @@ contract LibRainDeployTest is Test {
             dependencies
         );
         assertEq(result, mockDeployableAddress());
+    }
+
+    /// `deployToNetworks` MUST skip an already-deployed network WITHOUT reading
+    /// the Zoltu factory. The factory guards the deploy path only, so a rerun on
+    /// a network that no longer needs deployment is a clean no-op even where the
+    /// factory itself is gone.
+    function testDeployToNetworksSkipsAlreadyDeployedWithMissingZoltuFactory() external {
+        vm.makePersistent(address(this));
+
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        address deployed = this.externalDeployZoltu(type(MockDeployable).creationCode);
+        assertEq(deployed, mockDeployableAddress());
+        vm.makePersistent(deployed);
+
+        // Emptied AFTER the deploy that needed it, and persisted so the fork
+        // `deployToNetworks` creates for itself sees the same empty account.
+        vm.makePersistent(LibRainDeploy.ZOLTU_FACTORY);
+        vm.etch(LibRainDeploy.ZOLTU_FACTORY, hex"");
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        address result = this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            dependencies
+        );
+        assertEq(result, mockDeployableAddress());
+        // The fork left selected is the one the skip ran on, so this is the
+        // factory state that skip saw, not the state of some other fork.
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+        assertEq(mockDeployableAddress().codehash, mockDeployableCodeHash());
     }
 
     /// `deployToNetworks` MUST revert with `MissingDependency` when the Zoltu
