@@ -192,8 +192,10 @@ contract LibMigrationRegistryTest is Test {
     /// An applied migration answers the moment it was applied — read back
     /// through the library, so what `applyMigration` writes is what `applied`
     /// finds. The head alone is a migration that waits on nothing else, and
-    /// reads back as given.
-    function testApplyMigrationThenApplied(bytes32 namespace, bytes32 migration, uint32 appliedAt) external {
+    /// reads back as given. The moment is a whole `uint256` timestamp, so a chain
+    /// whose clock is past any narrower bound reads back exactly what it
+    /// recorded.
+    function testApplyMigrationThenApplied(bytes32 namespace, bytes32 migration, uint64 appliedAt) external {
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(appliedAt != 0);
@@ -286,6 +288,55 @@ contract LibMigrationRegistryTest is Test {
         this.externalApplyMigration(namespace, migration, one(address(this), namespace, skipped));
 
         assertEq(LibMigrationRegistry.applied(address(this), namespace, migration), 0);
+    }
+
+    /// The first entry is the caller's own head in the namespace the write
+    /// names, so one naming another writer or another line is refused even
+    /// when its migration is exactly the head both lines are at. The list is
+    /// passed to the registry as the caller wrote it: nothing here repairs an
+    /// entry that names the wrong line into one that names the right one.
+    function testApplyMigrationHeadEntryIsTheCallerInTheNamespace(
+        address other,
+        bytes32 namespace,
+        bytes32 otherNamespace,
+        bytes32 migration
+    ) external {
+        vm.assume(other != address(0));
+        vm.assume(other != address(this));
+        vm.assume(namespace != bytes32(0));
+        vm.assume(otherNamespace != bytes32(0));
+        vm.assume(namespace != otherNamespace);
+        LibMigrationFuzz.assumeMigration(vm, migration);
+        deployRegistry();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
+                address(this),
+                namespace,
+                namespace,
+                MIGRATION_HEAD_GENESIS,
+                MIGRATION_HEAD_GENESIS
+            )
+        );
+        this.externalApplyMigration(namespace, migration, one(other, namespace, MIGRATION_HEAD_GENESIS));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
+                address(this),
+                namespace,
+                otherNamespace,
+                MIGRATION_HEAD_GENESIS,
+                MIGRATION_HEAD_GENESIS
+            )
+        );
+        this.externalApplyMigration(namespace, migration, one(address(this), otherNamespace, MIGRATION_HEAD_GENESIS));
+
+        assertEq(LibMigrationRegistry.applied(address(this), namespace, migration), 0);
+        assertEq(LibMigrationRegistry.head(address(this), namespace), MIGRATION_HEAD_GENESIS);
+        assertEq(LibMigrationRegistry.head(other, namespace), MIGRATION_HEAD_GENESIS);
+        assertEq(LibMigrationRegistry.head(address(this), otherNamespace), MIGRATION_HEAD_GENESIS);
     }
 
     /// The writer is the CONTRACT that executes the library call. The
@@ -724,6 +775,30 @@ contract LibMigrationRegistryTest is Test {
         assumeOrdinaryCode(code);
         vm.assume(keccak256(code) != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH);
         vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                keccak256(code)
+            )
+        );
+        this.externalApplied(writer, namespace, migration);
+    }
+
+    /// The check is on the code HASH, not on how much code is there. Code the
+    /// exact length of the registry's own, differing anywhere in it, is refused
+    /// exactly as any other occupying code is, naming the hash of what is
+    /// actually at the address.
+    function testAppliedCodeOfTheRegistrysOwnLength(address writer, bytes32 namespace, bytes32 migration, uint256 index)
+        external
+    {
+        deployRegistry();
+        bytes memory code = LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code;
+        uint256 length = code.length;
+        code[index % length] = ~code[index % length];
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
+        assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, length);
 
         vm.expectRevert(
             abi.encodeWithSelector(
