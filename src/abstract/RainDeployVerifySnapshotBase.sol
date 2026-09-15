@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
-import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.4/src/lib/LibMemoryKV.sol";
+import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.5/src/lib/LibMemoryKV.sol";
 
 /// Thrown when the deploy address recorded for a version is not the address its
 /// own creation code derives.
@@ -44,6 +44,15 @@ error FrozenSnapshotNotReleased(string path);
 /// wrong thing.
 /// @param path The record file with no `DEPLOYED_ADDRESS` declaration.
 error FrozenSnapshotUnreadable(string path);
+
+/// Thrown when a file in the frozen record declares its deployed address more
+/// than once. Solidity rejects a second file-scope `DEPLOYED_ADDRESS`, so no
+/// compiler reads such a file at all, and every rule for choosing between the
+/// copies — first, last, either — reads a value the compiler never would. A
+/// hand edit is what this group exists to catch and a position rule is what it
+/// would aim at, so the reader refuses rather than choosing.
+/// @param path The record file declaring `DEPLOYED_ADDRESS` more than once.
+error FrozenSnapshotAmbiguous(string path);
 
 /// Thrown when an `[etherscan]` entry carries neither `chain` nor `url`. Under
 /// an alias foundry does not itself resolve to a chain that entry is not a
@@ -153,6 +162,13 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// exactly the hand edit this whole group exists to catch, and it is at
     /// file scope in every generated snapshot, so there is no indentation to
     /// allow for.
+    ///
+    /// The start of a line is what makes a `//` copy unreachable, because `//`
+    /// has to sit in front of the text it comments out. It does nothing to a
+    /// `/* ... */` copy, whose delimiters are on their own lines and whose
+    /// contents therefore start their lines exactly as the real declaration
+    /// does. Block comments come out of the record before this rule runs, so
+    /// that what it runs on is what the compiler would see.
     string constant DEPLOYED_ADDRESS_DECLARATION = "address constant DEPLOYED_ADDRESS =";
 
     /// The address a frozen record declares as its deploy address.
@@ -170,20 +186,63 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// because a record is reached by its PATH, which is what the walk returns,
     /// while its artifact path is not something a caller can name — foundry
     /// disambiguates those by whatever else happens to share the basename.
+    ///
+    /// The whole record is scanned before a match is read, so a record
+    /// carrying two declarations is refused rather than resolved by position.
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
     /// @return The address the record declares.
     function recordedDeployedAddress(string memory path, string memory record) internal pure returns (address) {
-        string[] memory lines = vm.split(record, "\n");
+        string[] memory lines = vm.split(withoutBlockComments(record), "\n");
+        bool found = false;
+        address declared;
         for (uint256 i = 0; i < lines.length; i++) {
             if (vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) != 0) {
                 continue;
             }
+            if (found) {
+                revert FrozenSnapshotAmbiguous(path);
+            }
             string[] memory tokens = vm.split(lines[i], " ");
             string memory literal = tokens[tokens.length - 1];
-            return vm.parseAddress(vm.replace(vm.replace(vm.replace(literal, "address(", ""), ")", ""), ";", ""));
+            declared = vm.parseAddress(vm.replace(vm.replace(vm.replace(literal, "address(", ""), ")", ""), ";", ""));
+            found = true;
         }
-        revert FrozenSnapshotUnreadable(path);
+        if (!found) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        return declared;
+    }
+
+    /// A record's text with every block comment removed, so that a declaration
+    /// found in it is one the compiler would read.
+    ///
+    /// `/*` opens a comment that the first following `*/` closes, and Solidity
+    /// does not nest them, so what survives is the text before the first `/*`
+    /// plus, for each one after it, the text after its `*/`. An unclosed `/*`
+    /// is comment to the end of the file, so nothing after it survives.
+    ///
+    /// A comment is removed rather than blanked, which joins the text either
+    /// side of it into one line exactly as the compiler joins it. A declaration
+    /// the compiler reads on the tail of a `*/` is therefore still found, and
+    /// one interrupted mid-line by a comment is not — that leaves the record
+    /// unreadable, never read as some other address.
+    /// @param record The record file's contents.
+    /// @return The contents with every block comment removed.
+    function withoutBlockComments(string memory record) internal pure returns (string memory) {
+        string[] memory opened = vm.split(record, "/*");
+        string memory stripped = opened[0];
+        for (uint256 i = 1; i < opened.length; i++) {
+            string[] memory closed = vm.split(opened[i], "*/");
+            if (closed.length == 1) {
+                break;
+            }
+            stripped = string.concat(stripped, closed[1]);
+            for (uint256 j = 2; j < closed.length; j++) {
+                stripped = string.concat(stripped, "*/", closed[j]);
+            }
+        }
+        return stripped;
     }
 
     /// Checks the frozen record against the released declaration: every file in

@@ -83,8 +83,13 @@ import {LibHyperCore} from "../src/lib/LibHyperCore.sol";
 /// caught. Both env reads are `uint256`, and a key and an amount transposed
 /// between them would send a private key's worth of HYPE — so the key is turned
 /// into an `address` on its own line first, and the call takes that address.
-/// The two arguments no longer have the same type, and the transposition that
-/// no test is watching for does not compile.
+/// The two arguments no longer have the same type, and the transposition does
+/// not compile.
+///
+/// The types say nothing about WHICH name is read, or about the call being the
+/// entry that takes the HyperEVM fork; each of those is a one-line edit that
+/// compiles. `CreditHyperCoreTest` asserts all three out of this file's own AST,
+/// which writes no env var and forks nothing.
 contract CreditHyperCore is Script {
     /// Credits the `DEPLOYMENT_KEY` deployer's HyperCore account with
     /// `HYPERCORE_CREDIT_WEI` of its own HYPE.

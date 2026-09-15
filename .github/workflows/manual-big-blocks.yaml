@@ -106,7 +106,8 @@ jobs:
       # what is built either way.
       - uses: rainlanguage/rainix/.github/actions/rust-cache@main
       # The submit itself. The tool exits nonzero unless the exchange answers
-      # `"status": "ok"`, and prints the full parsed response either way.
+      # `"status": "ok"` with the empty `{"type": "default"}` envelope, and
+      # prints the full parsed response either way.
       # There is no info-endpoint query that reads `usingBigBlocks` back —
       # nothing in the Hyperliquid docs, and the obvious candidate type names
       # are refused by the API — so the logged response IS the record of what

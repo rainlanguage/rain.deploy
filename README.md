@@ -101,7 +101,10 @@ Suites are a **registry the abstract iterates**, not a chain of `else if`.
 Adding a suite is adding an array entry. A mistyped `DEPLOYMENT_SUITE` reports
 the valid keys built from that same array, so the error cannot fall behind the
 suites it describes, and keys are checked unique because the key is what selects
-what gets broadcast.
+what gets broadcast. They are checked **non-empty** for the same reason from the
+other side: the empty string is what an unset `DEPLOYMENT_SUITE` arrives as, so
+leaving it declarable would let a dispatch with the suite input blank select
+something instead of reporting that it was told nothing.
 
 Every suite is individually selectable, including a frozen release — which is
 how a snapshot from before a network existed reaches that network.
@@ -601,8 +604,12 @@ also says why a rev rather than a crates.io version, and the `big-blocks-tool`
 CI job builds and tests the crate on every push, so the first dispatch is not
 the first compile.
 
-The run fails unless the exchange answers `"status": "ok"`, and the full
-response is in the run log. That log line is the record: Hyperliquid has no
+The run fails unless the exchange answers `"status": "ok"` carrying the empty
+envelope — `{"type": "default"}` with no `data`, which is what the live run on
+record got. The tag alone is not enough: `"status": "ok"` is also how
+Hyperliquid answers the actions that report a per-action outcome, with that
+outcome, error included, nested under `data.statuses`. Either way the full
+response is in the run log, and that log line is the record: Hyperliquid has no
 info-endpoint query that reads `usingBigBlocks` back, so the only observable of
 the flag afterwards is which blocks the deployer's next transactions land in.
 

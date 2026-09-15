@@ -70,9 +70,11 @@ library LibHyperCore {
     /// may have changed under a library that would otherwise carry on sending
     /// real value into it.
     ///
-    /// Also the zero hash, which is what an address with no code at all
-    /// reports, so a chain that merely does not have this contract fails here
-    /// rather than accepting the transfer into a hole.
+    /// Also an address with no code at all, which hashes to zero while the
+    /// account does not exist and to the hash of the empty string once a single
+    /// wei brings it into existence. Neither is this contract's, so a chain
+    /// that merely does not have it fails here rather than accepting the
+    /// transfer into a hole.
     /// @param expected `HYPE_SYSTEM_CODEHASH`.
     /// @param actual The code hash actually at `HYPE_SYSTEM_ADDRESS`.
     error SystemContractChanged(bytes32 expected, bytes32 actual);

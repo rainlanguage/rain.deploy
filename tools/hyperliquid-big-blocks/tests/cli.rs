@@ -13,8 +13,10 @@
 //! is the only part of it a test can read, and it is the part that says
 //! mainnet rather than testnet.
 
+use std::ffi::OsString;
 use std::io::{BufRead, BufReader};
 use std::net::TcpListener;
+use std::os::unix::ffi::OsStringExt;
 use std::process::{Command, Output, Stdio};
 use std::sync::mpsc;
 use std::time::Duration;
@@ -121,6 +123,28 @@ fn an_unset_key_is_refused() {
         assert_refused(
             &run(Some(flag), None),
             "::error::DEPLOYMENT_KEY is not set.\n",
+        );
+    }
+}
+
+/// A variable whose value is bytes that are not UTF-8 is set, so it is refused
+/// as set: the environment can carry such a value and `String` cannot hold it,
+/// which the standard library reports as the same `Err` as nothing being there
+/// at all. Telling an operator that the key is not set, when it is, points the
+/// fix at supplying a secret that is already supplied.
+#[test]
+fn a_variable_set_to_bytes_that_are_not_utf8_is_refused_as_set() {
+    let not_utf8 = || OsString::from_vec(vec![0xff]);
+    for (flag, key, name) in [
+        (not_utf8(), OsString::from(KEY), "USING_BIG_BLOCKS"),
+        (OsString::from("true"), not_utf8(), "DEPLOYMENT_KEY"),
+    ] {
+        let mut command = command(DEAD_PROXY);
+        command.env("USING_BIG_BLOCKS", flag);
+        command.env("DEPLOYMENT_KEY", key);
+        assert_refused(
+            &command.output().unwrap(),
+            &format!("::error::{name} is set to a value that is not valid UTF-8.\n"),
         );
     }
 }
