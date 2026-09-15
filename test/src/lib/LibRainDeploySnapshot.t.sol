@@ -363,6 +363,39 @@ contract LibRainDeploySnapshotTest is Test {
         }
     }
 
+    /// EVERY version the guard admits MUST freeze to a tag the record ordering
+    /// can read. `tagPrecedes` reads a component with `parseUint`, so a
+    /// component that does not fit in a `uint256` is not a release the record
+    /// can place: it freezes to a directory that every ordering read of an
+    /// append-only record then reverts on, with a cheatcode parse error, which
+    /// is the orphan `UnreleasableVersion` exists to refuse.
+    ///
+    /// The bound is the parse's own rather than a digit count, so the boundary
+    /// is asserted from both sides: `2**256 - 1` is a releasable component and
+    /// `2**256` is not.
+    function testTagForVersionRefusesAComponentTheRecordCannotOrder() external {
+        string memory max = "115792089237316195423570985008687907853269984665640564039457584007913129639935";
+        string memory overflows = "115792089237316195423570985008687907853269984665640564039457584007913129639936";
+
+        string memory maxTag = LibRainDeploySnapshot.tagForVersion(string.concat(max, ".0.0"));
+        assertEq(maxTag, string.concat(max, "_0_0"));
+        assertTrue(LibRainDeploySnapshot.isTag(maxTag));
+        assertTrue(LibRainDeploySnapshot.tagPrecedes(vm, "0_0_1", maxTag));
+
+        // Both spellings of the rule, so the walk cannot admit a directory the
+        // freeze refuses.
+        assertFalse(LibRainDeploySnapshot.isTag(string.concat(overflows, "_0_0")));
+
+        string[] memory bad = new string[](3);
+        bad[0] = string.concat(overflows, ".0.0");
+        bad[1] = string.concat("0.", overflows, ".0");
+        bad[2] = string.concat("0.0.", overflows);
+        for (uint256 i = 0; i < bad.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(UnreleasableVersion.selector, bad[i]));
+            this.externalTagForVersion(bad[i]);
+        }
+    }
+
     /// The tag read from `foundry.toml` MUST go through the same guard, so a
     /// repo cannot reach a release path with a version the guard would refuse.
     function testDeployTagUsesTheGuardedConversion() external view {
