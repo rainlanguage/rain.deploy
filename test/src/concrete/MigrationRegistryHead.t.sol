@@ -58,6 +58,22 @@ contract MigrationRegistryHeadTest is Test {
         assertTrue(MIGRATION_HEAD_GENESIS != bytes32(0));
     }
 
+    /// Genesis is one fixed shared value — the hash of one string, identical
+    /// for every writer, every namespace, every consumer and every chain —
+    /// rather than anything derived, which is what lets an empty line on a
+    /// chain nobody has migrated answer the same head a script written
+    /// anywhere else names. Pinned to the preimage rather than to whatever the
+    /// constant happens to hold, because a changed one is not a new value: it
+    /// orphans every record already applied onto the old one and puts every
+    /// empty line at a head no deployed script names.
+    function testHeadGenesisIsTheSharedValue(address writer, bytes32 namespace) external view {
+        vm.assume(writer != address(0));
+        vm.assume(namespace != bytes32(0));
+
+        assertEq(MIGRATION_HEAD_GENESIS, keccak256("rain.migration-registry.head.genesis"));
+        assertEq(sRegistry.head(writer, namespace), keccak256("rain.migration-registry.head.genesis"));
+    }
+
     /// The head is the migration applied most recently, and it moves with each
     /// one.
     function testHeadFollowsTheRecords(address writer, bytes32 namespace, bytes32 migrationA, bytes32 migrationB)
