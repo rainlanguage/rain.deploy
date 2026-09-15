@@ -22,6 +22,11 @@ struct AstReferences {
 /// `cutRelease()` here cuts THIS repo's tag, and `src/generated/` is
 /// append-only, so each test drives a harness over a fixture record of its own.
 /// A shared root would have the second test refused as a re-cut of the first.
+///
+/// What the harness can show is a hook that RAN. A hook nothing calls leaves
+/// every marker exactly where a wired base would, so the wiring itself is
+/// asserted from the compiler's AST instead, and against the base's own
+/// declarations rather than a list of the hooks it holds today.
 contract BuildScriptTest is Test {
     /// The contract the fixture snapshots describe.
     string constant FIXTURE_CONTRACT = "Fixture";
@@ -413,7 +418,7 @@ contract BuildScriptTest is Test {
     /// A declaration's own id, as `int256` because solc numbers its built-ins
     /// negative and both sides of a comparison have to be the same type.
     /// @param json The base's artifact.
-    /// @param path the declaration's path.
+    /// @param path The declaration's path.
     /// @return The id.
     function declarationId(string memory json, string memory path) internal pure returns (int256) {
         return vm.parseJsonInt(json, string.concat(path, ".id"));
