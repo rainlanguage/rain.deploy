@@ -92,10 +92,12 @@ for it to disagree with. A repo that wrote its suites out twice would have that
 bug available to it; this one does not.
 
 `BuildScript` carries both build entry points concrete. `run()` regenerates the
-generated sources and freezes nothing; `cutRelease()` regenerates, freezes the
-release as `src/generated/<tag>/`, then regenerates from the record that now
-holds it. Neither is `virtual`, so the entry point CI runs on every push has no
-way to cut a release.
+generated sources and the network config, and freezes nothing; `cutRelease()`
+regenerates, freezes the release as `src/generated/<tag>/`, then regenerates
+from the record that now holds it. The config is written by `run()` alone: it is
+not part of a release record, and `cutRelease()` is the one operation that
+cannot be repeated. Neither is `virtual`, so the entry point CI runs on every
+push has no way to cut a release.
 
 Suites are a **registry the abstract iterates**, not a chain of `else if`.
 Adding a suite is adding an array entry. A mistyped `DEPLOYMENT_SUITE` reports
@@ -121,16 +123,15 @@ Deriving the pins at broadcast time would make that comparison
 derived-against-derived, and a guard that compares a value to itself is not a
 guard.
 
-Five groups, sorted by what each is anchored to and therefore by what each can
+Four groups, sorted by what each is anchored to and therefore by what each can
 catch:
 
-| Group    | Anchored to            | Catches                               | Cannot catch                     |
-| -------- | ---------------------- | ------------------------------------- | -------------------------------- |
-| Internal | the recorded set       | an inconsistently generated set       | a snapshot of the wrong contract |
-| Source   | `type(X).creationCode` | a snapshot of the wrong contract      | anything about any chain         |
-| Record   | the frozen record      | a release the declaration missed      | what a declared suite records    |
-| Chain    | the networks           | never deployed, or not there any more | anything about a candidate       |
-| Config   | `foundry.toml`         | a network it cannot fork or verify on | anything about a suite           |
+| Group    | Anchored to            | Catches                                            | Cannot catch                     |
+| -------- | ---------------------- | -------------------------------------------------- | -------------------------------- |
+| Internal | the recorded set       | an inconsistently generated set                    | a snapshot of the wrong contract |
+| Source   | `type(X).creationCode` | a snapshot of the wrong contract                   | anything about any chain         |
+| Record   | the frozen record      | a release the declaration missed                   | what a declared suite records    |
+| Chain    | the networks           | a missing deployment, or an alias on another chain | anything about a candidate       |
 
 The internal group's blind spot is not a gap to close there: every check in it
 asks the recorded bytes to agree with each other, and the wrong contract's bytes
@@ -179,22 +180,34 @@ chain: deploying through Zoltu buys address predictability, and such a
 constructor spends it. So a per-chain difference fails hard, naming the chain
 and both hashes, and there is deliberately no per-chain code hash to record.
 
-The config group is the only one whose subject is the CONSUMER's own
-`foundry.toml` rather than its suites. `supportedNetworks()` is what the deploy
-broadcasts to and what the chain group forks, `[rpc_endpoints]` is what makes an
-alias forkable and `[etherscan]` is what makes `--verify` resolve, so the three
-lists are one list and drift between them is a defect in either direction: a
-supported network missing from a section broadcasts and then fails after the gas
-is spent, and a section entry no supported network names is config nothing ever
-reads. An `[etherscan]` entry carrying neither `chain` nor `url` under an alias
-foundry cannot resolve is worse than missing — it takes verification down for
-every entry in the section, not only its own.
+**The network config is generated, not compared.**
+`LibRainDeploy.supportedNetworkConfigs()` is the single statement of the set —
+each network's name, chain id, explorer url and default endpoint — and
+`BuildScript.run()` writes `foundry.toml`'s `[rpc_endpoints]` and `[etherscan]`
+sections and `.env.example`'s endpoint variables from it. `Git is clean` is the
+enforcement, the same mechanism already holding `src/generated/`: a tree whose
+config has drifted from the roster it pins fails the job every push runs.
 
-It reads the raw file rather than forge's resolved config, because the values
-are `${VAR}` interpolations that only exist in CI while the KEYS are the whole
-contract, and the keys are in the text. So it needs no RPC and fails on the pull
-request that drifts rather than at dispatch time. Reading the file at all is
-what a consumer has to allow: see [Install](#install).
+That is what a config group used to be for, and comparing is the weaker half of
+it. A comparison keeps both statements, so every assertion in it is one somebody
+had to think of and the prose around them drifts silently; generation leaves one
+statement and there is nothing left to compare. It also settles what a
+comparison could only report: every generated `[etherscan]` entry states
+`chain`, so an entry carrying neither `chain` nor `url` under an alias foundry
+cannot resolve — which takes verification down for every entry in the section
+and not only its own — is no longer a state a consumer can be in.
+
+The roster is deliberately not overridable. A repo able to narrow it would
+deploy to and verify fewer chains with nothing red, so a network arrives in a
+consumer's config by a version bump and by nothing else.
+
+The one thing generation cannot settle is whether a declared chain id is the one
+the bound endpoint reports. That is a claim about the world rather than about
+the text, and it is what `--verify` submits, so it sits in the chain group:
+`testSupportedNetworkChainIdsAreBound` forks every supported network and
+compares `block.chainid` against the roster. A wrong id there is config that
+resolves, passes everything that reads the file, and verifies a deployment
+against the wrong explorer.
 
 ## Address registry
 
@@ -632,17 +645,37 @@ The versions have to match: the import paths are version-qualified, which is
 deliberate — it is what stops a consumer's incompatible copy from silently
 satisfying these imports.
 
-The config group reads the CONSUMING repo's `foundry.toml`, so that repo has to
-allow it and has to have the sections to be read:
+`BuildScript.run()` writes the CONSUMING repo's own `foundry.toml` and
+`.env.example`, so that repo has to allow it:
 
 ```toml
-fs_permissions = [{ access = "read", path = "./foundry.toml" }]
+fs_permissions = [
+  { access = "read-write", path = "./foundry.toml" },
+  { access = "read-write", path = "./.env.example" },
+]
 ```
 
-`[rpc_endpoints]` and `[etherscan]` then have to name exactly the networks in
-`supportedNetworks()`. Missing permission fails the check rather than skipping
-it, which is the intended direction: a repo that cannot read its own config is a
-repo whose config nothing has checked.
+Both files then need the markers the generated blocks are spliced between, once
+each and the begin before the end. A file carrying neither is refused, naming
+the file and the block, rather than having the section appended to it — which is
+a duplicate key at the next forge startup:
+
+```toml
+# rain-deploy:generated:rpc_endpoints:begin
+# rain-deploy:generated:rpc_endpoints:end
+
+# rain-deploy:generated:etherscan:begin
+# rain-deploy:generated:etherscan:end
+```
+
+```sh
+# .env.example
+# rain-deploy:generated:env:begin
+# rain-deploy:generated:env:end
+```
+
+Everything outside the markers is the consumer's, and the build neither reads
+nor moves it.
 
 ## Develop
 

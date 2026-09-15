@@ -38,6 +38,60 @@ contract BuildScriptHarness is BuildScript {
         return recordRoot();
     }
 
+    /// @inheritdoc BuildScript
+    /// @dev Under the fixture root, never the repo's own `foundry.toml`: forge
+    /// reads that file once at startup and a script rewriting it is safe, but a
+    /// TEST rewriting it races every other test that reads it.
+    function configPath() internal view override returns (string memory) {
+        return string.concat(sRoot, "/foundry.toml");
+    }
+
+    /// @inheritdoc BuildScript
+    function envExamplePath() internal view override returns (string memory) {
+        return string.concat(sRoot, "/.env.example");
+    }
+
+    /// Where `regenerateConfig` writes the network sections.
+    /// @return The fixture config path.
+    function externalConfigPath() external view returns (string memory) {
+        return configPath();
+    }
+
+    /// Where `regenerateConfig` writes the endpoint variables.
+    /// @return The fixture `.env.example` path.
+    function externalEnvExamplePath() external view returns (string memory) {
+        return envExamplePath();
+    }
+
+    /// A fixture file carrying both `foundry.toml` blocks, with a stale body in
+    /// each and hand-written text around them.
+    /// @return The seed config.
+    function configSeed() public pure returns (string memory) {
+        return string.concat(
+            "# hand written\n",
+            "# rain-deploy:generated:rpc_endpoints:begin\n",
+            "STALE\n",
+            "# rain-deploy:generated:rpc_endpoints:end\n",
+            "# rain-deploy:generated:etherscan:begin\n",
+            "STALE\n",
+            "# rain-deploy:generated:etherscan:end\n"
+        );
+    }
+
+    /// A fixture file carrying the `.env.example` block.
+    /// @return The seed `.env.example`.
+    function envExampleSeed() public pure returns (string memory) {
+        return string.concat(
+            "# hand written\n", "# rain-deploy:generated:env:begin\n", "STALE=1\n", "# rain-deploy:generated:env:end\n"
+        );
+    }
+
+    /// Writes both config fixtures, so `run()` has markers to splice into.
+    function seedConfig() external {
+        writeFixture(configPath(), configSeed());
+        writeFixture(envExamplePath(), envExampleSeed());
+    }
+
     /// Where `regenerateSnapshots` writes.
     /// @return The rolling snapshot path.
     function rollingPath() public view returns (string memory) {

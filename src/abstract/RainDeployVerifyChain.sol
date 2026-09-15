@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
-import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
+import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 
 /// Thrown when a version's derived address has no code on a network. Either it
 /// never deployed there, or it is not there any more.
@@ -28,6 +28,16 @@ error NotDeployedOnNetwork(string network, string suite, address deployedAddress
 error CodeHashMismatchOnNetwork(
     string network, string suite, address deployedAddress, bytes32 expectedCodeHash, bytes32 actualCodeHash
 );
+
+/// Thrown when the chain id a network's roster entry declares is not the chain
+/// id the endpoint bound to its `[rpc_endpoints]` alias reports. Either the
+/// declaration is wrong — and `--verify` submits it — or the alias is bound to
+/// a different network than the one it names, and everything checked through it
+/// was checked somewhere else.
+/// @param network The network name, as configured in `[rpc_endpoints]`.
+/// @param declared The chain id the roster states.
+/// @param reported The chain id the endpoint answers with.
+error NetworkChainIdMismatch(string network, uint256 declared, uint256 reported);
 
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the
@@ -133,5 +143,56 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// produces, on every supported network.
     function testSuitesLiveOnEverySupportedNetwork() external {
         checkDeployedOnSupportedNetworks(deriveDeployments(releasedSuites()));
+    }
+
+    /// Checks one network's declared chain id against whichever chain id the
+    /// currently selected fork reports.
+    /// @param network The network name, for the error only.
+    /// @param declared The chain id the roster states.
+    /// @param reported The chain id the bound endpoint answers with.
+    function checkNetworkChainId(string memory network, uint256 declared, uint256 reported) internal pure {
+        if (declared != reported) {
+            revert NetworkChainIdMismatch(network, declared, reported);
+        }
+    }
+
+    /// Checks every network's declared chain id against the endpoint bound to
+    /// its `[rpc_endpoints]` alias.
+    /// @param networks The roster to check.
+    function checkNetworkChainIds(SupportedNetwork[] memory networks) internal {
+        // An empty roster is a repo that deploys nowhere, not a repo with
+        // nothing to check, and it would pass here having forked nothing.
+        if (networks.length == 0) {
+            revert LibRainDeploy.NoNetworks();
+        }
+
+        string[] memory names = new string[](networks.length);
+        for (uint256 i = 0; i < networks.length; i++) {
+            names[i] = networks[i].name;
+        }
+
+        uint256[] memory forkIds = LibRainDeploy.createForks(vm, names);
+        for (uint256 i = 0; i < networks.length; i++) {
+            vm.selectFork(forkIds[i]);
+            checkNetworkChainId(networks[i].name, networks[i].chainId, block.chainid);
+        }
+    }
+
+    /// Every supported network's declared chain id MUST be the one the endpoint
+    /// bound to its alias reports.
+    ///
+    /// The one thing about the config that generating it cannot settle. The
+    /// sections are written from the roster, so an alias missing from one of
+    /// them is a tree `Git is clean` fails rather than an assertion anything
+    /// makes — but which chain an endpoint actually serves is a claim about the
+    /// world, and `chain` is what `--verify` submits to. A wrong id there is
+    /// config that resolves, passes every check that reads the text, and
+    /// verifies a deployment against the wrong explorer.
+    ///
+    /// Here rather than beside the roster because the subject is the endpoint:
+    /// this is the contract that already forks every supported network, and the
+    /// snapshot half is the one a credential-free job binds.
+    function testSupportedNetworkChainIdsAreBound() external {
+        checkNetworkChainIds(LibRainDeploy.supportedNetworkConfigs());
     }
 }

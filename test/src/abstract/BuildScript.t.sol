@@ -3,6 +3,8 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.2/src/Test.sol";
+import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployConfig} from "../../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
 
@@ -25,6 +27,15 @@ contract BuildScriptTest is Test {
 
     /// Where the lib-ordering fixture's record is built.
     string constant LIBS_FIXTURE_ROOT = "test/generated-buildscript-libs";
+
+    /// Where the `run()` config fixture's record is built.
+    string constant RUN_CONFIG_FIXTURE_ROOT = "test/generated-buildscript-run-config";
+
+    /// Where the `cutRelease()` config fixture's record is built. Its own root,
+    /// like every other fixture here: forge runs the tests in a contract in
+    /// parallel, so a root two of them share is one deleting the tree the other
+    /// is midway through reading.
+    string constant CUT_CONFIG_FIXTURE_ROOT = "test/generated-buildscript-cut-config";
 
     /// Clears a fixture record an earlier failure left behind.
     ///
@@ -50,6 +61,7 @@ contract BuildScriptTest is Test {
     function testRunRegeneratesAndFreezesNothing() external {
         resetFixture(RUN_FIXTURE_ROOT);
         BuildScriptHarness harness = new BuildScriptHarness(RUN_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        harness.seedConfig();
         harness.run();
 
         // Read while the fixture is still there, asserted once it is gone.
@@ -120,6 +132,76 @@ contract BuildScriptTest is Test {
         vm.removeDir(LIBS_FIXTURE_ROOT, true);
 
         assertEq(libs, harness.libsMarker(1, true));
+    }
+
+    /// PROPERTY: `run()` rewrites both `foundry.toml` network blocks and the
+    /// `.env.example` block from the roster, leaving everything outside the
+    /// markers where it was.
+    ///
+    /// This is the wiring, not the emission: what the sections SAY is pinned
+    /// against string literals in `LibRainDeployConfigTest`, over a fixture
+    /// roster no real network is named in. What is asserted here is that the
+    /// entry point CI runs on every push reaches the config at all — without
+    /// it the sections would exist, be correct, and be written nowhere, and
+    /// `Git is clean` would pass a tree whose config had drifted from the
+    /// roster it pins.
+    function testRunRegeneratesTheNetworkConfig() external {
+        resetFixture(RUN_CONFIG_FIXTURE_ROOT);
+        BuildScriptHarness harness = new BuildScriptHarness(RUN_CONFIG_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        harness.seedConfig();
+        harness.run();
+
+        // Read while the fixture is still there, asserted once it is gone.
+        string memory config = vm.readFile(harness.externalConfigPath());
+        string memory envExample = vm.readFile(harness.externalEnvExamplePath());
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(RUN_CONFIG_FIXTURE_ROOT, true);
+
+        assertEq(
+            config,
+            string.concat(
+                "# hand written\n",
+                "# rain-deploy:generated:rpc_endpoints:begin\n",
+                LibRainDeployConfig.rpcEndpointsSection(vm, LibRainDeploy.supportedNetworkConfigs()),
+                "# rain-deploy:generated:rpc_endpoints:end\n",
+                "# rain-deploy:generated:etherscan:begin\n",
+                LibRainDeployConfig.etherscanSection(vm, LibRainDeploy.supportedNetworkConfigs()),
+                "# rain-deploy:generated:etherscan:end\n"
+            )
+        );
+        assertEq(
+            envExample,
+            string.concat(
+                "# hand written\n",
+                "# rain-deploy:generated:env:begin\n",
+                LibRainDeployConfig.envExampleSection(vm, LibRainDeploy.supportedNetworkConfigs()),
+                "# rain-deploy:generated:env:end\n"
+            )
+        );
+    }
+
+    /// PROPERTY: `cutRelease()` leaves the config exactly as it found it.
+    ///
+    /// The config is not part of a release record. A `cutRelease()` that
+    /// rewrote it would put a config change inside the one operation that can
+    /// never be repeated, where `run()` is the entry point every push already
+    /// runs and the only one `Git is clean` currency checks.
+    function testCutReleaseLeavesTheConfigAlone() external {
+        resetFixture(CUT_CONFIG_FIXTURE_ROOT);
+        BuildScriptHarness harness = new BuildScriptHarness(CUT_CONFIG_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        harness.seedConfig();
+        harness.cutRelease();
+
+        // Read while the fixture is still there, asserted once it is gone.
+        string memory config = vm.readFile(harness.externalConfigPath());
+        string memory envExample = vm.readFile(harness.externalEnvExamplePath());
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CUT_CONFIG_FIXTURE_ROOT, true);
+
+        assertEq(config, harness.configSeed());
+        assertEq(envExample, harness.envExampleSeed());
     }
 
     /// PROPERTY: a repo that overrides nothing freezes into its OWN record.

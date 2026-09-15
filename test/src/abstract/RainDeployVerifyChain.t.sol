@@ -5,10 +5,11 @@ pragma solidity =0.8.25;
 import {DerivedDeploy} from "../../../src/abstract/RainDeployVerifyBase.sol";
 import {
     CodeHashMismatchOnNetwork,
+    NetworkChainIdMismatch,
     NotDeployedOnNetwork,
     RainDeployVerifyChain
 } from "../../../src/abstract/RainDeployVerifyChain.sol";
-import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
@@ -361,5 +362,71 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
 
         (bool extraFork,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", networkCount));
         assertFalse(extraFork, "the run opened a fork that is not one of the supported networks");
+    }
+
+    /// External wrapper for `checkNetworkChainId` so `vm.expectRevert` works at
+    /// the correct call depth.
+    /// @param network The network name, for the error only.
+    /// @param declared The chain id the roster states.
+    /// @param reported The chain id the endpoint answers with.
+    function externalCheckNetworkChainId(string memory network, uint256 declared, uint256 reported) external pure {
+        checkNetworkChainId(network, declared, reported);
+    }
+
+    /// External wrapper for `checkNetworkChainIds` so `vm.expectRevert` works
+    /// at the correct call depth.
+    /// @param networks The roster to check.
+    function externalCheckNetworkChainIds(SupportedNetwork[] memory networks) external {
+        checkNetworkChainIds(networks);
+    }
+
+    /// PROPERTY: a declared chain id that is not the reported one fails hard,
+    /// naming the network and BOTH ids.
+    ///
+    /// Exact values rather than a bare revert: the two ids are what tells a
+    /// reader whether the declaration is wrong or the alias is bound to a
+    /// different network, and those are opposite fixes.
+    function testChainIdMismatchReverts() external {
+        vm.expectRevert(abi.encodeWithSelector(NetworkChainIdMismatch.selector, "alpha", 11, 22));
+        this.externalCheckNetworkChainId("alpha", 11, 22);
+    }
+
+    /// PROPERTY: a declared chain id that IS the reported one passes.
+    ///
+    /// The other half of the discrimination: without it a check that reverted
+    /// on every pair would satisfy the case above.
+    function testChainIdMatchPasses() external view {
+        this.externalCheckNetworkChainId("alpha", 11, 11);
+    }
+
+    /// PROPERTY: the chain id read is the one the ENDPOINT reports, on a fork
+    /// that really was created.
+    ///
+    /// The roster's own pass is the inherited
+    /// `testSupportedNetworkChainIdsAreBound`, which cannot say where the
+    /// number came from — a check reading `block.chainid` off the unforked
+    /// 31337 EVM would fail there for every network, but so would one reading
+    /// it off the wrong fork, and neither is distinguishable from the other by
+    /// a green run. This declares a chain id no network has for an alias that
+    /// really resolves, and the id in the revert is the one that endpoint
+    /// answers with: `1`, which is Ethereum's and not 31337.
+    function testChainIdIsReadFromTheForkedEndpoint() external {
+        SupportedNetwork[] memory networks = new SupportedNetwork[](1);
+        networks[0] =
+            SupportedNetwork({name: LibRainDeploy.ETHEREUM, chainId: 987654, explorerUrl: "", defaultRpcUrl: ""});
+
+        vm.expectRevert(abi.encodeWithSelector(NetworkChainIdMismatch.selector, LibRainDeploy.ETHEREUM, 987654, 1));
+        this.externalCheckNetworkChainIds(networks);
+    }
+
+    /// PROPERTY: an empty roster fails rather than passing having forked
+    /// nothing.
+    ///
+    /// The one shape of roster that satisfies every loop here without a
+    /// subject, and the shape a repo that narrowed the list all the way down
+    /// would be in.
+    function testChainIdEmptyRosterReverts() external {
+        vm.expectRevert(LibRainDeploy.NoNetworks.selector);
+        this.externalCheckNetworkChainIds(new SupportedNetwork[](0));
     }
 }
