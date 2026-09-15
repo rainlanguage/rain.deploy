@@ -4,7 +4,11 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.2/src/Test.sol";
 
-import {RAIN_COPYRIGHT_TEXT, RAIN_SPDX_LICENSE_IDENTIFIER} from "rain-sol-codegen-0.1.37/src/lib/LibCodeGen.sol";
+import {
+    InvalidIdentifier,
+    RAIN_COPYRIGHT_TEXT,
+    RAIN_SPDX_LICENSE_IDENTIFIER
+} from "rain-sol-codegen-0.1.37/src/lib/LibCodeGen.sol";
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     EmptyRelease,
@@ -2079,6 +2083,229 @@ contract LibRainDeploySnapshotTest is Test {
 
         assertFalse(cutExists);
         assertEq(record.length, 1);
+    }
+
+    /// Where the guard ORDER is driven: a record that is already frozen, cut
+    /// by a call that also names no contracts. Its own tree, for the reason
+    /// the other freeze fixtures have theirs.
+    string constant GUARD_ORDER_FIXTURE_ROOT = "test/generated-freeze-order";
+
+    /// A cut that is BOTH a re-cut and an empty release MUST be refused as the
+    /// re-cut.
+    ///
+    /// The two refusals are not interchangeable. `SnapshotAlreadyFrozen` names
+    /// the directory that already holds the release, which is the thing to go
+    /// and look at; `EmptyRelease` is a fact about the arguments of the call
+    /// and says nothing about the record. Reporting the second would send
+    /// whoever ran it hunting for a mistake in the arguments of a release that
+    /// was already cut, and the record it is about is append-only.
+    function testFreezeRefusesARecutBeforeAnEmptyRelease() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        string memory frozenDir = LibRainDeploySnapshot.dirForSnapshot(GUARD_ORDER_FIXTURE_ROOT, tag);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(frozenDir, true);
+
+        vm.expectRevert(abi.encodeWithSelector(SnapshotAlreadyFrozen.selector, tag, frozenDir));
+        this.externalFreezeAt(GUARD_ORDER_FIXTURE_ROOT, new string[](0));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(GUARD_ORDER_FIXTURE_ROOT, true);
+    }
+
+    /// Where a refused cut's regeneration would be seen. Its own tree, for the
+    /// reason the other freeze fixtures have theirs.
+    string constant REFUSED_REGENERATION_FIXTURE_ROOT = "test/generated-freeze-refused";
+
+    /// The regeneration `testFreezeDoesNotRegenerateARefusedRelease` hands
+    /// `freeze`. It writes the rolling snapshot, so a regeneration that ran
+    /// leaves behind a file nothing else in that tree writes.
+    function regenerateRefusedFixture() internal {
+        writeRollingFixture(REFUSED_REGENERATION_FIXTURE_ROOT, FIXTURE_CONTRACT);
+    }
+
+    /// External wrapper so `vm.expectRevert` lands at the right call depth for
+    /// a refusal whose regeneration is the thing being observed.
+    /// @param root The record root to freeze into.
+    /// @param contractNames The contracts to freeze.
+    function externalFreezeRegeneratingAt(string memory root, string[] memory contractNames) external {
+        LibRainDeploySnapshot.freeze(vm, root, regenerateRefusedFixture, contractNames);
+    }
+
+    /// A cut refused for its ORDER MUST NOT have regenerated anything.
+    ///
+    /// The regeneration is the repo's whole build, and it rewrites the rolling
+    /// snapshot in place. Running it for a release that is then refused leaves
+    /// the candidate of a repo whose release did not happen moved anyway, by a
+    /// call that reported failure — and the guards exist to be the cheap thing
+    /// that happens before the expensive one. Every other freeze test hands a
+    /// regeneration that writes nothing, so a `freeze` that ran it first would
+    /// pass all of them.
+    function testFreezeDoesNotRegenerateARefusedRelease() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        // A release NEWER than the tag being cut: the ordering guard refuses.
+        writeFixture(string.concat(REFUSED_REGENERATION_FIXTURE_ROOT, "/9_9_9/", FIXTURE_CONTRACT, ".sol"));
+
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = FIXTURE_CONTRACT;
+
+        vm.expectRevert(abi.encodeWithSelector(NonMonotonicRelease.selector, tag, "9_9_9"));
+        this.externalFreezeRegeneratingAt(REFUSED_REGENERATION_FIXTURE_ROOT, contractNames);
+
+        // Read while the fixture is still there, asserted once it is gone.
+        bool rollingExists = vm.exists(
+            LibRainDeploySnapshot.pathForSnapshot(
+                REFUSED_REGENERATION_FIXTURE_ROOT, LibRainDeploySnapshot.CANDIDATE, FIXTURE_CONTRACT
+            )
+        );
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(REFUSED_REGENERATION_FIXTURE_ROOT, true);
+
+        assertFalse(rollingExists);
+    }
+
+    /// Where the regeneration is counted. Its own tree, for the reason the
+    /// other freeze fixtures have theirs.
+    string constant REGENERATION_COUNT_FIXTURE_ROOT = "test/generated-freeze-once";
+
+    /// How many times `regenerateCounted` has run.
+    uint256 internal regenerations;
+
+    /// The regeneration `testFreezeRegeneratesExactlyOnce` hands `freeze`. It
+    /// writes the rolling snapshot the cut then freezes, and counts its own
+    /// calls.
+    function regenerateCounted() internal {
+        regenerations++;
+        writeRollingFixture(REGENERATION_COUNT_FIXTURE_ROOT, FIXTURE_CONTRACT);
+    }
+
+    /// A cut MUST run the regeneration exactly once.
+    ///
+    /// The regeneration is a whole build, handed in by the caller and nothing
+    /// this library can assume anything about. Running it twice is a second
+    /// build's bytes under a tag the first build's were read for, and the two
+    /// are the same only for as long as every regeneration any repo hands in
+    /// is idempotent. Not running it is caught by the copied bytes; running it
+    /// again is not, because the fixture regenerations are idempotent — which
+    /// is exactly the assumption being removed.
+    function testFreezeRegeneratesExactlyOnce() external {
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = FIXTURE_CONTRACT;
+
+        LibRainDeploySnapshot.freeze(vm, REGENERATION_COUNT_FIXTURE_ROOT, regenerateCounted, contractNames);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(REGENERATION_COUNT_FIXTURE_ROOT, true);
+
+        assertEq(regenerations, 1);
+    }
+
+    /// Where a cut that fails on a LATER contract is driven. Its own tree, for
+    /// the reason the other freeze fixtures have theirs.
+    string constant LATE_FAILURE_FIXTURE_ROOT = "test/generated-freeze-late";
+
+    /// A cut whose SECOND contract has nothing to freeze MUST leave nothing
+    /// behind: not the tag directory, and not the first contract's file.
+    ///
+    /// The whole record is read before any of it is written for this case
+    /// precisely. A freeze that wrote as it read leaves `<tag>/` holding the
+    /// contracts it got to, which is a partial record under a frozen tag, and
+    /// `SnapshotAlreadyFrozen` refuses the retry of that release forever
+    /// afterwards. A release of one contract cannot see it: there is no later
+    /// contract to fail on.
+    function testFreezeWritesNothingWhenALaterContractHasNothingToFreeze() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        writeRollingFixture(LATE_FAILURE_FIXTURE_ROOT, FIXTURE_CONTRACT);
+
+        string[] memory contractNames = new string[](2);
+        contractNames[0] = FIXTURE_CONTRACT;
+        contractNames[1] = FIXTURE_CONTRACT_SECOND;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                NothingToFreeze.selector,
+                LibRainDeploySnapshot.pathForSnapshot(
+                    LATE_FAILURE_FIXTURE_ROOT, LibRainDeploySnapshot.CANDIDATE, FIXTURE_CONTRACT_SECOND
+                )
+            )
+        );
+        this.externalFreezeAt(LATE_FAILURE_FIXTURE_ROOT, contractNames);
+
+        // Read while the fixture is still there, asserted once it is gone.
+        bool cutExists = vm.exists(LibRainDeploySnapshot.dirForSnapshot(LATE_FAILURE_FIXTURE_ROOT, tag));
+        bool firstExists =
+            vm.exists(LibRainDeploySnapshot.pathForSnapshot(LATE_FAILURE_FIXTURE_ROOT, tag, FIXTURE_CONTRACT));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(LATE_FAILURE_FIXTURE_ROOT, true);
+
+        assertFalse(cutExists);
+        assertFalse(firstExists);
+    }
+
+    /// Where a cut naming something that is not a contract is driven. Its own
+    /// tree, for the reason the other freeze fixtures have theirs.
+    string constant BAD_NAME_FIXTURE_ROOT = "test/generated-freeze-badname";
+
+    /// A contract name that is not a Solidity identifier MUST be refused as
+    /// one, and nothing created.
+    ///
+    /// The name is a path component of every file the release writes, so one
+    /// carrying a separator is a write outside the record. Reported as a
+    /// missing rolling snapshot instead, it reads as a contract nobody
+    /// generated — which is a build to go and fix rather than an argument that
+    /// can never name a file in the first place.
+    function testFreezeRefusesAContractNameThatIsNotAnIdentifier() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = "../MockDeployable";
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidIdentifier.selector, contractNames[0]));
+        this.externalFreezeAt(BAD_NAME_FIXTURE_ROOT, contractNames);
+
+        assertFalse(vm.exists(LibRainDeploySnapshot.dirForSnapshot(BAD_NAME_FIXTURE_ROOT, tag)));
+    }
+
+    /// Where an append onto a record that already holds a release is driven.
+    /// Its own tree, for the reason the other freeze fixtures have theirs.
+    string constant APPEND_FIXTURE_ROOT = "test/generated-freeze-append";
+
+    /// A cut MUST leave every release already in the record exactly as it was.
+    ///
+    /// The record is append-only, and what an earlier tag holds is what
+    /// consumers of that release pin their bytecode against. A cut that
+    /// rewrote or removed it moves bytes out from under a release that is
+    /// already published, and nothing downstream would notice: the entry is
+    /// still declared, still under its own tag, still a file. Every other
+    /// freeze test cuts into a record with nothing else in it, so a cut that
+    /// cleared what came before it would pass all of them.
+    function testFreezeLeavesEarlierReleasesAlone() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        string memory earlierPath =
+            LibRainDeploySnapshot.pathForSnapshot(APPEND_FIXTURE_ROOT, "0_0_1", FIXTURE_CONTRACT);
+        writeFixture(earlierPath);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(earlierPath, fixtureSnapshot("earlier release"));
+        writeRollingFixture(APPEND_FIXTURE_ROOT, FIXTURE_CONTRACT);
+
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = FIXTURE_CONTRACT;
+        LibRainDeploySnapshot.freeze(vm, APPEND_FIXTURE_ROOT, noRegeneration, contractNames);
+
+        // Read while the fixture is still there, asserted once it is gone.
+        bool earlierExists = vm.exists(earlierPath);
+        string memory earlier = earlierExists ? vm.readFile(earlierPath) : "";
+        string[] memory record = LibRainDeploySnapshot.frozenSnapshotPaths(vm, APPEND_FIXTURE_ROOT);
+        string memory cutPath = LibRainDeploySnapshot.pathForSnapshot(APPEND_FIXTURE_ROOT, tag, FIXTURE_CONTRACT);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(APPEND_FIXTURE_ROOT, true);
+
+        assertTrue(earlierExists);
+        assertEq(earlier, fixtureSnapshot("earlier release"));
+        assertEq(record.length, 2);
+        assertTrue(LibStringSet.holds(record, earlierPath));
+        assertTrue(LibStringSet.holds(record, cutPath));
     }
 
     /// Every record the ordering guard is driven against gets a root of its
