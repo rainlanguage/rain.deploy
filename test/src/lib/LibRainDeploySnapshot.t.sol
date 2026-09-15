@@ -516,36 +516,12 @@ contract LibRainDeploySnapshotTest is Test {
         assertTrue(exists);
     }
 
-    /// The fixture record root the rooted write is pointed at. Under `test/`,
-    /// which nothing walks for releases.
     string constant ROOTED_FIXTURE_ROOT = "test/generated-write-snapshot-root";
 
-    /// The directory the rooted write writes into, under the fixture root and
-    /// nowhere else. Not tag shaped, for the reason
-    /// `testWriteSnapshotWritesTheSnapshotAtItsPath` gives, and drawn from the
-    /// tag alphabet because the writer places files only in directories whose
-    /// names are.
     string constant ROOTED_FIXTURE_DIR = "writeSnapshotRootedNotATag";
 
-    /// The directory the same snapshot is written into at the REAL root, to
-    /// compare the bytes against. A second name so that nothing this test wrote
-    /// can stand in for what the rooted write did.
     string constant ROOTED_FIXTURE_REAL_DIR = "writeSnapshotRootedRealNotATag";
 
-    /// PROPERTY: a snapshot is generated under the record root it is HANDED,
-    /// and the real record is not written on the way there.
-    ///
-    /// `freeze` reads every rolling snapshot at `pathForSnapshot(root,
-    /// CANDIDATE, name)`, so a generator that wrote under `LIB_FS_ROOT`
-    /// whatever root it was handed would leave a release cut under any other
-    /// root frozen from a record its own regeneration never wrote — after
-    /// rewriting the append-only tree the other root exists to keep clear.
-    ///
-    /// The bytes are the real root's for the same inputs: the root selects the
-    /// PATH and nothing else, so a fixture record holds the layout the real
-    /// record holds rather than one only a test can be pointed at. State is
-    /// reverted between the two writes for the reason
-    /// `testWriteSnapshotDefaultsToTheOrgHeader` gives.
     function testWriteSnapshotWritesUnderTheRootItIsHanded() external {
         uint256 undeployed = vm.snapshotState();
         string memory atRealRoot = vm.readFile(
@@ -569,7 +545,6 @@ contract LibRainDeploySnapshotTest is Test {
             new address[](0)
         );
 
-        // Read while the fixtures are still there, asserted once they are gone.
         bool rooted = vm.exists(written);
         string memory atFixtureRoot = rooted ? vm.readFile(written) : "";
         bool inTheRealRecord = vm.exists(LibRainDeploySnapshot.pathForSnapshot(ROOTED_FIXTURE_DIR, FIXTURE_CONTRACT));
@@ -593,56 +568,24 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(atFixtureRoot, atRealRoot);
     }
 
-    /// The directory the escaping write is pointed at, under whatever root it
-    /// is handed. Not tag shaped, for the reason
-    /// `testWriteSnapshotWritesTheSnapshotAtItsPath` gives.
     string constant ESCAPE_FIXTURE_DIR = "writeSnapshotEscapeNotATag";
 
-    /// A record root spelled as a path that leaves the tree it names: two
-    /// segments under `test/`, then back out of both and into the REAL record.
-    ///
-    /// The real record is where it is pointed deliberately. It is the tree
-    /// `BuildScript.recordRoot` is overridable to keep a caller's hands off, it
-    /// is append-only, and `fs_permissions` grants `./src` — so a root that
-    /// reaches it is inside everything the config can refuse and is exactly the
-    /// write nothing outside this library is left to catch.
     string constant ESCAPE_FIXTURE_ROOT = "test/generated-escape-root/../../src/generated";
 
-    /// The directory `ESCAPE_FIXTURE_ROOT`'s first segment names, created on the
-    /// way through by a recursive create and removed with the rest.
     string constant ESCAPE_FIXTURE_CLIMB_DIR = "test/generated-escape-root";
 
-    /// External wrapper so a refusal is a failed call rather than a reverted
-    /// test, for the write that is not supposed to happen at all.
-    /// @param root The record root to generate into.
-    /// @param dir The snapshot directory name.
     function externalWriteSnapshotAt(string memory root, string memory dir) external {
         LibRainDeploySnapshot.writeSnapshot(
             vm, root, dir, FIXTURE_CONTRACT, type(MockDeployable).creationCode, new address[](0)
         );
     }
 
-    /// PROPERTY: a root that resolves to somewhere other than the tree it names
-    /// is refused, and nothing is written.
-    ///
-    /// A root is concatenated with a directory and a contract name, both of
-    /// which are checked, and the root is the half that decides where the tree
-    /// IS. Unchecked, `..` in it walks the write out of the root the caller
-    /// named and into one it did not — here the append-only record — and the
-    /// only thing that would have stood between the two is `fs_permissions`,
-    /// which is a consuming repo's config rather than an argument of this
-    /// library's and which grants the record's own tree.
-    ///
-    /// The landing path is the WRITER's own spelling at the real root rather
-    /// than a literal, so what is asserted absent is the same path a real
-    /// generation into the record would produce.
     function testWriteSnapshotRefusesARootThatClimbsOutOfTheTreeItNames() external {
         string memory landing = LibRainDeploySnapshot.pathForSnapshot(ESCAPE_FIXTURE_DIR, FIXTURE_CONTRACT);
 
         (bool accepted,) =
             address(this).call(abi.encodeCall(this.externalWriteSnapshotAt, (ESCAPE_FIXTURE_ROOT, ESCAPE_FIXTURE_DIR)));
 
-        // Read while any residue is still there, asserted once it is gone.
         bool landedInTheRecord = vm.exists(landing);
         if (vm.exists(LibRainDeploySnapshot.dirForSnapshot(ESCAPE_FIXTURE_DIR))) {
             //forge-lint: disable-next-line(unsafe-cheatcode)
@@ -657,30 +600,14 @@ contract LibRainDeploySnapshotTest is Test {
         assertFalse(accepted, "a root that resolves outside the tree it names was accepted");
     }
 
-    /// External wrapper so a refusal is a failed call rather than a reverted
-    /// test, and so the root rule can be asked about a root on its own.
-    /// @param root The record root to check.
     function externalRequireRecordRoot(string memory root) external pure {
         LibRainDeploySnapshot.requireRecordRoot(root);
     }
 
-    /// External wrapper for `LibFs`'s own tag rule, the counterpart to
-    /// `externalRequireRecordRoot`.
-    /// @param tag The tag to check.
     function externalRequireTag(string memory tag) external pure {
         LibFs.requireTag(tag);
     }
 
-    /// PROPERTY: every root that is not a path of record root segments is
-    /// refused, and the refusal names the root.
-    ///
-    /// The cases are the shapes a root can take that a concatenation cannot
-    /// survive, each of which puts the written file somewhere other than under
-    /// the root the caller named: climbing out of the tree, naming the tree's
-    /// own parent, starting at the filesystem root, ending in a separator so
-    /// the next one doubles, doubling one already, and carrying nothing at all.
-    /// A character outside the alphabet is last, because it is the one that is
-    /// not about separators.
     function testRecordRootRefusesEveryRootThatIsNotOne() external {
         string[8] memory bad = [
             "../src/generated",
@@ -699,20 +626,6 @@ contract LibRainDeploySnapshotTest is Test {
         }
     }
 
-    /// PROPERTY: a root of ONE segment is accepted exactly when `LibFs` accepts
-    /// that segment as a tag, `-` alone excepted.
-    ///
-    /// The root rule cannot be asked of `LibFs.requireTag` — a root is a path
-    /// and `requireTag` refuses the separators that make it one — so the
-    /// alphabet between the separators is a copy of `LibFs`'s, and this is where
-    /// the copy is held to the original. Exhaustive over all 256 byte values
-    /// rather than fuzzed, because the alphabet is a property of every byte and
-    /// a copy that has drifted by one of them is a copy that has drifted.
-    ///
-    /// `-` is the whole of the widening and it is asserted as such: the two
-    /// rules are required to disagree about it, so dropping it from the root
-    /// alphabet fails here as loudly as widening the root alphabet further
-    /// does.
     function testRecordRootSegmentIsTheTagAlphabetPlusHyphen() external view {
         for (uint256 i = 0; i < 256; i++) {
             bytes memory segmentBytes = new bytes(1);
@@ -727,21 +640,10 @@ contract LibRainDeploySnapshotTest is Test {
         }
     }
 
-    /// External wrapper so a refusal is a failed call rather than a reverted
-    /// test, for the record walk.
-    /// @param root The record root to walk.
     function externalFrozenSnapshotPaths(string memory root) external view {
         LibRainDeploySnapshot.frozenSnapshotPaths(vm, root);
     }
 
-    /// PROPERTY: the record WALK holds a root to the same rule the writers do.
-    ///
-    /// It is the one root-taking entry point that does not reach
-    /// `dirForSnapshot`, and it answers a missing root with an empty record —
-    /// which is a real state for a repo that has released nothing, and silence
-    /// for a root nothing could ever have been written under. The same root is
-    /// refused by both, so a reader cannot be pointed somewhere a writer would
-    /// not go.
     function testFrozenSnapshotPathsRefusesARootThatIsNotOne() external {
         vm.expectRevert(abi.encodeWithSelector(InvalidRecordRoot.selector, ESCAPE_FIXTURE_ROOT));
         this.externalFrozenSnapshotPaths(ESCAPE_FIXTURE_ROOT);
