@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.2/src/Test.sol";
 import {DeployHarness} from "../concrete/DeployHarness.sol";
-import {LibStringSet} from "../../src/lib/LibStringSet.sol";
+import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.4/src/lib/LibMemoryKV.sol";
 
 /// @title DeployTest
 /// @notice `script/Deploy.sol` has an empty body, and an empty body is a claim:
@@ -22,6 +22,8 @@ import {LibStringSet} from "../../src/lib/LibStringSet.sol";
 /// one here is a dispatch that silently skips chains while every assertion in
 /// this repo stays green.
 contract DeployTest is Test {
+    using LibMemoryKV for MemoryKV;
+
     DeployHarness internal sDeploy;
 
     function setUp() external {
@@ -52,16 +54,26 @@ contract DeployTest is Test {
             targets.length, rpcAliases.length, "the deploy targets a different number of networks than are configured"
         );
 
+        MemoryKV aliasSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < rpcAliases.length; i++) {
+            aliasSet = aliasSet.set(MemoryKVKey.wrap(keccak256(bytes(rpcAliases[i]))), MemoryKVVal.wrap(0));
+        }
+
+        MemoryKV targetSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < targets.length; i++) {
+            targetSet = targetSet.set(MemoryKVKey.wrap(keccak256(bytes(targets[i]))), MemoryKVVal.wrap(0));
+        }
+
         for (uint256 i = 0; i < targets.length; i++) {
             assertTrue(
-                LibStringSet.holds(rpcAliases, targets[i]),
+                aliasSet.has(MemoryKVKey.wrap(keccak256(bytes(targets[i])))),
                 string.concat("the deploy targets a network with no [rpc_endpoints] alias: ", targets[i])
             );
         }
 
         for (uint256 i = 0; i < rpcAliases.length; i++) {
             assertTrue(
-                LibStringSet.holds(targets, rpcAliases[i]),
+                targetSet.has(MemoryKVKey.wrap(keccak256(bytes(rpcAliases[i])))),
                 string.concat("a configured network is not a deploy target: ", rpcAliases[i])
             );
         }
