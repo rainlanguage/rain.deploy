@@ -102,8 +102,8 @@ library LibRainDeploySnapshot {
         return tagForVersion(vm.parseTomlString(vm.readFile("foundry.toml"), ".external.package.version"));
     }
 
-    /// Whether `subject` is three numbers joined by exactly two `separator`s,
-    /// each written without a leading zero.
+    /// Whether `subject` is three `uint256`s joined by exactly two
+    /// `separator`s, each written without a leading zero.
     ///
     /// The ONE definition of the release-version shape. It is asked with `.`
     /// for a version out of `foundry.toml` and with `_` for the directory that
@@ -111,15 +111,23 @@ library LibRainDeploySnapshot {
     /// `frozenSnapshotPaths` recognises as a release cannot drift apart. Two
     /// spellings of one rule is how a version becomes freezable to a directory
     /// the record then ignores.
+    ///
+    /// A component is a `uint256` and not merely a run of digits, because
+    /// `tagPrecedes` reads one back with `parseUint` to order the record. A
+    /// component past that range is digits the ordering cannot read, so
+    /// admitting it would freeze a directory every ordering read of an
+    /// append-only record reverts on.
     /// @param subject The string to test.
     /// @param separator The component separator: `.` for a version, `_` for a
     /// tag.
     /// @return Whether it has the shape.
     function isStrictTriple(string memory subject, bytes1 separator) internal pure returns (bool) {
         bytes memory subjectBytes = bytes(subject);
+        bytes1 zero = "0";
 
         uint256 separators = 0;
         uint256 digitsInComponent = 0;
+        uint256 component = 0;
         for (uint256 i = 0; i < subjectBytes.length; i++) {
             bytes1 char = subjectBytes[i];
             if (char == separator) {
@@ -129,6 +137,7 @@ library LibRainDeploySnapshot {
                 }
                 separators++;
                 digitsInComponent = 0;
+                component = 0;
             } else if (char >= "0" && char <= "9") {
                 // A component is one number, so it has one spelling. `01` and
                 // `1` are the same release and would freeze to two directories,
@@ -140,6 +149,14 @@ library LibRainDeploySnapshot {
                 if (digitsInComponent == 1 && subjectBytes[i - 1] == "0") {
                     return false;
                 }
+                // The parse's own bound rather than a digit count, so exactly
+                // the components `parseUint` reads are the ones a release can
+                // be cut at.
+                uint256 digit = uint256(uint8(char)) - uint256(uint8(zero));
+                if (component > (type(uint256).max - digit) / 10) {
+                    return false;
+                }
+                component = component * 10 + digit;
                 digitsInComponent++;
             } else {
                 return false;
@@ -373,6 +390,24 @@ library LibRainDeploySnapshot {
             paths[i] = found[i];
         }
         return paths;
+    }
+
+    /// Every file in the FROZEN record of a repo's REAL record.
+    ///
+    /// The spelling a repo's own checks call, so the root is not something
+    /// their call sites hand over and cannot be what one of them gets wrong. A
+    /// walk of a root nothing writes to finds nothing, forever and silently, so
+    /// pointing one somewhere else is how a record-anchored check is made inert
+    /// while it still reports green. The rooted spelling above is for a FIXTURE
+    /// record, a tree a test builds rather than the tree a repo asks about
+    /// itself.
+    ///
+    /// `testFrozenSnapshotPathsDefaultToTheWritersRecord` is where this default
+    /// is held to the writer's own paths.
+    /// @param vm The Vm instance for file operations.
+    /// @return Every frozen record file.
+    function frozenSnapshotPaths(Vm vm) internal view returns (string[] memory) {
+        return frozenSnapshotPaths(vm, LIB_FS_ROOT);
     }
 
     /// The constants a snapshot declares below the `BYTECODE_HASH` that

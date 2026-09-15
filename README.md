@@ -101,9 +101,10 @@ Suites are a **registry the abstract iterates**, not a chain of `else if`.
 Adding a suite is adding an array entry. A mistyped `DEPLOYMENT_SUITE` reports
 the valid keys built from that same array, so the error cannot fall behind the
 suites it describes, and keys are checked unique because the key is what selects
-what gets broadcast. A key may not carry a character of the `", "` that list is
-joined with, because one that does renders as two keys and sends a reader who
-did not already know the answer after one that is declared nowhere.
+what gets broadcast. They are checked **non-empty** for the same reason from the
+other side: the empty string is what an unset `DEPLOYMENT_SUITE` arrives as, so
+leaving it declarable would let a dispatch with the suite input blank select
+something instead of reporting that it was told nothing.
 
 Every suite is individually selectable, including a frozen release — which is
 how a snapshot from before a network existed reaches that network.

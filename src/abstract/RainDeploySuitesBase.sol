@@ -7,33 +7,31 @@ pragma solidity ^0.8.25;
 /// @param suite The key declared more than once.
 error DuplicateDeploySuite(string suite);
 
+/// Thrown when a suite declares an EMPTY key.
+///
+/// The empty string is the absent-sentinel: `RainDeployBroadcast.run()` reads
+/// `DEPLOYMENT_SUITE` through `vm.envOr` with `string("")` as the default, so a
+/// dispatch that left the suite input blank asks the registry for exactly this
+/// key. A declaration free to answer it turns "told nothing" into a selection,
+/// and `CREATE2` under a zero salt puts those bytes at their own permanent
+/// address on every chain that dispatch reached.
+///
+/// Reserved on the DECLARATION rather than beside the substitution, for the
+/// reason `NoDeployCandidates` is: a rule bound in the consumer is a rule most
+/// consumers do not run, and here every `suiteByName` caller pays for it rather
+/// than only `run()`. Uniqueness does not already cover it — a lone empty key
+/// collides with nothing.
+/// @param index Position in `allSuites()`: the released suites in declaration
+/// order, then the candidates. The key itself names nothing, so the position is
+/// the only thing that can.
+error EmptyDeploySuiteKey(uint256 index);
+
 /// Thrown when `DEPLOYMENT_SUITE` names no declared suite. Carries the valid
 /// keys, because the whole point of a registry is that the answer is not one
 /// hardcoded string the caller has to already know.
 /// @param requested The key that was asked for.
 /// @param validSuites The declared keys, comma separated.
 error UnknownDeploymentSuite(string requested, string validSuites);
-
-/// @dev What `suiteNames()` joins the declared keys with, and so the characters
-/// a key may not itself contain.
-string constant SUITE_NAME_SEPARATOR = ", ";
-
-/// Thrown when a key contains a character the key list is joined with.
-///
-/// The list `UnknownDeploymentSuite` carries is that join, so one such key
-/// renders as two: a caller reading the list back is told a different number of
-/// suites exist than do and is sent after keys that are declared nowhere. A
-/// list that cannot be read back is the hardcoded string the registry exists to
-/// replace, spelled differently.
-///
-/// EVERY character of the separator, not only the comma that splits it: this
-/// list is revert data a human reads, and a key that opens or closes on the
-/// separator's space renders indistinguishably from one that does not. "No
-/// character of the separator" is one rule tied to the constant the join uses,
-/// where "no comma, and no leading or trailing space" is two rules that can
-/// drift from it and from each other.
-/// @param suite The key that cannot be read back out of the list.
-error UnreadableDeploySuiteKey(string suite);
 
 /// Thrown when a declaration names no candidate at all.
 ///
@@ -81,9 +79,11 @@ error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, byte
 /// make that comparison derived-against-derived, and a guard that compares a
 /// value to itself is not a guard.
 struct DeploySuite {
-    /// The key. Unique across every suite a repo declares: it is what
-    /// `DEPLOYMENT_SUITE` selects for broadcasting, and the label every
-    /// verification error names.
+    /// The key. Unique across every suite a repo declares, and never empty: it
+    /// is what `DEPLOYMENT_SUITE` selects for broadcasting, and the label every
+    /// verification error names. The empty string is the value an unset
+    /// `DEPLOYMENT_SUITE` arrives as, so it is reserved rather than declarable
+    /// — see `EmptyDeploySuiteKey`.
     ///
     /// A repo with one contract and several frozen releases gives each release
     /// its own key, because each is separately deployable — a chain added after
@@ -92,17 +92,25 @@ struct DeploySuite {
     string suite;
     /// The creation code this suite is a snapshot of. The only parameter.
     ///
-    /// A frozen `CREATION_CODE` constant for a released snapshot, or
-    /// `type(X).creationCode` where nothing is frozen yet. Frozen matters: a
-    /// released suite broadcasts the exact bytes its audit covered, whatever
-    /// the current source now compiles to.
+    /// A generated `CREATION_CODE` constant: a frozen one for a released
+    /// snapshot, the rolling one for a candidate. Frozen matters: a released
+    /// suite broadcasts the exact bytes its audit covered, whatever the current
+    /// source now compiles to.
+    ///
+    /// `type(X).creationCode` is what a candidate pairs this AGAINST, so
+    /// spelling the type expression here puts both operands of
+    /// `checkCandidatesAnchoredToSource` on the source side and leaves the one
+    /// check that catches a snapshot of the wrong contract comparing source to
+    /// itself, green. Fixtures that derive a whole mock suite do that on
+    /// purpose, because they have no record and are exercising other
+    /// assertions; a declaration of a real deployment never does.
     bytes creationCode;
     /// The deploy address recorded for this suite.
     address storedDeployedAddress;
     /// The deployed code hash recorded for this suite.
     bytes32 storedBytecodeHash;
-    /// The runtime code recorded for this suite. A frozen `RUNTIME_CODE`
-    /// constant, or `type(X).runtimeCode` where nothing is frozen yet.
+    /// The runtime code recorded for this suite. A generated `RUNTIME_CODE`
+    /// constant.
     bytes storedRuntimeCode;
     /// `<path>:<Name>`, for the explorer verification command.
     ///
@@ -249,18 +257,17 @@ abstract contract RainDeploySuitesBase {
     /// candidates. This is the verification set and the deploy registry, which
     /// are the same set because they are the same declaration.
     ///
-    /// Keys are checked unique here rather than anywhere more specific, so both
-    /// sides pay for the check and neither can be handed an ambiguous registry.
-    /// One pairwise pass over the whole set, so a candidate colliding with
-    /// another candidate is caught by the same code that catches a candidate
-    /// colliding with a release — there is no second rule to keep in step.
+    /// Keys are checked here rather than anywhere more specific, so both sides
+    /// pay for the check and neither can be handed a registry that is ambiguous
+    /// or that answers the absent-sentinel. One pass over the whole set, so a
+    /// candidate colliding with another candidate is caught by the same code
+    /// that catches a candidate colliding with a release, and an empty key is
+    /// refused wherever in the declaration it was spelled — there is no second
+    /// rule to keep in step.
     ///
-    /// Keys are checked readable back out of `suiteNames()` in the same pass
-    /// and for the same reason. A registry whose reported key list parses to a
-    /// different set than it holds is ambiguous to the only party that ever
-    /// reads it, and refusing it here refuses it on every reader at once —
-    /// including `suiteByName`, so the ambiguous list is never the thing a
-    /// failed lookup answers with.
+    /// Unique AND non-empty, because neither implies the other: a lone empty
+    /// key collides with nothing, and it is the one key `run()` can be handed
+    /// by accident.
     /// @return Every declared suite.
     function allSuites() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory released = releasedSuites();
@@ -274,17 +281,10 @@ abstract contract RainDeploySuitesBase {
             suites[released.length + i] = candidates[i].snapshot;
         }
 
-        bytes memory separator = bytes(SUITE_NAME_SEPARATOR);
         for (uint256 i = 0; i < suites.length; i++) {
-            bytes memory key = bytes(suites[i].suite);
-            for (uint256 k = 0; k < key.length; k++) {
-                for (uint256 s = 0; s < separator.length; s++) {
-                    if (key[k] == separator[s]) {
-                        revert UnreadableDeploySuiteKey(suites[i].suite);
-                    }
-                }
+            if (bytes(suites[i].suite).length == 0) {
+                revert EmptyDeploySuiteKey(i);
             }
-
             for (uint256 j = i + 1; j < suites.length; j++) {
                 if (keccak256(bytes(suites[i].suite)) == keccak256(bytes(suites[j].suite))) {
                     revert DuplicateDeploySuite(suites[i].suite);
@@ -295,18 +295,13 @@ abstract contract RainDeploySuitesBase {
         return suites;
     }
 
-    /// Every declared key, `SUITE_NAME_SEPARATOR` separated, for the
-    /// unknown-suite error.
-    ///
-    /// Splitting the result on the separator recovers exactly the keys, because
-    /// `allSuites` refuses a declaration whose keys could put a character of
-    /// the separator anywhere but between two of them.
+    /// Every declared key, comma separated, for the unknown-suite error.
     /// @return The declared keys.
     function suiteNames() internal pure returns (string memory) {
         DeploySuite[] memory suites = allSuites();
         string memory names;
         for (uint256 i = 0; i < suites.length; i++) {
-            names = i == 0 ? suites[i].suite : string.concat(names, SUITE_NAME_SEPARATOR, suites[i].suite);
+            names = i == 0 ? suites[i].suite : string.concat(names, ", ", suites[i].suite);
         }
         return names;
     }
