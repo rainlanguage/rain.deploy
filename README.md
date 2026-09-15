@@ -584,8 +584,12 @@ also says why a rev rather than a crates.io version, and the `big-blocks-tool`
 CI job builds and tests the crate on every push, so the first dispatch is not
 the first compile.
 
-The run fails unless the exchange answers `"status": "ok"`, and the full
-response is in the run log. That log line is the record: Hyperliquid has no
+The run fails unless the exchange answers `"status": "ok"` carrying the empty
+envelope — `{"type": "default"}` with no `data`, which is what the live run on
+record got. The tag alone is not enough: `"status": "ok"` is also how
+Hyperliquid answers the actions that report a per-action outcome, with that
+outcome, error included, nested under `data.statuses`. Either way the full
+response is in the run log, and that log line is the record: Hyperliquid has no
 info-endpoint query that reads `usingBigBlocks` back, so the only observable of
 the flag afterwards is which blocks the deployer's next transactions land in.
 
