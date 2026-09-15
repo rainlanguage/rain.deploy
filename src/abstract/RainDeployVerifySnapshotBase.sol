@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
+import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.4/src/lib/LibMemoryKV.sol";
 
 /// Thrown when the deploy address recorded for a version is not the address its
 /// own creation code derives.
@@ -43,6 +44,15 @@ error FrozenSnapshotNotReleased(string path);
 /// wrong thing.
 /// @param path The record file with no `DEPLOYED_ADDRESS` declaration.
 error FrozenSnapshotUnreadable(string path);
+
+/// Thrown when an `[etherscan]` entry carries neither `chain` nor `url`. Under
+/// an alias foundry does not itself resolve to a chain that entry is not a
+/// missing key, it is "At least one of `url` or `chain` must be present for
+/// Etherscan config with unknown alias" — raised while foundry resolves the
+/// SECTION, so it takes verification down for the other entries too and not
+/// only its own.
+/// @param entry The `[etherscan]` entry that cannot resolve.
+error EtherscanEntryUnresolvable(string entry);
 
 /// @title RainDeployVerifySnapshotBase
 /// @notice Every deploy-pin assertion that needs no network, for every suite
@@ -113,6 +123,8 @@ error FrozenSnapshotUnreadable(string path);
 /// one spelling. Inheriting a narrower contract is a choice a reader sees in
 /// the inheritance list; overriding a test to nothing is one they do not.
 abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
+    using LibMemoryKV for MemoryKV;
+
     /// Checks one suite against itself: derive from its creation code, then
     /// require everything it records to agree with the derivation.
     /// @param suite The suite to check.
@@ -225,6 +237,86 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
                 revert FrozenSnapshotNotReleased(paths[i]);
             }
         }
+    }
+
+    /// Checks that every `[etherscan]` entry can resolve at all: each carries at
+    /// least one of `chain` or `url`.
+    ///
+    /// The entries EXISTING is not enough for the section to verify anything.
+    /// Foundry resolves the section rather than the single entry the network
+    /// being verified needs, so one entry it cannot resolve is an error raised
+    /// for whichever network `--verify` was pointed at — the failure mode the
+    /// key checks are there to keep off a broadcast, arriving from an entry
+    /// that satisfies them.
+    ///
+    /// Required of EVERY entry rather than only the aliases foundry cannot
+    /// resolve itself, because that set is foundry's table and moves under a
+    /// toolchain bump. Stating the chain an alias already resolves to resolves
+    /// it to the same chain, so the strict form is monotonic, needs to know
+    /// nothing of that table, and cannot red-line when foundry adds an alias.
+    /// @param config The raw `foundry.toml` text.
+    /// @param entries The `[etherscan]` entries to check.
+    function checkEtherscanEntriesResolvable(string memory config, string[] memory entries) internal view {
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (
+                !vm.keyExistsToml(config, string.concat(".etherscan.", entries[i], ".chain"))
+                    && !vm.keyExistsToml(config, string.concat(".etherscan.", entries[i], ".url"))
+            ) {
+                revert EtherscanEntryUnresolvable(entries[i]);
+            }
+        }
+    }
+
+    /// Checks a `foundry.toml`'s `[rpc_endpoints]` and `[etherscan]` sections
+    /// against a set of supported networks: the three lists are one list, and
+    /// every `[etherscan]` entry can resolve.
+    ///
+    /// Membership is asserted in BOTH directions. Containment one way alone
+    /// passes for a section carrying an alias nothing deploys to, and the other
+    /// way alone passes for a network with no config at all. Membership rather
+    /// than position, because a config section is keyed rather than ordered and
+    /// there is no order in it to assert.
+    ///
+    /// Takes the config text rather than reading it, so it can be handed one a
+    /// test builds. What reads the binder's own file is
+    /// `testSupportedNetworksAreFullyConfigured`, and see it for why the file's
+    /// text is the subject at all.
+    /// @param config The raw `foundry.toml` text.
+    /// @param networks The supported networks the sections must name.
+    function checkNetworksConfigured(string memory config, string[] memory networks) internal view {
+        MemoryKV networkSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < networks.length; i++) {
+            networkSet = networkSet.set(MemoryKVKey.wrap(keccak256(bytes(networks[i]))), MemoryKVVal.wrap(0));
+        }
+
+        for (uint256 i = 0; i < networks.length; i++) {
+            assertTrue(
+                vm.keyExistsToml(config, string.concat(".rpc_endpoints.", networks[i])),
+                string.concat("supported network has no [rpc_endpoints] alias: ", networks[i])
+            );
+            assertTrue(
+                vm.keyExistsToml(config, string.concat(".etherscan.", networks[i])),
+                string.concat("supported network has no [etherscan] key: ", networks[i])
+            );
+        }
+
+        string[] memory rpcAliases = vm.parseTomlKeys(config, ".rpc_endpoints");
+        for (uint256 i = 0; i < rpcAliases.length; i++) {
+            assertTrue(
+                networkSet.has(MemoryKVKey.wrap(keccak256(bytes(rpcAliases[i])))),
+                string.concat("[rpc_endpoints] alias is not a supported network: ", rpcAliases[i])
+            );
+        }
+
+        string[] memory etherscanKeys = vm.parseTomlKeys(config, ".etherscan");
+        for (uint256 i = 0; i < etherscanKeys.length; i++) {
+            assertTrue(
+                networkSet.has(MemoryKVKey.wrap(keccak256(bytes(etherscanKeys[i])))),
+                string.concat("[etherscan] key is not a supported network: ", etherscanKeys[i])
+            );
+        }
+
+        checkEtherscanEntriesResolvable(config, etherscanKeys);
     }
 
     /// Every declared suite MUST be internally consistent: what it records is

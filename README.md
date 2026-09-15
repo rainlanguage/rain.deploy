@@ -188,13 +188,17 @@ supported network missing from a section broadcasts and then fails after the gas
 is spent, and a section entry no supported network names is config nothing ever
 reads. An `[etherscan]` entry carrying neither `chain` nor `url` under an alias
 foundry cannot resolve is worse than missing — it takes verification down for
-every entry in the section, not only its own.
+every entry in the section, not only its own — so membership is not the whole of
+that half: every entry has to carry at least one of `chain` or `url` as well.
+That is asked of every entry rather than only of the aliases foundry cannot
+resolve, because which aliases those are is foundry's own table, and stating the
+chain an alias already resolves to resolves it to the same chain.
 
 It reads the raw file rather than forge's resolved config, because the values
-are `${VAR}` interpolations that only exist in CI while the KEYS are the whole
-contract, and the keys are in the text. So it needs no RPC and fails on the pull
-request that drifts rather than at dispatch time. Reading the file at all is
-what a consumer has to allow: see [Install](#install).
+are `${VAR}` interpolations that only exist in CI, and nothing it asserts is a
+value — the keys and the entry shapes are both in the text. So it needs no RPC
+and fails on the pull request that drifts rather than at dispatch time. Reading
+the file at all is what a consumer has to allow: see [Install](#install).
 
 ## Address registry
 
@@ -640,8 +644,9 @@ fs_permissions = [{ access = "read", path = "./foundry.toml" }]
 ```
 
 `[rpc_endpoints]` and `[etherscan]` then have to name exactly the networks in
-`supportedNetworks()`. Missing permission fails the check rather than skipping
-it, which is the intended direction: a repo that cannot read its own config is a
+`supportedNetworks()`, and every `[etherscan]` entry has to carry at least one
+of `chain` or `url`. Missing permission fails the check rather than skipping it,
+which is the intended direction: a repo that cannot read its own config is a
 repo whose config nothing has checked.
 
 ## Develop
