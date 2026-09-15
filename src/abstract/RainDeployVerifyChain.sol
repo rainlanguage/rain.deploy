@@ -57,7 +57,9 @@ struct DeclaredChainId {
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the
 /// repo: across every network in `LibRainDeploy.supportedNetworks()`, every
-/// RELEASED suite's derived address carries code with its derived code hash.
+/// RELEASED suite's derived address carries code with its derived code hash,
+/// and every chain id `[etherscan]` declares is the one that network's alias
+/// forks.
 ///
 /// This is the only group that can catch a suite that never deployed to a
 /// network, or that is not there any more. Neither is a fact the repo can hold:
