@@ -14,6 +14,7 @@ import {
     SnapshotAlreadyFrozen,
     UnreleasableVersion
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
 import {LibStringSet} from "../../../src/lib/LibStringSet.sol";
@@ -655,6 +656,44 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
+    /// The alias lib MUST alias the snapshot directory it was HANDED.
+    ///
+    /// The directory is the whole of what the alias lib selects. `candidate/`
+    /// is what a repo aliases while it develops, and a FROZEN tag is what one
+    /// aliases to pin consumers to a release that has actually been cut -- an
+    /// emitter that always named `candidate/` would give every consumer of
+    /// every release the rolling address of whatever HEAD last compiled to,
+    /// which is a pin that moves. The two cases are the same call with one
+    /// argument different, so a hardcoded directory is invisible in the
+    /// candidate case and wrong in the other.
+    ///
+    /// The import path is asserted as text rather than against
+    /// `aliasImportBlock`, so the expectation does not come from the emitter
+    /// the file was written by.
+    ///
+    /// The directory goes before the assertions, because forge-std assertions
+    /// revert: removing afterwards removes in every case except a failure.
+    function testWriteAliasLibAliasesTheSnapshotDirItWasHanded() external {
+        string memory libDir = string.concat(FIXTURE_LIB_ROOT, "/alias-dir");
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(libDir, true);
+
+        string memory emitted =
+            vm.readFile(LibRainDeploySnapshot.writeAliasLib(vm, libDir, FIXTURE_CONTRACT, "MOCK_DEPLOYABLE", "0_0_2"));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(libDir, true);
+
+        assertTrue(
+            vm.contains(emitted, "} from \"../generated/0_0_2/MockDeployable.sol\";"),
+            "the alias lib does not import the snapshot directory it was handed"
+        );
+        assertFalse(
+            vm.contains(emitted, LibRainDeploySnapshot.CANDIDATE),
+            "the alias lib names the rolling snapshot it was not handed"
+        );
+    }
+
     /// Where the released-lib record fixture is built. Its own tree rather
     /// than `FIXTURE_ROOT`: forge runs the tests in a contract concurrently,
     /// and two of them writing one record root see each other's releases.
@@ -1052,6 +1091,175 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(frozenDependencies(sourceThree), three, "a three element list did not round trip");
     }
 
+    /// Where the record-consistency fixture snapshot is written. NOT tag
+    /// shaped, for the reason `testWriteSnapshotWritesTheSnapshotAtItsPath`
+    /// gives: the record root is the real `src/generated/`, walked by the
+    /// inherited record check in contracts forge runs in parallel with this
+    /// one. Drawn from the tag alphabet even so, because the writer places
+    /// files only in directories whose names are.
+    string constant CONSENSUS_FIXTURE_DIR = "writeConsensusNotATag";
+
+    /// The address a snapshot's `DEPLOYED_ADDRESS` constant holds, read out of
+    /// the source the generator wrote.
+    /// @param source The snapshot source.
+    /// @return The frozen deploy address.
+    function frozenDeployedAddress(string memory source) internal pure returns (address) {
+        string[] memory afterName = vm.split(source, "address constant DEPLOYED_ADDRESS = address(");
+        return vm.parseAddress(vm.split(afterName[1], ")")[0]);
+    }
+
+    /// The `bytes32` a snapshot's `BYTECODE_HASH` constant holds, read out of
+    /// the source the generator wrote.
+    /// @param source The snapshot source.
+    /// @return The frozen code hash.
+    function frozenBytecodeHash(string memory source) internal pure returns (bytes32) {
+        string[] memory afterName = vm.split(source, "bytes32 constant BYTECODE_HASH = bytes32(");
+        return vm.parseBytes32(vm.split(afterName[1], ")")[0]);
+    }
+
+    /// The bytes a snapshot's `RUNTIME_CODE` constant holds, read out of the
+    /// source the generator wrote.
+    /// @param source The snapshot source.
+    /// @return The frozen runtime code.
+    function frozenRuntimeCode(string memory source) internal pure returns (bytes memory) {
+        string[] memory afterName = vm.split(source, "bytes constant RUNTIME_CODE =");
+        string[] memory afterOpen = vm.split(afterName[1], "hex\"");
+        return vm.parseBytes(string.concat("0x", vm.split(afterOpen[1], "\"")[0]));
+    }
+
+    /// Freezes one fixture snapshot for `MockDeployable` and returns the source
+    /// written.
+    ///
+    /// The directory goes before the caller asserts anything, because forge-std
+    /// assertions revert: cleaning up afterwards cleans up in every case except
+    /// a failure, which is the one case that leaves a directory under the real
+    /// `src/generated/` for every suite that walks it.
+    /// @return The snapshot source.
+    function freezeConsensusFixture() internal returns (string memory) {
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(LibRainDeploySnapshot.dirForSnapshot(CONSENSUS_FIXTURE_DIR), true);
+
+        string memory source = vm.readFile(
+            LibRainDeploySnapshot.writeSnapshot(
+                vm,
+                CONSENSUS_FIXTURE_DIR,
+                FIXTURE_CONTRACT,
+                RAIN_SPDX_LICENSE_IDENTIFIER,
+                RAIN_COPYRIGHT_TEXT,
+                type(MockDeployable).creationCode,
+                new address[](0)
+            )
+        );
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(CONSENSUS_FIXTURE_DIR), true);
+        return source;
+    }
+
+    /// A snapshot's `DEPLOYED_ADDRESS` MUST be where the ZOLTU FACTORY puts
+    /// that creation code, not wherever the generating process happened to
+    /// deploy it.
+    ///
+    /// The address is the pin. `RainDeployVerifySnapshot` resolves it on every
+    /// supported network and `deployToNetworks` broadcasts to it, so a record
+    /// naming an address the factory does not produce is a release nobody can
+    /// deploy and nobody can verify. The generator deploys locally only to
+    /// learn the code, and the address it learns has to be the one the factory
+    /// gives on chain: a plain `CREATE` lands at an address derived from the
+    /// generating account and its nonce, which is a property of the build
+    /// machine rather than of the contract, and it is identical on no two
+    /// machines.
+    ///
+    /// The expectation is the EVM's own `CREATE2` derivation over the factory's
+    /// address and a zero salt, spelled out here rather than taken from
+    /// `LibRainDeploy.zoltuAddress`, so the oracle does not come from the code
+    /// that wrote the file.
+    function testWriteSnapshotRecordsTheZoltuAddress() external {
+        string memory source = freezeConsensusFixture();
+
+        assertEq(
+            frozenDeployedAddress(source),
+            address(
+                uint160(
+                    uint256(
+                        keccak256(
+                            abi.encodePacked(
+                                bytes1(0xff),
+                                LibRainDeploy.ZOLTU_FACTORY,
+                                bytes32(0),
+                                keccak256(type(MockDeployable).creationCode)
+                            )
+                        )
+                    )
+                )
+            ),
+            "the snapshot does not record the deterministic Zoltu address"
+        );
+    }
+
+    /// A snapshot's `BYTECODE_HASH` MUST hash the code that snapshot's OWN
+    /// `RUNTIME_CODE` holds, which MUST be the code at the address it names.
+    ///
+    /// The three constants are one statement about one deployment, and the
+    /// checks downstream read them SEPARATELY: `RainDeployVerifySnapshot`
+    /// compares a live account's `codehash` against `BYTECODE_HASH` and its
+    /// code against `RUNTIME_CODE`. A hash taken from a different instance than
+    /// the code was is a record that contradicts itself, so whichever of the
+    /// two a network is put through, the other was never true of it.
+    function testWriteSnapshotHashesTheCodeItRecords() external {
+        string memory source = freezeConsensusFixture();
+
+        bytes memory runtimeCode = frozenRuntimeCode(source);
+
+        assertEq(
+            runtimeCode,
+            frozenDeployedAddress(source).code,
+            "the snapshot does not record the code at the address it names"
+        );
+        assertEq(frozenBytecodeHash(source), keccak256(runtimeCode), "the snapshot does not hash the code it records");
+    }
+
+    /// Every constant a snapshot declares MUST carry its documented comment,
+    /// attached to that constant.
+    ///
+    /// A frozen snapshot is read by repos that do not have the contract's
+    /// source -- that is what a release record is for -- so the file's own
+    /// prose is the whole of what a reader is told about four values that all
+    /// look like opaque hex. `DEPENDENCIES` has to say that it is a
+    /// PRECONDITION of the broadcast rather than a note about one, and why it
+    /// is `bytes` and not `address[]`, or the next reader tidies the type and
+    /// silently retypes an append-only record.
+    function testSnapshotConstantsDocumentEveryConstant() external view {
+        string memory constants = LibRainDeploySnapshot.snapshotConstants(vm, address(this), hex"00", new address[](0));
+
+        assertTrue(
+            vm.contains(
+                constants,
+                "/// @dev The deterministic deploy address of the contract when deployed via\n"
+                "/// the Zoltu factory.\naddress constant DEPLOYED_ADDRESS ="
+            ),
+            "DEPLOYED_ADDRESS is not documented"
+        );
+        assertTrue(
+            vm.contains(constants, "/// @dev The creation bytecode of the contract.\nbytes constant CREATION_CODE ="),
+            "CREATION_CODE is not documented"
+        );
+        assertTrue(
+            vm.contains(constants, "/// @dev The runtime bytecode of the contract.\nbytes constant RUNTIME_CODE ="),
+            "RUNTIME_CODE is not documented"
+        );
+        assertTrue(
+            vm.contains(
+                constants,
+                "/// @dev The addresses that MUST already have code on a network before\n"
+                "/// this release can be broadcast there, `abi.encode`d as an `address[]`\n"
+                "/// because Solidity has no file-scope constant of dynamic array type.\n"
+                "bytes constant DEPENDENCIES ="
+            ),
+            "DEPENDENCIES is not documented"
+        );
+    }
+
     /// Tags MUST compare as VERSIONS and not as text. `0_10_0` follows `0_9_0`
     /// as a release and precedes it as a string, so a text comparison both
     /// misorders the record and, since the freeze's ordering guard asks this
@@ -1134,6 +1342,29 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(sorted[2], "src/generated/0_9_0/Second.sol");
         assertEq(sorted[3], "src/generated/0_10_0/AddressRegistry.sol");
         assertEq(sorted[4], "src/generated/1_0_0/AddressRegistry.sol");
+    }
+
+    /// A record file does NOT precede itself.
+    ///
+    /// The order is a STRICT one: `sortedRecordPaths` inserts each path ahead
+    /// of every path it precedes, so a comparison that answered true for a path
+    /// against itself would walk a run of identical paths one place further on
+    /// every insertion, and the freeze's ordering guard asks this same question
+    /// about a tag being re-cut. Two files with one path is what a record root
+    /// read twice, or a walk that reported an entry twice, hands it — and the
+    /// answer has to be the same one `tagPrecedes` gives for a tag against
+    /// itself.
+    function testRecordPrecedesIsStrict() external pure {
+        assertFalse(
+            LibRainDeploySnapshot.recordPrecedes(
+                vm, "src/generated/0_9_0/AddressRegistry.sol", "src/generated/0_9_0/AddressRegistry.sol"
+            )
+        );
+        assertFalse(
+            LibRainDeploySnapshot.recordPrecedes(
+                vm, "src/generated/0_10_0/Second.sol", "src/generated/0_10_0/Second.sol"
+            )
+        );
     }
 
     /// A record holds every contract a repo has ever frozen, and a released lib
