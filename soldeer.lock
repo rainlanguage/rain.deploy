@@ -7,10 +7,10 @@ integrity = "5fb4325b60d7d4194bd0481e2f94398cf1d9c6561dd12a66fb2748ef4a68205f"
 
 [[dependencies]]
 name = "rain-lib-memkv"
-version = "0.1.4"
-url = "https://soldeer-revisions.s3.amazonaws.com/rain-lib-memkv/0_1_4_15-09-2026_09:43:54_rain.lib.zip"
-checksum = "b4869efe13bff76ed2d762a5e72e532bcc1ea5e6ac5b92ad18931dfd0f62c906"
-integrity = "452cd1844a0a578b994a95531d7becde0a13bb15f50fa705d101a25929ebd0b1"
+version = "0.1.5"
+url = "https://soldeer-revisions.s3.amazonaws.com/rain-lib-memkv/0_1_5_15-09-2026_13:51:34_rain.lib.zip"
+checksum = "3820351d5710366790d98727eff897e966054699df2c42221bde40b1114e2918"
+integrity = "46290a43bca3f44f5cf39d1622464e0cb17a450defc7c49198140a66250a6e7c"
 
 [[dependencies]]
 name = "rain-sol-codegen"

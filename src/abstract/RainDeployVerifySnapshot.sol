@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {RainDeployVerifySnapshotBase} from "./RainDeployVerifySnapshotBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
-import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.4/src/lib/LibMemoryKV.sol";
+import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.5/src/lib/LibMemoryKV.sol";
 
 /// @title RainDeployVerifySnapshot
 /// @notice What a deploy repo inherits: every assertion that needs no network,
