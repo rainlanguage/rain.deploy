@@ -165,9 +165,9 @@ contract RainDeployBroadcastTest is Test {
         //
         // A fixture that names ONE network, so that where the broadcast went is
         // observable at all. `sDeploy` takes the default target set, and a suite
-        // deployed to all seven chains and a suite deployed to the one chain the
-        // repo asked for are indistinguishable from a fixture that asks for all
-        // seven.
+        // deployed to every supported chain and a suite deployed to the one
+        // chain the repo asked for are indistinguishable from a fixture that
+        // asks for all of them.
         ExampleDeploySingleNetwork single = new ExampleDeploySingleNetwork();
 
         // Derived here from the same source the declaration derives them from,
@@ -234,8 +234,8 @@ contract RainDeployBroadcastTest is Test {
         // arbitrum for this fixture's single-element override, polygon for the
         // default. That is the whole of the difference an assertion can see, and
         // an override `run()` ignored is a repo that asked for one chain getting
-        // a suite on seven — with a revert partway through leaving a dispatch
-        // half done.
+        // a suite on every supported network — with a revert partway through
+        // leaving a dispatch half done.
         //
         // `testDeployNetworksDefaultsToSupportedNetworks` asserts the default
         // VALUE of that function; nothing until here asserted that `run()` is
@@ -353,12 +353,12 @@ contract RainDeployBroadcastTest is Test {
     /// before the `CREATE2` goes out compares the recorded address against the
     /// recorded creation code, both of which come out of the same generated
     /// file. That catches a stale PIN and cannot catch a snapshot of the wrong
-    /// CONTRACT, so without this the bytes reaching seven chains are whatever the
-    /// generated file happens to hold. `CREATE2` at a zero salt makes that
-    /// permanent: the wrong bytes take the wrong bytes' own address, on every
-    /// chain the dispatch reached, and the dispatch is `workflow_dispatch` on a
-    /// ref with no required-green gate — so "CI was red" is a signal a human may
-    /// not have read.
+    /// CONTRACT, so without this the bytes reaching every chain the dispatch
+    /// targets are whatever the generated file happens to hold. `CREATE2` at a
+    /// zero salt makes that permanent: the wrong bytes take the wrong bytes' own
+    /// address, on every chain the dispatch reached, and the dispatch is
+    /// `workflow_dispatch` on a ref with no required-green gate — so "CI was
+    /// red" is a signal a human may not have read.
     ///
     /// ## Before the suite, and therefore before the key
     ///

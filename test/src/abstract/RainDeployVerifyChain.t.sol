@@ -43,10 +43,10 @@ import {
 /// "nothing is deployed at this address" from something the fixture arranged
 /// into a claim about the world. That claim is false here: the exemplar's
 /// addresses come from `src/generated/candidate/`, which is exactly what
-/// `Manual sol artifacts` broadcasts, and `AddressRegistry` is live on five of
-/// the seven supported networks. A negative case resting on it asserts nothing
-/// and reports `next call did not revert as expected` — a fixture that only
-/// worked while the repo had not yet done the thing it exists to do.
+/// `Manual sol artifacts` broadcasts, and `AddressRegistry` is already live on
+/// supported networks. A negative case resting on it asserts nothing and
+/// reports `next call did not revert as expected` — a fixture that only worked
+/// while the repo had not yet done the thing it exists to do.
 ///
 /// Pointing the fixture at a mock nobody deploys would move that dependency
 /// rather than remove it: the Zoltu factory is permissionless, so no address is
@@ -94,8 +94,9 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
 
     /// A version that is not on a network MUST fail, naming the network, the
     /// version and the address. This is the whole reason the group exists: a
-    /// release that reached six chains of seven, or a chain added after a
-    /// release that therefore never got it, is invisible to every other check.
+    /// release that reached some chains and not others, or a chain added after
+    /// a release that therefore never got it, is invisible to every other
+    /// check.
     function testChainNotDeployedReverts() external {
         // Emptied, and left persistent, so every fork carries an empty account
         // here rather than whatever the network holds.
@@ -197,7 +198,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     ///
     /// This contract is where it belongs because it already forks every
     /// supported network. Asserting it from the empty-set side would hand the
-    /// contract that exists to need no RPC endpoint the seven-endpoint dependency
+    /// contract that exists to need no RPC endpoint the whole-roster dependency
     /// the early return removes from it.
     function testChainWithASingleSubjectDoesFork() external {
         (bool activeBefore,) = address(vm).call(abi.encodeWithSignature("activeFork()"));
