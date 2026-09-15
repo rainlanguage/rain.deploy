@@ -94,23 +94,10 @@ robinhood = "${ROBINHOOD_RPC_URL}"
 # directions, by `testSupportedNetworksAreFullyConfigured`. Adding a network is
 # an edit to all three or a red test, not a broadcast that discovers it.
 #
-# `chain` is stated on EVERY entry, and `testSupportedNetworksAreFullyConfigured`
-# requires at least one of `chain` or `url` on each. An entry with neither, under
-# an alias foundry does not itself resolve to a chain, is not a missing key, it
-# is a config error — "At least one of `url` or `chain` must be present for
-# Etherscan config with unknown alias" — raised while resolving the section, so
-# it takes down verification for every network in it and not only its own.
-#
-# Stated on every entry rather than only on the aliases foundry cannot resolve,
-# because which aliases those are is foundry's own table and that table moves
-# under a toolchain bump. Stating the chain an alias already resolves to
-# resolves it to the same chain, so neither these entries nor the check reading
-# them has to know the table.
-#
-# Each stated `chain` is compared against the chain id its `[rpc_endpoints]`
-# alias actually reports, by `testSupportedNetworkChainIdsAreBound`. That is the
-# one claim here the text cannot settle on its own: a wrong id resolves, reads
-# as well-formed, and is what `--verify` submits.
+# `chain` is stated on every entry because an entry carrying neither `chain` nor
+# `url`, under an alias foundry does not itself resolve to a chain, is a config
+# error raised while resolving the section — it takes down verification for
+# every network in it and not only its own.
 [etherscan]
 arbitrum = { key = "${CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY}", chain = 42161 }
 base = { key = "${CI_DEPLOY_BASE_ETHERSCAN_API_KEY}", chain = 8453 }
