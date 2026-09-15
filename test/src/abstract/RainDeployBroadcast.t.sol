@@ -77,7 +77,10 @@ contract RainDeployBroadcastTest is Test {
     ///
     /// That the reported key is empty rather than a suite is what says there is
     /// no default; `RainDeploySuitesBaseTest.testEmptySuiteIsUnknown` is what
-    /// says an empty key is unknown.
+    /// says an empty key is unknown to THIS declaration, and
+    /// `testEmptySuiteKeyReverts` is what says no declaration can make it
+    /// known — the registry refuses an empty key outright, so the default this
+    /// leg exercises cannot become a real suite in any repo that inherits it.
     ///
     /// ## Then a suite nobody declared
     ///
