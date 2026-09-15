@@ -423,20 +423,20 @@ library LibRainDeploySnapshot {
 
     /// Generate one snapshot for one contract.
     ///
-    /// There is no output root to choose. `LibFs.buildFileForTaggedContract`
-    /// derives its directory from `LIB_FS_ROOT` and the snapshot directory it is
-    /// handed, and this is the repo's real deploy record, which belongs under
-    /// that root and nowhere else. This is the one place a snapshot's bytes come
-    /// into existence, and they come from the compiler rather than from another
-    /// tree, so there is nothing for a root to select between.
+    /// The output root is the one `freeze` is handed, and it is required for
+    /// the same reason: `cutRelease()` regenerates and then freezes within ONE
+    /// record tree. A generator that could only write under `LIB_FS_ROOT` would
+    /// leave a release cut under any other root frozen from a rolling snapshot
+    /// its own regeneration never wrote — after writing the real record on the
+    /// way there, which is the tree a `recordRoot()` override exists to keep a
+    /// caller's hands off.
     ///
-    /// `freeze` does take a root and that is not the same freedom: it COPIES,
-    /// within one record tree, reading a rolling snapshot under the root it is
-    /// handed and writing the frozen copy under that same root. Pointing a
-    /// copier at a tree of its own is a thing a test genuinely needs, exactly
-    /// as pointing `frozenSnapshotPaths` at one is; GENERATING this repo's
-    /// record anywhere but under `LIB_FS_ROOT` remains something nothing here
-    /// can express.
+    /// `LibFs.buildFileForContract` takes the directory it writes into, so the
+    /// root reaches the writer through `dirForSnapshot(root, dir)` and `dir` is
+    /// still held to the tag alphabet by it. At `LIB_FS_ROOT` that directory is
+    /// `LibFs.dirForTag(dir)`, which is where
+    /// `testRootAwareSnapshotPathIsTheWritersAtTheRealRoot` holds the two
+    /// spellings to being one path.
     ///
     /// The dependency list is frozen here with the rest, and it is not
     /// metadata. `RainDeployBroadcast.run` hands a suite's `dependencies` to
@@ -455,6 +455,8 @@ library LibRainDeploySnapshot {
     /// repo's statement. Repos outside this org call this overload; repos
     /// inside it call the one that defaults to the org's values.
     /// @param vm The Vm instance for file operations.
+    /// @param root The record root to generate into — `LIB_FS_ROOT` for a
+    /// repo's real record.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
     /// @param spdxLicenseIdentifier The SPDX licence identifier the written
@@ -466,6 +468,7 @@ library LibRainDeploySnapshot {
     /// @return The path written.
     function writeSnapshot(
         Vm vm,
+        string memory root,
         string memory dir,
         string memory contractName,
         string memory spdxLicenseIdentifier,
@@ -478,18 +481,20 @@ library LibRainDeploySnapshot {
         address deployed = LibRainDeploy.deployZoltu(creationCode);
         string memory constants = snapshotConstants(vm, deployed, creationCode, dependencies);
 
-        // The directory is created by the writer, from the same tag this path is
-        // derived from, so there is no `createDir` here to disagree with it.
-        LibFs.buildFileForTaggedContract(
-            vm, deployed, dir, contractName, spdxLicenseIdentifier, copyrightText, constants
+        // The directory is created by the writer, from the same root and tag
+        // this path is derived from, so there is no `createDir` here to
+        // disagree with it.
+        LibFs.buildFileForContract(
+            vm, deployed, dirForSnapshot(root, dir), contractName, spdxLicenseIdentifier, copyrightText, constants
         );
 
-        return pathForSnapshot(dir, contractName);
+        return pathForSnapshot(root, dir, contractName);
     }
 
     /// `writeSnapshot` applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
     /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
     /// @param vm The Vm instance for file operations.
+    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
     /// @param creationCode That contract's creation code.
@@ -498,13 +503,14 @@ library LibRainDeploySnapshot {
     /// @return The path written.
     function writeSnapshot(
         Vm vm,
+        string memory root,
         string memory dir,
         string memory contractName,
         bytes memory creationCode,
         address[] memory dependencies
     ) internal returns (string memory) {
         return writeSnapshot(
-            vm, dir, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, creationCode, dependencies
+            vm, root, dir, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, creationCode, dependencies
         );
     }
 

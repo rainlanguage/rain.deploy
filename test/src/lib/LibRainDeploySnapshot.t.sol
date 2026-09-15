@@ -496,6 +496,7 @@ contract LibRainDeploySnapshotTest is Test {
 
         string memory written = LibRainDeploySnapshot.writeSnapshot(
             vm,
+            LibRainDeploySnapshot.LIB_FS_ROOT,
             dir,
             "MockDeployable",
             RAIN_SPDX_LICENSE_IDENTIFIER,
@@ -511,6 +512,83 @@ contract LibRainDeploySnapshotTest is Test {
 
         assertEq(written, LibRainDeploySnapshot.pathForSnapshot(dir, "MockDeployable"));
         assertTrue(exists);
+    }
+
+    /// The fixture record root the rooted write is pointed at. Under `test/`,
+    /// which nothing walks for releases.
+    string constant ROOTED_FIXTURE_ROOT = "test/generated-write-snapshot-root";
+
+    /// The directory the rooted write writes into, under the fixture root and
+    /// nowhere else. Not tag shaped, for the reason
+    /// `testWriteSnapshotWritesTheSnapshotAtItsPath` gives, and drawn from the
+    /// tag alphabet because the writer places files only in directories whose
+    /// names are.
+    string constant ROOTED_FIXTURE_DIR = "writeSnapshotRootedNotATag";
+
+    /// The directory the same snapshot is written into at the REAL root, to
+    /// compare the bytes against. A second name so that nothing this test wrote
+    /// can stand in for what the rooted write did.
+    string constant ROOTED_FIXTURE_REAL_DIR = "writeSnapshotRootedRealNotATag";
+
+    /// PROPERTY: a snapshot is generated under the record root it is HANDED,
+    /// and the real record is not written on the way there.
+    ///
+    /// `freeze` reads every rolling snapshot at `pathForSnapshot(root,
+    /// CANDIDATE, name)`, so a generator that wrote under `LIB_FS_ROOT`
+    /// whatever root it was handed would leave a release cut under any other
+    /// root frozen from a record its own regeneration never wrote — after
+    /// rewriting the append-only tree the other root exists to keep clear.
+    ///
+    /// The bytes are the real root's for the same inputs: the root selects the
+    /// PATH and nothing else, so a fixture record holds the layout the real
+    /// record holds rather than one only a test can be pointed at. State is
+    /// reverted between the two writes for the reason
+    /// `testWriteSnapshotDefaultsToTheOrgHeader` gives.
+    function testWriteSnapshotWritesUnderTheRootItIsHanded() external {
+        uint256 undeployed = vm.snapshotState();
+        string memory atRealRoot = vm.readFile(
+            LibRainDeploySnapshot.writeSnapshot(
+                vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
+                ROOTED_FIXTURE_REAL_DIR,
+                FIXTURE_CONTRACT,
+                type(MockDeployable).creationCode,
+                new address[](0)
+            )
+        );
+        vm.revertToState(undeployed);
+
+        string memory written = LibRainDeploySnapshot.writeSnapshot(
+            vm,
+            ROOTED_FIXTURE_ROOT,
+            ROOTED_FIXTURE_DIR,
+            FIXTURE_CONTRACT,
+            type(MockDeployable).creationCode,
+            new address[](0)
+        );
+
+        // Read while the fixtures are still there, asserted once they are gone.
+        bool rooted = vm.exists(written);
+        string memory atFixtureRoot = rooted ? vm.readFile(written) : "";
+        bool inTheRealRecord = vm.exists(LibRainDeploySnapshot.pathForSnapshot(ROOTED_FIXTURE_DIR, FIXTURE_CONTRACT));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(ROOTED_FIXTURE_REAL_DIR), true);
+        if (vm.exists(LibRainDeploySnapshot.dirForSnapshot(ROOTED_FIXTURE_DIR))) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(ROOTED_FIXTURE_DIR), true);
+        }
+        if (vm.exists(ROOTED_FIXTURE_ROOT)) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(ROOTED_FIXTURE_ROOT, true);
+        }
+
+        assertEq(
+            written, LibRainDeploySnapshot.pathForSnapshot(ROOTED_FIXTURE_ROOT, ROOTED_FIXTURE_DIR, FIXTURE_CONTRACT)
+        );
+        assertTrue(rooted, "nothing was written under the record root");
+        assertFalse(inTheRealRecord, "the real record was written under the record root's name");
+        assertEq(atFixtureRoot, atRealRoot);
     }
 
     /// The directory the licence-header fixture snapshot is written into. Not
@@ -555,6 +633,7 @@ contract LibRainDeploySnapshotTest is Test {
         string memory source = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
                 vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
                 HEADER_FIXTURE_DIR,
                 FIXTURE_CONTRACT,
                 RAIN_SPDX_LICENSE_IDENTIFIER,
@@ -639,7 +718,12 @@ contract LibRainDeploySnapshotTest is Test {
 
         string memory source = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
-                vm, RECORD_FIXTURE_DIR, FIXTURE_CONTRACT, creationCode, new address[](0)
+                vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
+                RECORD_FIXTURE_DIR,
+                FIXTURE_CONTRACT,
+                creationCode,
+                new address[](0)
             )
         );
         //forge-lint: disable-next-line(unsafe-cheatcode)
@@ -673,7 +757,12 @@ contract LibRainDeploySnapshotTest is Test {
     function testWriteSnapshotDeclaresTheDeployConstantsInOrder() external {
         string memory source = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
-                vm, ORDER_FIXTURE_DIR, FIXTURE_CONTRACT, type(MockDeployable).creationCode, new address[](0)
+                vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
+                ORDER_FIXTURE_DIR,
+                FIXTURE_CONTRACT,
+                type(MockDeployable).creationCode,
+                new address[](0)
             )
         );
 
@@ -1247,6 +1336,7 @@ contract LibRainDeploySnapshotTest is Test {
         string memory source = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
                 vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
                 DEPENDENCIES_FIXTURE_DIR,
                 FIXTURE_CONTRACT,
                 RAIN_SPDX_LICENSE_IDENTIFIER,
@@ -1366,6 +1456,7 @@ contract LibRainDeploySnapshotTest is Test {
         string memory source = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
                 vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
                 CONSENSUS_FIXTURE_DIR,
                 FIXTURE_CONTRACT,
                 RAIN_SPDX_LICENSE_IDENTIFIER,
@@ -2718,13 +2809,19 @@ contract LibRainDeploySnapshotTest is Test {
         uint256 undeployed = vm.snapshotState();
         string memory defaulted = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
-                vm, dir, "MockDeployable", type(MockDeployable).creationCode, new address[](0)
+                vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
+                dir,
+                "MockDeployable",
+                type(MockDeployable).creationCode,
+                new address[](0)
             )
         );
         vm.revertToState(undeployed);
         string memory explicitly = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
                 vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
                 dir,
                 "MockDeployable",
                 RAIN_SPDX_LICENSE_IDENTIFIER,
