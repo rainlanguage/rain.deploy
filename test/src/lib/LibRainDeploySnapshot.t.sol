@@ -723,7 +723,7 @@ contract LibRainDeploySnapshotTest is Test {
             (bool rootOk,) = address(this).staticcall(abi.encodeCall(this.externalRequireRecordRoot, (segment)));
             (bool tagOk,) = address(this).staticcall(abi.encodeCall(this.externalRequireTag, (segment)));
 
-            assertEq(rootOk, tagOk || segmentBytes[0] == "-", segment);
+            assertEq(rootOk, tagOk || segmentBytes[0] == "-", vm.toString(segmentBytes));
         }
     }
 
