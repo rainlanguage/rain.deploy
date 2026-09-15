@@ -729,6 +729,30 @@ contract LibMigrationRegistryTest is Test {
         this.externalApplied(writer, namespace, migration);
     }
 
+    /// A codeless registry address that EXISTS hashes to the empty string, not
+    /// to zero, and anyone can bring it into existence on a chain without the
+    /// registry by sending it a single wei. The guard fires either way, so what
+    /// this pins is the value a caller reading `actualCodeHash` off the revert
+    /// is handed.
+    function testAppliedNoRegistryFundedAccount(address writer, bytes32 namespace, bytes32 migration, uint256 balance)
+        external
+    {
+        balance = bound(balance, 1, type(uint128).max);
+        vm.deal(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, balance);
+
+        assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
+        assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.codehash, keccak256(""));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                keccak256("")
+            )
+        );
+        this.externalApplied(writer, namespace, migration);
+    }
+
     /// Reading a head off a chain with no registry is refused for the same
     /// reason and with the same named error: an unguarded read reverts here
     /// anyway, because there is no returndata for a `bytes32` to decode from,

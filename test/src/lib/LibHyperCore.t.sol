@@ -216,6 +216,33 @@ contract LibHyperCoreTest is Test {
         this.externalCreditCore(account, VALID_CREDIT);
     }
 
+    /// PROPERTY: a system address holding a BALANCE and no code is refused, as
+    /// the hash of the empty string rather than as zero.
+    ///
+    /// The no-code case above meets an address nothing has ever touched, which
+    /// is the one codeless value. The other is an account that exists without
+    /// code, and on a chain answering as HyperEVM without being it, anyone can
+    /// make the system address that by sending it a single wei — which is
+    /// exactly the chain this guard is for.
+    function testCreditRefusesAFundedSystemAddressWithNoCode(address account, uint256 balance) external {
+        assumeCreditableAccount(account);
+        vm.chainId(LibHyperCore.HYPEREVM_CHAIN_ID);
+        vm.deal(account, VALID_CREDIT + 1);
+
+        balance = bound(balance, 1, type(uint128).max);
+        vm.deal(LibHyperCore.HYPE_SYSTEM_ADDRESS, balance);
+
+        assertEq(LibHyperCore.HYPE_SYSTEM_ADDRESS.code.length, 0);
+        assertEq(LibHyperCore.HYPE_SYSTEM_ADDRESS.codehash, keccak256(""));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibHyperCore.SystemContractChanged.selector, LibHyperCore.HYPE_SYSTEM_CODEHASH, keccak256("")
+            )
+        );
+        this.externalCreditCore(account, VALID_CREDIT);
+    }
+
     /// PROPERTY: the system contract is checked BEFORE the amount, so a credit
     /// with nothing to receive it says so whatever the amount was.
     ///
