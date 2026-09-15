@@ -444,12 +444,14 @@ library LibRainDeploy {
     /// expected address that disagrees with the creation code fails loudly
     /// rather than matching some other contract already deployed there and
     /// skipping every network.
-    /// For each network it forks once, verifies the Zoltu factory and every
-    /// dependency have code (the factory codehash must also match), then
-    /// broadcasts the deploy on that same fork. If code already exists at
-    /// `expectedAddress`, deployment is skipped for that network. Checking and
-    /// deploying on a single fork reads each dependency exactly once, so a
-    /// transient RPC inconsistency on a redundant second read cannot report an
+    /// For each network it forks once. Where `expectedAddress` has no code it
+    /// verifies the Zoltu factory and every dependency have code (the factory
+    /// codehash must also match), then broadcasts the deploy on that same fork;
+    /// where code already exists there, that verification is skipped along with
+    /// the deploy, so a rerun proves nothing about the factory or the
+    /// dependencies on an already-deployed network. Checking and deploying on a
+    /// single fork reads each dependency exactly once, so a transient RPC
+    /// inconsistency on a redundant second read cannot report an
     /// already-deployed dependency as missing and abort an otherwise-valid
     /// deploy. Each network is handled independently: the Zoltu deploy is
     /// idempotent (an existing contract is skipped), so a failure on one network
@@ -468,7 +470,8 @@ library LibRainDeploy {
     /// @param expectedAddress The expected deterministic address, which MUST be
     /// the address the Zoltu factory derives for `creationCode`.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
-    /// @param dependencies The addresses that must have code on each network.
+    /// @param dependencies The addresses that must already have code on a
+    /// network before this contract can be broadcast there.
     /// @return The deployed contract address.
     function deployToNetworks(
         Vm vm,
