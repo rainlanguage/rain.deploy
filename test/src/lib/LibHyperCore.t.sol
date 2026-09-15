@@ -88,6 +88,34 @@ contract LibHyperCoreTest is Test {
         assertEq(keccak256(LibHyperCore.HYPE_SYSTEM_BYTECODE), LibHyperCore.HYPE_SYSTEM_CODEHASH);
     }
 
+    /// PROPERTY: the pinned contract reverts EVERY call that carries calldata,
+    /// and keeps the value such a call tried to send.
+    ///
+    /// This is the fact `CreditFailed` being unreachable rests on. The library
+    /// sends no calldata, so a transfer of its can only fail if the contract
+    /// behind the pin stopped being a bare `receive()` — and the pin is what
+    /// says it has not. Asserted against the etched bytecode, because the claim
+    /// is about those bytes rather than about anything this library does.
+    function testTheSystemContractRefusesEveryCallCarryingCalldata(bytes memory data, uint256 value) external {
+        vm.assume(data.length > 0);
+        value = bound(value, 0, 1e18);
+        LibHyperCore.etchHypeSystemContract(vm);
+        vm.deal(address(this), value);
+        uint256 systemBalanceBefore = LibHyperCore.HYPE_SYSTEM_ADDRESS.balance;
+
+        vm.recordLogs();
+        // The contract has no functions, so there is no interface to reach a
+        // calldata-carrying call to it through.
+        // slither-disable-next-line low-level-calls
+        (bool success, bytes memory returnData) = LibHyperCore.HYPE_SYSTEM_ADDRESS.call{value: value}(data);
+
+        assertFalse(success);
+        assertEq(returnData.length, 0);
+        assertEq(vm.getRecordedLogs().length, 0);
+        assertEq(LibHyperCore.HYPE_SYSTEM_ADDRESS.balance, systemBalanceBefore);
+        assertEq(address(this).balance, value);
+    }
+
     /// PROPERTY: one Core wei is `10 ** 10` EVM wei, which is the gap between
     /// HYPE's 18 wei decimals on the EVM and its 8 on Core.
     ///
@@ -133,6 +161,27 @@ contract LibHyperCoreTest is Test {
         assertEq(account.balance, accountBalanceBefore);
     }
 
+    /// PROPERTY: the chain is checked BEFORE the system contract, so the wrong
+    /// chain says so even when it has no system contract on it either.
+    ///
+    /// The ordinary wrong chain is one where the system address holds nothing,
+    /// so both guards have something to say about it and only the first of them
+    /// is heard. The chain is the one that names what went wrong — the run
+    /// pointed at the wrong network — where a code hash would send whoever read
+    /// it looking for a replaced contract on a chain that never had one.
+    function testCreditChecksTheChainBeforeTheSystemContract(uint64 chainId, address account, uint256 amount) external {
+        assumeCreditableAccount(account);
+        vm.assume(chainId != LibHyperCore.HYPEREVM_CHAIN_ID);
+        vm.assume(chainId != 0);
+        vm.chainId(chainId);
+
+        assertEq(LibHyperCore.HYPE_SYSTEM_ADDRESS.code.length, 0);
+        vm.expectRevert(
+            abi.encodeWithSelector(LibHyperCore.UnexpectedChainId.selector, LibHyperCore.HYPEREVM_CHAIN_ID, chainId)
+        );
+        this.externalCreditCore(account, amount);
+    }
+
     /// PROPERTY: a credit is REFUSED unless the system address holds the exact
     /// contract this library was written against.
     ///
@@ -167,6 +216,26 @@ contract LibHyperCoreTest is Test {
         this.externalCreditCore(account, VALID_CREDIT);
     }
 
+    /// PROPERTY: the system contract is checked BEFORE the amount, so a credit
+    /// with nothing to receive it says so whatever the amount was.
+    ///
+    /// Zero is the amount that also has a guard of its own, and the contract is
+    /// the guard that wins: an amount can be corrected and resubmitted, while a
+    /// system address with the wrong code behind it means the run is pointed
+    /// somewhere the value would not come back from.
+    function testCreditChecksTheSystemContractBeforeTheAmount(address account) external {
+        assumeCreditableAccount(account);
+        vm.chainId(LibHyperCore.HYPEREVM_CHAIN_ID);
+
+        assertEq(LibHyperCore.HYPE_SYSTEM_ADDRESS.codehash, bytes32(0));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibHyperCore.SystemContractChanged.selector, LibHyperCore.HYPE_SYSTEM_CODEHASH, bytes32(0)
+            )
+        );
+        this.externalCreditCore(account, 0);
+    }
+
     /// PROPERTY: a zero credit is REFUSED.
     ///
     /// Zero is a whole number of Core wei, so the round-amount guard lets it
@@ -177,6 +246,23 @@ contract LibHyperCoreTest is Test {
     function testCreditRefusesZero(address account) external {
         assumeCreditableAccount(account);
         arrangeCreditableChain(account, 0);
+
+        vm.expectRevert(abi.encodeWithSelector(LibHyperCore.ZeroCredit.selector));
+        this.externalCreditCore(account, 0);
+    }
+
+    /// PROPERTY: zero is refused as ZERO before the funds are read, so an
+    /// account holding nothing and sending nothing hears about the amount.
+    ///
+    /// Zero passes the round-amount guard — it is a whole number of Core wei —
+    /// and an empty account fails the balance guard, so an order that read the
+    /// funds first would answer a zero credit with `InsufficientBalance` and
+    /// send the caller off to fund an account that is not the problem.
+    function testCreditRefusesZeroBeforeTheBalance(address account) external {
+        assumeCreditableAccount(account);
+        vm.chainId(LibHyperCore.HYPEREVM_CHAIN_ID);
+        LibHyperCore.etchHypeSystemContract(vm);
+        vm.deal(account, 0);
 
         vm.expectRevert(abi.encodeWithSelector(LibHyperCore.ZeroCredit.selector));
         this.externalCreditCore(account, 0);
@@ -214,6 +300,29 @@ contract LibHyperCoreTest is Test {
         amount = bound(amount, 1, LibHyperCore.HYPE_EVM_WEI_PER_CORE_WEI - 1);
 
         arrangeCreditableChain(account, amount);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibHyperCore.CreditNotRound.selector, amount, LibHyperCore.HYPE_EVM_WEI_PER_CORE_WEI)
+        );
+        this.externalCreditCore(account, amount);
+    }
+
+    /// PROPERTY: the amount is checked BEFORE the funds, so an unround amount
+    /// from an empty account is reported as the amount.
+    ///
+    /// Both guards have something to say about that input and the amount is the
+    /// one worth hearing: it is wrong at any balance, where the balance is only
+    /// wrong relative to an amount that should not have been asked for. Funding
+    /// the account to find out would move real money to reach a refusal that
+    /// was already decidable.
+    function testCreditChecksRoundnessBeforeTheBalance(uint256 amount, address account) external {
+        assumeCreditableAccount(account);
+        amount = bound(amount, 1, type(uint128).max);
+        vm.assume(amount % LibHyperCore.HYPE_EVM_WEI_PER_CORE_WEI != 0);
+
+        vm.chainId(LibHyperCore.HYPEREVM_CHAIN_ID);
+        LibHyperCore.etchHypeSystemContract(vm);
+        vm.deal(account, 0);
 
         vm.expectRevert(
             abi.encodeWithSelector(LibHyperCore.CreditNotRound.selector, amount, LibHyperCore.HYPE_EVM_WEI_PER_CORE_WEI)
