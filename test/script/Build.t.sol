@@ -38,10 +38,8 @@ import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.
 /// contract's pins are written into.
 ///
 /// Deliberately nothing here calls `run()` or `cutRelease()`. Both rewrite the
-/// committed `src/generated/` snapshots that other test contracts read, and
-/// forge runs test contracts in parallel — a contract rewriting what another
-/// one is reading is a race, not a check. `regenerateLibs()` is run, and only
-/// into a fixture directory nothing compiles; the one write below is that.
+/// committed `src/generated/` snapshots other test contracts read, and forge
+/// runs test contracts in parallel.
 contract BuildTest is Test {
     using LibMemoryKV for MemoryKV;
 
@@ -313,65 +311,13 @@ contract BuildTest is Test {
         }
     }
 
-    /// PROPERTY: a build with nothing overridden writes its libs into the
-    /// directory the committed ones are in.
-    ///
-    /// Asserted against the path as text rather than against
-    /// `LibRainDeploySnapshot.LIB_DIR`, which is the constant the default
-    /// returns: a default pointed at a directory nothing compiles leaves every
-    /// committed lib stale forever while the regeneration reports success, and
-    /// the test below cannot see it, because that test overrides this.
     function testTheDefaultLibDirIsWhereTheCommittedLibsAre() external view {
         assertEq(sBuild.externalLibDir(), "src/lib");
     }
 
-    /// Where `regenerateLibs()` is driven.
-    ///
-    /// Outside `src/` and `test/`, which is everything `fs_permissions`
-    /// otherwise grants and both of which are compiled: a generated lib imports
-    /// `../generated/`, `../abstract/` and `./Lib<Contract>Released.sol`, which
-    /// resolve from `src/lib` and nowhere else, so a copy under either root
-    /// fails the build for every suite — including the copy a failing test
-    /// leaves behind. `foundry.toml` grants this root for exactly that, and
-    /// nothing compiles it.
     string constant LIBS_FIXTURE_DIR = "fixture-lib/build-regenerate-libs";
 
-    /// PROPERTY: `regenerateLibs()` RUN emits exactly the committed libs — one
-    /// alias lib and one released lib per generated contract, one aggregate,
-    /// and nothing else.
-    ///
-    /// Every assertion above this one is output-anchored: it compares a
-    /// committed file against the emitters, so it sees drift only AFTER
-    /// somebody re-runs the generator and commits what came out. The hook that
-    /// decides which emitter is called, with which arguments, how many times,
-    /// was executed by nothing at all — a loop bound that stopped one contract
-    /// short, or a `constantPrefix` taken from `contracts[0]` on every pass,
-    /// was invisible until the next release cut it into the record. Both hooks
-    /// took a `revert()` as their first statement with the whole suite still
-    /// green.
-    ///
-    /// So this runs it, and the oracle is the committed tree rather than the
-    /// emitters: a regeneration of a clean checkout is a no-op, so every file
-    /// it writes MUST be byte-identical to the file already there. That is
-    /// independent of the emitters in the way the pins above are not — they say
-    /// the committed files are what the emitters produce, and this says the
-    /// hook asks the emitters for those files.
-    ///
-    /// The count is asserted as well as the contents, because a loop that
-    /// stopped short writes nothing wrong — it writes nothing at all — and a
-    /// file the hook wrote that the repo does not commit is a generated file
-    /// nothing regenerates.
-    ///
-    /// `regenerateSnapshots()` has no counterpart here and can have none:
-    /// `LibFs` confines every snapshot write to `src/generated/<tag>/`, the
-    /// record `frozenSnapshotPaths` walks, so there is no directory to drive it
-    /// into that is not read by the suites running beside this one.
-    ///
-    /// Read, then removed, then asserted: forge-std assertions revert, so a
-    /// removal after them removes in every case except a failure, which is the
-    /// only case that leaves a directory behind. `vm.isFile` before each read
-    /// for the same reason — a missing file is what the loop-bound failure
-    /// looks like, and a cheatcode revert there would strand the fixture.
+    /// Assertions revert, so the fixture is removed before any of them run.
     function testRegenerateLibsEmitsExactlyTheCommittedLibs() external {
         GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
         BuildHarness harness = new BuildHarness(LIBS_FIXTURE_DIR);
@@ -411,14 +357,6 @@ contract BuildTest is Test {
         }
     }
 
-    /// A harness left pointed at `Build`'s own lib directory MUST refuse to run
-    /// the lib half of a build.
-    ///
-    /// `setUp` builds one, because the default is what
-    /// `testTheDefaultLibDirIsWhereTheCommittedLibsAre` reads, and it is shared
-    /// with every other test in this contract. A call that went through would
-    /// rewrite `src/lib/` while the suites that compile and read those files
-    /// are running.
     function testRegenerateLibsRefusesToWriteTheCommittedLibs() external {
         vm.expectRevert(BuildHarnessWouldWriteTheCommittedLibs.selector);
         sBuild.externalRegenerateLibs();
