@@ -298,6 +298,20 @@ contract LibRainDeployTest is Test {
         assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
     }
 
+    /// `createForks` MUST fork nothing and answer with an empty list when given
+    /// no networks, rather than refusing them.
+    ///
+    /// Refusing an empty target set is the CALLERS' job, and they do it before
+    /// they get here: `deployToNetworks` and `checkResolvedAddressesOnNetworks`
+    /// both report `NoNetworks` ahead of any fork, which is what makes that
+    /// refusal reportable without an RPC round trip. A refusal here as well
+    /// would be a second one nothing can reach, and it would take the honest
+    /// answer to forking nothing — nothing — with it.
+    function testCreateForksEmptyList() external {
+        uint256[] memory forkIds = LibRainDeploy.createForks(vm, new string[](0));
+        assertEq(forkIds.length, 0);
+    }
+
     /// External wrapper for `deployAndBroadcast` so that
     /// `vm.expectRevert` works at the correct call depth.
     /// @param networks The list of network names to deploy to.
@@ -1036,6 +1050,110 @@ contract LibRainDeployTest is Test {
             )
         );
         this.externalCheckResolvedAddresses("test_network", address(consumer), readCalls, expectedAddresses);
+    }
+
+    /// Every read MUST be made with its OWN calldata, so a list of reads asks
+    /// the target as many different questions as it holds.
+    ///
+    /// The reads here are two DIFFERENT selectors answering two different
+    /// addresses, which is the only shape that separates a per-read call from
+    /// one that repeats the first read and compares its answer down the list.
+    /// A list of identical reads cannot: every answer is the same whichever
+    /// calldata produced it, so a check that asked the first question twice
+    /// would pass it.
+    ///
+    /// Both directions are asserted. The matching pair passes, and swapping the
+    /// two expected addresses fails at index 0 — the read that would have been
+    /// reused — naming the address the other read answers with.
+    function testCheckResolvedAddressesReadsEachCallSeparately(address first, address second) external {
+        vm.assume(first != second);
+        MockChainDependentOwner target = new MockChainDependentOwner(first, second, block.chainid);
+
+        bytes[] memory readCalls = new bytes[](2);
+        readCalls[0] = abi.encodeWithSignature("iOwnerOnChain()");
+        readCalls[1] = abi.encodeWithSignature("iOwnerElsewhere()");
+        address[] memory expectedAddresses = new address[](2);
+        expectedAddresses[0] = first;
+        expectedAddresses[1] = second;
+
+        LibRainDeploy.checkResolvedAddresses("test_network", address(target), readCalls, expectedAddresses);
+
+        expectedAddresses[0] = second;
+        expectedAddresses[1] = first;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                "test_network",
+                address(target),
+                uint256(0),
+                second,
+                first
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(target), readCalls, expectedAddresses);
+    }
+
+    /// A read that cannot be answered MUST be reported against the index of the
+    /// read that failed, not against the first one.
+    ///
+    /// The index is the only thing in the error that says WHICH read to go and
+    /// look at: the network and the target are the same for every read in the
+    /// list, and the return data of a read that answered nothing is empty. A
+    /// consumer handed index 0 for a failure at index 1 is sent to a read that
+    /// is working. The first read here answers correctly for that reason — a
+    /// list whose first read also failed could not tell the two apart.
+    function testCheckResolvedAddressesReadFailureNamesTheFailingRead(bytes32 name, address account) external {
+        vm.assume(account != address(0));
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+
+        bytes[] memory readCalls = new bytes[](2);
+        readCalls[0] = abi.encodeWithSignature("iOwner()");
+        readCalls[1] = abi.encodeWithSignature("thisFunctionDoesNotExist()");
+        address[] memory expectedAddresses = new address[](2);
+        expectedAddresses[0] = account;
+        expectedAddresses[1] = account;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector,
+                "test_network",
+                address(consumer),
+                uint256(1),
+                bytes("")
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(consumer), readCalls, expectedAddresses);
+    }
+
+    /// A read that answers with a word that is not an address MUST be reported
+    /// against the index of that read too.
+    ///
+    /// This is the same rule one guard further along, and it is a guard of its
+    /// own: a read can succeed, answer with exactly one word, and still not have
+    /// answered with an address. The target answers the first read with a clean
+    /// address and the second with a `uint256` whose upper 96 bits are set, so
+    /// only the second read is at fault and the index is what says so.
+    function testCheckResolvedAddressesDirtyWordNamesTheFailingRead(address account, bytes32 word) external {
+        vm.assume(uint256(word) > type(uint160).max);
+        MockChainDependentOwner target = new MockChainDependentOwner(account, account, uint256(word));
+
+        bytes[] memory readCalls = new bytes[](2);
+        readCalls[0] = abi.encodeWithSignature("iOwnerOnChain()");
+        readCalls[1] = abi.encodeWithSignature("iChainId()");
+        address[] memory expectedAddresses = new address[](2);
+        expectedAddresses[0] = account;
+        expectedAddresses[1] = address(uint160(uint256(word)));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector,
+                "test_network",
+                address(target),
+                uint256(1),
+                abi.encode(word)
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(target), readCalls, expectedAddresses);
     }
 
     /// A read that cannot be answered is never a pass. An address with no code
