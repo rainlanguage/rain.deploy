@@ -49,6 +49,15 @@ error EmptyRelease(string tag);
 /// @param newestFrozenTag The newest tag already in the record.
 error NonMonotonicRelease(string tag, string newestFrozenTag);
 
+/// Thrown when a record root is not a path this library can place a record at.
+/// A root is interpolated into every snapshot path a caller hands it, so one
+/// that climbs out of the tree, starts at `/` or is empty makes the paths this
+/// library returns paths to somewhere else entirely — and `fs_permissions`, a
+/// consuming repo's config rather than this library's argument, the only thing
+/// standing between a generated file and an arbitrary location on disk.
+/// @param root The rejected root.
+error InvalidRecordRoot(string root);
+
 /// @title LibRainDeploySnapshot
 /// @notice Which release is being built, where its record lives, and how it is
 /// frozen. Release machinery, not code generation.
@@ -196,6 +205,51 @@ library LibRainDeploySnapshot {
     /// assertion was standing in for.
     string constant LIB_FS_ROOT = GENERATED_DIR;
 
+    /// Reverts unless `root` is a path of record root segments: at least one
+    /// segment, separated by single `/`, each of them at least one character
+    /// and every character an ASCII letter, a digit, `_`, `$` or `-`.
+    ///
+    /// That is `LibFs.requireTag`'s alphabet with `-` admitted as well, and a
+    /// root is held to it segment by segment for the reason `requireTag` states
+    /// of a tag: no character in the set is a path separator and none of them is
+    /// `.`, so no segment is `.` or `..` and none reaches past the single
+    /// directory it names. Refusing the empty segment is what carries that from
+    /// a segment to a path — it takes the leading `/` of an absolute path, the
+    /// trailing one, the doubled one, and the empty root itself.
+    ///
+    /// `requireTag` cannot be asked this, because the separators that make a
+    /// path a path are exactly what it refuses; the alphabet BETWEEN them is a
+    /// copy of its, held to it byte for byte by
+    /// `testRecordRootSegmentIsTheTagAlphabetPlusHyphen`. The `-` is the whole
+    /// of the widening and it is what this repo's own roots need: `src/generated`
+    /// is tag segments already, while every fixture root the tests build is
+    /// `test/generated-<something>` or `test/fixture-record`.
+    /// @param root The record root to check.
+    function requireRecordRoot(string memory root) internal pure {
+        bytes memory rootBytes = bytes(root);
+        uint256 segmentLength = 0;
+        for (uint256 i = 0; i < rootBytes.length; i++) {
+            bytes1 char = rootBytes[i];
+            if (char == "/") {
+                if (segmentLength == 0) {
+                    revert InvalidRecordRoot(root);
+                }
+                segmentLength = 0;
+                continue;
+            }
+            bool isLetter = (char >= 0x41 && char <= 0x5A) || (char >= 0x61 && char <= 0x7A);
+            bool isDigit = char >= 0x30 && char <= 0x39;
+            bool isUnderscoreOrDollar = char == 0x5F || char == 0x24;
+            if (!(isLetter || isDigit || isUnderscoreOrDollar || char == "-")) {
+                revert InvalidRecordRoot(root);
+            }
+            segmentLength++;
+        }
+        if (segmentLength == 0) {
+            revert InvalidRecordRoot(root);
+        }
+    }
+
     /// The directory holding a snapshot, rolling or frozen, under a record
     /// root.
     ///
@@ -204,11 +258,18 @@ library LibRainDeploySnapshot {
     /// that admitted a name the writer refuses is a reader pointed at a path
     /// nothing can ever have written, and a fixture record that admitted one
     /// would be a fixture of a layout the real record cannot hold.
+    ///
+    /// The root is checked here too, and this is where it has to be: it is the
+    /// one place the root becomes a path, and the two halves of that path are
+    /// concatenated caller input. A checked `dir` beside an unchecked root is
+    /// only the shorter half of the path confined.
     /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// MUST be a path of record root segments.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// MUST be drawn from `LibFs`'s tag alphabet.
     /// @return The directory path.
     function dirForSnapshot(string memory root, string memory dir) internal pure returns (string memory) {
+        requireRecordRoot(root);
         LibFs.requireTag(dir);
         return string.concat(root, "/", dir);
     }
@@ -242,6 +303,7 @@ library LibRainDeploySnapshot {
     /// as on how they are spelled: a reader that accepted what the writer
     /// refuses is the same divergence one step quieter.
     /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// MUST be a path of record root segments.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// MUST be drawn from `LibFs`'s tag alphabet.
     /// @param contractName The name of the contract. MUST be a Solidity
@@ -335,10 +397,17 @@ library LibRainDeploySnapshot {
     /// - the entry is a file directly inside it. Everything in a release
     ///   directory belongs to that release's record — there is no extension to
     ///   filter on, because nothing else has any business being in there.
+    /// The root is checked before the walk, because a root nothing can be
+    /// written under is not a record that happens to be empty. This is the one
+    /// root-taking entry point that does not reach `dirForSnapshot`, so the two
+    /// together are every way a root gets into this library.
     /// @param vm The Vm instance for file operations.
     /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// MUST be a path of record root segments.
     /// @return Every frozen record file.
     function frozenSnapshotPaths(Vm vm, string memory root) internal view returns (string[] memory) {
+        requireRecordRoot(root);
+
         // A repo with no generated directory at all has released nothing. That
         // is a real state — it is this repo's own, before its first release —
         // rather than a missing file to fail on.
@@ -432,8 +501,14 @@ library LibRainDeploySnapshot {
     /// caller's hands off.
     ///
     /// `LibFs.buildFileForContract` takes the directory it writes into, so the
-    /// root reaches the writer through `dirForSnapshot(root, dir)` and `dir` is
-    /// still held to the tag alphabet by it. At `LIB_FS_ROOT` that directory is
+    /// root reaches the writer through `dirForSnapshot(root, dir)`, which is
+    /// where both halves of the directory are checked: `dir` against `LibFs`'s
+    /// tag alphabet and the root against `requireRecordRoot`. The root is a
+    /// caller's string and it is the half that names where the tree IS, so an
+    /// unchecked one would make the output directory of every write here the
+    /// caller's to place anywhere `fs_permissions` allows — which is a
+    /// consuming repo's config, not an argument this library gets to see. At
+    /// `LIB_FS_ROOT` that directory is
     /// `LibFs.dirForTag(dir)`, which is where
     /// `testRootAwareSnapshotPathIsTheWritersAtTheRealRoot` holds the two
     /// spellings to being one path.
@@ -456,7 +531,7 @@ library LibRainDeploySnapshot {
     /// inside it call the one that defaults to the org's values.
     /// @param vm The Vm instance for file operations.
     /// @param root The record root to generate into — `LIB_FS_ROOT` for a
-    /// repo's real record.
+    /// repo's real record. MUST be a path of record root segments.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
     /// @param spdxLicenseIdentifier The SPDX licence identifier the written
@@ -495,6 +570,7 @@ library LibRainDeploySnapshot {
     /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
     /// @param vm The Vm instance for file operations.
     /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// MUST be a path of record root segments.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
     /// @param creationCode That contract's creation code.
