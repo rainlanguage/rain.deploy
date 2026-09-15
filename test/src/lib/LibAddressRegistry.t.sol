@@ -146,4 +146,17 @@ contract LibAddressRegistryTest is Test {
         );
         this.externalResolve(name);
     }
+
+    /// The Zoltu deploy really does land the registry on its pinned address
+    /// with its pinned code hash. Every other test here depends on that, and a
+    /// pin that had gone stale would otherwise show up as an unrelated
+    /// code-hash revert in all of them.
+    function testDeployMatchesPins() external {
+        deployRegistry();
+
+        assertEq(
+            LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.codehash,
+            LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH
+        );
+    }
 }

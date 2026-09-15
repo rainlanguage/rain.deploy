@@ -64,6 +64,7 @@ fs_permissions = [
 [dependencies]
 forge-std = "1.16.2"
 rain-sol-codegen = "0.1.37"
+rain-lib-memkv = "0.1.4"
 
 [soldeer]
 recursive_deps = false

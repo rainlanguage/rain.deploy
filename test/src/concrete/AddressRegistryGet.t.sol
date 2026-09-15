@@ -72,4 +72,41 @@ contract AddressRegistryGetTest is Test {
         (bool success,) = address(sRegistry).call(abi.encodeWithSelector(selector, name, address(this)));
         assertFalse(success);
     }
+
+    /// The ABI is exactly the two `IAddressRegistryV1` functions, counted
+    /// rather than sampled. A fuzz over unknown selectors cannot see a reader
+    /// added under a name of its own, and such a reader is precisely what the
+    /// interface forbids: it would answer an unbound name with the zero
+    /// address, the silent failure `get` reverts to prevent.
+    function testGetAbiIsExactlyTheInterface() external view {
+        string[] memory signatures =
+            vm.parseJsonKeys(vm.readFile("out/AddressRegistry.sol/AddressRegistry.json"), "$.methodIdentifiers");
+
+        assertEq(signatures.length, 2);
+        assertEq(signatures[0], "get(bytes32)");
+        assertEq(signatures[1], "register(bytes32,address)");
+    }
+
+    /// The registry takes no value on any path. Neither entry point is payable
+    /// and there is no `receive`, so ether sent with or without calldata is
+    /// refused rather than trapped in a contract that holds no way to move it
+    /// out again.
+    function testGetNoValueEntryPoint(bytes32 name, address account) external {
+        vm.assume(account != address(0));
+        vm.deal(ADDRESS_REGISTRY_ROOT, 3);
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        (bool bare,) = address(sRegistry).call{value: 1}("");
+        assertFalse(bare);
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        (bool bound,) = address(sRegistry).call{value: 1}(abi.encodeCall(IAddressRegistryV1.register, (name, account)));
+        assertFalse(bound);
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        (bool read,) = address(sRegistry).call{value: 1}(abi.encodeCall(IAddressRegistryV1.get, (name)));
+        assertFalse(read);
+
+        assertEq(address(sRegistry).balance, 0);
+    }
 }
