@@ -46,6 +46,12 @@ library LibRainDeploy {
     /// no code at the current block.
     error NotDeployed(address target);
 
+    /// Thrown when a code hash check is handed the zero code hash. An account
+    /// with no code answers `codehash` zero, so a zero expectation is met by
+    /// the ABSENCE of a contract and missed at every block one exists. A true
+    /// from it is indistinguishable at the call site from a real match.
+    error NoExpectedCodeHash(address target);
+
     /// Thrown when the target already has code at the start block, meaning
     /// the deploy may have happened before the search range.
     error DeployedBeforeStartBlock(address target, uint256 startBlock);
@@ -124,13 +130,18 @@ library LibRainDeploy {
     /// two blocks cannot show it.
     /// @param vm The Vm instance for fork manipulation.
     /// @param target The contract address to check.
-    /// @param expectedCodeHash The code hash to look for.
+    /// @param expectedCodeHash The code hash to look for. MUST NOT be zero;
+    /// `NoExpectedCodeHash` says why.
     /// @param blockNumber The block number to check.
     /// @return True if the contract first appears at this block.
     function isStartBlock(Vm vm, address target, bytes32 expectedCodeHash, uint256 blockNumber)
         internal
         returns (bool)
     {
+        if (expectedCodeHash == bytes32(0)) {
+            revert NoExpectedCodeHash(target);
+        }
+
         uint256 originalBlock = block.number;
         vm.rollFork(blockNumber);
         bool isStart = target.codehash == expectedCodeHash;

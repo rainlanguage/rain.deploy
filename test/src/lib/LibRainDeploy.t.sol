@@ -1886,4 +1886,27 @@ contract LibRainDeployTest is Test {
             ZOLTU_BASE_DEPLOY_BLOCK
         );
     }
+
+    /// `isStartBlock` MUST refuse a zero `expectedCodeHash` rather than answer
+    /// true for an address no contract has ever existed at. Block 0 of Base is
+    /// such a block for this address, and it is the case the guard has to take:
+    /// at block 0 only the one read happens, so a zero expectation is met
+    /// outright.
+    function testIsStartBlockZeroCodeHashWhereNoContractEverExisted() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        vm.rollFork(uint256(0));
+        assertEq(address(0xdead).codehash, bytes32(0));
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoExpectedCodeHash.selector, address(0xdead)));
+        this.externalIsStartBlock(address(0xdead), bytes32(0), 0);
+    }
+
+    /// `isStartBlock` MUST refuse a zero `expectedCodeHash` at the genuine
+    /// start block of a real contract, where the true code hash answers true
+    /// and zero answers false.
+    function testIsStartBlockZeroCodeHashAtGenuineStartBlock() external {
+        vm.createSelectFork(LibRainDeploy.BASE, ZOLTU_BASE_DEPLOY_BLOCK);
+        assertGt(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoExpectedCodeHash.selector, LibRainDeploy.ZOLTU_FACTORY));
+        this.externalIsStartBlock(LibRainDeploy.ZOLTU_FACTORY, bytes32(0), ZOLTU_BASE_DEPLOY_BLOCK);
+    }
 }
