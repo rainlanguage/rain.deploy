@@ -69,6 +69,21 @@ error CodeHashMismatchOnNetwork(
 /// network from the moment it is declared. There are deliberately no per-chain
 /// or per-suite functions to add.
 ///
+/// ## One bad cell ends the run, at that cell
+///
+/// Generated from both lists is a statement about what gets CHECKED, not a
+/// promise that every cell gets REPORTED. The first missing or mismatched cell
+/// reverts and the run stops on that network, so a release that reached one
+/// network of nine is enumerated one red run per cell.
+///
+/// That is the trade, not an oversight. The error names the network, the suite
+/// and the address, so a run that names one cell is actionable on its own;
+/// deploying is idempotent by construction, so a partial release is fixed by
+/// running the deploy again rather than by knowing the whole shape first; and
+/// stopping spends no further RPC on a run whose answer is already red.
+/// Reporting every cell means this check becomes a collector with a summary
+/// error, which is a larger contract bought with fewer red runs.
+///
 /// It compares against the DERIVED code hash rather than the recorded one, so
 /// the creation code stays the only parameter. `RainDeployVerifySnapshot` is
 /// what ties the derivation back to the recorded constants; the two together
