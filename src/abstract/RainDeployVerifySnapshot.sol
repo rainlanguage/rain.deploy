@@ -5,7 +5,6 @@ pragma solidity ^0.8.25;
 import {RainDeployVerifySnapshotBase} from "./RainDeployVerifySnapshotBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
-import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.4/src/lib/LibMemoryKV.sol";
 
 /// @title RainDeployVerifySnapshot
 /// @notice What a deploy repo inherits: every assertion that needs no network,
@@ -20,8 +19,6 @@ import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.
 /// FIXTURE — the record is not its subject, and see the base for why asking it
 /// about the record asserts something false.
 abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
-    using LibMemoryKV for MemoryKV;
-
     /// Every release in the frozen record MUST be declared, so that the set the
     /// chain group checks is every release this repo has ever cut rather than
     /// the ones somebody remembered to list.
@@ -85,40 +82,21 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
     /// A binding repo therefore needs `{ access = "read", path =
     /// "./foundry.toml" }` in `fs_permissions`, and one without it fails here
     /// rather than passing on a file it never opened.
+    ///
+    /// What is here is that BINDING and nothing else: the check itself is
+    /// `checkNetworksFullyConfigured` on the base, which is handed the config
+    /// and the networks. A check that can only ever read the real file is one
+    /// nothing can hand a drifted config, so the enforcement claimed above
+    /// would be a claim nothing in the suite had ever seen hold — the same
+    /// inert-check shape the record group's own essay is about.
+    /// `RainDeployVerifySnapshotBaseTest` drives it over synthetic sections,
+    /// exactly as it drives the record check over a record it builds.
+    ///
+    /// Unlike the record root, the subject being an argument is not a way to
+    /// point this somewhere else: the read and the network list are spelled
+    /// here, at the binding, and a consumer inherits the binding rather than
+    /// calling it.
     function testSupportedNetworksAreFullyConfigured() external view {
-        string memory config = vm.readFile("foundry.toml");
-        string[] memory networks = LibRainDeploy.supportedNetworks();
-
-        MemoryKV networkSet = MemoryKV.wrap(0);
-        for (uint256 i = 0; i < networks.length; i++) {
-            networkSet = networkSet.set(MemoryKVKey.wrap(keccak256(bytes(networks[i]))), MemoryKVVal.wrap(0));
-        }
-
-        for (uint256 i = 0; i < networks.length; i++) {
-            assertTrue(
-                vm.keyExistsToml(config, string.concat(".rpc_endpoints.", networks[i])),
-                string.concat("supported network has no [rpc_endpoints] alias: ", networks[i])
-            );
-            assertTrue(
-                vm.keyExistsToml(config, string.concat(".etherscan.", networks[i])),
-                string.concat("supported network has no [etherscan] key: ", networks[i])
-            );
-        }
-
-        string[] memory rpcAliases = vm.parseTomlKeys(config, ".rpc_endpoints");
-        for (uint256 i = 0; i < rpcAliases.length; i++) {
-            assertTrue(
-                networkSet.has(MemoryKVKey.wrap(keccak256(bytes(rpcAliases[i])))),
-                string.concat("[rpc_endpoints] alias is not a supported network: ", rpcAliases[i])
-            );
-        }
-
-        string[] memory etherscanKeys = vm.parseTomlKeys(config, ".etherscan");
-        for (uint256 i = 0; i < etherscanKeys.length; i++) {
-            assertTrue(
-                networkSet.has(MemoryKVKey.wrap(keccak256(bytes(etherscanKeys[i])))),
-                string.concat("[etherscan] key is not a supported network: ", etherscanKeys[i])
-            );
-        }
+        checkNetworksFullyConfigured(vm.readFile("foundry.toml"), LibRainDeploy.supportedNetworks());
     }
 }

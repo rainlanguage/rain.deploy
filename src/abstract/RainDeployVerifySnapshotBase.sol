@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
+import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.4/src/lib/LibMemoryKV.sol";
 
 /// Thrown when the deploy address recorded for a version is not the address its
 /// own creation code derives.
@@ -44,11 +45,30 @@ error FrozenSnapshotNotReleased(string path);
 /// @param path The record file with no `DEPLOYED_ADDRESS` declaration.
 error FrozenSnapshotUnreadable(string path);
 
+/// Thrown when a config section that MUST name the supported networks is not in
+/// the config at all. Distinct from one that is present and empty, which fails
+/// per network as `NetworkNotConfigured`: a section that is absent has no keys
+/// to read rather than none to find.
+/// @param section The absent section.
+error ConfigSectionMissing(string section);
+
+/// Thrown when a supported network has no entry in a config section.
+/// @param section The section the network is missing from.
+/// @param network The supported network with no entry.
+error NetworkNotConfigured(string section, string network);
+
+/// Thrown when a config section carries an entry that no supported network
+/// names.
+/// @param section The section carrying the entry.
+/// @param entry The entry no supported network names.
+error ConfigEntryNotSupported(string section, string entry);
+
 /// @title RainDeployVerifySnapshotBase
 /// @notice Every deploy-pin assertion that needs no network, for every suite
 /// a repo declares. Three groups, which catch different things and are
 /// documented as such because it is easy to read the first as covering the
-/// second.
+/// second. The config group's check is here too, and for the same reason the
+/// record group's is: see below.
 ///
 /// **Internal to the recorded set.** The address a suite's creation code
 /// derives is the address it records, the code hash that creation code produces
@@ -91,15 +111,18 @@ error FrozenSnapshotUnreadable(string path);
 ///
 /// ## What this contract is, and what a deploy repo inherits instead
 ///
-/// This holds the third group's CHECK and not its BINDING. Everything defined
-/// here takes its subject as an argument or from the inheriting contract's own
-/// declaration, so a contract whose declaration is a fixture is a contract this
-/// says true things about. `RainDeployVerifySnapshot` is this plus the one test
-/// that binds the third group to the repo's real record on disk, and it is
-/// what a deploy repo inherits — the whole of the split is which contract
-/// carries that one test.
+/// This holds the CHECK and not the BINDING, for both groups whose subject is
+/// the repo's own state on disk rather than anything it declares: the record,
+/// and `foundry.toml`. Everything defined here takes its subject as an argument
+/// or from the inheriting contract's own declaration, so a contract whose
+/// declaration is a fixture is a contract this says true things about — and a
+/// check handed its subject is a check a fixture can drive to failure, which is
+/// the only way any of this is known to be capable of failing at all.
+/// `RainDeployVerifySnapshot` is this plus the two tests that bind those checks
+/// to the real record and the real config, and it is what a deploy repo
+/// inherits — the whole of the split is which contract carries those tests.
 ///
-/// The split exists because that test's subject is `LibRainDeploySnapshot`'s
+/// The split exists because the record test's subject is `LibRainDeploySnapshot`'s
 /// single spelling of the record root and never the inheriting contract's
 /// declaration, which makes it the one assertion here that is FALSE of a
 /// fixture: a harness declaring exemplar suites, inheriting it, would be
@@ -113,6 +136,8 @@ error FrozenSnapshotUnreadable(string path);
 /// one spelling. Inheriting a narrower contract is a choice a reader sees in
 /// the inheritance list; overriding a test to nothing is one they do not.
 abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
+    using LibMemoryKV for MemoryKV;
+
     /// Checks one suite against itself: derive from its creation code, then
     /// require everything it records to agree with the derivation.
     /// @param suite The suite to check.
@@ -225,6 +250,79 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
                 revert FrozenSnapshotNotReleased(paths[i]);
             }
         }
+    }
+
+    /// Checks one config section against the supported networks: the section's
+    /// keys are EXACTLY the networks.
+    ///
+    /// Both directions, because containment one way alone passes for a section
+    /// carrying an entry nothing deploys to, and the other way alone passes for
+    /// a network with no config at all. Membership rather than position,
+    /// because a config section is keyed rather than ordered and there is no
+    /// order in it to assert.
+    ///
+    /// The section's keys are PARSED and each network looked up among them,
+    /// rather than each network being probed as a `.<section>.<network>` key
+    /// path. A key path is read as a PATH: a network whose name carries a dot
+    /// is answered by a nested table under the part before it — which is no
+    /// alias foundry resolves — and is NOT answered by the quoted flat key that
+    /// is that alias. Both of those are backwards, and the keys of the section
+    /// are what the claim is about.
+    ///
+    /// Reading the keys is also what keeps an empty section from going quiet.
+    /// The reverse direction over a section with no keys walks nothing and
+    /// asserts nothing; the forward direction over the same keys fails once per
+    /// network, so there is no shape of section that this passes without a
+    /// subject.
+    /// @param config The config file's contents.
+    /// @param section The top-level section to check.
+    /// @param networks The supported networks the section MUST name.
+    function checkConfigSectionNamesNetworks(string memory config, string memory section, string[] memory networks)
+        internal
+        view
+    {
+        string memory path = string.concat(".", section);
+        if (!vm.keyExistsToml(config, path)) {
+            revert ConfigSectionMissing(section);
+        }
+        string[] memory entries = vm.parseTomlKeys(config, path);
+
+        MemoryKV entrySet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < entries.length; i++) {
+            entrySet = entrySet.set(MemoryKVKey.wrap(keccak256(bytes(entries[i]))), MemoryKVVal.wrap(0));
+        }
+
+        MemoryKV networkSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < networks.length; i++) {
+            networkSet = networkSet.set(MemoryKVKey.wrap(keccak256(bytes(networks[i]))), MemoryKVVal.wrap(0));
+        }
+
+        for (uint256 i = 0; i < networks.length; i++) {
+            if (!entrySet.has(MemoryKVKey.wrap(keccak256(bytes(networks[i]))))) {
+                revert NetworkNotConfigured(section, networks[i]);
+            }
+        }
+
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (!networkSet.has(MemoryKVKey.wrap(keccak256(bytes(entries[i]))))) {
+                revert ConfigEntryNotSupported(section, entries[i]);
+            }
+        }
+    }
+
+    /// Checks both config sections a deploy resolves against the supported
+    /// networks: `[rpc_endpoints]`, which the fork and the broadcast read, and
+    /// `[etherscan]`, which `--verify` reads.
+    ///
+    /// Which two sections those are is stated here rather than taken from the
+    /// caller. A binder able to name a section is a binder able to name one of
+    /// them and leave the other unchecked, and the `[etherscan]` half has
+    /// nothing else in the suite standing behind it.
+    /// @param config The config file's contents.
+    /// @param networks The supported networks both sections MUST name.
+    function checkNetworksFullyConfigured(string memory config, string[] memory networks) internal view {
+        checkConfigSectionNamesNetworks(config, "rpc_endpoints", networks);
+        checkConfigSectionNamesNetworks(config, "etherscan", networks);
     }
 
     /// Every declared suite MUST be internally consistent: what it records is

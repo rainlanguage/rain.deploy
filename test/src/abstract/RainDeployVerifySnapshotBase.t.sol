@@ -5,8 +5,11 @@ pragma solidity =0.8.25;
 import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBase.sol";
 import {CandidateSourceMismatch, DeployCandidate, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
+    ConfigEntryNotSupported,
+    ConfigSectionMissing,
     FrozenSnapshotNotReleased,
     FrozenSnapshotUnreadable,
+    NetworkNotConfigured,
     RainDeployVerifySnapshotBase,
     StoredAddressMismatch,
     StoredCodeHashMismatch,
@@ -623,5 +626,229 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         for (uint256 i = 0; i < suites.length; i++) {
             assertEq(suites[i].storedDeployedAddress.code.length, 0);
         }
+    }
+
+    /// External wrapper for `checkNetworksFullyConfigured` so `vm.expectRevert`
+    /// works at the correct call depth.
+    /// @param config The config file's contents.
+    /// @param networks The supported networks both sections MUST name.
+    function externalCheckNetworksFullyConfigured(string memory config, string[] memory networks) external view {
+        checkNetworksFullyConfigured(config, networks);
+    }
+
+    /// The exemplar networks every config fixture below is built from or broken
+    /// against. Three, so a fixture can break the FIRST, a MIDDLE or the LAST
+    /// position, and named nothing like a real network so that no case here can
+    /// pass on this repo's own `foundry.toml` instead of on the fixture.
+    /// @return The three exemplar networks.
+    function exampleNetworks() internal pure returns (string[] memory) {
+        string[] memory networks = new string[](3);
+        networks[0] = "alpha";
+        networks[1] = "beta";
+        networks[2] = "gamma";
+        return networks;
+    }
+
+    /// One TOML section whose keys are the given entries.
+    ///
+    /// Quoted, which is how TOML spells a key that is not a bare word and which
+    /// reads identically to a bare key for one that is — so every fixture
+    /// spells its keys the one way, and a name carrying a dot is a fixture
+    /// rather than a second spelling.
+    /// @param section The section name.
+    /// @param entries The section's keys.
+    /// @return The section's TOML.
+    function tomlSection(string memory section, string[] memory entries) internal pure returns (string memory) {
+        string memory toml = string.concat("[", section, "]\n");
+        for (uint256 i = 0; i < entries.length; i++) {
+            toml = string.concat(toml, "\"", entries[i], "\" = \"value\"\n");
+        }
+        return string.concat(toml, "\n");
+    }
+
+    /// A config carrying both sections the check reads.
+    /// @param rpcAliases The `[rpc_endpoints]` keys.
+    /// @param etherscanKeys The `[etherscan]` keys.
+    /// @return The config's TOML.
+    function configOf(string[] memory rpcAliases, string[] memory etherscanKeys) internal pure returns (string memory) {
+        return string.concat(tomlSection("rpc_endpoints", rpcAliases), tomlSection("etherscan", etherscanKeys));
+    }
+
+    /// The given entries with the one at `index` dropped.
+    /// @param entries The entries.
+    /// @param index The position to drop.
+    /// @return The remaining entries, in order.
+    function without(string[] memory entries, uint256 index) internal pure returns (string[] memory) {
+        string[] memory kept = new string[](entries.length - 1);
+        uint256 keptCount = 0;
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (i == index) {
+                continue;
+            }
+            kept[keptCount] = entries[i];
+            keptCount++;
+        }
+        return kept;
+    }
+
+    /// The given entries with `extra` inserted at `index`.
+    /// @param entries The entries.
+    /// @param index The position to insert at, up to and including the end.
+    /// @param extra The entry to insert.
+    /// @return The entries with `extra` among them.
+    function withExtra(string[] memory entries, uint256 index, string memory extra)
+        internal
+        pure
+        returns (string[] memory)
+    {
+        string[] memory grown = new string[](entries.length + 1);
+        for (uint256 i = 0; i < grown.length; i++) {
+            grown[i] = i < index ? entries[i] : (i == index ? extra : entries[i - 1]);
+        }
+        return grown;
+    }
+
+    /// Sections naming exactly the supported networks MUST pass, so the failing
+    /// cases below are discriminating rather than a check that cannot succeed.
+    function testNetworkConfigExactSectionsPass() external view {
+        this.externalCheckNetworksFullyConfigured(configOf(exampleNetworks(), exampleNetworks()), exampleNetworks());
+    }
+
+    /// A supported network with no `[rpc_endpoints]` alias MUST fail, naming
+    /// the section and the network, at EVERY position. The deploy forks by this
+    /// alias, so a network missing from it is a broadcast that cannot happen —
+    /// and the network that goes missing is whichever one the pull request
+    /// forgot, not the first one.
+    function testNetworkConfigMissingRpcAliasReverts() external {
+        string[] memory networks = exampleNetworks();
+        for (uint256 i = 0; i < networks.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(NetworkNotConfigured.selector, "rpc_endpoints", networks[i]));
+            this.externalCheckNetworksFullyConfigured(configOf(without(networks, i), networks), networks);
+        }
+    }
+
+    /// A supported network with no `[etherscan]` key MUST fail, naming the
+    /// section and the network, at EVERY position. Nothing else in the suite
+    /// asks about this section at all: a deploy discovers it after the gas is
+    /// spent, or never, because `--verify` failing is not the broadcast failing.
+    function testNetworkConfigMissingEtherscanKeyReverts() external {
+        string[] memory networks = exampleNetworks();
+        for (uint256 i = 0; i < networks.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(NetworkNotConfigured.selector, "etherscan", networks[i]));
+            this.externalCheckNetworksFullyConfigured(configOf(networks, without(networks, i)), networks);
+        }
+    }
+
+    /// An `[rpc_endpoints]` alias no supported network names MUST fail, naming
+    /// the section and the alias, at EVERY position including the end. This is
+    /// the direction that catches config nothing ever reads — a network removed
+    /// from `supportedNetworks()` and left in the file.
+    function testNetworkConfigExtraRpcAliasReverts() external {
+        string[] memory networks = exampleNetworks();
+        for (uint256 i = 0; i <= networks.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(ConfigEntryNotSupported.selector, "rpc_endpoints", "delta"));
+            this.externalCheckNetworksFullyConfigured(configOf(withExtra(networks, i, "delta"), networks), networks);
+        }
+    }
+
+    /// An `[etherscan]` key no supported network names MUST fail, naming the
+    /// section and the key, at EVERY position including the end.
+    function testNetworkConfigExtraEtherscanKeyReverts() external {
+        string[] memory networks = exampleNetworks();
+        for (uint256 i = 0; i <= networks.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(ConfigEntryNotSupported.selector, "etherscan", "delta"));
+            this.externalCheckNetworksFullyConfigured(configOf(networks, withExtra(networks, i, "delta")), networks);
+        }
+    }
+
+    /// The match MUST be by MEMBERSHIP and never by position. A config section
+    /// is keyed rather than ordered, so the order its entries happen to be
+    /// written in is not something a repo has agreed to hold — and this repo's
+    /// own file happens to be written in `supportedNetworks()` order, which
+    /// makes a positional check indistinguishable from this one there.
+    function testNetworkConfigIsMembershipNotPosition() external view {
+        string[] memory networks = exampleNetworks();
+
+        string[] memory rotatedRight = new string[](3);
+        rotatedRight[0] = networks[2];
+        rotatedRight[1] = networks[0];
+        rotatedRight[2] = networks[1];
+
+        string[] memory rotatedLeft = new string[](3);
+        rotatedLeft[0] = networks[1];
+        rotatedLeft[1] = networks[2];
+        rotatedLeft[2] = networks[0];
+
+        // Neither section agrees with the network list at ANY position, nor
+        // with the other section at any position.
+        for (uint256 i = 0; i < networks.length; i++) {
+            assertTrue(keccak256(bytes(rotatedRight[i])) != keccak256(bytes(networks[i])));
+            assertTrue(keccak256(bytes(rotatedLeft[i])) != keccak256(bytes(networks[i])));
+            assertTrue(keccak256(bytes(rotatedLeft[i])) != keccak256(bytes(rotatedRight[i])));
+        }
+
+        this.externalCheckNetworksFullyConfigured(configOf(rotatedRight, rotatedLeft), networks);
+    }
+
+    /// A section that is not in the config at all MUST fail as that section
+    /// being missing, for EITHER section. A repo that has written one of them
+    /// is the state a repo adding this package is in, and the failure has to
+    /// name which one so it is a config error rather than a parse error out of
+    /// the cheatcode.
+    function testNetworkConfigMissingSectionReverts() external {
+        string[] memory networks = exampleNetworks();
+
+        vm.expectRevert(abi.encodeWithSelector(ConfigSectionMissing.selector, "rpc_endpoints"));
+        this.externalCheckNetworksFullyConfigured(tomlSection("etherscan", networks), networks);
+
+        vm.expectRevert(abi.encodeWithSelector(ConfigSectionMissing.selector, "etherscan"));
+        this.externalCheckNetworksFullyConfigured(tomlSection("rpc_endpoints", networks), networks);
+    }
+
+    /// A section that is PRESENT and EMPTY MUST fail once per network, for
+    /// EITHER section, rather than passing with nothing to walk.
+    ///
+    /// This is the inert shape the whole group has to be proof against: the
+    /// direction that walks the section's keys asserts nothing when there are
+    /// none, so a check that was only that direction would report green over a
+    /// config with no subject in it at all.
+    function testNetworkConfigEmptySectionReverts() external {
+        string[] memory networks = exampleNetworks();
+        string[] memory none = new string[](0);
+
+        vm.expectRevert(abi.encodeWithSelector(NetworkNotConfigured.selector, "rpc_endpoints", networks[0]));
+        this.externalCheckNetworksFullyConfigured(configOf(none, networks), networks);
+
+        vm.expectRevert(abi.encodeWithSelector(NetworkNotConfigured.selector, "etherscan", networks[0]));
+        this.externalCheckNetworksFullyConfigured(configOf(networks, none), networks);
+    }
+
+    /// A network whose name carries a DOT MUST be matched against the section's
+    /// keys, both ways round.
+    ///
+    /// TOML reads an unquoted dot as nesting, so `.<section>.<network>` as a
+    /// key PATH is answered by a nested table — which is not an alias foundry
+    /// resolves to anything — and is NOT answered by the quoted flat key that
+    /// IS the alias. A check that asked the path would therefore pass a config
+    /// that cannot deploy and fail the config that can, and no supported
+    /// network has to carry a dot today for which of those it does to be this
+    /// check's answer rather than an accident of the current names.
+    function testNetworkConfigNetworkNameContainingADot() external {
+        string[] memory networks = new string[](1);
+        networks[0] = "sub.chain";
+
+        // The alias, spelled the only way TOML spells a key with a dot in it.
+        this.externalCheckNetworksFullyConfigured(configOf(networks, networks), networks);
+
+        // The same characters as NESTING, which is a table named `sub` and no
+        // alias named `sub.chain` at all.
+        string memory nested = "[rpc_endpoints]\nsub.chain = \"value\"\n\n[etherscan]\nsub.chain = \"value\"\n";
+        // The key path really is answered by the nesting, and the section
+        // really carries no such alias.
+        assertTrue(vm.keyExistsToml(nested, ".rpc_endpoints.sub.chain"));
+        assertEq(vm.parseTomlKeys(nested, ".rpc_endpoints")[0], "sub");
+
+        vm.expectRevert(abi.encodeWithSelector(NetworkNotConfigured.selector, "rpc_endpoints", "sub.chain"));
+        this.externalCheckNetworksFullyConfigured(nested, networks);
     }
 }
