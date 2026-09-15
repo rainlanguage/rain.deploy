@@ -8,13 +8,16 @@ import {
     DeploySuite,
     DuplicateDeploySuite,
     NoDeployCandidates,
-    UnknownDeploymentSuite
+    UnknownDeploymentSuite,
+    UnreadableDeploySuiteKey
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {CollidingCandidateDeploySuites} from "../../concrete/CollidingCandidateDeploySuites.sol";
 import {DuplicateDeploySuites} from "../../concrete/DuplicateDeploySuites.sol";
 import {NoCandidateDeploySuites} from "../../concrete/NoCandidateDeploySuites.sol";
 import {SameLengthKeyDeploySuites} from "../../concrete/SameLengthKeyDeploySuites.sol";
+import {SeparatorKeyDeploySuites} from "../../concrete/SeparatorKeyDeploySuites.sol";
+import {SpaceKeyDeploySuites} from "../../concrete/SpaceKeyDeploySuites.sol";
 
 /// @title RainDeploySuitesBaseTest
 /// @notice The registry itself: one declaration, keyed lookup, and the two ways
@@ -101,6 +104,58 @@ contract RainDeploySuitesBaseTest is Test {
             )
         );
         sSuites.externalSuiteByName("");
+    }
+
+    /// A key carrying the separator's COMMA MUST be refused, on every reader.
+    ///
+    /// The list exists so a caller who does NOT already know the valid keys is
+    /// told them. Joined on `", "` with nothing said about key contents, the
+    /// two suite registry `a,b` and `c` renders `a,b, c`, which is what a three
+    /// suite registry keyed `a`, `b` and `c` says: the reader is told a
+    /// different number of suites exist than do, and `b`, declared nowhere, is
+    /// handed to them as valid. The registry is refused rather than rendered,
+    /// because a list that reads back as a different set than the one it
+    /// describes is the hardcoded string this whole registry replaces.
+    function testSeparatorKeyIsRefused() external {
+        SeparatorKeyDeploySuites separator = new SeparatorKeyDeploySuites();
+
+        vm.expectRevert(abi.encodeWithSelector(UnreadableDeploySuiteKey.selector, "a,b"));
+        separator.externalAllSuites();
+
+        vm.expectRevert(abi.encodeWithSelector(UnreadableDeploySuiteKey.selector, "a,b"));
+        separator.externalSuiteNames();
+
+        // The key the declaration DOES name, refused too. What is wrong is the
+        // declaration, not any one lookup against it, so there is no key that
+        // reaches a suite through it.
+        vm.expectRevert(abi.encodeWithSelector(UnreadableDeploySuiteKey.selector, "a,b"));
+        separator.externalSuiteByName("a,b");
+
+        // And the phantom: an unknown key gets the refusal rather than an
+        // `UnknownDeploymentSuite` whose valid list names `b`.
+        vm.expectRevert(abi.encodeWithSelector(UnreadableDeploySuiteKey.selector, "a,b"));
+        separator.externalSuiteByName("b");
+    }
+
+    /// A key carrying the separator's SPACE without its comma MUST be refused
+    /// too. `a` and ` b` render `a,  b`, which splits into the right NUMBER of
+    /// keys and still sends a reader after `b`, which does not exist — the one
+    /// character between the two being the one a rendering cannot show them. A
+    /// rule written against the comma alone answers this with that list.
+    ///
+    /// The offending key is the CANDIDATE here and the released suite in the
+    /// comma case, so a check that ran over either side alone is caught.
+    function testSpaceKeyIsRefused() external {
+        SpaceKeyDeploySuites spaced = new SpaceKeyDeploySuites();
+
+        vm.expectRevert(abi.encodeWithSelector(UnreadableDeploySuiteKey.selector, " b"));
+        spaced.externalAllSuites();
+
+        vm.expectRevert(abi.encodeWithSelector(UnreadableDeploySuiteKey.selector, " b"));
+        spaced.externalSuiteNames();
+
+        vm.expectRevert(abi.encodeWithSelector(UnreadableDeploySuiteKey.selector, " b"));
+        spaced.externalSuiteByName("b");
     }
 
     /// The reported key list MUST be exactly the registry, in order.

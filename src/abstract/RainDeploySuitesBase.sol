@@ -14,6 +14,27 @@ error DuplicateDeploySuite(string suite);
 /// @param validSuites The declared keys, comma separated.
 error UnknownDeploymentSuite(string requested, string validSuites);
 
+/// @dev What `suiteNames()` joins the declared keys with, and so the characters
+/// a key may not itself contain.
+string constant SUITE_NAME_SEPARATOR = ", ";
+
+/// Thrown when a key contains a character the key list is joined with.
+///
+/// The list `UnknownDeploymentSuite` carries is that join, so one such key
+/// renders as two: a caller reading the list back is told a different number of
+/// suites exist than do and is sent after keys that are declared nowhere. A
+/// list that cannot be read back is the hardcoded string the registry exists to
+/// replace, spelled differently.
+///
+/// EVERY character of the separator, not only the comma that splits it: this
+/// list is revert data a human reads, and a key that opens or closes on the
+/// separator's space renders indistinguishably from one that does not. "No
+/// character of the separator" is one rule tied to the constant the join uses,
+/// where "no comma, and no leading or trailing space" is two rules that can
+/// drift from it and from each other.
+/// @param suite The key that cannot be read back out of the list.
+error UnreadableDeploySuiteKey(string suite);
+
 /// Thrown when a declaration names no candidate at all.
 ///
 /// The source anchor is the ONLY check that catches a snapshot of the wrong
@@ -233,6 +254,13 @@ abstract contract RainDeploySuitesBase {
     /// One pairwise pass over the whole set, so a candidate colliding with
     /// another candidate is caught by the same code that catches a candidate
     /// colliding with a release — there is no second rule to keep in step.
+    ///
+    /// Keys are checked readable back out of `suiteNames()` in the same pass
+    /// and for the same reason. A registry whose reported key list parses to a
+    /// different set than it holds is ambiguous to the only party that ever
+    /// reads it, and refusing it here refuses it on every reader at once —
+    /// including `suiteByName`, so the ambiguous list is never the thing a
+    /// failed lookup answers with.
     /// @return Every declared suite.
     function allSuites() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory released = releasedSuites();
@@ -246,7 +274,17 @@ abstract contract RainDeploySuitesBase {
             suites[released.length + i] = candidates[i].snapshot;
         }
 
+        bytes memory separator = bytes(SUITE_NAME_SEPARATOR);
         for (uint256 i = 0; i < suites.length; i++) {
+            bytes memory key = bytes(suites[i].suite);
+            for (uint256 k = 0; k < key.length; k++) {
+                for (uint256 s = 0; s < separator.length; s++) {
+                    if (key[k] == separator[s]) {
+                        revert UnreadableDeploySuiteKey(suites[i].suite);
+                    }
+                }
+            }
+
             for (uint256 j = i + 1; j < suites.length; j++) {
                 if (keccak256(bytes(suites[i].suite)) == keccak256(bytes(suites[j].suite))) {
                     revert DuplicateDeploySuite(suites[i].suite);
@@ -257,13 +295,18 @@ abstract contract RainDeploySuitesBase {
         return suites;
     }
 
-    /// Every declared key, comma separated, for the unknown-suite error.
+    /// Every declared key, `SUITE_NAME_SEPARATOR` separated, for the
+    /// unknown-suite error.
+    ///
+    /// Splitting the result on the separator recovers exactly the keys, because
+    /// `allSuites` refuses a declaration whose keys could put a character of
+    /// the separator anywhere but between two of them.
     /// @return The declared keys.
     function suiteNames() internal pure returns (string memory) {
         DeploySuite[] memory suites = allSuites();
         string memory names;
         for (uint256 i = 0; i < suites.length; i++) {
-            names = i == 0 ? suites[i].suite : string.concat(names, ", ", suites[i].suite);
+            names = i == 0 ? suites[i].suite : string.concat(names, SUITE_NAME_SEPARATOR, suites[i].suite);
         }
         return names;
     }
