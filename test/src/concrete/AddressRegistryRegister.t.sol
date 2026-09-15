@@ -192,4 +192,20 @@ contract AddressRegistryRegisterTest is Test {
         sRegistry.register(name, account);
         assertEq(vm.getRecordedLogs().length, 0);
     }
+
+    /// Root is the CALLER, never the transaction origin. A call from a non-root
+    /// account is refused even when the transaction originates from root, so no
+    /// intermediary contract can borrow root's authority merely by being called
+    /// by it, and root signing a transaction is not root making the call.
+    function testRegisterRootIsCallerNotOrigin(address sender, bytes32 name, address account) external {
+        vm.assume(sender != ADDRESS_REGISTRY_ROOT);
+        vm.assume(account != address(0));
+
+        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NotRoot.selector, sender));
+        vm.prank(sender, ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, account);
+
+        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name));
+        sRegistry.get(name);
+    }
 }

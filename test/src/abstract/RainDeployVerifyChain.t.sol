@@ -330,4 +330,35 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             this.externalCheckDeployedOnNetwork(networks[i], derived);
         }
     }
+
+    /// The derivations MUST be computed before anything forks, which is why
+    /// the matrix takes them as an argument rather than computing them: a
+    /// derivation is a local deploy at the very address the checks read, so one
+    /// that happened with a fork selected would either collide with the
+    /// deployment under test or read it back as its own expectation.
+    ///
+    /// "Before anything forks" is observable as a COUNT. The whole run opens
+    /// exactly one fork per supported network and not one more, so a fork
+    /// opened to derive on is an extra one. Fork ids are handed out in creation
+    /// order from zero and this test creates none of its own, so the run's ids
+    /// are exactly `0 .. supportedNetworks().length - 1`: selecting the last of
+    /// them says the matrix really did open one per network, and the id past
+    /// the end not existing is what says nothing else opened one. `selectFork`
+    /// reverts on an id that was never created, so the low-level call failing
+    /// IS "there is no such fork".
+    ///
+    /// The empty-set case cannot say this. It asserts that a matrix with
+    /// nothing to check forks nothing at all, which a derivation over an empty
+    /// list satisfies however it is ordered — this contract is where there are
+    /// suites to derive.
+    function testChainDerivationOpensNoForkOfItsOwn() external {
+        uint256 networkCount = LibRainDeploy.supportedNetworks().length;
+
+        this.testSuitesLiveOnEverySupportedNetwork();
+
+        vm.selectFork(networkCount - 1);
+
+        (bool extraFork,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", networkCount));
+        assertFalse(extraFork, "the run opened a fork that is not one of the supported networks");
+    }
 }

@@ -298,6 +298,20 @@ contract LibRainDeployTest is Test {
         assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
     }
 
+    /// `createForks` MUST fork nothing and answer with an empty list when given
+    /// no networks, rather than refusing them.
+    ///
+    /// Refusing an empty target set is the CALLERS' job, and they do it before
+    /// they get here: `deployToNetworks` and `checkResolvedAddressesOnNetworks`
+    /// both report `NoNetworks` ahead of any fork, which is what makes that
+    /// refusal reportable without an RPC round trip. A refusal here as well
+    /// would be a second one nothing can reach, and it would take the honest
+    /// answer to forking nothing — nothing — with it.
+    function testCreateForksEmptyList() external {
+        uint256[] memory forkIds = LibRainDeploy.createForks(vm, new string[](0));
+        assertEq(forkIds.length, 0);
+    }
+
     /// External wrapper for `deployAndBroadcast` so that
     /// `vm.expectRevert` works at the correct call depth.
     /// @param networks The list of network names to deploy to.
@@ -335,6 +349,18 @@ contract LibRainDeployTest is Test {
         address[] memory dependencies = new address[](0);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalDeployAndBroadcast(networks, 1, hex"", "", address(0), bytes32(0), dependencies);
+    }
+
+    /// `deployAndBroadcast` MUST refuse an empty network set BEFORE it touches
+    /// the key. A zero private key has no wallet to remember, so a call with
+    /// neither a network to deploy to nor a usable key is what makes the order
+    /// observable from outside: the answer is `NoNetworks`, and the key is
+    /// never reached to report anything of its own.
+    function testDeployAndBroadcastNoNetworksBeforeTheKey() external {
+        string[] memory networks = new string[](0);
+        address[] memory dependencies = new address[](0);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        this.externalDeployAndBroadcast(networks, 0, hex"", "", address(0), bytes32(0), dependencies);
     }
 
     /// `deployToNetworks` MUST revert with `NoNetworks` when given an empty
@@ -1026,6 +1052,110 @@ contract LibRainDeployTest is Test {
         this.externalCheckResolvedAddresses("test_network", address(consumer), readCalls, expectedAddresses);
     }
 
+    /// Every read MUST be made with its OWN calldata, so a list of reads asks
+    /// the target as many different questions as it holds.
+    ///
+    /// The reads here are two DIFFERENT selectors answering two different
+    /// addresses, which is the only shape that separates a per-read call from
+    /// one that repeats the first read and compares its answer down the list.
+    /// A list of identical reads cannot: every answer is the same whichever
+    /// calldata produced it, so a check that asked the first question twice
+    /// would pass it.
+    ///
+    /// Both directions are asserted. The matching pair passes, and swapping the
+    /// two expected addresses fails at index 0 — the read that would have been
+    /// reused — naming the address the other read answers with.
+    function testCheckResolvedAddressesReadsEachCallSeparately(address first, address second) external {
+        vm.assume(first != second);
+        MockChainDependentOwner target = new MockChainDependentOwner(first, second, block.chainid);
+
+        bytes[] memory readCalls = new bytes[](2);
+        readCalls[0] = abi.encodeWithSignature("iOwnerOnChain()");
+        readCalls[1] = abi.encodeWithSignature("iOwnerElsewhere()");
+        address[] memory expectedAddresses = new address[](2);
+        expectedAddresses[0] = first;
+        expectedAddresses[1] = second;
+
+        LibRainDeploy.checkResolvedAddresses("test_network", address(target), readCalls, expectedAddresses);
+
+        expectedAddresses[0] = second;
+        expectedAddresses[1] = first;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                "test_network",
+                address(target),
+                uint256(0),
+                second,
+                first
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(target), readCalls, expectedAddresses);
+    }
+
+    /// A read that cannot be answered MUST be reported against the index of the
+    /// read that failed, not against the first one.
+    ///
+    /// The index is the only thing in the error that says WHICH read to go and
+    /// look at: the network and the target are the same for every read in the
+    /// list, and the return data of a read that answered nothing is empty. A
+    /// consumer handed index 0 for a failure at index 1 is sent to a read that
+    /// is working. The first read here answers correctly for that reason — a
+    /// list whose first read also failed could not tell the two apart.
+    function testCheckResolvedAddressesReadFailureNamesTheFailingRead(bytes32 name, address account) external {
+        vm.assume(account != address(0));
+        (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+
+        bytes[] memory readCalls = new bytes[](2);
+        readCalls[0] = abi.encodeWithSignature("iOwner()");
+        readCalls[1] = abi.encodeWithSignature("thisFunctionDoesNotExist()");
+        address[] memory expectedAddresses = new address[](2);
+        expectedAddresses[0] = account;
+        expectedAddresses[1] = account;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector,
+                "test_network",
+                address(consumer),
+                uint256(1),
+                bytes("")
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(consumer), readCalls, expectedAddresses);
+    }
+
+    /// A read that answers with a word that is not an address MUST be reported
+    /// against the index of that read too.
+    ///
+    /// This is the same rule one guard further along, and it is a guard of its
+    /// own: a read can succeed, answer with exactly one word, and still not have
+    /// answered with an address. The target answers the first read with a clean
+    /// address and the second with a `uint256` whose upper 96 bits are set, so
+    /// only the second read is at fault and the index is what says so.
+    function testCheckResolvedAddressesDirtyWordNamesTheFailingRead(address account, bytes32 word) external {
+        vm.assume(uint256(word) > type(uint160).max);
+        MockChainDependentOwner target = new MockChainDependentOwner(account, account, uint256(word));
+
+        bytes[] memory readCalls = new bytes[](2);
+        readCalls[0] = abi.encodeWithSignature("iOwnerOnChain()");
+        readCalls[1] = abi.encodeWithSignature("iChainId()");
+        address[] memory expectedAddresses = new address[](2);
+        expectedAddresses[0] = account;
+        expectedAddresses[1] = address(uint160(uint256(word)));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector,
+                "test_network",
+                address(target),
+                uint256(1),
+                abi.encode(word)
+            )
+        );
+        this.externalCheckResolvedAddresses("test_network", address(target), readCalls, expectedAddresses);
+    }
+
     /// A read that cannot be answered is never a pass. An address with no code
     /// static-calls successfully and returns nothing, which would compare equal
     /// to nothing at all if the length were not checked.
@@ -1242,6 +1372,19 @@ contract LibRainDeployTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalCheckResolvedAddressesOnNetworks(networks, address(this), ownerReadCalls(), expected(account));
+    }
+
+    /// `checkResolvedAddressesOnNetworks` MUST report the OUTERMOST refusal
+    /// when more than one applies at once. Given no networks, no reads and no
+    /// expected addresses, every refusal it has is true together, and the one
+    /// it names is `NoNetworks`: the network set is what the call is for, so a
+    /// caller that supplied nothing at all is told that rather than told about
+    /// reads it would only have run once it had a network to run them on.
+    function testCheckResolvedAddressesOnNetworksNoNetworksBeatsNoReads() external {
+        string[] memory networks = new string[](0);
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        this.externalCheckResolvedAddressesOnNetworks(networks, address(this), new bytes[](0), new address[](0));
     }
 
     /// `checkResolvedAddressesOnNetworks` MUST check the reads and expected
@@ -1679,5 +1822,68 @@ contract LibRainDeployTest is Test {
             }
         }
         return false;
+    }
+
+    /// `findDeployBlock` MUST report `NotDeployed` for a target with no code,
+    /// rather than a code hash mismatch against the hash an empty account
+    /// answers with. Nothing at the address is not a deployment whose hash is
+    /// wrong, and the two are only told apart when the expected hash is not
+    /// the zero hash.
+    function testFindDeployBlockNotDeployedTakesPrecedenceOverCodeHash() external {
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NotDeployed.selector, address(0xdead)));
+        this.externalFindDeployBlock(address(0xdead), bytes32(uint256(1)), 0);
+    }
+
+    /// `deployZoltu` MUST answer with a clean address word even when the
+    /// scratch space it reads the factory's answer out of is dirty on entry.
+    /// The factory answers with a raw 20 byte address, so the 12 bytes above
+    /// it in the word are whatever was in scratch before the call.
+    function testDeployZoltuAnswersACleanWordOverDirtyScratch() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        assembly ("memory-safe") {
+            mstore(0, not(0))
+        }
+        address deployed = LibRainDeploy.deployZoltu(type(MockDeployable).creationCode);
+        uint256 deployedWord;
+        assembly ("memory-safe") {
+            deployedWord := deployed
+        }
+        // Pinned literal, the same address `testDeployZoltu` pins against the
+        // live factory on a fork.
+        assertEq(deployedWord, uint256(uint160(0x7DA611e4146dCf0107407Bb331599acC53E8B62c)));
+        assertEq(deployed.codehash, mockDeployableCodeHash());
+    }
+
+    /// `isStartBlock` MUST read the code hash at the block it is handed, not at
+    /// the one after it. The block immediately before the Zoltu factory deploy
+    /// block has no code at the factory address at all, so it is not a start
+    /// block, however the block after it reads.
+    function testIsStartBlockOneBlockBeforeDeployBlock() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        assertFalse(
+            LibRainDeploy.isStartBlock(
+                vm, LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, ZOLTU_BASE_DEPLOY_BLOCK - 1
+            )
+        );
+    }
+
+    /// `findDeployBlock` MUST answer with a block it has read the expected code
+    /// hash at, and MUST narrow the search on every step.
+    ///
+    /// The window here is the three blocks around the Zoltu factory deploy
+    /// block, so the very first block the search reads IS the answer. A search
+    /// that discards the block it just matched at answers with the block below
+    /// it, and one that cannot narrow a window this small never settles at all,
+    /// which is why the call is given a stipend: a search that halves its range
+    /// reads a handful of blocks, and anything that does not runs out of gas
+    /// instead of running forever.
+    function testFindDeployBlockWhereTheFirstReadIsTheAnswer() external {
+        vm.createSelectFork(LibRainDeploy.BASE, ZOLTU_BASE_DEPLOY_BLOCK + 1);
+        assertEq(
+            this.externalFindDeployBlock{gas: 1_000_000}(
+                LibRainDeploy.ZOLTU_FACTORY, LibRainDeploy.ZOLTU_FACTORY_CODEHASH, ZOLTU_BASE_DEPLOY_BLOCK - 1
+            ),
+            ZOLTU_BASE_DEPLOY_BLOCK
+        );
     }
 }

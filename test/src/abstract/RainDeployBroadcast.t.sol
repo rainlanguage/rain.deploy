@@ -11,6 +11,8 @@ import {ExampleDeploySingleNetwork} from "../../concrete/ExampleDeploySingleNetw
 import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
 import {StalePinDeploy, STALE_PIN_ADDRESS} from "../../concrete/StalePinDeploy.sol";
 import {MissingDependencyDeploy, ABSENT_DEPENDENCY} from "../../concrete/MissingDependencyDeploy.sol";
+import {StaleCodeHashDeploy, STALE_CODE_HASH} from "../../concrete/StaleCodeHashDeploy.sol";
+import {MultiSuiteDeploy} from "../../concrete/MultiSuiteDeploy.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 
@@ -110,14 +112,25 @@ contract RainDeployBroadcastTest is Test {
     /// here: this leg has to SET `DEPLOYMENT_SUITE`, and a second test doing
     /// that is a second test racing the first over one process-global variable.
     ///
-    /// ## Carrying the suite's own pins and its own dependencies
+    /// ## Carrying the suite's own pins, its dependencies and nothing else
     ///
-    /// Two further legs drive declarations whose selected suite differs from the
-    /// one above in exactly one field: a recorded address its creation code does
-    /// not derive, and a dependency that is on no network. Both answer to the
-    /// `DEPLOYMENT_SUITE` this test has already set, so neither adds a writer of
-    /// it, and both fail where a `run()` that derived the pins or dropped the
-    /// list would not.
+    /// Further legs drive declarations that differ from the one above in
+    /// exactly one thing: a recorded address its creation code does not derive,
+    /// a dependency that is on no network, a recorded code hash the deployed
+    /// code does not produce, and a second deployable entry nothing selected.
+    /// Each fails, or leaves an address empty, where a `run()` that derived the
+    /// pins, dropped the list or walked the whole registry would not. They all
+    /// answer to the `DEPLOYMENT_SUITE` this test has already set, so none of
+    /// them adds a writer of it.
+    ///
+    /// ## And by the key it was given
+    ///
+    /// The key is asserted twice over, because nothing else here can see it.
+    /// Unreadable, the run must refuse rather than fall back to a default; read
+    /// and used, the wallet the run takes up must be the one that key derives.
+    /// The deployment itself cannot show either: the factory is `CREATE2` under
+    /// a zero salt, so the address and the code hash are the same whoever
+    /// signed.
     function testRunSelectsTheSuiteFromTheEnvBeforeTheKeyNeverDefaultsAndBroadcastsIt() external {
         // `DEPLOYMENT_SUITE` has to be ABSENT and no cheatcode makes it so, so
         // the precondition is asserted: a value set outside this test reports
@@ -166,6 +179,29 @@ contract RainDeployBroadcastTest is Test {
         bytes32 expectedCodeHash = keccak256(type(MockDeployableV2).runtimeCode);
 
         vm.setEnv("DEPLOYMENT_SUITE", "second-address-candidate");
+
+        // ## The key is REQUIRED, and it is READ
+        //
+        // `DEPLOYMENT_SUITE` now names a declared suite, so this is the first
+        // leg to get past selection, and `DEPLOYMENT_KEY` still holds the
+        // unreadable value set above. The run MUST stop there, naming the
+        // variable it could not read: a broadcast that fell back to a default
+        // when the key is unreadable signs with a key nobody chose, from an
+        // address nobody funded, and a repo that dispatched with the secret
+        // misspelled would watch it fail on gas instead of on the secret.
+        //
+        // The stale-pin declaration rather than a deploying one, because its
+        // own refusal comes BEFORE any fork: a run that got past the key here
+        // says so without reaching for an RPC.
+        StalePinDeploy stale = new StalePinDeploy();
+        vm.expectRevert(
+            abi.encodeWithSignature(
+                "CheatcodeError(string)",
+                "vm.envUint: failed parsing $DEPLOYMENT_KEY as type `uint256`: parser error:\n$DEPLOYMENT_KEY\n^\nexpected at least one digit"
+            )
+        );
+        stale.run();
+
         // Parseable, unlike the value above, because this leg has to get PAST
         // the key. `vm.rememberKey` takes it and the deploy is broadcast as the
         // address it derives; the key itself is a test constant that has never
@@ -206,6 +242,23 @@ contract RainDeployBroadcastTest is Test {
         // what consults it.
         assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
 
+        // ## Signed by the key `DEPLOYMENT_KEY` holds
+        //
+        // Nothing above can see which key was used. The factory is `CREATE2`
+        // under a zero salt, so the address and the code hash are a function of
+        // the creation code alone and every assertion over them holds for ANY
+        // deployer — a run broadcasting as some other key puts the same bytes
+        // at the same address and passes every check made so far, while the
+        // transactions it writes out are signed by an account the dispatcher
+        // neither controls nor funded, and the dispatch fails on a chain where
+        // that account has no gas rather than on anything a reader can see.
+        //
+        // The wallet the run took up is where the difference shows. Exactly
+        // one, because a run broadcasts one suite as one key.
+        address[] memory wallets = vm.getWallets();
+        assertEq(wallets.length, 1);
+        assertEq(wallets[0], vm.addr(0xa11ce));
+
         // ## The pins it carries are the ones the suite RECORDS
         //
         // `deployToNetworks` compares the recorded address against the address
@@ -220,7 +273,6 @@ contract RainDeployBroadcastTest is Test {
         //
         // It answers to the same `DEPLOYMENT_SUITE` already set, so this leg
         // adds no second writer of a process-wide variable.
-        StalePinDeploy stale = new StalePinDeploy();
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.UnexpectedDeployedAddress.selector,
@@ -246,6 +298,49 @@ contract RainDeployBroadcastTest is Test {
             )
         );
         dependent.run();
+
+        // ## And so is the recorded code hash
+        //
+        // The code hash the suite RECORDS is what the deployed code is checked
+        // against once it lands, and that check is the last thing standing
+        // between a dispatch and a chain holding bytes the repo does not
+        // describe. A `run()` that hashed the suite's own recorded runtime code
+        // instead of carrying the recorded hash would check the snapshot
+        // against itself: a snapshot whose hash went stale would deploy and
+        // report success, on every chain the dispatch reached. Every suite
+        // above records a hash its runtime code produces, so none of them can
+        // tell a carried hash from a recomputed one; this one records a hash
+        // that describes neither what it records nor what it deploys.
+        StaleCodeHashDeploy staleHash = new StaleCodeHashDeploy();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedCodeHash.selector,
+                STALE_CODE_HASH,
+                keccak256(type(MockDeployableV2).runtimeCode)
+            )
+        );
+        staleHash.run();
+
+        // ## ONE suite, not every suite
+        //
+        // A dispatch deploys the suite it was given and nothing else. Every
+        // declaration above carries exactly one deployable entry, so a `run()`
+        // that walked the whole registry would put the same single contract on
+        // chain as one that selected it and be indistinguishable from it. This
+        // declaration carries a second entry, anchored and pinned exactly like
+        // the first, that `DEPLOYMENT_SUITE` does not name.
+        //
+        // What the unnamed entry's address holds is the assertion. Deploying it
+        // is not a harmless extra: `CREATE2` at a zero salt gives it a
+        // permanent address on every chain the run reached, couples a dispatch
+        // of one contract to the success of another, and reverses the ordering
+        // a caller establishes by dispatching suites in dependency order.
+        MultiSuiteDeploy multi = new MultiSuiteDeploy();
+
+        multi.run();
+
+        assertGt(LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode).code.length, 0);
+        assertEq(LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode).code.length, 0);
     }
 
     /// The broadcast MUST refuse a candidate that is not the contract this repo

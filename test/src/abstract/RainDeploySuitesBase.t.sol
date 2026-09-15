@@ -14,6 +14,7 @@ import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {CollidingCandidateDeploySuites} from "../../concrete/CollidingCandidateDeploySuites.sol";
 import {DuplicateDeploySuites} from "../../concrete/DuplicateDeploySuites.sol";
 import {NoCandidateDeploySuites} from "../../concrete/NoCandidateDeploySuites.sol";
+import {SameLengthKeyDeploySuites} from "../../concrete/SameLengthKeyDeploySuites.sol";
 
 /// @title RainDeploySuitesBaseTest
 /// @notice The registry itself: one declaration, keyed lookup, and the two ways
@@ -183,5 +184,44 @@ contract RainDeploySuitesBaseTest is Test {
     function testCandidatesPresentAnswers() external view {
         assertEq(sSuites.externalCheckedCandidateSuites().length, 2);
         sSuites.externalCheckCandidatesAnchoredToSource();
+    }
+
+    /// A key is the whole string, not its length. Two DIFFERENT keys of the
+    /// SAME length MUST be two suites: both declared, each selecting its own
+    /// record, and a third key of that length still unknown.
+    ///
+    /// A registry that compared how long a key is would call these two a
+    /// duplicate and refuse the declaration, hand the first record back for the
+    /// second key, and answer a key nobody declared with a real suite — which
+    /// on the deploy side is the wrong contract broadcast under a key that
+    /// looks right. Every other declaration here happens to spell its keys at
+    /// differing lengths, so nothing else can tell the two rules apart.
+    function testSameLengthKeysSelectApart() external {
+        SameLengthKeyDeploySuites sameLength = new SameLengthKeyDeploySuites();
+
+        DeploySuite[] memory suites = sameLength.externalAllSuites();
+        assertEq(suites.length, 2);
+        assertEq(suites[0].suite, "same-length-aaa");
+        assertEq(suites[1].suite, "same-length-zzz");
+        assertEq(bytes(suites[0].suite).length, bytes(suites[1].suite).length);
+
+        DeploySuite memory first = sameLength.externalSuiteByName("same-length-aaa");
+        assertEq(first.suite, "same-length-aaa");
+        assertEq(first.storedDeployedAddress, suites[0].storedDeployedAddress);
+        assertEq(keccak256(first.creationCode), keccak256(suites[0].creationCode));
+
+        DeploySuite memory second = sameLength.externalSuiteByName("same-length-zzz");
+        assertEq(second.suite, "same-length-zzz");
+        assertEq(second.storedDeployedAddress, suites[1].storedDeployedAddress);
+        assertEq(keccak256(second.creationCode), keccak256(suites[1].creationCode));
+
+        assertNotEq(first.storedDeployedAddress, second.storedDeployedAddress);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                UnknownDeploymentSuite.selector, "same-length-qqq", "same-length-aaa, same-length-zzz"
+            )
+        );
+        sameLength.externalSuiteByName("same-length-qqq");
     }
 }
