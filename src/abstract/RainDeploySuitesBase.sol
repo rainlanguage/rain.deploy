@@ -71,17 +71,25 @@ struct DeploySuite {
     string suite;
     /// The creation code this suite is a snapshot of. The only parameter.
     ///
-    /// A frozen `CREATION_CODE` constant for a released snapshot, or
-    /// `type(X).creationCode` where nothing is frozen yet. Frozen matters: a
-    /// released suite broadcasts the exact bytes its audit covered, whatever
-    /// the current source now compiles to.
+    /// A generated `CREATION_CODE` constant: a frozen one for a released
+    /// snapshot, the rolling one for a candidate. Frozen matters: a released
+    /// suite broadcasts the exact bytes its audit covered, whatever the current
+    /// source now compiles to.
+    ///
+    /// `type(X).creationCode` is what a candidate pairs this AGAINST, so
+    /// spelling the type expression here puts both operands of
+    /// `checkCandidatesAnchoredToSource` on the source side and leaves the one
+    /// check that catches a snapshot of the wrong contract comparing source to
+    /// itself, green. Fixtures that derive a whole mock suite do that on
+    /// purpose, because they have no record and are exercising other
+    /// assertions; a declaration of a real deployment never does.
     bytes creationCode;
     /// The deploy address recorded for this suite.
     address storedDeployedAddress;
     /// The deployed code hash recorded for this suite.
     bytes32 storedBytecodeHash;
-    /// The runtime code recorded for this suite. A frozen `RUNTIME_CODE`
-    /// constant, or `type(X).runtimeCode` where nothing is frozen yet.
+    /// The runtime code recorded for this suite. A generated `RUNTIME_CODE`
+    /// constant.
     bytes storedRuntimeCode;
     /// `<path>:<Name>`, for the explorer verification command.
     ///
