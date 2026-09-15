@@ -129,12 +129,33 @@ mod test {
         assert_eq!(parse_using_big_blocks("false"), Ok(false));
     }
 
+    /// The refusal names the variable and quotes the offending value back,
+    /// because that value is the one thing a run log cannot reconstruct:
+    /// `True` from some other tooling's bool rendering and nothing set at all
+    /// are different fixes.
     #[test]
     fn refuses_everything_else() {
         for raw in [
-            "", " true", "true ", "TRUE", "True", "FALSE", "1", "0", "yes", "no",
+            "",
+            " ",
+            " true",
+            "true ",
+            "TRUE",
+            "True",
+            "FALSE",
+            "1",
+            "0",
+            "yes",
+            "no",
+            "true false",
         ] {
-            assert!(parse_using_big_blocks(raw).is_err(), "accepted '{raw}'");
+            assert_eq!(
+                parse_using_big_blocks(raw),
+                Err(format!(
+                    "USING_BIG_BLOCKS must be exactly 'true' or 'false', got '{raw}'."
+                )),
+                "accepted '{raw}'"
+            );
         }
     }
 
