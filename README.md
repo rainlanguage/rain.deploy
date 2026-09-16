@@ -127,13 +127,13 @@ guard.
 Five groups, sorted by what each is anchored to and therefore by what each can
 catch:
 
-| Group    | Anchored to            | Catches                               | Cannot catch                     |
-| -------- | ---------------------- | ------------------------------------- | -------------------------------- |
-| Internal | the recorded set       | an inconsistently generated set       | a snapshot of the wrong contract |
-| Source   | `type(X).creationCode` | a snapshot of the wrong contract      | anything about any chain         |
-| Record   | the frozen record      | a release the declaration missed      | what a declared suite records    |
-| Chain    | the networks           | never deployed, or not there any more | anything about a candidate       |
-| Config   | `foundry.toml`         | a network it cannot fork or verify on | anything about a suite           |
+| Group    | Anchored to            | Catches                                   | Cannot catch                     |
+| -------- | ---------------------- | ----------------------------------------- | -------------------------------- |
+| Internal | the recorded set       | an inconsistently generated set           | a snapshot of the wrong contract |
+| Source   | `type(X).creationCode` | a snapshot of the wrong contract          | anything about any chain         |
+| Record   | the frozen record      | a release the declaration missed          | what a declared suite records    |
+| Chain    | the networks           | never deployed, gone, or a wrong chain id | anything about a candidate       |
+| Config   | `foundry.toml`         | a network it cannot fork or verify on     | anything about a suite           |
 
 The internal group's blind spot is not a gap to close there: every check in it
 asks the recorded bytes to agree with each other, and the wrong contract's bytes
@@ -191,13 +191,30 @@ supported network missing from a section broadcasts and then fails after the gas
 is spent, and a section entry no supported network names is config nothing ever
 reads. An `[etherscan]` entry carrying neither `chain` nor `url` under an alias
 foundry cannot resolve is worse than missing — it takes verification down for
-every entry in the section, not only its own.
+every entry in the section, not only its own — so membership is not the whole of
+that half: every entry has to carry at least one of `chain` or `url` as well.
+That is asked of every entry rather than only of the aliases foundry cannot
+resolve, because which aliases those are is foundry's own table, and stating the
+chain an alias already resolves to resolves it to the same chain.
 
 It reads the raw file rather than forge's resolved config, because the values
-are `${VAR}` interpolations that only exist in CI while the KEYS are the whole
-contract, and the keys are in the text. So it needs no RPC and fails on the pull
-request that drifts rather than at dispatch time. Reading the file at all is
-what a consumer has to allow: see [Install](#install).
+are `${VAR}` interpolations that only exist in CI, and nothing it asserts is a
+value — the keys and the entry shapes are both in the text. So it needs no RPC
+and fails on the pull request that drifts rather than at dispatch time. Reading
+the file at all is what a consumer has to allow: see [Install](#install).
+
+Whether a stated `chain` IS the network its alias forks is the one thing about
+that config the text cannot settle, so it belongs to the chain group instead:
+`testSupportedNetworkChainIdsAreBound` forks every supported network that states
+one and compares it against `block.chainid`. A wrong id resolves and satisfies
+every check that reads the text, and `chain` is what `--verify` submits, so the
+deployment is verified against another chain's explorer after the gas is spent.
+The same comparison catches the mirror case — an `[rpc_endpoints]` alias bound
+to a different network than it names — which is worse, because every
+chain-anchored assertion ever made through that alias was made somewhere nobody
+named. An entry resolving through a `url` alone states no id and is skipped;
+every entry being that way is refused rather than passed as a check with no
+subject.
 
 ## Address registry
 
@@ -639,17 +656,19 @@ The versions have to match: the import paths are version-qualified, which is
 deliberate — it is what stops a consumer's incompatible copy from silently
 satisfying these imports.
 
-The config group reads the CONSUMING repo's `foundry.toml`, so that repo has to
-allow it and has to have the sections to be read:
+The config and chain groups both read the CONSUMING repo's `foundry.toml`, so
+that repo has to allow it and has to have the sections to be read:
 
 ```toml
 fs_permissions = [{ access = "read", path = "./foundry.toml" }]
 ```
 
 `[rpc_endpoints]` and `[etherscan]` then have to name exactly the networks in
-`supportedNetworks()`. Missing permission fails the check rather than skipping
-it, which is the intended direction: a repo that cannot read its own config is a
-repo whose config nothing has checked.
+`supportedNetworks()`, every `[etherscan]` entry has to carry at least one of
+`chain` or `url`, and a `chain` it states has to be the chain id the endpoint
+bound to that alias reports. Missing permission fails the check rather than
+skipping it, which is the intended direction: a repo that cannot read its own
+config is a repo whose config nothing has checked.
 
 ## Develop
 
