@@ -17,7 +17,7 @@ import {BuildHarness} from "./BuildHarness.sol";
 contract BuildRecordRootHarness is BuildHarness {
     string internal sRoot;
 
-    constructor(string memory root) {
+    constructor(string memory root) BuildHarness("") {
         sRoot = root;
     }
 
