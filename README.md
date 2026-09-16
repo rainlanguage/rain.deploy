@@ -188,6 +188,14 @@ sections and `.env.example`'s endpoint variables from it. `Git is clean` is the
 enforcement, the same mechanism already holding `src/generated/`: a tree whose
 config has drifted from the roster it pins fails the job every push runs.
 
+It reaches `foundry.toml` in two steps, because foundry refuses a filesystem
+cheatcode write to the project root's own config whatever `fs_permissions` says.
+`run()` stages the spliced files under `.staged-config/` and `script/build.sh`
+installs them — see [Install](#install). Reads are allowed, which is what makes
+the splice possible at all, and staging removes the hazard the direct write
+would have carried: nothing under `forge test` can race a rewrite of the config
+every other test reads, because nothing rewrites it.
+
 That is what a config group used to be for, and comparing is the weaker half of
 it. A comparison keeps both statements, so every assertion in it is one somebody
 had to think of and the prose around them drifts silently; generation leaves one
@@ -645,15 +653,40 @@ The versions have to match: the import paths are version-qualified, which is
 deliberate — it is what stops a consumer's incompatible copy from silently
 satisfying these imports.
 
-`BuildScript.run()` writes the CONSUMING repo's own `foundry.toml` and
+`BuildScript.run()` regenerates the CONSUMING repo's own `foundry.toml` and
 `.env.example`, so that repo has to allow it:
 
 ```toml
 fs_permissions = [
-  { access = "read-write", path = "./foundry.toml" },
-  { access = "read-write", path = "./.env.example" },
+  { access = "read", path = "./foundry.toml" },
+  { access = "read", path = "./.env.example" },
+  { access = "read-write", path = "./.staged-config" },
+  { access = "read", path = "./script/build.sh" },
 ]
 ```
+
+Read, not read-write, on the two generated files: foundry refuses every
+filesystem cheatcode write to the project root's own `foundry.toml` — the guard
+is on the path, so no `fs_permissions` grant and no spelling of the path gets
+past it. `run()` therefore reads each file, splices its blocks, and writes the
+result to `.staged-config/` under the same name.
+
+What installs it is `script/build.sh`, the hook rainix's `rainix-copy-artifacts`
+runs after `forge script ./script/Build.sol` and before the `git diff` that
+fails a stale tree. Copy this repo's — it needs no forge, no nix and no `--ffi`,
+which is the other way a script could reach a shell and is not taken: the
+invocation that matters passes no `--ffi`, and granting it there would hand FFI
+to every consumer's build rather than to one step.
+
+```sh
+# .gitignore
+.staged-config
+```
+
+A repo with no `script/build.sh` is REFUSED rather than staged for, because
+nothing else moves a staged file into place: generating for it would write the
+roster where nothing reads it while the config went on saying whatever it said,
+and the build would report success.
 
 Both files then need the markers the generated blocks are spliced between, once
 each and the begin before the end. A file carrying neither is refused, naming
@@ -686,6 +719,14 @@ slim `sol-shell` from [rainix](https://github.com/rainlanguage/rainix).
 nix develop          # enter the shell
 forge soldeer install # install deps declared in foundry.toml
 forge test
+```
+
+Regenerating what this repo generates is two commands, and the second is not
+optional — the first only stages the network config:
+
+```sh
+nix develop -c forge script ./script/Build.sol
+./script/build.sh
 ```
 
 Three of the CI jobs are rainix reusable workflows, not commands in the shell,

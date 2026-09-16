@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {BuildScript} from "../../src/abstract/BuildScript.sol";
+import {LibRainDeployConfig} from "../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 
 /// @title BuildScriptHarness
@@ -39,28 +40,42 @@ contract BuildScriptHarness is BuildScript {
     }
 
     /// @inheritdoc BuildScript
-    /// @dev Under the fixture root, never the repo's own `foundry.toml`: forge
-    /// reads that file once at startup and a script rewriting it is safe, but a
-    /// TEST rewriting it races every other test that reads it.
-    function configPath() internal view override returns (string memory) {
-        return string.concat(sRoot, "/foundry.toml");
+    /// @dev The fixture root, never the repo's own. A `run()` here would
+    /// otherwise read the committed config and stage a spliced copy of it,
+    /// which the next `script/build.sh` would install.
+    function configRoot() internal view override returns (string memory) {
+        return sRoot;
     }
 
-    /// @inheritdoc BuildScript
-    function envExamplePath() internal view override returns (string memory) {
-        return string.concat(sRoot, "/.env.example");
-    }
-
-    /// Where `regenerateConfig` writes the network sections.
+    /// The seeded `foundry.toml` `regenerateConfig` reads.
     /// @return The fixture config path.
     function externalConfigPath() external view returns (string memory) {
-        return configPath();
+        return LibRainDeployConfig.configPath(configRoot());
     }
 
-    /// Where `regenerateConfig` writes the endpoint variables.
+    /// The seeded `.env.example` `regenerateConfig` reads.
     /// @return The fixture `.env.example` path.
     function externalEnvExamplePath() external view returns (string memory) {
-        return envExamplePath();
+        return LibRainDeployConfig.envExamplePath(configRoot());
+    }
+
+    /// Where `regenerateConfig` stages the spliced config.
+    /// @return The staged config path.
+    function externalStagedConfigPath() external view returns (string memory) {
+        return LibRainDeployConfig.stagedPath(configRoot(), LibRainDeployConfig.CONFIG_NAME);
+    }
+
+    /// Where `regenerateConfig` stages the spliced `.env.example`.
+    /// @return The staged `.env.example` path.
+    function externalStagedEnvExamplePath() external view returns (string memory) {
+        return LibRainDeployConfig.stagedPath(configRoot(), LibRainDeployConfig.ENV_EXAMPLE_NAME);
+    }
+
+    /// The staging directory, so a test can assert whether anything was staged
+    /// at all.
+    /// @return The staging directory.
+    function externalStagedDir() external view returns (string memory) {
+        return LibRainDeployConfig.stagedDir(configRoot());
     }
 
     /// A fixture file carrying both `foundry.toml` blocks, with a stale body in
@@ -88,8 +103,8 @@ contract BuildScriptHarness is BuildScript {
 
     /// Writes both config fixtures, so `run()` has markers to splice into.
     function seedConfig() external {
-        writeFixture(configPath(), configSeed());
-        writeFixture(envExamplePath(), envExampleSeed());
+        writeFixture(LibRainDeployConfig.configPath(configRoot()), configSeed());
+        writeFixture(LibRainDeployConfig.envExamplePath(configRoot()), envExampleSeed());
     }
 
     /// Where `regenerateSnapshots` writes.

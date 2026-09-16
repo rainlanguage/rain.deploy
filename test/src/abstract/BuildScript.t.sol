@@ -134,9 +134,9 @@ contract BuildScriptTest is Test {
         assertEq(libs, harness.libsMarker(1, true));
     }
 
-    /// PROPERTY: `run()` rewrites both `foundry.toml` network blocks and the
+    /// PROPERTY: `run()` stages both `foundry.toml` network blocks and the
     /// `.env.example` block from the roster, leaving everything outside the
-    /// markers where it was.
+    /// markers where it was — and leaves the files it read untouched.
     ///
     /// This is the wiring, not the emission: what the sections SAY is pinned
     /// against string literals in `LibRainDeployConfigTest`, over a fixture
@@ -145,13 +145,19 @@ contract BuildScriptTest is Test {
     /// it the sections would exist, be correct, and be written nowhere, and
     /// `Git is clean` would pass a tree whose config had drifted from the
     /// roster it pins.
-    function testRunRegeneratesTheNetworkConfig() external {
+    ///
+    /// The sources staying byte-identical is the half `script/build.sh` then
+    /// depends on: a `run()` that wrote them directly would be refused for
+    /// `foundry.toml` and would make the hook's copy a no-op for the other.
+    function testRunStagesTheNetworkConfig() external {
         resetFixture(RUN_CONFIG_FIXTURE_ROOT);
         BuildScriptHarness harness = new BuildScriptHarness(RUN_CONFIG_FIXTURE_ROOT, FIXTURE_CONTRACT);
         harness.seedConfig();
         harness.run();
 
         // Read while the fixture is still there, asserted once it is gone.
+        string memory stagedConfig = vm.readFile(harness.externalStagedConfigPath());
+        string memory stagedEnvExample = vm.readFile(harness.externalStagedEnvExamplePath());
         string memory config = vm.readFile(harness.externalConfigPath());
         string memory envExample = vm.readFile(harness.externalEnvExamplePath());
 
@@ -159,7 +165,7 @@ contract BuildScriptTest is Test {
         vm.removeDir(RUN_CONFIG_FIXTURE_ROOT, true);
 
         assertEq(
-            config,
+            stagedConfig,
             string.concat(
                 "# hand written\n",
                 "# rain-deploy:generated:rpc_endpoints:begin\n",
@@ -171,7 +177,7 @@ contract BuildScriptTest is Test {
             )
         );
         assertEq(
-            envExample,
+            stagedEnvExample,
             string.concat(
                 "# hand written\n",
                 "# rain-deploy:generated:env:begin\n",
@@ -179,14 +185,21 @@ contract BuildScriptTest is Test {
                 "# rain-deploy:generated:env:end\n"
             )
         );
+        assertEq(config, harness.configSeed());
+        assertEq(envExample, harness.envExampleSeed());
     }
 
-    /// PROPERTY: `cutRelease()` leaves the config exactly as it found it.
+    /// PROPERTY: `cutRelease()` stages nothing and leaves the config exactly as
+    /// it found it.
     ///
     /// The config is not part of a release record. A `cutRelease()` that
     /// rewrote it would put a config change inside the one operation that can
     /// never be repeated, where `run()` is the entry point every push already
     /// runs and the only one `Git is clean` currency checks.
+    ///
+    /// The staging directory being ABSENT is what says so now: a staged file
+    /// left behind by a release is one the next `script/build.sh` installs,
+    /// which is the config change happening anyway, one step later.
     function testCutReleaseLeavesTheConfigAlone() external {
         resetFixture(CUT_CONFIG_FIXTURE_ROOT);
         BuildScriptHarness harness = new BuildScriptHarness(CUT_CONFIG_FIXTURE_ROOT, FIXTURE_CONTRACT);
@@ -196,12 +209,14 @@ contract BuildScriptTest is Test {
         // Read while the fixture is still there, asserted once it is gone.
         string memory config = vm.readFile(harness.externalConfigPath());
         string memory envExample = vm.readFile(harness.externalEnvExamplePath());
+        bool stagedAnything = vm.exists(harness.externalStagedDir());
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(CUT_CONFIG_FIXTURE_ROOT, true);
 
         assertEq(config, harness.configSeed());
         assertEq(envExample, harness.envExampleSeed());
+        assertFalse(stagedAnything);
     }
 
     /// PROPERTY: a repo that overrides nothing freezes into its OWN record.

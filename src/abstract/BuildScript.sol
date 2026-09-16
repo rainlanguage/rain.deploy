@@ -24,6 +24,11 @@ import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 /// package's own constant, so a version bump is how a network arrives in a
 /// consumer's `foundry.toml` and `.env.example`. A repo able to narrow that
 /// list would deploy to and verify fewer chains with nothing red.
+///
+/// `run()` stages those two files rather than writing them, because foundry
+/// refuses a cheatcode write to the project root's own `foundry.toml`. A repo
+/// inheriting this needs `script/build.sh` to install what was staged — see
+/// `LibRainDeployConfig`.
 abstract contract BuildScript is Script {
     /// Rewrite the rolling `candidate/` snapshots from what this repo currently
     /// compiles. Run by `cutRelease()` inside `freeze`, after its guards and
@@ -50,24 +55,18 @@ abstract contract BuildScript is Script {
         return LibRainDeploySnapshot.LIB_FS_ROOT;
     }
 
-    /// The `foundry.toml` whose network sections are generated.
+    /// The root holding the `foundry.toml` and `.env.example` whose network
+    /// blocks are generated, and the parent of the staging directory they are
+    /// written to.
     ///
-    /// Overridable for the same reason `recordRoot` is, and with the same
-    /// hazard: a writer that can only be pointed at the committed tree can only
-    /// be exercised by overwriting it, and overwriting this one under `forge
-    /// test` races every test that reads the config. A repo pointing it
-    /// somewhere other than its own root generates config nothing reads, and
-    /// `Git is clean` then sees a tree that never drifts because nothing
-    /// regenerates it.
-    /// @return The config path.
-    function configPath() internal view virtual returns (string memory) {
-        return LibRainDeployConfig.CONFIG_PATH;
-    }
-
-    /// The `.env.example` whose endpoint variables are generated.
-    /// @return The `.env.example` path.
-    function envExamplePath() internal view virtual returns (string memory) {
-        return LibRainDeployConfig.ENV_EXAMPLE_PATH;
+    /// Overridable for the same reason `recordRoot` is: a writer that can only
+    /// be pointed at the committed tree can only be exercised against it. The
+    /// hazard is the same too — a repo pointing this anywhere but its own root
+    /// generates config nothing reads, and `Git is clean` then sees a tree that
+    /// never drifts because nothing regenerates it.
+    /// @return The config root.
+    function configRoot() internal view virtual returns (string memory) {
+        return LibRainDeployConfig.CONFIG_ROOT;
     }
 
     /// Rewrite the delimited network config blocks from this package's roster.
@@ -75,9 +74,14 @@ abstract contract BuildScript is Script {
     /// Run by `run()` and not by `cutRelease()`: the config is not part of a
     /// release record, and `run()` is what `Git is clean` calls on every push,
     /// so a tree whose config has drifted from the roster it pins fails there.
+    ///
+    /// This STAGES the files; `script/build.sh` installs them. See
+    /// `LibRainDeployConfig` for why a script cannot write `foundry.toml`
+    /// itself.
     function regenerateConfig() internal {
-        LibRainDeployConfig.writeNetworkConfig(vm, configPath(), LibRainDeploy.supportedNetworkConfigs());
-        LibRainDeployConfig.writeEnvExample(vm, envExamplePath(), LibRainDeploy.supportedNetworkConfigs());
+        LibRainDeployConfig.writeStagedConfig(
+            vm, configRoot(), LibRainDeployConfig.BUILD_HOOK_PATH, LibRainDeploy.supportedNetworkConfigs()
+        );
     }
 
     /// @notice Regenerate everything this repo generates. Freezes nothing.

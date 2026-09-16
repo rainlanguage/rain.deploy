@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.16.2/src/Test.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {
+    BuildHookMissing,
     EmptyRoster,
     GeneratedBlockMalformed,
     LibRainDeployConfig,
@@ -35,6 +36,12 @@ contract LibRainDeployConfigTest is Test {
 
     /// Where the fixture carrying no markers is built.
     string constant NO_MARKERS_FIXTURE_ROOT = "test/generated-config-no-markers";
+
+    /// Where the `writeStagedConfig` fixture is built.
+    string constant STAGED_FIXTURE_ROOT = "test/generated-config-staged";
+
+    /// Where the fixture for a repo with no build hook is built.
+    string constant NO_HOOK_FIXTURE_ROOT = "test/generated-config-no-hook";
 
     /// A roster of three, one of which carries an explorer url, so both
     /// `[etherscan]` entry shapes are emitted by one call.
@@ -119,14 +126,22 @@ contract LibRainDeployConfigTest is Test {
         return LibRainDeployConfig.spliceBlock(vm, path, content, name, body);
     }
 
-    /// @param path The config to write.
+    /// @param path The config to read.
+    /// @param staged Where to write the spliced result.
     /// @param networks The roster.
-    /// @return The path written.
-    function externalWriteNetworkConfig(string memory path, SupportedNetwork[] memory networks)
+    function externalWriteNetworkConfig(string memory path, string memory staged, SupportedNetwork[] memory networks)
         external
-        returns (string memory)
     {
-        return LibRainDeployConfig.writeNetworkConfig(vm, path, networks);
+        LibRainDeployConfig.writeNetworkConfig(vm, path, staged, networks);
+    }
+
+    /// @param root The project root to stage under.
+    /// @param hookPath The build hook that would install what is staged.
+    /// @param networks The roster.
+    function externalWriteStagedConfig(string memory root, string memory hookPath, SupportedNetwork[] memory networks)
+        external
+    {
+        LibRainDeployConfig.writeStagedConfig(vm, root, hookPath, networks);
     }
 
     /// PROPERTY: the `[rpc_endpoints]` section is the roster, in roster order,
@@ -338,25 +353,30 @@ contract LibRainDeployConfigTest is Test {
         );
     }
 
-    /// PROPERTY: the config writer replaces BOTH sections of the file it is
-    /// pointed at, and nothing else in it.
+    /// PROPERTY: the config writer replaces BOTH sections of the file it reads,
+    /// and nothing else in it, writing the result WHERE IT WAS TOLD rather than
+    /// back over what it read.
+    ///
+    /// The source staying untouched is the property: foundry refuses a
+    /// cheatcode write to the project root's own `foundry.toml`, so the only
+    /// thing that can put this result there is `script/build.sh`.
     function testWriteNetworkConfigWritesBothSections() external {
         resetFixtures(CONFIG_FIXTURE_ROOT);
         string memory path = string.concat(CONFIG_FIXTURE_ROOT, "/foundry.toml");
-        writeFixture(
-            CONFIG_FIXTURE_ROOT,
-            path,
-            "[profile.default]\n" "src = \"src\"\n" "\n" "# rain-deploy:generated:rpc_endpoints:begin\n" "STALE\n"
-            "# rain-deploy:generated:rpc_endpoints:end\n" "\n" "# rain-deploy:generated:etherscan:begin\n" "STALE\n"
-            "# rain-deploy:generated:etherscan:end\n"
-        );
+        string memory staged = string.concat(CONFIG_FIXTURE_ROOT, "/staged-foundry.toml");
+        string memory source = "[profile.default]\n" "src = \"src\"\n" "\n"
+            "# rain-deploy:generated:rpc_endpoints:begin\n" "STALE\n" "# rain-deploy:generated:rpc_endpoints:end\n" "\n"
+            "# rain-deploy:generated:etherscan:begin\n" "STALE\n" "# rain-deploy:generated:etherscan:end\n";
+        writeFixture(CONFIG_FIXTURE_ROOT, path, source);
 
-        LibRainDeployConfig.writeNetworkConfig(vm, path, singleRoster("alpha", 11));
+        LibRainDeployConfig.writeNetworkConfig(vm, path, staged, singleRoster("alpha", 11));
 
-        string memory written = vm.readFile(path);
+        string memory written = vm.readFile(staged);
+        string memory read = vm.readFile(path);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(CONFIG_FIXTURE_ROOT, true);
 
+        assertEq(read, source);
         assertEq(
             written,
             "[profile.default]\n" "src = \"src\"\n" "\n" "# rain-deploy:generated:rpc_endpoints:begin\n"
@@ -367,23 +387,24 @@ contract LibRainDeployConfigTest is Test {
         );
     }
 
-    /// PROPERTY: the `.env.example` writer replaces its block and nothing else.
+    /// PROPERTY: the `.env.example` writer replaces its block and nothing else,
+    /// and leaves what it read where it was.
     function testWriteEnvExampleWritesTheBlock() external {
         resetFixtures(ENV_FIXTURE_ROOT);
         string memory path = string.concat(ENV_FIXTURE_ROOT, "/.env.example");
-        writeFixture(
-            ENV_FIXTURE_ROOT,
-            path,
-            "# prose\n" "# rain-deploy:generated:env:begin\n" "STALE=1\n" "# rain-deploy:generated:env:end\n"
-            "HAND_WRITTEN=1\n"
-        );
+        string memory staged = string.concat(ENV_FIXTURE_ROOT, "/staged.env.example");
+        string memory source = "# prose\n" "# rain-deploy:generated:env:begin\n" "STALE=1\n"
+            "# rain-deploy:generated:env:end\n" "HAND_WRITTEN=1\n";
+        writeFixture(ENV_FIXTURE_ROOT, path, source);
 
-        LibRainDeployConfig.writeEnvExample(vm, path, singleRoster("alpha", 11));
+        LibRainDeployConfig.writeEnvExample(vm, path, staged, singleRoster("alpha", 11));
 
-        string memory written = vm.readFile(path);
+        string memory written = vm.readFile(staged);
+        string memory read = vm.readFile(path);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(ENV_FIXTURE_ROOT, true);
 
+        assertEq(read, source);
         assertEq(
             written,
             "# prose\n" "# rain-deploy:generated:env:begin\n" "ALPHA_RPC_URL=https://one\n"
@@ -397,12 +418,91 @@ contract LibRainDeployConfigTest is Test {
     function testWriteNetworkConfigWithoutMarkersReverts() external {
         resetFixtures(NO_MARKERS_FIXTURE_ROOT);
         string memory path = string.concat(NO_MARKERS_FIXTURE_ROOT, "/foundry.toml");
+        string memory staged = string.concat(NO_MARKERS_FIXTURE_ROOT, "/staged-foundry.toml");
         writeFixture(NO_MARKERS_FIXTURE_ROOT, path, "[profile.default]\n");
 
         vm.expectRevert(abi.encodeWithSelector(GeneratedBlockMalformed.selector, path, "rpc_endpoints"));
-        this.externalWriteNetworkConfig(path, singleRoster("alpha", 11));
+        this.externalWriteNetworkConfig(path, staged, singleRoster("alpha", 11));
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(NO_MARKERS_FIXTURE_ROOT, true);
+    }
+
+    /// PROPERTY: a staged file is named EXACTLY as the file it will be
+    /// installed over, and sits under the staging directory of the root it was
+    /// generated for.
+    ///
+    /// `script/build.sh` copies each staged file onto the file of the same name
+    /// at the root, so the name is the whole of the mapping between the two.
+    function testStagedPathsAreNamedAsTheFilesTheyInstallOver() external pure {
+        assertEq(LibRainDeployConfig.configPath("."), "./foundry.toml");
+        assertEq(LibRainDeployConfig.envExamplePath("."), "./.env.example");
+        assertEq(LibRainDeployConfig.stagedDir("."), "./.staged-config");
+        assertEq(LibRainDeployConfig.stagedPath(".", LibRainDeployConfig.CONFIG_NAME), "./.staged-config/foundry.toml");
+        assertEq(
+            LibRainDeployConfig.stagedPath(".", LibRainDeployConfig.ENV_EXAMPLE_NAME), "./.staged-config/.env.example"
+        );
+    }
+
+    /// PROPERTY: staging puts BOTH generated files in the staging directory and
+    /// changes neither of the files it read.
+    function testWriteStagedConfigStagesBothFiles() external {
+        resetFixtures(STAGED_FIXTURE_ROOT);
+        string memory configSource = "# rain-deploy:generated:rpc_endpoints:begin\n" "STALE\n"
+            "# rain-deploy:generated:rpc_endpoints:end\n" "# rain-deploy:generated:etherscan:begin\n" "STALE\n"
+            "# rain-deploy:generated:etherscan:end\n";
+        string memory envSource = "# rain-deploy:generated:env:begin\n" "STALE=1\n" "# rain-deploy:generated:env:end\n";
+        writeFixture(STAGED_FIXTURE_ROOT, LibRainDeployConfig.configPath(STAGED_FIXTURE_ROOT), configSource);
+        writeFixture(STAGED_FIXTURE_ROOT, LibRainDeployConfig.envExamplePath(STAGED_FIXTURE_ROOT), envSource);
+
+        LibRainDeployConfig.writeStagedConfig(
+            vm, STAGED_FIXTURE_ROOT, LibRainDeployConfig.BUILD_HOOK_PATH, singleRoster("alpha", 11)
+        );
+
+        string memory stagedConfig =
+            vm.readFile(LibRainDeployConfig.stagedPath(STAGED_FIXTURE_ROOT, LibRainDeployConfig.CONFIG_NAME));
+        string memory stagedEnv =
+            vm.readFile(LibRainDeployConfig.stagedPath(STAGED_FIXTURE_ROOT, LibRainDeployConfig.ENV_EXAMPLE_NAME));
+        string memory readConfig = vm.readFile(LibRainDeployConfig.configPath(STAGED_FIXTURE_ROOT));
+        string memory readEnv = vm.readFile(LibRainDeployConfig.envExamplePath(STAGED_FIXTURE_ROOT));
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(STAGED_FIXTURE_ROOT, true);
+
+        assertEq(readConfig, configSource);
+        assertEq(readEnv, envSource);
+        assertEq(
+            stagedConfig,
+            "# rain-deploy:generated:rpc_endpoints:begin\n" "[rpc_endpoints]\n" 'alpha = "${ALPHA_RPC_URL}"\n'
+            "# rain-deploy:generated:rpc_endpoints:end\n" "# rain-deploy:generated:etherscan:begin\n" "[etherscan]\n"
+            'alpha = { key = "${CI_DEPLOY_ALPHA_ETHERSCAN_API_KEY}", chain = 11 }\n'
+            "# rain-deploy:generated:etherscan:end\n"
+        );
+        assertEq(
+            stagedEnv,
+            "# rain-deploy:generated:env:begin\n" "ALPHA_RPC_URL=https://one\n" "# rain-deploy:generated:env:end\n"
+        );
+    }
+
+    /// PROPERTY: a repo with no build hook is refused, naming the hook, and
+    /// nothing is staged.
+    ///
+    /// The hook is the only thing that installs a staged file. Staging for a
+    /// repo that has none writes the roster where nothing reads it while the
+    /// config goes on saying whatever it said, and the build reports success —
+    /// the silent green this whole mechanism exists to remove. Presence is what
+    /// `rainix-copy-artifacts` conditions its own run of the hook on, so this
+    /// is exactly the state in which the install would be skipped.
+    function testWriteStagedConfigWithoutBuildHookReverts() external {
+        resetFixtures(NO_HOOK_FIXTURE_ROOT);
+        string memory missing = string.concat(NO_HOOK_FIXTURE_ROOT, "/build.sh");
+
+        vm.expectRevert(abi.encodeWithSelector(BuildHookMissing.selector, missing));
+        this.externalWriteStagedConfig(NO_HOOK_FIXTURE_ROOT, missing, singleRoster("alpha", 11));
+
+        bool stagedAnything = vm.exists(LibRainDeployConfig.stagedDir(NO_HOOK_FIXTURE_ROOT));
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(NO_HOOK_FIXTURE_ROOT, true);
+
+        assertFalse(stagedAnything);
     }
 }

@@ -36,17 +36,23 @@ bytecode_hash = "none"
 # plain `forge test` produces — not only under an explicit `--ast`.
 ast = true
 
-# Build reads the version from foundry.toml, writes the generated network
-# sections back into it and into .env.example, and writes the generated per-tag
-# snapshots + the current-pin lib under src/. Nothing else in this repo touches
-# the filesystem.
+# Build reads the version and the network sections from foundry.toml, stages the
+# regenerated sections under .staged-config/ for script/build.sh to install, and
+# writes the generated per-tag snapshots + the current-pin lib under src/.
+# Nothing else in this repo touches the filesystem.
 fs_permissions = [
-  # Read-write because `BuildScript.regenerateConfig` writes the generated
-  # network sections here. Only `script/Build.sol` does: nothing under
-  # `forge test` points a config writer at this file, because the tests that
-  # read it would race the write.
-  { access = "read-write", path = "./foundry.toml" },
-  { access = "read-write", path = "./.env.example" },
+  # READ, not read-write. `BuildScript.regenerateConfig` reads these two and
+  # writes the spliced result to .staged-config/: foundry refuses a cheatcode
+  # write to this file whatever is granted here, so the write it would need is
+  # not a permission this list can hand out.
+  { access = "read", path = "./foundry.toml" },
+  { access = "read", path = "./.env.example" },
+  # Where the spliced files are staged, for script/build.sh to install over the
+  # two above. Gitignored; the hook removes it once it has installed them.
+  { access = "read-write", path = "./.staged-config" },
+  # `writeStagedConfig` refuses a repo with no build hook, which is a repo where
+  # nothing would install what it staged.
+  { access = "read", path = "./script/build.sh" },
   { access = "read-write", path = "./src" },
   # LibRainDeploySnapshotTest builds a record tree of its own under
   # test/generated to drive the frozen-record walk. NOT src/generated: the
