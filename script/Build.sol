@@ -59,28 +59,34 @@ contract Build is BuildScript, RegistryDeploySuites {
         return names;
     }
 
+    /// The directory every generated lib is written into.
+    ///
+    /// Overridable for the reason `BuildScript.recordRoot` is: a hook that can
+    /// only be pointed at the committed tree can only be RUN by overwriting
+    /// files the rest of the suite compiles and reads, and forge runs test
+    /// contracts in parallel. Only the per-contract libs and the aggregate go
+    /// here — `regenerateSnapshots` has no equivalent, because `LibFs` confines
+    /// every snapshot it writes to `src/generated/`.
+    /// @return The lib directory.
+    function libDir() internal view virtual returns (string memory) {
+        return LibRainDeploySnapshot.LIB_DIR;
+    }
+
     /// @inheritdoc BuildScript
     /// @dev Every alias lib, every released-suites lib and the aggregate over
     /// them.
     function regenerateLibs() internal override {
         GeneratedContract[] memory contracts = generatedContracts();
+        string memory dir = libDir();
         for (uint256 i = 0; i < contracts.length; i++) {
             LibRainDeploySnapshot.writeAliasLib(
-                vm,
-                LibRainDeploySnapshot.LIB_DIR,
-                contracts[i].contractName,
-                contracts[i].constantPrefix,
-                LibRainDeploySnapshot.CANDIDATE
+                vm, dir, contracts[i].contractName, contracts[i].constantPrefix, LibRainDeploySnapshot.CANDIDATE
             );
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm,
-                LibRainDeploySnapshot.LIB_DIR,
-                recordRoot(),
-                contracts[i].contractName,
-                contracts[i].candidate.snapshot
+                vm, dir, recordRoot(), contracts[i].contractName, contracts[i].candidate.snapshot
             );
         }
-        LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, LibRainDeploySnapshot.LIB_DIR, snapshotContractNames());
+        LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, dir, snapshotContractNames());
     }
 
     /// @inheritdoc BuildScript
