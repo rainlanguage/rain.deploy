@@ -89,6 +89,7 @@ contract Build is BuildScript, RegistryDeploySuites {
         for (uint256 i = 0; i < contracts.length; i++) {
             LibRainDeploySnapshot.writeSnapshot(
                 vm,
+                recordRoot(),
                 LibRainDeploySnapshot.CANDIDATE,
                 contracts[i].contractName,
                 contracts[i].candidate.sourceCreationCode,
