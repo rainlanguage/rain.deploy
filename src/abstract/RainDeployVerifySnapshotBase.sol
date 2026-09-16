@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
+import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.5/src/lib/LibMemoryKV.sol";
 
 /// Thrown when the deploy address recorded for a version is not the address its
 /// own creation code derives.
@@ -43,6 +44,24 @@ error FrozenSnapshotNotReleased(string path);
 /// wrong thing.
 /// @param path The record file with no `DEPLOYED_ADDRESS` declaration.
 error FrozenSnapshotUnreadable(string path);
+
+/// Thrown when a file in the frozen record declares its deployed address more
+/// than once. Solidity rejects a second file-scope `DEPLOYED_ADDRESS`, so no
+/// compiler reads such a file at all, and every rule for choosing between the
+/// copies — first, last, either — reads a value the compiler never would. A
+/// hand edit is what this group exists to catch and a position rule is what it
+/// would aim at, so the reader refuses rather than choosing.
+/// @param path The record file declaring `DEPLOYED_ADDRESS` more than once.
+error FrozenSnapshotAmbiguous(string path);
+
+/// Thrown when an `[etherscan]` entry carries neither `chain` nor `url`. Under
+/// an alias foundry does not itself resolve to a chain that entry is not a
+/// missing key, it is "At least one of `url` or `chain` must be present for
+/// Etherscan config with unknown alias" — raised while foundry resolves the
+/// SECTION, so it takes verification down for the other entries too and not
+/// only its own.
+/// @param entry The `[etherscan]` entry that cannot resolve.
+error EtherscanEntryUnresolvable(string entry);
 
 /// @title RainDeployVerifySnapshotBase
 /// @notice Every deploy-pin assertion that needs no network, for every suite
@@ -113,6 +132,8 @@ error FrozenSnapshotUnreadable(string path);
 /// one spelling. Inheriting a narrower contract is a choice a reader sees in
 /// the inheritance list; overriding a test to nothing is one they do not.
 abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
+    using LibMemoryKV for MemoryKV;
+
     /// Checks one suite against itself: derive from its creation code, then
     /// require everything it records to agree with the derivation.
     /// @param suite The suite to check.
@@ -141,6 +162,13 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// exactly the hand edit this whole group exists to catch, and it is at
     /// file scope in every generated snapshot, so there is no indentation to
     /// allow for.
+    ///
+    /// The start of a line is what makes a `//` copy unreachable, because `//`
+    /// has to sit in front of the text it comments out. It does nothing to a
+    /// `/* ... */` copy, whose delimiters are on their own lines and whose
+    /// contents therefore start their lines exactly as the real declaration
+    /// does. Block comments come out of the record before this rule runs, so
+    /// that what it runs on is what the compiler would see.
     string constant DEPLOYED_ADDRESS_DECLARATION = "address constant DEPLOYED_ADDRESS =";
 
     /// The address a frozen record declares as its deploy address.
@@ -158,20 +186,63 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// because a record is reached by its PATH, which is what the walk returns,
     /// while its artifact path is not something a caller can name — foundry
     /// disambiguates those by whatever else happens to share the basename.
+    ///
+    /// The whole record is scanned before a match is read, so a record
+    /// carrying two declarations is refused rather than resolved by position.
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
     /// @return The address the record declares.
     function recordedDeployedAddress(string memory path, string memory record) internal pure returns (address) {
-        string[] memory lines = vm.split(record, "\n");
+        string[] memory lines = vm.split(withoutBlockComments(record), "\n");
+        bool found = false;
+        address declared;
         for (uint256 i = 0; i < lines.length; i++) {
             if (vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) != 0) {
                 continue;
             }
+            if (found) {
+                revert FrozenSnapshotAmbiguous(path);
+            }
             string[] memory tokens = vm.split(lines[i], " ");
             string memory literal = tokens[tokens.length - 1];
-            return vm.parseAddress(vm.replace(vm.replace(vm.replace(literal, "address(", ""), ")", ""), ";", ""));
+            declared = vm.parseAddress(vm.replace(vm.replace(vm.replace(literal, "address(", ""), ")", ""), ";", ""));
+            found = true;
         }
-        revert FrozenSnapshotUnreadable(path);
+        if (!found) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        return declared;
+    }
+
+    /// A record's text with every block comment removed, so that a declaration
+    /// found in it is one the compiler would read.
+    ///
+    /// `/*` opens a comment that the first following `*/` closes, and Solidity
+    /// does not nest them, so what survives is the text before the first `/*`
+    /// plus, for each one after it, the text after its `*/`. An unclosed `/*`
+    /// is comment to the end of the file, so nothing after it survives.
+    ///
+    /// A comment is removed rather than blanked, which joins the text either
+    /// side of it into one line exactly as the compiler joins it. A declaration
+    /// the compiler reads on the tail of a `*/` is therefore still found, and
+    /// one interrupted mid-line by a comment is not — that leaves the record
+    /// unreadable, never read as some other address.
+    /// @param record The record file's contents.
+    /// @return The contents with every block comment removed.
+    function withoutBlockComments(string memory record) internal pure returns (string memory) {
+        string[] memory opened = vm.split(record, "/*");
+        string memory stripped = opened[0];
+        for (uint256 i = 1; i < opened.length; i++) {
+            string[] memory closed = vm.split(opened[i], "*/");
+            if (closed.length == 1) {
+                break;
+            }
+            stripped = string.concat(stripped, closed[1]);
+            for (uint256 j = 2; j < closed.length; j++) {
+                stripped = string.concat(stripped, "*/", closed[j]);
+            }
+        }
+        return stripped;
     }
 
     /// Checks the frozen record against the released declaration: every file in
@@ -225,6 +296,86 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
                 revert FrozenSnapshotNotReleased(paths[i]);
             }
         }
+    }
+
+    /// Checks that every `[etherscan]` entry can resolve at all: each carries at
+    /// least one of `chain` or `url`.
+    ///
+    /// The entries EXISTING is not enough for the section to verify anything.
+    /// Foundry resolves the section rather than the single entry the network
+    /// being verified needs, so one entry it cannot resolve is an error raised
+    /// for whichever network `--verify` was pointed at — the failure mode the
+    /// key checks are there to keep off a broadcast, arriving from an entry
+    /// that satisfies them.
+    ///
+    /// Required of EVERY entry rather than only the aliases foundry cannot
+    /// resolve itself, because that set is foundry's table and moves under a
+    /// toolchain bump. Stating the chain an alias already resolves to resolves
+    /// it to the same chain, so the strict form is monotonic, needs to know
+    /// nothing of that table, and cannot red-line when foundry adds an alias.
+    /// @param config The raw `foundry.toml` text.
+    /// @param entries The `[etherscan]` entries to check.
+    function checkEtherscanEntriesResolvable(string memory config, string[] memory entries) internal view {
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (
+                !vm.keyExistsToml(config, string.concat(".etherscan.", entries[i], ".chain"))
+                    && !vm.keyExistsToml(config, string.concat(".etherscan.", entries[i], ".url"))
+            ) {
+                revert EtherscanEntryUnresolvable(entries[i]);
+            }
+        }
+    }
+
+    /// Checks a `foundry.toml`'s `[rpc_endpoints]` and `[etherscan]` sections
+    /// against a set of supported networks: the three lists are one list, and
+    /// every `[etherscan]` entry can resolve.
+    ///
+    /// Membership is asserted in BOTH directions. Containment one way alone
+    /// passes for a section carrying an alias nothing deploys to, and the other
+    /// way alone passes for a network with no config at all. Membership rather
+    /// than position, because a config section is keyed rather than ordered and
+    /// there is no order in it to assert.
+    ///
+    /// Takes the config text rather than reading it, so it can be handed one a
+    /// test builds. What reads the binder's own file is
+    /// `testSupportedNetworksAreFullyConfigured`, and see it for why the file's
+    /// text is the subject at all.
+    /// @param config The raw `foundry.toml` text.
+    /// @param networks The supported networks the sections must name.
+    function checkNetworksConfigured(string memory config, string[] memory networks) internal view {
+        MemoryKV networkSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < networks.length; i++) {
+            networkSet = networkSet.set(MemoryKVKey.wrap(keccak256(bytes(networks[i]))), MemoryKVVal.wrap(0));
+        }
+
+        for (uint256 i = 0; i < networks.length; i++) {
+            assertTrue(
+                vm.keyExistsToml(config, string.concat(".rpc_endpoints.", networks[i])),
+                string.concat("supported network has no [rpc_endpoints] alias: ", networks[i])
+            );
+            assertTrue(
+                vm.keyExistsToml(config, string.concat(".etherscan.", networks[i])),
+                string.concat("supported network has no [etherscan] key: ", networks[i])
+            );
+        }
+
+        string[] memory rpcAliases = vm.parseTomlKeys(config, ".rpc_endpoints");
+        for (uint256 i = 0; i < rpcAliases.length; i++) {
+            assertTrue(
+                networkSet.has(MemoryKVKey.wrap(keccak256(bytes(rpcAliases[i])))),
+                string.concat("[rpc_endpoints] alias is not a supported network: ", rpcAliases[i])
+            );
+        }
+
+        string[] memory etherscanKeys = vm.parseTomlKeys(config, ".etherscan");
+        for (uint256 i = 0; i < etherscanKeys.length; i++) {
+            assertTrue(
+                networkSet.has(MemoryKVKey.wrap(keccak256(bytes(etherscanKeys[i])))),
+                string.concat("[etherscan] key is not a supported network: ", etherscanKeys[i])
+            );
+        }
+
+        checkEtherscanEntriesResolvable(config, etherscanKeys);
     }
 
     /// Every declared suite MUST be internally consistent: what it records is

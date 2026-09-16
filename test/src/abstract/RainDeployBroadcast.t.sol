@@ -77,7 +77,10 @@ contract RainDeployBroadcastTest is Test {
     ///
     /// That the reported key is empty rather than a suite is what says there is
     /// no default; `RainDeploySuitesBaseTest.testEmptySuiteIsUnknown` is what
-    /// says an empty key is unknown.
+    /// says an empty key is unknown to THIS declaration, and
+    /// `testEmptySuiteKeyReverts` is what says no declaration can make it
+    /// known — the registry refuses an empty key outright, so the default this
+    /// leg exercises cannot become a real suite in any repo that inherits it.
     ///
     /// ## Then a suite nobody declared
     ///
@@ -145,7 +148,7 @@ contract RainDeployBroadcastTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "",
-                "address-registry-0-0-1, second-address, address-registry-candidate, second-address-candidate"
+                "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
             )
         );
         sDeploy.run();
@@ -156,7 +159,7 @@ contract RainDeployBroadcastTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "address-registry",
-                "address-registry-0-0-1, second-address, address-registry-candidate, second-address-candidate"
+                "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
             )
         );
         sDeploy.run();
@@ -165,9 +168,9 @@ contract RainDeployBroadcastTest is Test {
         //
         // A fixture that names ONE network, so that where the broadcast went is
         // observable at all. `sDeploy` takes the default target set, and a suite
-        // deployed to all seven chains and a suite deployed to the one chain the
-        // repo asked for are indistinguishable from a fixture that asks for all
-        // seven.
+        // deployed to every supported chain and a suite deployed to the one
+        // chain the repo asked for are indistinguishable from a fixture that
+        // asks for all of them.
         ExampleDeploySingleNetwork single = new ExampleDeploySingleNetwork();
 
         // Derived here from the same source the declaration derives them from,
@@ -234,8 +237,8 @@ contract RainDeployBroadcastTest is Test {
         // arbitrum for this fixture's single-element override, polygon for the
         // default. That is the whole of the difference an assertion can see, and
         // an override `run()` ignored is a repo that asked for one chain getting
-        // a suite on seven — with a revert partway through leaving a dispatch
-        // half done.
+        // a suite on every supported network — with a revert partway through
+        // leaving a dispatch half done.
         //
         // `testDeployNetworksDefaultsToSupportedNetworks` asserts the default
         // VALUE of that function; nothing until here asserted that `run()` is
@@ -353,12 +356,12 @@ contract RainDeployBroadcastTest is Test {
     /// before the `CREATE2` goes out compares the recorded address against the
     /// recorded creation code, both of which come out of the same generated
     /// file. That catches a stale PIN and cannot catch a snapshot of the wrong
-    /// CONTRACT, so without this the bytes reaching seven chains are whatever the
-    /// generated file happens to hold. `CREATE2` at a zero salt makes that
-    /// permanent: the wrong bytes take the wrong bytes' own address, on every
-    /// chain the dispatch reached, and the dispatch is `workflow_dispatch` on a
-    /// ref with no required-green gate — so "CI was red" is a signal a human may
-    /// not have read.
+    /// CONTRACT, so without this the bytes reaching every chain the dispatch
+    /// targets are whatever the generated file happens to hold. `CREATE2` at a
+    /// zero salt makes that permanent: the wrong bytes take the wrong bytes' own
+    /// address, on every chain the dispatch reached, and the dispatch is
+    /// `workflow_dispatch` on a ref with no required-green gate — so "CI was
+    /// red" is a signal a human may not have read.
     ///
     /// ## Before the suite, and therefore before the key
     ///
@@ -428,11 +431,11 @@ contract RainDeployBroadcastTest is Test {
     /// make that comparison derived-against-derived.
     function testSelectedSuiteCarriesTheRecordedPins() external view {
         assertEq(
-            sDeploy.externalSuiteByName("address-registry-0-0-1").storedDeployedAddress,
-            LibRainDeploy.zoltuAddress(sDeploy.externalSuiteByName("address-registry-0-0-1").creationCode)
+            sDeploy.externalSuiteByName("address-registry@0_0_1").storedDeployedAddress,
+            LibRainDeploy.zoltuAddress(sDeploy.externalSuiteByName("address-registry@0_0_1").creationCode)
         );
         assertEq(
-            sDeploy.externalSuiteByName("address-registry-0-0-1").artifactPath,
+            sDeploy.externalSuiteByName("address-registry@0_0_1").artifactPath,
             "src/concrete/AddressRegistry.sol:AddressRegistry"
         );
     }

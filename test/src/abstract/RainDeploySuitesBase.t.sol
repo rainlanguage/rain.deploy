@@ -7,14 +7,20 @@ import {Test} from "forge-std-1.16.2/src/Test.sol";
 import {
     DeploySuite,
     DuplicateDeploySuite,
+    InvalidDeploySuiteKey,
     NoDeployCandidates,
     UnknownDeploymentSuite
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {CollidingCandidateDeploySuites} from "../../concrete/CollidingCandidateDeploySuites.sol";
 import {DuplicateDeploySuites} from "../../concrete/DuplicateDeploySuites.sol";
+import {EmptyKeyDeploySuites} from "../../concrete/EmptyKeyDeploySuites.sol";
 import {NoCandidateDeploySuites} from "../../concrete/NoCandidateDeploySuites.sol";
 import {SameLengthKeyDeploySuites} from "../../concrete/SameLengthKeyDeploySuites.sol";
+import {SeparatorKeyDeploySuites} from "../../concrete/SeparatorKeyDeploySuites.sol";
+import {ShortestKeyDeploySuites} from "../../concrete/ShortestKeyDeploySuites.sol";
+import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
+import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 
 /// @title RainDeploySuitesBaseTest
 /// @notice The registry itself: one declaration, keyed lookup, and the two ways
@@ -41,7 +47,7 @@ contract RainDeploySuitesBaseTest is Test {
         DeploySuite[] memory suites = sSuites.externalAllSuites();
 
         assertEq(suites.length, 4);
-        assertEq(suites[0].suite, "address-registry-0-0-1");
+        assertEq(suites[0].suite, "address-registry@0_0_1");
         assertEq(suites[1].suite, "second-address");
         assertEq(suites[2].suite, "address-registry-candidate");
         assertEq(suites[3].suite, "second-address-candidate");
@@ -63,12 +69,10 @@ contract RainDeploySuitesBaseTest is Test {
     }
 
     /// Two suites that record the SAME creation code MUST still be selectable
-    /// apart. `address-registry-0-0-1` and `address-registry-candidate` are the
-    /// same bytes at the same address, so the key is the only thing that
-    /// distinguishes them — and it has to, because they are separately
-    /// deployable records.
+    /// apart: they are separately deployable records, so the key is the only
+    /// thing that distinguishes them.
     function testSuitesSharingCreationCodeSelectApart() external view {
-        DeploySuite memory released = sSuites.externalSuiteByName("address-registry-0-0-1");
+        DeploySuite memory released = sSuites.externalSuiteByName("address-registry@0_0_1");
         DeploySuite memory candidate = sSuites.externalSuiteByName("address-registry-candidate");
 
         assertEq(keccak256(released.creationCode), keccak256(candidate.creationCode));
@@ -84,7 +88,7 @@ contract RainDeploySuitesBaseTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "mock-deployable",
-                "address-registry-0-0-1, second-address, address-registry-candidate, second-address-candidate"
+                "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
             )
         );
         sSuites.externalSuiteByName("mock-deployable");
@@ -97,17 +101,89 @@ contract RainDeploySuitesBaseTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "",
-                "address-registry-0-0-1, second-address, address-registry-candidate, second-address-candidate"
+                "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
             )
         );
         sSuites.externalSuiteByName("");
+    }
+
+    /// A declaration that KEYS a suite on the empty string MUST be refused, on
+    /// every reader.
+    ///
+    /// `testEmptySuiteIsUnknown` above says the empty key is unknown to the
+    /// fixture registry. It says nothing about a registry that declares it, and
+    /// the empty string is not an ordinary key: it is the value
+    /// `RainDeployBroadcast.run()` substitutes for an absent
+    /// `DEPLOYMENT_SUITE`, so a declaration allowed to answer it is a dispatch
+    /// with the suite input left blank selecting a real contract and putting it
+    /// at its permanent `CREATE2` address on every chain that dispatch reached.
+    ///
+    /// Refused where the key rules already are rather than at the substitution,
+    /// so the guarantee holds for every `suiteByName` caller and not only for
+    /// `run()` — the argument `NoDeployCandidates` is already made of. It is
+    /// the key ALPHABET that refuses it, which admits no key of no bytes; a
+    /// length check beside that alphabet would be a second rule for one
+    /// property, and the two could disagree.
+    ///
+    /// The reported index is asserted, not just the refusal. It is 1, the
+    /// CANDIDATE, behind a released suite that is keyed properly: a check that
+    /// looked only at the head of the registry would answer this declaration as
+    /// if nothing were wrong, and with the key empty the position is the only
+    /// thing that can name which entry is at fault.
+    function testEmptySuiteKeyReverts() external {
+        EmptyKeyDeploySuites empty = new EmptyKeyDeploySuites();
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, 1, ""));
+        empty.externalAllSuites();
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, 1, ""));
+        empty.externalSuiteNames();
+
+        // The selection an unset `DEPLOYMENT_SUITE` makes. Without the refusal
+        // this returns the candidate — `MockDeployableV2`, a real deployable
+        // entry — rather than reporting the valid set.
+        vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, 1, ""));
+        empty.externalSuiteByName("");
+
+        // And for a key that IS spelled: one bad entry makes the whole registry
+        // unreadable, exactly as a duplicate does, rather than leaving the
+        // sibling entries quietly selectable out of a declaration nobody can
+        // safely dispatch from.
+        vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, 1, ""));
+        empty.externalSuiteByName("address-registry@0_0_1");
+    }
+
+    /// A ONE BYTE key MUST be an ordinary key.
+    ///
+    /// The alphabet is about what a key may SAY, and carries no length floor
+    /// above the one byte it takes to say anything. Every other declaration in
+    /// this repo spells its keys at six bytes or more, so a refusal written
+    /// against any other short-key threshold passes all of them while refusing
+    /// a declaration that is entirely legal — and the repo would find that out
+    /// from the consumer that chose short keys, at the point it could no longer
+    /// deploy.
+    function testShortestKeysSelectApart() external {
+        ShortestKeyDeploySuites shortest = new ShortestKeyDeploySuites();
+
+        DeploySuite[] memory suites = shortest.externalAllSuites();
+        assertEq(suites.length, 2);
+        assertEq(suites[0].suite, "a");
+        assertEq(suites[1].suite, "z");
+        assertEq(shortest.externalSuiteNames(), "a, z");
+
+        DeploySuite memory released = shortest.externalSuiteByName("a");
+        assertEq(released.artifactPath, "src/concrete/AddressRegistry.sol:AddressRegistry");
+
+        DeploySuite memory candidate = shortest.externalSuiteByName("z");
+        assertEq(candidate.artifactPath, "test/concrete/MockDeployableV2.sol:MockDeployableV2");
+        assertEq(candidate.storedDeployedAddress, LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode));
     }
 
     /// The reported key list MUST be exactly the registry, in order.
     function testSuiteNamesIsTheRegistry() external view {
         assertEq(
             sSuites.externalSuiteNames(),
-            "address-registry-0-0-1, second-address, address-registry-candidate, second-address-candidate"
+            "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
         );
     }
 
@@ -163,7 +239,7 @@ contract RainDeploySuitesBaseTest is Test {
         // cannot answer "no such suite" either, because it has no valid set to
         // report and the answer would send the reader after a typo.
         vm.expectRevert(abi.encodeWithSelector(NoDeployCandidates.selector));
-        none.externalSuiteByName("address-registry-0-0-1");
+        none.externalSuiteByName("address-registry@0_0_1");
 
         // And at the source of the refusal itself, which is what the
         // source-anchored check reads through — a loop over an empty list
@@ -223,5 +299,82 @@ contract RainDeploySuitesBaseTest is Test {
             )
         );
         sameLength.externalSuiteByName("same-length-qqq");
+    }
+
+    /// A key carrying the comma the key list is joined on MUST be refused, on
+    /// every reader.
+    ///
+    /// That list exists so a caller who does NOT already know the valid keys is
+    /// told them. Joined on `", "`, the TWO suite registry keyed `a,b` and `c`
+    /// renders `a,b, c` — which is what a THREE suite registry keyed `a`, `b`
+    /// and `c` says. The reader is told a different number of suites exist than
+    /// do, and `b`, declared nowhere, is handed to them as valid. The
+    /// declaration is refused rather than rendered, because a list that reads
+    /// back as a different set than the one it names is the hardcoded string
+    /// this registry replaces, spelled differently.
+    ///
+    /// The offending key is the RELEASED one here and the CANDIDATE in
+    /// `testEmptySuiteKeyReverts`, so between them a check that ran over either
+    /// side of the registry alone is caught.
+    function testSeparatorKeyIsRefused() external {
+        SeparatorKeyDeploySuites separated = new SeparatorKeyDeploySuites();
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, 0, "a,b"));
+        separated.externalAllSuites();
+
+        vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, 0, "a,b"));
+        separated.externalSuiteNames();
+
+        // The key this declaration DOES name, refused with it: what is wrong is
+        // the declaration, not any one lookup against it.
+        vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, 0, "a,b"));
+        separated.externalSuiteByName("c");
+
+        // And the phantom the rendering invents. A registry that rendered this
+        // answers `b` with a list that names `b` as valid.
+        vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, 0, "a,b"));
+        separated.externalSuiteByName("b");
+    }
+
+    /// A table rather than a declaration contract apiece: a fixture is sixty
+    /// lines to say one string, and the fixtures are what pin that the rule
+    /// runs on every reader. What is left to pin is WHICH keys it decides which
+    /// way, and the accepting half is what keeps the rule from being narrowed
+    /// into refusing the release keys `LibRainDeploySnapshot` generates.
+    function testSuiteKeyAlphabetAccepts() external view {
+        string[7] memory accepted =
+            ["address-registry", "a", "a-b-c", "address-registry@0_1_10", "tofu-token-decimals@0_1_0", "a@z", "a@-_9"];
+
+        for (uint256 i = 0; i < accepted.length; i++) {
+            sSuites.externalCheckSuiteKey(i, accepted[i]);
+        }
+    }
+
+    /// The index is asserted with the key on every entry. It is the only handle
+    /// on which suite is at fault when the key itself is empty, and a refusal
+    /// reporting a fixed position would still pass a test that only asked
+    /// whether it reverted.
+    function testSuiteKeyAlphabetRefuses() external {
+        string[14] memory refused = [
+            "",
+            "@",
+            "@0_1_10",
+            "address-registry@",
+            "address-registry@0_1_10@0_1_11",
+            "Address-Registry",
+            "address registry",
+            "address,registry",
+            "address_registry",
+            "address-registry-0-0-1",
+            "address-registry@0_1_7-RC",
+            "address.registry",
+            "address/registry",
+            unicode"addréss-registry"
+        ];
+
+        for (uint256 i = 0; i < refused.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, i, refused[i]));
+            sSuites.externalCheckSuiteKey(i, refused[i]);
+        }
     }
 }

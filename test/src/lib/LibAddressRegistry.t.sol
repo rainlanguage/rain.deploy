@@ -76,6 +76,10 @@ contract LibAddressRegistryTest is Test {
     /// A chain with no registry deployed reverts on the code hash rather than
     /// calling into an empty account, which would otherwise succeed silently
     /// and return nothing.
+    ///
+    /// Zero is what the address hashes to only while the account does not
+    /// exist at all, which is what a never-touched address is.
+    /// `testResolveNoRegistryFundedAccount` is the other codeless value.
     function testResolveNoRegistry(bytes32 name) external {
         assertEq(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
 
@@ -84,6 +88,28 @@ contract LibAddressRegistryTest is Test {
                 LibAddressRegistry.UnexpectedAddressRegistryCodeHash.selector,
                 LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH,
                 bytes32(0)
+            )
+        );
+        this.externalResolve(name);
+    }
+
+    /// A codeless registry address that EXISTS hashes to the empty string, not
+    /// to zero, and anyone can bring it into existence on a chain without the
+    /// registry by sending it a single wei. The guard fires either way, so what
+    /// this pins is the value a caller reading `actualCodeHash` off the revert
+    /// is handed.
+    function testResolveNoRegistryFundedAccount(bytes32 name, uint256 balance) external {
+        balance = bound(balance, 1, type(uint128).max);
+        vm.deal(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS, balance);
+
+        assertEq(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
+        assertEq(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.codehash, keccak256(""));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibAddressRegistry.UnexpectedAddressRegistryCodeHash.selector,
+                LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH,
+                keccak256("")
             )
         );
         this.externalResolve(name);

@@ -92,7 +92,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
 
     /// Nothing to derive derives nothing, rather than a one-entry array of
     /// zeroes. The chain group returns early on a zero length and would fork
-    /// seven endpoints for a subject at address zero otherwise.
+    /// every supported network for a subject at address zero otherwise.
     function testDerivingNoSuitesDerivesNothing() external {
         DerivedDeploy[] memory derived = deriveDeployments(new DeploySuite[](0));
         assertEq(derived.length, 0);
