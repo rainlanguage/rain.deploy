@@ -23,9 +23,9 @@ bytes32 constant STALE_CODE_HASH = bytes32(uint256(0xdead));
 /// recomputed the hash from its own recorded runtime code instead of carrying
 /// the recorded one would compare a value against itself and let this through.
 ///
-/// One network, so the refusal is reached on the first fork rather than the
-/// seventh. Keyed `second-address-candidate` for the reason `StalePinDeploy`
-/// gives.
+/// One network, so the refusal is reached on the only fork rather than partway
+/// down the default roster. Keyed `second-address-candidate` for the reason
+/// `StalePinDeploy` gives.
 contract StaleCodeHashDeploy is RainDeployBroadcast {
     /// @inheritdoc RainDeployBroadcast
     function deployNetworks() internal pure override returns (string[] memory networks) {
