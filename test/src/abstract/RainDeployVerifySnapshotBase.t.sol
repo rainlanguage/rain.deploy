@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBase.sol";
 import {CandidateSourceMismatch, DeployCandidate, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
+    EtherscanEntryUnresolvable,
     FrozenSnapshotAmbiguous,
     FrozenSnapshotNotReleased,
     FrozenSnapshotUnreadable,
@@ -85,6 +86,12 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// @param released The declared released suites.
     function externalCheckFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released) external view {
         checkFrozenSnapshotsReleased(paths, released);
+    }
+
+    /// External wrapper for `checkNetworksConfigured` so `vm.expectRevert` works
+    /// at the correct call depth.
+    function externalCheckNetworksConfigured(string memory config, string[] memory networks) external view {
+        checkNetworksConfigured(config, networks);
     }
 
     /// External wrapper for `recordedDeployedAddress` so `vm.expectRevert`
@@ -438,11 +445,10 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// undeclared and make the check unusable the moment a repo releases twice.
     function testFrozenSnapshotCheckReachesEveryReleasedSuite() external view {
         DeploySuite[] memory released = releasedSuites();
-        // `second-address` first, `address-registry-0-0-1` second.
         DeploySuite[] memory reordered = new DeploySuite[](2);
         reordered[0] = released[1];
         reordered[1] = released[0];
-        assertEq(reordered[1].suite, "address-registry-0-0-1");
+        assertEq(reordered[1].suite, "address-registry@0_0_1");
 
         this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), reordered);
     }
@@ -472,7 +478,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// @return The consistent `0_0_1` suite.
     function consistentSuite() internal pure returns (DeploySuite memory) {
         return DeploySuite({
-            suite: "address-registry-0-0-1",
+            suite: "address-registry@0_0_1",
             creationCode: ADDRESS_REGISTRY_CREATION_CODE,
             storedDeployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
             storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
@@ -492,7 +498,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         vm.expectRevert(
             abi.encodeWithSelector(
                 StoredAddressMismatch.selector,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 address(0xdead),
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS
             )
@@ -510,7 +516,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         vm.expectRevert(
             abi.encodeWithSelector(
                 StoredCodeHashMismatch.selector,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 bytes32(uint256(1)),
                 ADDRESS_REGISTRY_BYTECODE_HASH
             )
@@ -530,7 +536,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         vm.expectRevert(
             abi.encodeWithSelector(
                 StoredRuntimeCodeHashMismatch.selector,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_BYTECODE_HASH,
                 keccak256(hex"00")
             )
@@ -598,9 +604,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
 
     /// Two suites that record the SAME creation code MUST both derive, which
     /// is the ordinary state of a repo between a release and the next source
-    /// change. `address-registry-0-0-1` and `address-registry-candidate` are
-    /// the same bytes and therefore the same address, and the whole set still
-    /// passes.
+    /// change.
     function testSuitesSharingCreationCodeAllDerive() external {
         DeploySuite[] memory suites = allSuites();
         assertEq(suites.length, 4);
@@ -633,7 +637,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         vm.expectRevert(
             abi.encodeWithSelector(
                 ZoltuDerivationMismatch.selector,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
                 LibRainDeploy.ZOLTU_FACTORY
             )
@@ -735,5 +739,66 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         for (uint256 i = 0; i < suites.length; i++) {
             assertEq(suites[i].storedDeployedAddress.code.length, 0);
         }
+    }
+
+    /// The networks the config fixtures below are written against. Named for
+    /// nothing real, so no fixture here reads as a claim about the networks
+    /// this repo actually deploys to.
+    function fixtureNetworks() internal pure returns (string[] memory) {
+        string[] memory networks = new string[](3);
+        networks[0] = "alpha";
+        networks[1] = "beta";
+        networks[2] = "gamma";
+        return networks;
+    }
+
+    /// A config whose sections name exactly the fixture networks and whose
+    /// `[etherscan]` entries can all resolve — `chain` alone on two of them and
+    /// `url` alone on the third, because each is sufficient by itself.
+    string constant CONFIG_RESOLVABLE = "[rpc_endpoints]\n" "alpha = \"${ALPHA_RPC_URL}\"\n"
+        "beta = \"${BETA_RPC_URL}\"\n" "gamma = \"${GAMMA_RPC_URL}\"\n" "\n" "[etherscan]\n"
+        "alpha = { key = \"${A}\", chain = 999 }\n" "beta = { key = \"${B}\", url = \"https://example.com/api\" }\n"
+        "gamma = { key = \"${C}\", chain = 1000 }\n";
+
+    /// `CONFIG_RESOLVABLE` with the LAST `[etherscan]` entry stripped back to
+    /// its key, so a check that stops before the end of the section lets it
+    /// through.
+    string constant CONFIG_LAST_ENTRY_UNRESOLVABLE = "[rpc_endpoints]\n" "alpha = \"${ALPHA_RPC_URL}\"\n"
+        "beta = \"${BETA_RPC_URL}\"\n" "gamma = \"${GAMMA_RPC_URL}\"\n" "\n" "[etherscan]\n"
+        "alpha = { key = \"${A}\", chain = 999 }\n" "beta = { key = \"${B}\", url = \"https://example.com/api\" }\n"
+        "gamma = { key = \"${C}\" }\n";
+
+    /// `CONFIG_RESOLVABLE` with the MIDDLE `[etherscan]` entry stripped back to
+    /// its key. That entry is the one `url` alone was carrying, so this is also
+    /// what a `url` deleted from an otherwise untouched entry leaves behind.
+    string constant CONFIG_MIDDLE_ENTRY_UNRESOLVABLE = "[rpc_endpoints]\n" "alpha = \"${ALPHA_RPC_URL}\"\n"
+        "beta = \"${BETA_RPC_URL}\"\n" "gamma = \"${GAMMA_RPC_URL}\"\n" "\n" "[etherscan]\n"
+        "alpha = { key = \"${A}\", chain = 999 }\n" "beta = { key = \"${B}\" }\n"
+        "gamma = { key = \"${C}\", chain = 1000 }\n";
+
+    /// A config whose sections name the networks and whose `[etherscan]`
+    /// entries can all resolve MUST pass, so the failing cases below are
+    /// discriminating rather than a check that cannot succeed.
+    function testConfigWithResolvableEtherscanEntriesPasses() external view {
+        this.externalCheckNetworksConfigured(CONFIG_RESOLVABLE, fixtureNetworks());
+    }
+
+    /// An `[etherscan]` entry carrying only a `key` MUST fail, naming itself.
+    /// This is the whole subject of the shape assertion: such an entry
+    /// satisfies every membership assertion beside it — the sections here name
+    /// exactly the networks, in both directions — and is still config that
+    /// verifies nothing, on any network in the section rather than only on its
+    /// own.
+    function testConfigWithUnresolvableLastEtherscanEntryReverts() external {
+        vm.expectRevert(abi.encodeWithSelector(EtherscanEntryUnresolvable.selector, "gamma"));
+        this.externalCheckNetworksConfigured(CONFIG_LAST_ENTRY_UNRESOLVABLE, fixtureNetworks());
+    }
+
+    /// The unresolvable entry MUST be caught wherever it sits, and reported as
+    /// itself. A config section is keyed rather than ordered, so which entry is
+    /// the broken one is not something the check gets to assume.
+    function testConfigWithUnresolvableMiddleEtherscanEntryReverts() external {
+        vm.expectRevert(abi.encodeWithSelector(EtherscanEntryUnresolvable.selector, "beta"));
+        this.externalCheckNetworksConfigured(CONFIG_MIDDLE_ENTRY_UNRESOLVABLE, fixtureNetworks());
     }
 }
