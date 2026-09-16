@@ -11,12 +11,12 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 /// @notice A repo that has released nothing: the matrix has no subject, and
 /// MUST reach no network at all.
 ///
-/// Forking seven endpoints to check nothing turns an outage into the failure of
-/// an assertion with no subject, which is the one failure the chain group is
-/// supposed to stay legible against. The pass is identical either way — a
-/// matrix that forked all seven and found nothing to check on each of them
-/// passes too — so the ABSENCE of a fork is the only thing that separates them
-/// and it is what is asserted here.
+/// Forking every supported network to check nothing turns an outage into the
+/// failure of an assertion with no subject, which is the one failure the chain
+/// group is supposed to stay legible against. The pass is identical either
+/// way — a matrix that forked every one of them and found nothing to check on
+/// each of them passes too — so the ABSENCE of a fork is the only thing that
+/// separates them and it is what is asserted here.
 ///
 /// The empty set is DECLARED here rather than read off a repo that happens not
 /// to have released yet. A deploy repo's own declaration is empty exactly once,
@@ -66,7 +66,7 @@ contract RainDeployVerifyChainEmptyTest is RainDeployVerifyChain {
     ///
     /// It runs the whole inherited entry point rather than handing the matrix an
     /// empty array, so the derivation is inside what is asserted: a fork opened
-    /// while deriving would touch the same seven endpoints for the same nothing.
+    /// while deriving would touch the same endpoints for the same nothing.
     ///
     /// The empty released set is asserted rather than assumed, so an edit that
     /// gives this contract a subject fails naming the declaration it changed

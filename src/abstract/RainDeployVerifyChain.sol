@@ -36,9 +36,9 @@ error CodeHashMismatchOnNetwork(
 ///
 /// This is the only group that can catch a suite that never deployed to a
 /// network, or that is not there any more. Neither is a fact the repo can hold:
-/// both can go false with nobody touching it — a release that reached six
-/// chains of seven, a chain added to `supportedNetworks()` after a release that
-/// therefore never got it, a deploy that silently failed.
+/// both can go false with nobody touching it — a release that reached some
+/// chains and not others, a chain added to `supportedNetworks()` after a
+/// release that therefore never got it, a deploy that silently failed.
 ///
 /// ## Released only, for the same reason source anchors the candidate only
 ///
@@ -68,6 +68,21 @@ error CodeHashMismatchOnNetwork(
 /// network leaves no suite unchecked and a new release is checked on every
 /// network from the moment it is declared. There are deliberately no per-chain
 /// or per-suite functions to add.
+///
+/// ## One bad cell ends the run, at that cell
+///
+/// Generated from both lists is a statement about what gets CHECKED, not a
+/// promise that every cell gets REPORTED. The first missing or mismatched cell
+/// reverts and the run stops on that network, so a release that reached one
+/// network of nine is enumerated one red run per cell.
+///
+/// That is the trade, not an oversight. The error names the network, the suite
+/// and the address, so a run that names one cell is actionable on its own;
+/// deploying is idempotent by construction, so a partial release is fixed by
+/// running the deploy again rather than by knowing the whole shape first; and
+/// stopping spends no further RPC on a run whose answer is already red.
+/// Reporting every cell means this check becomes a collector with a summary
+/// error, which is a larger contract bought with fewer red runs.
 ///
 /// It compares against the DERIVED code hash rather than the recorded one, so
 /// the creation code stays the only parameter. `RainDeployVerifySnapshot` is
@@ -111,7 +126,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// expectation.
     /// @param derived The derivation of every suite to check.
     function checkDeployedOnSupportedNetworks(DerivedDeploy[] memory derived) internal {
-        // Nothing to check is not a reason to touch seven RPC endpoints. Forking
+        // Nothing to check is not a reason to touch every RPC endpoint. Forking
         // to check nothing turns an outage into the failure of an assertion
         // that has no subject, which is the one failure this contract is
         // supposed to be legible against.

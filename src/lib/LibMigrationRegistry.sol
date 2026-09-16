@@ -98,8 +98,10 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// library is not a substitute for them.
 library LibMigrationRegistry {
     /// Thrown when the code at the registry address is not the registry this
-    /// library was compiled against. An address with no code hits this too: an
-    /// empty account's code hash is zero, never the expected value.
+    /// library was compiled against. An address with no code hits this too: a
+    /// codeless account hashes to zero while it does not exist, and to the hash
+    /// of the empty string once a single wei brings it into existence. Neither
+    /// is the expected value.
     /// @param expectedCodeHash The code hash of the pinned registry.
     /// @param actualCodeHash The code hash actually found at the address.
     error UnexpectedMigrationRegistryCodeHash(bytes32 expectedCodeHash, bytes32 actualCodeHash);

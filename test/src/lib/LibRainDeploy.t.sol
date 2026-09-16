@@ -464,7 +464,8 @@ contract LibRainDeployTest is Test {
     /// @param contractPath The contract path for verification commands.
     /// @param expectedAddress The expected deterministic address.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
-    /// @param dependencies The addresses that must have code on each network.
+    /// @param dependencies The addresses that must already have code on a
+    /// network before this contract can be broadcast there.
     /// @return deployedAddress The deployed contract address.
     function externalDeployToNetworks(
         string[] memory networks,
@@ -661,6 +662,43 @@ contract LibRainDeployTest is Test {
             dependencies
         );
         assertEq(result, mockDeployableAddress());
+    }
+
+    /// `deployToNetworks` MUST skip an already-deployed network WITHOUT reading
+    /// the Zoltu factory. The factory guards the deploy path only, so a rerun on
+    /// a network that no longer needs deployment is a clean no-op even where the
+    /// factory itself is gone.
+    function testDeployToNetworksSkipsAlreadyDeployedWithMissingZoltuFactory() external {
+        vm.makePersistent(address(this));
+
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        address deployed = this.externalDeployZoltu(type(MockDeployable).creationCode);
+        assertEq(deployed, mockDeployableAddress());
+        vm.makePersistent(deployed);
+
+        // Emptied AFTER the deploy that needed it, and persisted so the fork
+        // `deployToNetworks` creates for itself sees the same empty account.
+        vm.makePersistent(LibRainDeploy.ZOLTU_FACTORY);
+        vm.etch(LibRainDeploy.ZOLTU_FACTORY, hex"");
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory dependencies = new address[](0);
+
+        address result = this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            dependencies
+        );
+        assertEq(result, mockDeployableAddress());
+        // The fork left selected is the one the skip ran on, so this is the
+        // factory state that skip saw, not the state of some other fork.
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+        assertEq(mockDeployableAddress().codehash, mockDeployableCodeHash());
     }
 
     /// `deployToNetworks` MUST revert with `MissingDependency` when the Zoltu
@@ -1422,9 +1460,9 @@ contract LibRainDeployTest is Test {
     ///
     /// Two networks rather than `supportedNetworks()`. What is under test is
     /// that the loop visits every network it is given, which two prove as well
-    /// as seven; the roster itself is `testSupportedNetworks`'s job. These are
-    /// the two networks the rest of this suite forks, so the test does not
-    /// depend on the reliability of RPC endpoints nothing else here touches.
+    /// as the whole roster; the roster itself is `testSupportedNetworks`'s job.
+    /// These are the two networks the rest of this suite forks, so the test does
+    /// not depend on the reliability of RPC endpoints nothing else here touches.
     function testCheckResolvedAddressesOnNetworksEachNetwork() external {
         bytes32 name = keccak256("testCheckResolvedAddressesOnNetworksEachNetwork");
         address account = address(0xf00);
@@ -1472,8 +1510,8 @@ contract LibRainDeployTest is Test {
     /// just as happily — and the mismatch case above is one network, so it
     /// cannot tell them apart either. What separates them is a target that
     /// answers differently on a LATER network, which is exactly the deployment
-    /// this matrix exists for: one chain of seven holding a value nobody looked
-    /// at.
+    /// this matrix exists for: one chain of the roster holding a value nobody
+    /// looked at.
     ///
     /// The first network is the one the target agrees on, so nothing fails
     /// before the loop has to advance, and the failure names the SECOND network
@@ -1885,5 +1923,28 @@ contract LibRainDeployTest is Test {
             ),
             ZOLTU_BASE_DEPLOY_BLOCK
         );
+    }
+
+    /// `isStartBlock` MUST refuse a zero `expectedCodeHash` rather than answer
+    /// true for an address no contract has ever existed at. Block 0 of Base is
+    /// such a block for this address, and it is the case the guard has to take:
+    /// at block 0 only the one read happens, so a zero expectation is met
+    /// outright.
+    function testIsStartBlockZeroCodeHashWhereNoContractEverExisted() external {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        vm.rollFork(uint256(0));
+        assertEq(address(0xdead).codehash, bytes32(0));
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoExpectedCodeHash.selector, address(0xdead)));
+        this.externalIsStartBlock(address(0xdead), bytes32(0), 0);
+    }
+
+    /// `isStartBlock` MUST refuse a zero `expectedCodeHash` at the genuine
+    /// start block of a real contract, where the true code hash answers true
+    /// and zero answers false.
+    function testIsStartBlockZeroCodeHashAtGenuineStartBlock() external {
+        vm.createSelectFork(LibRainDeploy.BASE, ZOLTU_BASE_DEPLOY_BLOCK);
+        assertGt(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoExpectedCodeHash.selector, LibRainDeploy.ZOLTU_FACTORY));
+        this.externalIsStartBlock(LibRainDeploy.ZOLTU_FACTORY, bytes32(0), ZOLTU_BASE_DEPLOY_BLOCK);
     }
 }

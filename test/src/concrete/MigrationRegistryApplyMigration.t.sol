@@ -921,6 +921,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         );
 
         assertEq(sRegistry.applied(writer, namespace, migration), appliedAt);
+        // The inequality against the block's own moment IS what this asserts.
+        //forge-lint: disable-next-line(block-timestamp)
         assertTrue(sRegistry.applied(writer, namespace, migration) != block.timestamp);
     }
 
