@@ -438,11 +438,10 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// undeclared and make the check unusable the moment a repo releases twice.
     function testFrozenSnapshotCheckReachesEveryReleasedSuite() external view {
         DeploySuite[] memory released = releasedSuites();
-        // `second-address` first, `address-registry-0-0-1` second.
         DeploySuite[] memory reordered = new DeploySuite[](2);
         reordered[0] = released[1];
         reordered[1] = released[0];
-        assertEq(reordered[1].suite, "address-registry-0-0-1");
+        assertEq(reordered[1].suite, "address-registry@0_0_1");
 
         this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), reordered);
     }
@@ -472,7 +471,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// @return The consistent `0_0_1` suite.
     function consistentSuite() internal pure returns (DeploySuite memory) {
         return DeploySuite({
-            suite: "address-registry-0-0-1",
+            suite: "address-registry@0_0_1",
             creationCode: ADDRESS_REGISTRY_CREATION_CODE,
             storedDeployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
             storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
@@ -492,7 +491,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         vm.expectRevert(
             abi.encodeWithSelector(
                 StoredAddressMismatch.selector,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 address(0xdead),
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS
             )
@@ -510,7 +509,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         vm.expectRevert(
             abi.encodeWithSelector(
                 StoredCodeHashMismatch.selector,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 bytes32(uint256(1)),
                 ADDRESS_REGISTRY_BYTECODE_HASH
             )
@@ -530,7 +529,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         vm.expectRevert(
             abi.encodeWithSelector(
                 StoredRuntimeCodeHashMismatch.selector,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_BYTECODE_HASH,
                 keccak256(hex"00")
             )
@@ -598,9 +597,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
 
     /// Two suites that record the SAME creation code MUST both derive, which
     /// is the ordinary state of a repo between a release and the next source
-    /// change. `address-registry-0-0-1` and `address-registry-candidate` are
-    /// the same bytes and therefore the same address, and the whole set still
-    /// passes.
+    /// change.
     function testSuitesSharingCreationCodeAllDerive() external {
         DeploySuite[] memory suites = allSuites();
         assertEq(suites.length, 4);
@@ -633,7 +630,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         vm.expectRevert(
             abi.encodeWithSelector(
                 ZoltuDerivationMismatch.selector,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
                 LibRainDeploy.ZOLTU_FACTORY
             )
