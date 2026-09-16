@@ -107,7 +107,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             abi.encodeWithSelector(
                 NotDeployedOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS
             )
         );
@@ -130,7 +130,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             abi.encodeWithSelector(
                 NotDeployedOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS
             )
         );
@@ -183,6 +183,46 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         assertEq(block.chainid, lastChainId);
     }
 
+    /// A bad cell ends the run AT that cell. The matrix does not run the rest
+    /// of itself out and report the first failure once it gets to the end,
+    /// which is a different contract with identical revert data: the same
+    /// error, after every remaining fork has been selected and read.
+    ///
+    /// The selected fork is what separates them, and it is the failing-case
+    /// half of `testChainMatrixReachesTheLastSupportedNetwork`. A run that
+    /// stopped is still on the network its error names; one that ran to the
+    /// end is on the last supported network. Starting on the last network is
+    /// what makes staying an observation rather than an accident: arriving at
+    /// the first network says the matrix moved, and the assertion says that is
+    /// where it stopped.
+    function testChainFailureEndsTheRunAtThatCell() external {
+        // Emptied before anything forks, and left persistent, so every fork the
+        // matrix creates carries an empty account here.
+        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"");
+
+        string[] memory networks = LibRainDeploy.supportedNetworks();
+
+        uint256 firstForkId = vm.createSelectFork(networks[0]);
+        (firstForkId);
+        uint256 firstChainId = block.chainid;
+
+        uint256 lastForkId = vm.createSelectFork(networks[networks.length - 1]);
+        (lastForkId);
+        assertNotEq(block.chainid, firstChainId);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                NotDeployedOnNetwork.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                "address-registry@0_0_1",
+                ADDRESS_REGISTRY_DEPLOYED_ADDRESS
+            )
+        );
+        this.testSuitesLiveOnEverySupportedNetwork();
+
+        assertEq(block.chainid, firstChainId);
+    }
+
     /// The early return for an empty set is about having NOTHING to check, not
     /// about the networks: handed ONE derivation, the matrix forks.
     ///
@@ -210,7 +250,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         // check itself passes on all of them.
         DerivedDeploy[] memory derived = new DerivedDeploy[](1);
         derived[0] = DerivedDeploy({
-            suite: "address-registry-0-0-1",
+            suite: "address-registry@0_0_1",
             deployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
             bytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH
         });
@@ -239,7 +279,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             abi.encodeWithSelector(
                 CodeHashMismatchOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
                 ADDRESS_REGISTRY_BYTECODE_HASH,
                 keccak256(hex"6001")
@@ -256,7 +296,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         vm.createSelectFork(LibRainDeploy.BASE);
 
         DerivedDeploy memory derived = DerivedDeploy({
-            suite: "address-registry-0-0-1",
+            suite: "address-registry@0_0_1",
             deployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
             bytecodeHash: bytes32(uint256(1))
         });
@@ -265,7 +305,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             abi.encodeWithSelector(
                 CodeHashMismatchOnNetwork.selector,
                 LibRainDeploy.BASE,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
                 bytes32(uint256(1)),
                 ADDRESS_REGISTRY_BYTECODE_HASH
@@ -316,7 +356,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"");
 
             DerivedDeploy memory derived = DerivedDeploy({
-                suite: "address-registry-0-0-1",
+                suite: "address-registry@0_0_1",
                 deployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
                 bytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH
             });
@@ -325,7 +365,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
                 abi.encodeWithSelector(
                     NotDeployedOnNetwork.selector,
                     networks[i],
-                    "address-registry-0-0-1",
+                    "address-registry@0_0_1",
                     ADDRESS_REGISTRY_DEPLOYED_ADDRESS
                 )
             );
@@ -416,6 +456,19 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             SupportedNetwork({name: LibRainDeploy.ETHEREUM, chainId: 987654, explorerUrl: "", defaultRpcUrl: ""});
 
         vm.expectRevert(abi.encodeWithSelector(NetworkChainIdMismatch.selector, LibRainDeploy.ETHEREUM, 987654, 1));
+        this.externalCheckNetworkChainIds(networks);
+    }
+
+    /// PROPERTY: EVERY entry in the roster is checked, not just the first.
+    ///
+    /// The wrong id is on the LAST entry, behind one that is right, so a loop
+    /// that stopped at the first agreement would pass.
+    function testChainIdChecksEveryEntry() external {
+        SupportedNetwork[] memory networks = new SupportedNetwork[](2);
+        networks[0] = SupportedNetwork({name: LibRainDeploy.ETHEREUM, chainId: 1, explorerUrl: "", defaultRpcUrl: ""});
+        networks[1] = SupportedNetwork({name: LibRainDeploy.BASE, chainId: 987654, explorerUrl: "", defaultRpcUrl: ""});
+
+        vm.expectRevert(abi.encodeWithSelector(NetworkChainIdMismatch.selector, LibRainDeploy.BASE, 987654, 8453));
         this.externalCheckNetworkChainIds(networks);
     }
 

@@ -9,9 +9,11 @@ import {
     RAIN_COPYRIGHT_TEXT,
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.37/src/lib/LibCodeGen.sol";
+import {LibFs} from "rain-sol-codegen-0.1.37/src/lib/LibFs.sol";
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     EmptyRelease,
+    InvalidRecordRoot,
     LibRainDeploySnapshot,
     NonMonotonicRelease,
     NothingToFreeze,
@@ -31,6 +33,61 @@ import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.
 /// nobody knows works. Each is driven here directly.
 contract LibRainDeploySnapshotTest is Test {
     using LibMemoryKV for MemoryKV;
+
+    /// The one directory this contract writes record fixtures into. Every
+    /// fixture root below is a subdirectory of it, so the whole of what a run
+    /// can leave behind is one tree with one name, and a root added later is
+    /// covered by the clear in `setUp` without being added to anything.
+    ///
+    /// NOT `src/generated`: the inherited record check reads that root, in
+    /// other contracts, which forge runs in parallel with this one — a fixture
+    /// release there would be a release those contracts have to fail on, for as
+    /// long as it exists. A directory of its own rather than a shared
+    /// `test/generated-` prefix, because `BuildScript.t.sol` owns roots under
+    /// that prefix and forge runs it in parallel too: a tree is removed by
+    /// name, and a prefix is not a name.
+    ///
+    /// `FROZEN_FIXTURE_ROOT` is outside this tree, and being outside is what
+    /// keeps it: it is committed and read only, so a clear that reached it
+    /// would delete it from the repo.
+    string constant FIXTURE_ROOT = "test/generated-snapshot";
+
+    /// A run MUST NOT inherit the fixtures of the run before it.
+    ///
+    /// Every test here reads before it removes and asserts after, so a failed
+    /// ASSERTION still leaves a clean tree. A mismatched `vm.expectRevert` is
+    /// the case that discipline cannot cover: it fires at the guarded call,
+    /// which is upstream of every removal, so the run that leaves a fixture
+    /// behind is a run that already failed. The next run then reads that
+    /// residue as if a test had put it there — a leftover `<tag>/` is refused
+    /// as `SnapshotAlreadyFrozen` before `freeze` reaches the guard a test is
+    /// there to observe, so one failure turns a repeatable test into a
+    /// permanently red one naming a cause that is not its own.
+    ///
+    /// The START of the run is what makes the outcome independent of the runs
+    /// before it, and it is the only point where removing a whole tree is safe:
+    /// forge runs the tests in a contract concurrently, and runs `setUp` once,
+    /// before any of them.
+    ///
+    /// Two trees rather than one because a lib these tests emit cannot sit
+    /// under a compiled root — `FIXTURE_LIB_ROOT` says why, and a copy left
+    /// there fails the next BUILD, which is upstream of anything `setUp` could
+    /// do about it. The snapshots the defaulting writers put in the REAL
+    /// `src/generated/` are in neither tree and are not cleared: that root is
+    /// the writer under test, and those directories are deliberately not tag
+    /// shaped, so what a failure leaves there is passed over by every record
+    /// walk and overwritten by the test that wrote it.
+    function setUp() external {
+        clearFixtureTree(FIXTURE_ROOT);
+        clearFixtureTree(FIXTURE_LIB_ROOT);
+    }
+
+    function clearFixtureTree(string memory root) internal {
+        if (vm.exists(root)) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(root, true);
+        }
+    }
 
     /// External wrapper so `vm.expectRevert` lands at the right call depth.
     /// @param version The version to convert.
@@ -106,7 +163,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// record check reads that root, in other contracts, which forge runs in
     /// parallel with this one — a fixture release there would be a release
     /// those contracts have to fail on, for as long as it exists.
-    string constant FIXTURE_ROOT = "test/generated";
+    string constant WALK_FIXTURE_ROOT = "test/generated-snapshot/walk";
 
     /// Writes one file into the fixture record.
     ///
@@ -192,20 +249,20 @@ contract LibRainDeploySnapshotTest is Test {
     /// order is the filesystem's, so an assertion about position would be an
     /// assertion about the machine that ran it.
     function testFrozenSnapshotPathsFindsEveryReleaseAndNothingElse() external {
-        writeFixture(string.concat(FIXTURE_ROOT, "/0_0_1/MockDeployable.sol"));
-        writeFixture(string.concat(FIXTURE_ROOT, "/0_0_2/MockDeployableV2.sol"));
-        writeFixture(string.concat(FIXTURE_ROOT, "/0_0_2/Second.sol"));
+        writeFixture(string.concat(WALK_FIXTURE_ROOT, "/0_0_1/MockDeployable.sol"));
+        writeFixture(string.concat(WALK_FIXTURE_ROOT, "/0_0_2/MockDeployableV2.sol"));
+        writeFixture(string.concat(WALK_FIXTURE_ROOT, "/0_0_2/Second.sol"));
         // Not releases: the rolling snapshot, a version no freeze could have
         // written, a file loose in the root, and a file too deep to be a record.
-        writeFixture(string.concat(FIXTURE_ROOT, "/", LibRainDeploySnapshot.CANDIDATE, "/MockDeployable.sol"));
-        writeFixture(string.concat(FIXTURE_ROOT, "/0_0_3-rc1/MockDeployable.sol"));
-        writeFixture(string.concat(FIXTURE_ROOT, "/Loose.sol"));
-        writeFixture(string.concat(FIXTURE_ROOT, "/0_0_1/nested/TooDeep.sol"));
+        writeFixture(string.concat(WALK_FIXTURE_ROOT, "/", LibRainDeploySnapshot.CANDIDATE, "/MockDeployable.sol"));
+        writeFixture(string.concat(WALK_FIXTURE_ROOT, "/0_0_3-rc1/MockDeployable.sol"));
+        writeFixture(string.concat(WALK_FIXTURE_ROOT, "/Loose.sol"));
+        writeFixture(string.concat(WALK_FIXTURE_ROOT, "/0_0_1/nested/TooDeep.sol"));
 
-        string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, FIXTURE_ROOT);
+        string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, WALK_FIXTURE_ROOT);
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeDir(FIXTURE_ROOT, true);
+        vm.removeDir(WALK_FIXTURE_ROOT, true);
 
         MemoryKV pathSet = MemoryKV.wrap(0);
         for (uint256 i = 0; i < paths.length; i++) {
@@ -213,20 +270,26 @@ contract LibRainDeploySnapshotTest is Test {
         }
 
         assertTrue(
-            pathSet.has(MemoryKVKey.wrap(keccak256(bytes(string.concat(FIXTURE_ROOT, "/0_0_1/MockDeployable.sol")))))
+            pathSet.has(
+                MemoryKVKey.wrap(keccak256(bytes(string.concat(WALK_FIXTURE_ROOT, "/0_0_1/MockDeployable.sol"))))
+            )
         );
         assertTrue(
-            pathSet.has(MemoryKVKey.wrap(keccak256(bytes(string.concat(FIXTURE_ROOT, "/0_0_2/MockDeployableV2.sol")))))
+            pathSet.has(
+                MemoryKVKey.wrap(keccak256(bytes(string.concat(WALK_FIXTURE_ROOT, "/0_0_2/MockDeployableV2.sol"))))
+            )
         );
-        assertTrue(pathSet.has(MemoryKVKey.wrap(keccak256(bytes(string.concat(FIXTURE_ROOT, "/0_0_2/Second.sol"))))));
+        assertTrue(
+            pathSet.has(MemoryKVKey.wrap(keccak256(bytes(string.concat(WALK_FIXTURE_ROOT, "/0_0_2/Second.sol")))))
+        );
         assertEq(paths.length, 3);
     }
 
     /// Where the missing-root case reads. Its own tree, for the same reason
-    /// `RELEASED_FIXTURE_ROOT` is not `FIXTURE_ROOT`: a root another test in
-    /// this contract builds and tears down is not a root this one can assert is
-    /// absent, and nothing writes here at all.
-    string constant MISSING_FIXTURE_ROOT = "test/generated-missing";
+    /// `RELEASED_FIXTURE_ROOT` is not `WALK_FIXTURE_ROOT`: a root another test
+    /// in this contract builds and tears down is not a root this one can assert
+    /// is absent, and nothing writes here at all.
+    string constant MISSING_FIXTURE_ROOT = "test/generated-snapshot/missing";
 
     /// A root that is not there at all MUST read as a repo that has released
     /// nothing, not as a failure. That is the state of every deploy repo before
@@ -295,10 +358,10 @@ contract LibRainDeploySnapshotTest is Test {
     }
 
     /// Where the depth rule is driven. Its own tree, for the reason
-    /// `MISSING_FIXTURE_ROOT` is not `FIXTURE_ROOT`: forge runs the tests in a
-    /// contract concurrently, and a walk asserted to find exactly one file
+    /// `MISSING_FIXTURE_ROOT` is not `WALK_FIXTURE_ROOT`: forge runs the tests
+    /// in a contract concurrently, and a walk asserted to find exactly one file
     /// counts another test's fixture the moment it is in the tree being read.
-    string constant NESTED_FIXTURE_ROOT = "test/generated-nested";
+    string constant NESTED_FIXTURE_ROOT = "test/generated-snapshot/nested";
 
     /// A record file is a file DIRECTLY inside a release directory. One a level
     /// deeper is not in the record, even where the directory holding it is
@@ -338,7 +401,7 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// Where a record root whose own last segment is tag shaped is built. See
     /// `NESTED_FIXTURE_ROOT` for why it is a tree of its own.
-    string constant TAG_SHAPED_FIXTURE_PARENT = "test/generated-tag-shaped";
+    string constant TAG_SHAPED_FIXTURE_PARENT = "test/generated-snapshot/tag-shaped";
 
     /// A file loose in the root is not in the record, whatever the root is
     /// called.
@@ -564,6 +627,7 @@ contract LibRainDeploySnapshotTest is Test {
 
         string memory written = LibRainDeploySnapshot.writeSnapshot(
             vm,
+            LibRainDeploySnapshot.LIB_FS_ROOT,
             dir,
             "MockDeployable",
             RAIN_SPDX_LICENSE_IDENTIFIER,
@@ -579,6 +643,228 @@ contract LibRainDeploySnapshotTest is Test {
 
         assertEq(written, LibRainDeploySnapshot.pathForSnapshot(dir, "MockDeployable"));
         assertTrue(exists);
+    }
+
+    /// Under `test/`, which nothing walks for releases.
+    string constant ROOTED_FIXTURE_ROOT = "test/generated-write-snapshot-root";
+
+    /// Not tag shaped, for the reason
+    /// `testWriteSnapshotWritesTheSnapshotAtItsPath` gives, and drawn from the
+    /// tag alphabet because the writer places files only in directories whose
+    /// names are.
+    string constant ROOTED_FIXTURE_DIR = "writeSnapshotRootedNotATag";
+
+    /// A second name so that nothing this test wrote can stand in for what the
+    /// rooted write did.
+    string constant ROOTED_FIXTURE_REAL_DIR = "writeSnapshotRootedRealNotATag";
+
+    /// PROPERTY: a snapshot is generated under the record root it is HANDED,
+    /// and the real record is not written on the way there.
+    ///
+    /// `freeze` reads every rolling snapshot at `pathForSnapshot(root,
+    /// CANDIDATE, name)`, so a generator that wrote under `LIB_FS_ROOT`
+    /// whatever root it was handed would leave a release cut under any other
+    /// root frozen from a record its own regeneration never wrote — after
+    /// rewriting the append-only tree the other root exists to keep clear.
+    ///
+    /// The bytes are the real root's for the same inputs: the root selects the
+    /// PATH and nothing else, so a fixture record holds the layout the real
+    /// record holds rather than one only a test can be pointed at. State is
+    /// reverted between the two writes for the reason
+    /// `testWriteSnapshotDefaultsToTheOrgHeader` gives.
+    function testWriteSnapshotWritesUnderTheRootItIsHanded() external {
+        uint256 undeployed = vm.snapshotState();
+        string memory atRealRoot = vm.readFile(
+            LibRainDeploySnapshot.writeSnapshot(
+                vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
+                ROOTED_FIXTURE_REAL_DIR,
+                FIXTURE_CONTRACT,
+                type(MockDeployable).creationCode,
+                new address[](0)
+            )
+        );
+        vm.revertToState(undeployed);
+
+        string memory written = LibRainDeploySnapshot.writeSnapshot(
+            vm,
+            ROOTED_FIXTURE_ROOT,
+            ROOTED_FIXTURE_DIR,
+            FIXTURE_CONTRACT,
+            type(MockDeployable).creationCode,
+            new address[](0)
+        );
+
+        // Read while the fixtures are still there, asserted once they are gone.
+        bool rooted = vm.exists(written);
+        string memory atFixtureRoot = rooted ? vm.readFile(written) : "";
+        bool inTheRealRecord = vm.exists(LibRainDeploySnapshot.pathForSnapshot(ROOTED_FIXTURE_DIR, FIXTURE_CONTRACT));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(ROOTED_FIXTURE_REAL_DIR), true);
+        if (vm.exists(LibRainDeploySnapshot.dirForSnapshot(ROOTED_FIXTURE_DIR))) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(ROOTED_FIXTURE_DIR), true);
+        }
+        if (vm.exists(ROOTED_FIXTURE_ROOT)) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(ROOTED_FIXTURE_ROOT, true);
+        }
+
+        assertEq(
+            written, LibRainDeploySnapshot.pathForSnapshot(ROOTED_FIXTURE_ROOT, ROOTED_FIXTURE_DIR, FIXTURE_CONTRACT)
+        );
+        assertTrue(rooted, "nothing was written under the record root");
+        assertFalse(inTheRealRecord, "the real record was written under the record root's name");
+        assertEq(atFixtureRoot, atRealRoot);
+    }
+
+    /// Not tag shaped, for the reason
+    /// `testWriteSnapshotWritesTheSnapshotAtItsPath` gives.
+    string constant ESCAPE_FIXTURE_DIR = "writeSnapshotEscapeNotATag";
+
+    /// A record root spelled as a path that leaves the tree it names: two
+    /// segments under `test/`, then back out of both and into the REAL record.
+    ///
+    /// The real record is where it is pointed deliberately. It is the tree
+    /// `BuildScript.recordRoot` is overridable to keep a caller's hands off, it
+    /// is append-only, and `fs_permissions` grants `./src` — so a root that
+    /// reaches it is inside everything the config can refuse and is exactly the
+    /// write nothing outside this library is left to catch.
+    string constant ESCAPE_FIXTURE_ROOT = "test/generated-escape-root/../../src/generated";
+
+    /// The directory `ESCAPE_FIXTURE_ROOT`'s first segment names, created on the
+    /// way through by a recursive create and removed with the rest.
+    string constant ESCAPE_FIXTURE_CLIMB_DIR = "test/generated-escape-root";
+
+    /// External wrapper so a refusal is a failed call rather than a reverted
+    /// test, for the write that is not supposed to happen at all.
+    function externalWriteSnapshotAt(string memory root, string memory dir) external {
+        LibRainDeploySnapshot.writeSnapshot(
+            vm, root, dir, FIXTURE_CONTRACT, type(MockDeployable).creationCode, new address[](0)
+        );
+    }
+
+    /// PROPERTY: a root that resolves to somewhere other than the tree it names
+    /// is refused, and nothing is written.
+    ///
+    /// A root is concatenated with a directory and a contract name, both of
+    /// which are checked, and the root is the half that decides where the tree
+    /// IS. Unchecked, `..` in it walks the write out of the root the caller
+    /// named and into one it did not — here the append-only record — and the
+    /// only thing that would have stood between the two is `fs_permissions`,
+    /// which is a consuming repo's config rather than an argument of this
+    /// library's and which grants the record's own tree.
+    ///
+    /// The landing path is the WRITER's own spelling at the real root rather
+    /// than a literal, so what is asserted absent is the same path a real
+    /// generation into the record would produce.
+    function testWriteSnapshotRefusesARootThatClimbsOutOfTheTreeItNames() external {
+        string memory landing = LibRainDeploySnapshot.pathForSnapshot(ESCAPE_FIXTURE_DIR, FIXTURE_CONTRACT);
+
+        (bool accepted,) =
+            address(this).call(abi.encodeCall(this.externalWriteSnapshotAt, (ESCAPE_FIXTURE_ROOT, ESCAPE_FIXTURE_DIR)));
+
+        // Read while any residue is still there, asserted once it is gone.
+        bool landedInTheRecord = vm.exists(landing);
+        if (vm.exists(LibRainDeploySnapshot.dirForSnapshot(ESCAPE_FIXTURE_DIR))) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(LibRainDeploySnapshot.dirForSnapshot(ESCAPE_FIXTURE_DIR), true);
+        }
+        if (vm.exists(ESCAPE_FIXTURE_CLIMB_DIR)) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(ESCAPE_FIXTURE_CLIMB_DIR, true);
+        }
+
+        assertFalse(landedInTheRecord, "the write landed in the real record, outside the root it was handed");
+        assertFalse(accepted, "a root that resolves outside the tree it names was accepted");
+    }
+
+    /// External wrapper so a refusal is a failed call rather than a reverted
+    /// test, and so the root rule can be asked about a root on its own.
+    function externalRequireRecordRoot(string memory root) external pure {
+        LibRainDeploySnapshot.requireRecordRoot(root);
+    }
+
+    /// External wrapper for `LibFs`'s own tag rule, the counterpart to
+    /// `externalRequireRecordRoot`.
+    function externalRequireTag(string memory tag) external pure {
+        LibFs.requireTag(tag);
+    }
+
+    /// PROPERTY: every root that is not a path of record root segments is
+    /// refused, and the refusal names the root.
+    ///
+    /// The cases are the shapes a root can take that a concatenation cannot
+    /// survive, each of which puts the written file somewhere other than under
+    /// the root the caller named: climbing out of the tree, naming the tree's
+    /// own parent, starting at the filesystem root, ending in a separator so
+    /// the next one doubles, doubling one already, and carrying nothing at all.
+    /// A character outside the alphabet is last, because it is the one that is
+    /// not about separators.
+    function testRecordRootRefusesEveryRootThatIsNotOne() external {
+        string[8] memory bad = [
+            "../src/generated",
+            "src/generated/..",
+            "..",
+            "/src/generated",
+            "src/generated/",
+            "src//generated",
+            "",
+            "src/gen erated"
+        ];
+
+        for (uint256 i = 0; i < bad.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(InvalidRecordRoot.selector, bad[i]));
+            this.externalRequireRecordRoot(bad[i]);
+        }
+    }
+
+    /// PROPERTY: a root of ONE segment is accepted exactly when `LibFs` accepts
+    /// that segment as a tag, `-` alone excepted.
+    ///
+    /// The root rule cannot be asked of `LibFs.requireTag` — a root is a path
+    /// and `requireTag` refuses the separators that make it one — so the
+    /// alphabet between the separators is a copy of `LibFs`'s, and this is where
+    /// the copy is held to the original. Exhaustive over all 256 byte values
+    /// rather than fuzzed, because the alphabet is a property of every byte and
+    /// a copy that has drifted by one of them is a copy that has drifted.
+    ///
+    /// `-` is the whole of the widening and it is asserted as such: the two
+    /// rules are required to disagree about it, so dropping it from the root
+    /// alphabet fails here as loudly as widening the root alphabet further
+    /// does.
+    function testRecordRootSegmentIsTheTagAlphabetPlusHyphen() external view {
+        for (uint256 i = 0; i < 256; i++) {
+            bytes memory segmentBytes = new bytes(1);
+            // forge-lint: disable-next-line(unsafe-typecast)
+            segmentBytes[0] = bytes1(uint8(i));
+            string memory segment = string(segmentBytes);
+
+            (bool rootOk,) = address(this).staticcall(abi.encodeCall(this.externalRequireRecordRoot, (segment)));
+            (bool tagOk,) = address(this).staticcall(abi.encodeCall(this.externalRequireTag, (segment)));
+
+            assertEq(rootOk, tagOk || segmentBytes[0] == "-", vm.toString(segmentBytes));
+        }
+    }
+
+    /// External wrapper so a refusal is a failed call rather than a reverted
+    /// test, for the record walk.
+    function externalFrozenSnapshotPaths(string memory root) external view {
+        LibRainDeploySnapshot.frozenSnapshotPaths(vm, root);
+    }
+
+    /// PROPERTY: the record WALK holds a root to the same rule the writers do.
+    ///
+    /// It is the one root-taking entry point that does not reach
+    /// `dirForSnapshot`, and it answers a missing root with an empty record —
+    /// which is a real state for a repo that has released nothing, and silence
+    /// for a root nothing could ever have been written under. The same root is
+    /// refused by both, so a reader cannot be pointed somewhere a writer would
+    /// not go.
+    function testFrozenSnapshotPathsRefusesARootThatIsNotOne() external {
+        vm.expectRevert(abi.encodeWithSelector(InvalidRecordRoot.selector, ESCAPE_FIXTURE_ROOT));
+        this.externalFrozenSnapshotPaths(ESCAPE_FIXTURE_ROOT);
     }
 
     /// The directory the licence-header fixture snapshot is written into. Not
@@ -623,6 +909,7 @@ contract LibRainDeploySnapshotTest is Test {
         string memory source = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
                 vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
                 HEADER_FIXTURE_DIR,
                 FIXTURE_CONTRACT,
                 RAIN_SPDX_LICENSE_IDENTIFIER,
@@ -664,7 +951,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// @param source The snapshot source.
     /// @param name The constant's name.
     /// @return The value it holds.
-    function snapshotBytesConstant(string memory source, string memory name) internal view returns (bytes memory) {
+    function snapshotBytesConstant(string memory source, string memory name) internal pure returns (bytes memory) {
         string memory declaration = string.concat("bytes constant ", name, " =");
         assertTrue(vm.contains(source, declaration), string.concat("snapshot declares no bytes ", name));
         string[] memory afterOpen = vm.split(vm.split(source, declaration)[1], "hex\"");
@@ -676,7 +963,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// @param source The snapshot source.
     /// @param name The constant's name.
     /// @return The value it holds.
-    function snapshotAddressConstant(string memory source, string memory name) internal view returns (address) {
+    function snapshotAddressConstant(string memory source, string memory name) internal pure returns (address) {
         string memory declaration = string.concat("address constant ", name, " =");
         assertTrue(vm.contains(source, declaration), string.concat("snapshot declares no address ", name));
         string[] memory afterOpen = vm.split(vm.split(source, declaration)[1], "address(");
@@ -707,7 +994,12 @@ contract LibRainDeploySnapshotTest is Test {
 
         string memory source = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
-                vm, RECORD_FIXTURE_DIR, FIXTURE_CONTRACT, creationCode, new address[](0)
+                vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
+                RECORD_FIXTURE_DIR,
+                FIXTURE_CONTRACT,
+                creationCode,
+                new address[](0)
             )
         );
         //forge-lint: disable-next-line(unsafe-cheatcode)
@@ -741,7 +1033,12 @@ contract LibRainDeploySnapshotTest is Test {
     function testWriteSnapshotDeclaresTheDeployConstantsInOrder() external {
         string memory source = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
-                vm, ORDER_FIXTURE_DIR, FIXTURE_CONTRACT, type(MockDeployable).creationCode, new address[](0)
+                vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
+                ORDER_FIXTURE_DIR,
+                FIXTURE_CONTRACT,
+                type(MockDeployable).creationCode,
+                new address[](0)
             )
         );
 
@@ -791,9 +1088,9 @@ contract LibRainDeploySnapshotTest is Test {
     /// that, and nothing compiles it.
     ///
     /// Each writer test takes a subdirectory of its own, for the reason
-    /// `RELEASED_FIXTURE_ROOT` is not `FIXTURE_ROOT`: forge runs the tests in a
-    /// contract concurrently, and two of them writing one lib path read each
-    /// other's output.
+    /// `RELEASED_FIXTURE_ROOT` is not `WALK_FIXTURE_ROOT`: forge runs the tests
+    /// in a contract concurrently, and two of them writing one lib path read
+    /// each other's output.
     string constant FIXTURE_LIB_ROOT = "fixture-lib";
 
     /// `LIB_DIR` is the directory a build points every lib writer at, so the
@@ -986,14 +1283,14 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
-    /// Where the released-lib record fixture is built. Its own tree rather
-    /// than `FIXTURE_ROOT`: forge runs the tests in a contract concurrently,
-    /// and two of them writing one record root see each other's releases.
-    string constant RELEASED_FIXTURE_ROOT = "test/generated-released";
+    /// Where the released-lib record fixture is built. Its own tree rather than
+    /// `WALK_FIXTURE_ROOT`: forge runs the tests in a contract concurrently, and
+    /// two of them writing one record root see each other's releases.
+    string constant RELEASED_FIXTURE_ROOT = "test/generated-snapshot/released";
 
     /// Where the selection fixture's record is built, for the same reason
-    /// `RELEASED_FIXTURE_ROOT` is not `FIXTURE_ROOT`.
-    string constant SELECTED_FIXTURE_ROOT = "test/generated-selected";
+    /// `RELEASED_FIXTURE_ROOT` is not `WALK_FIXTURE_ROOT`.
+    string constant SELECTED_FIXTURE_ROOT = "test/generated-snapshot/selected";
 
     /// The contract the fixture record freezes, and the one the writers are
     /// pointed at. NOT this repo's own `AddressRegistry`: the writers derive
@@ -1315,6 +1612,7 @@ contract LibRainDeploySnapshotTest is Test {
         string memory source = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
                 vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
                 DEPENDENCIES_FIXTURE_DIR,
                 FIXTURE_CONTRACT,
                 RAIN_SPDX_LICENSE_IDENTIFIER,
@@ -1434,6 +1732,7 @@ contract LibRainDeploySnapshotTest is Test {
         string memory source = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
                 vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
                 CONSENSUS_FIXTURE_DIR,
                 FIXTURE_CONTRACT,
                 RAIN_SPDX_LICENSE_IDENTIFIER,
@@ -1596,9 +1895,7 @@ contract LibRainDeploySnapshotTest is Test {
         string memory a = tagOf(aMajor, aMinor, aPatch);
         string memory b = tagOf(bMajor, bMinor, bPatch);
 
-        bool precedes = aMajor != bMajor
-            ? aMajor < bMajor
-            : (aMinor != bMinor ? aMinor < bMinor : (aPatch != bPatch ? aPatch < bPatch : false));
+        bool precedes = aMajor != bMajor ? aMajor < bMajor : (aMinor != bMinor ? aMinor < bMinor : aPatch < bPatch);
 
         assertEq(LibRainDeploySnapshot.tagPrecedes(vm, a, b), precedes);
         // Strict, so exactly one of the two orderings holds unless they are the
@@ -1935,9 +2232,9 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// Where `testWriteReleasedSuitesAggregateDefaultsToTheOrgHeader` points
     /// the writer, for the reason `RELEASED_FIXTURE_ROOT` is not
-    /// `FIXTURE_ROOT`: forge runs the tests in a contract concurrently, and two
-    /// of them creating, writing, reading and removing one directory see each
-    /// other's files and each other's removals. Under `FIXTURE_LIB_ROOT`,
+    /// `WALK_FIXTURE_ROOT`: forge runs the tests in a contract concurrently, and
+    /// two of them creating, writing, reading and removing one directory see
+    /// each other's files and each other's removals. Under `FIXTURE_LIB_ROOT`,
     /// spelled out for the reason `AGGREGATE_PATH_FIXTURE_DIR` gives.
     string constant AGGREGATE_DEFAULTS_FIXTURE_DIR = "fixture-lib/aggregate-defaults";
 
@@ -2018,11 +2315,11 @@ contract LibRainDeploySnapshotTest is Test {
     /// checked before either guard below, so a freeze pointed at the real root
     /// is refused for a reason that is not the one being driven. The tag stays
     /// the real one; it is the ROOT that has to be a fixture's.
-    string constant EMPTY_RELEASE_FIXTURE_ROOT = "test/generated-freeze-empty";
+    string constant EMPTY_RELEASE_FIXTURE_ROOT = "test/generated-snapshot/freeze-empty";
 
     /// Where the nothing-to-freeze refusal is driven. Its own tree, for the
     /// reason `EMPTY_RELEASE_FIXTURE_ROOT` is its own tree.
-    string constant NOTHING_TO_FREEZE_FIXTURE_ROOT = "test/generated-freeze-nothing";
+    string constant NOTHING_TO_FREEZE_FIXTURE_ROOT = "test/generated-snapshot/freeze-nothing";
 
     /// A freeze that names no contracts MUST be refused. It would write
     /// nothing, report success, and leave `<tag>/` there — and an empty
@@ -2077,27 +2374,27 @@ contract LibRainDeploySnapshotTest is Test {
     }
 
     /// Where the freeze fixture's record is built. Its own tree, for the same
-    /// reason `RELEASED_FIXTURE_ROOT` is not `FIXTURE_ROOT`, and NOT
+    /// reason `RELEASED_FIXTURE_ROOT` is not `WALK_FIXTURE_ROOT`, and NOT
     /// `src/generated`: every freeze here cuts a release under THIS repo's
     /// tag, and a transient `<tag>/` in the real record is a release the
     /// inherited record check has to fail on, from contracts forge runs in
     /// parallel with this one.
-    string constant FREEZE_FIXTURE_ROOT = "test/generated-freeze";
+    string constant FREEZE_FIXTURE_ROOT = "test/generated-snapshot/freeze";
 
     /// Where the multi-contract freeze fixture's record is built. Its own tree
     /// again, and for a sharper reason than the others: every freeze test cuts
     /// the SAME tag, so two of them sharing a root would have whichever ran
     /// second refused as a re-cut.
-    string constant FREEZE_MULTI_FIXTURE_ROOT = "test/generated-freeze-multi";
+    string constant FREEZE_MULTI_FIXTURE_ROOT = "test/generated-snapshot/freeze-multi";
 
     /// Where the re-cut fixture's record is built. Its own tree: this one is
     /// deliberately left frozen between the two calls, so no other test may
     /// share it.
-    string constant RECUT_FIXTURE_ROOT = "test/generated-recut";
+    string constant RECUT_FIXTURE_ROOT = "test/generated-snapshot/recut";
 
     /// Where the empty-tag-directory fixture's record is built. Its own tree,
     /// for the same reason: it is a frozen tag from the moment it is created.
-    string constant RECUT_EMPTY_FIXTURE_ROOT = "test/generated-recut-empty";
+    string constant RECUT_EMPTY_FIXTURE_ROOT = "test/generated-snapshot/recut-empty";
 
     /// A fixture snapshot's content: a licence header and a marker, and
     /// deliberately NOTHING a compiler would look at twice.
@@ -2338,7 +2635,7 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// Where the freeze's own ordering guard is driven. Its own tree, for the
     /// same reason the other freeze fixtures have theirs.
-    string constant FREEZE_GUARD_FIXTURE_ROOT = "test/generated-freeze-guard";
+    string constant FREEZE_GUARD_FIXTURE_ROOT = "test/generated-snapshot/freeze-guard";
 
     /// The ordering guard inside `freeze` MUST read the record the release is
     /// being APPENDED TO — the root `freeze` was handed — and not this repo's
@@ -2378,10 +2675,59 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(record.length, 1);
     }
 
+    /// Where the run-start clear is driven, over the residue a failed run of
+    /// `testFreezeChecksTheRecordItIsAppendingTo` leaves. A tree of its own for
+    /// the reason the other freeze fixtures have theirs, and dirty before it is
+    /// used on purpose.
+    string constant STALE_CUT_FIXTURE_ROOT = "test/generated-snapshot/freeze-stale";
+
+    /// Clearing a fixture tree MUST take everything under it, so a cut an
+    /// earlier run left cannot decide this one.
+    ///
+    /// The residue planted here is the exact shape `freeze` leaves when its
+    /// refusal does not fire: a real `<tag>/` cut holding a record. That
+    /// directory is what `freeze` looks for FIRST, so a clear that missed it —
+    /// or that took only an empty root — answers `SnapshotAlreadyFrozen` here,
+    /// and the ordering guard this fixture is built to reach never runs. The
+    /// refusal is spelled out in full rather than asserted as "it reverted",
+    /// because a test that accepted any revert would accept that one.
+    ///
+    /// `setUp` calls the same clear on `FIXTURE_ROOT` whole; this one drives it
+    /// over a single tree under it, because the rest of that tree is the
+    /// fixtures of the tests forge is running concurrently with this one.
+    function testClearingAFixtureTreeRemovesAStaleCut() external {
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        writeFixture(string.concat(STALE_CUT_FIXTURE_ROOT, "/", tag, "/", FIXTURE_CONTRACT, ".sol"));
+
+        clearFixtureTree(STALE_CUT_FIXTURE_ROOT);
+        bool staleCutExists = vm.exists(LibRainDeploySnapshot.dirForSnapshot(STALE_CUT_FIXTURE_ROOT, tag));
+
+        // The fixture the freeze-guard test builds, on the tree the clear just
+        // ran over: a release newer than the tag being cut, and a rolling
+        // snapshot ready to freeze.
+        writeFixture(string.concat(STALE_CUT_FIXTURE_ROOT, "/9_9_9/", FIXTURE_CONTRACT, ".sol"));
+        writeRollingFixture(STALE_CUT_FIXTURE_ROOT, FIXTURE_CONTRACT);
+
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = FIXTURE_CONTRACT;
+
+        vm.expectRevert(abi.encodeWithSelector(NonMonotonicRelease.selector, tag, "9_9_9"));
+        this.externalFreezeAt(STALE_CUT_FIXTURE_ROOT, contractNames);
+
+        // Read while the fixture is still there, asserted once it is gone.
+        string[] memory record = LibRainDeploySnapshot.frozenSnapshotPaths(vm, STALE_CUT_FIXTURE_ROOT);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(STALE_CUT_FIXTURE_ROOT, true);
+
+        assertFalse(staleCutExists);
+        assertEq(record.length, 1);
+    }
+
     /// Where the guard ORDER is driven: a record that is already frozen, cut
     /// by a call that also names no contracts. Its own tree, for the reason
     /// the other freeze fixtures have theirs.
-    string constant GUARD_ORDER_FIXTURE_ROOT = "test/generated-freeze-order";
+    string constant GUARD_ORDER_FIXTURE_ROOT = "test/generated-snapshot/freeze-order";
 
     /// A cut that is BOTH a re-cut and an empty release MUST be refused as the
     /// re-cut.
@@ -2407,7 +2753,7 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// Where a refused cut's regeneration would be seen. Its own tree, for the
     /// reason the other freeze fixtures have theirs.
-    string constant REFUSED_REGENERATION_FIXTURE_ROOT = "test/generated-freeze-refused";
+    string constant REFUSED_REGENERATION_FIXTURE_ROOT = "test/generated-snapshot/freeze-refused";
 
     /// The regeneration `testFreezeDoesNotRegenerateARefusedRelease` hands
     /// `freeze`. It writes the rolling snapshot, so a regeneration that ran
@@ -2459,7 +2805,7 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// Where the regeneration is counted. Its own tree, for the reason the
     /// other freeze fixtures have theirs.
-    string constant REGENERATION_COUNT_FIXTURE_ROOT = "test/generated-freeze-once";
+    string constant REGENERATION_COUNT_FIXTURE_ROOT = "test/generated-snapshot/freeze-once";
 
     /// How many times `regenerateCounted` has run.
     uint256 internal regenerations;
@@ -2495,7 +2841,7 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// Where a cut that fails on a LATER contract is driven. Its own tree, for
     /// the reason the other freeze fixtures have theirs.
-    string constant LATE_FAILURE_FIXTURE_ROOT = "test/generated-freeze-late";
+    string constant LATE_FAILURE_FIXTURE_ROOT = "test/generated-snapshot/freeze-late";
 
     /// A cut whose SECOND contract has nothing to freeze MUST leave nothing
     /// behind: not the tag directory, and not the first contract's file.
@@ -2538,7 +2884,7 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// Where a cut naming something that is not a contract is driven. Its own
     /// tree, for the reason the other freeze fixtures have theirs.
-    string constant BAD_NAME_FIXTURE_ROOT = "test/generated-freeze-badname";
+    string constant BAD_NAME_FIXTURE_ROOT = "test/generated-snapshot/freeze-badname";
 
     /// A contract name that is not a Solidity identifier MUST be refused as
     /// one, and nothing created.
@@ -2561,7 +2907,7 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// Where an append onto a record that already holds a release is driven.
     /// Its own tree, for the reason the other freeze fixtures have theirs.
-    string constant APPEND_FIXTURE_ROOT = "test/generated-freeze-append";
+    string constant APPEND_FIXTURE_ROOT = "test/generated-snapshot/freeze-append";
 
     /// A cut MUST leave every release already in the record exactly as it was.
     ///
@@ -2607,26 +2953,26 @@ contract LibRainDeploySnapshotTest is Test {
     }
 
     /// Every record the ordering guard is driven against gets a root of its
-    /// own, for the reason `RELEASED_FIXTURE_ROOT` is not `FIXTURE_ROOT`: forge
-    /// runs the tests in a contract concurrently, and a guard test sees the
-    /// wrong newest release the moment another test's fixture is in the tree it
-    /// is reading.
-    string constant NEWEST_FIXTURE_ROOT = "test/generated-newest";
+    /// own, for the reason `RELEASED_FIXTURE_ROOT` is not `WALK_FIXTURE_ROOT`:
+    /// forge runs the tests in a contract concurrently, and a guard test sees
+    /// the wrong newest release the moment another test's fixture is in the
+    /// tree it is reading.
+    string constant NEWEST_FIXTURE_ROOT = "test/generated-snapshot/newest";
 
     /// The record with nothing released in it. See `NEWEST_FIXTURE_ROOT`.
-    string constant UNRELEASED_FIXTURE_ROOT = "test/generated-unreleased";
+    string constant UNRELEASED_FIXTURE_ROOT = "test/generated-snapshot/unreleased";
 
     /// The record a below-the-newest tag is refused against. See
     /// `NEWEST_FIXTURE_ROOT`.
-    string constant BELOW_FIXTURE_ROOT = "test/generated-below";
+    string constant BELOW_FIXTURE_ROOT = "test/generated-snapshot/below";
 
     /// The record the newest tag itself is refused against. See
     /// `NEWEST_FIXTURE_ROOT`.
-    string constant EQUAL_FIXTURE_ROOT = "test/generated-equal";
+    string constant EQUAL_FIXTURE_ROOT = "test/generated-snapshot/equal";
 
     /// The record strictly greater tags are accepted against. See
     /// `NEWEST_FIXTURE_ROOT`.
-    string constant GREATER_FIXTURE_ROOT = "test/generated-greater";
+    string constant GREATER_FIXTURE_ROOT = "test/generated-snapshot/greater";
 
     /// The record every fuzzed tag is put to. COMMITTED, and read only — see
     /// the fixture itself for why a fuzz cannot build the record it is put
@@ -2786,13 +3132,19 @@ contract LibRainDeploySnapshotTest is Test {
         uint256 undeployed = vm.snapshotState();
         string memory defaulted = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
-                vm, dir, "MockDeployable", type(MockDeployable).creationCode, new address[](0)
+                vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
+                dir,
+                "MockDeployable",
+                type(MockDeployable).creationCode,
+                new address[](0)
             )
         );
         vm.revertToState(undeployed);
         string memory explicitly = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
                 vm,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
                 dir,
                 "MockDeployable",
                 RAIN_SPDX_LICENSE_IDENTIFIER,

@@ -31,9 +31,10 @@ error CodeHashMismatchOnNetwork(
 
 /// Thrown when the chain id a network's roster entry declares is not the chain
 /// id the endpoint bound to its `[rpc_endpoints]` alias reports. Either the
-/// declaration is wrong — and `--verify` submits it — or the alias is bound to
-/// a different network than the one it names, and everything checked through it
-/// was checked somewhere else.
+/// declaration is wrong — and `chain` is what `--verify` submits, so the
+/// deployment is verified against another chain's explorer — or the alias is
+/// bound to a different network than the one it names, and everything ever
+/// checked through it was checked somewhere else.
 /// @param network The network name, as configured in `[rpc_endpoints]`.
 /// @param declared The chain id the roster states.
 /// @param reported The chain id the endpoint answers with.
@@ -42,7 +43,9 @@ error NetworkChainIdMismatch(string network, uint256 declared, uint256 reported)
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the
 /// repo: across every network in `LibRainDeploy.supportedNetworks()`, every
-/// RELEASED suite's derived address carries code with its derived code hash.
+/// RELEASED suite's derived address carries code with its derived code hash,
+/// and every chain id `[etherscan]` declares is the one that network's alias
+/// forks.
 ///
 /// This is the only group that can catch a suite that never deployed to a
 /// network, or that is not there any more. Neither is a fact the repo can hold:
@@ -78,6 +81,21 @@ error NetworkChainIdMismatch(string network, uint256 declared, uint256 reported)
 /// network leaves no suite unchecked and a new release is checked on every
 /// network from the moment it is declared. There are deliberately no per-chain
 /// or per-suite functions to add.
+///
+/// ## One bad cell ends the run, at that cell
+///
+/// Generated from both lists is a statement about what gets CHECKED, not a
+/// promise that every cell gets REPORTED. The first missing or mismatched cell
+/// reverts and the run stops on that network, so a release that reached one
+/// network of nine is enumerated one red run per cell.
+///
+/// That is the trade, not an oversight. The error names the network, the suite
+/// and the address, so a run that names one cell is actionable on its own;
+/// deploying is idempotent by construction, so a partial release is fixed by
+/// running the deploy again rather than by knowing the whole shape first; and
+/// stopping spends no further RPC on a run whose answer is already red.
+/// Reporting every cell means this check becomes a collector with a summary
+/// error, which is a larger contract bought with fewer red runs.
 ///
 /// It compares against the DERIVED code hash rather than the recorded one, so
 /// the creation code stays the only parameter. `RainDeployVerifySnapshot` is

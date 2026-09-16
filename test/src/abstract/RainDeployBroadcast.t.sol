@@ -77,7 +77,10 @@ contract RainDeployBroadcastTest is Test {
     ///
     /// That the reported key is empty rather than a suite is what says there is
     /// no default; `RainDeploySuitesBaseTest.testEmptySuiteIsUnknown` is what
-    /// says an empty key is unknown.
+    /// says an empty key is unknown to THIS declaration, and
+    /// `testEmptySuiteKeyReverts` is what says no declaration can make it
+    /// known — the registry refuses an empty key outright, so the default this
+    /// leg exercises cannot become a real suite in any repo that inherits it.
     ///
     /// ## Then a suite nobody declared
     ///
@@ -145,7 +148,7 @@ contract RainDeployBroadcastTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "",
-                "address-registry-0-0-1, second-address, address-registry-candidate, second-address-candidate"
+                "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
             )
         );
         sDeploy.run();
@@ -156,7 +159,7 @@ contract RainDeployBroadcastTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "address-registry",
-                "address-registry-0-0-1, second-address, address-registry-candidate, second-address-candidate"
+                "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
             )
         );
         sDeploy.run();
@@ -428,11 +431,11 @@ contract RainDeployBroadcastTest is Test {
     /// make that comparison derived-against-derived.
     function testSelectedSuiteCarriesTheRecordedPins() external view {
         assertEq(
-            sDeploy.externalSuiteByName("address-registry-0-0-1").storedDeployedAddress,
-            LibRainDeploy.zoltuAddress(sDeploy.externalSuiteByName("address-registry-0-0-1").creationCode)
+            sDeploy.externalSuiteByName("address-registry@0_0_1").storedDeployedAddress,
+            LibRainDeploy.zoltuAddress(sDeploy.externalSuiteByName("address-registry@0_0_1").creationCode)
         );
         assertEq(
-            sDeploy.externalSuiteByName("address-registry-0-0-1").artifactPath,
+            sDeploy.externalSuiteByName("address-registry@0_0_1").artifactPath,
             "src/concrete/AddressRegistry.sol:AddressRegistry"
         );
     }

@@ -7,6 +7,47 @@ pragma solidity ^0.8.25;
 /// @param suite The key declared more than once.
 error DuplicateDeploySuite(string suite);
 
+/// Thrown when a suite declares a key outside the key alphabet.
+///
+/// A key is a NAME, or a name and a release TAG joined by an at sign: the name
+/// lowercase letters and hyphens, the tag those plus digits and underscores,
+/// neither half empty and at most one at sign. Digits and underscores after the
+/// at sign only, which is where a tag needs them and where nothing else does.
+///
+/// That is the kebab case a repo declares by hand, and it is what
+/// `LibRainDeploySnapshot` emits a released entry as — the candidate key the
+/// release was cut from, the at sign, and the record directory's tag, which
+/// `isTag` already holds to `X_Y_Z` — so a generated declaration needs no
+/// exemption from the rule a hand written one is held to. The at sign cannot
+/// appear in a name, so that emission carries exactly one however many releases
+/// a repo cuts.
+///
+/// The key list is why an alphabet exists at all. `suiteNames()` joins the
+/// declared keys on `", "` for `UnknownDeploymentSuite`, which exists so a
+/// caller who does NOT already know the valid keys is told them; a key free to
+/// carry either of those characters renders as two, so the reader is told a
+/// different number of suites exist than do and is sent after a key that is
+/// declared nowhere. A list that cannot be read back as the set it names is the
+/// hardcoded string the registry exists to replace, spelled differently.
+///
+/// The EMPTY key is refused by the same rule, and is the one refusal with a
+/// broadcast behind it: it is the value `RainDeployBroadcast.run()` substitutes
+/// for an absent `DEPLOYMENT_SUITE`, so a declaration allowed to answer it
+/// turns "told nothing" into a selection, and `CREATE2` under a zero salt puts
+/// those bytes at their own permanent address on every chain that dispatch
+/// reached. An alphabet admitting no zero byte key already says that; a length
+/// check beside it would be a second rule for one property, free to drift.
+///
+/// Held on the DECLARATION rather than beside the substitution, for the reason
+/// `NoDeployCandidates` is: a rule bound in the consumer is a rule most
+/// consumers do not run, and here every `suiteByName` caller pays for it rather
+/// than only `run()`.
+/// @param index Position in `allSuites()`: the released suites in declaration
+/// order, then the candidates. An empty key names nothing, so the position is
+/// the only thing that can.
+/// @param suite The refused key.
+error InvalidDeploySuiteKey(uint256 index, string suite);
+
 /// Thrown when `DEPLOYMENT_SUITE` names no declared suite. Carries the valid
 /// keys, because the whole point of a registry is that the answer is not one
 /// hardcoded string the caller has to already know.
@@ -60,9 +101,11 @@ error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, byte
 /// make that comparison derived-against-derived, and a guard that compares a
 /// value to itself is not a guard.
 struct DeploySuite {
-    /// The key. Unique across every suite a repo declares: it is what
-    /// `DEPLOYMENT_SUITE` selects for broadcasting, and the label every
-    /// verification error names.
+    /// The key. Unique across every suite a repo declares, and held to the key
+    /// alphabet — see `InvalidDeploySuiteKey`. It is what
+    /// `DEPLOYMENT_SUITE` selects for broadcasting, the label every
+    /// verification error names, and what the valid-key list an unknown suite
+    /// reports has to read back as.
     ///
     /// A repo with one contract and several frozen releases gives each release
     /// its own key, because each is separately deployable — a chain added after
@@ -232,15 +275,58 @@ abstract contract RainDeploySuitesBase {
         }
     }
 
+    /// Refuses a key the registry cannot carry — see `InvalidDeploySuiteKey`.
+    ///
+    /// Held against the WHOLE key rather than against a name a released key is
+    /// derived from, because `releasedSuites()` declares finished keys: a rule
+    /// that only knew the name half could not be asked about a released entry
+    /// at all, and this is the one place every key a repo declares is read.
+    /// @param index Position in `allSuites()`, for the refusal to name.
+    /// @param suite The key to check.
+    function checkSuiteKey(uint256 index, string memory suite) internal pure {
+        bytes memory key = bytes(suite);
+        // Where the tag starts, and zero until an `@` is seen. Zero is not a
+        // position a tag can start at, because an `@` opening the key leaves
+        // the name half empty and is refused below.
+        uint256 tagStart = 0;
+
+        for (uint256 i = 0; i < key.length; i++) {
+            bytes1 char = key[i];
+            if (char == "@") {
+                if (i == 0 || tagStart != 0) {
+                    revert InvalidDeploySuiteKey(index, suite);
+                }
+                tagStart = i + 1;
+            } else {
+                bool nameAlphabet = (char >= "a" && char <= "z") || char == "-";
+                bool tagAlphabet = (char >= "0" && char <= "9") || char == "_";
+                if (!(nameAlphabet || (tagStart != 0 && tagAlphabet))) {
+                    revert InvalidDeploySuiteKey(index, suite);
+                }
+            }
+        }
+
+        // The empty key and a trailing at sign: the loop only refuses bytes that are there.
+        if (tagStart == key.length) {
+            revert InvalidDeploySuiteKey(index, suite);
+        }
+    }
+
     /// Every suite this repo declares: the released ones followed by the
     /// candidates. This is the verification set and the deploy registry, which
     /// are the same set because they are the same declaration.
     ///
-    /// Keys are checked unique here rather than anywhere more specific, so both
-    /// sides pay for the check and neither can be handed an ambiguous registry.
-    /// One pairwise pass over the whole set, so a candidate colliding with
-    /// another candidate is caught by the same code that catches a candidate
-    /// colliding with a release — there is no second rule to keep in step.
+    /// Keys are checked here rather than anywhere more specific, so both sides
+    /// pay for the check and neither can be handed a registry that is ambiguous
+    /// or that answers the absent-sentinel. One pass over the whole set, so a
+    /// candidate colliding with another candidate is caught by the same code
+    /// that catches a candidate colliding with a release, and a key the
+    /// alphabet refuses is refused wherever in the declaration it was spelled —
+    /// there is no second rule to keep in step.
+    ///
+    /// Unique AND in the alphabet, because neither implies the other: a lone
+    /// unreadable key collides with nothing, and two keys can be spelled
+    /// perfectly and still be the same key.
     /// @return Every declared suite.
     function allSuites() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory released = releasedSuites();
@@ -255,6 +341,7 @@ abstract contract RainDeploySuitesBase {
         }
 
         for (uint256 i = 0; i < suites.length; i++) {
+            checkSuiteKey(i, suites[i].suite);
             for (uint256 j = i + 1; j < suites.length; j++) {
                 if (keccak256(bytes(suites[i].suite)) == keccak256(bytes(suites[j].suite))) {
                     revert DuplicateDeploySuite(suites[i].suite);
@@ -266,6 +353,10 @@ abstract contract RainDeploySuitesBase {
     }
 
     /// Every declared key, comma separated, for the unknown-suite error.
+    ///
+    /// Splitting the result on `", "` recovers exactly the declared keys,
+    /// because the alphabet `allSuites` holds them to carries neither of those
+    /// two characters anywhere but between two keys.
     /// @return The declared keys.
     function suiteNames() internal pure returns (string memory) {
         DeploySuite[] memory suites = allSuites();
