@@ -664,7 +664,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// @param source The snapshot source.
     /// @param name The constant's name.
     /// @return The value it holds.
-    function snapshotBytesConstant(string memory source, string memory name) internal view returns (bytes memory) {
+    function snapshotBytesConstant(string memory source, string memory name) internal pure returns (bytes memory) {
         string memory declaration = string.concat("bytes constant ", name, " =");
         assertTrue(vm.contains(source, declaration), string.concat("snapshot declares no bytes ", name));
         string[] memory afterOpen = vm.split(vm.split(source, declaration)[1], "hex\"");
@@ -676,7 +676,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// @param source The snapshot source.
     /// @param name The constant's name.
     /// @return The value it holds.
-    function snapshotAddressConstant(string memory source, string memory name) internal view returns (address) {
+    function snapshotAddressConstant(string memory source, string memory name) internal pure returns (address) {
         string memory declaration = string.concat("address constant ", name, " =");
         assertTrue(vm.contains(source, declaration), string.concat("snapshot declares no address ", name));
         string[] memory afterOpen = vm.split(vm.split(source, declaration)[1], "address(");
@@ -1596,9 +1596,7 @@ contract LibRainDeploySnapshotTest is Test {
         string memory a = tagOf(aMajor, aMinor, aPatch);
         string memory b = tagOf(bMajor, bMinor, bPatch);
 
-        bool precedes = aMajor != bMajor
-            ? aMajor < bMajor
-            : (aMinor != bMinor ? aMinor < bMinor : (aPatch != bPatch ? aPatch < bPatch : false));
+        bool precedes = aMajor != bMajor ? aMajor < bMajor : (aMinor != bMinor ? aMinor < bMinor : aPatch < bPatch);
 
         assertEq(LibRainDeploySnapshot.tagPrecedes(vm, a, b), precedes);
         // Strict, so exactly one of the two orderings holds unless they are the
