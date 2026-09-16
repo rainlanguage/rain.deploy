@@ -5,7 +5,6 @@ pragma solidity ^0.8.25;
 import {RainDeployVerifySnapshotBase} from "./RainDeployVerifySnapshotBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
-import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.1.5/src/lib/LibMemoryKV.sol";
 
 /// @title RainDeployVerifySnapshot
 /// @notice What a deploy repo inherits: every assertion that needs no network,
@@ -20,8 +19,6 @@ import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.
 /// FIXTURE — the record is not its subject, and see the base for why asking it
 /// about the record asserts something false.
 abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
-    using LibMemoryKV for MemoryKV;
-
     /// Every release in the frozen record MUST be declared, so that the set the
     /// chain group checks is every release this repo has ever cut rather than
     /// the ones somebody remembered to list.
@@ -79,50 +76,30 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
     /// This is what makes the `[etherscan]` half enforced at all. The RPC half
     /// is enforced only incidentally, by the fork tests, and only forwards.
     ///
+    /// Membership is necessary and not sufficient for that half, so the SHAPE
+    /// of each `[etherscan]` entry is asserted beside it by
+    /// `checkEtherscanEntriesResolvable`: foundry resolves the whole section, so
+    /// an entry it cannot resolve fails `--verify` for the other entries as
+    /// well, after the gas is spent, while satisfying every membership
+    /// assertion here.
+    ///
     /// The raw file is read rather than forge's resolved config because the
-    /// values are `${VAR}` interpolations that exist only in CI. The KEYS are
-    /// the whole contract here, and they are in the text — so this needs no
-    /// RPC and fails on the PR that drifts rather than at dispatch time.
+    /// values are `${VAR}` interpolations that exist only in CI. Nothing
+    /// asserted here is a value — the keys, and that each `[etherscan]` entry
+    /// carries enough to resolve at all, are both in the text — so this needs
+    /// no RPC and fails on the PR that drifts rather than at dispatch time.
     ///
     /// `vm.readFile` resolves against the project root of whatever runs it, so
     /// the file read is the binder's own and the networks are this package's.
     /// A binding repo therefore needs `{ access = "read", path =
     /// "./foundry.toml" }` in `fs_permissions`, and one without it fails here
     /// rather than passing on a file it never opened.
+    ///
+    /// The assertions themselves are `checkNetworksConfigured`, in the base,
+    /// because they take the config as an argument and so can be handed one a
+    /// test builds. Reading the binder's own file is the part that cannot be,
+    /// and it is all that is left here.
     function testSupportedNetworksAreFullyConfigured() external view {
-        string memory config = vm.readFile("foundry.toml");
-        string[] memory networks = LibRainDeploy.supportedNetworks();
-
-        MemoryKV networkSet = MemoryKV.wrap(0);
-        for (uint256 i = 0; i < networks.length; i++) {
-            networkSet = networkSet.set(MemoryKVKey.wrap(keccak256(bytes(networks[i]))), MemoryKVVal.wrap(0));
-        }
-
-        for (uint256 i = 0; i < networks.length; i++) {
-            assertTrue(
-                vm.keyExistsToml(config, string.concat(".rpc_endpoints.", networks[i])),
-                string.concat("supported network has no [rpc_endpoints] alias: ", networks[i])
-            );
-            assertTrue(
-                vm.keyExistsToml(config, string.concat(".etherscan.", networks[i])),
-                string.concat("supported network has no [etherscan] key: ", networks[i])
-            );
-        }
-
-        string[] memory rpcAliases = vm.parseTomlKeys(config, ".rpc_endpoints");
-        for (uint256 i = 0; i < rpcAliases.length; i++) {
-            assertTrue(
-                networkSet.has(MemoryKVKey.wrap(keccak256(bytes(rpcAliases[i])))),
-                string.concat("[rpc_endpoints] alias is not a supported network: ", rpcAliases[i])
-            );
-        }
-
-        string[] memory etherscanKeys = vm.parseTomlKeys(config, ".etherscan");
-        for (uint256 i = 0; i < etherscanKeys.length; i++) {
-            assertTrue(
-                networkSet.has(MemoryKVKey.wrap(keccak256(bytes(etherscanKeys[i])))),
-                string.concat("[etherscan] key is not a supported network: ", etherscanKeys[i])
-            );
-        }
+        checkNetworksConfigured(vm.readFile("foundry.toml"), LibRainDeploy.supportedNetworks());
     }
 }
