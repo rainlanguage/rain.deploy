@@ -43,8 +43,8 @@ fs_permissions = [
   { access = "read", path = "./foundry.toml" },
   { access = "read-write", path = "./src" },
   # LibRainDeploySnapshotTest builds a record tree of its own under
-  # test/generated to drive the frozen-record walk. NOT src/generated: the
-  # inherited record check reads that root from contracts forge runs in
+  # test/generated-snapshot to drive the frozen-record walk. NOT src/generated:
+  # the inherited record check reads that root from contracts forge runs in
   # parallel, so a fixture release there would be one they have to fail on.
   { access = "read-write", path = "./test" },
   # LibRainDeploySnapshotTest points the lib writers here — the alias writer,
