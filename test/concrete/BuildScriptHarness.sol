@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {BuildScript} from "../../src/abstract/BuildScript.sol";
+import {LibRainDeployConfig} from "../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 
 /// @title BuildScriptHarness
@@ -36,6 +37,74 @@ contract BuildScriptHarness is BuildScript {
     /// @return The record root.
     function externalRecordRoot() external view returns (string memory) {
         return recordRoot();
+    }
+
+    /// @inheritdoc BuildScript
+    /// @dev The fixture root, never the repo's own. A `run()` here would
+    /// otherwise read the committed config and stage a spliced copy of it,
+    /// which the next `script/build.sh` would install.
+    function configRoot() internal view override returns (string memory) {
+        return sRoot;
+    }
+
+    /// The seeded `foundry.toml` `regenerateConfig` reads.
+    /// @return The fixture config path.
+    function externalConfigPath() external view returns (string memory) {
+        return LibRainDeployConfig.configPath(configRoot());
+    }
+
+    /// The seeded `.env.example` `regenerateConfig` reads.
+    /// @return The fixture `.env.example` path.
+    function externalEnvExamplePath() external view returns (string memory) {
+        return LibRainDeployConfig.envExamplePath(configRoot());
+    }
+
+    /// Where `regenerateConfig` stages the spliced config.
+    /// @return The staged config path.
+    function externalStagedConfigPath() external view returns (string memory) {
+        return LibRainDeployConfig.stagedPath(configRoot(), LibRainDeployConfig.CONFIG_NAME);
+    }
+
+    /// Where `regenerateConfig` stages the spliced `.env.example`.
+    /// @return The staged `.env.example` path.
+    function externalStagedEnvExamplePath() external view returns (string memory) {
+        return LibRainDeployConfig.stagedPath(configRoot(), LibRainDeployConfig.ENV_EXAMPLE_NAME);
+    }
+
+    /// The staging directory, so a test can assert whether anything was staged
+    /// at all.
+    /// @return The staging directory.
+    function externalStagedDir() external view returns (string memory) {
+        return LibRainDeployConfig.stagedDir(configRoot());
+    }
+
+    /// A fixture file carrying both `foundry.toml` blocks, with a stale body in
+    /// each and hand-written text around them.
+    /// @return The seed config.
+    function configSeed() public pure returns (string memory) {
+        return string.concat(
+            "# hand written\n",
+            "# rain-deploy:generated:rpc_endpoints:begin\n",
+            "STALE\n",
+            "# rain-deploy:generated:rpc_endpoints:end\n",
+            "# rain-deploy:generated:etherscan:begin\n",
+            "STALE\n",
+            "# rain-deploy:generated:etherscan:end\n"
+        );
+    }
+
+    /// A fixture file carrying the `.env.example` block.
+    /// @return The seed `.env.example`.
+    function envExampleSeed() public pure returns (string memory) {
+        return string.concat(
+            "# hand written\n", "# rain-deploy:generated:env:begin\n", "STALE=1\n", "# rain-deploy:generated:env:end\n"
+        );
+    }
+
+    /// Writes both config fixtures, so `run()` has markers to splice into.
+    function seedConfig() external {
+        writeFixture(LibRainDeployConfig.configPath(configRoot()), configSeed());
+        writeFixture(LibRainDeployConfig.envExamplePath(configRoot()), envExampleSeed());
     }
 
     /// Where `regenerateSnapshots` writes.

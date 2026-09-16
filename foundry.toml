@@ -36,11 +36,23 @@ bytecode_hash = "none"
 # plain `forge test` produces — not only under an explicit `--ast`.
 ast = true
 
-# Build reads the version from foundry.toml and writes the generated
-# per-tag snapshots + the current-pin lib under src/. Nothing else in this repo
-# touches the filesystem.
+# Build reads the version and the network sections from foundry.toml, stages the
+# regenerated sections under .staged-config/ for script/build.sh to install, and
+# writes the generated per-tag snapshots + the current-pin lib under src/.
+# Nothing else in this repo touches the filesystem.
 fs_permissions = [
+  # READ, not read-write. `BuildScript.regenerateConfig` reads these two and
+  # writes the spliced result to .staged-config/: foundry refuses a cheatcode
+  # write to this file whatever is granted here, so the write it would need is
+  # not a permission this list can hand out.
   { access = "read", path = "./foundry.toml" },
+  { access = "read", path = "./.env.example" },
+  # Where the spliced files are staged, for script/build.sh to install over the
+  # two above. Gitignored; the hook removes it once it has installed them.
+  { access = "read-write", path = "./.staged-config" },
+  # `writeStagedConfig` refuses a repo with no build hook, which is a repo where
+  # nothing would install what it staged.
+  { access = "read", path = "./script/build.sh" },
   { access = "read-write", path = "./src" },
   # LibRainDeploySnapshotTest builds a record tree of its own under
   # test/generated-snapshot to drive the frozen-record walk. NOT src/generated:
@@ -74,6 +86,12 @@ recursive_deps = false
 # <NETWORK>_RPC_URL to a candidate that is reachable at the time of the run,
 # rather than to one URL that may be dead, so these names are the contract with
 # it.
+#
+# Generated from `LibRainDeploy.supportedNetworkConfigs()` by `script/Build.sol`,
+# between the markers and nowhere else. Adding a network is an edit to the
+# roster followed by a build, and `Git is clean` fails a tree where the two have
+# come apart.
+# rain-deploy:generated:rpc_endpoints:begin
 [rpc_endpoints]
 arbitrum = "${ARBITRUM_RPC_URL}"
 base = "${BASE_RPC_URL}"
@@ -84,33 +102,23 @@ flare = "${FLARE_RPC_URL}"
 hyperevm = "${HYPEREVM_RPC_URL}"
 polygon = "${POLYGON_RPC_URL}"
 robinhood = "${ROBINHOOD_RPC_URL}"
+# rain-deploy:generated:rpc_endpoints:end
 
 # `rainix-manual-sol-artifacts` passes `--verify` by default and exports exactly
 # these variable names, so a deploy without this section broadcasts and then
 # fails with no API key configured for the chain — after spending the gas. One
 # entry per `[rpc_endpoints]` alias, because the deploy goes to all of them.
 #
-# Both sections are checked against `LibRainDeploy.supportedNetworks()`, in both
-# directions, by `testSupportedNetworksAreFullyConfigured`. Adding a network is
-# an edit to all three or a red test, not a broadcast that discovers it.
+# `chain` is stated on every entry, from the roster's own chain id. An entry
+# with neither `chain` nor `url` under an alias foundry does not itself resolve
+# is not a missing key, it is a config error — "At least one of `url` or `chain`
+# must be present for Etherscan config with unknown alias" — raised while
+# resolving the section, so it takes down verification for every network in it
+# and not only its own.
 #
-# `chain` is stated on EVERY entry, and `testSupportedNetworksAreFullyConfigured`
-# requires at least one of `chain` or `url` on each. An entry with neither, under
-# an alias foundry does not itself resolve to a chain, is not a missing key, it
-# is a config error — "At least one of `url` or `chain` must be present for
-# Etherscan config with unknown alias" — raised while resolving the section, so
-# it takes down verification for every network in it and not only its own.
-#
-# Stated on every entry rather than only on the aliases foundry cannot resolve,
-# because which aliases those are is foundry's own table and that table moves
-# under a toolchain bump. Stating the chain an alias already resolves to
-# resolves it to the same chain, so neither these entries nor the check reading
-# them has to know the table.
-#
-# Each stated `chain` is compared against the chain id its `[rpc_endpoints]`
-# alias actually reports, by `testSupportedNetworkChainIdsAreBound`. That is the
-# one claim here the text cannot settle on its own: a wrong id resolves, reads
-# as well-formed, and is what `--verify` submits.
+# Generated with `[rpc_endpoints]`, from the same roster, so the two cannot name
+# different networks.
+# rain-deploy:generated:etherscan:begin
 [etherscan]
 arbitrum = { key = "${CI_DEPLOY_ARBITRUM_ETHERSCAN_API_KEY}", chain = 42161 }
 base = { key = "${CI_DEPLOY_BASE_ETHERSCAN_API_KEY}", chain = 8453 }
@@ -120,11 +128,5 @@ ethereum = { key = "${CI_DEPLOY_ETHEREUM_ETHERSCAN_API_KEY}", chain = 1 }
 flare = { key = "${CI_DEPLOY_FLARE_ETHERSCAN_API_KEY}", chain = 14 }
 hyperevm = { key = "${CI_DEPLOY_HYPEREVM_ETHERSCAN_API_KEY}", chain = 999 }
 polygon = { key = "${CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY}", chain = 137 }
-# Robinhood Chain (4663) is not indexed by Etherscan V2. Its Blockscout
-# explorer speaks the Etherscan API, so the entry points there; the key is
-# whatever `CI_DEPLOY_ROBINHOOD_ETHERSCAN_API_KEY` carries (Blockscout ignores
-# it). Blockscout sits behind a browser challenge that has rejected non-browser
-# clients, so if `--verify` fails on this network after a broadcast, verify
-# afterwards through Sourcify (which supports 4663 and which Blockscout
-# imports): `forge verify-contract --verifier sourcify --chain 4663 ...`.
 robinhood = { key = "${CI_DEPLOY_ROBINHOOD_ETHERSCAN_API_KEY}", chain = 4663, url = "https://robinhoodchain.blockscout.com/api" }
+# rain-deploy:generated:etherscan:end

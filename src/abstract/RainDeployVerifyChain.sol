@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
-import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
+import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 
 /// Thrown when a version's derived address has no code on a network. Either it
 /// never deployed there, or it is not there any more.
@@ -29,30 +29,16 @@ error CodeHashMismatchOnNetwork(
     string network, string suite, address deployedAddress, bytes32 expectedCodeHash, bytes32 actualCodeHash
 );
 
-/// Thrown when the chain id a network's `[etherscan]` entry declares is not the
-/// chain id the endpoint bound to that network's `[rpc_endpoints]` alias
-/// reports. Either the declaration is wrong — and `chain` is what `--verify`
-/// submits, so the deployment is verified against another chain's explorer — or
-/// the alias is bound to a different network than the one it names, and
-/// everything ever checked through it was checked somewhere else.
+/// Thrown when the chain id a network's roster entry declares is not the chain
+/// id the endpoint bound to its `[rpc_endpoints]` alias reports. Either the
+/// declaration is wrong — and `chain` is what `--verify` submits, so the
+/// deployment is verified against another chain's explorer — or the alias is
+/// bound to a different network than the one it names, and everything ever
+/// checked through it was checked somewhere else.
 /// @param network The network name, as configured in `[rpc_endpoints]`.
-/// @param declared The chain id the `[etherscan]` entry states.
+/// @param declared The chain id the roster states.
 /// @param reported The chain id the endpoint answers with.
 error NetworkChainIdMismatch(string network, uint256 declared, uint256 reported);
-
-/// Thrown when no supported network's `[etherscan]` entry declares a `chain` at
-/// all. That is not nothing to check, it is a config in which every entry
-/// resolves through a `url` alone, and a check with no subject passes having
-/// forked nothing — indistinguishable from every declared id being right.
-error NoDeclaredChainIds();
-
-/// The chain id one network's `[etherscan]` entry states.
-struct DeclaredChainId {
-    /// The network name, as configured in `[rpc_endpoints]` and `[etherscan]`.
-    string network;
-    /// The chain id the entry states.
-    uint256 chainId;
-}
 
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the
@@ -177,50 +163,10 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         checkDeployedOnSupportedNetworks(deriveDeployments(releasedSuites()));
     }
 
-    /// The chain id each supported network's `[etherscan]` entry states, for
-    /// the networks that state one.
-    ///
-    /// An entry with no `chain` is not a gap here. The config group requires
-    /// only that an entry carry at least one of `chain` or `url`, so one that
-    /// resolves through a `url` alone makes no claim about which chain its
-    /// alias is, and there is nothing about it to compare. What WOULD be a gap
-    /// is every entry being that way, which is why `checkNetworkChainIds`
-    /// refuses an empty declaration set rather than passing on it.
-    ///
-    /// Takes the config text rather than reading it, so a test can hand it one
-    /// it built. Reading the binder's own file is
-    /// `testSupportedNetworkChainIdsAreBound`.
-    /// @param config The raw `foundry.toml` text.
-    /// @param networks The supported networks whose entries to read.
-    /// @return The declaration of every network that states a chain id, in
-    /// `networks` order.
-    function declaredChainIds(string memory config, string[] memory networks)
-        internal
-        view
-        returns (DeclaredChainId[] memory)
-    {
-        uint256 declaredCount = 0;
-        for (uint256 i = 0; i < networks.length; i++) {
-            if (vm.keyExistsToml(config, string.concat(".etherscan.", networks[i], ".chain"))) {
-                declaredCount++;
-            }
-        }
-
-        DeclaredChainId[] memory declared = new DeclaredChainId[](declaredCount);
-        uint256 next = 0;
-        for (uint256 i = 0; i < networks.length; i++) {
-            string memory key = string.concat(".etherscan.", networks[i], ".chain");
-            if (vm.keyExistsToml(config, key)) {
-                declared[next] = DeclaredChainId({network: networks[i], chainId: vm.parseTomlUint(config, key)});
-                next++;
-            }
-        }
-        return declared;
-    }
-
-    /// Checks one network's declared chain id against a reported one.
+    /// Checks one network's declared chain id against whichever chain id the
+    /// currently selected fork reports.
     /// @param network The network name, for the error only.
-    /// @param declared The chain id the `[etherscan]` entry states.
+    /// @param declared The chain id the roster states.
     /// @param reported The chain id the bound endpoint answers with.
     function checkNetworkChainId(string memory network, uint256 declared, uint256 reported) internal pure {
         if (declared != reported) {
@@ -228,53 +174,43 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         }
     }
 
-    /// Checks every declaration against the endpoint bound to its network's
-    /// `[rpc_endpoints]` alias.
-    ///
-    /// Every fork is created before any is selected, for the reason
-    /// `LibRainDeploy.createForks` gives.
-    /// @param declared The declarations to check.
-    function checkNetworkChainIds(DeclaredChainId[] memory declared) internal {
-        if (declared.length == 0) {
-            revert NoDeclaredChainIds();
+    /// Checks every network's declared chain id against the endpoint bound to
+    /// its `[rpc_endpoints]` alias.
+    /// @param networks The roster to check.
+    function checkNetworkChainIds(SupportedNetwork[] memory networks) internal {
+        // An empty roster is a repo that deploys nowhere, not a repo with
+        // nothing to check, and it would pass here having forked nothing.
+        if (networks.length == 0) {
+            revert LibRainDeploy.NoNetworks();
         }
 
-        string[] memory names = new string[](declared.length);
-        for (uint256 i = 0; i < declared.length; i++) {
-            names[i] = declared[i].network;
+        string[] memory names = new string[](networks.length);
+        for (uint256 i = 0; i < networks.length; i++) {
+            names[i] = networks[i].name;
         }
 
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, names);
-        for (uint256 i = 0; i < declared.length; i++) {
+        for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
-            checkNetworkChainId(declared[i].network, declared[i].chainId, block.chainid);
+            checkNetworkChainId(networks[i].name, networks[i].chainId, block.chainid);
         }
     }
 
-    /// Every chain id `[etherscan]` declares MUST be the one the endpoint bound
-    /// to that network's `[rpc_endpoints]` alias reports.
+    /// Every supported network's declared chain id MUST be the one the endpoint
+    /// bound to its alias reports.
     ///
-    /// The config group asserts that those entries exist and can resolve, and
-    /// can go no further: whether `chain = 42161` is the network `arbitrum`
-    /// forks is a claim about the world that only a fork settles. A wrong id
-    /// resolves, satisfies every check that reads the text, and is what
-    /// `--verify` submits — so the deployment is verified against another
-    /// chain's explorer, after the gas is spent. The mirror of it is an
-    /// `[rpc_endpoints]` alias bound to a different network than it names,
-    /// which the same comparison catches and which is worse: every
-    /// chain-anchored assertion ever made through that alias was made somewhere
-    /// nobody named.
+    /// The one thing about the config that generating it cannot settle. The
+    /// sections are written from the roster, so an alias missing from one of
+    /// them is a tree `Git is clean` fails rather than an assertion anything
+    /// makes — but which chain an endpoint actually serves is a claim about the
+    /// world, and `chain` is what `--verify` submits to. A wrong id there is
+    /// config that resolves, passes every check that reads the text, and
+    /// verifies a deployment against the wrong explorer.
     ///
-    /// Here rather than in the config group because the subject is the
-    /// endpoint. This is the contract that forks, and keeping the comparison
-    /// out of the snapshot half is what leaves that half bindable by a job with
-    /// no RPC endpoint at all.
-    ///
-    /// `vm.readFile` resolves against the project root of whatever runs it, so
-    /// the file read is the binder's own — which is why a binding repo needs
-    /// `{ access = "read", path = "./foundry.toml" }` in `fs_permissions` for
-    /// THIS half as well as the snapshot half.
+    /// Here rather than beside the roster because the subject is the endpoint:
+    /// this is the contract that already forks every supported network, and the
+    /// snapshot half is the one a credential-free job binds.
     function testSupportedNetworkChainIdsAreBound() external {
-        checkNetworkChainIds(declaredChainIds(vm.readFile("foundry.toml"), LibRainDeploy.supportedNetworks()));
+        checkNetworkChainIds(LibRainDeploy.supportedNetworkConfigs());
     }
 }

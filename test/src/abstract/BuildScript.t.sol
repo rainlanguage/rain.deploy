@@ -3,6 +3,8 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.16.2/src/Test.sol";
+import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployConfig} from "../../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
 
@@ -38,6 +40,15 @@ contract BuildScriptTest is Test {
     /// Where the lib-ordering fixture's record is built.
     string constant LIBS_FIXTURE_ROOT = "test/generated-buildscript-libs";
 
+    /// Where the `run()` config fixture's record is built.
+    string constant RUN_CONFIG_FIXTURE_ROOT = "test/generated-buildscript-run-config";
+
+    /// Where the `cutRelease()` config fixture's record is built. Its own root,
+    /// like every other fixture here: forge runs the tests in a contract in
+    /// parallel, so a root two of them share is one deleting the tree the other
+    /// is midway through reading.
+    string constant CUT_CONFIG_FIXTURE_ROOT = "test/generated-buildscript-cut-config";
+
     /// Carries its AST because `foundry.toml` sets `ast = true`.
     string constant BASE_ARTIFACT = "out/BuildScript.sol/BuildScript.json";
 
@@ -71,6 +82,7 @@ contract BuildScriptTest is Test {
     function testRunRegeneratesAndFreezesNothing() external {
         resetFixture(RUN_FIXTURE_ROOT);
         BuildScriptHarness harness = new BuildScriptHarness(RUN_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        harness.seedConfig();
         harness.run();
 
         // Read while the fixture is still there, asserted once it is gone.
@@ -143,6 +155,91 @@ contract BuildScriptTest is Test {
         assertEq(libs, harness.libsMarker(1, true));
     }
 
+    /// PROPERTY: `run()` stages both `foundry.toml` network blocks and the
+    /// `.env.example` block from the roster, leaving everything outside the
+    /// markers where it was — and leaves the files it read untouched.
+    ///
+    /// This is the wiring, not the emission: what the sections SAY is pinned
+    /// against string literals in `LibRainDeployConfigTest`, over a fixture
+    /// roster no real network is named in. What is asserted here is that the
+    /// entry point CI runs on every push reaches the config at all — without
+    /// it the sections would exist, be correct, and be written nowhere, and
+    /// `Git is clean` would pass a tree whose config had drifted from the
+    /// roster it pins.
+    ///
+    /// The sources staying byte-identical is the half `script/build.sh` then
+    /// depends on: a `run()` that wrote them directly would be refused for
+    /// `foundry.toml` and would make the hook's copy a no-op for the other.
+    function testRunStagesTheNetworkConfig() external {
+        resetFixture(RUN_CONFIG_FIXTURE_ROOT);
+        BuildScriptHarness harness = new BuildScriptHarness(RUN_CONFIG_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        harness.seedConfig();
+        harness.run();
+
+        // Read while the fixture is still there, asserted once it is gone.
+        string memory stagedConfig = vm.readFile(harness.externalStagedConfigPath());
+        string memory stagedEnvExample = vm.readFile(harness.externalStagedEnvExamplePath());
+        string memory config = vm.readFile(harness.externalConfigPath());
+        string memory envExample = vm.readFile(harness.externalEnvExamplePath());
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(RUN_CONFIG_FIXTURE_ROOT, true);
+
+        assertEq(
+            stagedConfig,
+            string.concat(
+                "# hand written\n",
+                "# rain-deploy:generated:rpc_endpoints:begin\n",
+                LibRainDeployConfig.rpcEndpointsSection(vm, LibRainDeploy.supportedNetworkConfigs()),
+                "# rain-deploy:generated:rpc_endpoints:end\n",
+                "# rain-deploy:generated:etherscan:begin\n",
+                LibRainDeployConfig.etherscanSection(vm, LibRainDeploy.supportedNetworkConfigs()),
+                "# rain-deploy:generated:etherscan:end\n"
+            )
+        );
+        assertEq(
+            stagedEnvExample,
+            string.concat(
+                "# hand written\n",
+                "# rain-deploy:generated:env:begin\n",
+                LibRainDeployConfig.envExampleSection(vm, LibRainDeploy.supportedNetworkConfigs()),
+                "# rain-deploy:generated:env:end\n"
+            )
+        );
+        assertEq(config, harness.configSeed());
+        assertEq(envExample, harness.envExampleSeed());
+    }
+
+    /// PROPERTY: `cutRelease()` stages nothing and leaves the config exactly as
+    /// it found it.
+    ///
+    /// The config is not part of a release record. A `cutRelease()` that
+    /// rewrote it would put a config change inside the one operation that can
+    /// never be repeated, where `run()` is the entry point every push already
+    /// runs and the only one `Git is clean` currency checks.
+    ///
+    /// The staging directory being ABSENT is what says so now: a staged file
+    /// left behind by a release is one the next `script/build.sh` installs,
+    /// which is the config change happening anyway, one step later.
+    function testCutReleaseLeavesTheConfigAlone() external {
+        resetFixture(CUT_CONFIG_FIXTURE_ROOT);
+        BuildScriptHarness harness = new BuildScriptHarness(CUT_CONFIG_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        harness.seedConfig();
+        harness.cutRelease();
+
+        // Read while the fixture is still there, asserted once it is gone.
+        string memory config = vm.readFile(harness.externalConfigPath());
+        string memory envExample = vm.readFile(harness.externalEnvExamplePath());
+        bool stagedAnything = vm.exists(harness.externalStagedDir());
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CUT_CONFIG_FIXTURE_ROOT, true);
+
+        assertEq(config, harness.configSeed());
+        assertEq(envExample, harness.envExampleSeed());
+        assertFalse(stagedAnything);
+    }
+
     /// PROPERTY: a repo that overrides nothing freezes into its OWN record.
     ///
     /// The root is overridable only so a release can be cut somewhere a test
@@ -184,56 +281,62 @@ contract BuildScriptTest is Test {
         );
     }
 
-    /// PROPERTY: `run()` calls every hook that regenerates something, and holds
+    /// PROPERTY: `run()` calls every generator the base declares, and holds
     /// nothing else.
     ///
     /// THIS ASSERTION IS THE SPECIFICATION of the entry point CI calls on every
-    /// push: it regenerates everything this repo generates. A hook is what a
-    /// deriving repo implements, so a hook nothing calls is a generator that no
-    /// push ever runs — its output drifts from its inputs until a release cuts
-    /// the drift into the append-only record, which is the one place it can
-    /// never be fixed.
+    /// push: it regenerates everything this repo generates. A generator nothing
+    /// calls is one that no push ever runs — its output drifts from its inputs
+    /// until a release cuts the drift into the append-only record, which is the
+    /// one place it can never be fixed.
     ///
-    /// The hooks are enumerated from the base's own declarations rather than
-    /// named here, because naming them is the failure: a third hook added
-    /// beside the two that exist today is wired by the same edit that adds it
-    /// or by nobody at all, and a test that lists today's two says nothing
+    /// A generator is an `internal` function that can write, whether or not it
+    /// is a hook. `regenerateConfig` is deliberately NOT a hook — the roster it
+    /// emits from is this package's own, and a repo able to override the
+    /// emission would deploy to and verify fewer chains with nothing red — and
+    /// a generator the base holds itself is as capable of being wired to
+    /// nothing as one a deriving repo implements.
+    ///
+    /// They are enumerated from the base's own declarations rather than named
+    /// here, because naming them is the failure: a fourth generator added
+    /// beside the three that exist today is wired by the same edit that adds it
+    /// or by nobody at all, and a test that lists today's three says nothing
     /// either way.
     ///
     /// `run()` holding nothing but those calls is the other half. Every
     /// assertion here is about the set of declarations `run()` calls, and a set
     /// says nothing about a statement that is not a call — a guard, an early
     /// return, an inlined generator — which is exactly where a regeneration
-    /// that no hook can be overridden to change would land.
+    /// nothing declares would land.
     ///
     /// Order is not asserted here and cannot be: declaration order is not call
     /// order, and the order that is observable —
     /// `regenerateSnapshots` before `regenerateLibs` — is already pinned by
     /// `testRunRegeneratesAndFreezesNothing` through the harness's markers.
     ///
-    /// A hook that only reads is not `run()`'s to call: `recordRoot()` and
-    /// `snapshotContractNames()` answer questions for whoever asks one, and
-    /// `run()` asks neither. They are held to being called by something in
-    /// `testEveryHookIsReachedFromAnEntryPoint` instead.
-    function testRunCallsEveryHookThatRegenerates() external view {
+    /// A function that only reads is not `run()`'s to call: `recordRoot()`,
+    /// `configRoot()` and `snapshotContractNames()` answer questions for
+    /// whoever asks one, and `run()` asks none of them. They are held to being
+    /// called by something in `testEveryHookIsReachedFromAnEntryPoint` instead.
+    function testRunCallsEveryGenerator() external view {
         string memory json = baseArtifact();
         string[] memory members = functionPaths(json);
         int256[] memory called = statementCallIds(json, namedFunctionPath(json, members, "run"));
 
-        uint256 hooks = 0;
+        uint256 generators = 0;
         for (uint256 i = 0; i < members.length; i++) {
-            if (!isHook(json, members[i]) || !regenerates(json, members[i])) {
+            if (!isGenerator(json, members[i])) {
                 continue;
             }
-            hooks++;
+            generators++;
             assertTrue(
                 referencesId(called, declarationId(json, members[i])),
-                string.concat("run() does not call the hook ", nodeField(json, members[i], "name"))
+                string.concat("run() does not call the generator ", nodeField(json, members[i], "name"))
             );
         }
 
-        assertGt(hooks, 0, "the base declares no hook that regenerates anything");
-        assertEq(called.length, hooks, "run() holds a call that is not one of those hooks");
+        assertGt(generators, 0, "the base declares no generator");
+        assertEq(called.length, generators, "run() holds a call that is not one of those generators");
     }
 
     /// PROPERTY: every hook the base declares is reached from an entry point.
@@ -397,10 +500,13 @@ contract BuildScriptTest is Test {
             && vm.parseJsonBool(json, string.concat(path, ".virtual"));
     }
 
-    /// Whether a function can write anything, which for a hook is what makes it
-    /// a generator rather than an answer to a question.
-    function regenerates(string memory json, string memory path) internal pure returns (bool) {
-        return keccak256(bytes(nodeField(json, path, "stateMutability"))) == keccak256("nonpayable");
+    /// Whether a function is a generator: `internal`, and able to write. That
+    /// is what makes it something `run()` has to call, and it is independent of
+    /// `virtual` — which is about who can change the emission, not about
+    /// whether anything runs it.
+    function isGenerator(string memory json, string memory path) internal pure returns (bool) {
+        return keccak256(bytes(nodeField(json, path, "visibility"))) == keccak256("internal")
+            && keccak256(bytes(nodeField(json, path, "stateMutability"))) == keccak256("nonpayable");
     }
 
     /// Whether a function can be called from outside the contract, which is

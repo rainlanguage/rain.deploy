@@ -37,3 +37,10 @@ relocated.
   deployment. The deploy and the chain matrix create every fork before selecting
   any, so such a failure takes the whole run before any network is checked
   rather than stopping partway down the list.
+- **Foundry REFUSES a cheatcode write to the project root's own
+  `foundry.toml`.** "access to `foundry.toml` is not allowed", from a guard on
+  the path — no `fs_permissions` grant and no spelling of the path gets past it,
+  and `writeFile`, `writeLine` and `copyFile` are all refused. Reads are
+  allowed. That is why `BuildScript.run()` stages the spliced config under
+  `.staged-config/` and `script/build.sh` installs it, and why regenerating by
+  hand is `forge script ./script/Build.sol` FOLLOWED BY `./script/build.sh`.
