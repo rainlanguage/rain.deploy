@@ -423,15 +423,31 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         checkNetworkChainIds(declared);
     }
 
+    /// A declared chain id that is not the reported one MUST fail, naming the
+    /// network and BOTH ids. Which one is wrong — the declaration or the alias
+    /// the endpoint is bound to — is not something the check can know, and the
+    /// two are opposite fixes, so both ids are in the failure.
     function testChainIdMismatchReverts() external {
         vm.expectRevert(abi.encodeWithSelector(NetworkChainIdMismatch.selector, "arbitrum", 11, 22));
         this.externalCheckNetworkChainId("arbitrum", 11, 22);
     }
 
+    /// A declared chain id that IS the reported one MUST pass. Without this a
+    /// comparison that rejected every pair would satisfy the case above.
     function testChainIdMatchPasses() external view {
         this.externalCheckNetworkChainId("arbitrum", 11, 11);
     }
 
+    /// The reported id MUST come from a fork of the network's own
+    /// `[rpc_endpoints]` alias.
+    ///
+    /// The inherited `testSupportedNetworkChainIdsAreBound` passing cannot say
+    /// that: a comparison reading `block.chainid` off the unforked 31337 EVM
+    /// fails there for every network, and so does one reading it off the wrong
+    /// fork, and a green run tells the two apart from neither. So this declares
+    /// an id no network has, for an alias that really resolves, and the id in
+    /// the failure is the one THAT endpoint answers with — `1`, which is
+    /// Ethereum's and is neither 31337 nor the declared value.
     function testChainIdIsReadFromTheForkedEndpoint() external {
         DeclaredChainId[] memory declared = new DeclaredChainId[](1);
         declared[0] = DeclaredChainId({network: LibRainDeploy.ETHEREUM, chainId: 987654});
@@ -440,6 +456,9 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         this.externalCheckNetworkChainIds(declared);
     }
 
+    /// EVERY declaration MUST be checked, not just the first. The wrong id here
+    /// is on the LAST entry, behind one that is right, so a loop that stopped
+    /// at the first agreement would pass.
     function testChainIdChecksEveryDeclaration() external {
         DeclaredChainId[] memory declared = new DeclaredChainId[](2);
         declared[0] = DeclaredChainId({network: LibRainDeploy.ETHEREUM, chainId: 1});
@@ -449,11 +468,17 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         this.externalCheckNetworkChainIds(declared);
     }
 
+    /// Nothing declared MUST fail rather than pass having forked nothing. It is
+    /// the one input that satisfies the loop without a subject, and it is what
+    /// a config whose every entry resolves through a `url` alone hands in.
     function testChainIdNoDeclarationsReverts() external {
         vm.expectRevert(NoDeclaredChainIds.selector);
         this.externalCheckNetworkChainIds(new DeclaredChainId[](0));
     }
 
+    /// The declarations MUST be the ids the config text states, paired with the
+    /// networks that state them. Distinct values, so a pairing that slipped by
+    /// one is a different number rather than the same one twice.
     function testDeclaredChainIdsReadsTheConfigText() external view {
         string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
@@ -468,6 +493,14 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         assertEq(declared[1].chainId, 33);
     }
 
+    /// An entry that states no `chain` MUST be skipped rather than read as a
+    /// zero. The config group requires only `chain` OR `url` of an entry, so an
+    /// entry resolving through its `url` claims no chain id — and a zero
+    /// standing in for the absent claim is a mismatch against every network
+    /// there is.
+    ///
+    /// The skipped entry is in the MIDDLE, so the entry after it is still read
+    /// and still paired with its own network.
     function testDeclaredChainIdsSkipsEntriesWithNoChain() external view {
         string[] memory networks = new string[](3);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
@@ -483,6 +516,10 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         assertEq(declared[1].chainId, 33);
     }
 
+    /// A config where nothing states a `chain` MUST produce nothing to check,
+    /// which `checkNetworkChainIds` then refuses. Read through the same pair of
+    /// calls the inherited test makes, so the refusal is reachable from config
+    /// text rather than only from an array a test built.
     function testDeclaredChainIdsOfUrlOnlyEntriesIsRefused() external {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.BASE;
@@ -494,6 +531,10 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         this.externalCheckNetworkChainIds(declared);
     }
 
+    /// A network with no `[etherscan]` entry at all MUST be skipped here rather
+    /// than reverting on the read. Membership is the config group's assertion
+    /// and it names the missing network; a parse error here would fail first,
+    /// on a network, with nothing about the section it is missing from.
     function testDeclaredChainIdsSkipsNetworksWithNoEntry() external view {
         string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.FLARE;

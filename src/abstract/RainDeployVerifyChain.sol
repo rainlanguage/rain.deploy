@@ -31,19 +31,26 @@ error CodeHashMismatchOnNetwork(
 
 /// Thrown when the chain id a network's `[etherscan]` entry declares is not the
 /// chain id the endpoint bound to that network's `[rpc_endpoints]` alias
-/// reports.
+/// reports. Either the declaration is wrong — and `chain` is what `--verify`
+/// submits, so the deployment is verified against another chain's explorer — or
+/// the alias is bound to a different network than the one it names, and
+/// everything ever checked through it was checked somewhere else.
 /// @param network The network name, as configured in `[rpc_endpoints]`.
 /// @param declared The chain id the `[etherscan]` entry states.
 /// @param reported The chain id the endpoint answers with.
 error NetworkChainIdMismatch(string network, uint256 declared, uint256 reported);
 
 /// Thrown when no supported network's `[etherscan]` entry declares a `chain` at
-/// all.
+/// all. That is not nothing to check, it is a config in which every entry
+/// resolves through a `url` alone, and a check with no subject passes having
+/// forked nothing — indistinguishable from every declared id being right.
 error NoDeclaredChainIds();
 
 /// The chain id one network's `[etherscan]` entry states.
 struct DeclaredChainId {
+    /// The network name, as configured in `[rpc_endpoints]` and `[etherscan]`.
     string network;
+    /// The chain id the entry states.
     uint256 chainId;
 }
 
@@ -172,6 +179,17 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
 
     /// The chain id each supported network's `[etherscan]` entry states, for
     /// the networks that state one.
+    ///
+    /// An entry with no `chain` is not a gap here. The config group requires
+    /// only that an entry carry at least one of `chain` or `url`, so one that
+    /// resolves through a `url` alone makes no claim about which chain its
+    /// alias is, and there is nothing about it to compare. What WOULD be a gap
+    /// is every entry being that way, which is why `checkNetworkChainIds`
+    /// refuses an empty declaration set rather than passing on it.
+    ///
+    /// Takes the config text rather than reading it, so a test can hand it one
+    /// it built. Reading the binder's own file is
+    /// `testSupportedNetworkChainIdsAreBound`.
     /// @param config The raw `foundry.toml` text.
     /// @param networks The supported networks whose entries to read.
     /// @return The declaration of every network that states a chain id, in
@@ -212,6 +230,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
 
     /// Checks every declaration against the endpoint bound to its network's
     /// `[rpc_endpoints]` alias.
+    ///
+    /// Every fork is created before any is selected, for the reason
+    /// `LibRainDeploy.createForks` gives.
     /// @param declared The declarations to check.
     function checkNetworkChainIds(DeclaredChainId[] memory declared) internal {
         if (declared.length == 0) {
@@ -233,8 +254,26 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// Every chain id `[etherscan]` declares MUST be the one the endpoint bound
     /// to that network's `[rpc_endpoints]` alias reports.
     ///
-    /// A binding repo needs `{ access = "read", path = "./foundry.toml" }` in
-    /// `fs_permissions` for this half as well as the snapshot half.
+    /// The config group asserts that those entries exist and can resolve, and
+    /// can go no further: whether `chain = 42161` is the network `arbitrum`
+    /// forks is a claim about the world that only a fork settles. A wrong id
+    /// resolves, satisfies every check that reads the text, and is what
+    /// `--verify` submits — so the deployment is verified against another
+    /// chain's explorer, after the gas is spent. The mirror of it is an
+    /// `[rpc_endpoints]` alias bound to a different network than it names,
+    /// which the same comparison catches and which is worse: every
+    /// chain-anchored assertion ever made through that alias was made somewhere
+    /// nobody named.
+    ///
+    /// Here rather than in the config group because the subject is the
+    /// endpoint. This is the contract that forks, and keeping the comparison
+    /// out of the snapshot half is what leaves that half bindable by a job with
+    /// no RPC endpoint at all.
+    ///
+    /// `vm.readFile` resolves against the project root of whatever runs it, so
+    /// the file read is the binder's own — which is why a binding repo needs
+    /// `{ access = "read", path = "./foundry.toml" }` in `fs_permissions` for
+    /// THIS half as well as the snapshot half.
     function testSupportedNetworkChainIdsAreBound() external {
         checkNetworkChainIds(declaredChainIds(vm.readFile("foundry.toml"), LibRainDeploy.supportedNetworks()));
     }

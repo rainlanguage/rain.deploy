@@ -76,14 +76,29 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
     /// This is what makes the `[etherscan]` half enforced at all. The RPC half
     /// is enforced only incidentally, by the fork tests, and only forwards.
     ///
+    /// Membership is necessary and not sufficient for that half, so the SHAPE
+    /// of each `[etherscan]` entry is asserted beside it by
+    /// `checkEtherscanEntriesResolvable`: foundry resolves the whole section, so
+    /// an entry it cannot resolve fails `--verify` for the other entries as
+    /// well, after the gas is spent, while satisfying every membership
+    /// assertion here.
+    ///
     /// The raw file is read rather than forge's resolved config because the
-    /// values are `${VAR}` interpolations that exist only in CI.
+    /// values are `${VAR}` interpolations that exist only in CI. Nothing
+    /// asserted here is a value — the keys, and that each `[etherscan]` entry
+    /// carries enough to resolve at all, are both in the text — so this needs
+    /// no RPC and fails on the PR that drifts rather than at dispatch time.
     ///
     /// `vm.readFile` resolves against the project root of whatever runs it, so
     /// the file read is the binder's own and the networks are this package's.
     /// A binding repo therefore needs `{ access = "read", path =
     /// "./foundry.toml" }` in `fs_permissions`, and one without it fails here
     /// rather than passing on a file it never opened.
+    ///
+    /// The assertions themselves are `checkNetworksConfigured`, in the base,
+    /// because they take the config as an argument and so can be handed one a
+    /// test builds. Reading the binder's own file is the part that cannot be,
+    /// and it is all that is left here.
     function testSupportedNetworksAreFullyConfigured() external view {
         checkNetworksConfigured(vm.readFile("foundry.toml"), LibRainDeploy.supportedNetworks());
     }
