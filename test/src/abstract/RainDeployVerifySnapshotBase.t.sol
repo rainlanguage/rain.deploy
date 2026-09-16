@@ -595,6 +595,9 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         sMismatch.externalCheckCandidatesAnchoredToSource();
     }
 
+    /// Two suites that record the SAME creation code MUST both derive, which
+    /// is the ordinary state of a repo between a release and the next source
+    /// change.
     function testSuitesSharingCreationCodeAllDerive() external {
         DeploySuite[] memory suites = allSuites();
         assertEq(suites.length, 4);
