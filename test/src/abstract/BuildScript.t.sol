@@ -6,6 +6,8 @@ import {Test} from "forge-std-1.16.2/src/Test.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
 
+/// A memory struct so a recursion into a subtree writes what it finds where the
+/// caller can read it: every frame of the walk shares this one accumulator.
 struct AstReferences {
     int256[] ids;
     uint256 count;
@@ -18,6 +20,11 @@ struct AstReferences {
 /// `cutRelease()` here cuts THIS repo's tag, and `src/generated/` is
 /// append-only, so each test drives a harness over a fixture record of its own.
 /// A shared root would have the second test refused as a re-cut of the first.
+///
+/// What the harness can show is a hook that RAN. A hook nothing calls leaves
+/// every marker exactly where a wired base would, so the wiring itself is
+/// asserted from the compiler's AST instead, and against the base's own
+/// declarations rather than a list of the hooks it holds today.
 contract BuildScriptTest is Test {
     /// The contract the fixture snapshots describe.
     string constant FIXTURE_CONTRACT = "Fixture";
@@ -147,6 +154,20 @@ contract BuildScriptTest is Test {
         assertEq(harness.externalRecordRoot(), LibRainDeploySnapshot.LIB_FS_ROOT);
     }
 
+    /// PROPERTY: the AST the assertions below read is the base the harness
+    /// above inherits, in the file this repo compiles it from.
+    ///
+    /// Every one of them is a claim about a file named by a hard-coded path,
+    /// and an artifact left behind by a moved or renamed source parses exactly
+    /// as well as a live one — a hook walk over a dead file finds no unwired
+    /// hook and reports that as the property holding.
+    ///
+    /// The base is abstract, so its own creation code cannot be the anchor the
+    /// way `CreditHyperCoreTest` uses one. The harness is concrete and this
+    /// file drives it, so the chain runs through it instead: the harness
+    /// artifact is the harness this suite compiled, the base it inherits was
+    /// imported from `BASE_SOURCE`, and the base artifact describes that same
+    /// file.
     function testTheAstIsTheBaseTheHarnessInherits() external view {
         assertEq(
             keccak256(vm.getCode(string.concat(HARNESS_SOURCE, ":BuildScriptHarness"))),
@@ -163,6 +184,37 @@ contract BuildScriptTest is Test {
         );
     }
 
+    /// PROPERTY: `run()` calls every hook that regenerates something, and holds
+    /// nothing else.
+    ///
+    /// THIS ASSERTION IS THE SPECIFICATION of the entry point CI calls on every
+    /// push: it regenerates everything this repo generates. A hook is what a
+    /// deriving repo implements, so a hook nothing calls is a generator that no
+    /// push ever runs — its output drifts from its inputs until a release cuts
+    /// the drift into the append-only record, which is the one place it can
+    /// never be fixed.
+    ///
+    /// The hooks are enumerated from the base's own declarations rather than
+    /// named here, because naming them is the failure: a third hook added
+    /// beside the two that exist today is wired by the same edit that adds it
+    /// or by nobody at all, and a test that lists today's two says nothing
+    /// either way.
+    ///
+    /// `run()` holding nothing but those calls is the other half. Every
+    /// assertion here is about the set of declarations `run()` calls, and a set
+    /// says nothing about a statement that is not a call — a guard, an early
+    /// return, an inlined generator — which is exactly where a regeneration
+    /// that no hook can be overridden to change would land.
+    ///
+    /// Order is not asserted here and cannot be: declaration order is not call
+    /// order, and the order that is observable —
+    /// `regenerateSnapshots` before `regenerateLibs` — is already pinned by
+    /// `testRunRegeneratesAndFreezesNothing` through the harness's markers.
+    ///
+    /// A hook that only reads is not `run()`'s to call: `recordRoot()` and
+    /// `snapshotContractNames()` answer questions for whoever asks one, and
+    /// `run()` asks neither. They are held to being called by something in
+    /// `testEveryHookIsReachedFromAnEntryPoint` instead.
     function testRunCallsEveryHookThatRegenerates() external view {
         string memory json = baseArtifact();
         string[] memory members = functionPaths(json);
@@ -184,6 +236,18 @@ contract BuildScriptTest is Test {
         assertEq(called.length, hooks, "run() holds a call that is not one of those hooks");
     }
 
+    /// PROPERTY: every hook the base declares is reached from an entry point.
+    ///
+    /// The half of the wiring `run()` cannot carry. A hook that only reads is
+    /// called where its answer is needed, which for the two that exist today is
+    /// `cutRelease()` — but a hook reached from neither entry point is one a
+    /// deriving repo is asked to implement and that nothing ever calls, and
+    /// that is the same defect whether the hook writes files or answers a
+    /// question.
+    ///
+    /// Reachability, not a direct call: `regenerateSnapshots` reaches `freeze`
+    /// as an internal function pointer rather than as a call, and a hook whose
+    /// only caller is another hook's default body is wired.
     function testEveryHookIsReachedFromAnEntryPoint() external view {
         string memory json = baseArtifact();
         string[] memory members = functionPaths(json);
@@ -205,6 +269,9 @@ contract BuildScriptTest is Test {
         return vm.readFile(BASE_ARTIFACT);
     }
 
+    /// Walked rather than indexed: the top-level nodes are the pragma, the
+    /// imports and then the contract, so an import added or removed moves the
+    /// index of everything below.
     function baseContractPath(string memory json) internal view returns (string memory) {
         string memory found = "";
         uint256 count = 0;
@@ -224,6 +291,11 @@ contract BuildScriptTest is Test {
         return found;
     }
 
+    /// The import is matched to the inheritance by declaration id rather than
+    /// by name, so a second contract spelled `BuildScript` in a file the
+    /// harness also imports is not a way to point the assertions at one file
+    /// while inheriting another. Both ids are read out of the harness's own
+    /// artifact, which is one compilation and therefore one id space.
     function importPathOfBase(string memory json) internal view returns (string memory) {
         string memory contractPath = "";
         for (uint256 i = 0; vm.keyExistsJson(json, string.concat("$.ast.nodes[", vm.toString(i), "].nodeType")); i++) {
@@ -258,6 +330,8 @@ contract BuildScriptTest is Test {
         revert("the harness imports no base");
     }
 
+    /// Collected from the contract's own members, so a hook added to the base
+    /// is in this walk the moment it is declared and before anything calls it.
     function functionPaths(string memory json) internal view returns (string[] memory) {
         string memory contractPath = baseContractPath(json);
         string[] memory found = new string[](64);
@@ -315,20 +389,30 @@ contract BuildScriptTest is Test {
         return vm.parseJsonInt(json, string.concat(path, ".id"));
     }
 
+    /// Whether a function is a hook: `internal virtual`, which is the whole of
+    /// what a deriving repo can implement and nothing outside the base can
+    /// call.
     function isHook(string memory json, string memory path) internal pure returns (bool) {
         return keccak256(bytes(nodeField(json, path, "visibility"))) == keccak256("internal")
             && vm.parseJsonBool(json, string.concat(path, ".virtual"));
     }
 
+    /// Whether a function can write anything, which for a hook is what makes it
+    /// a generator rather than an answer to a question.
     function regenerates(string memory json, string memory path) internal pure returns (bool) {
         return keccak256(bytes(nodeField(json, path, "stateMutability"))) == keccak256("nonpayable");
     }
 
+    /// Whether a function can be called from outside the contract, which is
+    /// what makes it the start of a wiring chain rather than a link in one.
     function isEntryPoint(string memory json, string memory path) internal pure returns (bool) {
         bytes32 visibility = keccak256(bytes(nodeField(json, path, "visibility")));
         return visibility == keccak256("external") || visibility == keccak256("public");
     }
 
+    /// Every statement MUST be a plain call of a function the contract
+    /// declares, so a body that does anything else fails here rather than being
+    /// counted as a call of nothing.
     function statementCallIds(string memory json, string memory path) internal view returns (int256[] memory) {
         int256[] memory found = new int256[](64);
         uint256 count = 0;
@@ -377,6 +461,8 @@ contract BuildScriptTest is Test {
             references[i] = referencedIds(json, members[i]);
         }
 
+        // One pass per member: a pass that changes nothing has closed the set,
+        // and a pass that changes something adds at least one member to it.
         for (uint256 pass = 0; pass < members.length; pass++) {
             for (uint256 i = 0; i < members.length; i++) {
                 if (!reached[i]) {
@@ -401,6 +487,11 @@ contract BuildScriptTest is Test {
         return ids;
     }
 
+    /// Generic over node shapes rather than a walk of the expressions the base
+    /// happens to hold today: a hook handed to a library as a function pointer
+    /// is a reference several levels inside an argument list, and a call moved
+    /// inside a block is one level inside a statement. Neither is a hook that
+    /// nothing wires, so neither may read as one here.
     function collectReferences(string memory json, string memory path, AstReferences memory references) internal view {
         string memory nodeType = string.concat(path, ".nodeType");
         if (!vm.keyExistsJson(json, nodeType)) {
