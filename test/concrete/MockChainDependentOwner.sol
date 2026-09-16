@@ -23,6 +23,8 @@ contract MockChainDependentOwner {
     /// @param ownerOnChain The address to answer on `chainId`.
     /// @param ownerElsewhere The address to answer everywhere else.
     /// @param chainId The chain `ownerOnChain` is answered on.
+    // Answered back verbatim, authorising nothing, and the fuzz callers reach address(0).
+    //forge-lint: disable-next-line(missing-zero-check)
     constructor(address ownerOnChain, address ownerElsewhere, uint256 chainId) {
         iOwnerOnChain = ownerOnChain;
         iOwnerElsewhere = ownerElsewhere;
