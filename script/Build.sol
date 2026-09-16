@@ -59,6 +59,15 @@ contract Build is BuildScript, RegistryDeploySuites {
         return names;
     }
 
+    /// The directory every generated lib is written into.
+    ///
+    /// Overridable for the reason `BuildScript.recordRoot` is: a hook that can
+    /// only be pointed at the committed tree can only be RUN by overwriting
+    /// files the rest of the suite compiles and reads, and forge runs test
+    /// contracts in parallel. Only the per-contract libs and the aggregate go
+    /// here — `regenerateSnapshots` has no equivalent, because `LibFs` confines
+    /// every snapshot it writes to `src/generated/`.
+    /// @return The lib directory.
     function libDir() internal view virtual returns (string memory) {
         return LibRainDeploySnapshot.LIB_DIR;
     }
