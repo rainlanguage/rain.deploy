@@ -106,7 +106,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             abi.encodeWithSelector(
                 NotDeployedOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS
             )
         );
@@ -129,7 +129,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             abi.encodeWithSelector(
                 NotDeployedOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS
             )
         );
@@ -213,7 +213,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             abi.encodeWithSelector(
                 NotDeployedOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS
             )
         );
@@ -249,7 +249,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         // check itself passes on all of them.
         DerivedDeploy[] memory derived = new DerivedDeploy[](1);
         derived[0] = DerivedDeploy({
-            suite: "address-registry-0-0-1",
+            suite: "address-registry@0_0_1",
             deployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
             bytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH
         });
@@ -278,7 +278,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             abi.encodeWithSelector(
                 CodeHashMismatchOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
                 ADDRESS_REGISTRY_BYTECODE_HASH,
                 keccak256(hex"6001")
@@ -295,7 +295,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         vm.createSelectFork(LibRainDeploy.BASE);
 
         DerivedDeploy memory derived = DerivedDeploy({
-            suite: "address-registry-0-0-1",
+            suite: "address-registry@0_0_1",
             deployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
             bytecodeHash: bytes32(uint256(1))
         });
@@ -304,7 +304,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             abi.encodeWithSelector(
                 CodeHashMismatchOnNetwork.selector,
                 LibRainDeploy.BASE,
-                "address-registry-0-0-1",
+                "address-registry@0_0_1",
                 ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
                 bytes32(uint256(1)),
                 ADDRESS_REGISTRY_BYTECODE_HASH
@@ -355,7 +355,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"");
 
             DerivedDeploy memory derived = DerivedDeploy({
-                suite: "address-registry-0-0-1",
+                suite: "address-registry@0_0_1",
                 deployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
                 bytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH
             });
@@ -364,7 +364,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
                 abi.encodeWithSelector(
                     NotDeployedOnNetwork.selector,
                     networks[i],
-                    "address-registry-0-0-1",
+                    "address-registry@0_0_1",
                     ADDRESS_REGISTRY_DEPLOYED_ADDRESS
                 )
             );

@@ -40,7 +40,7 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
     function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
         suites = new DeploySuite[](1);
         suites[0] = DeploySuite({
-            suite: "address-registry-0-0-1",
+            suite: "address-registry@0_0_1",
             creationCode: ADDRESS_REGISTRY_CREATION_CODE,
             storedDeployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
             storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
