@@ -30,6 +30,14 @@ import {
     DEPENDENCIES as AddressRegistry_0_1_10_DEPENDENCIES
 } from "../generated/0_1_10/AddressRegistry.sol";
 
+import {
+    DEPLOYED_ADDRESS as AddressRegistry_0_1_11_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as AddressRegistry_0_1_11_BYTECODE_HASH,
+    CREATION_CODE as AddressRegistry_0_1_11_CREATION_CODE,
+    RUNTIME_CODE as AddressRegistry_0_1_11_RUNTIME_CODE,
+    DEPENDENCIES as AddressRegistry_0_1_11_DEPENDENCIES
+} from "../generated/0_1_11/AddressRegistry.sol";
+
 /// @title LibAddressRegistryReleased
 /// @notice Every frozen release of `AddressRegistry`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -50,7 +58,7 @@ library LibAddressRegistryReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](3);
+        DeploySuite[] memory suites = new DeploySuite[](4);
         suites[0] = DeploySuite({
             suite: "address-registry@0_1_7",
             creationCode: AddressRegistry_0_1_7_CREATION_CODE,
@@ -77,6 +85,15 @@ library LibAddressRegistryReleased {
             storedRuntimeCode: AddressRegistry_0_1_10_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_10_DEPENDENCIES, (address[]))
+        });
+        suites[3] = DeploySuite({
+            suite: "address-registry@0_1_11",
+            creationCode: AddressRegistry_0_1_11_CREATION_CODE,
+            storedDeployedAddress: AddressRegistry_0_1_11_DEPLOYED_ADDRESS,
+            storedBytecodeHash: AddressRegistry_0_1_11_BYTECODE_HASH,
+            storedRuntimeCode: AddressRegistry_0_1_11_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: abi.decode(AddressRegistry_0_1_11_DEPENDENCIES, (address[]))
         });
         return suites;
     }
