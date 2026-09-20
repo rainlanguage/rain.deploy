@@ -57,8 +57,7 @@ contract EmptyKeyDeploySuites is ExternalDeploySuites {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new address[](0)
-            }),
-            sourceCreationCode: type(MockDeployableV2).creationCode
+            })
         });
         return candidates;
     }

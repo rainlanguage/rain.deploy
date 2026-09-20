@@ -132,13 +132,13 @@ guard.
 Five groups, sorted by what each is anchored to and therefore by what each can
 catch:
 
-| Group    | Anchored to            | Catches                                   | Cannot catch                     |
-| -------- | ---------------------- | ----------------------------------------- | -------------------------------- |
-| Internal | the recorded set       | an inconsistently generated set           | a snapshot of the wrong contract |
-| Source   | `type(X).creationCode` | a snapshot of the wrong contract          | anything about any chain         |
-| Record   | the frozen record      | a release the declaration missed          | what a declared suite records    |
-| Chain    | the networks           | never deployed, gone, or a wrong chain id | anything about a candidate       |
-| Config   | `foundry.toml`         | a network it cannot fork or verify on     | anything about a suite           |
+| Group    | Anchored to                | Catches                                   | Cannot catch                     |
+| -------- | -------------------------- | ----------------------------------------- | -------------------------------- |
+| Internal | the recorded set           | an inconsistently generated set           | a snapshot of the wrong contract |
+| Source   | `vm.getCode(artifactPath)` | a snapshot of the wrong contract          | anything about any chain         |
+| Record   | the frozen record          | a release the declaration missed          | what a declared suite records    |
+| Chain    | the networks               | never deployed, gone, or a wrong chain id | anything about a candidate       |
+| Config   | `foundry.toml`             | a network it cannot fork or verify on     | anything about a suite           |
 
 The internal group's blind spot is not a gap to close there: every check in it
 asks the recorded bytes to agree with each other, and the wrong contract's bytes
@@ -147,6 +147,22 @@ catches it, and it applies to the **candidates only** — a released tag is mean
 to have diverged from current source, so anchoring one to source asserts
 something false by design. That is a property of the assertion, and there is no
 field on a released version with which to opt in or out.
+
+Neither is there a field on a CANDIDATE with which to satisfy it. A candidate
+names the contract it is a snapshot of, in its `artifactPath`, and that is the
+whole of what it says about its source; the anchor resolves that `<path>:<Name>`
+through `vm.getCode` and compares the record against what the compiler's own
+artifact holds. A declaration that supplied the source side as a value could
+point it at the same generated constant as the record and make the one check
+that catches a snapshot of the wrong contract compare a value with itself —
+green for any candidate whatsoever, on the broadcast path as well as in CI. It
+used to be able to (rainlanguage/rain.factory.deploy#34); the field is gone.
+
+`artifactPath` is therefore LOAD-BEARING on a candidate. It must resolve,
+uniquely, to the contract the snapshot is of. A path left behind by a moved or
+renamed source file now fails at the anchor — before the broadcast — where it
+previously only produced a `forge verify-contract` line a human read after the
+deploy.
 
 It runs over EVERY candidate, and a declaration that names none at all is
 refused with `NoDeployCandidates` rather than passed as a loop with nothing in

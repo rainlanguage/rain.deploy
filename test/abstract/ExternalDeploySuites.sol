@@ -40,7 +40,7 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
     }
 
     /// Runs the source anchor over the fixture's own declaration.
-    function externalCheckCandidatesAnchoredToSource() external pure {
+    function externalCheckCandidatesAnchoredToSource() external view {
         checkCandidatesAnchoredToSource();
     }
 }

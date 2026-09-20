@@ -8,6 +8,7 @@ import {CandidateSourceMismatch, UnknownDeploymentSuite} from "../../../src/abst
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {ExampleDeploySingleNetwork} from "../../concrete/ExampleDeploySingleNetwork.sol";
+import {MisanchoredDeploy} from "../../concrete/MisanchoredDeploy.sol";
 import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
 import {StalePinDeploy, STALE_PIN_ADDRESS} from "../../concrete/StalePinDeploy.sol";
 import {MissingDependencyDeploy, ABSENT_DEPENDENCY} from "../../concrete/MissingDependencyDeploy.sol";
@@ -405,6 +406,20 @@ contract RainDeployBroadcastTest is Test {
             )
         );
         mismatch.run();
+    }
+
+    function testRunRefusesToBroadcastACandidateThatNamesAnotherContract() external {
+        MisanchoredDeploy misanchored = new MisanchoredDeploy();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CandidateSourceMismatch.selector,
+                "misanchored-candidate",
+                keccak256(type(MockDeployableV2).creationCode),
+                keccak256(type(MockDeployable).creationCode)
+            )
+        );
+        misanchored.run();
     }
 
     /// The default target set MUST be every supported network, so a

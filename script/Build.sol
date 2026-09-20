@@ -15,9 +15,6 @@ struct GeneratedContract {
     string contractName;
     /// Prefix for the constants the alias lib exports, e.g. `ADDRESS_REGISTRY`.
     string constantPrefix;
-    /// Snapshots are written from its `sourceCreationCode` and
-    /// `snapshot.dependencies`; the released lib takes its suite key and
-    /// artifact path from its `snapshot`.
     DeployCandidate candidate;
 }
 
@@ -98,7 +95,7 @@ contract Build is BuildScript, RegistryDeploySuites {
                 recordRoot(),
                 LibRainDeploySnapshot.CANDIDATE,
                 contracts[i].contractName,
-                contracts[i].candidate.sourceCreationCode,
+                vm.getCode(contracts[i].candidate.snapshot.artifactPath),
                 contracts[i].candidate.snapshot.dependencies
             );
         }
