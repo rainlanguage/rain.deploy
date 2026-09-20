@@ -50,8 +50,7 @@ contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBa
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new address[](0)
-            }),
-            sourceCreationCode: type(MockDeployable).creationCode
+            })
         });
     }
 

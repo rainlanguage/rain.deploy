@@ -40,7 +40,11 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
     }
 
     /// Runs the source anchor over the fixture's own declaration.
-    function externalCheckCandidatesAnchoredToSource() external pure {
+    ///
+    /// `view` because the anchor reads the compiler's artifact for the contract
+    /// each candidate names, which is the whole point of it: an operand the
+    /// declaration could supply is an operand the declaration could satisfy.
+    function externalCheckCandidatesAnchoredToSource() external view {
         checkCandidatesAnchoredToSource();
     }
 }

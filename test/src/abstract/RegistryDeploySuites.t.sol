@@ -19,13 +19,15 @@ import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol"
 /// only thing that consumes it is `deployToNetworks`, on a fork, under an RPC
 /// this suite does not have.
 ///
-/// The source anchor's two operands are the other thing nothing could reach.
-/// `checkCandidatesAnchoredToSource` compares two `bytes`, and where they come
-/// from is a property of how the declaration is SPELLED rather than of any
-/// value it produces: a candidate that reads `type(X).creationCode` into the
-/// recorded field compares source against itself, and on a green tree the two
+/// The RECORD half of the source anchor is the other thing nothing could reach.
+/// `checkCandidatesAnchoredToSource` compares the bytes a candidate records
+/// against what its `artifactPath` currently compiles to, and the source half
+/// is no longer anything the declaration can reach — it is read from the
+/// compiler's artifact. The recorded half still is: a candidate that reads
+/// `type(X).creationCode` into the recorded field puts BOTH operands on the
+/// source side and compares source against itself, and on a green tree the two
 /// spellings are byte-identical, so no runtime assertion can tell them apart.
-/// The assertions below read the compiler's AST of the declaration itself, for
+/// The assertion below reads the compiler's AST of the declaration itself, for
 /// the reason `GeneratedSnapshotShapeTest` gives for reading it rather than the
 /// source text: this is about structure, not formatting.
 contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
@@ -63,12 +65,13 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     /// PROPERTY: every candidate's RECORDED creation code and runtime code are
     /// read from the rolling `src/generated/candidate/` snapshot.
     ///
-    /// This is the half of the source anchor that has to come from the record.
-    /// Spelling it `type(X).creationCode` — to drop an import, or to make the
-    /// two fields of a candidate read alike — puts both operands of
-    /// `checkCandidatesAnchoredToSource` on the source side and makes the one
-    /// check that catches a snapshot of the wrong contract a tautology for that
-    /// candidate, with nothing red anywhere.
+    /// This is the half of the source anchor that has to come from the record,
+    /// and since the source half stopped being a field it is the ONLY half a
+    /// declaration can still get wrong. Spelling it `type(X).creationCode` — to
+    /// drop an import, or because the record and the compiler agree today
+    /// anyway — puts both operands of `checkCandidatesAnchoredToSource` on the
+    /// source side and makes the one check that catches a snapshot of the wrong
+    /// contract a tautology for that candidate, with nothing red anywhere.
     ///
     /// The runtime code is held to the record by the same assertion because it
     /// is what would be left of the record side. A candidate whose creation
@@ -76,7 +79,7 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     /// which stops being internal the moment one operand is source; that only
     /// holds while the rest of the snapshot is the generated file, and a
     /// refactor reaching for the type expression reaches for both `bytes`
-    /// fields at once.
+    /// fields of the snapshot at once.
     ///
     /// The identifier is matched against the declaration id the IMPORT resolved
     /// to, rather than against a constant name written here. A name asserts
@@ -96,28 +99,6 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
             assertReadsImportedConstant(json, fieldPath(json, snapshot, "creationCode"), creationIds, "creationCode");
             assertReadsImportedConstant(
                 json, fieldPath(json, snapshot, "storedRuntimeCode"), runtimeIds, "storedRuntimeCode"
-            );
-        }
-    }
-
-    /// PROPERTY: every candidate's `sourceCreationCode` is
-    /// `type(X).creationCode`.
-    ///
-    /// The mirror of the assertion above, and undetectable at runtime for the
-    /// same reason. A candidate whose source side reads the generated constant
-    /// compares the record against itself, which is a tautology arrived at from
-    /// the other direction — and it is the spelling a refactor lands on when it
-    /// notices that the two fields hold equal bytes.
-    function testCandidatesAnchorAgainstCurrentSource() external view {
-        string memory json = vm.readFile(DECLARATION_ARTIFACT);
-        string[] memory candidates = candidateLiteralPaths(json);
-        assertEq(candidates.length, checkedCandidateSuites().length, "a declared candidate has no struct literal");
-
-        for (uint256 i = 0; i < candidates.length; i++) {
-            assertEq(
-                expressionShape(json, fieldPath(json, candidates[i], "sourceCreationCode")),
-                "type().creationCode",
-                "candidate does not anchor to current source"
             );
         }
     }
@@ -308,25 +289,5 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
             imported = imported || ids[i] == id;
         }
         assertTrue(imported, string.concat("candidate does not read the rolling snapshot for ", field));
-    }
-
-    /// A field value's shape, as `<callee>().<member>` for a member access on a
-    /// call and as its node type otherwise.
-    ///
-    /// One string compared once, rather than a walk that reads `memberName` off
-    /// a node that may not have one: the assertion that would have caught it is
-    /// then the assertion that reports it.
-    /// @param json The declaration's artifact.
-    /// @param path The field value's path.
-    /// @return The shape.
-    function expressionShape(string memory json, string memory path) internal view returns (string memory) {
-        string memory nodeType = vm.parseJsonString(json, string.concat(path, ".nodeType"));
-        string memory callee = string.concat(path, ".expression.expression.name");
-        if (keccak256(bytes(nodeType)) != keccak256("MemberAccess") || !vm.keyExistsJson(json, callee)) {
-            return nodeType;
-        }
-        return string.concat(
-            vm.parseJsonString(json, callee), "().", vm.parseJsonString(json, string.concat(path, ".memberName"))
-        );
     }
 }

@@ -185,19 +185,16 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// the path is a file this repo has, and the artifact that whole string
     /// selects is the contract the candidate is anchored to.
     ///
-    /// `artifactPath` is the one field of a suite that nothing derives, and
-    /// until this assertion nothing checked either. Two things read it:
-    /// `LibRainDeploy` prints it as the `forge verify-contract` command a
-    /// human runs against a freshly broadcast contract, and
-    /// `candidateContractName` above takes the contract this whole shape spec
-    /// is about out of it. Only the `:<Name>` half was ever read by a check —
-    /// `testEveryCandidateHasASnapshot` matches it against the generator's
-    /// output — so a path left behind by a moved or renamed source file passed
-    /// every assertion in this repo, including all of the ones here, because
-    /// the half that moved is the half nothing read. `bytecode_hash = "none"`
-    /// and `cbor_metadata = false` mean moving a file changes no creation code,
-    /// no address and no code hash either, so there is nothing else for it to
-    /// be caught by.
+    /// `artifactPath` is the field a candidate says which contract it is with.
+    /// Three things read it now: `LibRainDeploy` prints it as the
+    /// `forge verify-contract` command a human runs against a freshly broadcast
+    /// contract, `candidateContractName` above takes the contract this whole
+    /// shape spec is about out of it, and
+    /// `RainDeploySuitesBase.checkCandidatesAnchoredToSource` resolves it to
+    /// get the source half of the anchor. `bytecode_hash = "none"` and
+    /// `cbor_metadata = false` mean moving a file changes no creation code, no
+    /// address and no code hash, so the path itself is the only thing that
+    /// can be wrong about a path.
     ///
     /// Resolved through `vm.getCode`, which is foundry's own resolution of a
     /// `<path>:<Name>` artifact id — the same form `forge verify-contract`
@@ -206,25 +203,30 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// in a comment or in a longer identifier, and defeated by a declaration
     /// written with no space before its brace.
     ///
-    /// `vm.isFile` on the path half AS WELL, because `vm.getCode` resolves an
-    /// artifact id by path SUFFIX while the printed command is run from the
-    /// repo root. `concrete/AddressRegistry.sol:AddressRegistry` resolves for
-    /// `vm.getCode` — uniquely, and to the right contract — and still names no
-    /// file anybody can point `forge verify-contract` at. That is the one shape
-    /// of wrong path nothing else in this repo goes red on.
+    /// `vm.isFile` on the path half is the assertion here that nothing else
+    /// makes, and it is why this test survived the anchor learning to resolve
+    /// this field for itself. `vm.getCode` resolves an artifact id by path
+    /// SUFFIX, while the printed verification command is run from the repo
+    /// root: `concrete/AddressRegistry.sol:AddressRegistry` resolves for
+    /// `vm.getCode` — uniquely, and to the right contract, so the anchor is
+    /// perfectly happy with it — and still names no file anybody can point
+    /// `forge verify-contract` at. That is the one shape of wrong path nothing
+    /// else in this repo goes red on.
     ///
     /// A path outside the `fs_permissions` roots fails here as a cheatcode
     /// revert naming the path rather than as this assertion's own message,
     /// which is foundry refusing to look rather than looking and not finding.
     ///
-    /// Compared against the candidate's own `sourceCreationCode` rather than
-    /// merely required to resolve to something, because resolving is not the
-    /// same as resolving to the RIGHT contract. Two candidates whose declared
-    /// paths are swapped resolve perfectly, and every other assertion in this
-    /// repo stays green through it — including `testEveryCandidateHasASnapshot`
-    /// above, because swapping both halves leaves the SET of declared names
-    /// exactly as it was. This is the assertion that says each candidate's path
-    /// names ITS own contract rather than one of its siblings'.
+    /// The creation code comparison is a RESTATEMENT of
+    /// `checkCandidatesAnchoredToSource`, which now reads the source side out
+    /// of this same field through this same cheatcode, and which the BROADCAST
+    /// runs. It is kept because it costs nothing and because it is what makes
+    /// the `vm.isFile` line above readable as the one thing that is not also
+    /// the anchor; the guarantee it describes — two candidates whose declared
+    /// paths are swapped resolve perfectly, and swapping both halves leaves the
+    /// SET of declared names exactly as `testEveryCandidateHasASnapshot` wants
+    /// it — lives in the anchor now, on the path that deploys, rather than only
+    /// in a test.
     ///
     /// Hashed rather than compared as bytes, for the reason
     /// `CandidateSourceMismatch` gives for hashing: creation codes run to tens
@@ -240,7 +242,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
             assertTrue(vm.isFile(parts[0]), string.concat("artifact path names no such file: ", declared));
             assertEq(
                 keccak256(vm.getCode(declared)),
-                keccak256(candidates[i].sourceCreationCode),
+                keccak256(candidates[i].snapshot.creationCode),
                 string.concat("artifact path resolves to another contract: ", declared)
             );
         }

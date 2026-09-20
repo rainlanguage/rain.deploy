@@ -556,10 +556,13 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         DeployCandidate memory candidate = sMismatch.externalCheckedCandidateSuites()[1];
 
         // It really is the wrong contract: the snapshot records `MockDeployableV2`
-        // while the source it claims to be is `MockDeployable`.
+        // while the contract it NAMES is `MockDeployable`. Read back through
+        // the same resolution the anchor uses, so this says the two really do
+        // differ rather than restating the fixture's own literals.
         assertEq(keccak256(candidate.snapshot.creationCode), keccak256(type(MockDeployableV2).creationCode));
-        assertEq(keccak256(candidate.sourceCreationCode), keccak256(type(MockDeployable).creationCode));
-        assertNotEq(keccak256(candidate.snapshot.creationCode), keccak256(candidate.sourceCreationCode));
+        assertEq(candidate.snapshot.artifactPath, "test/concrete/MockDeployable.sol:MockDeployable");
+        assertEq(keccak256(vm.getCode(candidate.snapshot.artifactPath)), keccak256(type(MockDeployable).creationCode));
+        assertNotEq(keccak256(candidate.snapshot.creationCode), keccak256(vm.getCode(candidate.snapshot.artifactPath)));
 
         // Every internal check passes anyway.
         this.externalCheckInternallyConsistent(candidate.snapshot);
@@ -578,8 +581,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// loop that reached it from one that reported a fixed entry or the first.
     ///
     /// The inherited `testSnapshotMatchesSource` is the passing case: it runs
-    /// this same function over `ExampleDeploySuites`, whose candidates are their
-    /// own source.
+    /// this same function over `ExampleDeploySuites`, whose candidates really
+    /// are the current compilation of the contracts they name.
     function testWrongContractSnapshotCaughtBySource() external {
         DeployCandidate[] memory candidates = sMismatch.externalCheckedCandidateSuites();
         assertEq(candidates.length, 2);
@@ -588,7 +591,9 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         // to advance, and it is a different contract at a different address
         // rather than the same entry under two keys.
         assertEq(candidates[0].snapshot.suite, "anchored-candidate");
-        assertEq(keccak256(candidates[0].snapshot.creationCode), keccak256(candidates[0].sourceCreationCode));
+        assertEq(
+            keccak256(candidates[0].snapshot.creationCode), keccak256(vm.getCode(candidates[0].snapshot.artifactPath))
+        );
         assertNotEq(candidates[0].snapshot.storedDeployedAddress, candidates[1].snapshot.storedDeployedAddress);
 
         vm.expectRevert(

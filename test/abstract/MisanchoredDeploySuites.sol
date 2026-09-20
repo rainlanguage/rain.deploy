@@ -20,19 +20,23 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 /// one the anchor makes: that the record is what the named contract COMPILES TO.
 ///
 /// This is the declaration the source anchor has to be able to refuse without
-/// being handed the source by the thing it is checking. `SourceMismatchDeploy`
-/// is its sibling and is NOT the same fixture: there the declaration itself
-/// supplies the contradiction, so an anchor that believed the declaration would
-/// still catch it. Here the declaration is internally silent, and the only
-/// origin left that is not the declaration's own word is the compiler's
-/// artifact for the contract the candidate names.
+/// being handed the source by the thing it is checking, and it is the
+/// regression fixture for rainlanguage/rain.factory.deploy#34. While
+/// `DeployCandidate` carried a `sourceCreationCode` field, this declaration
+/// pointed it at its own recorded bytes and passed: the anchor compared a value
+/// with itself, so it was satisfied by construction for any candidate at all,
+/// and the whole suite — and the broadcast — went green over it. There is no
+/// longer a field with which to spell that, which is the only reason this
+/// fixture cannot spell it.
 ///
 /// ONE candidate, and no releases. The loop-reaches-every-candidate property is
-/// `SourceMismatchDeploySuites`' subject and is pinned there; this fixture is
-/// about where the anchor's SOURCE operand comes from, which a single candidate
-/// says with nothing else in the way. The key is its own, shared with no other
-/// fixture, because `DEPLOYMENT_SUITE` is a process-wide variable other tests
-/// write.
+/// `SourceMismatchDeploySuites`' subject and is pinned there, behind a
+/// genuinely anchored first entry; this fixture is about where the anchor's
+/// SOURCE operand comes from, which a lone candidate says with nothing else in
+/// the way — there is no earlier entry for a short loop to have stopped at and
+/// no other suite for a refusal to have been about. The key is its own, shared
+/// with no other fixture, because `DEPLOYMENT_SUITE` is a process-wide variable
+/// other tests write.
 abstract contract MisanchoredDeploySuites is RainDeploySuitesBase {
     /// @inheritdoc RainDeploySuitesBase
     function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
@@ -53,13 +57,7 @@ abstract contract MisanchoredDeploySuites is RainDeploySuitesBase {
                 // of `MockDeployable`, and records the other contract.
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new address[](0)
-            }),
-            // The exemption, spelled: both operands of the anchor are the
-            // RECORD, so the comparison is a value against itself and is
-            // satisfied for any candidate whatsoever. This is the mutation
-            // rainlanguage/rain.factory.deploy#34 found surviving a consumer's
-            // whole suite.
-            sourceCreationCode: type(MockDeployableV2).creationCode
+            })
         });
     }
 }

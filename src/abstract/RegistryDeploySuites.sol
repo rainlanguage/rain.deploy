@@ -3,8 +3,6 @@
 pragma solidity ^0.8.25;
 
 import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
-import {AddressRegistry} from "../concrete/AddressRegistry.sol";
-import {MigrationRegistry} from "../concrete/MigrationRegistry.sol";
 import {
     CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE_CANDIDATE
@@ -98,9 +96,14 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// The creation code and runtime code are RECORDED, read from the rolling
     /// `src/generated/candidate/` snapshot. That is what makes the source
     /// anchor mean something: it compares the recorded creation code against
-    /// `type(AddressRegistry).creationCode`, so editing the contract without
-    /// re-running `script/Build.sol` fails. While nothing was recorded, that
-    /// check compared source against itself and could only pass.
+    /// whatever the `artifactPath` below currently compiles to, so editing the
+    /// contract without re-running `script/Build.sol` fails. While nothing was
+    /// recorded, that check compared source against itself and could only pass.
+    ///
+    /// Nothing here supplies the source half, and there is no field left to
+    /// supply it with. Naming the contract in `artifactPath` is the whole of
+    /// what this declaration says about its source; what that contract compiles
+    /// to is the compiler's answer, read out of its artifact.
     ///
     /// `AddressRegistry` reads nothing and calls nothing at construction, so it
     /// has no dependency that must already be on chain.
@@ -122,8 +125,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
                 dependencies: new address[](0)
-            }),
-            sourceCreationCode: type(AddressRegistry).creationCode
+            })
         });
     }
 
@@ -132,7 +134,9 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// Everything said about the `AddressRegistry` candidate holds here
     /// unchanged: the pins are aliased from the generated snapshot, the
     /// creation and runtime code are recorded rather than derived, and the
-    /// source anchor is what says the record describes THIS contract.
+    /// source anchor — the record held against what this candidate's
+    /// `artifactPath` compiles to — is what says the record describes THIS
+    /// contract.
     ///
     /// `MigrationRegistry` has no constructor argument, no compile-time
     /// authority and no dependency to be on chain first — the namespace is
@@ -150,8 +154,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: MIGRATION_REGISTRY_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
                 dependencies: new address[](0)
-            }),
-            sourceCreationCode: type(MigrationRegistry).creationCode
+            })
         });
     }
 }

@@ -39,7 +39,6 @@ contract DuplicateDeploySuites is ExternalDeploySuites {
     /// @inheritdoc RainDeploySuitesBase
     function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
         candidates = new DeployCandidate[](1);
-        candidates[0] =
-            DeployCandidate({snapshot: collidingSuite(), sourceCreationCode: type(AddressRegistry).creationCode});
+        candidates[0] = DeployCandidate({snapshot: collidingSuite()});
     }
 }

@@ -387,15 +387,19 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         }
     }
 
-    /// EVERY candidate MUST be a snapshot of the contract this repo compiles,
-    /// not of some other contract that happens to be internally consistent.
+    /// EVERY candidate MUST be a snapshot of the contract it NAMES, as this
+    /// repo currently compiles it, not of some other contract that happens to
+    /// be internally consistent.
     ///
     /// The check itself is `RainDeploySuitesBase.checkCandidatesAnchoredToSource`
     /// rather than anything here, because `RainDeployBroadcast` runs the same
     /// definition before it broadcasts. A second spelling on this side is a
     /// spelling the deploy does not run, which is exactly the state this test
     /// would otherwise be reporting green about.
-    function testSnapshotMatchesSource() external pure {
+    ///
+    /// `view` because that one definition reads the compiler's artifact for the
+    /// named contract rather than an operand the declaration hands it.
+    function testSnapshotMatchesSource() external view {
         checkCandidatesAnchoredToSource();
     }
 }

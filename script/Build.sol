@@ -15,9 +15,9 @@ struct GeneratedContract {
     string contractName;
     /// Prefix for the constants the alias lib exports, e.g. `ADDRESS_REGISTRY`.
     string constantPrefix;
-    /// Snapshots are written from its `sourceCreationCode` and
-    /// `snapshot.dependencies`; the released lib takes its suite key and
-    /// artifact path from its `snapshot`.
+    /// Snapshots are written from what its `snapshot.artifactPath` currently
+    /// compiles to, plus `snapshot.dependencies`; the released lib takes its
+    /// suite key and artifact path from its `snapshot`.
     DeployCandidate candidate;
 }
 
@@ -90,6 +90,13 @@ contract Build is BuildScript, RegistryDeploySuites {
     }
 
     /// @inheritdoc BuildScript
+    /// @dev The bytes written are what the candidate's own `artifactPath`
+    /// compiles to RIGHT NOW, resolved through `vm.getCode` — the same origin,
+    /// read the same way, that `checkCandidatesAnchoredToSource` will hold the
+    /// written snapshot against. Regenerating and then checking is therefore
+    /// one claim rather than two spellings of it, and a declaration whose path
+    /// names the wrong contract writes a snapshot that goes red on the next
+    /// run instead of a snapshot nothing disagrees with.
     function regenerateSnapshots() internal override {
         GeneratedContract[] memory contracts = generatedContracts();
         for (uint256 i = 0; i < contracts.length; i++) {
@@ -98,7 +105,7 @@ contract Build is BuildScript, RegistryDeploySuites {
                 recordRoot(),
                 LibRainDeploySnapshot.CANDIDATE,
                 contracts[i].contractName,
-                contracts[i].candidate.sourceCreationCode,
+                vm.getCode(contracts[i].candidate.snapshot.artifactPath),
                 contracts[i].candidate.snapshot.dependencies
             );
         }
