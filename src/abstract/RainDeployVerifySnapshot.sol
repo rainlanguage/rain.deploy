@@ -55,14 +55,6 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
     /// and never will. A size check would red-line that permanently with no way
     /// to spell the exemption, while the release it names goes on being checked
     /// by everything anchored to a chain.
-    ///
-    /// The per-address tally `checkFrozenSnapshotsReleased` does keep is not
-    /// that size check wearing a different hat. It counts within ONE derived
-    /// address and refuses only the direction that hides a release — more
-    /// record files at an address than declared suites deriving it. A
-    /// declaration that names releases the record has never held, at that
-    /// address or at any other, passes it exactly as it passes here, which is
-    /// what keeps the pre-machinery release spellable.
     function testEveryFrozenSnapshotIsReleased() external view {
         checkFrozenSnapshotsReleased(LibRainDeploySnapshot.frozenSnapshotPaths(vm), releasedSuites());
     }
