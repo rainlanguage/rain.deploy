@@ -35,6 +35,35 @@ error StoredRuntimeCodeHashMismatch(string suite, bytes32 storedBytecodeHash, by
 /// @param path The frozen record file no released suite declares.
 error FrozenSnapshotNotReleased(string path);
 
+/// Thrown when the frozen record holds more files recording one deploy address
+/// than the declaration holds released suites deriving it.
+///
+/// Every record file needs a declaration of ITS OWN. The address is a pure
+/// function of the creation code, so two tags that froze identical bytes derive
+/// one address — a release that changed only dependencies, metadata or
+/// documentation compiles to the same bytes, which is the ordinary way such a
+/// pair comes about. A check that asked only whether SOME declared suite
+/// derives a file's address would let either of them be dropped from the
+/// declaration and go on being "declared" by its twin: the dropped key stops
+/// being dispatchable, the dropped entry's own frozen dependency list stops
+/// being checked, and nothing anywhere reports it.
+///
+/// Distinct from `FrozenSnapshotNotReleased`, which is a record file that no
+/// declared suite derives AT ALL. Here there are matching entries and there are
+/// not ENOUGH of them, so a reader told the other error would go looking for an
+/// entry that is already there. The counts say how many are missing and the
+/// address says which releases to count.
+///
+/// The path named is the file the record ran out of declarations at, which is
+/// not necessarily the release that was dropped — to a match by address the
+/// files sharing one are interchangeable, which is the whole defect this
+/// exists for. The fix is at the declaration either way.
+/// @param path The record file the record ran out of declarations at.
+/// @param deployedAddress The address that file declares.
+/// @param records The record files declaring it, up to and including `path`.
+/// @param released The released suites whose creation code derives it.
+error FrozenSnapshotsOutnumberReleases(string path, address deployedAddress, uint256 records, uint256 released);
+
 /// Thrown when a file in the frozen record declares no deployed address. The
 /// record holds generated snapshots and nothing else, and `DEPLOYED_ADDRESS` is
 /// what makes one the record of a deployment rather than a file that happens to
@@ -96,12 +125,13 @@ error EtherscanEntryUnresolvable(string entry);
 ///
 /// **Anchored to the record.** Every file in the frozen record — the
 /// append-only `src/generated/<tag>/` directories — is declared by a released
-/// suite. This is the one check that is about the DECLARATION rather than about
-/// what a declared suite records, and it exists because everything anchored to
-/// a chain reads `releasedSuites()`, which is a separate file from the record
-/// it describes. A release missing from it is not caught anywhere else, by
-/// anything: it simply stops being checked, and every check there is stays
-/// green.
+/// suite OF ITS OWN, one for one, so a release cannot be covered by another
+/// that froze the same bytes. This is the one check that is about the
+/// DECLARATION rather than about what a declared suite records, and it exists
+/// because everything anchored to a chain reads `releasedSuites()`, which is a
+/// separate file from the record it describes. A release missing from it is not
+/// caught anywhere else, by anything: it simply stops being checked, and every
+/// check there is stays green.
 ///
 /// None of the three can catch a suite that was never deployed, or that is no
 /// longer deployed. Only `RainDeployVerifyChain` can, and nothing here is a
@@ -246,7 +276,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     }
 
     /// Checks the frozen record against the released declaration: every file in
-    /// the record is declared by a released suite.
+    /// the record is declared by a released suite OF ITS OWN.
     ///
     /// `releasedSuites()` is a generated file, and everything anchored to a
     /// chain reads it. A frozen tag it does not name is therefore not a missing
@@ -271,29 +301,83 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// The match is by address: the address a file DECLARES against the address
     /// a suite's creation code DERIVES. The derived side is a pure function of
     /// the creation code, so a suite whose creation code derives the address a
-    /// file records IS that file's release.
+    /// file records IS a release of those bytes.
+    ///
+    /// It is ONE FOR ONE, which is the whole of what a shared address costs.
+    /// That derivation is not injective ACROSS RELEASES: two tags that froze
+    /// identical bytes derive one address and are indistinguishable here, and
+    /// they are not exotic — a release that changes only dependencies,
+    /// metadata or documentation compiles to the same bytes. Asking only
+    /// whether SOME declared suite derives a file's address lets the survivor
+    /// of such a pair answer for its twin, so either tag can be dropped from
+    /// the declaration while its own record file goes on being "declared" by
+    /// the other, and every check stays green. Counting instead — N record
+    /// files at an address need N declared suites deriving it — hands each file
+    /// a declaration that is not already spoken for, and no arrangement of
+    /// twins hides a dropped entry.
+    ///
+    /// The inequality runs ONE WAY. More declarations than record files at an
+    /// address is not a failure: a release deployed before this repo adopted
+    /// the machinery has no frozen record and never will, and see
+    /// `testEveryFrozenSnapshotIsReleased` for why refusing that would
+    /// red-line a legitimate state with no way to spell the exemption.
     ///
     /// Nothing is matched by name, which would assert only that a convention
-    /// was followed. Nothing is matched by searching the file's text either: a
-    /// record is mostly two hex payloads thousands of digits long, and an
-    /// address that merely OCCURS somewhere in one of them says nothing about
-    /// what the file records.
-    /// @param paths The frozen record's files.
+    /// was followed — and `DeploySuite.suite` is a free-form key on a virtual
+    /// declaration, so a consumer is free to spell one that carries no release
+    /// tag at all. Matching on it would turn this into a check on the shape of
+    /// a string rather than on what a file records, and would fail every
+    /// declaration that spells its keys some other way. Nothing is matched by
+    /// searching the file's text either: a record is mostly two hex payloads
+    /// thousands of digits long, and an address that merely OCCURS somewhere in
+    /// one of them says nothing about what the file records.
+    ///
+    /// What is left uncovered is an entry RENAMED rather than dropped. The
+    /// counts are unchanged, so a key that names a tag the record does not hold
+    /// still answers for the file whose address it derives. Nothing in a
+    /// `DeploySuite` says which tag it was cut from — only its key does, by a
+    /// convention the struct does not hold it to — so the record cannot see
+    /// that at all, and a check that could would be the name match this refuses
+    /// to be.
+    /// @param paths The frozen record's files. Distinct files: the walk that
+    /// produces them lists a directory tree, so it never repeats one, and a
+    /// list that did would be two claims about one file.
     /// @param released The declared released suites.
     function checkFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released) internal view {
-        for (uint256 i = 0; i < paths.length; i++) {
-            address recorded = recordedDeployedAddress(paths[i], vm.readFile(paths[i]));
+        // Every record file's address, in walk order, so the tally below can
+        // ask about the files already passed without reading them again. A
+        // record file is tens of kilobytes of hex and reading it is what this
+        // check costs, so each is read exactly once however many files share an
+        // address.
+        address[] memory recorded = new address[](paths.length);
 
-            bool declared = false;
+        for (uint256 i = 0; i < paths.length; i++) {
+            recorded[i] = recordedDeployedAddress(paths[i], vm.readFile(paths[i]));
+
+            uint256 declarations = 0;
             for (uint256 j = 0; j < released.length; j++) {
-                if (recorded == LibRainDeploy.zoltuAddress(released[j].creationCode)) {
-                    declared = true;
-                    break;
+                if (recorded[i] == LibRainDeploy.zoltuAddress(released[j].creationCode)) {
+                    declarations++;
                 }
             }
 
-            if (!declared) {
+            if (declarations == 0) {
                 revert FrozenSnapshotNotReleased(paths[i]);
+            }
+
+            // This file and every EARLIER one recording the same address. The
+            // files after it are not counted, so the failure lands on the file
+            // the record ran out of declarations at rather than on the first of
+            // a group that is only short once the walk has reached the last.
+            uint256 records = 1;
+            for (uint256 k = 0; k < i; k++) {
+                if (recorded[k] == recorded[i]) {
+                    records++;
+                }
+            }
+
+            if (records > declarations) {
+                revert FrozenSnapshotsOutnumberReleases(paths[i], recorded[i], records, declarations);
             }
         }
     }

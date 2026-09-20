@@ -8,6 +8,7 @@ import {
     EtherscanEntryUnresolvable,
     FrozenSnapshotAmbiguous,
     FrozenSnapshotNotReleased,
+    FrozenSnapshotsOutnumberReleases,
     FrozenSnapshotUnreadable,
     RainDeployVerifySnapshotBase,
     StoredAddressMismatch,
@@ -26,6 +27,18 @@ import {
     DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
 } from "../../../src/generated/candidate/AddressRegistry.sol";
+import {
+    BYTECODE_HASH as ADDRESS_REGISTRY_0_1_10_BYTECODE_HASH,
+    CREATION_CODE as ADDRESS_REGISTRY_0_1_10_CREATION_CODE,
+    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_0_1_10_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as ADDRESS_REGISTRY_0_1_10_RUNTIME_CODE
+} from "../../../src/generated/0_1_10/AddressRegistry.sol";
+import {
+    BYTECODE_HASH as ADDRESS_REGISTRY_0_1_11_BYTECODE_HASH,
+    CREATION_CODE as ADDRESS_REGISTRY_0_1_11_CREATION_CODE,
+    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as ADDRESS_REGISTRY_0_1_11_RUNTIME_CODE
+} from "../../../src/generated/0_1_11/AddressRegistry.sol";
 
 /// @title RainDeployVerifySnapshotBaseTest
 /// @notice `RainDeployVerifySnapshotBase` inherited by a exemplar repo, so the
@@ -150,6 +163,128 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
 
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfTheGeneratedSnapshot()[0]));
         this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), wrongRelease);
+    }
+
+    /// A record of the twin releases `0_1_10` and `0_1_11`: two frozen tags of
+    /// this repo's own that froze the SAME creation code, so the two files
+    /// declare one deploy address between them.
+    ///
+    /// Real frozen files rather than a fixture, because the pair IS the
+    /// subject. A record directory is append-only, so these two are byte
+    /// identical to each other permanently, and a release that changes only
+    /// dependencies, metadata or documentation compiles to identical bytes —
+    /// which is exactly how this pair came to be one. Every test below asserts
+    /// that premise rather than assuming it, so a record that stopped being a
+    /// twin pair is a red test rather than a green one with nothing in it.
+    /// @return paths The two-file record.
+    function recordOfTheTwinReleases() internal pure returns (string[] memory paths) {
+        paths = new string[](2);
+        paths[0] = LibRainDeploySnapshot.pathForSnapshot("0_1_10", "AddressRegistry");
+        paths[1] = LibRainDeploySnapshot.pathForSnapshot("0_1_11", "AddressRegistry");
+    }
+
+    /// The declaration entry for the OLDER twin, `0_1_10`, built from that
+    /// release's own frozen constants exactly as the generated declaration
+    /// builds it.
+    /// @return The `0_1_10` suite.
+    function declaredOlderTwin() internal pure returns (DeploySuite memory) {
+        return DeploySuite({
+            suite: "address-registry@0_1_10",
+            creationCode: ADDRESS_REGISTRY_0_1_10_CREATION_CODE,
+            storedDeployedAddress: ADDRESS_REGISTRY_0_1_10_DEPLOYED_ADDRESS,
+            storedBytecodeHash: ADDRESS_REGISTRY_0_1_10_BYTECODE_HASH,
+            storedRuntimeCode: ADDRESS_REGISTRY_0_1_10_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: new address[](0)
+        });
+    }
+
+    /// The declaration entry for the NEWER twin, `0_1_11`, built the same way.
+    /// @return The `0_1_11` suite.
+    function declaredNewerTwin() internal pure returns (DeploySuite memory) {
+        return DeploySuite({
+            suite: "address-registry@0_1_11",
+            creationCode: ADDRESS_REGISTRY_0_1_11_CREATION_CODE,
+            storedDeployedAddress: ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
+            storedBytecodeHash: ADDRESS_REGISTRY_0_1_11_BYTECODE_HASH,
+            storedRuntimeCode: ADDRESS_REGISTRY_0_1_11_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: new address[](0)
+        });
+    }
+
+    /// The two twins really are twins: identical creation code, and therefore
+    /// one derived address between them. The premise every case below rests
+    /// on, asserted rather than assumed.
+    function testTwinReleasesFrozeTheSameCreationCode() external pure {
+        assertEq(keccak256(ADDRESS_REGISTRY_0_1_10_CREATION_CODE), keccak256(ADDRESS_REGISTRY_0_1_11_CREATION_CODE));
+        assertEq(ADDRESS_REGISTRY_0_1_10_DEPLOYED_ADDRESS, ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS);
+        assertEq(
+            LibRainDeploy.zoltuAddress(ADDRESS_REGISTRY_0_1_10_CREATION_CODE),
+            LibRainDeploy.zoltuAddress(ADDRESS_REGISTRY_0_1_11_CREATION_CODE)
+        );
+    }
+
+    /// A release dropped from the declaration MUST fail even when ANOTHER
+    /// release froze the same bytes.
+    ///
+    /// The derived address is a pure function of the creation code, so two
+    /// tags that froze identical bytes derive ONE address and are
+    /// indistinguishable to anything that only asks whether some declared
+    /// suite derives the address a file records: the survivor answers for its
+    /// twin, and the dropped release goes on being "declared" by a file it is
+    /// not. That is the state this whole check exists to make impossible —
+    /// the dropped entry's key stops being dispatchable and its own
+    /// dependency list stops being checked, with nothing anywhere reporting
+    /// it.
+    ///
+    /// Two record files sharing an address therefore need TWO declarations,
+    /// not one that matches both.
+    function testFrozenSnapshotTwinReleaseDroppedFromTheDeclarationReverts() external {
+        DeploySuite[] memory released = new DeploySuite[](1);
+        released[0] = declaredNewerTwin();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                FrozenSnapshotsOutnumberReleases.selector,
+                recordOfTheTwinReleases()[1],
+                ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
+                uint256(2),
+                uint256(1)
+            )
+        );
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheTwinReleases(), released);
+    }
+
+    /// Both twins declared MUST pass, so the case above is a missing
+    /// declaration being caught rather than a record with a shared address
+    /// being refused outright. This is the ordinary state of a repo that cut
+    /// two releases without a source change between them, and it is this
+    /// repo's own.
+    function testFrozenSnapshotTwinReleasesBothDeclaredPasses() external view {
+        DeploySuite[] memory released = new DeploySuite[](2);
+        released[0] = declaredOlderTwin();
+        released[1] = declaredNewerTwin();
+
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheTwinReleases(), released);
+    }
+
+    /// A declaration with MORE entries at an address than the record has files
+    /// MUST pass. The record is checked against the declaration in one
+    /// direction only: a release deployed before this repo adopted the
+    /// machinery has no frozen record and never will, and refusing it would
+    /// red-line that permanently with no way to spell the exemption — while
+    /// the release it names goes on being checked by everything anchored to a
+    /// chain.
+    function testFrozenSnapshotMoreDeclarationsThanRecordFilesPasses() external view {
+        string[] memory paths = new string[](1);
+        paths[0] = recordOfTheTwinReleases()[1];
+
+        DeploySuite[] memory released = new DeploySuite[](2);
+        released[0] = declaredOlderTwin();
+        released[1] = declaredNewerTwin();
+
+        this.externalCheckFrozenSnapshotsReleased(paths, released);
     }
 
     /// A record in the generated shape that DECLARES one address and merely
