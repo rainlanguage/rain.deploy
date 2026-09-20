@@ -8,6 +8,7 @@ import {
     EtherscanEntryUnresolvable,
     FrozenSnapshotAmbiguous,
     FrozenSnapshotNotReleased,
+    FrozenSnapshotsOutnumberReleases,
     FrozenSnapshotUnreadable,
     RainDeployVerifySnapshotBase,
     StoredAddressMismatch,
@@ -26,6 +27,18 @@ import {
     DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
 } from "../../../src/generated/candidate/AddressRegistry.sol";
+import {
+    BYTECODE_HASH as ADDRESS_REGISTRY_0_1_10_BYTECODE_HASH,
+    CREATION_CODE as ADDRESS_REGISTRY_0_1_10_CREATION_CODE,
+    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_0_1_10_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as ADDRESS_REGISTRY_0_1_10_RUNTIME_CODE
+} from "../../../src/generated/0_1_10/AddressRegistry.sol";
+import {
+    BYTECODE_HASH as ADDRESS_REGISTRY_0_1_11_BYTECODE_HASH,
+    CREATION_CODE as ADDRESS_REGISTRY_0_1_11_CREATION_CODE,
+    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as ADDRESS_REGISTRY_0_1_11_RUNTIME_CODE
+} from "../../../src/generated/0_1_11/AddressRegistry.sol";
 
 /// @title RainDeployVerifySnapshotBaseTest
 /// @notice `RainDeployVerifySnapshotBase` inherited by a exemplar repo, so the
@@ -150,6 +163,80 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
 
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfTheGeneratedSnapshot()[0]));
         this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), wrongRelease);
+    }
+
+    function recordOfTheTwinReleases() internal pure returns (string[] memory paths) {
+        paths = new string[](2);
+        paths[0] = LibRainDeploySnapshot.pathForSnapshot("0_1_10", "AddressRegistry");
+        paths[1] = LibRainDeploySnapshot.pathForSnapshot("0_1_11", "AddressRegistry");
+    }
+
+    function declaredOlderTwin() internal pure returns (DeploySuite memory) {
+        return DeploySuite({
+            suite: "address-registry@0_1_10",
+            creationCode: ADDRESS_REGISTRY_0_1_10_CREATION_CODE,
+            storedDeployedAddress: ADDRESS_REGISTRY_0_1_10_DEPLOYED_ADDRESS,
+            storedBytecodeHash: ADDRESS_REGISTRY_0_1_10_BYTECODE_HASH,
+            storedRuntimeCode: ADDRESS_REGISTRY_0_1_10_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: new address[](0)
+        });
+    }
+
+    function declaredNewerTwin() internal pure returns (DeploySuite memory) {
+        return DeploySuite({
+            suite: "address-registry@0_1_11",
+            creationCode: ADDRESS_REGISTRY_0_1_11_CREATION_CODE,
+            storedDeployedAddress: ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
+            storedBytecodeHash: ADDRESS_REGISTRY_0_1_11_BYTECODE_HASH,
+            storedRuntimeCode: ADDRESS_REGISTRY_0_1_11_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: new address[](0)
+        });
+    }
+
+    function testTwinReleasesFrozeTheSameCreationCode() external pure {
+        assertEq(keccak256(ADDRESS_REGISTRY_0_1_10_CREATION_CODE), keccak256(ADDRESS_REGISTRY_0_1_11_CREATION_CODE));
+        assertEq(ADDRESS_REGISTRY_0_1_10_DEPLOYED_ADDRESS, ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS);
+        assertEq(
+            LibRainDeploy.zoltuAddress(ADDRESS_REGISTRY_0_1_10_CREATION_CODE),
+            LibRainDeploy.zoltuAddress(ADDRESS_REGISTRY_0_1_11_CREATION_CODE)
+        );
+    }
+
+    function testFrozenSnapshotTwinReleaseDroppedFromTheDeclarationReverts() external {
+        DeploySuite[] memory released = new DeploySuite[](1);
+        released[0] = declaredNewerTwin();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                FrozenSnapshotsOutnumberReleases.selector,
+                recordOfTheTwinReleases()[1],
+                ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
+                uint256(2),
+                uint256(1)
+            )
+        );
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheTwinReleases(), released);
+    }
+
+    function testFrozenSnapshotTwinReleasesBothDeclaredPasses() external view {
+        DeploySuite[] memory released = new DeploySuite[](2);
+        released[0] = declaredOlderTwin();
+        released[1] = declaredNewerTwin();
+
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheTwinReleases(), released);
+    }
+
+    function testFrozenSnapshotMoreDeclarationsThanRecordFilesPasses() external view {
+        string[] memory paths = new string[](1);
+        paths[0] = recordOfTheTwinReleases()[1];
+
+        DeploySuite[] memory released = new DeploySuite[](2);
+        released[0] = declaredOlderTwin();
+        released[1] = declaredNewerTwin();
+
+        this.externalCheckFrozenSnapshotsReleased(paths, released);
     }
 
     /// A record in the generated shape that DECLARES one address and merely

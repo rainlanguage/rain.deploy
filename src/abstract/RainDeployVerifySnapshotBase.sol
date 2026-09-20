@@ -35,6 +35,14 @@ error StoredRuntimeCodeHashMismatch(string suite, bytes32 storedBytecodeHash, by
 /// @param path The frozen record file no released suite declares.
 error FrozenSnapshotNotReleased(string path);
 
+/// Thrown when the frozen record holds more files recording one deploy address
+/// than the declaration holds released suites deriving it.
+/// @param path The record file the record ran out of declarations at.
+/// @param deployedAddress The address that file declares.
+/// @param records The record files declaring it, up to and including `path`.
+/// @param released The released suites whose creation code derives it.
+error FrozenSnapshotsOutnumberReleases(string path, address deployedAddress, uint256 records, uint256 released);
+
 /// Thrown when a file in the frozen record declares no deployed address. The
 /// record holds generated snapshots and nothing else, and `DEPLOYED_ADDRESS` is
 /// what makes one the record of a deployment rather than a file that happens to
@@ -96,12 +104,12 @@ error EtherscanEntryUnresolvable(string entry);
 ///
 /// **Anchored to the record.** Every file in the frozen record — the
 /// append-only `src/generated/<tag>/` directories — is declared by a released
-/// suite. This is the one check that is about the DECLARATION rather than about
-/// what a declared suite records, and it exists because everything anchored to
-/// a chain reads `releasedSuites()`, which is a separate file from the record
-/// it describes. A release missing from it is not caught anywhere else, by
-/// anything: it simply stops being checked, and every check there is stays
-/// green.
+/// suite OF ITS OWN, one for one. This is the one check that is about the
+/// DECLARATION rather than about what a declared suite records, and it exists
+/// because everything anchored to a chain reads `releasedSuites()`, which is a
+/// separate file from the record it describes. A release missing from it is not
+/// caught anywhere else, by anything: it simply stops being checked, and every
+/// check there is stays green.
 ///
 /// None of the three can catch a suite that was never deployed, or that is no
 /// longer deployed. Only `RainDeployVerifyChain` can, and nothing here is a
@@ -246,7 +254,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     }
 
     /// Checks the frozen record against the released declaration: every file in
-    /// the record is declared by a released suite.
+    /// the record is declared by a released suite OF ITS OWN.
     ///
     /// `releasedSuites()` is a generated file, and everything anchored to a
     /// chain reads it. A frozen tag it does not name is therefore not a missing
@@ -271,29 +279,43 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// The match is by address: the address a file DECLARES against the address
     /// a suite's creation code DERIVES. The derived side is a pure function of
     /// the creation code, so a suite whose creation code derives the address a
-    /// file records IS that file's release.
+    /// file records IS a release of those bytes.
     ///
     /// Nothing is matched by name, which would assert only that a convention
     /// was followed. Nothing is matched by searching the file's text either: a
     /// record is mostly two hex payloads thousands of digits long, and an
     /// address that merely OCCURS somewhere in one of them says nothing about
     /// what the file records.
+    ///
+    /// A RENAMED entry is not caught: the counts are unchanged.
     /// @param paths The frozen record's files.
     /// @param released The declared released suites.
     function checkFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released) internal view {
-        for (uint256 i = 0; i < paths.length; i++) {
-            address recorded = recordedDeployedAddress(paths[i], vm.readFile(paths[i]));
+        address[] memory recorded = new address[](paths.length);
 
-            bool declared = false;
+        for (uint256 i = 0; i < paths.length; i++) {
+            recorded[i] = recordedDeployedAddress(paths[i], vm.readFile(paths[i]));
+
+            uint256 declarations = 0;
             for (uint256 j = 0; j < released.length; j++) {
-                if (recorded == LibRainDeploy.zoltuAddress(released[j].creationCode)) {
-                    declared = true;
-                    break;
+                if (recorded[i] == LibRainDeploy.zoltuAddress(released[j].creationCode)) {
+                    declarations++;
                 }
             }
 
-            if (!declared) {
+            if (declarations == 0) {
                 revert FrozenSnapshotNotReleased(paths[i]);
+            }
+
+            uint256 records = 1;
+            for (uint256 k = 0; k < i; k++) {
+                if (recorded[k] == recorded[i]) {
+                    records++;
+                }
+            }
+
+            if (records > declarations) {
+                revert FrozenSnapshotsOutnumberReleases(paths[i], recorded[i], records, declarations);
             }
         }
     }
