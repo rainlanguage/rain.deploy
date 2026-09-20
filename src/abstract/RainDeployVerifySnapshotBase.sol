@@ -396,9 +396,6 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// definition before it broadcasts. A second spelling on this side is a
     /// spelling the deploy does not run, which is exactly the state this test
     /// would otherwise be reporting green about.
-    ///
-    /// `view` because that one definition reads the compiler's artifact for the
-    /// named contract rather than an operand the declaration hands it.
     function testSnapshotMatchesSource() external view {
         checkCandidatesAnchoredToSource();
     }

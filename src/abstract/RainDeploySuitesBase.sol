@@ -84,8 +84,7 @@ error NoDeployCandidates();
 /// @param storedCreationCodeHash Hash of the creation code the candidate
 /// records.
 /// @param sourceCreationCodeHash Hash of the creation code the contract the
-/// candidate NAMES — its `artifactPath` — currently compiles to, read from the
-/// compiler's own artifact rather than from anything the declaration says.
+/// candidate NAMES — its `artifactPath` — currently compiles to.
 error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, bytes32 sourceCreationCodeHash);
 
 /// One deployable unit: a named snapshot of one contract.
@@ -122,17 +121,10 @@ struct DeploySuite {
     /// suite broadcasts the exact bytes its audit covered, whatever the current
     /// source now compiles to.
     ///
-    /// What a candidate is anchored AGAINST is what `artifactPath` currently
-    /// compiles to, so spelling `type(X).creationCode` here puts both operands
-    /// of `checkCandidatesAnchoredToSource` on the source side and leaves the
-    /// one check that catches a snapshot of the wrong contract comparing source
-    /// to itself, green. Fixtures that derive a whole mock suite do that on
-    /// purpose, because they have no record and are exercising other
-    /// assertions; a declaration of a real deployment never does.
-    ///
-    /// This is the remaining half a declaration can get wrong, and it is the
-    /// half a declaration has to own: the record is the point. The SOURCE half
-    /// was an ordinary field until it was not — see `DeployCandidate`.
+    /// Spelling `type(X).creationCode` here puts both operands of
+    /// `checkCandidatesAnchoredToSource` on the source side and leaves the one
+    /// check that catches a snapshot of the wrong contract comparing source to
+    /// itself, green.
     bytes creationCode;
     /// The deploy address recorded for this suite.
     address storedDeployedAddress;
@@ -147,21 +139,9 @@ struct DeploySuite {
     /// holds only the flattest repos; a repo that groups concretes into
     /// subdirectories has paths no naming convention recovers.
     ///
-    /// Two things read it, and for a CANDIDATE the second is the load-bearing
-    /// one. `LibRainDeploy` prints it as the `forge verify-contract` command a
-    /// human runs against a freshly broadcast contract, and
-    /// `checkCandidatesAnchoredToSource` resolves it through `vm.getCode` to
-    /// get the creation code the named contract currently compiles to — the
-    /// source half of the one check that catches a snapshot of the wrong
-    /// contract. Naming the contract is therefore the whole of what a candidate
-    /// says about its source, and it is all it gets to say: what that contract
-    /// COMPILES TO is the compiler's answer, not the declaration's.
-    ///
-    /// A path that resolves to no artifact, or to more than one, now fails at
-    /// the anchor — which for a candidate is before the broadcast. It used to
-    /// fail nowhere in this package: the printed verification command is read
-    /// by a human AFTER the deploy, so a path left behind by a moved or renamed
-    /// source file cost a deploy before it cost a test.
+    /// For a candidate this is load-bearing: `checkCandidatesAnchoredToSource`
+    /// resolves it through `vm.getCode`, so a path that resolves to no
+    /// artifact, or to more than one, fails at the anchor before the broadcast.
     string artifactPath;
     /// Addresses that MUST already have code on a network before this suite is
     /// broadcast there. Ordinarily other suites' recorded addresses: a
@@ -173,36 +153,9 @@ struct DeploySuite {
 /// The rolling candidate: a snapshot that tracks current source rather than a
 /// frozen release, and that MUST equal what the contract it names currently
 /// compiles to.
-///
-/// That anchor is the ONLY thing that catches a snapshot of the wrong contract.
-/// Every check internal to a snapshot is satisfied by a consistent snapshot of
-/// the wrong thing, so without it there is nothing that says the recorded bytes
-/// belong to the contract this repo compiles.
-///
-/// Anchoring is a property of the TYPE, not a value the declaration supplies.
-/// `checkCandidatesAnchoredToSource` reads the source side out of the
-/// compiler's artifact for `snapshot.artifactPath`, so a declaration has no
-/// operand to hand it and therefore no way to spell an exemption. It used to
-/// carry that operand as an ordinary `sourceCreationCode` field, and an
-/// ordinary field is one a consumer fills in: pointing it at the same generated
-/// constant as `snapshot.creationCode` left the one check that catches a
-/// snapshot of the wrong contract comparing a value with itself — green for any
-/// candidate whatsoever, on the broadcast path as well as in CI, with a whole
-/// consumer suite passing through it (rainlanguage/rain.factory.deploy#34).
-///
-/// ONE field, deliberately, and the type is not folded back into `DeploySuite`
-/// for it. The type is what separates a rolling candidate from a frozen
-/// release, and that separation is the whole of what it carries: a released tag
-/// is MEANT to diverge from current source, so anchoring one asserts something
-/// false by design. `releasedSuites()` returns `DeploySuite[]` and
-/// `candidateSuites()` returns this, so which of the two an entry is is
-/// something the compiler makes a repo state rather than a flag beside the data
-/// — there is no way for a caller to spell "released, and also skip the checks
-/// that do apply", and none to spell "candidate, and also skip the anchor".
 struct DeployCandidate {
     /// The candidate's own recorded snapshot, checked exactly as any other
-    /// suite is, and additionally anchored to what its `artifactPath` compiles
-    /// to.
+    /// suite is, and anchored to what its `artifactPath` compiles to.
     DeploySuite snapshot;
 }
 
@@ -302,42 +255,7 @@ abstract contract RainDeploySuitesBase {
     /// Candidates alone, and there is no way to spell an exemption. A released
     /// suite is MEANT to diverge from current source — it records bytes that
     /// are already on chain — so anchoring one to source asserts something
-    /// false by design, which is why only `candidateSuites()` is read here.
-    ///
-    /// ## Where the source operand comes from
-    ///
-    /// The COMPILER, through `vm.getCode` on the candidate's `artifactPath` —
-    /// foundry's own resolution of a `<path>:<Name>` artifact id, the same form
-    /// `forge verify-contract` takes. Never from the declaration.
-    ///
-    /// A declaration that supplied both operands could satisfy this by
-    /// construction, and one did: `DeployCandidate` used to carry the source
-    /// creation code as a field, so pointing that field at the same generated
-    /// constant as `snapshot.creationCode` made the comparison a value against
-    /// itself — satisfied for any candidate, including a snapshot of an
-    /// entirely different contract, with a consumer's whole suite still green
-    /// and `RainDeployBroadcast` running the same neutered definition before it
-    /// broadcast (rainlanguage/rain.factory.deploy#34). "No way to spell an
-    /// exemption" is only true of an operand the declaration cannot reach. A
-    /// consumer names the contract; what that contract compiles to is not
-    /// something it gets a say in.
-    ///
-    /// Not derived from the contract NAME either — `artifactPath` is the whole
-    /// `<path>:<Name>`, because a repo that groups its concretes into
-    /// subdirectories has paths no naming convention recovers, and because that
-    /// field already exists and is already the one thing a suite says about
-    /// which contract it is.
-    ///
-    /// `view` rather than `pure` follows from reading the compiler at all, and
-    /// costs nothing: both callers are a `Script` and a `Test`, which is the
-    /// only place a cheatcode exists.
-    ///
-    /// An `artifactPath` that resolves to no artifact, or to more than one,
-    /// reverts inside the cheatcode naming the path, before this comparison is
-    /// reached. That failure is new and it is the right one: the field was
-    /// previously read only by the verification command `LibRainDeploy` prints
-    /// AFTER a broadcast, so a path left behind by a moved or renamed source
-    /// file cost a deploy before it cost a test.
+    /// false by design.
     function checkCandidatesAnchoredToSource() internal view {
         DeployCandidate[] memory candidates = checkedCandidateSuites();
         for (uint256 i = 0; i < candidates.length; i++) {

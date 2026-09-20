@@ -556,9 +556,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         DeployCandidate memory candidate = sMismatch.externalCheckedCandidateSuites()[1];
 
         // It really is the wrong contract: the snapshot records `MockDeployableV2`
-        // while the contract it NAMES is `MockDeployable`. Read back through
-        // the same resolution the anchor uses, so this says the two really do
-        // differ rather than restating the fixture's own literals.
+        // while the contract it NAMES is `MockDeployable`.
         assertEq(keccak256(candidate.snapshot.creationCode), keccak256(type(MockDeployableV2).creationCode));
         assertEq(candidate.snapshot.artifactPath, "test/concrete/MockDeployable.sol:MockDeployable");
         assertEq(keccak256(vm.getCode(candidate.snapshot.artifactPath)), keccak256(type(MockDeployable).creationCode));
@@ -581,8 +579,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// loop that reached it from one that reported a fixed entry or the first.
     ///
     /// The inherited `testSnapshotMatchesSource` is the passing case: it runs
-    /// this same function over `ExampleDeploySuites`, whose candidates really
-    /// are the current compilation of the contracts they name.
+    /// this same function over `ExampleDeploySuites`.
     function testWrongContractSnapshotCaughtBySource() external {
         DeployCandidate[] memory candidates = sMismatch.externalCheckedCandidateSuites();
         assertEq(candidates.length, 2);

@@ -185,16 +185,9 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// the path is a file this repo has, and the artifact that whole string
     /// selects is the contract the candidate is anchored to.
     ///
-    /// `artifactPath` is the field a candidate says which contract it is with.
-    /// Three things read it now: `LibRainDeploy` prints it as the
-    /// `forge verify-contract` command a human runs against a freshly broadcast
-    /// contract, `candidateContractName` above takes the contract this whole
-    /// shape spec is about out of it, and
-    /// `RainDeploySuitesBase.checkCandidatesAnchoredToSource` resolves it to
-    /// get the source half of the anchor. `bytecode_hash = "none"` and
-    /// `cbor_metadata = false` mean moving a file changes no creation code, no
-    /// address and no code hash, so the path itself is the only thing that
-    /// can be wrong about a path.
+    /// `bytecode_hash = "none"` and `cbor_metadata = false` mean moving a file
+    /// changes no creation code, no address and no code hash, so the path itself
+    /// is the only thing that can be wrong about a path.
     ///
     /// Resolved through `vm.getCode`, which is foundry's own resolution of a
     /// `<path>:<Name>` artifact id — the same form `forge verify-contract`
@@ -203,30 +196,16 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// in a comment or in a longer identifier, and defeated by a declaration
     /// written with no space before its brace.
     ///
-    /// `vm.isFile` on the path half is the assertion here that nothing else
-    /// makes, and it is why this test survived the anchor learning to resolve
-    /// this field for itself. `vm.getCode` resolves an artifact id by path
-    /// SUFFIX, while the printed verification command is run from the repo
-    /// root: `concrete/AddressRegistry.sol:AddressRegistry` resolves for
-    /// `vm.getCode` — uniquely, and to the right contract, so the anchor is
-    /// perfectly happy with it — and still names no file anybody can point
-    /// `forge verify-contract` at. That is the one shape of wrong path nothing
-    /// else in this repo goes red on.
+    /// `vm.isFile` on the path half AS WELL, because `vm.getCode` resolves an
+    /// artifact id by path SUFFIX while the printed command is run from the
+    /// repo root. `concrete/AddressRegistry.sol:AddressRegistry` resolves for
+    /// `vm.getCode` — uniquely, and to the right contract — and still names no
+    /// file anybody can point `forge verify-contract` at. That is the one shape
+    /// of wrong path nothing else in this repo goes red on.
     ///
     /// A path outside the `fs_permissions` roots fails here as a cheatcode
     /// revert naming the path rather than as this assertion's own message,
     /// which is foundry refusing to look rather than looking and not finding.
-    ///
-    /// The creation code comparison is a RESTATEMENT of
-    /// `checkCandidatesAnchoredToSource`, which now reads the source side out
-    /// of this same field through this same cheatcode, and which the BROADCAST
-    /// runs. It is kept because it costs nothing and because it is what makes
-    /// the `vm.isFile` line above readable as the one thing that is not also
-    /// the anchor; the guarantee it describes — two candidates whose declared
-    /// paths are swapped resolve perfectly, and swapping both halves leaves the
-    /// SET of declared names exactly as `testEveryCandidateHasASnapshot` wants
-    /// it — lives in the anchor now, on the path that deploys, rather than only
-    /// in a test.
     ///
     /// Hashed rather than compared as bytes, for the reason
     /// `CandidateSourceMismatch` gives for hashing: creation codes run to tens

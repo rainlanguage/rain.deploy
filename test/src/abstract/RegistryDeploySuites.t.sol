@@ -20,13 +20,10 @@ import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol"
 /// this suite does not have.
 ///
 /// The RECORD half of the source anchor is the other thing nothing could reach.
-/// `checkCandidatesAnchoredToSource` compares the bytes a candidate records
-/// against what its `artifactPath` currently compiles to, and the source half
-/// is no longer anything the declaration can reach — it is read from the
-/// compiler's artifact. The recorded half still is: a candidate that reads
-/// `type(X).creationCode` into the recorded field puts BOTH operands on the
-/// source side and compares source against itself, and on a green tree the two
-/// spellings are byte-identical, so no runtime assertion can tell them apart.
+/// A candidate that reads `type(X).creationCode` into the recorded field puts
+/// BOTH operands of `checkCandidatesAnchoredToSource` on the source side, and on
+/// a green tree the two spellings are byte-identical, so no runtime assertion
+/// can tell them apart.
 /// The assertion below reads the compiler's AST of the declaration itself, for
 /// the reason `GeneratedSnapshotShapeTest` gives for reading it rather than the
 /// source text: this is about structure, not formatting.
@@ -65,13 +62,10 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     /// PROPERTY: every candidate's RECORDED creation code and runtime code are
     /// read from the rolling `src/generated/candidate/` snapshot.
     ///
-    /// This is the half of the source anchor that has to come from the record,
-    /// and since the source half stopped being a field it is the ONLY half a
-    /// declaration can still get wrong. Spelling it `type(X).creationCode` — to
-    /// drop an import, or because the record and the compiler agree today
-    /// anyway — puts both operands of `checkCandidatesAnchoredToSource` on the
-    /// source side and makes the one check that catches a snapshot of the wrong
-    /// contract a tautology for that candidate, with nothing red anywhere.
+    /// This is the half of the source anchor that has to come from the record.
+    /// Spelling it `type(X).creationCode` instead puts both operands of
+    /// `checkCandidatesAnchoredToSource` on the source side and makes that check
+    /// a tautology for that candidate, with nothing red anywhere.
     ///
     /// The runtime code is held to the record by the same assertion because it
     /// is what would be left of the record side. A candidate whose creation

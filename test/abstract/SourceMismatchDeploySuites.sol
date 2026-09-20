@@ -22,14 +22,10 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 /// The broken candidate is a CONSISTENT snapshot: the address it records is the
 /// address its recorded creation code derives, the code hash is the one that
 /// creation code produces, and the runtime code hashes to it. Every check
-/// internal to a snapshot passes on it. Only the pairing with what its
-/// `artifactPath` compiles to says it describes the wrong contract, which is
-/// why the source anchor is the only thing that can catch it.
+/// internal to a snapshot passes on it. Only the source anchor can catch it.
 ///
 /// `MockDeployable` and `MockDeployableV2` are the pair, deliberately: the
-/// snapshot is `V2`'s while the contract it names is `MockDeployable`, which is
-/// exactly the shape of a snapshot regenerated from a build that has since
-/// moved, or generated from the wrong contract in a repo that compiles several.
+/// snapshot is `V2`'s while the contract it names is `MockDeployable`.
 ///
 /// TWO candidates, broken one LAST, behind a genuinely anchored one. A loop
 /// that stops at the first entry is invisible against a single candidate and
@@ -70,10 +66,7 @@ abstract contract SourceMismatchDeploySuites is RainDeploySuitesBase {
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
                 storedBytecodeHash: keccak256(type(MockDeployableV2).runtimeCode),
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
-                // `MockDeployable`, while every recorded field above is
-                // `MockDeployableV2`'s. This is the whole of the fixture's
-                // breakage: the candidate names one contract and records
-                // another.
+                // Deliberately NOT `MockDeployableV2`, which every recorded field above is.
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new address[](0)
             })
