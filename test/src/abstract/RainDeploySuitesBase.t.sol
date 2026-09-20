@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.16.2/src/Test.sol";
 
 import {
+    CandidateSourceMismatch,
     DeploySuite,
     DuplicateDeploySuite,
     InvalidDeploySuiteKey,
@@ -15,10 +16,12 @@ import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {CollidingCandidateDeploySuites} from "../../concrete/CollidingCandidateDeploySuites.sol";
 import {DuplicateDeploySuites} from "../../concrete/DuplicateDeploySuites.sol";
 import {EmptyKeyDeploySuites} from "../../concrete/EmptyKeyDeploySuites.sol";
+import {MisanchoredDeploy} from "../../concrete/MisanchoredDeploy.sol";
 import {NoCandidateDeploySuites} from "../../concrete/NoCandidateDeploySuites.sol";
 import {SameLengthKeyDeploySuites} from "../../concrete/SameLengthKeyDeploySuites.sol";
 import {SeparatorKeyDeploySuites} from "../../concrete/SeparatorKeyDeploySuites.sol";
 import {ShortestKeyDeploySuites} from "../../concrete/ShortestKeyDeploySuites.sol";
+import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 
@@ -260,6 +263,50 @@ contract RainDeploySuitesBaseTest is Test {
     function testCandidatesPresentAnswers() external view {
         assertEq(sSuites.externalCheckedCandidateSuites().length, 2);
         sSuites.externalCheckCandidatesAnchoredToSource();
+    }
+
+    /// A candidate whose record is not what the contract it NAMES compiles to
+    /// MUST be refused, and no field of the declaration may be able to say
+    /// otherwise.
+    ///
+    /// The anchor is the only check that catches a snapshot of the wrong
+    /// contract, so its source operand cannot be something the declaration
+    /// hands it. A declaration that supplies BOTH operands can satisfy the
+    /// anchor by construction: point the source side at the same recorded bytes
+    /// and the comparison is a value against itself — green for any candidate
+    /// whatsoever, including a snapshot of an entirely different contract, and
+    /// green on the broadcast path as well as in CI. That is not a hypothetical
+    /// spelling. It is the mutation rainlanguage/rain.factory.deploy#34 found
+    /// SURVIVING a consumer's whole suite.
+    ///
+    /// `MisanchoredDeploySuites` is that declaration, and it is internally
+    /// SILENT about the contradiction. Its snapshot is consistent with itself,
+    /// its recorded bytes are the current compilation of a contract this repo
+    /// really has, and nothing it declares disagrees with anything else it
+    /// declares. The only thing that says it is `MockDeployableV2`'s snapshot
+    /// wearing `MockDeployable`'s name is the compiler's artifact for the
+    /// contract the candidate names — an origin the declaration does not own.
+    ///
+    /// The reported source hash is asserted, not merely the refusal. It is
+    /// `MockDeployable`'s, the contract the candidate NAMES, which is what says
+    /// the operand was read from that contract's artifact rather than from the
+    /// recorded bytes the declaration offered for it.
+    ///
+    /// `testCandidatesPresentAnswers` above is the discriminating case: a
+    /// declaration whose candidates really are snapshots of the contracts they
+    /// name passes this same call.
+    function testCandidateThatNamesAnotherContractIsRefused() external {
+        MisanchoredDeploy misanchored = new MisanchoredDeploy();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CandidateSourceMismatch.selector,
+                "misanchored-candidate",
+                keccak256(type(MockDeployableV2).creationCode),
+                keccak256(type(MockDeployable).creationCode)
+            )
+        );
+        misanchored.externalCheckCandidatesAnchoredToSource();
     }
 
     /// A key is the whole string, not its length. Two DIFFERENT keys of the

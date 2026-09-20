@@ -8,6 +8,7 @@ import {CandidateSourceMismatch, UnknownDeploymentSuite} from "../../../src/abst
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {ExampleDeploySingleNetwork} from "../../concrete/ExampleDeploySingleNetwork.sol";
+import {MisanchoredDeploy} from "../../concrete/MisanchoredDeploy.sol";
 import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
 import {StalePinDeploy, STALE_PIN_ADDRESS} from "../../concrete/StalePinDeploy.sol";
 import {MissingDependencyDeploy, ABSENT_DEPENDENCY} from "../../concrete/MissingDependencyDeploy.sol";
@@ -405,6 +406,43 @@ contract RainDeployBroadcastTest is Test {
             )
         );
         mismatch.run();
+    }
+
+    /// `run()` MUST refuse a candidate that records a contract other than the
+    /// one it NAMES, even when the declaration itself says nothing is wrong.
+    ///
+    /// The sibling test above hands `run()` a declaration that contradicts
+    /// itself, so an anchor that trusted the declaration would still catch it.
+    /// This one does not: `MisanchoredDeploySuites` records a consistent
+    /// snapshot of `MockDeployableV2`, names `MockDeployable` as the contract
+    /// it is a snapshot of, and — in the shape
+    /// rainlanguage/rain.factory.deploy#34 found surviving a consumer's whole
+    /// suite — would offer the anchor its own recorded bytes as the source side
+    /// if the anchor were willing to take them. Everything internal to the
+    /// snapshot agrees with everything else.
+    ///
+    /// Asserted on `run()` and not only through the external wrapper, because
+    /// this is the reason the anchor lives on the declaration at all. A guard
+    /// the irreversible action does not run is not a guard: broadcasting is
+    /// `workflow_dispatch` on a ref with no required-green gate, and `CREATE2`
+    /// at a zero salt puts the wrong bytes at their own permanent address on
+    /// every chain the dispatch reached.
+    ///
+    /// The anchor is reached before `DEPLOYMENT_SUITE` resolves and before
+    /// `DEPLOYMENT_KEY` is read, which is why no env var is written here and
+    /// why the revert that arrives is the anchor's rather than the selection's.
+    function testRunRefusesToBroadcastACandidateThatNamesAnotherContract() external {
+        MisanchoredDeploy misanchored = new MisanchoredDeploy();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CandidateSourceMismatch.selector,
+                "misanchored-candidate",
+                keccak256(type(MockDeployableV2).creationCode),
+                keccak256(type(MockDeployable).creationCode)
+            )
+        );
+        misanchored.run();
     }
 
     /// The default target set MUST be every supported network, so a
