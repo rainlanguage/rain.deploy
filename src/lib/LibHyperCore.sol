@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {Vm} from "forge-std-1.16.2/src/Vm.sol";
-import {console2} from "forge-std-1.16.2/src/console2.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {console2} from "forge-std-1.17.0/src/console2.sol";
 
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 
