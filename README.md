@@ -655,8 +655,8 @@ Via [soldeer](https://soldeer.xyz):
 forge soldeer install rain-deploy~<version>
 ```
 
-**You also need `forge-std` 1.16.2 and `rain-sol-codegen` 0.1.36**, remapped as
-`forge-std-1.16.2/` and `rain-sol-codegen-0.1.36/`. The published package ships
+**You also need `forge-std` 1.17.0 and `rain-sol-codegen` 0.1.39**, remapped as
+`forge-std-1.17.0/` and `rain-sol-codegen-0.1.39/`. The published package ships
 `src/`, `script/` and the licence and README files — no `test/`, no
 `foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no `dependencies/` — so
 a consumer resolves both itself. The requirement is transitive rather than
@@ -668,8 +668,8 @@ every abstract a consumer inherits pulls them in — `Script` via
 
 ```toml
 [dependencies]
-forge-std = "1.16.2"
-rain-sol-codegen = "0.1.36"
+forge-std = "1.17.0"
+rain-sol-codegen = "0.1.39"
 rain-deploy = "<version>"
 ```
 

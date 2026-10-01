@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.2/src/Test.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {
     InvalidIdentifier,
     RAIN_COPYRIGHT_TEXT,
     RAIN_SPDX_LICENSE_IDENTIFIER
-} from "rain-sol-codegen-0.1.37/src/lib/LibCodeGen.sol";
-import {LibFs} from "rain-sol-codegen-0.1.37/src/lib/LibFs.sol";
+} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
+import {LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     EmptyRelease,
