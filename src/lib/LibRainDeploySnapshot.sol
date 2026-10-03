@@ -371,6 +371,18 @@ library LibRainDeploySnapshot {
     /// there, and one left under a compiled root fails the whole build.
     string constant LIB_DIR = "src/lib";
 
+    /// The path a generated released lib reaches `DeploySuite` by, when the lib
+    /// is written into THIS repo's `LIB_DIR`.
+    ///
+    /// Correct here and nowhere else. `src/lib` and `src/abstract` are siblings
+    /// in this repo, so one directory up finds the type; a consumer's `src/lib`
+    /// has no `../abstract/RainDeploySuitesBase.sol` at all, because the type
+    /// lives in this package rather than in theirs. A consumer therefore passes
+    /// its own remapped path — `rain-deploy-<version>/src/abstract/
+    /// RainDeploySuitesBase.sol` — and this default is what keeps this repo's
+    /// own call unchanged.
+    string constant SUITES_IMPORT_PATH = "../abstract/RainDeploySuitesBase.sol";
+
     /// The generated aggregate's library name, and the file it is written to.
     ///
     /// Named rather than derived from a contract, because it is the ONE lib per
@@ -970,13 +982,28 @@ library LibRainDeploySnapshot {
     /// written anywhere but into the immutable record.
     /// @param vm The Vm instance for string operations.
     /// @param paths The record's files, in the order they are emitted.
+    /// @param suitesImportPath The path the emitted lib reaches `DeploySuite`
+    /// by — `SUITES_IMPORT_PATH` for a lib written into this repo's own
+    /// `LIB_DIR`, and the consumer's remapped path otherwise.
     /// @return The import block.
-    function releasedImportBlock(Vm vm, string[] memory paths) internal pure returns (string memory) {
-        string memory imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
+    function releasedImportBlock(Vm vm, string[] memory paths, string memory suitesImportPath)
+        internal
+        pure
+        returns (string memory)
+    {
+        string memory imports = string.concat("import {DeploySuite} from \"", suitesImportPath, "\";\n\n");
         for (uint256 i = 0; i < paths.length; i++) {
             imports = string.concat(imports, releasedImport(vm, paths[i]));
         }
         return imports;
+    }
+
+    /// `releasedImportBlock` applied to this repo's own `SUITES_IMPORT_PATH`.
+    /// @param vm The Vm instance for string operations.
+    /// @param paths The record's files, in the order they are emitted.
+    /// @return The import block.
+    function releasedImportBlock(Vm vm, string[] memory paths) internal pure returns (string memory) {
+        return releasedImportBlock(vm, paths, SUITES_IMPORT_PATH);
     }
 
     /// The library block of a generated released-suites lib.
@@ -1120,7 +1147,8 @@ library LibRainDeploySnapshot {
         string memory contractName,
         string memory spdxLicenseIdentifier,
         string memory copyrightText,
-        DeploySuite memory template
+        DeploySuite memory template,
+        string memory suitesImportPath
     ) internal returns (string memory) {
         string memory libraryName = releasedLibraryName(contractName);
         string memory path = pathForLib(libDir, libraryName);
@@ -1133,7 +1161,8 @@ library LibRainDeploySnapshot {
         {
             string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
             body = string.concat(
-                releasedImportBlock(vm, paths), releasedLibraryBlock(vm, libraryName, contractName, paths, template)
+                releasedImportBlock(vm, paths, suitesImportPath),
+                releasedLibraryBlock(vm, libraryName, contractName, paths, template)
             );
         }
 
@@ -1158,11 +1187,66 @@ library LibRainDeploySnapshot {
         string memory libDir,
         string memory recordRoot,
         string memory contractName,
+        DeploySuite memory template,
+        string memory suitesImportPath
+    ) internal returns (string memory) {
+        return writeReleasedSuitesLib(
+            vm,
+            libDir,
+            recordRoot,
+            contractName,
+            RAIN_SPDX_LICENSE_IDENTIFIER,
+            RAIN_COPYRIGHT_TEXT,
+            template,
+            suitesImportPath
+        );
+    }
+
+    /// `writeReleasedSuitesLib` applied to this repo's own `SUITES_IMPORT_PATH`,
+    /// keeping the explicit-licence arity for a repo this org does not own.
+    /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory to write the lib into.
+    /// @param recordRoot The record root to read releases from.
+    /// @param contractName The contract the released record describes.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written lib
+    /// declares.
+    /// @param copyrightText The copyright text the written lib declares.
+    /// @param template The candidate declaration the metadata comes from.
+    /// @return The path written.
+    function writeReleasedSuitesLib(
+        Vm vm,
+        string memory libDir,
+        string memory recordRoot,
+        string memory contractName,
+        string memory spdxLicenseIdentifier,
+        string memory copyrightText,
         DeploySuite memory template
     ) internal returns (string memory) {
         return writeReleasedSuitesLib(
-            vm, libDir, recordRoot, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, template
+            vm, libDir, recordRoot, contractName, spdxLicenseIdentifier, copyrightText, template, SUITES_IMPORT_PATH
         );
+    }
+
+    /// `writeReleasedSuitesLib` applied to this repo's own `SUITES_IMPORT_PATH`
+    /// as well, which only resolves for a lib written into THIS repo's
+    /// `LIB_DIR` — a consumer passes its own remapped path to the arity above.
+    /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory to write the lib into — `LIB_DIR` for a
+    /// repo's real tree.
+    /// @param recordRoot The record root — `LIB_FS_ROOT` for a repo's real
+    /// record.
+    /// @param contractName The contract the released lib is written for.
+    /// @param template The suite the released entries take their key and
+    /// artifact path from.
+    /// @return The path written.
+    function writeReleasedSuitesLib(
+        Vm vm,
+        string memory libDir,
+        string memory recordRoot,
+        string memory contractName,
+        DeploySuite memory template
+    ) internal returns (string memory) {
+        return writeReleasedSuitesLib(vm, libDir, recordRoot, contractName, template, SUITES_IMPORT_PATH);
     }
 
     /// The import block of the generated aggregate lib.
@@ -1174,14 +1258,28 @@ library LibRainDeploySnapshot {
     /// file also compiles only from a directory whose parent holds
     /// `abstract/RainDeploySuitesBase.sol`.
     /// @param contractNames The contracts whose released libs to aggregate.
+    /// @param suitesImportPath The path the emitted lib reaches `DeploySuite`
+    /// by — `SUITES_IMPORT_PATH` for a lib written into this repo's own
+    /// `LIB_DIR`, and the consumer's remapped path otherwise.
     /// @return The import block.
-    function aggregateImportBlock(string[] memory contractNames) internal pure returns (string memory) {
-        string memory imports = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
+    function aggregateImportBlock(string[] memory contractNames, string memory suitesImportPath)
+        internal
+        pure
+        returns (string memory)
+    {
+        string memory imports = string.concat("import {DeploySuite} from \"", suitesImportPath, "\";\n\n");
         for (uint256 i = 0; i < contractNames.length; i++) {
             string memory libraryName = releasedLibraryName(contractNames[i]);
             imports = string.concat(imports, "import {", libraryName, "} from \"./", libraryName, ".sol\";\n\n");
         }
         return imports;
+    }
+
+    /// `aggregateImportBlock` applied to this repo's own `SUITES_IMPORT_PATH`.
+    /// @param contractNames The contracts whose released libs to aggregate.
+    /// @return The import block.
+    function aggregateImportBlock(string[] memory contractNames) internal pure returns (string memory) {
+        return aggregateImportBlock(contractNames, SUITES_IMPORT_PATH);
     }
 
     /// The library block of the generated aggregate lib: every per-contract
@@ -1312,7 +1410,8 @@ library LibRainDeploySnapshot {
         string memory libDir,
         string memory spdxLicenseIdentifier,
         string memory copyrightText,
-        string[] memory contractNames
+        string[] memory contractNames,
+        string memory suitesImportPath
     ) internal returns (string memory) {
         string memory path = pathForLib(libDir, RELEASED_SUITES_LIBRARY);
 
@@ -1322,7 +1421,7 @@ library LibRainDeploySnapshot {
             string.concat(
                 LibCodeGen.filePrefix(spdxLicenseIdentifier, copyrightText),
                 "\n",
-                aggregateImportBlock(contractNames),
+                aggregateImportBlock(contractNames, suitesImportPath),
                 aggregateLibraryBlock(vm, contractNames)
             )
         );
@@ -1337,13 +1436,53 @@ library LibRainDeploySnapshot {
     /// arity above states — `LIB_DIR` for a repo's real libs.
     /// @param contractNames The contracts whose released libs to aggregate.
     /// @return The path written.
+    function writeReleasedSuitesAggregate(
+        Vm vm,
+        string memory libDir,
+        string[] memory contractNames,
+        string memory suitesImportPath
+    ) internal returns (string memory) {
+        return writeReleasedSuitesAggregate(
+            vm, libDir, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, contractNames, suitesImportPath
+        );
+    }
+
+    /// `writeReleasedSuitesAggregate` applied to this repo's own
+    /// `SUITES_IMPORT_PATH`, keeping the explicit-licence arity for a repo this
+    /// org does not own.
+    /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory to write into.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written lib
+    /// declares.
+    /// @param copyrightText The copyright text the written lib declares.
+    /// @param contractNames The contracts whose released libs to aggregate.
+    /// @return The path written.
+    function writeReleasedSuitesAggregate(
+        Vm vm,
+        string memory libDir,
+        string memory spdxLicenseIdentifier,
+        string memory copyrightText,
+        string[] memory contractNames
+    ) internal returns (string memory) {
+        return writeReleasedSuitesAggregate(
+            vm, libDir, spdxLicenseIdentifier, copyrightText, contractNames, SUITES_IMPORT_PATH
+        );
+    }
+
+    /// `writeReleasedSuitesAggregate` applied to this repo's own
+    /// `SUITES_IMPORT_PATH` as well, which only resolves for a lib written into
+    /// THIS repo's `LIB_DIR` — a consumer passes its own remapped path to the
+    /// arity above.
+    /// @param vm The Vm instance for file operations.
+    /// @param libDir The directory to write into, under the constraint the
+    /// arity above states — `LIB_DIR` for a repo's real libs.
+    /// @param contractNames The contracts whose released libs to aggregate.
+    /// @return The path written.
     function writeReleasedSuitesAggregate(Vm vm, string memory libDir, string[] memory contractNames)
         internal
         returns (string memory)
     {
-        return writeReleasedSuitesAggregate(
-            vm, libDir, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, contractNames
-        );
+        return writeReleasedSuitesAggregate(vm, libDir, contractNames, SUITES_IMPORT_PATH);
     }
 
     /// The newest release in a record: the greatest tag any of its files sits

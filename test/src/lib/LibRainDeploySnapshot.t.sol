@@ -1471,6 +1471,57 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
+    /// The `DeploySuite` import MUST be the caller's path.
+    ///
+    /// `SUITES_IMPORT_PATH` is parent-relative, which resolves only for a lib
+    /// written into THIS repo's `src/lib`, because `src/abstract` is its
+    /// sibling here. A consumer's `src/lib` has no `../abstract/` holding the
+    /// type at all — it is in this package — so a hardcoded default emits a lib
+    /// no consumer build can compile, and the path has to come from the caller.
+    ///
+    /// The record imports are asserted alongside it: the suites path MUST NOT
+    /// reach the aliases, which are record-relative and already correct for a
+    /// consumer.
+    function testReleasedImportBlockTakesTheSuitesImportPath() external pure {
+        string memory consumerPath = "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol";
+
+        assertEq(
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1), consumerPath),
+            string.concat(
+                "import {DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n",
+                expectedImport("0_0_1")
+            )
+        );
+    }
+
+    /// Omitting the path MUST be this repo's own `SUITES_IMPORT_PATH`, so the
+    /// arity every existing caller spells keeps emitting what it emitted.
+    function testReleasedImportBlockDefaultsToThisRepoSuitesImportPath() external pure {
+        assertEq(
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2)),
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2), LibRainDeploySnapshot.SUITES_IMPORT_PATH)
+        );
+    }
+
+    /// The aggregate's `DeploySuite` import MUST be the caller's path too, for
+    /// the reason the released lib's is: both are emitted into the consumer's
+    /// `LIB_DIR`, so both are uncompilable there under a parent-relative
+    /// default. The sibling `./Lib<Contract>Released.sol` imports MUST NOT
+    /// move, because those ARE siblings wherever `LIB_DIR` is.
+    function testAggregateImportBlockTakesTheSuitesImportPath() external pure {
+        string memory consumerPath = "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol";
+
+        assertEq(
+            LibRainDeploySnapshot.aggregateImportBlock(aggregateNames(0), consumerPath),
+            "import {DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n"
+        );
+
+        assertEq(
+            LibRainDeploySnapshot.aggregateImportBlock(aggregateNames(1)),
+            LibRainDeploySnapshot.aggregateImportBlock(aggregateNames(1), LibRainDeploySnapshot.SUITES_IMPORT_PATH)
+        );
+    }
+
     /// The library block MUST declare one suite per record file, taking the
     /// four consensus fields from that file's aliased constants and the other
     /// three from the template.
