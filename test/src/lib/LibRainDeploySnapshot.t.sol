@@ -1471,6 +1471,129 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
+    /// The `DeploySuite` import MUST be the caller's path.
+    ///
+    /// `suitesImportPathInThisRepo` is parent-relative, which resolves only for a lib
+    /// written into THIS repo's `src/lib`, because `src/abstract` is its
+    /// sibling here. A consumer's `src/lib` has no `../abstract/` holding the
+    /// type at all — it is in this package — so a hardcoded default emits a lib
+    /// no consumer build can compile, and the path has to come from the caller.
+    ///
+    /// The record imports are asserted alongside it: the suites path MUST NOT
+    /// reach the aliases, which are record-relative and already correct for a
+    /// consumer.
+    function testReleasedImportBlockTakesTheSuitesImportPath() external pure {
+        string memory consumerPath = "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol";
+
+        assertEq(
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1), consumerPath),
+            string.concat(
+                "import {DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n",
+                expectedImport("0_0_1")
+            )
+        );
+    }
+
+    /// Omitting the path MUST be this repo's own `suitesImportPathInThisRepo`, so the
+    /// arity every existing caller spells keeps emitting what it emitted.
+    function testReleasedImportBlockDefaultsToThisRepoSuitesImportPath() external pure {
+        assertEq(
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2)),
+            LibRainDeploySnapshot.releasedImportBlock(
+                vm, recordOf(2), LibRainDeploySnapshot.suitesImportPathInThisRepo()
+            )
+        );
+    }
+
+    /// The aggregate's `DeploySuite` import MUST be the caller's path too, for
+    /// the reason the released lib's is: both are emitted into the consumer's
+    /// `LIB_DIR`, so both are uncompilable there under a parent-relative
+    /// default. The sibling `./Lib<Contract>Released.sol` imports MUST NOT
+    /// move, because those ARE siblings wherever `LIB_DIR` is.
+    function testAggregateImportBlockTakesTheSuitesImportPath() external pure {
+        string memory consumerPath = "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol";
+
+        assertEq(
+            LibRainDeploySnapshot.aggregateImportBlock(aggregateNames(0), consumerPath),
+            "import {DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n"
+        );
+
+        assertEq(
+            LibRainDeploySnapshot.aggregateImportBlock(aggregateNames(1)),
+            LibRainDeploySnapshot.aggregateImportBlock(
+                aggregateNames(1), LibRainDeploySnapshot.suitesImportPathInThisRepo()
+            )
+        );
+    }
+
+    /// A consumer's pin MUST produce that consumer's remapped path.
+    ///
+    /// The version is in `foundry.toml` already, so deriving it is what keeps a
+    /// bump to one edit. A path restated by the caller is the version written
+    /// down twice, and the copy that is not `foundry.toml` is the one that goes
+    /// stale.
+    function testSuitesImportPathForTomlDerivesAConsumerPin() external view {
+        assertEq(
+            LibRainDeploySnapshot.suitesImportPathForToml(vm, "[dependencies]\n\"rain-deploy\" = \"0.1.11\"\n"),
+            "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol"
+        );
+
+        // A bump moves the emitted path with no other edit, which is the whole
+        // point of reading it rather than being handed it.
+        assertEq(
+            LibRainDeploySnapshot.suitesImportPathForToml(vm, "[dependencies]\nrain-deploy = \"0.2.0\"\n"),
+            "rain-deploy-0.2.0/src/abstract/RainDeploySuitesBase.sol"
+        );
+    }
+
+    /// An inline-table pin MUST read the same as a bare string one.
+    ///
+    /// Soldeer takes both forms, and the table form puts the version one
+    /// selector deeper. Read only the bare selector and this reverts with
+    /// `expected string, found JSON object` — inside the writer, before
+    /// anything is emitted, so a consumer pinning that way gets no generated
+    /// lib at all rather than a wrong one.
+    function testSuitesImportPathForTomlReadsAnInlineTablePin() external view {
+        assertEq(
+            LibRainDeploySnapshot.suitesImportPathForToml(
+                vm, "[dependencies]\nrain-deploy = { version = \"0.1.11\" }\n"
+            ),
+            "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol"
+        );
+
+        // The version beside a source, which is why the table form exists.
+        assertEq(
+            LibRainDeploySnapshot.suitesImportPathForToml(
+                vm,
+                "[dependencies]\nrain-deploy = { version = \"0.2.0\", git = \"https://github.com/rainlanguage/rain.deploy\" }\n"
+            ),
+            "rain-deploy-0.2.0/src/abstract/RainDeploySuitesBase.sol"
+        );
+    }
+
+    /// No pin MUST be the parent-relative path.
+    ///
+    /// That is THIS repo, because nothing depends on itself, and here the type
+    /// is a sibling directory away. It is also what every existing caller
+    /// emitted before the path was derived at all.
+    function testSuitesImportPathForTomlFallsBackWithNoPin() external view {
+        assertEq(
+            LibRainDeploySnapshot.suitesImportPathForToml(vm, "[dependencies]\nforge-std = \"1.17.0\"\n"),
+            LibRainDeploySnapshot.suitesImportPathInThisRepo()
+        );
+
+        assertEq(
+            LibRainDeploySnapshot.suitesImportPathForToml(vm, "[profile.default]\n"),
+            LibRainDeploySnapshot.suitesImportPathInThisRepo()
+        );
+    }
+
+    /// This repo's own manifest MUST take the fallback, so the writers keep
+    /// emitting here exactly what they emitted before.
+    function testDerivedSuitesImportPathIsTheFallbackInThisRepo() external view {
+        assertEq(LibRainDeploySnapshot.derivedSuitesImportPath(vm), LibRainDeploySnapshot.suitesImportPathInThisRepo());
+    }
+
     /// The library block MUST declare one suite per record file, taking the
     /// four consensus fields from that file's aliased constants and the other
     /// three from the template.
