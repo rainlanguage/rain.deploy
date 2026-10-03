@@ -371,14 +371,33 @@ library LibRainDeploySnapshot {
     /// there, and one left under a compiled root fails the whole build.
     string constant LIB_DIR = "src/lib";
 
-    /// The path a generated released lib reaches `DeploySuite` by, when the lib
-    /// is written into THIS repo's `LIB_DIR`.
+    /// Where `DeploySuite` is declared inside this package, below the source
+    /// root. The ONE spelling of it: both forms a generated lib can reach it by
+    /// are built from this, so the type can be renamed or moved in one edit.
+    /// Spelled twice, the second copy is the one that goes stale — and it would
+    /// be the in-repo form, which only this repo's own build ever emits, so a
+    /// consumer build could not catch it.
+    string constant SUITES_SOURCE_SUBPATH = "abstract/RainDeploySuitesBase.sol";
+
+    /// The source root both this package and a consumer put Solidity under, and
+    /// the directory `LIB_DIR` sits in.
+    string constant SOURCE_ROOT = "src";
+
+    /// The path a generated suites lib reaches `DeploySuite` by, when the lib is
+    /// written into THIS repo's `LIB_DIR`.
     ///
-    /// Correct here and nowhere else. `src/lib` and `src/abstract` are siblings
-    /// in this repo, so one directory up finds the type; a consumer's `src/lib`
-    /// has no `../abstract/RainDeploySuitesBase.sol` at all, because the type
-    /// lives in this package rather than in theirs.
-    string constant SUITES_IMPORT_PATH = "../abstract/RainDeploySuitesBase.sol";
+    /// Correct here and nowhere else. `LIB_DIR` and the type's directory are
+    /// siblings under `SOURCE_ROOT` in this repo, so one directory up finds it.
+    /// A consumer's `LIB_DIR` has no sibling holding the type at all, because
+    /// the type is in this package rather than in theirs.
+    ///
+    /// A function and not a constant because `string.concat` is not a
+    /// compile-time constant on solc 0.8.25, and respelling the subpath to get
+    /// one back is the duplication `SUITES_SOURCE_SUBPATH` exists to remove.
+    /// @return The path.
+    function suitesImportPathInThisRepo() internal pure returns (string memory) {
+        return string.concat("../", SUITES_SOURCE_SUBPATH);
+    }
 
     /// This library's own soldeer package name, which is also the remapping
     /// prefix a consumer reaches it by — soldeer writes `<name>-<version>/`.
@@ -420,9 +439,12 @@ library LibRainDeploySnapshot {
         // a consumer spells this pin with.
         string memory key = string.concat(".dependencies.", PACKAGE_NAME);
         if (!vm.keyExistsToml(toml, key)) {
-            return SUITES_IMPORT_PATH;
+            return suitesImportPathInThisRepo();
         }
-        return string.concat(PACKAGE_NAME, "-", vm.parseTomlString(toml, key), "/src/abstract/RainDeploySuitesBase.sol");
+        return
+            string.concat(
+                PACKAGE_NAME, "-", vm.parseTomlString(toml, key), "/", SOURCE_ROOT, "/", SUITES_SOURCE_SUBPATH
+            );
     }
 
     /// The generated aggregate's library name, and the file it is written to.
@@ -1025,7 +1047,7 @@ library LibRainDeploySnapshot {
     /// @param vm The Vm instance for string operations.
     /// @param paths The record's files, in the order they are emitted.
     /// @param suitesImportPath The path the emitted lib reaches `DeploySuite`
-    /// by — `SUITES_IMPORT_PATH` for a lib written into this repo's own
+    /// by — `suitesImportPathInThisRepo` for a lib written into this repo's own
     /// `LIB_DIR`, and the consumer's remapped path otherwise.
     /// @return The import block.
     function releasedImportBlock(Vm vm, string[] memory paths, string memory suitesImportPath)
@@ -1040,12 +1062,12 @@ library LibRainDeploySnapshot {
         return imports;
     }
 
-    /// `releasedImportBlock` applied to this repo's own `SUITES_IMPORT_PATH`.
+    /// `releasedImportBlock` applied to this repo's own `suitesImportPathInThisRepo`.
     /// @param vm The Vm instance for string operations.
     /// @param paths The record's files, in the order they are emitted.
     /// @return The import block.
     function releasedImportBlock(Vm vm, string[] memory paths) internal pure returns (string memory) {
-        return releasedImportBlock(vm, paths, SUITES_IMPORT_PATH);
+        return releasedImportBlock(vm, paths, suitesImportPathInThisRepo());
     }
 
     /// The library block of a generated released-suites lib.
@@ -1307,7 +1329,7 @@ library LibRainDeploySnapshot {
     /// `abstract/RainDeploySuitesBase.sol`.
     /// @param contractNames The contracts whose released libs to aggregate.
     /// @param suitesImportPath The path the emitted lib reaches `DeploySuite`
-    /// by — `SUITES_IMPORT_PATH` for a lib written into this repo's own
+    /// by — `suitesImportPathInThisRepo` for a lib written into this repo's own
     /// `LIB_DIR`, and the consumer's remapped path otherwise.
     /// @return The import block.
     function aggregateImportBlock(string[] memory contractNames, string memory suitesImportPath)
@@ -1323,11 +1345,11 @@ library LibRainDeploySnapshot {
         return imports;
     }
 
-    /// `aggregateImportBlock` applied to this repo's own `SUITES_IMPORT_PATH`.
+    /// `aggregateImportBlock` applied to this repo's own `suitesImportPathInThisRepo`.
     /// @param contractNames The contracts whose released libs to aggregate.
     /// @return The import block.
     function aggregateImportBlock(string[] memory contractNames) internal pure returns (string memory) {
-        return aggregateImportBlock(contractNames, SUITES_IMPORT_PATH);
+        return aggregateImportBlock(contractNames, suitesImportPathInThisRepo());
     }
 
     /// The library block of the generated aggregate lib: every per-contract

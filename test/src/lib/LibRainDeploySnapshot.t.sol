@@ -1473,7 +1473,7 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// The `DeploySuite` import MUST be the caller's path.
     ///
-    /// `SUITES_IMPORT_PATH` is parent-relative, which resolves only for a lib
+    /// `suitesImportPathInThisRepo` is parent-relative, which resolves only for a lib
     /// written into THIS repo's `src/lib`, because `src/abstract` is its
     /// sibling here. A consumer's `src/lib` has no `../abstract/` holding the
     /// type at all — it is in this package — so a hardcoded default emits a lib
@@ -1494,12 +1494,14 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
-    /// Omitting the path MUST be this repo's own `SUITES_IMPORT_PATH`, so the
+    /// Omitting the path MUST be this repo's own `suitesImportPathInThisRepo`, so the
     /// arity every existing caller spells keeps emitting what it emitted.
     function testReleasedImportBlockDefaultsToThisRepoSuitesImportPath() external pure {
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2)),
-            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2), LibRainDeploySnapshot.SUITES_IMPORT_PATH)
+            LibRainDeploySnapshot.releasedImportBlock(
+                vm, recordOf(2), LibRainDeploySnapshot.suitesImportPathInThisRepo()
+            )
         );
     }
 
@@ -1518,7 +1520,9 @@ contract LibRainDeploySnapshotTest is Test {
 
         assertEq(
             LibRainDeploySnapshot.aggregateImportBlock(aggregateNames(1)),
-            LibRainDeploySnapshot.aggregateImportBlock(aggregateNames(1), LibRainDeploySnapshot.SUITES_IMPORT_PATH)
+            LibRainDeploySnapshot.aggregateImportBlock(
+                aggregateNames(1), LibRainDeploySnapshot.suitesImportPathInThisRepo()
+            )
         );
     }
 
@@ -1550,19 +1554,19 @@ contract LibRainDeploySnapshotTest is Test {
     function testSuitesImportPathForTomlFallsBackWithNoPin() external view {
         assertEq(
             LibRainDeploySnapshot.suitesImportPathForToml(vm, "[dependencies]\nforge-std = \"1.17.0\"\n"),
-            LibRainDeploySnapshot.SUITES_IMPORT_PATH
+            LibRainDeploySnapshot.suitesImportPathInThisRepo()
         );
 
         assertEq(
             LibRainDeploySnapshot.suitesImportPathForToml(vm, "[profile.default]\n"),
-            LibRainDeploySnapshot.SUITES_IMPORT_PATH
+            LibRainDeploySnapshot.suitesImportPathInThisRepo()
         );
     }
 
     /// This repo's own manifest MUST take the fallback, so the writers keep
     /// emitting here exactly what they emitted before.
     function testDerivedSuitesImportPathIsTheFallbackInThisRepo() external view {
-        assertEq(LibRainDeploySnapshot.derivedSuitesImportPath(vm), LibRainDeploySnapshot.SUITES_IMPORT_PATH);
+        assertEq(LibRainDeploySnapshot.derivedSuitesImportPath(vm), LibRainDeploySnapshot.suitesImportPathInThisRepo());
     }
 
     /// The library block MUST declare one suite per record file, taking the
