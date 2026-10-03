@@ -1522,6 +1522,49 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
+    /// A consumer's pin MUST produce that consumer's remapped path.
+    ///
+    /// The version is in `foundry.toml` already, so deriving it is what keeps a
+    /// bump to one edit. A path restated by the caller is the version written
+    /// down twice, and the copy that is not `foundry.toml` is the one that goes
+    /// stale.
+    function testSuitesImportPathForTomlDerivesAConsumerPin() external view {
+        assertEq(
+            LibRainDeploySnapshot.suitesImportPathForToml(vm, "[dependencies]\n\"rain-deploy\" = \"0.1.11\"\n"),
+            "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol"
+        );
+
+        // A bump moves the emitted path with no other edit, which is the whole
+        // point of reading it rather than being handed it.
+        assertEq(
+            LibRainDeploySnapshot.suitesImportPathForToml(vm, "[dependencies]\nrain-deploy = \"0.2.0\"\n"),
+            "rain-deploy-0.2.0/src/abstract/RainDeploySuitesBase.sol"
+        );
+    }
+
+    /// No pin MUST be the parent-relative path.
+    ///
+    /// That is THIS repo, because nothing depends on itself, and here the type
+    /// is a sibling directory away. It is also what every existing caller
+    /// emitted before the path was derived at all.
+    function testSuitesImportPathForTomlFallsBackWithNoPin() external view {
+        assertEq(
+            LibRainDeploySnapshot.suitesImportPathForToml(vm, "[dependencies]\nforge-std = \"1.17.0\"\n"),
+            LibRainDeploySnapshot.SUITES_IMPORT_PATH
+        );
+
+        assertEq(
+            LibRainDeploySnapshot.suitesImportPathForToml(vm, "[profile.default]\n"),
+            LibRainDeploySnapshot.SUITES_IMPORT_PATH
+        );
+    }
+
+    /// This repo's own manifest MUST take the fallback, so the writers keep
+    /// emitting here exactly what they emitted before.
+    function testDerivedSuitesImportPathIsTheFallbackInThisRepo() external view {
+        assertEq(LibRainDeploySnapshot.derivedSuitesImportPath(vm), LibRainDeploySnapshot.SUITES_IMPORT_PATH);
+    }
+
     /// The library block MUST declare one suite per record file, taking the
     /// four consensus fields from that file's aliased constants and the other
     /// three from the template.

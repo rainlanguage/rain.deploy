@@ -377,11 +377,53 @@ library LibRainDeploySnapshot {
     /// Correct here and nowhere else. `src/lib` and `src/abstract` are siblings
     /// in this repo, so one directory up finds the type; a consumer's `src/lib`
     /// has no `../abstract/RainDeploySuitesBase.sol` at all, because the type
-    /// lives in this package rather than in theirs. A consumer therefore passes
-    /// its own remapped path — `rain-deploy-<version>/src/abstract/
-    /// RainDeploySuitesBase.sol` — and this default is what keeps this repo's
-    /// own call unchanged.
+    /// lives in this package rather than in theirs.
     string constant SUITES_IMPORT_PATH = "../abstract/RainDeploySuitesBase.sol";
+
+    /// This library's own soldeer package name, which is also the remapping
+    /// prefix a consumer reaches it by — soldeer writes `<name>-<version>/`.
+    string constant PACKAGE_NAME = "rain-deploy";
+
+    /// The path a generated suites lib reaches `DeploySuite` by, derived from
+    /// the tree being generated in rather than restated by the caller.
+    ///
+    /// A consumer reaches the type through soldeer, and the version it pinned
+    /// is already in its own `foundry.toml`. Reading it there is the move
+    /// `deployTag` makes, for the reason `deployTag` gives: `foundry.toml` is
+    /// the one source of truth, so a bump is one edit and a regenerate. A path
+    /// passed in instead would be the version written down twice, and the copy
+    /// that is not `foundry.toml` is the one that goes stale — silently, until
+    /// a build names a directory the bump removed.
+    ///
+    /// No pin means the tree is THIS repo, because nothing depends on itself,
+    /// and then the type is a sibling directory away.
+    /// @param vm The Vm instance for file operations.
+    /// @return The import path.
+    function derivedSuitesImportPath(Vm vm) internal view returns (string memory) {
+        return suitesImportPathForToml(vm, vm.readFile("foundry.toml"));
+    }
+
+    /// `derivedSuitesImportPath` against a given `foundry.toml` rather than the
+    /// one on disk.
+    ///
+    /// Split out so both branches are testable. The pinned branch cannot be
+    /// reached through the file: this repo does not depend on itself, so the
+    /// only `foundry.toml` the reading arity can see is one with no pin, and a
+    /// test that overwrote it to make the pin appear would be a test that
+    /// rewrites the manifest the rest of the suite builds against.
+    /// @param vm The Vm instance for TOML operations.
+    /// @param toml The manifest contents to read the pin from.
+    /// @return The import path.
+    function suitesImportPathForToml(Vm vm, string memory toml) internal view returns (string memory) {
+        // Unquoted, hyphen and all: a quoted path component is a path error
+        // rather than a lookup, and TOML has already normalised the quoted key
+        // a consumer spells this pin with.
+        string memory key = string.concat(".dependencies.", PACKAGE_NAME);
+        if (!vm.keyExistsToml(toml, key)) {
+            return SUITES_IMPORT_PATH;
+        }
+        return string.concat(PACKAGE_NAME, "-", vm.parseTomlString(toml, key), "/src/abstract/RainDeploySuitesBase.sol");
+    }
 
     /// The generated aggregate's library name, and the file it is written to.
     ///
@@ -1202,8 +1244,8 @@ library LibRainDeploySnapshot {
         );
     }
 
-    /// `writeReleasedSuitesLib` applied to this repo's own `SUITES_IMPORT_PATH`,
-    /// keeping the explicit-licence arity for a repo this org does not own.
+    /// `writeReleasedSuitesLib` applied to `derivedSuitesImportPath`, keeping the
+    /// explicit-licence arity for a repo this org does not own.
     /// @param vm The Vm instance for file operations.
     /// @param libDir The directory to write the lib into.
     /// @param recordRoot The record root to read releases from.
@@ -1222,14 +1264,20 @@ library LibRainDeploySnapshot {
         string memory copyrightText,
         DeploySuite memory template
     ) internal returns (string memory) {
+        // Derived into a local before the forward, not inlined as the eighth
+        // argument: eight arguments and the derivation's own temporaries alive
+        // at once is stack too deep on solc 0.8.25 without `--via-ir`, the same
+        // limit the full arity's body is already shaped around. Not a style
+        // choice — the inlined form does not compile.
+        string memory suitesImportPath = derivedSuitesImportPath(vm);
         return writeReleasedSuitesLib(
-            vm, libDir, recordRoot, contractName, spdxLicenseIdentifier, copyrightText, template, SUITES_IMPORT_PATH
+            vm, libDir, recordRoot, contractName, spdxLicenseIdentifier, copyrightText, template, suitesImportPath
         );
     }
 
-    /// `writeReleasedSuitesLib` applied to this repo's own `SUITES_IMPORT_PATH`
-    /// as well, which only resolves for a lib written into THIS repo's
-    /// `LIB_DIR` — a consumer passes its own remapped path to the arity above.
+    /// `writeReleasedSuitesLib` applied to `derivedSuitesImportPath` as well, so
+    /// a consumer gets its own remapped path without naming it. The arity above
+    /// takes an explicit path, for a tree whose layout neither case fits.
     /// @param vm The Vm instance for file operations.
     /// @param libDir The directory to write the lib into — `LIB_DIR` for a
     /// repo's real tree.
@@ -1246,7 +1294,7 @@ library LibRainDeploySnapshot {
         string memory contractName,
         DeploySuite memory template
     ) internal returns (string memory) {
-        return writeReleasedSuitesLib(vm, libDir, recordRoot, contractName, template, SUITES_IMPORT_PATH);
+        return writeReleasedSuitesLib(vm, libDir, recordRoot, contractName, template, derivedSuitesImportPath(vm));
     }
 
     /// The import block of the generated aggregate lib.
@@ -1447,9 +1495,8 @@ library LibRainDeploySnapshot {
         );
     }
 
-    /// `writeReleasedSuitesAggregate` applied to this repo's own
-    /// `SUITES_IMPORT_PATH`, keeping the explicit-licence arity for a repo this
-    /// org does not own.
+    /// `writeReleasedSuitesAggregate` applied to `derivedSuitesImportPath`,
+    /// keeping the explicit-licence arity for a repo this org does not own.
     /// @param vm The Vm instance for file operations.
     /// @param libDir The directory to write into.
     /// @param spdxLicenseIdentifier The SPDX licence identifier the written lib
@@ -1465,14 +1512,13 @@ library LibRainDeploySnapshot {
         string[] memory contractNames
     ) internal returns (string memory) {
         return writeReleasedSuitesAggregate(
-            vm, libDir, spdxLicenseIdentifier, copyrightText, contractNames, SUITES_IMPORT_PATH
+            vm, libDir, spdxLicenseIdentifier, copyrightText, contractNames, derivedSuitesImportPath(vm)
         );
     }
 
-    /// `writeReleasedSuitesAggregate` applied to this repo's own
-    /// `SUITES_IMPORT_PATH` as well, which only resolves for a lib written into
-    /// THIS repo's `LIB_DIR` — a consumer passes its own remapped path to the
-    /// arity above.
+    /// `writeReleasedSuitesAggregate` applied to `derivedSuitesImportPath` as
+    /// well, so a consumer gets its own remapped path without naming it. The
+    /// arity above takes an explicit path, for a layout neither case fits.
     /// @param vm The Vm instance for file operations.
     /// @param libDir The directory to write into, under the constraint the
     /// arity above states — `LIB_DIR` for a repo's real libs.
@@ -1482,7 +1528,7 @@ library LibRainDeploySnapshot {
         internal
         returns (string memory)
     {
-        return writeReleasedSuitesAggregate(vm, libDir, contractNames, SUITES_IMPORT_PATH);
+        return writeReleasedSuitesAggregate(vm, libDir, contractNames, derivedSuitesImportPath(vm));
     }
 
     /// The newest release in a record: the greatest tag any of its files sits
