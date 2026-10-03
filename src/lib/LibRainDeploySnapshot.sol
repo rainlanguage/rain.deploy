@@ -441,10 +441,16 @@ library LibRainDeploySnapshot {
         if (!vm.keyExistsToml(toml, key)) {
             return suitesImportPathInThisRepo();
         }
-        return
-            string.concat(
-                PACKAGE_NAME, "-", vm.parseTomlString(toml, key), "/", SOURCE_ROOT, "/", SUITES_SOURCE_SUBPATH
-            );
+        // Soldeer takes a pin either as a bare version string or as an inline
+        // table carrying `version` beside a git or path source, so the version
+        // sits at one of two selectors. Reading only the bare one reverts on
+        // the table form — `expected string, found JSON object` — and it
+        // reverts inside the writer, before anything is emitted, so the repo
+        // gets no lib rather than a wrong one.
+        string memory versionKey = string.concat(key, ".version");
+        string memory version =
+            vm.keyExistsToml(toml, versionKey) ? vm.parseTomlString(toml, versionKey) : vm.parseTomlString(toml, key);
+        return string.concat(PACKAGE_NAME, "-", version, "/", SOURCE_ROOT, "/", SUITES_SOURCE_SUBPATH);
     }
 
     /// The generated aggregate's library name, and the file it is written to.

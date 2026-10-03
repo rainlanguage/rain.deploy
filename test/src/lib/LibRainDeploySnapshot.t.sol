@@ -1546,6 +1546,31 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
+    /// An inline-table pin MUST read the same as a bare string one.
+    ///
+    /// Soldeer takes both forms, and the table form puts the version one
+    /// selector deeper. Read only the bare selector and this reverts with
+    /// `expected string, found JSON object` — inside the writer, before
+    /// anything is emitted, so a consumer pinning that way gets no generated
+    /// lib at all rather than a wrong one.
+    function testSuitesImportPathForTomlReadsAnInlineTablePin() external view {
+        assertEq(
+            LibRainDeploySnapshot.suitesImportPathForToml(
+                vm, "[dependencies]\nrain-deploy = { version = \"0.1.11\" }\n"
+            ),
+            "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol"
+        );
+
+        // The version beside a source, which is why the table form exists.
+        assertEq(
+            LibRainDeploySnapshot.suitesImportPathForToml(
+                vm,
+                "[dependencies]\nrain-deploy = { version = \"0.2.0\", git = \"https://github.com/rainlanguage/rain.deploy\" }\n"
+            ),
+            "rain-deploy-0.2.0/src/abstract/RainDeploySuitesBase.sol"
+        );
+    }
+
     /// No pin MUST be the parent-relative path.
     ///
     /// That is THIS repo, because nothing depends on itself, and here the type
