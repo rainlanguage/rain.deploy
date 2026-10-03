@@ -278,6 +278,48 @@ Only the consumer knows where it stored what it resolved, so the consumer
 supplies the reads (`abi.encodeCall(IOwnable.owner, ())` and the like) and this
 library supplies the fork loop and the comparison.
 
+### Provenance: `AddressRegistryV2`
+
+`AddressRegistry` is `IAddressRegistryV1`. `AddressRegistryV2` is
+`IAddressRegistryV2`: the same registry, plus the moment a binding's address
+last changed, which `get` answers with alongside the address.
+
+That is for the read a consumer makes at a moment nobody is watching. V1's
+containment — a poisoned binding is a burned deterministic address, found by
+verifying a deployment after deploying it — holds for a deploy, which is
+followed by verification. It does not hold for an existing proxy being
+reconciled after a beacon upgrade: that read happens months or years after the
+implementation was audited, nothing new is deployed, and so a root compromise
+can sit dormant on the honest address and be switched immediately before it.
+
+Nothing is withheld and nothing is pending. `register` takes effect in the block
+it lands in, exactly as in V1, and the timestamp is what lets a reader decide
+for itself whether that is too recent to trust. The window a reader considers
+unsafe is the reader's own number, which different readers choose differently,
+so a registry enforcing one would be picking it for everybody and answering a
+policy question with storage. The registry stays a record with provenance;
+policy sits with the reader.
+
+`changedAt` is the moment the bound ADDRESS changed, not the moment `register`
+was last called. Root re-binding a name to the address it already holds changes
+nothing, so the timestamp stays where it is — otherwise a call that moved
+nothing would read as a rotation, and root could make an untouched binding look
+fresh without touching it.
+
+It is a separate contract rather than a change to `AddressRegistry`, because
+`IAddressRegistryV1` rules out changing that contract's shape — "There is no
+removal, no upgrade and no authority beyond root, and an implementation MUST NOT
+add any" — and storing a timestamp is a shape change. So the V1 registry stays
+at its own deterministic address with the bindings it holds, this one has its
+own creation code and therefore its own address, and bindings do not carry
+between them. Root is the same account, imported from `AddressRegistry` so it is
+spelled once: it is the organisation's root, not one contract's, so rotating it
+moves both deterministic addresses together.
+
+It is not a declared deploy candidate yet, so it has no pinned address, no
+snapshot and no `LibAddressRegistryV2` to read it with. Declaring it writes a
+generated snapshot, which is release-ordering work rather than a source change.
+
 ## Migration registry
 
 `MigrationRegistry` records that a migration has been applied, when, and after
