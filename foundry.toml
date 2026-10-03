@@ -128,3 +128,6 @@ polygon = { key = "${CI_DEPLOY_POLYGON_ETHERSCAN_API_KEY}", chain = 137 }
 # afterwards through Sourcify (which supports 4663 and which Blockscout
 # imports): `forge verify-contract --verifier sourcify --chain 4663 ...`.
 robinhood = { key = "${CI_DEPLOY_ROBINHOOD_ETHERSCAN_API_KEY}", chain = 4663, url = "https://robinhoodchain.blockscout.com/api" }
+
+[profile.paris]
+evm_version = "paris"

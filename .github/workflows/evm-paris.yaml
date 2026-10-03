@@ -1,0 +1,19 @@
+name: evm-paris
+# A consumer that snapshots pre-cancun bytecode compiles this library under
+# `paris` codegen, which has no MCOPY and so a shallower stack budget. Proves
+# every abstract, library and script a consumer compiles still fits it.
+on: [push]
+env:
+  RAINIX_SHA: 8657b83b68f41957ab85da91132c3f652c1f32c0
+jobs:
+  evm-paris:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: rainlanguage/rainix/.github/actions/checkout@main
+      - uses: rainlanguage/rainix/.github/actions/nix-cachix-setup@main
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - name: Install soldeer dependencies
+        run: nix develop github:rainlanguage/rainix/${{ env.RAINIX_SHA }}#sol-shell -c forge soldeer install
+      - name: Build under paris
+        run: FOUNDRY_PROFILE=paris nix develop github:rainlanguage/rainix/${{ env.RAINIX_SHA }}#sol-shell -c forge build --skip test

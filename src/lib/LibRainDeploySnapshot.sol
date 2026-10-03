@@ -93,6 +93,17 @@ error InvalidRecordRoot(string root);
 /// `deployTag` can read it:
 /// `fs_permissions = [{ access = "read", path = "./foundry.toml" }, ...]`
 /// alongside read-write access to `./src`.
+/// What `writeReleasedSuitesLib` writes, as one memory struct so the writer
+/// holds one slot for it rather than six.
+struct ReleasedSuitesLib {
+    string libDir;
+    string recordRoot;
+    string contractName;
+    string spdxLicenseIdentifier;
+    string copyrightText;
+    DeploySuite template;
+}
+
 library LibRainDeploySnapshot {
     /// The rolling snapshot's directory name. A sibling of the frozen tag
     /// directories rather than a file beside them, so `src/generated/` reads as
@@ -898,23 +909,38 @@ library LibRainDeploySnapshot {
         view
         returns (string[] memory)
     {
-        string[] memory paths = frozenSnapshotPaths(vm, recordRoot);
+        return sortedRecordPaths(vm, recordPathsMatching(vm, frozenSnapshotPaths(vm, recordRoot), contractName));
+    }
 
+    /// Whether a record path names a snapshot of the contract whose name hashes
+    /// to `contractNameHash`.
+    function isRecordOf(Vm vm, string memory path, bytes32 contractNameHash) internal pure returns (bool) {
+        return keccak256(bytes(contractForRecordPath(vm, path))) == contractNameHash;
+    }
+
+    /// The record paths among `paths` that are snapshots of `contractName`, in
+    /// the order given. Its own frame, with the name hashed once: the filter
+    /// inlined into `recordPathsForContract` is one slot past what `paris`
+    /// codegen (no `MCOPY`) fits on the stack.
+    function recordPathsMatching(Vm vm, string[] memory paths, string memory contractName)
+        internal
+        pure
+        returns (string[] memory)
+    {
+        bytes32 contractNameHash = keccak256(bytes(contractName));
         string[] memory found = new string[](paths.length);
         uint256 count = 0;
         for (uint256 i = 0; i < paths.length; i++) {
-            if (keccak256(bytes(contractForRecordPath(vm, paths[i]))) != keccak256(bytes(contractName))) {
-                continue;
+            if (isRecordOf(vm, paths[i], contractNameHash)) {
+                found[count] = paths[i];
+                count++;
             }
-            found[count] = paths[i];
-            count++;
         }
-
         string[] memory selected = new string[](count);
         for (uint256 i = 0; i < count; i++) {
             selected[i] = found[i];
         }
-        return sortedRecordPaths(vm, selected);
+        return selected;
     }
 
     /// The name of the generated lib that declares ONE contract's releases.
@@ -1017,8 +1043,10 @@ library LibRainDeploySnapshot {
             string memory index = vm.toString(i);
             string memory prefix = releasedConstantPrefix(vm, paths[i]);
 
-            entries = string.concat(
-                entries,
+            // Built in three concatenations rather than one: `string.concat` takes
+            // every part as a stack slot, and nineteen of them is past what `paris`
+            // codegen (no `MCOPY`) fits without `--via-ir`.
+            string memory head = string.concat(
                 "        suites[",
                 index,
                 "] = DeploySuite({\n            suite: \"",
@@ -1026,7 +1054,9 @@ library LibRainDeploySnapshot {
                 "@",
                 tagForRecordPath(vm, paths[i]),
                 "\",\n            creationCode: ",
-                prefix,
+                prefix
+            );
+            string memory pins = string.concat(
                 "_CREATION_CODE,\n            storedDeployedAddress: ",
                 prefix,
                 "_DEPLOYED_ADDRESS,\n            storedBytecodeHash: ",
@@ -1034,7 +1064,12 @@ library LibRainDeploySnapshot {
                 "_BYTECODE_HASH,\n            storedRuntimeCode: ",
                 prefix,
                 "_RUNTIME_CODE,\n            artifactPath: \"",
-                template.artifactPath,
+                template.artifactPath
+            );
+            entries = string.concat(
+                entries,
+                head,
+                pins,
                 "\",\n            dependencies: abi.decode(",
                 prefix,
                 "_DEPENDENCIES, (address[]))\n        });\n"
@@ -1122,24 +1157,40 @@ library LibRainDeploySnapshot {
         string memory copyrightText,
         DeploySuite memory template
     ) internal returns (string memory) {
-        string memory libraryName = releasedLibraryName(contractName);
-        string memory path = pathForLib(libDir, libraryName);
-        // `paths` is scoped away before the write, and the body built first,
-        // because `libDir` is one local past what this function's stack frame
-        // holds: inlined into the `writeFile` call the way the other writers
-        // spell it, solc 0.8.25 without `--via-ir` refuses it as stack too
-        // deep. Not a style choice — the flat form does not compile.
-        string memory body;
-        {
-            string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
-            body = string.concat(
-                releasedImportBlock(vm, paths), releasedLibraryBlock(vm, libraryName, contractName, paths, template)
-            );
-        }
+        // Seven parameters plus the call that builds the file is past what solc
+        // 0.8.25 without `--via-ir` fits on the stack under `paris` codegen (no
+        // `MCOPY`), which a consumer snapshotting pre-cancun bytecode compiles
+        // with; one memory struct is one slot.
+        return writeReleasedSuitesLib(
+            vm,
+            ReleasedSuitesLib({
+                libDir: libDir,
+                recordRoot: recordRoot,
+                contractName: contractName,
+                spdxLicenseIdentifier: spdxLicenseIdentifier,
+                copyrightText: copyrightText,
+                template: template
+            })
+        );
+    }
 
+    function writeReleasedSuitesLib(Vm vm, ReleasedSuitesLib memory lib) internal returns (string memory) {
+        string memory path = pathForLib(lib.libDir, releasedLibraryName(lib.contractName));
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.writeFile(path, string.concat(LibCodeGen.filePrefix(spdxLicenseIdentifier, copyrightText), "\n", body));
+        vm.writeFile(path, releasedSuitesFile(vm, lib));
         return path;
+    }
+
+    /// The released-suites lib source for one contract: the file prefix, the
+    /// import block over its frozen records and the library block.
+    function releasedSuitesFile(Vm vm, ReleasedSuitesLib memory lib) internal view returns (string memory) {
+        string[] memory paths = recordPathsForContract(vm, lib.recordRoot, lib.contractName);
+        return string.concat(
+            LibCodeGen.filePrefix(lib.spdxLicenseIdentifier, lib.copyrightText),
+            "\n",
+            releasedImportBlock(vm, paths),
+            releasedLibraryBlock(vm, releasedLibraryName(lib.contractName), lib.contractName, paths, lib.template)
+        );
     }
 
     /// `writeReleasedSuitesLib` applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
