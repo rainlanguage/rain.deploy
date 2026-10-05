@@ -48,7 +48,8 @@ contract MultiSuiteDeploy is RainDeployBroadcast {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new address[](0)
-            })
+            }),
+            unanchorableReason: ""
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
@@ -59,7 +60,8 @@ contract MultiSuiteDeploy is RainDeployBroadcast {
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new address[](0)
-            })
+            }),
+            unanchorableReason: ""
         });
     }
 }

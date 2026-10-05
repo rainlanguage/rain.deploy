@@ -5,7 +5,9 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {
+    CandidateSourceCompiles,
     CandidateSourceMismatch,
+    DeployCandidate,
     DeploySuite,
     DuplicateDeploySuite,
     InvalidDeploySuiteKey,
@@ -21,6 +23,9 @@ import {NoCandidateDeploySuites} from "../../concrete/NoCandidateDeploySuites.so
 import {SameLengthKeyDeploySuites} from "../../concrete/SameLengthKeyDeploySuites.sol";
 import {SeparatorKeyDeploySuites} from "../../concrete/SeparatorKeyDeploySuites.sol";
 import {ShortestKeyDeploySuites} from "../../concrete/ShortestKeyDeploySuites.sol";
+import {UnanchorableDeploy, ASSEMBLED_CREATION_CODE} from "../../concrete/UnanchorableDeploy.sol";
+import {UnanchorableWithArtifactDeploySuites} from "../../concrete/UnanchorableWithArtifactDeploySuites.sol";
+import {UnanchorableWithStaleArtifactDeploySuites} from "../../concrete/UnanchorableWithStaleArtifactDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
@@ -277,6 +282,93 @@ contract RainDeploySuitesBaseTest is Test {
             )
         );
         misanchored.externalCheckCandidatesAnchoredToSource();
+    }
+
+    /// A candidate whose source NO compiler produces MUST be declarable, and
+    /// the anchor MUST pass over it rather than failing a repo out of its own
+    /// deploy path.
+    ///
+    /// A vendored third party deployment and a generated data contract have no
+    /// artifact for `vm.getCode` to resolve, so the anchor has no second operand
+    /// at all: the recorded bytes are the only statement of what the code is.
+    /// Both shapes the path takes are declared — a bare contract name and
+    /// nothing at all — because that is the whole of the difference between the
+    /// two repos the case arose in.
+    ///
+    /// The pass is not vacuous. `testUnanchorableCandidateThatCompilesIsRefused`
+    /// runs the same mechanism over a path that DOES resolve and is refused, so
+    /// this is the claim being honoured rather than the check being absent.
+    ///
+    /// Unanchored is not undeployed: the entries are keyed, listed and
+    /// selectable like any other suite, which is what the broadcast needs of
+    /// them.
+    function testUnanchorableCandidateIsAnchoredByNothing() external {
+        UnanchorableDeploy unanchorable = new UnanchorableDeploy();
+
+        unanchorable.externalCheckCandidatesAnchoredToSource();
+
+        DeployCandidate[] memory candidates = unanchorable.externalCheckedCandidateSuites();
+        assertEq(candidates.length, 3);
+        assertEq(candidates[0].unanchorableReason, "");
+        assertGt(bytes(candidates[1].unanchorableReason).length, 0);
+        assertEq(candidates[1].snapshot.artifactPath, "VendoredDeployable");
+        assertGt(bytes(candidates[2].unanchorableReason).length, 0);
+        assertEq(candidates[2].snapshot.artifactPath, "");
+
+        assertEq(unanchorable.externalSuiteNames(), "compiled-candidate, vendored-candidate, generated-candidate");
+        assertEq(
+            unanchorable.externalSuiteByName("generated-candidate").storedDeployedAddress,
+            LibRainDeploy.zoltuAddress(ASSEMBLED_CREATION_CODE)
+        );
+    }
+
+    /// A reason declared over a contract that DOES compile MUST be refused,
+    /// naming the candidate and the path that resolved.
+    ///
+    /// This is what stops the field being a way to spell "do not anchor me" on
+    /// an ordinary candidate, on the broadcast path as well as here. The refused
+    /// candidate records exactly what its artifact holds — it would pass the
+    /// anchor with the claim deleted — so what is refused is the DECLARATION,
+    /// and a check that only refused a claim it caught disagreeing with an
+    /// artifact lets this through.
+    ///
+    /// The refused candidate is the SECOND, behind a legitimately unanchorable
+    /// one, so this is also what says the loop passes OVER an exemption rather
+    /// than stopping at it.
+    function testUnanchorableCandidateThatCompilesIsRefused() external {
+        UnanchorableWithArtifactDeploySuites compiled = new UnanchorableWithArtifactDeploySuites();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CandidateSourceCompiles.selector,
+                "current-source-candidate",
+                "test/concrete/MockDeployableV2.sol:MockDeployableV2"
+            )
+        );
+        compiled.externalCheckCandidatesAnchoredToSource();
+    }
+
+    /// And over a STALE snapshot of a contract that compiles, it MUST be refused
+    /// as the claim being false rather than reported as the mismatch.
+    ///
+    /// This is the use a repo whose anchor has gone red would put the field to:
+    /// the record disagrees with the artifact, and one line makes the check stop
+    /// asking. `CandidateSourceCompiles` rather than `CandidateSourceMismatch`
+    /// is what says the claim was refused on its own terms — a check that
+    /// compared first and read the reason afterwards reverts with the other
+    /// error here, and is satisfied by the field everywhere a record happens to
+    /// agree.
+    function testUnanchorableCandidateOverAStaleSnapshotIsRefused() external {
+        UnanchorableWithStaleArtifactDeploySuites stale = new UnanchorableWithStaleArtifactDeploySuites();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CandidateSourceCompiles.selector,
+                "stale-source-candidate",
+                "test/concrete/MockDeployable.sol:MockDeployable"
+            )
+        );
+        stale.externalCheckCandidatesAnchoredToSource();
     }
 
     /// A key is the whole string, not its length. Two DIFFERENT keys of the

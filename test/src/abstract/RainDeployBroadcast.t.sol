@@ -14,6 +14,7 @@ import {StalePinDeploy, STALE_PIN_ADDRESS} from "../../concrete/StalePinDeploy.s
 import {MissingDependencyDeploy, ABSENT_DEPENDENCY} from "../../concrete/MissingDependencyDeploy.sol";
 import {StaleCodeHashDeploy, STALE_CODE_HASH} from "../../concrete/StaleCodeHashDeploy.sol";
 import {MultiSuiteDeploy} from "../../concrete/MultiSuiteDeploy.sol";
+import {UnanchorableDeploy} from "../../concrete/UnanchorableDeploy.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 
@@ -420,6 +421,39 @@ contract RainDeployBroadcastTest is Test {
             )
         );
         misanchored.run();
+    }
+
+    /// The broadcast MUST get PAST the anchor for a candidate whose source no
+    /// compiler produces.
+    ///
+    /// The anchor is the first statement of `run()` and it resolves
+    /// `artifactPath` through `vm.getCode`, so a candidate with no artifact was
+    /// a suite that could not be broadcast at all — not a red CI run but a repo
+    /// with no path to chain for a vendored deployment or a generated data
+    /// contract. Those are exactly the suites with no `type(X).creationCode` to
+    /// fall back on, and in one of the two repos it is the suite that must land
+    /// FIRST for anything after it to construct.
+    ///
+    /// This declaration names no key anything sets `DEPLOYMENT_SUITE` to, so
+    /// selection is where a run that cleared the anchor arrives, and the
+    /// anchor's own revert is what it would have produced instead. Nothing here
+    /// writes an env var, for the reason the test above gives.
+    ///
+    /// `RainDeploySuitesBaseTest.testUnanchorableCandidateThatCompilesIsRefused`
+    /// is the other half: the same definition refuses a declaration claiming
+    /// this of a contract the compiler does produce.
+    function testRunReachesSelectionPastAnUnanchorableCandidate() external {
+        UnanchorableDeploy unanchorable = new UnanchorableDeploy();
+
+        string memory requested = vm.envOr("DEPLOYMENT_SUITE", string(""));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                UnknownDeploymentSuite.selector,
+                requested,
+                "compiled-candidate, vendored-candidate, generated-candidate"
+            )
+        );
+        unanchorable.run();
     }
 
     /// The default target set MUST be every supported network, so a

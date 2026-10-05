@@ -158,11 +158,26 @@ that catches a snapshot of the wrong contract compare a value with itself —
 green for any candidate whatsoever, on the broadcast path as well as in CI. It
 used to be able to (rainlanguage/rain.factory.deploy#34); the field is gone.
 
+One kind of candidate cannot be anchored at all, and SAYS so. A third party
+deployment vendored as a pinned hex literal, and a data contract assembled from
+generated tables, have no source file: `vm.getCode` resolves nothing, so the
+anchor has no second operand rather than a disagreeing one, and the recorded
+bytes are the only statement of what the code is that exists. Such a candidate
+declares an `unanchorableReason` — prose, in its own declaration, saying why no
+compiler produces it — and the anchor passes over it. The field carries no
+BYTES, so there is still nothing for a consumer to point at the record and
+nothing for the check to compare with itself; and it is REFUSED wherever the
+`artifactPath` does resolve (`CandidateSourceCompiles`), so it cannot be spelled
+on an ordinary candidate as a way out of the check. Nothing reads what it says.
+It is held to being said.
+
 `artifactPath` is therefore LOAD-BEARING on a candidate. It must resolve,
 uniquely, to the contract the snapshot is of. A path left behind by a moved or
 renamed source file now fails at the anchor — before the broadcast — where it
 previously only produced a `forge verify-contract` line a human read after the
-deploy.
+deploy. On a candidate that declares itself unanchorable it is the other way
+round: resolving to nothing is the state being declared, and resolving to an
+artifact is what refuses the declaration.
 
 It runs over EVERY candidate, and a declaration that names none at all is
 refused with `NoDeployCandidates` rather than passed as a loop with nothing in
@@ -185,7 +200,8 @@ The chain group carries the mirror image of that exemption: it applies to
 live on every supported network" is either true of it or a defect. A candidate
 is what the next release will be, ordinarily ahead of anything on chain, so
 demanding it be live asserts something false by design in the other direction.
-Neither exemption is a field a caller can set.
+Neither exemption is a field a caller can set; both follow from which side of
+the declaration an entry is on.
 
 Scoping to releases puts the whole weight on `releasedSuites()` naming every
 release, which is what the record group is for. A frozen tag the declaration
