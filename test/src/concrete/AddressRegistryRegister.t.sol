@@ -61,9 +61,11 @@ contract AddressRegistryRegisterTest is Test {
         assertEq(sRegistry.get(name), account);
     }
 
-    /// Re-binding a name to the address it already holds is allowed and is a
-    /// no-op on the binding. There is no special case for it in either
-    /// direction.
+    /// Re-binding a name to the address it already holds is allowed and leaves
+    /// the address it answers with unchanged. There is no special case for it in
+    /// either direction — in particular it is not a no-op, because it refreshes
+    /// the stamp like any other bind; `AddressRegistryRegisteredAtTest` is where
+    /// that is pinned.
     function testRegisterRebindSameAccount(bytes32 name, address account) external {
         vm.assume(account != address(0));
 

@@ -3,11 +3,12 @@
 pragma solidity ^0.8.25;
 
 /// @title IAddressRegistryV1
-/// @notice A registry of `bytes32` names to addresses with exactly two
-/// operations: an immutable root authority binds a name (`register`), and
-/// anyone reads a bound name (`get`). Root may re-bind a name it has already
-/// bound. There is no removal, no upgrade and no authority beyond root, and an
-/// implementation MUST NOT add any.
+/// @notice A registry of `bytes32` names to addresses with exactly three
+/// operations: an immutable root authority binds a name (`register`), anyone
+/// reads a bound name (`get`), and anyone reads when it was most recently bound
+/// (`registeredAt`). Root may re-bind a name it has already bound. There is no
+/// removal, no upgrade and no authority beyond root, and an implementation MUST
+/// NOT add any.
 ///
 /// Names are opaque 32-byte values. This interface says nothing about how a
 /// name is derived — hashed from a string, a raw ASCII literal, a counter — and
@@ -35,6 +36,24 @@ pragma solidity ^0.8.25;
 /// after deploying it and before anything depends on it: the deployed contract
 /// has already snapshotted the value, so checking it is checking settled state.
 /// A poisoned deploy is a burned deterministic address, discovered before use.
+///
+/// That containment rests on the resolve happening at a moment someone is
+/// watching, which a deploy is. It says nothing about a resolve that happens
+/// later, so a root compromise can sit dormant on an honest binding and be
+/// switched immediately before one — and an address on its own cannot say that
+/// it has just moved. `registeredAt` is what makes the age of an answer
+/// readable on chain, where before it could only be recovered by enumerating
+/// `Register` logs, which a contract cannot do at all and an archive-less node
+/// cannot be relied on to answer.
+///
+/// The registry reports the age and imposes nothing on it. A fresh binding is
+/// live the moment it is bound, exactly as before; the registry does NOT hold
+/// one pending until some delay elapses, and an implementation MUST NOT. How
+/// fresh is too fresh belongs to the consumer, which is the only party that
+/// knows what it is resolving a name for, and differs between consumers — a
+/// single delay here would weld one answer into a contract that can never be
+/// upgraded, and a pending binding would additionally be a second thing a name
+/// can be and an authority over readers that this interface does not grant.
 interface IAddressRegistryV1 {
     /// Thrown when an account that is not the root authority calls `register`.
     /// @param sender The `msg.sender` that was not root.
@@ -56,6 +75,12 @@ interface IAddressRegistryV1 {
     /// log is the complete history of the registry and the only way to discover
     /// a binding without already knowing the name; the most recent `Register`
     /// for a name is its current binding.
+    ///
+    /// The stamp `registeredAt` answers with is deliberately not a field here. A
+    /// log already carries the block it was emitted in, so emitting
+    /// `block.timestamp` beside it would be the same fact twice, and a reader
+    /// taking the stamp from the event body rather than from the block would be
+    /// trusting the emitter for something the chain already told it.
     /// @param name The name that was bound.
     /// @param account The address `name` was bound to.
     event Register(bytes32 indexed name, address indexed account);
@@ -64,7 +89,15 @@ interface IAddressRegistryV1 {
     ///
     /// The implementation MUST revert `NotRoot` unless the caller is the root
     /// authority, and MUST revert `ZeroAccount` if `account` is the zero
-    /// address. On success it MUST emit `Register`.
+    /// address. On success it MUST emit `Register`, and MUST record
+    /// `block.timestamp` as the name's stamp in place of any stamp it already
+    /// carries — including when `account` is the address `name` already holds,
+    /// which is a bind like any other and so refreshes the stamp. The stamp
+    /// dates the WRITE, not the value: root re-asserting a binding is root
+    /// touching it, and reporting the later moment is the conservative
+    /// direction — it can only make an answer look fresher than the address
+    /// really is, so a consumer refusing fresh answers errs toward refusing,
+    /// never toward accepting one it meant to refuse.
     /// @param name The name to bind.
     /// @param account The address to bind it to.
     function register(bytes32 name, address account) external;
@@ -84,4 +117,22 @@ interface IAddressRegistryV1 {
     /// @param name The name to read.
     /// @return The address bound to `name`. Never the zero address.
     function get(bytes32 name) external view returns (address);
+
+    /// When `name` was most recently bound.
+    ///
+    /// The implementation MUST revert `NameNotRegistered` when `name` is
+    /// unbound, for the same reason `get` does, and here the reason is sharper:
+    /// zero is an ordinary number to subtract from, so answering an unbound name
+    /// with zero would hand a freshness check an age of "the whole of time" —
+    /// the one answer that passes every such check.
+    ///
+    /// An implementation that stores the stamp narrower than `block.timestamp`
+    /// MUST reject a timestamp that does not fit rather than truncate it. A
+    /// truncated stamp is a SMALLER number, which reads as an OLDER binding,
+    /// which passes exactly the check this reader exists to let a caller fail.
+    /// @param name The name to read.
+    /// @return The `block.timestamp` of the most recent `register` for `name`.
+    /// Zero only on a chain whose block time is itself zero, which is why an
+    /// unbound name is a revert and not a zero: nothing else separates the two.
+    function registeredAt(bytes32 name) external view returns (uint256);
 }
