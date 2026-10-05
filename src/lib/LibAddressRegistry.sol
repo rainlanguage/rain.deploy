@@ -49,6 +49,18 @@ library LibAddressRegistry {
     /// @param minAge How long it had to have stood.
     error BindingTooFresh(bytes32 name, uint256 age, uint256 minAge);
 
+    /// Thrown by `resolveSafe` when asked to accept any age at all. A `minAge`
+    /// of zero is satisfied by every binding, including one made in the block
+    /// being read, so it is `resolve` wearing the name of the checked version —
+    /// the one shape of call that looks guarded and is not. Refused rather than
+    /// answered, for the same reason `get` refuses an unbound name instead of
+    /// returning zero: a caller that reaches zero has reached it by accident,
+    /// from an unset constant or an unconfigured parameter, and that is a
+    /// mistake to report rather than a request to honour. A caller that really
+    /// wants no threshold says so by calling `resolve`.
+    /// @param name The name that was being resolved.
+    error ZeroMinAge(bytes32 name);
+
     /// The address `name` is currently bound to in the registry, and when it was
     /// bound.
     ///
@@ -85,8 +97,12 @@ library LibAddressRegistry {
     /// the caller knows what it is resolving the name for.
     ///
     /// A binding exactly `minAge` old passes — the requirement is that it has
-    /// stood for at least that long, so the boundary is inclusive. `minAge` of
-    /// zero accepts any binding, which is `resolve` with the extra read.
+    /// stood for at least that long, so the boundary is inclusive.
+    ///
+    /// A `minAge` of zero is REFUSED, before the registry is read at all. Zero
+    /// accepts everything, so it would make this function `resolve` under a
+    /// name that promises a check — the one call shape that looks guarded while
+    /// guarding nothing. `resolve` is how a caller asks for no threshold.
     ///
     /// A binding stamped in the future is treated as having no age at all and
     /// so always refused, rather than reverting on the underflow of
@@ -99,8 +115,16 @@ library LibAddressRegistry {
     /// `resolve` and compares for itself.
     /// @param name The name to resolve. Opaque, as in `resolve`.
     /// @param minAge The least time, in seconds, the binding must have stood.
+    /// Never zero.
     /// @return The address bound to `name`.
     function resolveSafe(bytes32 name, uint256 minAge) internal view returns (address) {
+        // First, so that a caller which asked for no threshold is told so
+        // whatever the registry would have said — including on a chain with no
+        // registry, and for a name nobody has bound. The call is wrong before
+        // any of that is reached.
+        if (minAge == 0) {
+            revert ZeroMinAge(name);
+        }
         (address account, uint256 registeredAt) = resolve(name);
         // Clamped rather than subtracted blind, so a future stamp is refused by
         // the check below instead of reverting as an arithmetic panic.

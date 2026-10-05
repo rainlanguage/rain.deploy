@@ -208,6 +208,7 @@ contract LibAddressRegistryTest is Test {
     /// address.
     function testResolveSafeOldEnough(bytes32 name, address account, uint64 minAge, uint64 extra) external {
         vm.assume(account != address(0));
+        vm.assume(minAge > 0);
         IAddressRegistryV1 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
@@ -222,6 +223,7 @@ contract LibAddressRegistryTest is Test {
     /// one would refuse a binding that has met the caller's own condition.
     function testResolveSafeExactlyMinAge(bytes32 name, address account, uint64 minAge) external {
         vm.assume(account != address(0));
+        vm.assume(minAge > 0);
         IAddressRegistryV1 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
@@ -261,16 +263,41 @@ contract LibAddressRegistryTest is Test {
         this.externalResolveSafe(name, minAge);
     }
 
-    /// A minimum of zero accepts any binding, including one made in the same
-    /// block, which makes it `resolve` with the extra read and no threshold.
-    function testResolveSafeZeroMinAge(bytes32 name, address account) external {
+    /// A minimum of zero is refused rather than honoured, even for a binding
+    /// that would pass any real threshold. Zero is satisfied by every binding,
+    /// so honouring it would make this `resolve` under a name that promises a
+    /// check — the one call shape that looks guarded while guarding nothing.
+    function testResolveSafeZeroMinAgeRefused(bytes32 name, address account, uint64 aged) external {
         vm.assume(account != address(0));
         IAddressRegistryV1 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, account);
+        vm.warp(block.timestamp + uint256(aged));
 
-        assertEq(LibAddressRegistry.resolveSafe(name, 0), account);
+        vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.ZeroMinAge.selector, name));
+        this.externalResolveSafe(name, 0);
+    }
+
+    /// Zero is refused before the registry is read at all, so an unbound name
+    /// with a zero minimum reports the zero rather than the missing binding. The
+    /// call is wrong before the registry could have an opinion, and saying
+    /// `NameNotRegistered` would send the caller looking at the wrong thing.
+    function testResolveSafeZeroMinAgeBeatsUnregistered(bytes32 name) external {
+        deployRegistry();
+
+        vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.ZeroMinAge.selector, name));
+        this.externalResolveSafe(name, 0);
+    }
+
+    /// And before the code-hash guard, so a zero minimum is reported even on a
+    /// chain with no registry deployed. This pins the order of the two
+    /// refusals rather than leaving it to whichever happens to run first.
+    function testResolveSafeZeroMinAgeBeatsMissingRegistry(bytes32 name) external {
+        assertEq(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
+
+        vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.ZeroMinAge.selector, name));
+        this.externalResolveSafe(name, 0);
     }
 
     /// A re-bind makes the name fresh again, so a binding that passed before the
@@ -323,6 +350,7 @@ contract LibAddressRegistryTest is Test {
     /// have an opinion — so a name nobody bound is never reported as merely too
     /// fresh, which would read as "wait and try again".
     function testResolveSafeUnregistered(bytes32 name, uint256 minAge) external {
+        vm.assume(minAge > 0);
         deployRegistry();
 
         vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name));
@@ -333,6 +361,7 @@ contract LibAddressRegistryTest is Test {
     /// occupies the registry's address cannot be talked into answering a
     /// freshness-checked read.
     function testResolveSafeNoRegistry(bytes32 name, uint256 minAge) external {
+        vm.assume(minAge > 0);
         assertEq(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
 
         vm.expectRevert(
