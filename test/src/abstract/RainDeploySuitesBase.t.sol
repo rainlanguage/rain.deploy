@@ -28,6 +28,7 @@ import {UnanchorableDeploy, ASSEMBLED_CREATION_CODE} from "../../concrete/Unanch
 import {UnanchorableWithArtifactDeploySuites} from "../../concrete/UnanchorableWithArtifactDeploySuites.sol";
 import {UnanchorableWithStaleArtifactDeploySuites} from "../../concrete/UnanchorableWithStaleArtifactDeploySuites.sol";
 import {UnqualifiedArtifactPathDeploySuites} from "../../concrete/UnqualifiedArtifactPathDeploySuites.sol";
+import {VersionQualifiedArtifactPathDeploySuites} from "../../concrete/VersionQualifiedArtifactPathDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
@@ -310,6 +311,21 @@ contract RainDeploySuitesBaseTest is Test {
         // quietly selectable.
         vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
         unqualified.externalSuiteByName("qualified-candidate");
+    }
+
+    /// A colon is not a file. forge reads `Name:0.8.25` as a contract name plus
+    /// a compiler version, so this form resolves exactly as the bare name does
+    /// and carries the same ambiguity.
+    function testVersionQualifiedCandidateArtifactPathReverts() external {
+        VersionQualifiedArtifactPathDeploySuites versioned = new VersionQualifiedArtifactPathDeploySuites();
+
+        assertEq(keccak256(vm.getCode("MockDeployableV2:0.8.25")), keccak256(type(MockDeployableV2).creationCode));
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2:0.8.25"));
+        versioned.externalCheckedCandidateSuites();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2:0.8.25"));
+        versioned.externalCheckCandidatesAnchoredToSource();
     }
 
     function testCandidateThatNamesAnotherContractIsRefused() external {

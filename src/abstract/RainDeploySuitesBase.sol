@@ -90,7 +90,9 @@ error NoDeployCandidates();
 /// same-named files it came from.
 ///
 /// Raised from `checkedCandidateSuites`, for the reason `NoDeployCandidates`
-/// is: every candidate reader goes through that one read.
+/// is: every candidate reader goes through that one read. `.sol:` and not any
+/// colon: forge reads `Name:0.8.25` as a name plus a compiler version, which
+/// qualifies nothing.
 /// @param index Position in the candidate list. The path may be shared by two
 /// candidates, or empty, so the position is what names the entry.
 /// @param artifactPath The refused path.
@@ -281,9 +283,17 @@ abstract contract RainDeploySuitesBase {
         }
         for (uint256 i = 0; i < candidates.length; i++) {
             bytes memory path = bytes(candidates[i].snapshot.artifactPath);
+            // `.sol:` and not merely a colon, because forge reads `Name:0.8.25`
+            // as a contract name plus a compiler version — a colon that
+            // qualifies nothing, and a path that still resolves to whichever
+            // same-named artifact comes first. Measured: `Dup2:0.8.25` resolves
+            // to the same bytes as `File.sol:Dup2` with two `Dup2` compiled.
             bool qualified = false;
-            for (uint256 j = 0; j < path.length; j++) {
-                if (path[j] == ":") {
+            for (uint256 j = 0; j + 5 <= path.length; j++) {
+                if (
+                    path[j] == "." && path[j + 1] == "s" && path[j + 2] == "o" && path[j + 3] == "l"
+                        && path[j + 4] == ":"
+                ) {
                     qualified = true;
                     break;
                 }
