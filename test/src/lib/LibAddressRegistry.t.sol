@@ -52,6 +52,7 @@ contract LibAddressRegistryTest is Test {
         vm.assume(account != address(0));
         IAddressRegistryV1 registry = deployRegistry();
 
+        time = uint96(bound(time, 1, type(uint96).max));
         vm.warp(time);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, account);
@@ -73,6 +74,7 @@ contract LibAddressRegistryTest is Test {
         // A name's moment is strictly increasing, so the re-bind is strictly after
         // the first bind. `vm.assume` rather than `bound` because this test's
         // `bound` parameter shadows forge-std's helper of that name.
+        vm.assume(first > 0);
         vm.assume(second > first);
         IAddressRegistryV1 registry = deployRegistry();
 

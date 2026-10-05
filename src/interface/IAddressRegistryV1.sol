@@ -80,12 +80,16 @@ interface IAddressRegistryV1 {
     /// identical — two distinct bindings a caller cannot tell apart by the only
     /// signal the registry gives it about when it changed.
     ///
-    /// The rule binds a RE-bind only. An unbound name carries no moment for a
-    /// new one to be after, so a first bind is unconstrained.
+    /// The rule is unconditional, with no carve-out for a first bind. An
+    /// unbound name reads as a moment of zero, so a bind at `block.timestamp ==
+    /// 0` is refused as well. That is deliberate: zero is the unset value of
+    /// the moment, and a binding allowed to store it would be one whose moment
+    /// cannot be told apart from never having been bound. A stored moment is
+    /// therefore never zero.
     /// @param name The name that was being bound.
     /// @param timestamp The clock the bind was attempted at.
     /// @param registeredAt The moment the name already carries, which that clock
-    /// is not after.
+    /// is not after. Zero when the name is unbound.
     error TimestampNotAfterBinding(bytes32 name, uint256 timestamp, uint256 registeredAt);
 
     /// Emitted every time `name` is bound, including when it is re-bound. The
@@ -139,7 +143,7 @@ interface IAddressRegistryV1 {
     /// @param name The name to read.
     /// @return The address bound to `name`. Never the zero address.
     /// @return The `block.timestamp` of the most recent `register` for `name`.
-    /// Zero only on a chain whose block time is itself zero, which is why an
-    /// unbound name is a revert and not a zero: nothing else separates the two.
+    /// Never zero: `register` refuses a bind at a clock of zero, so zero in the
+    /// moment field means unbound and nothing else.
     function get(bytes32 name) external view returns (address, uint256);
 }

@@ -80,9 +80,13 @@ contract AddressRegistry is IAddressRegistryV1 {
 
     /// The bindings. Not `public`: the only reader is `get`, which reverts on an
     /// unbound name. A name's `account` is the zero address if and only if it is
-    /// unbound, which is why `register` rejects the zero address, and why
-    /// bound-ness is never decided from the moment — the moment of a bound name
-    /// is legitimately zero on a chain at block time zero.
+    /// unbound, which is why `register` rejects the zero address.
+    ///
+    /// Bound-ness is read off `account` even though `register` also keeps the
+    /// moment nonzero, so the two halves agree about it. The address is the
+    /// binding and the moment is metadata about when it was written; deciding
+    /// bound-ness from the metadata would hold whether or not the nonzero rule
+    /// in `register` survives a later edit.
     mapping(bytes32 name => Binding binding) internal sBindings;
 
     /// @inheritdoc IAddressRegistryV1
@@ -129,18 +133,21 @@ contract AddressRegistry is IAddressRegistryV1 {
         // two distinct bindings a caller cannot tell apart by the only signal
         // the registry gives it.
         //
-        // The rule applies to a RE-bind only. An unbound name has no stored
-        // moment for a new one to be greater than, so a first bind is
-        // unconstrained; without that carve-out a chain at block time zero
-        // could never make its first binding.
+        // Unconditional, with no carve-out for a first bind. An unbound name
+        // reads as a moment of zero, so this also refuses a bind at
+        // `block.timestamp == 0` — which is the point rather than a side
+        // effect. Zero is the unset value of the moment field, and a binding
+        // allowed to store it would be one whose moment cannot be told from
+        // never-having-been-bound. Refusing it means a stored moment is never
+        // zero.
         //
         // Read after the cheap guards, so a call this function was going to
         // refuse anyway does not pay for the slot.
-        Binding memory existing = sBindings[name];
+        uint256 registeredAt = sBindings[name].registeredAt;
         // slither-disable-start timestamp
         // forge-lint: disable-next-line(block-timestamp)
-        if (existing.account != address(0) && block.timestamp <= existing.registeredAt) {
-            revert TimestampNotAfterBinding(name, block.timestamp, existing.registeredAt);
+        if (block.timestamp <= registeredAt) {
+            revert TimestampNotAfterBinding(name, block.timestamp, registeredAt);
         }
         // slither-disable-end timestamp
         // Assigned whole, so a re-bind replaces the moment in the same write
@@ -154,9 +161,9 @@ contract AddressRegistry is IAddressRegistryV1 {
     /// an answer that cannot move reads once and stores it, which is what a
     /// consumer resolving a name in its constructor does.
     ///
-    /// Bound-ness is read off `account`, never off the moment, so a binding
-    /// made on a chain at block time zero is answered rather than mistaken for
-    /// a name nobody bound.
+    /// Bound-ness is read off `account`, never off the moment. `register` keeps
+    /// the moment nonzero so the two would agree, and this reader does not rely
+    /// on that: the address is the binding, the moment is metadata about it.
     function get(bytes32 name) external view returns (address, uint256) {
         Binding memory binding = sBindings[name];
         // There is no time in this comparison. Slither reaches it because

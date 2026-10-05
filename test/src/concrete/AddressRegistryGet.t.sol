@@ -136,6 +136,7 @@ contract AddressRegistryGetTest is Test {
     function testGetReturnsMoment(bytes32 name, address account, uint96 time) external {
         vm.assume(account != address(0));
 
+        time = uint96(bound(time, 1, type(uint96).max));
         vm.warp(time);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, account);
@@ -150,7 +151,8 @@ contract AddressRegistryGetTest is Test {
     /// against `block.timestamp` grows rather than standing still.
     function testGetMomentStableAsTimePasses(bytes32 name, address account, uint96 time, uint96 elapsed) external {
         vm.assume(account != address(0));
-        time = uint96(bound(time, 0, type(uint96).max - elapsed));
+        elapsed = uint96(bound(elapsed, 0, type(uint96).max - 1));
+        time = uint96(bound(time, 1, type(uint96).max - elapsed));
 
         vm.warp(time);
         vm.prank(ADDRESS_REGISTRY_ROOT);
@@ -161,25 +163,21 @@ contract AddressRegistryGetTest is Test {
         assertEq(block.timestamp - getMoment(sRegistry, name), elapsed);
     }
 
-    /// A name bound on a chain at block time zero is bound, and its moment is
-    /// legitimately zero. This is why bound-ness is decided from the address and
-    /// never from the moment: here the moment of a bound name is
-    /// indistinguishable from that of a name nobody ever bound, while the
-    /// address and the revert are not.
-    function testGetMomentZeroBlockTime(bytes32 name, bytes32 unbound, address account) external {
+    /// The moment `get` answers with is never zero. `register` refuses a bind at
+    /// a clock of zero, so zero in the moment field means unbound and nothing
+    /// else — the one reading that would otherwise be ambiguous.
+    function testGetMomentNeverZero(bytes32 name, address account, uint96 time) external {
         vm.assume(account != address(0));
-        vm.assume(name != unbound);
+        time = uint96(bound(time, 1, type(uint96).max));
 
-        vm.warp(0);
+        vm.warp(time);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, account);
 
         (address got, uint256 registeredAt) = sRegistry.get(name);
         assertEq(got, account);
-        assertEq(registeredAt, 0);
-
-        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, unbound));
-        getAddress(sRegistry, unbound);
+        assertTrue(registeredAt != 0);
+        assertEq(registeredAt, time);
     }
 
     /// Moments are per name. Binding one name says nothing about another's age.
@@ -195,10 +193,12 @@ contract AddressRegistryGetTest is Test {
         vm.assume(accountA != address(0));
         vm.assume(accountB != address(0));
 
+        timeA = uint96(bound(timeA, 1, type(uint96).max));
         vm.warp(timeA);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(nameA, accountA);
 
+        timeB = uint96(bound(timeB, 1, type(uint96).max));
         vm.warp(timeB);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(nameB, accountB);
@@ -248,7 +248,12 @@ contract AddressRegistryGetTest is Test {
     ) external {
         vm.assume(bound_ != address(0));
         vm.assume(account != address(0));
+        // Past the stamp's width, so the width guard is what refuses the second
+        // bind. Deliberately a `uint256` beyond `uint96` range, so it must NOT
+        // be clamped back into it.
         time = bound(time, uint256(type(uint96).max) + 1, type(uint256).max);
+        // Nonzero, because a bind at a clock of zero is refused outright.
+        first = uint96(bound(first, 1, type(uint96).max));
 
         vm.warp(first);
         vm.prank(ADDRESS_REGISTRY_ROOT);
@@ -271,7 +276,7 @@ contract AddressRegistryGetTest is Test {
     /// read as a fresh one.
     function testGetAddressAndMomentMoveTogether(bytes32 name, address[] memory accounts, uint96 start) external {
         vm.assume(accounts.length > 0);
-        start = uint96(bound(start, 0, type(uint96).max - accounts.length));
+        start = uint96(bound(start, 1, type(uint96).max - accounts.length));
         for (uint256 i = 0; i < accounts.length; i++) {
             vm.assume(accounts[i] != address(0));
         }
