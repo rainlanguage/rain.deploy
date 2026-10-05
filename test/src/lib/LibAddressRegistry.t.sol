@@ -330,7 +330,7 @@ contract LibAddressRegistryTest is Test {
     /// the freshness check like any other too-fresh binding. A clock that moved
     /// backwards since the bind is not a state to hand a caller an address out
     /// of.
-    function testResolveSafeFutureStamp(bytes32 name, address account, uint64 ahead, uint64 minAge) external {
+    function testResolveSafeStampedInFuture(bytes32 name, address account, uint64 ahead, uint64 minAge) external {
         vm.assume(account != address(0));
         vm.assume(ahead > 0);
         vm.assume(minAge > 0);
@@ -342,6 +342,50 @@ contract LibAddressRegistryTest is Test {
 
         // The clock goes backwards, leaving the binding stamped ahead of it.
         vm.warp(1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibAddressRegistry.BindingStampedInFuture.selector, name, uint256(ahead) + 1, uint256(1)
+            )
+        );
+        this.externalResolveSafe(name, minAge);
+    }
+
+    /// A future stamp is refused however large the caller's minimum, so it is
+    /// not a threshold that happens to be unmet — it is a chain whose clock
+    /// cannot be used to age anything.
+    function testResolveSafeStampedInFutureRefusedAtAnyMinAge(bytes32 name, address account, uint64 ahead) external {
+        vm.assume(account != address(0));
+        vm.assume(ahead > 0);
+        IAddressRegistryV1 registry = deployRegistry();
+
+        vm.warp(uint256(ahead) + 1);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+        vm.warp(1);
+
+        uint256[3] memory minAges = [uint256(1), uint256(type(uint64).max), type(uint256).max];
+        for (uint256 i = 0; i < minAges.length; i++) {
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    LibAddressRegistry.BindingStampedInFuture.selector, name, uint256(ahead) + 1, uint256(1)
+                )
+            );
+            this.externalResolveSafe(name, minAges[i]);
+        }
+    }
+
+    /// A binding stamped at exactly the clock is NOT in the future — it is a
+    /// binding made in the block being read, which is the too-fresh case. This
+    /// is the boundary between the two errors, and reporting the wrong one here
+    /// would tell a caller its chain was broken when it only had to wait.
+    function testResolveSafeSameTimestampIsFreshNotFuture(bytes32 name, address account, uint64 minAge) external {
+        vm.assume(account != address(0));
+        vm.assume(minAge > 0);
+        IAddressRegistryV1 registry = deployRegistry();
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.BindingTooFresh.selector, name, 0, minAge));
         this.externalResolveSafe(name, minAge);
     }

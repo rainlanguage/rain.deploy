@@ -49,6 +49,23 @@ library LibAddressRegistry {
     /// @param minAge How long it had to have stood.
     error BindingTooFresh(bytes32 name, uint256 age, uint256 minAge);
 
+    /// Thrown by `resolveSafe` when the binding is stamped ahead of the clock
+    /// it is read against.
+    ///
+    /// Distinct from `BindingTooFresh` rather than reported as an age of zero,
+    /// because the two are not the same situation and the caller's response to
+    /// them differs. A binding made in the block being read is too fresh and
+    /// will become acceptable by waiting. A binding stamped in the FUTURE means
+    /// the chain's clock moved backwards since the bind: nothing is gained by
+    /// waiting, the age of every binding on that chain is unreliable, and the
+    /// only safe reading is that something is wrong with the chain. Collapsing
+    /// it into the freshness report would make "wait and retry" the advice for
+    /// a state where retrying is the wrong thing to do.
+    /// @param name The name that was being resolved.
+    /// @param registeredAt The moment the binding carries.
+    /// @param blockTimestamp The clock it was read against, which is behind it.
+    error BindingStampedInFuture(bytes32 name, uint256 registeredAt, uint256 blockTimestamp);
+
     /// Thrown by `resolveSafe` when asked to accept any age at all. A `minAge`
     /// of zero is satisfied by every binding, including one made in the block
     /// being read, so it is `resolve` wearing the name of the checked version —
@@ -104,11 +121,11 @@ library LibAddressRegistry {
     /// name that promises a check — the one call shape that looks guarded while
     /// guarding nothing. `resolve` is how a caller asks for no threshold.
     ///
-    /// A binding stamped in the future is treated as having no age at all and
-    /// so always refused, rather than reverting on the underflow of
-    /// `block.timestamp - registeredAt`. A future stamp means the chain's clock
-    /// moved backwards since the bind, which is not a state to hand a caller an
-    /// address out of.
+    /// A binding stamped ahead of the clock is refused as
+    /// `BindingStampedInFuture`, not as `BindingTooFresh`. It means the chain's
+    /// clock moved backwards since the bind, which is not a state to hand a
+    /// caller an address out of and not one that waiting repairs — so it is
+    /// reported as its own thing rather than as an age of zero.
     ///
     /// Returns the address alone. Vetting it is this function's whole purpose,
     /// so the moment has been spent; a caller that wants it as well uses
@@ -126,8 +143,10 @@ library LibAddressRegistry {
             revert ZeroMinAge(name);
         }
         (address account, uint256 registeredAt) = resolve(name);
-        // Clamped rather than subtracted blind, so a future stamp is refused by
-        // the check below instead of reverting as an arithmetic panic.
+        // Checked before the subtraction, so a future stamp is reported as what
+        // it is rather than underflowing into an arithmetic panic — and
+        // reported SEPARATELY from being too fresh, because waiting fixes one
+        // and not the other.
         //
         // Unlike the width check in `AddressRegistry.register`, these
         // comparisons really are about a moment, which is what the analysers
@@ -135,14 +154,16 @@ library LibAddressRegistry {
         // of slack at the boundary cannot matter to a `minAge` chosen to be
         // long enough to notice a rebind in, and a caller that would be harmed
         // by seconds has not picked a `minAge` that protects it from anything.
-        // Suppressed on these two comparisons rather than turned off for the
-        // repo.
+        // Suppressed on these comparisons rather than turned off for the repo.
         //
         // Slither's is a start/end pair because forge-lint's has to be the
         // comment immediately above the line and has no pair form.
         // slither-disable-start timestamp
         // forge-lint: disable-next-line(block-timestamp)
-        uint256 age = block.timestamp > registeredAt ? block.timestamp - registeredAt : 0;
+        if (registeredAt > block.timestamp) {
+            revert BindingStampedInFuture(name, registeredAt, block.timestamp);
+        }
+        uint256 age = block.timestamp - registeredAt;
         if (age < minAge) {
             revert BindingTooFresh(name, age, minAge);
         }
