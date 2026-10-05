@@ -195,6 +195,156 @@ contract LibAddressRegistryTest is Test {
         this.externalResolve(name);
     }
 
+    /// External wrapper for `resolveSafe` so that `vm.expectRevert` works at the
+    /// correct call depth.
+    /// @param name The name to resolve.
+    /// @param minAge The least time the binding must have stood.
+    /// @return The address bound to `name`.
+    function externalResolveSafe(bytes32 name, uint256 minAge) external view returns (address) {
+        return LibAddressRegistry.resolveSafe(name, minAge);
+    }
+
+    /// A binding that has stood longer than the caller's minimum resolves to its
+    /// address.
+    function testResolveSafeOldEnough(bytes32 name, address account, uint64 minAge, uint64 extra) external {
+        vm.assume(account != address(0));
+        IAddressRegistryV1 registry = deployRegistry();
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+
+        vm.warp(block.timestamp + uint256(minAge) + uint256(extra));
+        assertEq(LibAddressRegistry.resolveSafe(name, minAge), account);
+    }
+
+    /// A binding exactly `minAge` old passes. The requirement is that it has
+    /// stood for AT LEAST that long, so the boundary is inclusive — an exclusive
+    /// one would refuse a binding that has met the caller's own condition.
+    function testResolveSafeExactlyMinAge(bytes32 name, address account, uint64 minAge) external {
+        vm.assume(account != address(0));
+        IAddressRegistryV1 registry = deployRegistry();
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+
+        vm.warp(block.timestamp + uint256(minAge));
+        assertEq(LibAddressRegistry.resolveSafe(name, minAge), account);
+    }
+
+    /// A binding younger than the minimum is refused, and the revert carries the
+    /// age it had against the age it needed.
+    function testResolveSafeTooFresh(bytes32 name, address account, uint64 age, uint64 minAge) external {
+        vm.assume(account != address(0));
+        vm.assume(age < minAge);
+        IAddressRegistryV1 registry = deployRegistry();
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+
+        vm.warp(block.timestamp + uint256(age));
+        vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.BindingTooFresh.selector, name, age, minAge));
+        this.externalResolveSafe(name, minAge);
+    }
+
+    /// A binding made in the block being read is refused by any nonzero
+    /// minimum. This is the case the function exists for: a rebind landing
+    /// immediately before the resolve.
+    function testResolveSafeSameBlockRefused(bytes32 name, address account, uint64 minAge) external {
+        vm.assume(account != address(0));
+        vm.assume(minAge > 0);
+        IAddressRegistryV1 registry = deployRegistry();
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+
+        vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.BindingTooFresh.selector, name, 0, minAge));
+        this.externalResolveSafe(name, minAge);
+    }
+
+    /// A minimum of zero accepts any binding, including one made in the same
+    /// block, which makes it `resolve` with the extra read and no threshold.
+    function testResolveSafeZeroMinAge(bytes32 name, address account) external {
+        vm.assume(account != address(0));
+        IAddressRegistryV1 registry = deployRegistry();
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+
+        assertEq(LibAddressRegistry.resolveSafe(name, 0), account);
+    }
+
+    /// A re-bind makes the name fresh again, so a binding that passed before the
+    /// rotation is refused after it. Without this the check would be about the
+    /// age of the NAME rather than of the address it currently answers with.
+    function testResolveSafeRebindResetsAge(bytes32 name, address boundTo, address account, uint64 minAge, uint64 aged)
+        external
+    {
+        vm.assume(boundTo != address(0));
+        vm.assume(account != address(0));
+        vm.assume(minAge > 0);
+        aged = uint64(bound(aged, minAge, type(uint64).max));
+        IAddressRegistryV1 registry = deployRegistry();
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, boundTo);
+
+        vm.warp(block.timestamp + uint256(aged));
+        assertEq(LibAddressRegistry.resolveSafe(name, minAge), boundTo);
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+
+        vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.BindingTooFresh.selector, name, 0, minAge));
+        this.externalResolveSafe(name, minAge);
+    }
+
+    /// A binding stamped in the future has no age at all rather than reverting
+    /// on the underflow of `block.timestamp - registeredAt`, so it is refused by
+    /// the freshness check like any other too-fresh binding. A clock that moved
+    /// backwards since the bind is not a state to hand a caller an address out
+    /// of.
+    function testResolveSafeFutureStamp(bytes32 name, address account, uint64 ahead, uint64 minAge) external {
+        vm.assume(account != address(0));
+        vm.assume(ahead > 0);
+        vm.assume(minAge > 0);
+        IAddressRegistryV1 registry = deployRegistry();
+
+        vm.warp(uint256(ahead) + 1);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+
+        // The clock goes backwards, leaving the binding stamped ahead of it.
+        vm.warp(1);
+        vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.BindingTooFresh.selector, name, 0, minAge));
+        this.externalResolveSafe(name, minAge);
+    }
+
+    /// An unbound name reverts from the registry, before the freshness check can
+    /// have an opinion — so a name nobody bound is never reported as merely too
+    /// fresh, which would read as "wait and try again".
+    function testResolveSafeUnregistered(bytes32 name, uint256 minAge) external {
+        deployRegistry();
+
+        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name));
+        this.externalResolveSafe(name, minAge);
+    }
+
+    /// The code-hash guard runs first here too, so a chain where something else
+    /// occupies the registry's address cannot be talked into answering a
+    /// freshness-checked read.
+    function testResolveSafeNoRegistry(bytes32 name, uint256 minAge) external {
+        assertEq(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibAddressRegistry.UnexpectedAddressRegistryCodeHash.selector,
+                LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH,
+                bytes32(0)
+            )
+        );
+        this.externalResolveSafe(name, minAge);
+    }
+
     /// The Zoltu deploy really does land the registry on its pinned address
     /// with its pinned code hash. Every other test here depends on that, and a
     /// pin that had gone stale would otherwise show up as an unrelated

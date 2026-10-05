@@ -14,7 +14,8 @@ import {LibAddressRegistryDeploy} from "./LibAddressRegistryDeploy.sol";
 /// registry it compiled against.
 ///
 /// That is the whole library. It resolves a name to an address and the moment
-/// that address was bound. What a consumer resolves a name for, and when — an
+/// that address was bound, and will refuse a binding younger than the caller
+/// says it will accept. What a consumer resolves a name for, and when — an
 /// owner set in a constructor or an initializer, under `Ownable` or RBAC or
 /// nothing at all — is entirely the consumer's business and none of this
 /// library's.
@@ -27,9 +28,11 @@ import {LibAddressRegistryDeploy} from "./LibAddressRegistryDeploy.sol";
 /// exists, and no later re-binding can move it.
 ///
 /// The moment comes back alongside the address so that a caller about to
-/// snapshot one can tell whether it has just moved. This library applies no
-/// threshold of its own: it reports and the caller decides, because what counts
-/// as too fresh depends on what the name is being resolved for.
+/// snapshot one can tell whether it has just moved. `resolveSafe` is that
+/// comparison written once: it takes the caller's own minimum age and reverts
+/// rather than returning a binding younger than it. The threshold is never this
+/// library's — it is a parameter, because what counts as too fresh depends on
+/// what the name is being resolved for, and only the caller knows that.
 library LibAddressRegistry {
     /// Thrown when the code at the registry address is not the registry this
     /// library was compiled against. An address with no code hits this too: a
@@ -39,6 +42,12 @@ library LibAddressRegistry {
     /// @param expectedCodeHash The code hash of the pinned registry.
     /// @param actualCodeHash The code hash actually found at the address.
     error UnexpectedAddressRegistryCodeHash(bytes32 expectedCodeHash, bytes32 actualCodeHash);
+
+    /// Thrown by `resolveSafe` when the binding has not stood for long enough.
+    /// @param name The name that resolved to too fresh a binding.
+    /// @param age How long the binding had stood, in seconds.
+    /// @param minAge How long it had to have stood.
+    error BindingTooFresh(bytes32 name, uint256 age, uint256 minAge);
 
     /// The address `name` is currently bound to in the registry, and when it was
     /// bound.
@@ -65,5 +74,55 @@ library LibAddressRegistry {
         (address account, uint256 registeredAt) =
             IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name);
         return (account, registeredAt);
+    }
+
+    /// `resolve`, refusing a binding that has not stood for `minAge` seconds.
+    ///
+    /// This is the check the registry deliberately does not make for anyone: a
+    /// rebind timed to land immediately before a resolve is how a dormant root
+    /// compromise converts to live capture, and the moment is what lets a caller
+    /// refuse it. The threshold is the caller's, passed in here, because only
+    /// the caller knows what it is resolving the name for.
+    ///
+    /// A binding exactly `minAge` old passes — the requirement is that it has
+    /// stood for at least that long, so the boundary is inclusive. `minAge` of
+    /// zero accepts any binding, which is `resolve` with the extra read.
+    ///
+    /// A binding stamped in the future is treated as having no age at all and
+    /// so always refused, rather than reverting on the underflow of
+    /// `block.timestamp - registeredAt`. A future stamp means the chain's clock
+    /// moved backwards since the bind, which is not a state to hand a caller an
+    /// address out of.
+    ///
+    /// Returns the address alone. Vetting it is this function's whole purpose,
+    /// so the moment has been spent; a caller that wants it as well uses
+    /// `resolve` and compares for itself.
+    /// @param name The name to resolve. Opaque, as in `resolve`.
+    /// @param minAge The least time, in seconds, the binding must have stood.
+    /// @return The address bound to `name`.
+    function resolveSafe(bytes32 name, uint256 minAge) internal view returns (address) {
+        (address account, uint256 registeredAt) = resolve(name);
+        // Clamped rather than subtracted blind, so a future stamp is refused by
+        // the check below instead of reverting as an arithmetic panic.
+        //
+        // Unlike the width check in `AddressRegistry.register`, these
+        // comparisons really are about a moment, which is what the analysers
+        // flag. The hazard is priced by the caller: a validator's few seconds
+        // of slack at the boundary cannot matter to a `minAge` chosen to be
+        // long enough to notice a rebind in, and a caller that would be harmed
+        // by seconds has not picked a `minAge` that protects it from anything.
+        // Suppressed on these two comparisons rather than turned off for the
+        // repo.
+        //
+        // Slither's is a start/end pair because forge-lint's has to be the
+        // comment immediately above the line and has no pair form.
+        // slither-disable-start timestamp
+        // forge-lint: disable-next-line(block-timestamp)
+        uint256 age = block.timestamp > registeredAt ? block.timestamp - registeredAt : 0;
+        if (age < minAge) {
+            revert BindingTooFresh(name, age, minAge);
+        }
+        // slither-disable-end timestamp
+        return account;
     }
 }
