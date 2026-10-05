@@ -3,7 +3,6 @@
 pragma solidity ^0.8.25;
 
 import {RainDeployVerifySnapshotBase} from "./RainDeployVerifySnapshotBase.sol";
-import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// @title RainDeployVerifySnapshot
@@ -90,16 +89,23 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
     /// no RPC and fails on the PR that drifts rather than at dispatch time.
     ///
     /// `vm.readFile` resolves against the project root of whatever runs it, so
-    /// the file read is the binder's own and the networks are this package's.
-    /// A binding repo therefore needs `{ access = "read", path =
+    /// the file read is the binder's own — and the networks are the binder's
+    /// own too: `supportedNetworks()` is the declaration's hook, so a repo
+    /// deploying to a subset holds its config to the same set the deploy forks
+    /// and the chain matrix checks. A binding repo needs `{ access = "read", path =
     /// "./foundry.toml" }` in `fs_permissions`, and one without it fails here
     /// rather than passing on a file it never opened.
+    ///
+    /// An `[etherscan]` entry is still required for every network in the set.
+    /// A chain Etherscan does not index carries its explorer's API url there
+    /// instead — Robinhood (4663) points at Blockscout — so the requirement
+    /// does not narrow with the hook.
     ///
     /// The assertions themselves are `checkNetworksConfigured`, in the base,
     /// because they take the config as an argument and so can be handed one a
     /// test builds. Reading the binder's own file is the part that cannot be,
     /// and it is all that is left here.
     function testSupportedNetworksAreFullyConfigured() external view {
-        checkNetworksConfigured(vm.readFile("foundry.toml"), LibRainDeploy.supportedNetworks());
+        checkNetworksConfigured(vm.readFile("foundry.toml"), supportedNetworks());
     }
 }

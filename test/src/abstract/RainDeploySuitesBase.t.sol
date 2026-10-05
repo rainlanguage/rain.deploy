@@ -470,4 +470,26 @@ contract RainDeploySuitesBaseTest is Test {
         assertEq(addresses[1], SECOND_DEPENDENCY);
         assertEq(addresses[2], FIRST_DEPENDENCY);
     }
+
+    /// The declared network set MUST default to every network Rain supports, in
+    /// order, so a repo deploying to all of them declares nothing and only a
+    /// repo deploying to fewer writes a list.
+    ///
+    /// Asserted on the declaration because this one answer is what the
+    /// broadcast targets and what every network-scoped assertion is made over:
+    /// a default that drifted from the library's list would move where a
+    /// dispatch goes and what the chain matrix forks together, and silently,
+    /// because the two would go on agreeing with each other.
+    ///
+    /// Position as well as membership, because the deploy and the matrix both
+    /// walk it in order and the last entry is what each leaves selected.
+    function testSupportedNetworksDefaultsToEveryRainNetwork() external view {
+        string[] memory declared = sSuites.externalSupportedNetworks();
+        string[] memory supported = LibRainDeploy.supportedNetworks();
+
+        assertEq(declared.length, supported.length);
+        for (uint256 i = 0; i < supported.length; i++) {
+            assertEq(declared[i], supported[i]);
+        }
+    }
 }

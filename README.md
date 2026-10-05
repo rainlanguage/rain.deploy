@@ -703,6 +703,20 @@ bound to that alias reports. Missing permission fails the check rather than
 skipping it, which is the intended direction: a repo that cannot read its own
 config is a repo whose config nothing has checked.
 
+A repo that deploys to FEWER networks than Rain supports overrides
+`supportedNetworks()` on its suites declaration, and that one answer scopes both
+sides: `deployNetworks()` defaults to it, the chain group forks it, and the
+config assertions are made over it. There is deliberately nothing per
+verification to override — a verification set narrower than the one a repo
+broadcasts to is every release held to nothing at all on the networks that were
+dropped, with no assertion left to notice.
+
+The `[etherscan]` requirement does not narrow with it: an entry is still needed
+for every network in that set. Whether a network HAS an Etherscan deployment is
+a fact about the network rather than about the repo — Robinhood (4663) is not
+indexed by Etherscan v2 and is verified through Sourcify — so a repo deploying
+to one that has none fails the config group with its config correct.
+
 ## Develop
 
 This repo uses [nix](https://nixos.org/download.html). The default shell is the
