@@ -485,6 +485,38 @@ library LibRainDeploy {
         }
     }
 
+    /// Everything that MUST already be on a network before a deploy is
+    /// broadcast to it: the Zoltu factory, and every declared dependency with
+    /// the code its declaration carries.
+    ///
+    /// Each dependency's presence is checked before its code hash, and not
+    /// folded into one comparison. An account with no code answers `codehash`
+    /// zero, which is a value no declaration can produce — `keccak256` of the
+    /// empty string is not zero — so the hash check alone would report every
+    /// absent dependency as a changed one.
+    /// @param network The network being checked, for the refusal to name.
+    /// @param dependencies The declared dependencies.
+    function checkDeployRequirements(string memory network, DeployDependency[] memory dependencies) internal view {
+        console2.log(" - Zoltu Factory:", ZOLTU_FACTORY);
+        if (ZOLTU_FACTORY.code.length == 0) {
+            revert MissingDependency(network, ZOLTU_FACTORY);
+        }
+        if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {
+            revert DependencyChanged(network, ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);
+        }
+        for (uint256 j = 0; j < dependencies.length; j++) {
+            address dependency = dependencies[j].deployedAddress;
+            console2.log(" - Dependency:", dependency);
+            if (dependency.code.length == 0) {
+                revert MissingDependency(network, dependency);
+            }
+            bytes32 expectedDependencyCodeHash = keccak256(dependencies[j].runtimeCode);
+            if (dependency.codehash != expectedDependencyCodeHash) {
+                revert DependencyChanged(network, dependency, expectedDependencyCodeHash, dependency.codehash);
+            }
+        }
+    }
+
     /// Deploys the given creation code to each network via the Zoltu factory.
     /// `expectedAddress` MUST be the address the Zoltu factory derives for
     /// `creationCode`, which is checked before any network is forked, so an
@@ -557,34 +589,7 @@ library LibRainDeploy {
             console2.log("Block number:", block.number);
 
             if (expectedAddress.code.length == 0) {
-                // Nothing is deployed here yet, so the Zoltu factory and every
-                // dependency must be present before broadcasting the deploy.
-                console2.log(" - Zoltu Factory:", ZOLTU_FACTORY);
-                if (ZOLTU_FACTORY.code.length == 0) {
-                    revert MissingDependency(networks[i], ZOLTU_FACTORY);
-                }
-                if (ZOLTU_FACTORY.codehash != ZOLTU_FACTORY_CODEHASH) {
-                    revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);
-                }
-                for (uint256 j = 0; j < dependencies.length; j++) {
-                    address dependency = dependencies[j].deployedAddress;
-                    console2.log(" - Dependency:", dependency);
-                    // Presence first, and not folded into the hash
-                    // comparison below. An account with no code answers
-                    // `codehash` zero, which is a value no declaration can
-                    // produce — `keccak256` of the empty string is not zero —
-                    // so the hash check alone would report every absent
-                    // dependency as a changed one.
-                    if (dependency.code.length == 0) {
-                        revert MissingDependency(networks[i], dependency);
-                    }
-                    bytes32 expectedDependencyCodeHash = keccak256(dependencies[j].runtimeCode);
-                    if (dependency.codehash != expectedDependencyCodeHash) {
-                        revert DependencyChanged(
-                            networks[i], dependency, expectedDependencyCodeHash, dependency.codehash
-                        );
-                    }
-                }
+                checkDeployRequirements(networks[i], dependencies);
 
                 console2.log(" - Deploying via Zoltu");
                 vm.startBroadcast(deployer);
