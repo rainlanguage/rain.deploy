@@ -50,7 +50,8 @@ contract StaleCodeHashDeploy is RainDeployBroadcast {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new address[](0)
-            })
+            }),
+            unanchorableReason: ""
         });
     }
 }

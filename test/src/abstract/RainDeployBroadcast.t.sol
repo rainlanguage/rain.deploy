@@ -15,6 +15,7 @@ import {StalePinDeploy, STALE_PIN_ADDRESS} from "../../concrete/StalePinDeploy.s
 import {MissingDependencyDeploy, ABSENT_DEPENDENCY} from "../../concrete/MissingDependencyDeploy.sol";
 import {StaleCodeHashDeploy, STALE_CODE_HASH} from "../../concrete/StaleCodeHashDeploy.sol";
 import {MultiSuiteDeploy} from "../../concrete/MultiSuiteDeploy.sol";
+import {UnanchorableDeploy} from "../../concrete/UnanchorableDeploy.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 
@@ -421,6 +422,24 @@ contract RainDeployBroadcastTest is Test {
             )
         );
         misanchored.run();
+    }
+
+    /// `run()` gets past the anchor — its first statement — for a candidate
+    /// whose source no compiler produces, so such a suite can be broadcast at
+    /// all. Reaching suite selection is the evidence; the declaration names no
+    /// key `DEPLOYMENT_SUITE` is set to.
+    function testRunReachesSelectionPastAnUnanchorableCandidate() external {
+        UnanchorableDeploy unanchorable = new UnanchorableDeploy();
+
+        string memory requested = vm.envOr("DEPLOYMENT_SUITE", string(""));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                UnknownDeploymentSuite.selector,
+                requested,
+                "compiled-candidate, vendored-candidate, generated-candidate"
+            )
+        );
+        unanchorable.run();
     }
 
     /// The default target set MUST be every supported network, so a
