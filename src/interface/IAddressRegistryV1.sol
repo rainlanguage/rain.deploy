@@ -112,6 +112,12 @@ interface IAddressRegistryV1 {
     /// the result, which is what a consumer resolving a name in its constructor
     /// does. Reading at the point of use instead means reading whatever root
     /// has bound most recently.
+    ///
+    /// A caller that cannot read at construction, such as an upgrade-time
+    /// reconcile, MUST check the moment against a threshold of its own rather
+    /// than read unguarded, and MUST NOT treat that as equivalent. A
+    /// constructor read settles the value the moment the contract exists; a
+    /// threshold only narrows the window.
     /// @param name The name to read.
     /// @return The address bound to `name`. Never the zero address.
     /// @return The `block.timestamp` of the most recent `register` for `name`.
