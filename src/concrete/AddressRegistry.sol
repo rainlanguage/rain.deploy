@@ -16,16 +16,12 @@ address constant ADDRESS_REGISTRY_ROOT = 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1
 
 /// @dev One binding: the address a name is bound to, and when it was bound.
 ///
-/// Both halves are written by the only function that writes either, and they
-/// share a word so that they cannot be written apart. A stamp that could lag
-/// its address would be worse than no stamp at all, because a stale answer
-/// would read as a fresh one.
-///
-/// 96 bits is what is left of the word beside a 160-bit address, and is far
-/// wider than a block timestamp needs: `2**96` seconds is some 2.5e21 years.
-/// `AddressRegistry.register` checks the width anyway rather than assuming it —
-/// `IAddressRegistryV1.registeredAt` says why a narrowed stamp is the dangerous
-/// direction to be wrong in.
+/// A struct because these are mapping values, which is where packing needs one.
+/// The two share a word, so `get` reads both out of one slot and `register`
+/// cannot write one without the other. 96 bits is what is left beside a
+/// 160-bit address, and far wider than a block timestamp needs — `2**96`
+/// seconds is some 2.5e21 years — but `register` checks rather than assumes it,
+/// because a truncated moment reads as an older binding.
 struct Binding {
     /// The address the name is bound to. Zero if and only if the name is
     /// unbound, which is what `register` rejecting the zero address preserves.
@@ -36,8 +32,8 @@ struct Binding {
 
 /// @title AddressRegistry
 /// @notice The whole of `IAddressRegistryV1`: an immutable root authority binds
-/// a `bytes32` name, anyone reads a bound name, anyone reads when it was most
-/// recently bound, and a read of an unbound name reverts.
+/// a `bytes32` name, anyone reads a bound name and gets back the address with
+/// the moment it was bound, and a read of an unbound name reverts.
 ///
 /// There is deliberately nothing else. No removal, no upgrade, no pause, and no
 /// authority besides root — root is a compile-time constant, so it cannot even
@@ -54,33 +50,28 @@ struct Binding {
 /// changes what the next deployment resolves and nothing else — a rotation is a
 /// deliberate migration, never a silent change to live contracts.
 ///
-/// The stamp is the one thing a resolving consumer could not previously see:
-/// how old the answer is. It is reported and nothing more. A fresh binding is
-/// live immediately, and this contract holds nothing pending — a consumer that
-/// wants to refuse an answer bound moments ago reads the stamp and refuses it
-/// itself, because only the consumer knows what it is resolving the name for.
+/// The moment is reported and nothing more. A fresh binding is live
+/// immediately and this contract holds nothing pending; a caller that wants to
+/// refuse an answer bound moments ago has what it needs to refuse it itself.
 ///
 /// The storage mapping is `internal` rather than `public`: a public mapping's
-/// generated getter answers an unbound name with the zero address, which is
+/// generated getter answers an unbound name with a zero binding, which is
 /// exactly the silent failure `get` reverts to prevent.
 contract AddressRegistry is IAddressRegistryV1 {
-    /// Thrown when `block.timestamp` does not fit the stamp, instead of
-    /// narrowing it to something that fits.
+    /// Thrown when `block.timestamp` does not fit the binding's moment, instead
+    /// of narrowing it to something that fits.
     ///
     /// Unreachable on any chain whose block time is a plausible wall clock, and
     /// kept because the alternative is not an error that never fires but a
-    /// truncation that fires silently and in the unsafe direction. A chain, or a
-    /// test, that reports a timestamp this large gets a refused bind rather than
-    /// a binding that reads as 2.5e21 years old.
+    /// truncation that fires silently and in the unsafe direction.
     /// @param timestamp The `block.timestamp` that did not fit.
     error TimestampOverflow(uint256 timestamp);
 
-    /// The bindings. Not `public`: the only readers are `get` and
-    /// `registeredAt`, which both revert on an unbound name. A name's `account`
-    /// is the zero address if and only if it is unbound, which is why `register`
-    /// rejects the zero address, and why the stamp is never what either reader
-    /// consults to decide whether a name is bound — the stamp of a bound name is
-    /// legitimately zero on a chain at block time zero.
+    /// The bindings. Not `public`: the only reader is `get`, which reverts on an
+    /// unbound name. A name's `account` is the zero address if and only if it is
+    /// unbound, which is why `register` rejects the zero address, and why
+    /// bound-ness is never decided from the moment — the moment of a bound name
+    /// is legitimately zero on a chain at block time zero.
     mapping(bytes32 name => Binding binding) internal sBindings;
 
     /// @inheritdoc IAddressRegistryV1
@@ -97,9 +88,8 @@ contract AddressRegistry is IAddressRegistryV1 {
         // The hazard behind a `block.timestamp` comparison — a validator
         // nudging the clock to land on the side of it that suits them — does
         // not reach this one. It compares the clock against the WIDTH of the
-        // stamp, not against any moment: the seconds of slack a validator has
-        // cannot move a plausible timestamp past 2**96, and a chain whose clock
-        // is already past 2**96 is not one a nudge put there.
+        // moment, not against any moment: the seconds of slack a validator has
+        // cannot move a plausible timestamp past 2**96.
         //
         // Slither's is a start/end pair rather than a next-line because only
         // one comment fits immediately above the `if` and that one has to be
@@ -110,8 +100,8 @@ contract AddressRegistry is IAddressRegistryV1 {
             revert TimestampOverflow(block.timestamp);
         }
         // slither-disable-end timestamp
-        // Assigned whole, so the stamp of a re-bind replaces the stamp of the
-        // bind before it in the same write that replaces the address.
+        // Assigned whole, so a re-bind replaces the moment in the same write
+        // that replaces the address.
         sBindings[name] = Binding({account: account, registeredAt: uint96(block.timestamp)});
         emit Register(name, account);
     }
@@ -120,37 +110,21 @@ contract AddressRegistry is IAddressRegistryV1 {
     /// @dev Returns whatever root has bound most recently. A caller that needs
     /// an answer that cannot move reads once and stores it, which is what a
     /// consumer resolving a name in its constructor does.
-    function get(bytes32 name) external view returns (address) {
-        address account = sBindings[name].account;
-        // There is no time in this comparison. Slither reaches it because
-        // `account` is read out of a struct whose other half is written from
-        // `block.timestamp`, so the whole binding is tainted and an address
-        // check against zero is reported as a dangerous timestamp comparison.
-        // Suppressed on this one comparison rather than turned off for the
-        // repo.
-        // slither-disable-start timestamp
-        if (account == address(0)) {
-            revert NameNotRegistered(name);
-        }
-        // slither-disable-end timestamp
-        return account;
-    }
-
-    /// @inheritdoc IAddressRegistryV1
-    /// @dev Bound-ness is read off `account`, never off the stamp, so a binding
-    /// made on a chain at block time zero is answered with zero rather than
-    /// mistaken for a name nobody bound.
-    function registeredAt(bytes32 name) external view returns (uint256) {
+    ///
+    /// Bound-ness is read off `account`, never off the moment, so a binding
+    /// made on a chain at block time zero is answered rather than mistaken for
+    /// a name nobody bound.
+    function get(bytes32 name) external view returns (address, uint256) {
         Binding memory binding = sBindings[name];
-        // Tainted for the same reason as the one in `get`, and time has no part
-        // in it for the same reason: this is the address half of the binding
-        // being checked against zero, which is what decides bound-ness. The
-        // stamp half is returned, never compared.
+        // There is no time in this comparison. Slither reaches it because
+        // `account` shares a struct with a value written from `block.timestamp`,
+        // so the whole binding is tainted and an address check against zero is
+        // reported as a dangerous timestamp comparison.
         // slither-disable-start timestamp
         if (binding.account == address(0)) {
             revert NameNotRegistered(name);
         }
         // slither-disable-end timestamp
-        return binding.registeredAt;
+        return (binding.account, binding.registeredAt);
     }
 }

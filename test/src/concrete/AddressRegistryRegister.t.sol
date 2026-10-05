@@ -18,6 +18,25 @@ contract AddressRegistryRegisterTest is Test {
         sRegistry = new AddressRegistry();
     }
 
+    /// The address half of `get`, for the assertions that are only about which
+    /// address a name is bound to.
+    /// @param registry The registry to read.
+    /// @param name The name to read.
+    /// @return The address bound to `name`.
+    function getAddress(AddressRegistry registry, bytes32 name) internal view returns (address) {
+        (address account,) = registry.get(name);
+        return account;
+    }
+
+    /// The moment half of `get`.
+    /// @param registry The registry to read.
+    /// @param name The name to read.
+    /// @return The moment `name` was most recently bound.
+    function getMoment(AddressRegistry registry, bytes32 name) internal view returns (uint256) {
+        (, uint256 registeredAt) = registry.get(name);
+        return registeredAt;
+    }
+
     /// Only root may bind a name. Checked before the zero-address check, so a
     /// non-root caller is rejected as `NotRoot` whatever it passes.
     function testRegisterOnlyRoot(address sender, bytes32 name, address account) external {
@@ -41,7 +60,7 @@ contract AddressRegistryRegisterTest is Test {
         vm.prank(sender);
         sRegistry.register(name, account);
 
-        assertEq(sRegistry.get(name), bound);
+        assertEq(getAddress(sRegistry, name), bound);
     }
 
     /// Root may re-bind a name to a different address, and the new binding is
@@ -54,18 +73,18 @@ contract AddressRegistryRegisterTest is Test {
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, bound);
-        assertEq(sRegistry.get(name), bound);
+        assertEq(getAddress(sRegistry, name), bound);
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, account);
-        assertEq(sRegistry.get(name), account);
+        assertEq(getAddress(sRegistry, name), account);
     }
 
     /// Re-binding a name to the address it already holds is allowed and leaves
     /// the address it answers with unchanged. There is no special case for it in
     /// either direction — in particular it is not a no-op, because it refreshes
-    /// the stamp like any other bind; `AddressRegistryRegisteredAtTest` is where
-    /// that is pinned.
+    /// the moment like any other bind; `testRegisterRebindSameAccountRefreshesMoment`
+    /// is where that is pinned.
     function testRegisterRebindSameAccount(bytes32 name, address account) external {
         vm.assume(account != address(0));
 
@@ -75,7 +94,7 @@ contract AddressRegistryRegisterTest is Test {
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, account);
 
-        assertEq(sRegistry.get(name), account);
+        assertEq(getAddress(sRegistry, name), account);
     }
 
     /// Re-binding survives any number of rotations, and only the most recent one
@@ -89,9 +108,9 @@ contract AddressRegistryRegisterTest is Test {
         for (uint256 i = 0; i < accounts.length; i++) {
             vm.prank(ADDRESS_REGISTRY_ROOT);
             sRegistry.register(name, accounts[i]);
-            assertEq(sRegistry.get(name), accounts[i]);
+            assertEq(getAddress(sRegistry, name), accounts[i]);
         }
-        assertEq(sRegistry.get(name), accounts[accounts.length - 1]);
+        assertEq(getAddress(sRegistry, name), accounts[accounts.length - 1]);
     }
 
     /// The zero address is rejected. An unbound name reads as the zero address
@@ -103,7 +122,7 @@ contract AddressRegistryRegisterTest is Test {
         sRegistry.register(name, address(0));
 
         vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name));
-        sRegistry.get(name);
+        getAddress(sRegistry, name);
     }
 
     /// The zero address is rejected for a name that is already bound too, so
@@ -119,7 +138,7 @@ contract AddressRegistryRegisterTest is Test {
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, address(0));
 
-        assertEq(sRegistry.get(name), bound);
+        assertEq(getAddress(sRegistry, name), bound);
     }
 
     /// Names are independent: binding one says nothing about any other, and
@@ -134,13 +153,13 @@ contract AddressRegistryRegisterTest is Test {
 
         // Binding `nameA` did not bind `nameB`.
         vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, nameB));
-        sRegistry.get(nameB);
+        getAddress(sRegistry, nameB);
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(nameB, accountB);
 
-        assertEq(sRegistry.get(nameA), accountA);
-        assertEq(sRegistry.get(nameB), accountB);
+        assertEq(getAddress(sRegistry, nameA), accountA);
+        assertEq(getAddress(sRegistry, nameB), accountB);
     }
 
     /// `Register` is emitted with the name and account both indexed, so the log
@@ -208,6 +227,102 @@ contract AddressRegistryRegisterTest is Test {
         sRegistry.register(name, account);
 
         vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name));
-        sRegistry.get(name);
+        getAddress(sRegistry, name);
+    }
+
+    /// A re-bind replaces the moment along with the address. The age a caller
+    /// cares about is the age of the address it is about to snapshot, so a
+    /// rotation makes the binding new again.
+    function testRegisterRebindRefreshesMoment(
+        bytes32 name,
+        address bound_,
+        address account,
+        uint96 first,
+        uint96 second
+    ) external {
+        vm.assume(bound_ != address(0));
+        vm.assume(account != address(0));
+
+        vm.warp(first);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, bound_);
+        assertEq(getMoment(sRegistry, name), first);
+
+        vm.warp(second);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, account);
+
+        assertEq(getAddress(sRegistry, name), account);
+        assertEq(getMoment(sRegistry, name), second);
+    }
+
+    /// Re-binding a name to the address it already holds still refreshes the
+    /// moment. The moment dates the WRITE, not the value — root re-asserting a
+    /// binding is root touching it — and reporting the later moment is the
+    /// conservative direction: it can only make an answer look fresher than the
+    /// address really is, so a caller refusing fresh answers errs toward
+    /// refusing.
+    function testRegisterRebindSameAccountRefreshesMoment(bytes32 name, address account, uint96 first, uint96 second)
+        external
+    {
+        vm.assume(account != address(0));
+        vm.assume(first != second);
+
+        vm.warp(first);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, account);
+        assertEq(getMoment(sRegistry, name), first);
+
+        vm.warp(second);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, account);
+
+        assertEq(getAddress(sRegistry, name), account);
+        assertEq(getMoment(sRegistry, name), second);
+    }
+
+    /// A rejected `register` never moves a moment. A non-root caller cannot
+    /// refresh a binding's age, which would otherwise let anybody launder a
+    /// stale binding into one that looks newly reviewed.
+    function testRegisterNonRootCannotMoveMoment(
+        address sender,
+        bytes32 name,
+        address bound_,
+        address account,
+        uint96 first,
+        uint96 second
+    ) external {
+        vm.assume(sender != ADDRESS_REGISTRY_ROOT);
+        vm.assume(bound_ != address(0));
+
+        vm.warp(first);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, bound_);
+
+        vm.warp(second);
+        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NotRoot.selector, sender));
+        vm.prank(sender);
+        sRegistry.register(name, account);
+
+        assertEq(getMoment(sRegistry, name), first);
+    }
+
+    /// A zero-address `register` never moves a moment either, so there is no way
+    /// to refresh a binding's age without also re-asserting its address.
+    function testRegisterZeroAccountCannotMoveMoment(bytes32 name, address bound_, uint96 first, uint96 second)
+        external
+    {
+        vm.assume(bound_ != address(0));
+
+        vm.warp(first);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, bound_);
+
+        vm.warp(second);
+        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.ZeroAccount.selector, name));
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, address(0));
+
+        assertEq(getMoment(sRegistry, name), first);
     }
 }

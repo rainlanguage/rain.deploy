@@ -32,36 +32,58 @@ contract LibAddressRegistryTest is Test {
     /// @param name The name to resolve.
     /// @return The address bound to `name`.
     function externalResolve(bytes32 name) external view returns (address) {
-        return LibAddressRegistry.resolve(name);
+        (address account,) = LibAddressRegistry.resolve(name);
+        return account;
     }
 
-    /// A bound name resolves to the address it is bound to.
-    function testResolveRegistered(bytes32 name, address account) external {
+    /// The address half of `resolve`, for the assertions that are only about
+    /// which address a name resolves to.
+    /// @param name The name to resolve.
+    /// @return The address bound to `name`.
+    function resolveAddress(bytes32 name) internal view returns (address) {
+        (address account,) = LibAddressRegistry.resolve(name);
+        return account;
+    }
+
+    /// A bound name resolves to the address it is bound to, and to the moment
+    /// that address was bound.
+    function testResolveRegistered(bytes32 name, address account, uint96 time) external {
         vm.assume(account != address(0));
         IAddressRegistryV1 registry = deployRegistry();
 
+        vm.warp(time);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, account);
 
-        assertEq(LibAddressRegistry.resolve(name), account);
+        (address resolved, uint256 registeredAt) = LibAddressRegistry.resolve(name);
+        assertEq(resolved, account);
+        assertEq(registeredAt, time);
     }
 
     /// `resolve` answers with the current binding, not the first one. A caller
     /// that wants an answer which cannot move has to read once and store it —
     /// the library deliberately does not pretend to offer that itself.
-    function testResolveFollowsRebinding(bytes32 name, address bound, address account) external {
+    function testResolveFollowsRebinding(bytes32 name, address bound, address account, uint96 first, uint96 second)
+        external
+    {
         vm.assume(bound != address(0));
         vm.assume(account != address(0));
         vm.assume(bound != account);
         IAddressRegistryV1 registry = deployRegistry();
 
+        vm.warp(first);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, bound);
-        assertEq(LibAddressRegistry.resolve(name), bound);
+        assertEq(resolveAddress(name), bound);
 
+        // The moment follows the address, so a caller reading both is told the
+        // age of the address it was just given, never the age of one it was not.
+        vm.warp(second);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, account);
-        assertEq(LibAddressRegistry.resolve(name), account);
+        (address resolved, uint256 registeredAt) = LibAddressRegistry.resolve(name);
+        assertEq(resolved, account);
+        assertEq(registeredAt, second);
     }
 
     /// An unbound name reverts. The registry, not this library, is what refuses
@@ -171,99 +193,6 @@ contract LibAddressRegistryTest is Test {
             )
         );
         this.externalResolve(name);
-    }
-
-    /// External wrapper for `registeredAt` so that `vm.expectRevert` works at
-    /// the correct call depth.
-    /// @param name The name to read the stamp of.
-    /// @return The stamp.
-    function externalRegisteredAt(bytes32 name) external view returns (uint256) {
-        return LibAddressRegistry.registeredAt(name);
-    }
-
-    /// A bound name's stamp is the block time it was bound at, read back through
-    /// the library.
-    function testRegisteredAtRegistered(bytes32 name, address account, uint96 time) external {
-        vm.assume(account != address(0));
-        IAddressRegistryV1 registry = deployRegistry();
-
-        vm.warp(time);
-        vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
-
-        assertEq(LibAddressRegistry.registeredAt(name), time);
-    }
-
-    /// The stamp follows a re-binding, so a caller reading `resolve` and
-    /// `registeredAt` together is told the age of the address it was just
-    /// given, never the age of one it was not.
-    function testRegisteredAtFollowsRebinding(
-        bytes32 name,
-        address bound_,
-        address account,
-        uint96 first,
-        uint96 second
-    ) external {
-        vm.assume(bound_ != address(0));
-        vm.assume(account != address(0));
-        IAddressRegistryV1 registry = deployRegistry();
-
-        vm.warp(first);
-        vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, bound_);
-        assertEq(LibAddressRegistry.registeredAt(name), first);
-
-        vm.warp(second);
-        vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
-        assertEq(LibAddressRegistry.resolve(name), account);
-        assertEq(LibAddressRegistry.registeredAt(name), second);
-    }
-
-    /// An unbound name's stamp reverts. The registry is what refuses to answer,
-    /// so the revert arrives unmodified, exactly as for `resolve`.
-    function testRegisteredAtUnregistered(bytes32 name) external {
-        deployRegistry();
-
-        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name));
-        this.externalRegisteredAt(name);
-    }
-
-    /// The code-hash guard covers the stamp reader too. A guard that held on
-    /// `resolve` alone would leave the newer reader answering out of whatever
-    /// code happens to occupy the address, which is the whole failure the guard
-    /// exists to stop — and the stamp is the reader a consumer would trust to
-    /// decide whether to accept an address at all.
-    function testRegisteredAtNoRegistry(bytes32 name) external {
-        assertEq(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibAddressRegistry.UnexpectedAddressRegistryCodeHash.selector,
-                LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH,
-                bytes32(0)
-            )
-        );
-        this.externalRegisteredAt(name);
-    }
-
-    /// Ordinary code occupying the registry address is refused for the stamp
-    /// reader as well, so neither reader can be answered by code the caller did
-    /// not compile against.
-    function testRegisteredAtWrongCode(bytes32 name, bytes memory code) external {
-        vm.assume(code.length > 0);
-        vm.assume(!LibAccountCode.hasDelegationPrefix(code));
-        vm.assume(keccak256(code) != LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH);
-        vm.etch(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS, code);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibAddressRegistry.UnexpectedAddressRegistryCodeHash.selector,
-                LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH,
-                keccak256(code)
-            )
-        );
-        this.externalRegisteredAt(name);
     }
 
     /// The Zoltu deploy really does land the registry on its pinned address
