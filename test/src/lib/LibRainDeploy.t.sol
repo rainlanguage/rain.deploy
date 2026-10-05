@@ -1020,6 +1020,8 @@ contract LibRainDeployTest is Test {
         vm.assume(rebound != account);
         (IAddressRegistryV1 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
+        // A re-bind needs a later block: a name's moment strictly increases.
+        vm.warp(block.timestamp + 1);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, rebound);
         (address nowBound,) = registry.get(name);
