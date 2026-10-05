@@ -1658,21 +1658,8 @@ contract LibRainDeploySnapshotTest is Test {
     /// A released entry's dependency list MUST come from that release's OWN
     /// frozen snapshot, and the template's list MUST NOT reach it.
     ///
-    /// The list is not metadata. `RainDeployBroadcast.run` hands the
-    /// dependency ADDRESSES to `LibRainDeploy.deployToNetworks`, which reverts
-    /// `MissingDependency` for any of them with no code on the target network,
-    /// and `RainDeployVerifyBase.deriveDeployment` etches the runtime code
-    /// beside each to run the release's constructor — so the list is a
-    /// PRECONDITION of the broadcast, and re-broadcasting a past release onto a
-    /// newly supported chain has to check the preconditions that release was
-    /// cut with. Rebuilding it from the candidate declaration checks today's
-    /// instead.
-    ///
-    /// The template here differs from what any record holds, in BOTH halves, so
-    /// an emitter that still read it would be seen writing those addresses or
-    /// that code out. Two releases, because each MUST take its list from its
-    /// own constant: one release inheriting its successor's is the same defect
-    /// one step smaller.
+    /// The template differs from every record in BOTH halves, so an emitter
+    /// that still read it would be seen writing them out.
     function testReleasedEntriesTakeDependenciesFromTheFrozenRecord() external pure {
         DeploySuite memory declared = emitterTemplate();
         declared.dependencies = new DeployDependency[](2);
@@ -1792,11 +1779,8 @@ contract LibRainDeploySnapshotTest is Test {
     /// quietly wrong about — an encoder that wrote nothing at all would look
     /// correct against this repo's own committed snapshots forever.
     ///
-    /// Compared as `abi.encode` of the whole list rather than element by
-    /// element, because an entry carries a `bytes` and there is no assertion
-    /// for an array of those. One equality over the encoding asserts the
-    /// addresses, the code and the length together, which is the property: the
-    /// bytes on disk decode back to the list the writer was handed.
+    /// Compared as `abi.encode` of the whole list because an entry carries a
+    /// `bytes` and forge-std has no assertion for an array of those.
     function testWriteSnapshotFreezesTheDependencyList() external {
         DeployDependency[] memory none = new DeployDependency[](0);
 
@@ -1805,10 +1789,9 @@ contract LibRainDeploySnapshotTest is Test {
 
         DeployDependency[] memory three = new DeployDependency[](3);
         three[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: hex"d0d0"});
-        // A zero address and an empty code in the middle. `abi.encode` of this
-        // list is not self-delimiting, so a length or offset the round trip got
-        // wrong reads a neighbouring word rather than failing, and the empty
-        // values are the ones that would hide it.
+        // Empty values in the middle: `abi.encode` is not self-delimiting, so a
+        // wrong length or offset reads a neighbour rather than failing, and
+        // these are the values that would hide it.
         three[1] = DeployDependency({deployedAddress: address(0), runtimeCode: hex""});
         three[2] = DeployDependency({deployedAddress: address(0xbeef), runtimeCode: hex"b0b0"});
 

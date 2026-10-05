@@ -575,9 +575,8 @@ library LibRainDeploySnapshot {
     /// @param vm The Vm instance for string operations.
     /// @param deployed The address the creation code deployed to.
     /// @param creationCode The contract's creation code.
-    /// @param dependencies What must already be on a network before this
-    /// contract can be broadcast there: an address and the runtime code that
-    /// belongs at it, per dependency.
+    /// @param dependencies Each address that must already have code on a
+    /// network before this contract can be broadcast there, with that code.
     /// @return The constants, as Solidity source.
     function snapshotConstants(
         Vm vm,
@@ -643,13 +642,6 @@ library LibRainDeploySnapshot {
     /// dependency an old release still needs the moment current source stops
     /// needing it, and impose a new one on a release that never had it.
     ///
-    /// Each dependency's runtime code is frozen with its address, for that
-    /// reason and for one more: `RainDeployVerifyBase.deriveDeployment` etches
-    /// it to run this release's constructor locally, and this release's
-    /// constructor ran against the code that was at that address when the
-    /// release was cut. A dependency replaced at the same address later does
-    /// not retroactively change what this release deployed.
-    ///
     /// `abi.encode`d because Solidity has no file-scope constant of dynamic
     /// array type. The consumer is `releasedLibraryBlock`, which emits the
     /// matching `abi.decode`.
@@ -665,9 +657,8 @@ library LibRainDeploySnapshot {
     /// snapshot declares.
     /// @param copyrightText The copyright text the written snapshot declares.
     /// @param creationCode That contract's creation code.
-    /// @param dependencies What must already be on a network before this
-    /// contract can be broadcast there: an address and the runtime code that
-    /// belongs at it, per dependency.
+    /// @param dependencies Each address that must already have code on a
+    /// network before this contract can be broadcast there, with that code.
     /// @return The path written.
     function writeSnapshot(
         Vm vm,
@@ -702,9 +693,8 @@ library LibRainDeploySnapshot {
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
     /// @param creationCode That contract's creation code.
-    /// @param dependencies What must already be on a network before this
-    /// contract can be broadcast there: an address and the runtime code that
-    /// belongs at it, per dependency.
+    /// @param dependencies Each address that must already have code on a
+    /// network before this contract can be broadcast there, with that code.
     /// @return The path written.
     function writeSnapshot(
         Vm vm,
@@ -1064,10 +1054,9 @@ library LibRainDeploySnapshot {
     /// written anywhere but into the immutable record.
     /// @param vm The Vm instance for string operations.
     /// @param paths The record's files, in the order they are emitted.
-    /// @param suitesImportPath The path the emitted lib reaches `DeploySuite`
-    /// and `DeployDependency` by — `suitesImportPathInThisRepo` for a lib
-    /// written into this repo's own `LIB_DIR`, and the consumer's remapped path
-    /// otherwise.
+    /// @param suitesImportPath The path the emitted lib reaches the suite types
+    /// by — `suitesImportPathInThisRepo` for a lib written into this repo's own
+    /// `LIB_DIR`, and the consumer's remapped path otherwise.
     /// @return The import block.
     function releasedImportBlock(Vm vm, string[] memory paths, string memory suitesImportPath)
         internal
@@ -1097,11 +1086,10 @@ library LibRainDeploySnapshot {
     /// than rebuilt from `template` because it is a precondition of the
     /// deployment and not metadata — `RainDeployBroadcast.run` passes its
     /// addresses to `LibRainDeploy.deployToNetworks`, which refuses to
-    /// broadcast on a network where one of them has no code, and
-    /// `RainDeployVerifyBase.deriveDeployment` etches the runtime code beside
-    /// each to run the release's constructor. Broadcasting a past release onto
-    /// a newly supported chain therefore has to check the list that release was
-    /// cut with, so it is read from that release's own frozen snapshot.
+    /// broadcast on a network where one of them has no code. Broadcasting a
+    /// past release onto a newly supported chain therefore has to check the
+    /// list that release was cut with, so it is read from that release's own
+    /// frozen snapshot.
     ///
     /// The other two come from `template`, the candidate declaration, and are
     /// regenerated from it on every build: the key and the artifact path are

@@ -397,41 +397,32 @@ contract RainDeploySuitesBaseTest is Test {
         }
     }
 
-    /// @dev One declared dependency's address, with a second and a third beside
-    /// it so a projection can be out of order at all.
+    /// @dev A declared dependency's address, with two more so a projection can
+    /// be out of order at all.
     address constant FIRST_DEPENDENCY = address(0xdef1);
 
-    /// @dev The second declared dependency's address. See `FIRST_DEPENDENCY`.
+    /// @dev The second declared dependency's address.
     address constant SECOND_DEPENDENCY = address(0xdef2);
 
-    /// @dev The third declared dependency's address. See `FIRST_DEPENDENCY`.
+    /// @dev The third declared dependency's address.
     address constant THIRD_DEPENDENCY = address(0xdef3);
 
-    /// A declaration over `addresses`, each entry carrying runtime code that is
-    /// nothing like any other entry's.
-    ///
-    /// Distinct per entry because the projection drops the code: a projection
-    /// that read the wrong field, or built an entry out of two, is only visible
-    /// while the code and the address are different values and every entry's
-    /// code is its own.
+    /// A declaration over `addresses`, each entry carrying code of its own that
+    /// is nothing like its address, so a wrong field read is visible.
     /// @param addresses The dependency addresses, in declaration order.
     /// @return dependencies The declaration.
     function declaration(address[] memory addresses) internal pure returns (DeployDependency[] memory dependencies) {
         dependencies = new DeployDependency[](addresses.length);
         for (uint256 i = 0; i < addresses.length; i++) {
             dependencies[i] =
-                DeployDependency({deployedAddress: addresses[i], runtimeCode: abi.encodePacked(bytes1(uint8(i + 1)))});
+            // Below the split, because the directive must be on the cast's line.
+            // forge-lint: disable-next-line(unsafe-typecast)
+            DeployDependency({deployedAddress: addresses[i], runtimeCode: abi.encodePacked(bytes1(uint8(i + 1)))});
         }
     }
 
     /// A declaration with no entries MUST project to no addresses, rather than
     /// to a one-entry array holding address zero.
-    ///
-    /// Every suite in this repo declares none, so this is the shape
-    /// `LibRainDeploy.deployToNetworks` is handed on nearly every broadcast. A
-    /// phantom entry there is a dependency check against address zero, which
-    /// has no code on any network, so every such broadcast would refuse with
-    /// `MissingDependency` naming an address nobody declared.
     function testDependencyAddressesOfNoDependencies() external pure {
         address[] memory addresses = dependencyAddresses(new DeployDependency[](0));
         assertEq(addresses.length, 0);
@@ -450,13 +441,6 @@ contract RainDeploySuitesBaseTest is Test {
 
     /// EVERY declared dependency MUST project, into the position it was
     /// declared in.
-    ///
-    /// Order is part of the projection because the refusal downstream names the
-    /// dependency it refused, and the declarer reads that against the list they
-    /// wrote. A projection that dropped the tail is worse than out of order: a
-    /// dependency the broadcast is never handed is a dependency no network is
-    /// ever checked for, and the deploy proceeds green onto a chain where it is
-    /// absent.
     function testDependencyAddressesPreservesDeclarationOrder() external pure {
         address[] memory declared = new address[](3);
         declared[0] = FIRST_DEPENDENCY;
@@ -471,13 +455,8 @@ contract RainDeploySuitesBaseTest is Test {
         assertEq(addresses[2], THIRD_DEPENDENCY);
     }
 
-    /// The order MUST come from the declaration and not from anything about the
-    /// addresses themselves.
-    ///
-    /// The same three addresses declared backwards project backwards. Declared
-    /// ascending, a projection that sorted — or that read the list in reverse —
-    /// agrees with the test above on every entry, so that test alone cannot say
-    /// the declaration is what decided the order.
+    /// The same three addresses declared DESCENDING MUST project descending, so
+    /// a projection that sorted or reversed cannot pass the test above.
     function testDependencyAddressesOrderIsTheDeclarationsNotTheAddresses() external pure {
         address[] memory declared = new address[](3);
         declared[0] = THIRD_DEPENDENCY;

@@ -17,9 +17,7 @@ import {MockDeployable} from "./MockDeployable.sol";
 address constant ABSENT_DEPENDENCY = address(0xdeadbee5);
 
 /// @dev The code the candidate declares belongs at `ABSENT_DEPENDENCY`. Never
-/// etched anywhere: this fixture drives the BROADCAST path, which reads a real
-/// chain and finds nothing at that address, which is the whole point of it.
-/// Non-empty all the same, because a declaration carrying no code is a
+/// etched anywhere, but non-empty: a declaration carrying no code is a
 /// declaration of something else.
 bytes constant ABSENT_DEPENDENCY_RUNTIME_CODE = hex"fe";
 

@@ -87,35 +87,17 @@ error NoDeployCandidates();
 /// candidate NAMES — its `artifactPath` — currently compiles to.
 error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, bytes32 sourceCreationCodeHash);
 
-/// One address a suite's deployment requires, and the code that must be at it.
-///
-/// Two fields rather than one address, because an address alone does not say
-/// what belongs there. The broadcast only ever asks whether SOMETHING is there
-/// — `LibRainDeploy.deployToNetworks` refuses a network where a dependency has
-/// no code — but `deriveDeployment` has to PUT the dependency on a local EVM
-/// where nothing is deployed, and for that it needs the bytes. A single
-/// non-zero byte would satisfy a `code.length > 0` constructor check and
-/// nothing else, leaving a constructor that CALLS its dependency broken in a
-/// way the derivation reports as success.
-///
-/// Both halves are published data on the dependency's side: every generated
-/// snapshot carries a `DEPLOYED_ADDRESS` and a `RUNTIME_CODE` constant, which
-/// is what they are for. So whoever writes the declaration imports the pair
-/// from the snapshot of the suite being depended on, and nothing on this side
-/// resolves an address back to a suite that owns it — a dependency is not
-/// necessarily a suite of the declaring repo at all, and a library that went
-/// looking could only find the ones that are.
+/// One address a suite's deployment requires and the code that must be at it:
+/// the depended-on snapshot's own published `DEPLOYED_ADDRESS` and
+/// `RUNTIME_CODE`, written out by the declarer. Nothing here resolves an address
+/// back to a suite that owns it — a dependency need not be a suite of the
+/// declaring repo at all.
 struct DeployDependency {
     /// The address that MUST already have code on a network before the suite
-    /// declaring it is broadcast there. Ordinarily another suite's
-    /// `DEPLOYED_ADDRESS`.
+    /// declaring it is broadcast there.
     address deployedAddress;
-    /// The runtime code that MUST be at `deployedAddress`. Ordinarily that
-    /// suite's `RUNTIME_CODE`.
-    ///
-    /// `deriveDeployment` etches exactly these bytes, and the declarer is the
-    /// only one who knows them: this is the whole reason the field carries code
-    /// rather than an address.
+    /// The runtime code that MUST be at `deployedAddress`, which
+    /// `deriveDeployment` etches exactly.
     bytes runtimeCode;
 }
 
@@ -180,19 +162,6 @@ struct DeploySuite {
     /// Ordinarily other suites' recorded pins — a constructor that bakes in a
     /// beacon, or a fallback that delegatecalls a facet, silently produces a
     /// broken deployment if its target is absent.
-    ///
-    /// Read by both halves of the deploy process, which is why the code is
-    /// here. `RainDeployBroadcast.run` hands the addresses to
-    /// `LibRainDeploy.deployToNetworks`, which refuses to broadcast on a
-    /// network where one of them has no code. `deriveDeployment` etches the
-    /// code at the address, inside the state snapshot it already reverts, so
-    /// that a constructor which reads a dependency can run at all: derivation
-    /// happens on a local EVM with nothing deployed, so a declared dependency
-    /// is absent there by construction and such a suite used to fail
-    /// `DeployFailed` with its constructor's own revert buried — leaving every
-    /// pin it records checked by nothing.
-    ///
-    /// Written by the declarer and never looked up. See `DeployDependency`.
     DeployDependency[] dependencies;
 }
 
@@ -205,17 +174,8 @@ struct DeployCandidate {
     DeploySuite snapshot;
 }
 
-/// Just the addresses of a dependency list, in declaration order.
-///
-/// `LibRainDeploy` takes an `address[]`: its checks are a chain read of each
-/// address and nothing else, and it is reachable with no suite declaration
-/// anywhere in sight — a caller deploying creation code it assembled itself
-/// passes a list it wrote by hand. So the code half of a declaration stops
-/// here, at the one caller that has it, rather than being carried into a
-/// library with no use for it.
-///
-/// Order is preserved because the refusal names the dependency it refused, and
-/// a caller reads that against the list they wrote.
+/// Just the addresses of a dependency list, in declaration order, for
+/// `LibRainDeploy`, which takes an `address[]` and only ever reads a chain.
 /// @param dependencies The dependency list to project.
 /// @return The addresses, positionally.
 function dependencyAddresses(DeployDependency[] memory dependencies) pure returns (address[] memory) {

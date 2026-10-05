@@ -102,10 +102,6 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             suite.artifactPath,
             suite.storedDeployedAddress,
             suite.storedBytecodeHash,
-            // The addresses alone. The runtime code a declaration carries
-            // beside each one is for `deriveDeployment`, which has to PUT the
-            // dependency on a local EVM; the broadcast reads a real chain,
-            // where it only has to ask whether anything is there.
             dependencyAddresses(suite.dependencies)
         );
     }
