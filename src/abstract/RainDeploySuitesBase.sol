@@ -210,28 +210,16 @@ abstract contract RainDeploySuitesBase {
     /// @return The candidates.
     function candidateSuites() internal pure virtual returns (DeployCandidate[] memory);
 
-    /// Every network this repo deals with: what a broadcast targets by default,
-    /// and the set every network-scoped assertion is made over. Every network
-    /// Rain supports by default, which is what a deterministic deployment
-    /// usually wants — one address, every chain, in one dispatch.
+    /// Every network this repo deals with: what a broadcast targets and the set
+    /// every network-scoped assertion is made over. Defaults to all of Rain's.
     ///
-    /// Overridable because that is not universal: `st0x.deploy` broadcasts to
-    /// five of them. ONE hook, because the set of networks a repo deals with is
-    /// ONE fact. A `virtual` on each verification function instead would be
-    /// three ways for verification to end up scoped narrower than what the repo
-    /// broadcasts to — a release held to nothing at all on the networks that
-    /// were dropped, with nothing anywhere to catch it.
+    /// ONE hook, on the contract both sides inherit, because the set of networks
+    /// a repo deals with is one fact. A `virtual` per verification function
+    /// would be three ways for verification to end up narrower than what the
+    /// repo broadcasts to, with nothing to catch it.
     ///
-    /// On the declaration because this is the contract both sides already
-    /// inherit: `RainDeployBroadcast.deployNetworks` defaults to it, the chain
-    /// matrix forks it, and the config group holds `foundry.toml` to it. So
-    /// verifying a different set from the one deployed to is unspellable rather
-    /// than discouraged.
-    ///
-    /// `deployNetworks` narrowing it is a different thing and stays available.
-    /// That is the target set of ONE dispatch, for a repo bootstrapping a chain
-    /// at a time, and the networks a dispatch skips are ones this repo still
-    /// deploys to and is still verified on.
+    /// `deployNetworks` narrowing this is a different thing and stays
+    /// available: that is one dispatch's targets, not the repo's set.
     /// @return The network names, as `[rpc_endpoints]` aliases.
     function supportedNetworks() internal view virtual returns (string[] memory) {
         return LibRainDeploy.supportedNetworks();

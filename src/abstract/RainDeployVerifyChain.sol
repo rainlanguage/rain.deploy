@@ -61,12 +61,10 @@ struct DeclaredChainId {
 /// hash, and every chain id `[etherscan]` declares is the one that network's
 /// alias forks.
 ///
-/// The declaration's, rather than this package's, and through the same hook
-/// `RainDeployBroadcast.deployNetworks()` defaults to. A repo that deploys to a
-/// subset is held to exactly that subset, and there is no way to spell a
-/// verification set narrower than the one it broadcasts to — see
-/// `RainDeploySuitesBase.supportedNetworks` for why that is one hook and not a
-/// `virtual` on each test below.
+/// The declaration's networks, through the same hook
+/// `RainDeployBroadcast.deployNetworks()` defaults to, so a repo deploying to a
+/// subset is held to that subset and cannot be verified on fewer networks than
+/// it broadcasts to.
 ///
 /// This is the only group that can catch a suite that never deployed to a
 /// network, or that is not there any more. Neither is a fact the repo can hold:

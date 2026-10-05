@@ -59,12 +59,10 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// instead. The reusable workflow already carries a `network:` input for
     /// exactly this.
     ///
-    /// An override here narrows ONE dispatch and nothing else: the networks it
-    /// skips are still networks this repo deploys to, and the verification
-    /// groups go on checking them. A repo that deploys to fewer networks AT ALL
-    /// says so on `supportedNetworks` instead — which this defaults to, and
-    /// which both sides read, so verification follows the repo's own set rather
-    /// than this package's.
+    /// An override here narrows ONE dispatch: the networks it skips are still
+    /// ones this repo deploys to and is verified on. A repo that deploys to
+    /// fewer networks at all overrides `supportedNetworks` instead, which this
+    /// defaults to.
     /// @return The network names to deploy to, as `[rpc_endpoints]` aliases.
     function deployNetworks() internal view virtual returns (string[] memory) {
         return supportedNetworks();

@@ -13,35 +13,18 @@ import {
 } from "../../../src/generated/candidate/AddressRegistry.sol";
 
 /// @title RainDeployVerifyChainNarrowNetworksTest
-/// @notice A repo that deploys to FEWER networks than Rain supports: the chain
-/// group MUST be made over the networks that repo declares, and over no others.
+/// @notice The chain group is made over the networks the declaration names and
+/// no others. The inherited tests run here on the narrowed set and pass, so the
+/// binding is bindable.
 ///
-/// This is the consumer `supportedNetworks()` is a hook for. `st0x.deploy`
-/// broadcasts to five of the nine, so a chain group hardwired to the nine holds
-/// every one of its releases to four networks it never reaches — and the repo's
-/// only way out is to bind no chain group at all, which is how that tree is
-/// green today.
+/// Passing alone cannot show the set was narrowed — a group walking all nine
+/// would pass too. The tests below read the narrowing instead: neither group
+/// restores the fork it was on, so a run ends on the last network it walked,
+/// and fork ids are handed out from zero, so an id of 1 existing means a
+/// network was forked that the declaration does not name.
 ///
-/// Both of this contract's inherited tests run here on the narrowed set and
-/// pass, which is the whole of the consumer-facing claim: the binding is
-/// bindable. What the tests below add is that the set was really narrowed,
-/// because passing cannot say it — the subject is etched live on every fork and
-/// this repo's `[etherscan]` ids are right on all nine, so a group that ignored
-/// the declaration and walked the nine would pass too.
-///
-/// ## The narrowing is observable as the fork COUNT and the chain LEFT selected
-///
-/// Neither group restores the fork it was on, so a completed run ends on the
-/// LAST network it walked: base here, polygon for the library's nine. And ids
-/// are handed out in creation order from zero, so with one network declared an
-/// id of 1 existing at all is a network that was forked and never declared.
-/// `selectFork` reverts on an id that was never created, so a low-level call
-/// failing IS "there is no such fork".
-///
-/// Its own contract for the reason `RainDeployVerifyChainEmptyTest` is its own
-/// contract: the networks a contract declares are the whole of what the groups
-/// run over, and a contract has exactly one declaration, so a second scope is a
-/// second contract.
+/// Its own contract because a contract has exactly one declaration, so a second
+/// scope is a second contract.
 contract RainDeployVerifyChainNarrowNetworksTest is ExampleDeploySuites, RainDeployVerifyChain {
     /// Base's chain id, as a fact of the world rather than a second read of the
     /// alias this contract declares: an `[rpc_endpoints]` entry pointed at some
@@ -49,10 +32,8 @@ contract RainDeployVerifyChainNarrowNetworksTest is ExampleDeploySuites, RainDep
     uint256 constant BASE_CHAIN_ID = 8453;
 
     /// @inheritdoc RainDeploySuitesBase
-    /// @dev ONE network, and base rather than either end of the library's list.
-    /// The groups leave the last network they walked selected, so a run that
-    /// took the nine ends on polygon and one that took only their first entry
-    /// ends on arbitrum. Neither reads as base.
+    /// @dev ONE network, and base rather than either end of the library's
+    /// list, so a run that ignored the declaration ends on arbitrum or polygon.
     function supportedNetworks() internal pure override returns (string[] memory networks) {
         networks = new string[](1);
         networks[0] = LibRainDeploy.BASE;
@@ -85,9 +66,7 @@ contract RainDeployVerifyChainNarrowNetworksTest is ExampleDeploySuites, RainDep
         );
     }
 
-    /// The matrix MUST fork the declared networks and nothing else. A network
-    /// this repo does not deploy to is one every release would be reported
-    /// missing from, release after release, with the repo correct.
+    /// The matrix forks the declared networks and nothing else.
     function testChainMatrixForksOnlyTheDeclaredNetworks() external {
         assertNarrowerThanTheLibrary();
 
@@ -99,10 +78,8 @@ contract RainDeployVerifyChainNarrowNetworksTest is ExampleDeploySuites, RainDep
         assertFalse(extraFork, "the matrix forked a network the declaration does not name");
     }
 
-    /// The chain id check MUST read the declared networks' `[etherscan]`
-    /// entries and nothing else. The entries it would otherwise read are a
-    /// consumer's config for networks it never verifies on, and an alias it has
-    /// no endpoint for fails the fork rather than the comparison.
+    /// The chain id check reads the declared networks' `[etherscan]` entries
+    /// and nothing else.
     function testChainIdBindingReadsOnlyTheDeclaredNetworks() external {
         assertNarrowerThanTheLibrary();
 

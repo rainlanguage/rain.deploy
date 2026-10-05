@@ -90,22 +90,16 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
     ///
     /// `vm.readFile` resolves against the project root of whatever runs it, so
     /// the file read is the binder's own — and the networks are the binder's
-    /// own too, because `supportedNetworks()` is the declaration's hook rather
-    /// than this package's list. A repo that deploys to a subset holds its
-    /// config to that subset, which is the only scope that can be right here:
-    /// the set compared against is the set the deploy forks and the chain
-    /// matrix checks. A binding repo needs `{ access = "read", path =
+    /// own too: `supportedNetworks()` is the declaration's hook, so a repo
+    /// deploying to a subset holds its config to the same set the deploy forks
+    /// and the chain matrix checks. A binding repo needs `{ access = "read", path =
     /// "./foundry.toml" }` in `fs_permissions`, and one without it fails here
     /// rather than passing on a file it never opened.
     ///
-    /// Scoping to the declaration does NOT make the `[etherscan]` direction
-    /// per-consumer. An entry is still required for every network in the set,
-    /// and whether a network HAS an Etherscan deployment is a fact about the
-    /// network rather than about the repo: Robinhood (4663) is not indexed by
-    /// Etherscan v2 and is verified through Sourcify, so a repo that deploys
-    /// there and states no entry for it fails this with its config correct.
-    /// That set is a different set from this one, and no scoping of this hook
-    /// is it.
+    /// An `[etherscan]` entry is still required for every network in the set.
+    /// A chain Etherscan does not index carries its explorer's API url there
+    /// instead — Robinhood (4663) points at Blockscout — so the requirement
+    /// does not narrow with the hook.
     ///
     /// The assertions themselves are `checkNetworksConfigured`, in the base,
     /// because they take the config as an argument and so can be handed one a
