@@ -8,20 +8,17 @@ import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol"
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
 
 /// @title AddressRegistryGetTest
-/// @notice A test suite for `AddressRegistry.get`: it answers a bound name with
-/// its address AND the moment that address was bound, an unbound name with a
-/// revert, and it is the only reader the registry has.
+/// @notice Tests for `AddressRegistry.get`: the address, the moment, the revert
+/// for an unbound name, and that it is the registry's only reader.
 contract AddressRegistryGetTest is Test {
-    /// The registry under test. Stateful, so a fresh one per test.
+    /// The registry under test.
     AddressRegistry internal sRegistry;
 
     function setUp() external {
         sRegistry = new AddressRegistry();
     }
 
-    /// The address half of `get`, for the assertions that are only about the
-    /// address. The moment has its own tests rather than being repeated into
-    /// every one of them.
+    /// The address half of `get`.
     /// @param registry The registry to read.
     /// @param name The name to read.
     /// @return The address bound to `name`.
@@ -39,16 +36,14 @@ contract AddressRegistryGetTest is Test {
         return registeredAt;
     }
 
-    /// A read of an unbound name reverts rather than returning the zero
-    /// address, so a caller cannot proceed on a name nobody bound by forgetting
-    /// to check.
+    /// A read of an unbound name reverts rather than returning the zero address.
     function testGetUnsetReverts(bytes32 name) external {
         vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name));
         getAddress(sRegistry, name);
     }
 
-    /// A read of a bound name returns exactly what was bound, and reading does
-    /// not consume or alter the binding.
+    /// A read of a bound name returns exactly what was bound, and does not
+    /// consume or alter the binding.
     function testGetReturnsRegistered(bytes32 name, address account) external {
         vm.assume(account != address(0));
 
@@ -60,8 +55,7 @@ contract AddressRegistryGetTest is Test {
     }
 
     /// Names are opaque: nothing about a name's bytes changes how it is stored
-    /// or read, including names a string-hashing convention would never
-    /// produce.
+    /// or read.
     function testGetOpaqueNames(address account) external {
         vm.assume(account != address(0));
 
@@ -75,16 +69,14 @@ contract AddressRegistryGetTest is Test {
     }
 
     /// The bindings mapping is not `public`, so the getter a `public` mapping
-    /// would generate — which answers an unbound name with a zero `account`,
-    /// the exact silent failure `get` reverts to prevent — does not exist.
+    /// would generate does not exist.
     function testGetNoGeneratedMappingGetter(bytes32 name) external {
         (bool success,) = address(sRegistry).call(abi.encodeWithSignature("sBindings(bytes32)", name));
         assertFalse(success);
     }
 
-    /// There is no other entry point at all: no fallback, no receive, and
-    /// nothing beyond the two `IAddressRegistryV1` functions, so an unknown
-    /// selector reverts instead of being silently absorbed.
+    /// An unknown selector reverts: no fallback, no receive, nothing beyond the
+    /// two `IAddressRegistryV1` functions.
     function testGetNoOtherEntryPoint(bytes4 selector, bytes32 name) external {
         vm.assume(selector != IAddressRegistryV1.get.selector);
         vm.assume(selector != IAddressRegistryV1.register.selector);
@@ -94,10 +86,7 @@ contract AddressRegistryGetTest is Test {
     }
 
     /// The ABI is exactly the two `IAddressRegistryV1` functions, counted
-    /// rather than sampled. A fuzz over unknown selectors cannot see a reader
-    /// added under a name of its own, and such a reader is precisely what the
-    /// interface forbids: it would answer an unbound name with the zero
-    /// address, the silent failure `get` reverts to prevent.
+    /// rather than sampled.
     function testGetAbiIsExactlyTheInterface() external view {
         string[] memory signatures =
             vm.parseJsonKeys(vm.readFile("out/AddressRegistry.sol/AddressRegistry.json"), "$.methodIdentifiers");
@@ -107,10 +96,8 @@ contract AddressRegistryGetTest is Test {
         assertEq(signatures[1], "register(bytes32,address)");
     }
 
-    /// The registry takes no value on any path. Neither entry point is payable
-    /// and there is no `receive`, so ether sent with or without calldata is
-    /// refused rather than trapped in a contract that holds no way to move it
-    /// out again.
+    /// The registry takes no value on any path: ether sent with or without
+    /// calldata is refused, and its balance stays zero.
     function testGetNoValueEntryPoint(bytes32 name, address account) external {
         vm.assume(account != address(0));
         vm.deal(ADDRESS_REGISTRY_ROOT, 3);
@@ -130,9 +117,7 @@ contract AddressRegistryGetTest is Test {
         assertEq(address(sRegistry).balance, 0);
     }
 
-    /// `get` answers with the moment the binding was made, which is the whole
-    /// point of it returning two values: the age of the answer is on chain
-    /// rather than only recoverable from the logs.
+    /// `get` answers with the moment the binding was made.
     function testGetReturnsMoment(bytes32 name, address account, uint96 time) external {
         vm.assume(account != address(0));
 
@@ -146,9 +131,8 @@ contract AddressRegistryGetTest is Test {
         assertEq(registeredAt, time);
     }
 
-    /// The moment does not drift as the chain advances. It is the moment of the
-    /// write, read back unchanged however long afterwards, so an age computed
-    /// against `block.timestamp` grows rather than standing still.
+    /// The moment does not drift as the chain advances: it reads back unchanged
+    /// however long afterwards, so an age against `block.timestamp` grows.
     function testGetMomentStableAsTimePasses(bytes32 name, address account, uint96 time, uint96 elapsed) external {
         vm.assume(account != address(0));
         elapsed = uint96(bound(elapsed, 0, type(uint96).max - 1));
@@ -163,9 +147,7 @@ contract AddressRegistryGetTest is Test {
         assertEq(block.timestamp - getMoment(sRegistry, name), elapsed);
     }
 
-    /// The moment `get` answers with is never zero. `register` refuses a bind at
-    /// a clock of zero, so zero in the moment field means unbound and nothing
-    /// else — the one reading that would otherwise be ambiguous.
+    /// The moment `get` answers with is never zero.
     function testGetMomentNeverZero(bytes32 name, address account, uint96 time) external {
         vm.assume(account != address(0));
         time = uint96(bound(time, 1, type(uint96).max));
@@ -180,7 +162,7 @@ contract AddressRegistryGetTest is Test {
         assertEq(registeredAt, time);
     }
 
-    /// Moments are per name. Binding one name says nothing about another's age.
+    /// Moments are per name.
     function testGetMomentDistinctNames(
         bytes32 nameA,
         bytes32 nameB,
@@ -207,8 +189,7 @@ contract AddressRegistryGetTest is Test {
         assertEq(getMoment(sRegistry, nameB), timeB);
     }
 
-    /// The widest moment that fits is accepted, so the rejection below is a
-    /// boundary and not an off-by-one refusing legitimate binds.
+    /// The widest moment that fits is accepted.
     function testGetMomentMaxAccepted(bytes32 name, address account) external {
         vm.assume(account != address(0));
 
@@ -219,10 +200,8 @@ contract AddressRegistryGetTest is Test {
         assertEq(getMoment(sRegistry, name), type(uint96).max);
     }
 
-    /// A timestamp too wide for the moment is REFUSED, never narrowed. A
-    /// truncated moment is a smaller number, which reads as an older binding,
-    /// which passes exactly the check a caller reads it to fail — so the unsafe
-    /// direction is made impossible rather than improbable.
+    /// A timestamp too wide for the moment is REFUSED, never narrowed, and the
+    /// name is left unbound.
     function testGetMomentOverflowRejected(bytes32 name, address account, uint256 time) external {
         vm.assume(account != address(0));
         time = bound(time, uint256(type(uint96).max) + 1, type(uint256).max);
@@ -232,7 +211,6 @@ contract AddressRegistryGetTest is Test {
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, account);
 
-        // Refused outright: the name is not bound by a register that overflowed.
         vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name));
         getAddress(sRegistry, name);
     }
@@ -248,11 +226,7 @@ contract AddressRegistryGetTest is Test {
     ) external {
         vm.assume(bound_ != address(0));
         vm.assume(account != address(0));
-        // Past the stamp's width, so the width guard is what refuses the second
-        // bind. Deliberately a `uint256` beyond `uint96` range, so it must NOT
-        // be clamped back into it.
         time = bound(time, uint256(type(uint96).max) + 1, type(uint256).max);
-        // Nonzero, because a bind at a clock of zero is refused outright.
         first = uint96(bound(first, 1, type(uint96).max));
 
         vm.warp(first);
@@ -269,11 +243,8 @@ contract AddressRegistryGetTest is Test {
         assertEq(registeredAt, first);
     }
 
-    /// The address and the moment share a storage word, so a bind writes both or
-    /// neither. Reading them back across a run of rotations proves they were
-    /// replaced together rather than one lagging the other — a moment that could
-    /// lag its address would be worse than none, because a stale answer would
-    /// read as a fresh one.
+    /// Across a run of rotations the address and the moment are always replaced
+    /// together, never one lagging the other.
     function testGetAddressAndMomentMoveTogether(bytes32 name, address[] memory accounts, uint96 start) external {
         vm.assume(accounts.length > 0);
         start = uint96(bound(start, 1, type(uint96).max - accounts.length));

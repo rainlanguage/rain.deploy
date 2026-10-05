@@ -15,24 +15,14 @@ import {LibAddressRegistryDeploy} from "./LibAddressRegistryDeploy.sol";
 ///
 /// That is the whole library. It resolves a name to an address and the moment
 /// that address was bound, and will refuse a binding younger than the caller
-/// says it will accept. What a consumer resolves a name for, and when — an
-/// owner set in a constructor or an initializer, under `Ownable` or RBAC or
-/// nothing at all — is entirely the consumer's business and none of this
-/// library's.
+/// says it will accept. What a consumer resolves a name for, and when, is
+/// entirely the consumer's business and none of this library's.
 ///
 /// Bindings are mutable, so `resolve` answers with whatever root has bound most
 /// recently. A caller that needs an answer that cannot move afterwards resolves
 /// once, in its constructor, and stores the result; it must not re-read at the
 /// point of use. That single read at construction is what makes a deployment
-/// verifiable after the fact: the value is settled the moment the contract
-/// exists, and no later re-binding can move it.
-///
-/// The moment comes back alongside the address so that a caller about to
-/// snapshot one can tell whether it has just moved. `resolveSafe` is that
-/// comparison written once: it takes the caller's own minimum age and reverts
-/// rather than returning a binding younger than it. The threshold is never this
-/// library's — it is a parameter, because what counts as too fresh depends on
-/// what the name is being resolved for, and only the caller knows that.
+/// verifiable after the fact.
 library LibAddressRegistry {
     /// Thrown when the code at the registry address is not the registry this
     /// library was compiled against. An address with no code hits this too: a
@@ -49,32 +39,20 @@ library LibAddressRegistry {
     /// @param minAge How long it had to have stood.
     error BindingTooFresh(bytes32 name, uint256 age, uint256 minAge);
 
-    /// Thrown by `resolveSafe` when the binding is stamped ahead of the clock
-    /// it is read against.
+    /// Thrown by `resolveSafe` when the binding is stamped ahead of the clock.
     ///
-    /// Distinct from `BindingTooFresh` rather than reported as an age of zero,
-    /// because the two are not the same situation and the caller's response to
-    /// them differs. A binding made in the block being read is too fresh and
-    /// will become acceptable by waiting. A binding stamped in the FUTURE means
-    /// the chain's clock moved backwards since the bind: nothing is gained by
-    /// waiting, the age of every binding on that chain is unreliable, and the
-    /// only safe reading is that something is wrong with the chain. Collapsing
-    /// it into the freshness report would make "wait and retry" the advice for
-    /// a state where retrying is the wrong thing to do.
+    /// Separate from `BindingTooFresh` because the caller's response differs: a
+    /// too-fresh binding becomes acceptable by waiting, while a clock that moved
+    /// backwards since the bind makes every binding's age on that chain
+    /// unreliable and waiting fixes nothing.
     /// @param name The name that was being resolved.
     /// @param registeredAt The moment the binding carries.
-    /// @param blockTimestamp The clock it was read against, which is behind it.
+    /// @param blockTimestamp The clock it was read against.
     error BindingStampedInFuture(bytes32 name, uint256 registeredAt, uint256 blockTimestamp);
 
-    /// Thrown by `resolveSafe` when asked to accept any age at all. A `minAge`
-    /// of zero is satisfied by every binding, including one made in the block
-    /// being read, so it is `resolve` wearing the name of the checked version —
-    /// the one shape of call that looks guarded and is not. Refused rather than
-    /// answered, for the same reason `get` refuses an unbound name instead of
-    /// returning zero: a caller that reaches zero has reached it by accident,
-    /// from an unset constant or an unconfigured parameter, and that is a
-    /// mistake to report rather than a request to honour. A caller that really
-    /// wants no threshold says so by calling `resolve`.
+    /// Thrown by `resolveSafe` when `minAge` is zero, which every binding
+    /// satisfies. Honouring it would make this `resolve` under a name that
+    /// promises a check. A caller that wants no threshold calls `resolve`.
     /// @param name The name that was being resolved.
     error ZeroMinAge(bytes32 name);
 
@@ -97,80 +75,44 @@ library LibAddressRegistry {
                 LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH, actualCodeHash
             );
         }
-        // Destructured rather than returned straight through, so that both
-        // halves are visibly used: a tuple handed back untouched reads to the
-        // static analysers as a return value nobody looked at.
+        // Destructured rather than returned straight through, so both halves are
+        // visibly used: a passed-through tuple reads to the analysers as a
+        // return value nobody looked at.
         (address account, uint256 registeredAt) =
             IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name);
         return (account, registeredAt);
     }
 
-    /// `resolve`, refusing a binding that has not stood for `minAge` seconds.
+    /// `resolve`, refusing a binding that has not stood for longer than
+    /// `minAge`, and returning the address alone.
     ///
-    /// This is the check the registry deliberately does not make for anyone: a
-    /// rebind timed to land immediately before a resolve is how a dormant root
-    /// compromise converts to live capture, and the moment is what lets a caller
-    /// refuse it. The threshold is the caller's, passed in here, because only
-    /// the caller knows what it is resolving the name for.
+    /// This is the check the registry leaves to consumers: a rebind timed to
+    /// land immediately before a resolve is how a dormant root compromise
+    /// converts to live capture. The threshold is the caller's because only the
+    /// caller knows what it is resolving the name for.
     ///
-    /// What `minAge` buys is an OBSERVATION WINDOW, not protection, and the name
-    /// of this function should not be read as more than that. An attacker who
-    /// rebinds and then simply waits out `minAge` passes the check. What the
-    /// threshold guarantees is that the rebind was PUBLIC for at least that long
-    /// before it could affect any resolve — which is worth something only if
-    /// somebody or something is watching. A caller that picks a `minAge` without
-    /// arranging to watch the window has bought nothing but delay.
+    /// What `minAge` buys is an observation WINDOW, not protection. An attacker
+    /// who rebinds and waits it out passes. What it guarantees is that the
+    /// rebind was public for that long first, which is worth something only if
+    /// something is watching.
     ///
-    /// A binding exactly `minAge` old is REFUSED. The edge instant counts as
-    /// too fresh, so the binding must have stood for strictly longer than
-    /// `minAge`. That is the fail-safe resolution of the boundary: at the edge
-    /// the two readings are "just old enough" and "not quite old enough", and
-    /// a guard whose job is to refuse fresh bindings takes the second. An
-    /// inclusive edge here would be a permissive default on a security check,
-    /// chosen by accident rather than stated.
-    ///
-    /// A `minAge` of zero is REFUSED, before the registry is read at all. Zero
-    /// accepts everything, so it would make this function `resolve` under a
-    /// name that promises a check — the one call shape that looks guarded while
-    /// guarding nothing. `resolve` is how a caller asks for no threshold.
-    ///
-    /// A binding stamped ahead of the clock is refused as
-    /// `BindingStampedInFuture`, not as `BindingTooFresh`. It means the chain's
-    /// clock moved backwards since the bind, which is not a state to hand a
-    /// caller an address out of and not one that waiting repairs — so it is
-    /// reported as its own thing rather than as an age of zero.
-    ///
-    /// Returns the address alone. Vetting it is this function's whole purpose,
-    /// so the moment has been spent; a caller that wants it as well uses
-    /// `resolve` and compares for itself.
+    /// The boundary is exclusive: a binding exactly `minAge` old is refused, the
+    /// fail-safe reading of the edge.
     /// @param name The name to resolve. Opaque, as in `resolve`.
-    /// @param minAge The least time, in seconds, the binding must have stood.
+    /// @param minAge The time, in seconds, the binding must have stood for.
     /// Never zero.
     /// @return The address bound to `name`.
     function resolveSafe(bytes32 name, uint256 minAge) internal view returns (address) {
-        // First, so that a caller which asked for no threshold is told so
-        // whatever the registry would have said — including on a chain with no
-        // registry, and for a name nobody has bound. The call is wrong before
-        // any of that is reached.
+        // First, so a caller that asked for no threshold is told so whatever the
+        // registry would have said.
         if (minAge == 0) {
             revert ZeroMinAge(name);
         }
         (address account, uint256 registeredAt) = resolve(name);
         // Checked before the subtraction, so a future stamp is reported as what
-        // it is rather than underflowing into an arithmetic panic — and
-        // reported SEPARATELY from being too fresh, because waiting fixes one
-        // and not the other.
-        //
-        // Unlike the width check in `AddressRegistry.register`, these
-        // comparisons really are about a moment, which is what the analysers
-        // flag. The hazard is priced by the caller: a validator's few seconds
-        // of slack at the boundary cannot matter to a `minAge` chosen to be
-        // long enough to notice a rebind in, and a caller that would be harmed
-        // by seconds has not picked a `minAge` that protects it from anything.
-        // Suppressed on these comparisons rather than turned off for the repo.
-        //
-        // Slither's is a start/end pair because forge-lint's has to be the
-        // comment immediately above the line and has no pair form.
+        // it is rather than underflowing. These comparisons really are about a
+        // moment; a validator's seconds of slack cannot matter to a `minAge`
+        // long enough to notice a rebind in.
         // slither-disable-start timestamp
         // forge-lint: disable-next-line(block-timestamp)
         if (registeredAt > block.timestamp) {
