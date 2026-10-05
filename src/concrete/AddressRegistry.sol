@@ -38,6 +38,11 @@ address constant ADDRESS_REGISTRY_ROOT = 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1
 /// immediately and this contract holds nothing pending; a caller that wants to
 /// refuse an answer bound moments ago has what it needs to refuse it itself.
 ///
+/// A name's moment is non-decreasing. `register` refuses a bind whose clock is
+/// behind the moment the name already carries, so the age a caller derives from
+/// it can never overstate the time that has passed — which is the only reason
+/// the moment is worth reading.
+///
 /// The storage mapping is `internal` rather than `public`: a public mapping's
 /// generated getter answers an unbound name with a zero binding, which is
 /// exactly the silent failure `get` reverts to prevent.
@@ -104,6 +109,24 @@ contract AddressRegistry is IAddressRegistryV1 {
         // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp > type(uint96).max) {
             revert TimestampOverflow(block.timestamp);
+        }
+        // slither-disable-end timestamp
+        // A name's moment never goes backwards, whatever the chain's clock
+        // does. Without this a clock that regressed would let a re-bind write a
+        // SMALLER moment than the binding it replaces, and a caller measuring
+        // `block.timestamp -` that moment would get an age larger than the time
+        // that actually passed — so a re-bind from moments ago could report as
+        // long-settled. An unbound name carries a moment of zero, which no
+        // clock is below, so the first bind of a name is never affected.
+        //
+        // This does NOT make the clock trustworthy at read time: it can still
+        // regress between a bind and a read, which is what
+        // `LibAddressRegistry.resolveSafe` reports as `BindingStampedInFuture`.
+        // The two guards cover different moments and neither subsumes the other.
+        // slither-disable-start timestamp
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.timestamp < sBindings[name].registeredAt) {
+            revert TimestampBeforeBinding(name, block.timestamp, sBindings[name].registeredAt);
         }
         // slither-disable-end timestamp
         // Assigned whole, so a re-bind replaces the moment in the same write

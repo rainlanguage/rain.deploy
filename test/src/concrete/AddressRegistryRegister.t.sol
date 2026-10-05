@@ -242,6 +242,10 @@ contract AddressRegistryRegisterTest is Test {
     ) external {
         vm.assume(bound_ != address(0));
         vm.assume(account != address(0));
+        // A name's moment never goes backwards, so the second bind happens at or
+        // after the first. `testRegisterRefusesClockBehindTheBinding` covers the
+        // other order.
+        second = uint96(bound(second, first, type(uint96).max));
 
         vm.warp(first);
         vm.prank(ADDRESS_REGISTRY_ROOT);
@@ -266,7 +270,10 @@ contract AddressRegistryRegisterTest is Test {
         external
     {
         vm.assume(account != address(0));
-        vm.assume(first != second);
+        // Strictly later, so the refresh is observable, and because a name's
+        // moment never goes backwards.
+        first = uint96(bound(first, 0, type(uint96).max - 1));
+        second = uint96(bound(second, uint256(first) + 1, type(uint96).max));
 
         vm.warp(first);
         vm.prank(ADDRESS_REGISTRY_ROOT);
@@ -305,6 +312,100 @@ contract AddressRegistryRegisterTest is Test {
         sRegistry.register(name, account);
 
         assertEq(getMoment(sRegistry, name), first);
+    }
+
+    /// A name's moment never goes backwards. A re-bind at a clock behind the
+    /// moment the name carries is refused, so a caller deriving an age from the
+    /// moment can never be handed one larger than the time that actually
+    /// passed — which is what a clock-regressing chain would otherwise produce,
+    /// making a re-bind from moments ago report as long-settled.
+    function testRegisterRefusesClockBehindTheBinding(
+        bytes32 name,
+        address bound_,
+        address account,
+        uint96 first,
+        uint96 second
+    ) external {
+        vm.assume(bound_ != address(0));
+        vm.assume(account != address(0));
+        second = uint96(bound(second, 0, type(uint96).max - 1));
+        first = uint96(bound(first, uint256(second) + 1, type(uint96).max));
+
+        vm.warp(first);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, bound_);
+
+        vm.warp(second);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAddressRegistryV1.TimestampBeforeBinding.selector, name, uint256(second), uint256(first)
+            )
+        );
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, account);
+
+        // The refused bind left the binding and its moment untouched.
+        assertEq(getAddress(sRegistry, name), bound_);
+        assertEq(getMoment(sRegistry, name), first);
+    }
+
+    /// A re-bind at EXACTLY the moment the name carries is allowed. The rule is
+    /// that the moment must not go backwards, not that it must advance — and
+    /// re-binding twice in one block is the ordinary same-block case, which the
+    /// moment-refresh behaviour depends on.
+    function testRegisterAllowsClockEqualToTheBinding(bytes32 name, address bound_, address account, uint96 time)
+        external
+    {
+        vm.assume(bound_ != address(0));
+        vm.assume(account != address(0));
+
+        vm.warp(time);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, bound_);
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, account);
+
+        assertEq(getAddress(sRegistry, name), account);
+        assertEq(getMoment(sRegistry, name), time);
+    }
+
+    /// The first bind of a name is never refused by the non-decreasing rule. An
+    /// unbound name carries a moment of zero, which no clock is below, so even a
+    /// chain at block time zero can make its first binding.
+    function testRegisterFirstBindNeverRefusedByMonotonicity(bytes32 name, address account) external {
+        vm.assume(account != address(0));
+
+        vm.warp(0);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, account);
+
+        assertEq(getAddress(sRegistry, name), account);
+        assertEq(getMoment(sRegistry, name), 0);
+    }
+
+    /// The rule is per name: a name's moment constrains only its own re-binds,
+    /// so a clock behind ONE name's moment does not stop another name being
+    /// bound.
+    function testRegisterMonotonicityIsPerName(bytes32 nameA, bytes32 nameB, address account, uint96 high, uint96 low)
+        external
+    {
+        vm.assume(nameA != nameB);
+        vm.assume(account != address(0));
+        low = uint96(bound(low, 0, type(uint96).max - 1));
+        high = uint96(bound(high, uint256(low) + 1, type(uint96).max));
+
+        vm.warp(high);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(nameA, account);
+
+        // The clock is now behind nameA's moment, but nameB has none of its own.
+        vm.warp(low);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(nameB, account);
+
+        assertEq(getMoment(sRegistry, nameA), high);
+        assertEq(getMoment(sRegistry, nameB), low);
     }
 
     /// A zero-address `register` never moves a moment either, so there is no way

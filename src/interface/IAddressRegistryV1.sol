@@ -61,6 +61,23 @@ interface IAddressRegistryV1 {
     /// @param name The name that is not bound.
     error NameNotRegistered(bytes32 name);
 
+    /// Thrown by `register` when the clock is behind the moment the name
+    /// already carries, which would lower it.
+    ///
+    /// A name's moment is non-decreasing, and that is a property callers rely on
+    /// rather than an accident of how clocks behave. Without it, a chain whose
+    /// clock moved backwards would let a re-bind write a SMALLER moment than the
+    /// binding it replaces, and a caller measuring `block.timestamp -` that
+    /// moment would compute an age LARGER than the time that has actually
+    /// passed — so a re-bind from moments ago could report as long-settled and
+    /// clear a freshness threshold. The whole value of the moment is that the
+    /// age derived from it is not an overstatement.
+    /// @param name The name that was being bound.
+    /// @param timestamp The clock the bind was attempted at.
+    /// @param registeredAt The moment the name already carries, which is ahead
+    /// of that clock.
+    error TimestampBeforeBinding(bytes32 name, uint256 timestamp, uint256 registeredAt);
+
     /// Emitted every time `name` is bound, including when it is re-bound. The
     /// log is the complete history of the registry and the only way to discover
     /// a binding without already knowing the name; the most recent `Register`
@@ -76,7 +93,9 @@ interface IAddressRegistryV1 {
     ///
     /// The implementation MUST revert `NotRoot` unless the caller is the root
     /// authority, and MUST revert `ZeroAccount` if `account` is the zero
-    /// address. On success it MUST emit `Register` and MUST record
+    /// address. It MUST revert `TimestampBeforeBinding` rather than lower a
+    /// name's moment, so a name's moment is non-decreasing however the chain's
+    /// clock behaves. On success it MUST emit `Register` and MUST record
     /// `block.timestamp` as the binding's moment, in place of any moment it
     /// already carries — including when `account` is the address `name` already
     /// holds, which is a bind like any other. The moment dates the write, not
