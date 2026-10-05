@@ -59,6 +59,11 @@ library LibAddressRegistry {
                 LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH, actualCodeHash
             );
         }
-        return IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name);
+        // Destructured rather than returned straight through, so that both
+        // halves are visibly used: a tuple handed back untouched reads to the
+        // static analysers as a return value nobody looked at.
+        (address account, uint256 registeredAt) =
+            IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name);
+        return (account, registeredAt);
     }
 }
