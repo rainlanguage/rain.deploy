@@ -30,6 +30,11 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
         return suiteNames();
     }
 
+    /// @return The networks the declaration names.
+    function externalSupportedNetworks() external view returns (string[] memory) {
+        return supportedNetworks();
+    }
+
     function externalCheckSuiteKey(uint256 index, string memory suite) external pure {
         checkSuiteKey(index, suite);
     }
@@ -40,7 +45,7 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
     }
 
     /// Runs the source anchor over the fixture's own declaration.
-    function externalCheckCandidatesAnchoredToSource() external pure {
+    function externalCheckCandidatesAnchoredToSource() external view {
         checkCandidatesAnchoredToSource();
     }
 }

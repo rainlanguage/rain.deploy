@@ -35,6 +35,12 @@ pragma solidity ^0.8.25;
 /// after deploying it and before anything depends on it: the deployed contract
 /// has already snapshotted the value, so checking it is checking settled state.
 /// A poisoned deploy is a burned deterministic address, discovered before use.
+///
+/// `get` also answers with the moment a binding was made, because an address
+/// alone cannot say that it has just moved. The registry reports the moment
+/// and imposes nothing on it: a fresh binding is live at once, and an
+/// implementation MUST NOT withhold one. What counts as too fresh belongs to
+/// the caller.
 interface IAddressRegistryV1 {
     /// Thrown when an account that is not the root authority calls `register`.
     /// @param sender The `msg.sender` that was not root.
@@ -52,10 +58,28 @@ interface IAddressRegistryV1 {
     /// @param name The name that is not bound.
     error NameNotRegistered(bytes32 name);
 
+    /// Thrown by `register` when the clock is not strictly after the moment the
+    /// name already carries.
+    ///
+    /// Behind it would lower the moment, and a caller measuring
+    /// `block.timestamp -` it would then read an age larger than the time that
+    /// passed. Equal to it means a re-bind that changes the address while
+    /// leaving the moment identical, which a caller cannot detect. An unbound
+    /// name reads as a moment of zero, so a bind at a clock of zero is refused
+    /// too: zero is the field's unset value, and refusing it is what makes a
+    /// stored moment never zero.
+    /// @param name The name that was being bound.
+    /// @param timestamp The clock the bind was attempted at.
+    /// @param registeredAt The moment the name carries. Zero when unbound.
+    error TimestampNotAfterBinding(bytes32 name, uint256 timestamp, uint256 registeredAt);
+
     /// Emitted every time `name` is bound, including when it is re-bound. The
     /// log is the complete history of the registry and the only way to discover
     /// a binding without already knowing the name; the most recent `Register`
     /// for a name is its current binding.
+    ///
+    /// The moment is not a field here, because a log already carries the block
+    /// it was emitted in.
     /// @param name The name that was bound.
     /// @param account The address `name` was bound to.
     event Register(bytes32 indexed name, address indexed account);
@@ -63,25 +87,33 @@ interface IAddressRegistryV1 {
     /// Binds `name` to `account`, replacing any address it is already bound to.
     ///
     /// The implementation MUST revert `NotRoot` unless the caller is the root
-    /// authority, and MUST revert `ZeroAccount` if `account` is the zero
-    /// address. On success it MUST emit `Register`.
+    /// authority, MUST revert `ZeroAccount` if `account` is the zero address,
+    /// and MUST revert `TimestampNotAfterBinding` unless the clock is strictly
+    /// after the moment the name carries, so a name's moment strictly
+    /// increases. On success it MUST emit `Register` and record
+    /// `block.timestamp` as the moment — including when `account` is the
+    /// address already bound, which is a bind like any other. The moment dates
+    /// the write, not the value.
     /// @param name The name to bind.
     /// @param account The address to bind it to.
     function register(bytes32 name, address account) external;
 
-    /// The address `name` is currently bound to.
+    /// The address `name` is currently bound to, and when it was bound.
     ///
     /// The implementation MUST revert `NameNotRegistered` when `name` is
-    /// unbound, rather than returning the zero address, so that no caller has
-    /// to remember to check. It MUST NOT expose any other reader that returns
-    /// the zero address for an unbound name, as that reintroduces exactly the
-    /// mistake this reverting read exists to prevent.
+    /// unbound, rather than returning zeros, so that no caller has to remember
+    /// to check. It MUST NOT expose any other reader that returns the zero
+    /// address for an unbound name, as that reintroduces exactly the mistake
+    /// this reverting read exists to prevent. An implementation storing the
+    /// moment narrower than `block.timestamp` MUST reject what does not fit
+    /// rather than truncate it, since a truncated moment reads as older.
     ///
-    /// A caller that needs an answer that cannot move MUST read once and store
-    /// the result, which is what a consumer resolving a name in its constructor
-    /// does. Reading at the point of use instead means reading whatever root
-    /// has bound most recently.
+    /// Answers with the current binding: whatever root has bound most
+    /// recently, and the moment it was bound. A caller that stores the result
+    /// keeps that value; one that reads again gets whatever is current then.
     /// @param name The name to read.
     /// @return The address bound to `name`. Never the zero address.
-    function get(bytes32 name) external view returns (address);
+    /// @return The `block.timestamp` of the most recent `register` for `name`.
+    /// Never zero, so zero in this field means unbound and nothing else.
+    function get(bytes32 name) external view returns (address, uint256);
 }

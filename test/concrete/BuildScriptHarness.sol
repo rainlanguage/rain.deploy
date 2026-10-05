@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {BuildScript} from "../../src/abstract/BuildScript.sol";
+import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeployConfig} from "../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 
@@ -21,11 +22,42 @@ contract BuildScriptHarness is BuildScript {
     /// The single contract this fixture release freezes.
     string internal sContractName;
 
+    /// The declared network set, or empty for `RainDeploySuitesBase`'s own
+    /// default. Set by `declareNetworks` and only by it, so the default case is
+    /// the one every other test here drives.
+    string[] internal sNetworks;
+
     /// @param root The fixture record root, or empty for `BuildScript`'s own.
     /// @param contractName The contract the fixture snapshot describes.
     constructor(string memory root, string memory contractName) {
         sRoot = root;
         sContractName = contractName;
+    }
+
+    /// Narrows what this harness declares, which is what the config is
+    /// generated from.
+    /// @param networks The network names to declare.
+    function declareNetworks(string[] memory networks) external {
+        sNetworks = networks;
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    function supportedNetworks() internal view override returns (string[] memory) {
+        return sNetworks.length > 0 ? sNetworks : super.supportedNetworks();
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    /// @dev A fixture with no suites at all. Nothing `run()` or `cutRelease()`
+    /// reaches asks for one — the subject here is the wiring and the config —
+    /// and a declaration this harness does not drive is one a reader would take
+    /// for an assertion.
+    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
+        suites = new DeploySuite[](0);
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
+        candidates = new DeployCandidate[](0);
     }
 
     /// @inheritdoc BuildScript

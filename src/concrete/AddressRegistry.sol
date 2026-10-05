@@ -16,8 +16,8 @@ address constant ADDRESS_REGISTRY_ROOT = 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1
 
 /// @title AddressRegistry
 /// @notice The whole of `IAddressRegistryV1`: an immutable root authority binds
-/// a `bytes32` name, anyone reads a bound name, and a read of an unbound name
-/// reverts.
+/// a `bytes32` name, anyone reads a bound name and gets back the address with
+/// the moment it was bound, and a read of an unbound name reverts.
 ///
 /// There is deliberately nothing else. No removal, no upgrade, no pause, and no
 /// authority besides root — root is a compile-time constant, so it cannot even
@@ -31,42 +31,81 @@ address constant ADDRESS_REGISTRY_ROOT = 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1
 ///
 /// Mutability costs nothing already deployed. A consumer resolves a name once,
 /// in its constructor, and never reads the registry again, so re-binding a name
-/// changes what the next deployment resolves and nothing else — a rotation is a
-/// deliberate migration, never a silent change to live contracts.
+/// changes what the next deployment resolves and nothing else.
 ///
-/// The storage mapping is `internal` rather than `public`: a public mapping's
-/// generated getter answers an unbound name with the zero address, which is
-/// exactly the silent failure `get` reverts to prevent.
+/// The moment is reported and nothing more; this contract holds nothing
+/// pending. A name's moment strictly increases, so an age derived from it never
+/// overstates the time that passed.
 contract AddressRegistry is IAddressRegistryV1 {
+    /// Thrown when `block.timestamp` does not fit the moment's 96 bits, instead
+    /// of narrowing it. Unreachable on any plausible clock, and kept because
+    /// the alternative is a truncation that reads as an older binding.
+    /// @param timestamp The `block.timestamp` that did not fit.
+    error TimestampOverflow(uint256 timestamp);
+
+    /// @dev One binding, packed into one word. Declared in the contract because
+    /// it is storage layout and no part of anybody's ABI — `get` returns two
+    /// flat values.
+    ///
+    /// 96 bits is what is left beside a 160-bit address, and far more than a
+    /// clock needs: `2**96` seconds is some 2.5e21 years.
+    struct Binding {
+        /// Zero if and only if the name is unbound, which is what `register`
+        /// rejecting the zero address preserves.
+        address account;
+        /// The `block.timestamp` of the most recent `register`. Never zero for
+        /// a bound name.
+        uint96 registeredAt;
+    }
+
     /// The bindings. Not `public`: the only reader is `get`, which reverts on an
-    /// unbound name. A name maps to the zero address if and only if it is
-    /// unbound, which is why `register` rejects the zero address.
-    mapping(bytes32 name => address account) internal sAddresses;
+    /// unbound name rather than answering zero.
+    mapping(bytes32 name => Binding binding) internal sBindings;
 
     /// @inheritdoc IAddressRegistryV1
     function register(bytes32 name, address account) external {
         if (msg.sender != ADDRESS_REGISTRY_ROOT) {
             revert NotRoot(msg.sender);
         }
-        // Rejected so that a name can never be both bound and unreadable. There
-        // is deliberately no way to unbind a name; the nearest thing is
-        // re-binding it to something inert.
+        // Rejected so that a name can never be both bound and unreadable.
         if (account == address(0)) {
             revert ZeroAccount(name);
         }
-        sAddresses[name] = account;
+        // Both comparisons check the clock against a width or a stored moment,
+        // never against a deadline, so the validator-nudge hazard the analysers
+        // flag does not reach them.
+        // slither-disable-start timestamp
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.timestamp > type(uint96).max) {
+            revert TimestampOverflow(block.timestamp);
+        }
+        // Read after the cheap guards, so a refused call does not pay for it.
+        uint256 registeredAt = sBindings[name].registeredAt;
+        // forge-lint has no pair form, so each comparison needs its own
+        // directive on the line immediately above it.
+        // forge-lint: disable-next-line(block-timestamp)
+        if (block.timestamp <= registeredAt) {
+            revert TimestampNotAfterBinding(name, block.timestamp, registeredAt);
+        }
+        // slither-disable-end timestamp
+        // Assigned whole, so a re-bind replaces the moment in the same write
+        // that replaces the address.
+        sBindings[name] = Binding({account: account, registeredAt: uint96(block.timestamp)});
         emit Register(name, account);
     }
 
     /// @inheritdoc IAddressRegistryV1
-    /// @dev Returns whatever root has bound most recently. A caller that needs
-    /// an answer that cannot move reads once and stores it, which is what a
-    /// consumer resolving a name in its constructor does.
-    function get(bytes32 name) external view returns (address) {
-        address account = sAddresses[name];
-        if (account == address(0)) {
+    /// @dev Bound-ness is read off `account`, not the moment: the address is the
+    /// binding and the moment is metadata about when it was written.
+    function get(bytes32 name) external view returns (address, uint256) {
+        Binding memory binding = sBindings[name];
+        // Slither reaches this because `account` shares a struct with a value
+        // written from `block.timestamp`. There is no time in it.
+        // slither-disable-start timestamp
+        if (binding.account == address(0)) {
             revert NameNotRegistered(name);
         }
-        return account;
+        // slither-disable-end timestamp
+        return (binding.account, binding.registeredAt);
     }
 }

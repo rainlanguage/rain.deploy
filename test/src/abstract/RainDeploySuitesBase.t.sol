@@ -2,9 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.2/src/Test.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {
+    CandidateSourceMismatch,
     DeploySuite,
     DuplicateDeploySuite,
     InvalidDeploySuiteKey,
@@ -15,10 +16,12 @@ import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {CollidingCandidateDeploySuites} from "../../concrete/CollidingCandidateDeploySuites.sol";
 import {DuplicateDeploySuites} from "../../concrete/DuplicateDeploySuites.sol";
 import {EmptyKeyDeploySuites} from "../../concrete/EmptyKeyDeploySuites.sol";
+import {MisanchoredDeploy} from "../../concrete/MisanchoredDeploy.sol";
 import {NoCandidateDeploySuites} from "../../concrete/NoCandidateDeploySuites.sol";
 import {SameLengthKeyDeploySuites} from "../../concrete/SameLengthKeyDeploySuites.sol";
 import {SeparatorKeyDeploySuites} from "../../concrete/SeparatorKeyDeploySuites.sol";
 import {ShortestKeyDeploySuites} from "../../concrete/ShortestKeyDeploySuites.sol";
+import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 
@@ -262,6 +265,20 @@ contract RainDeploySuitesBaseTest is Test {
         sSuites.externalCheckCandidatesAnchoredToSource();
     }
 
+    function testCandidateThatNamesAnotherContractIsRefused() external {
+        MisanchoredDeploy misanchored = new MisanchoredDeploy();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CandidateSourceMismatch.selector,
+                "misanchored-candidate",
+                keccak256(type(MockDeployableV2).creationCode),
+                keccak256(type(MockDeployable).creationCode)
+            )
+        );
+        misanchored.externalCheckCandidatesAnchoredToSource();
+    }
+
     /// A key is the whole string, not its length. Two DIFFERENT keys of the
     /// SAME length MUST be two suites: both declared, each selecting its own
     /// record, and a third key of that length still unknown.
@@ -375,6 +392,28 @@ contract RainDeploySuitesBaseTest is Test {
         for (uint256 i = 0; i < refused.length; i++) {
             vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, i, refused[i]));
             sSuites.externalCheckSuiteKey(i, refused[i]);
+        }
+    }
+
+    /// The declared network set MUST default to every network Rain supports, in
+    /// order, so a repo deploying to all of them declares nothing and only a
+    /// repo deploying to fewer writes a list.
+    ///
+    /// Asserted on the declaration because this one answer is what the
+    /// broadcast targets and what every network-scoped assertion is made over:
+    /// a default that drifted from the library's list would move where a
+    /// dispatch goes and what the chain matrix forks together, and silently,
+    /// because the two would go on agreeing with each other.
+    ///
+    /// Position as well as membership, because the deploy and the matrix both
+    /// walk it in order and the last entry is what each leaves selected.
+    function testSupportedNetworksDefaultsToEveryRainNetwork() external view {
+        string[] memory declared = sSuites.externalSupportedNetworks();
+        string[] memory supported = LibRainDeploy.supportedNetworks();
+
+        assertEq(declared.length, supported.length);
+        for (uint256 i = 0; i < supported.length; i++) {
+            assertEq(declared[i], supported[i]);
         }
     }
 }

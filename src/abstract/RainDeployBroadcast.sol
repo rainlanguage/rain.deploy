@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {Script} from "forge-std-1.16.2/src/Script.sol";
+import {Script} from "forge-std-1.17.0/src/Script.sol";
 
 import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
@@ -49,18 +49,23 @@ import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 /// `deploy/` and `authorize/`, so a convention would be wrong for most of its
 /// suites.
 abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
-    /// The networks to broadcast to. Every supported network by default, which
-    /// is what a deterministic deployment usually wants: one address, every
-    /// chain, in one dispatch.
+    /// The networks to broadcast to. Every network the declaration supports by
+    /// default, which is what a deterministic deployment usually wants: one
+    /// address, every chain, in one dispatch.
     ///
     /// Overridable because that is not universal. A repo bootstrapping onto one
     /// chain at a time — `st0x.deploy` selects between Ethereum and HyperEVM
     /// per dispatch — returns a single-element list from its own env var
     /// instead. The reusable workflow already carries a `network:` input for
     /// exactly this.
+    ///
+    /// An override here narrows ONE dispatch: the networks it skips are still
+    /// ones this repo deploys to and is verified on. A repo that deploys to
+    /// fewer networks at all overrides `supportedNetworks` instead, which this
+    /// defaults to.
     /// @return The network names to deploy to, as `[rpc_endpoints]` aliases.
     function deployNetworks() internal view virtual returns (string[] memory) {
-        return LibRainDeploy.supportedNetworks();
+        return supportedNetworks();
     }
 
     /// Broadcasts the suite `DEPLOYMENT_SUITE` names.

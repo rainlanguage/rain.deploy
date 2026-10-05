@@ -7,6 +7,7 @@ import {CandidateSourceMismatch, DeployCandidate, DeploySuite} from "../../../sr
 import {
     FrozenSnapshotAmbiguous,
     FrozenSnapshotNotReleased,
+    FrozenSnapshotsOutnumberReleases,
     FrozenSnapshotUnreadable,
     RainDeployVerifySnapshotBase,
     StoredAddressMismatch,
@@ -25,6 +26,18 @@ import {
     DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
 } from "../../../src/generated/candidate/AddressRegistry.sol";
+import {
+    BYTECODE_HASH as ADDRESS_REGISTRY_0_1_10_BYTECODE_HASH,
+    CREATION_CODE as ADDRESS_REGISTRY_0_1_10_CREATION_CODE,
+    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_0_1_10_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as ADDRESS_REGISTRY_0_1_10_RUNTIME_CODE
+} from "../../../src/generated/0_1_10/AddressRegistry.sol";
+import {
+    BYTECODE_HASH as ADDRESS_REGISTRY_0_1_11_BYTECODE_HASH,
+    CREATION_CODE as ADDRESS_REGISTRY_0_1_11_CREATION_CODE,
+    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as ADDRESS_REGISTRY_0_1_11_RUNTIME_CODE
+} from "../../../src/generated/0_1_11/AddressRegistry.sol";
 
 /// @title RainDeployVerifySnapshotBaseTest
 /// @notice `RainDeployVerifySnapshotBase` inherited by a exemplar repo, so the
@@ -143,6 +156,80 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
 
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfTheGeneratedSnapshot()[0]));
         this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), wrongRelease);
+    }
+
+    function recordOfTheTwinReleases() internal pure returns (string[] memory paths) {
+        paths = new string[](2);
+        paths[0] = LibRainDeploySnapshot.pathForSnapshot("0_1_10", "AddressRegistry");
+        paths[1] = LibRainDeploySnapshot.pathForSnapshot("0_1_11", "AddressRegistry");
+    }
+
+    function declaredOlderTwin() internal pure returns (DeploySuite memory) {
+        return DeploySuite({
+            suite: "address-registry@0_1_10",
+            creationCode: ADDRESS_REGISTRY_0_1_10_CREATION_CODE,
+            storedDeployedAddress: ADDRESS_REGISTRY_0_1_10_DEPLOYED_ADDRESS,
+            storedBytecodeHash: ADDRESS_REGISTRY_0_1_10_BYTECODE_HASH,
+            storedRuntimeCode: ADDRESS_REGISTRY_0_1_10_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: new address[](0)
+        });
+    }
+
+    function declaredNewerTwin() internal pure returns (DeploySuite memory) {
+        return DeploySuite({
+            suite: "address-registry@0_1_11",
+            creationCode: ADDRESS_REGISTRY_0_1_11_CREATION_CODE,
+            storedDeployedAddress: ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
+            storedBytecodeHash: ADDRESS_REGISTRY_0_1_11_BYTECODE_HASH,
+            storedRuntimeCode: ADDRESS_REGISTRY_0_1_11_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: new address[](0)
+        });
+    }
+
+    function testTwinReleasesFrozeTheSameCreationCode() external pure {
+        assertEq(keccak256(ADDRESS_REGISTRY_0_1_10_CREATION_CODE), keccak256(ADDRESS_REGISTRY_0_1_11_CREATION_CODE));
+        assertEq(ADDRESS_REGISTRY_0_1_10_DEPLOYED_ADDRESS, ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS);
+        assertEq(
+            LibRainDeploy.zoltuAddress(ADDRESS_REGISTRY_0_1_10_CREATION_CODE),
+            LibRainDeploy.zoltuAddress(ADDRESS_REGISTRY_0_1_11_CREATION_CODE)
+        );
+    }
+
+    function testFrozenSnapshotTwinReleaseDroppedFromTheDeclarationReverts() external {
+        DeploySuite[] memory released = new DeploySuite[](1);
+        released[0] = declaredNewerTwin();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                FrozenSnapshotsOutnumberReleases.selector,
+                recordOfTheTwinReleases()[1],
+                ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
+                uint256(2),
+                uint256(1)
+            )
+        );
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheTwinReleases(), released);
+    }
+
+    function testFrozenSnapshotTwinReleasesBothDeclaredPasses() external view {
+        DeploySuite[] memory released = new DeploySuite[](2);
+        released[0] = declaredOlderTwin();
+        released[1] = declaredNewerTwin();
+
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheTwinReleases(), released);
+    }
+
+    function testFrozenSnapshotMoreDeclarationsThanRecordFilesPasses() external view {
+        string[] memory paths = new string[](1);
+        paths[0] = recordOfTheTwinReleases()[1];
+
+        DeploySuite[] memory released = new DeploySuite[](2);
+        released[0] = declaredOlderTwin();
+        released[1] = declaredNewerTwin();
+
+        this.externalCheckFrozenSnapshotsReleased(paths, released);
     }
 
     /// A record in the generated shape that DECLARES one address and merely
@@ -549,10 +636,11 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         DeployCandidate memory candidate = sMismatch.externalCheckedCandidateSuites()[1];
 
         // It really is the wrong contract: the snapshot records `MockDeployableV2`
-        // while the source it claims to be is `MockDeployable`.
+        // while the contract it NAMES is `MockDeployable`.
         assertEq(keccak256(candidate.snapshot.creationCode), keccak256(type(MockDeployableV2).creationCode));
-        assertEq(keccak256(candidate.sourceCreationCode), keccak256(type(MockDeployable).creationCode));
-        assertNotEq(keccak256(candidate.snapshot.creationCode), keccak256(candidate.sourceCreationCode));
+        assertEq(candidate.snapshot.artifactPath, "test/concrete/MockDeployable.sol:MockDeployable");
+        assertEq(keccak256(vm.getCode(candidate.snapshot.artifactPath)), keccak256(type(MockDeployable).creationCode));
+        assertNotEq(keccak256(candidate.snapshot.creationCode), keccak256(vm.getCode(candidate.snapshot.artifactPath)));
 
         // Every internal check passes anyway.
         this.externalCheckInternallyConsistent(candidate.snapshot);
@@ -571,8 +659,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// loop that reached it from one that reported a fixed entry or the first.
     ///
     /// The inherited `testSnapshotMatchesSource` is the passing case: it runs
-    /// this same function over `ExampleDeploySuites`, whose candidates are their
-    /// own source.
+    /// this same function over `ExampleDeploySuites`.
     function testWrongContractSnapshotCaughtBySource() external {
         DeployCandidate[] memory candidates = sMismatch.externalCheckedCandidateSuites();
         assertEq(candidates.length, 2);
@@ -581,7 +668,9 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         // to advance, and it is a different contract at a different address
         // rather than the same entry under two keys.
         assertEq(candidates[0].snapshot.suite, "anchored-candidate");
-        assertEq(keccak256(candidates[0].snapshot.creationCode), keccak256(candidates[0].sourceCreationCode));
+        assertEq(
+            keccak256(candidates[0].snapshot.creationCode), keccak256(vm.getCode(candidates[0].snapshot.artifactPath))
+        );
         assertNotEq(candidates[0].snapshot.storedDeployedAddress, candidates[1].snapshot.storedDeployedAddress);
 
         vm.expectRevert(

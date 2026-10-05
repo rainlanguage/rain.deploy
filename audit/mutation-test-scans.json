@@ -140,4 +140,37 @@
       "alreadyFiled": []
     }
   }
+,
+  {
+    "timestamp": "2026-10-05T09:05:00Z",
+    "commit": "f08ee42c6dbdb0f3daa82deae208e9ceccd37103",
+    "testsAfterCommit": "e26ede409ff163e2d576e8580738e11c3bd73662",
+    "publishedTag": "sol-v0.1.12",
+    "commitsAheadOfTag": 0,
+    "scope": "the address registry: src/concrete/AddressRegistry.sol, src/lib/LibAddressRegistry.sol, src/interface/IAddressRegistryV1.sol",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 38,
+      "behavioursProbed": 30,
+      "killedByExistingTests": 12,
+      "gapsFilled": 18,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 3,
+      "confirmed": 3,
+      "filed": [255, 256],
+      "alreadyFiled": [249]
+    },
+    "notes": [
+      "Base attribution pass at f08ee42 probed 12 mutants over the pre-existing behaviours that are single-edit mutatable; 12/12 KILLED, every one by a test already on main, baseline green at 27. No pre-existing gap was found, so the tests this run added are additive rather than covering for main.",
+      "Branch pass at e26ede4 probed 18 mutants over the behaviours this run introduced; 18/18 KILLED, baseline green at 54. Those kills credit this run's own tests, because the behaviours did not exist at base.",
+      "The third candidate is absent from 'filed' because it was fixed in the same PR rather than left open: BindingTooFresh reported an age of zero for a binding stamped ahead of the clock, collapsing 'wait and retry' together with 'this chain's clock went backwards'. Split into BindingStampedInFuture. The adversarial pass found it, and a test written earlier in the run had PINNED it, which is the failure mode the skill opens with.",
+      "Process defects in this run, recorded rather than hidden: the branch pass was first run after this run's own tests were written, forfeiting attribution and requiring the base pass above as recovery; the adversarial pass was skipped on the first attempt; and the first pass ran sequentially on one checkout instead of fanning out. The base pass was then run 12-way across 12 fresh clones at 193s, against 944s for 18 sequential mutants.",
+      "Snapshot regeneration must run INSIDE the probe suite command. Mutating AddressRegistry moves its bytecode, so a stale pin makes testDeployMatchesPins and every LibAddressRegistry code-hash guard fail for every mutant regardless of behaviour, which is a universal killer that hides which test discriminates. The first attempt attributed all ten mutants to testDeployMatchesPins and was discarded."
+    ]
+  }
 ]

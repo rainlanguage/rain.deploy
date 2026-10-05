@@ -5,7 +5,7 @@
 # Installs what `forge script ./script/Build.sol` staged.
 #
 # `BuildScript.run()` generates `foundry.toml`'s network sections and
-# `.env.example`'s endpoint variables from `LibRainDeploy.supportedNetworkConfigs()`
+# `.env.example`'s endpoint variables from the declared networks' catalogue entries
 # but CANNOT write the first of them: foundry refuses every filesystem cheatcode
 # write to the project root's own `foundry.toml`, whatever `fs_permissions`
 # says. So the script splices and writes to `.staged-config/`, and this moves

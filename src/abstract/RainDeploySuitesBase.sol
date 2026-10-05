@@ -2,6 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
+import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
+
+import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
+
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
 /// @param suite The key declared more than once.
@@ -81,8 +85,8 @@ error NoDeployCandidates();
 /// @param suite The candidate's key.
 /// @param storedCreationCodeHash Hash of the creation code the candidate
 /// records.
-/// @param sourceCreationCodeHash Hash of `type(X).creationCode` for the
-/// contract the candidate claims to be.
+/// @param sourceCreationCodeHash Hash of the creation code the contract the
+/// candidate NAMES — its `artifactPath` — currently compiles to.
 error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, bytes32 sourceCreationCodeHash);
 
 /// One deployable unit: a named snapshot of one contract.
@@ -119,13 +123,10 @@ struct DeploySuite {
     /// suite broadcasts the exact bytes its audit covered, whatever the current
     /// source now compiles to.
     ///
-    /// `type(X).creationCode` is what a candidate pairs this AGAINST, so
-    /// spelling the type expression here puts both operands of
+    /// Spelling `type(X).creationCode` here puts both operands of
     /// `checkCandidatesAnchoredToSource` on the source side and leaves the one
     /// check that catches a snapshot of the wrong contract comparing source to
-    /// itself, green. Fixtures that derive a whole mock suite do that on
-    /// purpose, because they have no record and are exercising other
-    /// assertions; a declaration of a real deployment never does.
+    /// itself, green.
     bytes creationCode;
     /// The deploy address recorded for this suite.
     address storedDeployedAddress;
@@ -134,11 +135,15 @@ struct DeploySuite {
     /// The runtime code recorded for this suite. A generated `RUNTIME_CODE`
     /// constant.
     bytes storedRuntimeCode;
-    /// `<path>:<Name>`, for the explorer verification command.
+    /// `<path>:<Name>`: the contract this suite is a snapshot OF.
     ///
     /// Declared rather than derived from the contract name. `src/concrete/`
     /// holds only the flattest repos; a repo that groups concretes into
     /// subdirectories has paths no naming convention recovers.
+    ///
+    /// For a candidate this is load-bearing: `checkCandidatesAnchoredToSource`
+    /// resolves it through `vm.getCode`, so a path that resolves to no
+    /// artifact, or to more than one, fails at the anchor before the broadcast.
     string artifactPath;
     /// Addresses that MUST already have code on a network before this suite is
     /// broadcast there. Ordinarily other suites' recorded addresses: a
@@ -147,25 +152,13 @@ struct DeploySuite {
     address[] dependencies;
 }
 
-/// The rolling candidate: the snapshot that tracks current source rather than a
-/// frozen release, paired with the current source's creation code it MUST
-/// equal.
-///
-/// This pairing is the ONLY thing that catches a snapshot of the wrong
-/// contract. Every check internal to a snapshot is satisfied by a consistent
-/// snapshot of the wrong thing, so without an anchor to source there is nothing
-/// that says the recorded bytes belong to the contract this repo compiles.
-///
-/// It is deliberately absent from `DeploySuite` and therefore from released
-/// suites: a released tag is MEANT to diverge from current source, so anchoring
-/// one to source would fail on every release that is not the newest. That is a
-/// property of the assertion, not an opt-out — there is no way for a caller to
-/// spell "released, and also skip the checks that do apply".
+/// The rolling candidate: a snapshot that tracks current source rather than a
+/// frozen release, and that MUST equal what the contract it names currently
+/// compiles to.
 struct DeployCandidate {
-    /// The candidate's own recorded snapshot, checked exactly as any other.
+    /// The candidate's own recorded snapshot, checked exactly as any other
+    /// suite is, and anchored to what its `artifactPath` compiles to.
     DeploySuite snapshot;
-    /// `type(X).creationCode` for the contract the candidate claims to be.
-    bytes sourceCreationCode;
 }
 
 /// @title RainDeploySuitesBase
@@ -179,9 +172,18 @@ struct DeployCandidate {
 /// the thing checked against the chain cannot disagree: not because it is
 /// checked, but because there is nothing to disagree with.
 ///
+/// The networks are here for the same reason, and are one list for the same
+/// reason: `supportedNetworks` is what the broadcast targets, what every
+/// network-scoped assertion is made over, and what the generated
+/// `[rpc_endpoints]`, `[etherscan]` and `.env.example` blocks are emitted from,
+/// so a repo cannot be verified on a different set of networks than it deploys
+/// to, nor configured for a set it does neither on.
+///
 /// A repo overrides `releasedSuites` and `candidateSuites` on one abstract
-/// contract and inherits that into its deploy script and its test contracts.
-/// Nothing else is per suite, and nothing anywhere is per network.
+/// contract and inherits that into its deploy script, its build script and its
+/// test contracts, and overrides `supportedNetworks` there too if it deploys to
+/// fewer than all of them. Nothing else is per suite and nothing else is per
+/// network.
 abstract contract RainDeploySuitesBase {
     /// Every FROZEN released suite, in any order. A released snapshot is
     /// immutable: its recorded bytes describe a deployment that already
@@ -191,7 +193,8 @@ abstract contract RainDeploySuitesBase {
     function releasedSuites() internal pure virtual returns (DeploySuite[] memory);
 
     /// The rolling candidates — one snapshot per contract this repo compiles
-    /// right now, each paired with the source it MUST equal.
+    /// right now, each naming the contract it MUST be the current compilation
+    /// of.
     ///
     /// A list because a repo deploys as many contracts as it deploys, and each
     /// of them has its own rolling snapshot and its own source to be anchored
@@ -209,6 +212,23 @@ abstract contract RainDeploySuitesBase {
     /// than it looks.
     /// @return The candidates.
     function candidateSuites() internal pure virtual returns (DeployCandidate[] memory);
+
+    /// Every network this repo deals with: what a broadcast targets, the set
+    /// every network-scoped assertion is made over, and the set the network
+    /// config is generated from. Defaults to all of Rain's.
+    ///
+    /// ONE hook, on the contract all three sides inherit, because the set of
+    /// networks a repo deals with is one fact. A `virtual` per verification
+    /// function would be three ways for verification to end up narrower than
+    /// what the repo broadcasts to, with nothing to catch it, and a second one
+    /// on the build script would be config for networks nothing verifies.
+    ///
+    /// `deployNetworks` narrowing this is a different thing and stays
+    /// available: that is one dispatch's targets, not the repo's set.
+    /// @return The network names, as `[rpc_endpoints]` aliases.
+    function supportedNetworks() internal view virtual returns (string[] memory) {
+        return LibRainDeploy.supportedNetworks();
+    }
 
     /// The declared candidates, refusing an empty list.
     ///
@@ -228,7 +248,8 @@ abstract contract RainDeploySuitesBase {
         return candidates;
     }
 
-    /// EVERY candidate MUST record the creation code this repo compiles.
+    /// EVERY candidate MUST record the creation code the contract it NAMES
+    /// currently compiles to.
     ///
     /// This is the ONLY check that catches a snapshot of the wrong contract.
     /// Everything else a snapshot is asked is internal to the snapshot — the
@@ -262,13 +283,12 @@ abstract contract RainDeploySuitesBase {
     /// Candidates alone, and there is no way to spell an exemption. A released
     /// suite is MEANT to diverge from current source — it records bytes that
     /// are already on chain — so anchoring one to source asserts something
-    /// false by design, which is why `DeploySuite` carries no source at all and
-    /// only `DeployCandidate` does.
-    function checkCandidatesAnchoredToSource() internal pure {
+    /// false by design.
+    function checkCandidatesAnchoredToSource() internal view {
         DeployCandidate[] memory candidates = checkedCandidateSuites();
         for (uint256 i = 0; i < candidates.length; i++) {
             bytes32 stored = keccak256(candidates[i].snapshot.creationCode);
-            bytes32 source = keccak256(candidates[i].sourceCreationCode);
+            bytes32 source = keccak256(StdConstants.VM.getCode(candidates[i].snapshot.artifactPath));
             if (stored != source) {
                 revert CandidateSourceMismatch(candidates[i].snapshot.suite, stored, source);
             }

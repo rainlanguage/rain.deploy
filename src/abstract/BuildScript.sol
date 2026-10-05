@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {Script} from "forge-std-1.16.2/src/Script.sol";
+import {Script} from "forge-std-1.17.0/src/Script.sol";
+import {RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
@@ -20,16 +21,23 @@ import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 /// and has no entry point to cut a release from other than `cutRelease()`.
 ///
 /// The network config is generated here rather than through a hook a repo
-/// implements: it comes out of `LibRainDeploy.supportedNetworkConfigs()`, this
-/// package's own constant, so a version bump is how a network arrives in a
-/// consumer's `foundry.toml` and `.env.example`. A repo able to narrow that
-/// list would deploy to and verify fewer chains with nothing red.
+/// implements: the facts come out of `LibRainDeploy.supportedNetworkConfigs()`,
+/// this package's own catalogue, and which of them are emitted comes out of
+/// `supportedNetworks()` — the one hook on the declaration this inherits, which
+/// `RainDeployBroadcast` deploys to and the chain group forks. So a network
+/// arrives in a consumer's `foundry.toml` and `.env.example` by a version bump,
+/// a repo narrowing the set narrows what it deploys to and what it is verified
+/// on by the same answer, and there is no second place to spell either.
+///
+/// Inheriting the declaration is what makes that one answer: a hook of its own
+/// here would be a second statement of the repo's network set, and the config
+/// generated from it could cover networks nothing verifies with nothing red.
 ///
 /// `run()` stages those two files rather than writing them, because foundry
 /// refuses a cheatcode write to the project root's own `foundry.toml`. A repo
 /// inheriting this needs `script/build.sh` to install what was staged — see
 /// `LibRainDeployConfig`.
-abstract contract BuildScript is Script {
+abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// Rewrite the rolling `candidate/` snapshots from what this repo currently
     /// compiles. Run by `cutRelease()` inside `freeze`, after its guards and
     /// before it copies anything.
@@ -69,18 +77,23 @@ abstract contract BuildScript is Script {
         return LibRainDeployConfig.CONFIG_ROOT;
     }
 
-    /// Rewrite the delimited network config blocks from this package's roster.
+    /// Rewrite the delimited network config blocks from the declared networks'
+    /// catalogue entries.
     ///
     /// Run by `run()` and not by `cutRelease()`: the config is not part of a
     /// release record, and `run()` is what `Git is clean` calls on every push,
-    /// so a tree whose config has drifted from the roster it pins fails there.
+    /// so a tree whose config has drifted from the declaration it pins fails
+    /// there.
     ///
     /// This STAGES the files; `script/build.sh` installs them. See
     /// `LibRainDeployConfig` for why a script cannot write `foundry.toml`
     /// itself.
     function regenerateConfig() internal {
         LibRainDeployConfig.writeStagedConfig(
-            vm, configRoot(), LibRainDeployConfig.BUILD_HOOK_PATH, LibRainDeploy.supportedNetworkConfigs()
+            vm,
+            configRoot(),
+            LibRainDeployConfig.BUILD_HOOK_PATH,
+            LibRainDeploy.declaredNetworkConfigs(supportedNetworks())
         );
     }
 

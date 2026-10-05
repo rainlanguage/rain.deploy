@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {Vm} from "forge-std-1.16.2/src/Vm.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {SupportedNetwork} from "./LibRainDeploy.sol";
 
 /// Thrown when the file a generated block is written into does not carry that
@@ -37,8 +37,8 @@ error BuildHookMissing(string path);
 /// @title LibRainDeployConfig
 /// @notice Writes the network config a deploy repo cannot state twice: the
 /// `[rpc_endpoints]` and `[etherscan]` sections of `foundry.toml`, and the
-/// `<NAME>_RPC_URL` lines of `.env.example`, all of them from
-/// `LibRainDeploy.supportedNetworkConfigs()`.
+/// `<NAME>_RPC_URL` lines of `.env.example`, all of them from the catalogue
+/// entries the repo's `supportedNetworks()` declaration names.
 ///
 /// Generated rather than compared. A comparison keeps both statements and
 /// checks them, so the prose around them drifts silently and every assertion is
@@ -142,7 +142,7 @@ library LibRainDeployConfig {
 
     /// The `[rpc_endpoints]` section, header and all.
     /// @param vm The Vm instance, for the case conversion only.
-    /// @param networks The roster.
+    /// @param networks The networks to generate for.
     /// @return The section text, newline terminated.
     function rpcEndpointsSection(Vm vm, SupportedNetwork[] memory networks) internal pure returns (string memory) {
         if (networks.length == 0) {
@@ -166,7 +166,7 @@ library LibRainDeployConfig {
     /// resolves it to the same chain, so stating it on all of them cannot go
     /// wrong when foundry adds or renames an alias.
     /// @param vm The Vm instance, for the case conversion and `chain`.
-    /// @param networks The roster.
+    /// @param networks The networks to generate for.
     /// @return The section text, newline terminated.
     function etherscanSection(Vm vm, SupportedNetwork[] memory networks) internal pure returns (string memory) {
         if (networks.length == 0) {
@@ -194,7 +194,7 @@ library LibRainDeployConfig {
 
     /// The `<NAME>_RPC_URL` lines of `.env.example`.
     /// @param vm The Vm instance, for the case conversion only.
-    /// @param networks The roster.
+    /// @param networks The networks to generate for.
     /// @return The block text, newline terminated.
     function envExampleSection(Vm vm, SupportedNetwork[] memory networks) internal pure returns (string memory) {
         if (networks.length == 0) {
@@ -284,7 +284,7 @@ library LibRainDeployConfig {
     /// @param vm The Vm instance for file operations.
     /// @param path The config to read.
     /// @param staged Where to write the spliced result.
-    /// @param networks The roster.
+    /// @param networks The networks to generate for.
     function writeNetworkConfig(Vm vm, string memory path, string memory staged, SupportedNetwork[] memory networks)
         internal
     {
@@ -300,7 +300,7 @@ library LibRainDeployConfig {
     /// @param vm The Vm instance for file operations.
     /// @param path The `.env.example` to read.
     /// @param staged Where to write the spliced result.
-    /// @param networks The roster.
+    /// @param networks The networks to generate for.
     function writeEnvExample(Vm vm, string memory path, string memory staged, SupportedNetwork[] memory networks)
         internal
     {
@@ -322,7 +322,7 @@ library LibRainDeployConfig {
     /// @param vm The Vm instance for file operations.
     /// @param root The project root.
     /// @param hookPath The hook that installs what this stages.
-    /// @param networks The roster.
+    /// @param networks The networks to generate for.
     function writeStagedConfig(Vm vm, string memory root, string memory hookPath, SupportedNetwork[] memory networks)
         internal
     {

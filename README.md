@@ -134,12 +134,12 @@ guard.
 Four groups, sorted by what each is anchored to and therefore by what each can
 catch:
 
-| Group    | Anchored to            | Catches                                            | Cannot catch                     |
-| -------- | ---------------------- | -------------------------------------------------- | -------------------------------- |
-| Internal | the recorded set       | an inconsistently generated set                    | a snapshot of the wrong contract |
-| Source   | `type(X).creationCode` | a snapshot of the wrong contract                   | anything about any chain         |
-| Record   | the frozen record      | a release the declaration missed                   | what a declared suite records    |
-| Chain    | the networks           | a missing deployment, or an alias on another chain | anything about a candidate       |
+| Group    | Anchored to                | Catches                                            | Cannot catch                     |
+| -------- | -------------------------- | -------------------------------------------------- | -------------------------------- |
+| Internal | the recorded set           | an inconsistently generated set                    | a snapshot of the wrong contract |
+| Source   | `vm.getCode(artifactPath)` | a snapshot of the wrong contract                   | anything about any chain         |
+| Record   | the frozen record          | a release the declaration missed                   | what a declared suite records    |
+| Chain    | the networks               | a missing deployment, or an alias on another chain | anything about a candidate       |
 
 The internal group's blind spot is not a gap to close there: every check in it
 asks the recorded bytes to agree with each other, and the wrong contract's bytes
@@ -148,6 +148,22 @@ catches it, and it applies to the **candidates only** — a released tag is mean
 to have diverged from current source, so anchoring one to source asserts
 something false by design. That is a property of the assertion, and there is no
 field on a released version with which to opt in or out.
+
+Neither is there a field on a CANDIDATE with which to satisfy it. A candidate
+names the contract it is a snapshot of, in its `artifactPath`, and that is the
+whole of what it says about its source; the anchor resolves that `<path>:<Name>`
+through `vm.getCode` and compares the record against what the compiler's own
+artifact holds. A declaration that supplied the source side as a value could
+point it at the same generated constant as the record and make the one check
+that catches a snapshot of the wrong contract compare a value with itself —
+green for any candidate whatsoever, on the broadcast path as well as in CI. It
+used to be able to (rainlanguage/rain.factory.deploy#34); the field is gone.
+
+`artifactPath` is therefore LOAD-BEARING on a candidate. It must resolve,
+uniquely, to the contract the snapshot is of. A path left behind by a moved or
+renamed source file now fails at the anchor — before the broadcast — where it
+previously only produced a `forge verify-contract` line a human read after the
+deploy.
 
 It runs over EVERY candidate, and a declaration that names none at all is
 refused with `NoDeployCandidates` rather than passed as a loop with nothing in
@@ -189,12 +205,15 @@ constructor spends it. So a per-chain difference fails hard, naming the chain
 and both hashes, and there is deliberately no per-chain code hash to record.
 
 **The network config is generated, not compared.**
-`LibRainDeploy.supportedNetworkConfigs()` is the single statement of the set —
-each network's name, chain id, explorer url and default endpoint — and
+`LibRainDeploy.supportedNetworkConfigs()` is the catalogue — each network's
+name, chain id, explorer url and default endpoint — `supportedNetworks()` on the
+suites declaration selects which of its entries a repo deals with, and
 `BuildScript.run()` writes `foundry.toml`'s `[rpc_endpoints]` and `[etherscan]`
-sections and `.env.example`'s endpoint variables from it. `Git is clean` is the
-enforcement, the same mechanism already holding `src/generated/`: a tree whose
-config has drifted from the roster it pins fails the job every push runs.
+sections and `.env.example`'s endpoint variables from that selection.
+`Git is
+clean` is the enforcement, the same mechanism already holding
+`src/generated/`: a tree whose config has drifted from the declaration it pins
+fails the job every push runs.
 
 It reaches `foundry.toml` in two steps, because foundry refuses a filesystem
 cheatcode write to the project root's own config whatever `fs_permissions` says.
@@ -213,17 +232,21 @@ comparison could only report: every generated `[etherscan]` entry states
 cannot resolve — which takes verification down for every entry in the section
 and not only its own — is no longer a state a consumer can be in.
 
-The roster is deliberately not overridable. A repo able to narrow it would
-deploy to and verify fewer chains with nothing red, so a network arrives in a
-consumer's config by a version bump and by nothing else.
+The catalogue is deliberately not overridable — a network's chain id and
+explorer are facts about the network, so one arrives in a consumer's config by a
+version bump and by nothing else. WHICH of them a repo emits is overridable, and
+through exactly one hook: `supportedNetworks()`, the same answer the broadcast
+targets and the chain group forks. A declared name the catalogue says nothing
+about is refused, `NetworkNotInCatalogue`, on the build that would have
+generated from it.
 
 The one thing generation cannot settle is whether a declared chain id is the one
 the bound endpoint reports. That is a claim about the world rather than about
 the text, and it is what `--verify` submits, so it sits in the chain group:
-`testSupportedNetworkChainIdsAreBound` forks every supported network and
-compares `block.chainid` against the roster. A wrong id there is config that
-resolves, passes everything that reads the file, and verifies a deployment
-against the wrong explorer.
+`testSupportedNetworkChainIdsAreBound` forks every declared network and compares
+`block.chainid` against the catalogue. A wrong id there is config that resolves,
+passes everything that reads the file, and verifies a deployment against the
+wrong explorer.
 
 ## Address registry
 
@@ -643,8 +666,8 @@ Via [soldeer](https://soldeer.xyz):
 forge soldeer install rain-deploy~<version>
 ```
 
-**You also need `forge-std` 1.16.2 and `rain-sol-codegen` 0.1.36**, remapped as
-`forge-std-1.16.2/` and `rain-sol-codegen-0.1.36/`. The published package ships
+**You also need `forge-std` 1.17.0 and `rain-sol-codegen` 0.1.39**, remapped as
+`forge-std-1.17.0/` and `rain-sol-codegen-0.1.39/`. The published package ships
 `src/`, `script/` and the licence and README files — no `test/`, no
 `foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no `dependencies/` — so
 a consumer resolves both itself. The requirement is transitive rather than
@@ -656,8 +679,8 @@ every abstract a consumer inherits pulls them in — `Script` via
 
 ```toml
 [dependencies]
-forge-std = "1.16.2"
-rain-sol-codegen = "0.1.36"
+forge-std = "1.17.0"
+rain-sol-codegen = "0.1.39"
 rain-deploy = "<version>"
 ```
 
@@ -721,6 +744,23 @@ a duplicate key at the next forge startup:
 
 Everything outside the markers is the consumer's, and the build neither reads
 nor moves it.
+
+A repo that deploys to FEWER networks than Rain supports overrides
+`supportedNetworks()` on its suites declaration, and that one answer scopes
+every side: `deployNetworks()` defaults to it, the chain group forks it, and the
+generated config is the catalogue entries it names. `script/Build.sol` inherits
+that declaration, which is what makes it one answer — a networks hook on the
+build script instead would be a second statement of the repo's set, and config
+generated from it could cover networks nothing verifies. There is deliberately
+nothing per verification to override either: a verification set narrower than
+the one a repo broadcasts to is every release held to nothing at all on the
+networks that were dropped, with no assertion left to notice.
+
+An `[etherscan]` entry is generated for every network in that set, from the
+catalogue's own facts. Whether a network HAS an Etherscan deployment is one of
+them rather than anything about the repo — Robinhood (4663) is not indexed by
+Etherscan v2, so its entry carries its Blockscout url and the deployment is
+verified through Sourcify.
 
 ## Develop
 

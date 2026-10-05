@@ -42,10 +42,15 @@ error NetworkChainIdMismatch(string network, uint256 declared, uint256 reported)
 
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the
-/// repo: across every network in `LibRainDeploy.supportedNetworks()`, every
-/// RELEASED suite's derived address carries code with its derived code hash,
-/// and every chain id `[etherscan]` declares is the one that network's alias
-/// forks.
+/// repo: across every network the declaration's `supportedNetworks()` names,
+/// every RELEASED suite's derived address carries code with its derived code
+/// hash, and every chain id `[etherscan]` declares is the one that network's
+/// alias forks.
+///
+/// The declaration's networks, through the same hook
+/// `RainDeployBroadcast.deployNetworks()` defaults to, so a repo deploying to a
+/// subset is held to that subset and cannot be verified on fewer networks than
+/// it broadcasts to.
 ///
 /// This is the only group that can catch a suite that never deployed to a
 /// network, or that is not there any more. Neither is a fact the repo can hold:
@@ -147,7 +152,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             return;
         }
 
-        string[] memory networks = LibRainDeploy.supportedNetworks();
+        string[] memory networks = supportedNetworks();
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, networks);
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
@@ -196,21 +201,21 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         }
     }
 
-    /// Every supported network's declared chain id MUST be the one the endpoint
-    /// bound to its alias reports.
+    /// Every declared network's chain id MUST be the one the endpoint bound to
+    /// its alias reports.
     ///
     /// The one thing about the config that generating it cannot settle. The
-    /// sections are written from the roster, so an alias missing from one of
-    /// them is a tree `Git is clean` fails rather than an assertion anything
-    /// makes — but which chain an endpoint actually serves is a claim about the
-    /// world, and `chain` is what `--verify` submits to. A wrong id there is
-    /// config that resolves, passes every check that reads the text, and
-    /// verifies a deployment against the wrong explorer.
+    /// sections are written from the same declaration this reads, so an alias
+    /// missing from one of them is a tree `Git is clean` fails rather than an
+    /// assertion anything makes — but which chain an endpoint actually serves
+    /// is a claim about the world, and `chain` is what `--verify` submits to. A
+    /// wrong id there is config that resolves, passes every check that reads
+    /// the text, and verifies a deployment against the wrong explorer.
     ///
-    /// Here rather than beside the roster because the subject is the endpoint:
-    /// this is the contract that already forks every supported network, and the
-    /// snapshot half is the one a credential-free job binds.
+    /// Here rather than beside the catalogue because the subject is the
+    /// endpoint: this is the contract that already forks every declared
+    /// network, and the snapshot half is the one a credential-free job binds.
     function testSupportedNetworkChainIdsAreBound() external {
-        checkNetworkChainIds(LibRainDeploy.supportedNetworkConfigs());
+        checkNetworkChainIds(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()));
     }
 }

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.16.2/src/Test.sol";
+import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
@@ -222,6 +222,67 @@ contract LibRainDeployTest is Test {
         for (uint256 i = 0; i < configs.length; i++) {
             assertEq(networks[i], configs[i].name);
         }
+    }
+
+    /// A wrapper so `declaredNetworkConfigs` reverts at a depth
+    /// `vm.expectRevert` reaches.
+    /// @param networks The declared network names.
+    /// @return The catalogue entries selected.
+    function externalDeclaredNetworkConfigs(string[] memory networks)
+        external
+        pure
+        returns (SupportedNetwork[] memory)
+    {
+        return LibRainDeploy.declaredNetworkConfigs(networks);
+    }
+
+    /// `declaredNetworkConfigs` MUST answer in the order the DECLARATION names,
+    /// not the order the catalogue lists.
+    ///
+    /// Declared backwards from the catalogue, and with seven of the nine left
+    /// out, so a selection that walked the catalogue instead answers neither
+    /// the right length nor the right first entry. The chain ids are the
+    /// literals `testSupportedNetworkChainIds` pins rather than a second read
+    /// of the catalogue, which would agree with any selection whatsoever.
+    function testDeclaredNetworkConfigsFollowTheDeclaration() external pure {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+
+        SupportedNetwork[] memory declared = LibRainDeploy.declaredNetworkConfigs(networks);
+
+        assertEq(declared.length, 2);
+        assertEq(declared[0].name, LibRainDeploy.BASE);
+        assertEq(declared[0].chainId, 8453);
+        assertEq(declared[0].defaultRpcUrl, "https://mainnet.base.org");
+        assertEq(declared[1].name, LibRainDeploy.ARBITRUM_ONE);
+        assertEq(declared[1].chainId, 42161);
+        assertEq(declared[1].defaultRpcUrl, "https://arb1.arbitrum.io/rpc");
+    }
+
+    /// Declaring every supported network MUST select the whole catalogue,
+    /// unchanged. This is the case every repo that narrows nothing is in.
+    function testDeclaredNetworkConfigsDefaultToTheWholeCatalogue() external pure {
+        SupportedNetwork[] memory catalogue = LibRainDeploy.supportedNetworkConfigs();
+        SupportedNetwork[] memory declared = LibRainDeploy.declaredNetworkConfigs(LibRainDeploy.supportedNetworks());
+        assertEq(declared.length, catalogue.length);
+        for (uint256 i = 0; i < catalogue.length; i++) {
+            assertEq(declared[i].name, catalogue[i].name);
+            assertEq(declared[i].chainId, catalogue[i].chainId);
+            assertEq(declared[i].explorerUrl, catalogue[i].explorerUrl);
+            assertEq(declared[i].defaultRpcUrl, catalogue[i].defaultRpcUrl);
+        }
+    }
+
+    /// A declared name the catalogue states nothing about MUST be refused,
+    /// naming it — not skipped, which would silently generate config for fewer
+    /// networks than the declaration asked for.
+    function testDeclaredNetworkConfigsRefuseAnUncataloguedName() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = "nowhere";
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NetworkNotInCatalogue.selector, "nowhere"));
+        this.externalDeclaredNetworkConfigs(networks);
     }
 
     /// Every roster entry MUST state the chain id its network really has.
@@ -1071,9 +1132,12 @@ contract LibRainDeployTest is Test {
         vm.assume(rebound != account);
         (IAddressRegistryV1 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
+        // A re-bind needs a later block: a name's moment strictly increases.
+        vm.warp(block.timestamp + 1);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, rebound);
-        assertEq(registry.get(name), rebound);
+        (address nowBound,) = registry.get(name);
+        assertEq(nowBound, rebound);
 
         assertEq(consumer.iOwner(), account);
         LibRainDeploy.checkResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(account));
