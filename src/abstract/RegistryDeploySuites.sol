@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
+import {DeployCandidate, DeployDependency, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {
     CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE_CANDIDATE
@@ -118,7 +118,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 storedBytecodeHash: LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH,
                 storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             })
         });
     }
@@ -145,7 +145,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 storedBytecodeHash: LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
                 storedRuntimeCode: MIGRATION_REGISTRY_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             })
         });
     }

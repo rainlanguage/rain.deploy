@@ -2,7 +2,12 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDependency,
+    DeploySuite,
+    RainDeploySuitesBase
+} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
@@ -32,7 +37,7 @@ contract ShortestKeyDeploySuites is ExternalDeploySuites {
             storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
             storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-            dependencies: new address[](0)
+            dependencies: new DeployDependency[](0)
         });
         return suites;
     }
@@ -48,7 +53,7 @@ contract ShortestKeyDeploySuites is ExternalDeploySuites {
                 storedBytecodeHash: keccak256(type(MockDeployableV2).runtimeCode),
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             })
         });
         return candidates;

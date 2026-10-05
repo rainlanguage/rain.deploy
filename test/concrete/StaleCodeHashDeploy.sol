@@ -3,7 +3,12 @@
 pragma solidity =0.8.25;
 
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDependency,
+    DeploySuite,
+    RainDeploySuitesBase
+} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 
@@ -49,7 +54,7 @@ contract StaleCodeHashDeploy is RainDeployBroadcast {
                 storedBytecodeHash: STALE_CODE_HASH,
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             })
         });
     }

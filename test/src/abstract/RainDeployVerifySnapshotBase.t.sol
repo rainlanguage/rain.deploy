@@ -3,7 +3,12 @@
 pragma solidity =0.8.25;
 
 import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBase.sol";
-import {CandidateSourceMismatch, DeployCandidate, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    CandidateSourceMismatch,
+    DeployCandidate,
+    DeployDependency,
+    DeploySuite
+} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     EtherscanEntryUnresolvable,
     FrozenSnapshotAmbiguous,
@@ -179,7 +184,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedBytecodeHash: ADDRESS_REGISTRY_0_1_10_BYTECODE_HASH,
             storedRuntimeCode: ADDRESS_REGISTRY_0_1_10_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-            dependencies: new address[](0)
+            dependencies: new DeployDependency[](0)
         });
     }
 
@@ -191,7 +196,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedBytecodeHash: ADDRESS_REGISTRY_0_1_11_BYTECODE_HASH,
             storedRuntimeCode: ADDRESS_REGISTRY_0_1_11_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-            dependencies: new address[](0)
+            dependencies: new DeployDependency[](0)
         });
     }
 
@@ -571,7 +576,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
             storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-            dependencies: new address[](0)
+            dependencies: new DeployDependency[](0)
         });
     }
 

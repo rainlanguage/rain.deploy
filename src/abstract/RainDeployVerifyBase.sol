@@ -18,10 +18,11 @@ import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 error ZoltuDerivationMismatch(string suite, address formulaAddress, address factoryAddress);
 
 /// Thrown when the state snapshot taken around a derivation could not be
-/// reverted. The derivation plants code at the derived address and clears its
-/// nonce; if that cannot be undone, every later derivation reads state this one
-/// created, and the chain-anchored checks compare a locally planted deployment
-/// against itself. There is no safe way to continue.
+/// reverted. The derivation plants code at the derived address, clears its
+/// nonce and etches the suite's declared dependencies; if that cannot be
+/// undone, every later derivation reads state this one created, and the
+/// chain-anchored checks compare a locally planted deployment against itself.
+/// There is no safe way to continue.
 /// @param suite The suite being derived when the revert failed.
 /// @param snapshotId The snapshot that could not be reverted.
 error DerivationSnapshotRevertFailed(string suite, uint256 snapshotId);
@@ -88,12 +89,57 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     ///   locally deployed contract that leaked into a fork would be compared
     ///   against itself, and every chain would pass whether or not anything is
     ///   deployed there.
+    ///
+    /// ## The suite's declared dependencies, etched
+    ///
+    /// A constructor that reads a dependency cannot run on an EVM where nothing
+    /// is deployed, and that is exactly the EVM a derivation happens on: this
+    /// runs before anything forks, deliberately, because on a fork the derived
+    /// address is the address the deployment under test occupies. So the
+    /// declared dependencies are etched here, from the runtime code the
+    /// declaration carries, inside the same snapshot everything else here is
+    /// inside. OZ's `UpgradeableBeacon` reverts `BeaconInvalidImplementation`
+    /// on an implementation with no code; before this, a suite deploying one
+    /// derived as `DeployFailed` with that revert buried, and every pin such a
+    /// suite records was therefore checked by nothing.
+    ///
+    /// What is etched is what the DECLARATION supplies, out of the dependency's
+    /// own published snapshot. Nothing here resolves a dependency address to a
+    /// suite that owns it or searches the suite list: a dependency need not be
+    /// a suite of the declaring repo at all, so a search could only ever find
+    /// some of them, and finding none is indistinguishable from a suite that
+    /// declared none.
+    ///
+    /// The declaration reaches only the addresses it names, and never the two
+    /// this function owns, because of the order below: the dependencies are
+    /// etched FIRST, then the derived address is cleared, then the factory is
+    /// planted. So
+    ///
+    /// - the subject is DEPLOYED and never etched, whatever the declaration
+    ///   says. Etched instead of deployed, the derivation would hand back the
+    ///   runtime code the record already holds, `storedBytecodeHash` would be
+    ///   compared against the record it came from, and there would be no
+    ///   subject in it anywhere; and
+    /// - a declaration naming the Zoltu factory's address — a legitimate
+    ///   dependency, since nothing deploys without it — cannot replace the
+    ///   factory bytecode this derivation deploys THROUGH, whatever code it
+    ///   pairs with that address.
+    ///
+    /// The revert undoes the etches with everything else, so a dependency is no
+    /// more present afterwards than the subject is.
     /// @param suite The suite to derive from.
     /// @return The address and code hash the creation code produces.
     function deriveDeployment(DeploySuite memory suite) internal returns (DerivedDeploy memory) {
         address formulaAddress = LibRainDeploy.zoltuAddress(suite.creationCode);
 
         uint256 snapshotId = vm.snapshotState();
+
+        // The declaration's dependencies, so that a constructor which reads one
+        // can run at all. First, so the two addresses below belong to this
+        // function rather than to the declaration — see above.
+        for (uint256 i = 0; i < suite.dependencies.length; i++) {
+            vm.etch(suite.dependencies[i].deployedAddress, suite.dependencies[i].runtimeCode);
+        }
 
         // Whatever is at the derived address is not part of the derivation.
         // The nonce goes too: `CREATE2` collides on a non-zero nonce as well as

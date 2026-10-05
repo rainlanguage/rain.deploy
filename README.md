@@ -51,7 +51,8 @@ Approach:
 
 A repo declares its suites ONCE. A suite is a named snapshot: a key, the
 creation code, the recorded address/code hash/runtime code, the artifact path
-and the addresses that must already be on chain before it can be deployed.
+and the dependencies that must already be on chain before it can be deployed —
+each of those an address paired with the runtime code that belongs at it.
 
 ```solidity
 // src/abstract/MyDeploySuites.sol
@@ -128,6 +129,40 @@ stale pin fails instead of deploying to wherever the code happens to land.
 Deriving the pins at broadcast time would make that comparison
 derived-against-derived, and a guard that compares a value to itself is not a
 guard.
+
+**A suite's declared dependencies are etched for the derivation, and only the
+dependencies.** "Running the creation code once locally" happens before anything
+forks — on a fork the derived address is the address the deployment under test
+occupies — so the local EVM has nothing deployed on it and a declared dependency
+is absent there by construction. A constructor that reads one therefore cannot
+run: OZ's `UpgradeableBeacon` reverts `BeaconInvalidImplementation` on an
+implementation with no code, and a suite deploying one used to derive as
+`DeployFailed` with that revert buried, which left every pin such a suite
+records checked by nothing. `deriveDeployment` now etches each declared
+dependency's runtime code at its declared address, inside the state snapshot it
+already reverts, so nothing is deployed and the error-before-deploy guard in
+`LibRainDeploy.deployToNetworks` is untouched.
+
+Which is why a dependency is declared as an address AND the runtime code that
+belongs at it: an address alone cannot say what to put there, and a single
+non-zero byte would satisfy a `code.length` check while leaving a constructor
+that CALLS its dependency broken in a way the derivation reports as success.
+Both halves are already published on the dependency's side — every generated
+snapshot carries a `DEPLOYED_ADDRESS` and a `RUNTIME_CODE` — so a declaration
+imports the pair from the snapshot of the suite it depends on, and nothing here
+resolves an address back to a suite that owns it. A dependency need not be a
+suite of the declaring repo at all, so a lookup could only ever find some of
+them, and finding none is indistinguishable from declaring none.
+
+The SUBJECT is deployed and never etched, whatever a declaration says about its
+address: the dependencies are etched first, then the derived address is cleared,
+then the factory is planted, so neither the subject's address nor the factory's
+is reachable from the declaration. That order is the difference between this and
+the blanket `vm.etch` of every suite's recorded runtime code that consumers
+hand-rolled in `setUp`. A subject that is etched rather than deployed hands back
+the runtime code the record already holds, so the internal group compares
+`storedBytecodeHash` against the record it came from and the suite is derived by
+nothing — green, and inert.
 
 Five groups, sorted by what each is anchored to and therefore by what each can
 catch:

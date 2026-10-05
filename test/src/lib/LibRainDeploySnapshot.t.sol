@@ -10,7 +10,7 @@ import {
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
-import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     EmptyRelease,
     InvalidRecordRoot,
@@ -647,7 +647,7 @@ contract LibRainDeploySnapshotTest is Test {
             RAIN_SPDX_LICENSE_IDENTIFIER,
             RAIN_COPYRIGHT_TEXT,
             type(MockDeployable).creationCode,
-            new address[](0)
+            new DeployDependency[](0)
         );
         // Read while the snapshot is still there, asserted once it is gone.
         bool exists = vm.exists(written);
@@ -695,7 +695,7 @@ contract LibRainDeploySnapshotTest is Test {
                 ROOTED_FIXTURE_REAL_DIR,
                 FIXTURE_CONTRACT,
                 type(MockDeployable).creationCode,
-                new address[](0)
+                new DeployDependency[](0)
             )
         );
         vm.revertToState(undeployed);
@@ -706,7 +706,7 @@ contract LibRainDeploySnapshotTest is Test {
             ROOTED_FIXTURE_DIR,
             FIXTURE_CONTRACT,
             type(MockDeployable).creationCode,
-            new address[](0)
+            new DeployDependency[](0)
         );
 
         // Read while the fixtures are still there, asserted once they are gone.
@@ -756,7 +756,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// test, for the write that is not supposed to happen at all.
     function externalWriteSnapshotAt(string memory root, string memory dir) external {
         LibRainDeploySnapshot.writeSnapshot(
-            vm, root, dir, FIXTURE_CONTRACT, type(MockDeployable).creationCode, new address[](0)
+            vm, root, dir, FIXTURE_CONTRACT, type(MockDeployable).creationCode, new DeployDependency[](0)
         );
     }
 
@@ -926,7 +926,7 @@ contract LibRainDeploySnapshotTest is Test {
                 RAIN_SPDX_LICENSE_IDENTIFIER,
                 RAIN_COPYRIGHT_TEXT,
                 type(MockDeployable).creationCode,
-                new address[](0)
+                new DeployDependency[](0)
             )
         );
 
@@ -1006,7 +1006,7 @@ contract LibRainDeploySnapshotTest is Test {
                 LibRainDeploySnapshot.CANDIDATE,
                 FIXTURE_CONTRACT,
                 creationCode,
-                new address[](0)
+                new DeployDependency[](0)
             )
         );
         //forge-lint: disable-next-line(unsafe-cheatcode)
@@ -1045,7 +1045,7 @@ contract LibRainDeploySnapshotTest is Test {
                 LibRainDeploySnapshot.CANDIDATE,
                 FIXTURE_CONTRACT,
                 type(MockDeployable).creationCode,
-                new address[](0)
+                new DeployDependency[](0)
             )
         );
 
@@ -1358,7 +1358,7 @@ contract LibRainDeploySnapshotTest is Test {
             storedBytecodeHash: bytes32(0),
             storedRuntimeCode: "",
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-            dependencies: new address[](0)
+            dependencies: new DeployDependency[](0)
         });
     }
 
@@ -1437,7 +1437,7 @@ contract LibRainDeploySnapshotTest is Test {
             "_RUNTIME_CODE,\n            artifactPath: \"src/concrete/AddressRegistry.sol:AddressRegistry\",\n",
             "            dependencies: abi.decode(AddressRegistry_",
             tag,
-            "_DEPENDENCIES, (address[]))\n        });\n"
+            "_DEPENDENCIES, (DeployDependency[]))\n        });\n"
         );
     }
 
@@ -1451,20 +1451,21 @@ contract LibRainDeploySnapshotTest is Test {
     function testReleasedImportBlockAliasesEveryRecord() external pure {
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(0)),
-            "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n"
+            "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n"
         );
 
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1)),
             string.concat(
-                "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n", expectedImport("0_0_1")
+                "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                expectedImport("0_0_1")
             )
         );
 
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2)),
             string.concat(
-                "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
                 expectedImport("0_0_1"),
                 expectedImport("0_0_2")
             )
@@ -1488,7 +1489,7 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1), consumerPath),
             string.concat(
-                "import {DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n",
+                "import {DeployDependency, DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n",
                 expectedImport("0_0_1")
             )
         );
@@ -1657,39 +1658,46 @@ contract LibRainDeploySnapshotTest is Test {
     /// A released entry's dependency list MUST come from that release's OWN
     /// frozen snapshot, and the template's list MUST NOT reach it.
     ///
-    /// The list is not metadata. `RainDeployBroadcast.run` hands
-    /// `suite.dependencies` to `LibRainDeploy.deployToNetworks`, which reverts
-    /// `MissingDependency` for any of them with no code on the target network —
-    /// so it is a PRECONDITION of the broadcast, and re-broadcasting a past
-    /// release onto a newly supported chain has to check the preconditions that
-    /// release was cut with. Rebuilding it from the candidate declaration
-    /// checks today's instead.
+    /// The list is not metadata. `RainDeployBroadcast.run` hands the
+    /// dependency ADDRESSES to `LibRainDeploy.deployToNetworks`, which reverts
+    /// `MissingDependency` for any of them with no code on the target network,
+    /// and `RainDeployVerifyBase.deriveDeployment` etches the runtime code
+    /// beside each to run the release's constructor — so the list is a
+    /// PRECONDITION of the broadcast, and re-broadcasting a past release onto a
+    /// newly supported chain has to check the preconditions that release was
+    /// cut with. Rebuilding it from the candidate declaration checks today's
+    /// instead.
     ///
-    /// The template here differs from what any record holds, so an emitter that
-    /// still read it would be seen writing those addresses out. Two releases,
-    /// because each MUST take its list from its own constant: one release
-    /// inheriting its successor's is the same defect one step smaller.
+    /// The template here differs from what any record holds, in BOTH halves, so
+    /// an emitter that still read it would be seen writing those addresses or
+    /// that code out. Two releases, because each MUST take its list from its
+    /// own constant: one release inheriting its successor's is the same defect
+    /// one step smaller.
     function testReleasedEntriesTakeDependenciesFromTheFrozenRecord() external pure {
         DeploySuite memory declared = emitterTemplate();
-        declared.dependencies = new address[](2);
-        declared.dependencies[0] = address(0xdead);
-        declared.dependencies[1] = address(0xbeef);
+        declared.dependencies = new DeployDependency[](2);
+        declared.dependencies[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: hex"d0d0"});
+        declared.dependencies[1] = DeployDependency({deployedAddress: address(0xbeef), runtimeCode: hex"b0b0"});
 
         string memory emitted =
             LibRainDeploySnapshot.releasedLibraryBlock(vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), declared);
 
         assertTrue(
-            vm.contains(emitted, "dependencies: abi.decode(AddressRegistry_0_0_1_DEPENDENCIES, (address[]))"),
+            vm.contains(emitted, "dependencies: abi.decode(AddressRegistry_0_0_1_DEPENDENCIES, (DeployDependency[]))"),
             "the first release does not read its own frozen dependency list"
         );
         assertTrue(
-            vm.contains(emitted, "dependencies: abi.decode(AddressRegistry_0_0_2_DEPENDENCIES, (address[]))"),
+            vm.contains(emitted, "dependencies: abi.decode(AddressRegistry_0_0_2_DEPENDENCIES, (DeployDependency[]))"),
             "the second release does not read its own frozen dependency list"
         );
 
         assertFalse(vm.contains(emitted, vm.toString(address(0xdead))), "the declaration's dependency was emitted");
         assertFalse(vm.contains(emitted, vm.toString(address(0xbeef))), "the declaration's dependency was emitted");
-        assertFalse(vm.contains(emitted, "address[] memory"), "an entry still builds its list from the declaration");
+        assertFalse(vm.contains(emitted, "d0d0"), "the declaration's dependency code was emitted");
+        assertFalse(vm.contains(emitted, "b0b0"), "the declaration's dependency code was emitted");
+        assertFalse(
+            vm.contains(emitted, "DeployDependency[] memory"), "an entry still builds its list from the declaration"
+        );
     }
 
     /// PROPERTY: the emitted released lib is INDEPENDENT of the template's
@@ -1704,7 +1712,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// a released entry's list, so it is stated as invariance rather than as
     /// two examples — two examples is also what a partial re-read passes.
     /// @param dependencies Whatever the candidate declaration now says.
-    function testReleasedEntriesIgnoreTheTemplateDependencies(address[] memory dependencies) external pure {
+    function testReleasedEntriesIgnoreTheTemplateDependencies(DeployDependency[] memory dependencies) external pure {
         DeploySuite memory declared = emitterTemplate();
         declared.dependencies = dependencies;
 
@@ -1736,7 +1744,10 @@ contract LibRainDeploySnapshotTest is Test {
     /// @param root The record root to freeze under.
     /// @param dependencies The list to freeze.
     /// @return The snapshot source.
-    function freezeDependencies(string memory root, address[] memory dependencies) internal returns (string memory) {
+    function freezeDependencies(string memory root, DeployDependency[] memory dependencies)
+        internal
+        returns (string memory)
+    {
         uint256 state = vm.snapshotState();
         string memory source = vm.readFile(
             LibRainDeploySnapshot.writeSnapshot(
@@ -1754,8 +1765,8 @@ contract LibRainDeploySnapshotTest is Test {
         return source;
     }
 
-    /// The `address[]` a snapshot's `DEPENDENCIES` constant holds, decoded out
-    /// of the source the generator wrote.
+    /// The `DeployDependency[]` a snapshot's `DEPENDENCIES` constant holds,
+    /// decoded out of the source the generator wrote.
     ///
     /// Read back out of the FILE rather than returned by the writer, because
     /// the file is the whole point: what a release required has to survive as
@@ -1765,10 +1776,10 @@ contract LibRainDeploySnapshotTest is Test {
     /// asserts about.
     /// @param source The snapshot source.
     /// @return The frozen dependency list.
-    function frozenDependencies(string memory source) internal pure returns (address[] memory) {
+    function frozenDependencies(string memory source) internal pure returns (DeployDependency[] memory) {
         string[] memory afterName = vm.split(source, "bytes constant DEPENDENCIES =");
         string[] memory afterOpen = vm.split(afterName[1], "hex\"");
-        return abi.decode(vm.parseBytes(string.concat("0x", vm.split(afterOpen[1], "\"")[0])), (address[]));
+        return abi.decode(vm.parseBytes(string.concat("0x", vm.split(afterOpen[1], "\"")[0])), (DeployDependency[]));
     }
 
     /// A snapshot MUST record the dependency list it is handed, exactly, and
@@ -1780,20 +1791,26 @@ contract LibRainDeploySnapshotTest is Test {
     /// repo declares, and therefore the case a round trip is most likely to be
     /// quietly wrong about — an encoder that wrote nothing at all would look
     /// correct against this repo's own committed snapshots forever.
+    ///
+    /// Compared as `abi.encode` of the whole list rather than element by
+    /// element, because an entry carries a `bytes` and there is no assertion
+    /// for an array of those. One equality over the encoding asserts the
+    /// addresses, the code and the length together, which is the property: the
+    /// bytes on disk decode back to the list the writer was handed.
     function testWriteSnapshotFreezesTheDependencyList() external {
-        address[] memory none = new address[](0);
+        DeployDependency[] memory none = new DeployDependency[](0);
 
-        address[] memory one = new address[](1);
-        one[0] = address(0xdead);
+        DeployDependency[] memory one = new DeployDependency[](1);
+        one[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: hex"d0d0"});
 
-        address[] memory three = new address[](3);
-        three[0] = address(0xdead);
-        // A zero in the middle. `abi.encode` of an address array is not
-        // self-delimiting, so a length or offset the round trip got wrong reads
-        // a neighbouring word rather than failing, and zero is the value that
-        // would hide it.
-        three[1] = address(0);
-        three[2] = address(0xbeef);
+        DeployDependency[] memory three = new DeployDependency[](3);
+        three[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: hex"d0d0"});
+        // A zero address and an empty code in the middle. `abi.encode` of this
+        // list is not self-delimiting, so a length or offset the round trip got
+        // wrong reads a neighbouring word rather than failing, and the empty
+        // values are the ones that would hide it.
+        three[1] = DeployDependency({deployedAddress: address(0), runtimeCode: hex""});
+        three[2] = DeployDependency({deployedAddress: address(0xbeef), runtimeCode: hex"b0b0"});
 
         // Read while the snapshots are still there, asserted once they are
         // gone: forge-std assertions revert, so undoing afterwards undoes in
@@ -1805,9 +1822,13 @@ contract LibRainDeploySnapshotTest is Test {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(DEPENDENCIES_FIXTURE_ROOT, true);
 
-        assertEq(frozenDependencies(sourceNone), none, "an empty list did not round trip as empty");
-        assertEq(frozenDependencies(sourceOne), one, "a one element list did not round trip");
-        assertEq(frozenDependencies(sourceThree), three, "a three element list did not round trip");
+        assertEq(
+            abi.encode(frozenDependencies(sourceNone)), abi.encode(none), "an empty list did not round trip as empty"
+        );
+        assertEq(abi.encode(frozenDependencies(sourceOne)), abi.encode(one), "a one element list did not round trip");
+        assertEq(
+            abi.encode(frozenDependencies(sourceThree)), abi.encode(three), "a three element list did not round trip"
+        );
     }
 
     /// Where the deploy-address half of the record-consistency pair writes its
@@ -1873,7 +1894,7 @@ contract LibRainDeploySnapshotTest is Test {
                 RAIN_SPDX_LICENSE_IDENTIFIER,
                 RAIN_COPYRIGHT_TEXT,
                 type(MockDeployable).creationCode,
-                new address[](0)
+                new DeployDependency[](0)
             )
         );
 
@@ -1953,10 +1974,11 @@ contract LibRainDeploySnapshotTest is Test {
     /// prose is the whole of what a reader is told about four values that all
     /// look like opaque hex. `DEPENDENCIES` has to say that it is a
     /// PRECONDITION of the broadcast rather than a note about one, and why it
-    /// is `bytes` and not `address[]`, or the next reader tidies the type and
-    /// silently retypes an append-only record.
+    /// is `bytes` and not `DeployDependency[]`, or the next reader tidies the
+    /// type and silently retypes an append-only record.
     function testSnapshotConstantsDocumentEveryConstant() external view {
-        string memory constants = LibRainDeploySnapshot.snapshotConstants(vm, address(this), hex"00", new address[](0));
+        string memory constants =
+            LibRainDeploySnapshot.snapshotConstants(vm, address(this), hex"00", new DeployDependency[](0));
 
         assertTrue(
             vm.contains(
@@ -1977,10 +1999,10 @@ contract LibRainDeploySnapshotTest is Test {
         assertTrue(
             vm.contains(
                 constants,
-                "/// @dev The addresses that MUST already have code on a network before\n"
-                "/// this release can be broadcast there, `abi.encode`d as an `address[]`\n"
-                "/// because Solidity has no file-scope constant of dynamic array type.\n"
-                "bytes constant DEPENDENCIES ="
+                "/// @dev What MUST already be on a network before this release can be\n"
+                "/// broadcast there: an address, and the runtime code that belongs at it.\n"
+                "/// `abi.encode`d as a `DeployDependency[]` because Solidity has no\n"
+                "/// file-scope constant of dynamic array type.\n" "bytes constant DEPENDENCIES ="
             ),
             "DEPENDENCIES is not documented"
         );
@@ -3272,7 +3294,7 @@ contract LibRainDeploySnapshotTest is Test {
                 LibRainDeploySnapshot.CANDIDATE,
                 "MockDeployable",
                 type(MockDeployable).creationCode,
-                new address[](0)
+                new DeployDependency[](0)
             )
         );
         vm.revertToState(undeployed);
@@ -3285,7 +3307,7 @@ contract LibRainDeploySnapshotTest is Test {
                 RAIN_SPDX_LICENSE_IDENTIFIER,
                 RAIN_COPYRIGHT_TEXT,
                 type(MockDeployable).creationCode,
-                new address[](0)
+                new DeployDependency[](0)
             )
         );
 

@@ -3,13 +3,25 @@
 pragma solidity =0.8.25;
 
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDependency,
+    DeploySuite,
+    RainDeploySuitesBase
+} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {MockDeployable} from "./MockDeployable.sol";
 
 /// @dev The address the candidate declares must already hold code, and which
 /// holds none on any network.
 address constant ABSENT_DEPENDENCY = address(0xdeadbee5);
+
+/// @dev The code the candidate declares belongs at `ABSENT_DEPENDENCY`. Never
+/// etched anywhere: this fixture drives the BROADCAST path, which reads a real
+/// chain and finds nothing at that address, which is the whole point of it.
+/// Non-empty all the same, because a declaration carrying no code is a
+/// declaration of something else.
+bytes constant ABSENT_DEPENDENCY_RUNTIME_CODE = hex"fe";
 
 /// @title MissingDependencyDeploy
 /// @notice A deploy script whose candidate declares a dependency that is on no
@@ -38,8 +50,9 @@ contract MissingDependencyDeploy is RainDeployBroadcast {
 
     /// @inheritdoc RainDeploySuitesBase
     function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        address[] memory dependencies = new address[](1);
-        dependencies[0] = ABSENT_DEPENDENCY;
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] =
+            DeployDependency({deployedAddress: ABSENT_DEPENDENCY, runtimeCode: ABSENT_DEPENDENCY_RUNTIME_CODE});
 
         candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({

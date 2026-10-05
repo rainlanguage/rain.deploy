@@ -3,7 +3,12 @@
 pragma solidity =0.8.25;
 
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDependency,
+    DeploySuite,
+    RainDeploySuitesBase
+} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 
 /// @dev The address the candidate records, which its own creation code does not
@@ -41,7 +46,7 @@ contract StalePinDeploy is RainDeployBroadcast {
                 storedBytecodeHash: keccak256(type(MockDeployableV2).runtimeCode),
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             })
         });
     }

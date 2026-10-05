@@ -2,7 +2,12 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDependency,
+    DeploySuite,
+    RainDeploySuitesBase
+} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
@@ -46,7 +51,7 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
             storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
             storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-            dependencies: new address[](0)
+            dependencies: new DeployDependency[](0)
         });
     }
 
@@ -61,7 +66,7 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
                 storedBytecodeHash: keccak256(type(MockDeployableV2).runtimeCode),
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             })
         });
     }

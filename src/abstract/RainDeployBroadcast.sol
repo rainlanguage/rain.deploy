@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Script} from "forge-std-1.17.0/src/Script.sol";
 
-import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
+import {DeploySuite, RainDeploySuitesBase, dependencyAddresses} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 
 /// @title RainDeployBroadcast
@@ -102,7 +102,11 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             suite.artifactPath,
             suite.storedDeployedAddress,
             suite.storedBytecodeHash,
-            suite.dependencies
+            // The addresses alone. The runtime code a declaration carries
+            // beside each one is for `deriveDeployment`, which has to PUT the
+            // dependency on a local EVM; the broadcast reads a real chain,
+            // where it only has to ask whether anything is there.
+            dependencyAddresses(suite.dependencies)
         );
     }
 }
