@@ -5,12 +5,15 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {
+    CandidateSourceCompiles,
     CandidateSourceMismatch,
+    DeployCandidate,
     DeploySuite,
     DuplicateDeploySuite,
     InvalidDeploySuiteKey,
     NoDeployCandidates,
-    UnknownDeploymentSuite
+    UnknownDeploymentSuite,
+    UnqualifiedCandidateArtifactPath
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {CollidingCandidateDeploySuites} from "../../concrete/CollidingCandidateDeploySuites.sol";
@@ -21,6 +24,11 @@ import {NoCandidateDeploySuites} from "../../concrete/NoCandidateDeploySuites.so
 import {SameLengthKeyDeploySuites} from "../../concrete/SameLengthKeyDeploySuites.sol";
 import {SeparatorKeyDeploySuites} from "../../concrete/SeparatorKeyDeploySuites.sol";
 import {ShortestKeyDeploySuites} from "../../concrete/ShortestKeyDeploySuites.sol";
+import {UnanchorableDeploy, ASSEMBLED_CREATION_CODE} from "../../concrete/UnanchorableDeploy.sol";
+import {UnanchorableWithArtifactDeploySuites} from "../../concrete/UnanchorableWithArtifactDeploySuites.sol";
+import {UnanchorableWithStaleArtifactDeploySuites} from "../../concrete/UnanchorableWithStaleArtifactDeploySuites.sol";
+import {UnqualifiedArtifactPathDeploySuites} from "../../concrete/UnqualifiedArtifactPathDeploySuites.sol";
+import {VersionQualifiedArtifactPathDeploySuites} from "../../concrete/VersionQualifiedArtifactPathDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
@@ -265,6 +273,61 @@ contract RainDeploySuitesBaseTest is Test {
         sSuites.externalCheckCandidatesAnchoredToSource();
     }
 
+    /// A candidate naming its contract by BARE name MUST be refused, on every
+    /// reader, naming which candidate.
+    ///
+    /// The bare name here RESOLVES, and to exactly the contract the snapshot
+    /// records — asserted below rather than assumed — so with the refusal
+    /// deleted the anchor passes this declaration green. `vm.getCode` answers a
+    /// name matching several with whichever artifact comes first and never
+    /// reports that there were several, so the day a second contract of this
+    /// name exists the candidate is anchored to whichever wins, with nothing
+    /// anywhere saying which.
+    ///
+    /// The index is asserted, not just the refusal. It is 1, the second
+    /// candidate, behind one spelled properly: a refusal reporting a fixed
+    /// position would still pass a test that only asked whether it reverted.
+    function testUnqualifiedCandidateArtifactPathReverts() external {
+        UnqualifiedArtifactPathDeploySuites unqualified = new UnqualifiedArtifactPathDeploySuites();
+
+        assertEq(keccak256(vm.getCode("MockDeployableV2")), keccak256(type(MockDeployableV2).creationCode));
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
+        unqualified.externalCheckedCandidateSuites();
+
+        // The reader the BROADCAST runs, and the one check that catches a
+        // snapshot of the wrong contract.
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
+        unqualified.externalCheckCandidatesAnchoredToSource();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
+        unqualified.externalAllSuites();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
+        unqualified.externalSuiteNames();
+
+        // And the key this declaration DOES spell properly: one bad path makes
+        // the whole registry unreadable rather than leaving the sibling entry
+        // quietly selectable.
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
+        unqualified.externalSuiteByName("qualified-candidate");
+    }
+
+    /// A colon is not a file. forge reads `Name:0.8.25` as a contract name plus
+    /// a compiler version, so this form resolves exactly as the bare name does
+    /// and carries the same ambiguity.
+    function testVersionQualifiedCandidateArtifactPathReverts() external {
+        VersionQualifiedArtifactPathDeploySuites versioned = new VersionQualifiedArtifactPathDeploySuites();
+
+        assertEq(keccak256(vm.getCode("MockDeployableV2:0.8.25")), keccak256(type(MockDeployableV2).creationCode));
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2:0.8.25"));
+        versioned.externalCheckedCandidateSuites();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2:0.8.25"));
+        versioned.externalCheckCandidatesAnchoredToSource();
+    }
+
     function testCandidateThatNamesAnotherContractIsRefused() external {
         MisanchoredDeploy misanchored = new MisanchoredDeploy();
 
@@ -277,6 +340,60 @@ contract RainDeploySuitesBaseTest is Test {
             )
         );
         misanchored.externalCheckCandidatesAnchoredToSource();
+    }
+
+    /// The anchor passes over a candidate declaring a reason, for a qualified
+    /// path naming no file, and the entries stay keyed, listed and selectable.
+    function testUnanchorableCandidateIsAnchoredByNothing() external {
+        UnanchorableDeploy unanchorable = new UnanchorableDeploy();
+
+        unanchorable.externalCheckCandidatesAnchoredToSource();
+
+        DeployCandidate[] memory candidates = unanchorable.externalCheckedCandidateSuites();
+        assertEq(candidates.length, 3);
+        assertEq(candidates[0].unanchorableReason, "");
+        assertGt(bytes(candidates[1].unanchorableReason).length, 0);
+        assertEq(candidates[1].snapshot.artifactPath, "test/concrete/VendoredDeployable.sol:VendoredDeployable");
+        assertGt(bytes(candidates[2].unanchorableReason).length, 0);
+        assertEq(candidates[2].snapshot.artifactPath, "test/concrete/AssembledTables.sol:AssembledTables");
+
+        assertEq(unanchorable.externalSuiteNames(), "compiled-candidate, vendored-candidate, generated-candidate");
+        assertEq(
+            unanchorable.externalSuiteByName("generated-candidate").storedDeployedAddress,
+            LibRainDeploy.zoltuAddress(ASSEMBLED_CREATION_CODE)
+        );
+    }
+
+    /// A reason declared over a contract that compiles is refused, naming the
+    /// candidate and the path. It is second in the list, so this also pins that
+    /// the loop passes over an exemption rather than stopping at it.
+    function testUnanchorableCandidateThatCompilesIsRefused() external {
+        UnanchorableWithArtifactDeploySuites compiled = new UnanchorableWithArtifactDeploySuites();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CandidateSourceCompiles.selector,
+                "current-source-candidate",
+                "test/concrete/MockDeployableV2.sol:MockDeployableV2"
+            )
+        );
+        compiled.externalCheckCandidatesAnchoredToSource();
+    }
+
+    /// Over a stale snapshot of a contract that compiles, the refusal is
+    /// `CandidateSourceCompiles`, not `CandidateSourceMismatch` — so the claim
+    /// is refused on its own terms rather than caught by the comparison.
+    function testUnanchorableCandidateOverAStaleSnapshotIsRefused() external {
+        UnanchorableWithStaleArtifactDeploySuites stale = new UnanchorableWithStaleArtifactDeploySuites();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CandidateSourceCompiles.selector,
+                "stale-source-candidate",
+                "test/concrete/MockDeployable.sol:MockDeployable"
+            )
+        );
+        stale.externalCheckCandidatesAnchoredToSource();
     }
 
     /// A key is the whole string, not its length. Two DIFFERENT keys of the
