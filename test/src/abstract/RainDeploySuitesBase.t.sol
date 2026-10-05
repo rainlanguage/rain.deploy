@@ -12,7 +12,8 @@ import {
     DuplicateDeploySuite,
     InvalidDeploySuiteKey,
     NoDeployCandidates,
-    UnknownDeploymentSuite
+    UnknownDeploymentSuite,
+    UnqualifiedCandidateArtifactPath
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {CollidingCandidateDeploySuites} from "../../concrete/CollidingCandidateDeploySuites.sol";
@@ -26,6 +27,7 @@ import {ShortestKeyDeploySuites} from "../../concrete/ShortestKeyDeploySuites.so
 import {UnanchorableDeploy, ASSEMBLED_CREATION_CODE} from "../../concrete/UnanchorableDeploy.sol";
 import {UnanchorableWithArtifactDeploySuites} from "../../concrete/UnanchorableWithArtifactDeploySuites.sol";
 import {UnanchorableWithStaleArtifactDeploySuites} from "../../concrete/UnanchorableWithStaleArtifactDeploySuites.sol";
+import {UnqualifiedArtifactPathDeploySuites} from "../../concrete/UnqualifiedArtifactPathDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
@@ -270,6 +272,46 @@ contract RainDeploySuitesBaseTest is Test {
         sSuites.externalCheckCandidatesAnchoredToSource();
     }
 
+    /// A candidate naming its contract by BARE name MUST be refused, on every
+    /// reader, naming which candidate.
+    ///
+    /// The bare name here RESOLVES, and to exactly the contract the snapshot
+    /// records — asserted below rather than assumed — so with the refusal
+    /// deleted the anchor passes this declaration green. `vm.getCode` answers a
+    /// name matching several with whichever artifact comes first and never
+    /// reports that there were several, so the day a second contract of this
+    /// name exists the candidate is anchored to whichever wins, with nothing
+    /// anywhere saying which.
+    ///
+    /// The index is asserted, not just the refusal. It is 1, the second
+    /// candidate, behind one spelled properly: a refusal reporting a fixed
+    /// position would still pass a test that only asked whether it reverted.
+    function testUnqualifiedCandidateArtifactPathReverts() external {
+        UnqualifiedArtifactPathDeploySuites unqualified = new UnqualifiedArtifactPathDeploySuites();
+
+        assertEq(keccak256(vm.getCode("MockDeployableV2")), keccak256(type(MockDeployableV2).creationCode));
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
+        unqualified.externalCheckedCandidateSuites();
+
+        // The reader the BROADCAST runs, and the one check that catches a
+        // snapshot of the wrong contract.
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
+        unqualified.externalCheckCandidatesAnchoredToSource();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
+        unqualified.externalAllSuites();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
+        unqualified.externalSuiteNames();
+
+        // And the key this declaration DOES spell properly: one bad path makes
+        // the whole registry unreadable rather than leaving the sibling entry
+        // quietly selectable.
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
+        unqualified.externalSuiteByName("qualified-candidate");
+    }
+
     function testCandidateThatNamesAnotherContractIsRefused() external {
         MisanchoredDeploy misanchored = new MisanchoredDeploy();
 
@@ -284,9 +326,8 @@ contract RainDeploySuitesBaseTest is Test {
         misanchored.externalCheckCandidatesAnchoredToSource();
     }
 
-    /// The anchor passes over a candidate declaring a reason, for both path
-    /// shapes — a bare contract name and an empty one — and the entries stay
-    /// keyed, listed and selectable.
+    /// The anchor passes over a candidate declaring a reason, for a qualified
+    /// path naming no file, and the entries stay keyed, listed and selectable.
     function testUnanchorableCandidateIsAnchoredByNothing() external {
         UnanchorableDeploy unanchorable = new UnanchorableDeploy();
 
@@ -296,9 +337,9 @@ contract RainDeploySuitesBaseTest is Test {
         assertEq(candidates.length, 3);
         assertEq(candidates[0].unanchorableReason, "");
         assertGt(bytes(candidates[1].unanchorableReason).length, 0);
-        assertEq(candidates[1].snapshot.artifactPath, "VendoredDeployable");
+        assertEq(candidates[1].snapshot.artifactPath, "test/concrete/VendoredDeployable.sol:VendoredDeployable");
         assertGt(bytes(candidates[2].unanchorableReason).length, 0);
-        assertEq(candidates[2].snapshot.artifactPath, "");
+        assertEq(candidates[2].snapshot.artifactPath, "test/concrete/AssembledTables.sol:AssembledTables");
 
         assertEq(unanchorable.externalSuiteNames(), "compiled-candidate, vendored-candidate, generated-candidate");
         assertEq(

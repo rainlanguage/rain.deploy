@@ -179,6 +179,15 @@ deploy. On a candidate that declares itself unanchorable it is the other way
 round: resolving to nothing is the state being declared, and resolving to an
 artifact is what refuses the declaration.
 
+Uniqueness is not something `vm.getCode` reports. It resolves a BARE contract
+name to whichever same-named artifact comes first, and answers rather than
+reverting when several match, so a bare name anchors a candidate to a contract
+that merely shares a name and nothing anywhere says which one it took. Every
+candidate is therefore held to `<path>:<Name>` —
+`UnqualifiedCandidateArtifactPath`, raised from the same read as
+`NoDeployCandidates` — including one declaring itself unanchorable, which spells
+the path of the file it would have had.
+
 It runs over EVERY candidate, and a declaration that names none at all is
 refused with `NoDeployCandidates` rather than passed as a loop with nothing in
 it. A candidate the source anchor never reaches is a contract whose snapshot

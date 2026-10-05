@@ -35,9 +35,9 @@ bytes constant ASSEMBLED_CREATION_CODE = hex"600160005360016000f3";
 /// this are a vendored third party deployment and a generated data contract,
 /// which is to say the ones a repo has no other way to put on chain.
 ///
-/// BOTH shapes an artifact-less path takes are declared: a bare contract name
-/// and nothing at all. Neither resolves, and the mechanism treats them the
-/// same, so a change that special-cased the empty string is caught.
+/// Both paths are `<path>:<Name>` — `UnqualifiedCandidateArtifactPath` holds
+/// every candidate to that — naming the file each WOULD have had. Neither file
+/// exists, so neither resolves, which is the state the reason declares.
 ///
 /// The ordinary candidate is first and real, so this is the mixed declaration a
 /// repo actually has rather than one where nothing is anchored.
@@ -69,9 +69,9 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(VENDORED_CREATION_CODE),
                 storedBytecodeHash: keccak256(hex""),
                 storedRuntimeCode: hex"",
-                // A bare contract name: this repo compiles no such source, so
-                // it resolves to no artifact.
-                artifactPath: "VendoredDeployable",
+                // Qualified, and this repo compiles no such source, so it
+                // resolves to no artifact.
+                artifactPath: "test/concrete/VendoredDeployable.sol:VendoredDeployable",
                 dependencies: new address[](0)
             }),
             unanchorableReason: "Vendored third party deployment: the pinned creation code is the source."
@@ -83,9 +83,9 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(ASSEMBLED_CREATION_CODE),
                 storedBytecodeHash: keccak256(hex"01"),
                 storedRuntimeCode: hex"01",
-                // Nothing at all, the other shape: a data contract assembled at
-                // build time names no file to point anything at.
-                artifactPath: "",
+                // A data contract assembled at build time: the path names the
+                // file the tables would be compiled from, and there is none.
+                artifactPath: "test/concrete/AssembledTables.sol:AssembledTables",
                 dependencies: new address[](0)
             }),
             unanchorableReason: "Assembled from generated tables: there is no source file to compile."

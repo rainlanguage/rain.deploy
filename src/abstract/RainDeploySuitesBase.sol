@@ -77,6 +77,23 @@ error UnknownDeploymentSuite(string requested, string validSuites);
 /// ordinary state, and it is the CANDIDATE that the source anchor needs.
 error NoDeployCandidates();
 
+/// Thrown when a candidate's `artifactPath` is not `<path>:<Name>`.
+///
+/// `vm.getCode` resolves a BARE contract name to whichever same-named artifact
+/// it finds first, and answers rather than reverting when several match. So a
+/// bare name anchors the candidate against a contract that merely shares a
+/// name, silently, and the only check that catches a snapshot of the wrong
+/// contract is the one it defeats. Refused on the path rather than detected
+/// afterwards, because a resolved artifact carries nothing saying which of the
+/// same-named files it came from.
+///
+/// Raised from `checkedCandidateSuites`, for the reason `NoDeployCandidates`
+/// is: every candidate reader goes through that one read.
+/// @param index Position in the candidate list. The path may be shared by two
+/// candidates, or empty, so the position is what names the entry.
+/// @param artifactPath The refused path.
+error UnqualifiedCandidateArtifactPath(uint256 index, string artifactPath);
+
 /// Thrown when a candidate's recorded creation code is not the creation code
 /// this repo currently compiles. Hashes rather than the bytes themselves, which
 /// run to tens of kilobytes.
@@ -147,10 +164,13 @@ struct DeploySuite {
     /// subdirectories has paths no naming convention recovers.
     ///
     /// For a candidate this is load-bearing: `checkCandidatesAnchoredToSource`
-    /// resolves it through `vm.getCode`, so a path that resolves to no
-    /// artifact, or to more than one, fails at the anchor before the broadcast.
-    /// A candidate declaring an `unanchorableReason` inverts that: resolving to
-    /// no artifact is the declared state, and resolving to one refuses it.
+    /// resolves it through `vm.getCode`, so a path that resolves to no artifact
+    /// fails at the anchor before the broadcast, and a path that is not
+    /// `<path>:<Name>` is refused before that — see
+    /// `UnqualifiedCandidateArtifactPath`. A candidate declaring an
+    /// `unanchorableReason` inverts the anchor: resolving to no artifact is the
+    /// declared state, and resolving to one refuses it. It is still held to
+    /// `<path>:<Name>`, which it spells against the file it WOULD have.
     string artifactPath;
     /// Addresses that MUST already have code on a network before this suite is
     /// broadcast there. Ordinarily other suites' recorded addresses: a
@@ -219,9 +239,11 @@ abstract contract RainDeploySuitesBase {
     /// @return The candidates.
     function candidateSuites() internal pure virtual returns (DeployCandidate[] memory);
 
-    /// The declared candidates, refusing an empty list.
+    /// The declared candidates, refusing an empty list and an `artifactPath`
+    /// that is not `<path>:<Name>`.
     ///
-    /// The ONE place `NoDeployCandidates` is raised, and the only way anything
+    /// The ONE place `NoDeployCandidates` and
+    /// `UnqualifiedCandidateArtifactPath` are raised, and the only way anything
     /// reads the candidates. `allSuites` goes through it, and so does
     /// `checkCandidatesAnchoredToSource` — which matters, because the source
     /// anchor loops over the candidates and a loop over an empty list passes.
@@ -233,6 +255,19 @@ abstract contract RainDeploySuitesBase {
         DeployCandidate[] memory candidates = candidateSuites();
         if (candidates.length == 0) {
             revert NoDeployCandidates();
+        }
+        for (uint256 i = 0; i < candidates.length; i++) {
+            bytes memory path = bytes(candidates[i].snapshot.artifactPath);
+            bool qualified = false;
+            for (uint256 j = 0; j < path.length; j++) {
+                if (path[j] == ":") {
+                    qualified = true;
+                    break;
+                }
+            }
+            if (!qualified) {
+                revert UnqualifiedCandidateArtifactPath(i, candidates[i].snapshot.artifactPath);
+            }
         }
         return candidates;
     }
@@ -295,8 +330,9 @@ abstract contract RainDeploySuitesBase {
             }
             bytes32 stored = keccak256(candidates[i].snapshot.creationCode);
             // Direct, not through the `try` above, so a path that resolves to
-            // nothing and claims nothing fails as the cheatcode's own revert,
-            // which says whether it matched none or several.
+            // nothing and claims nothing fails as the cheatcode's own revert —
+            // which is a NO match only: a name matching several resolves to
+            // whichever comes first, which `checkedCandidateSuites` refuses.
             bytes32 source = keccak256(StdConstants.VM.getCode(candidates[i].snapshot.artifactPath));
             if (stored != source) {
                 revert CandidateSourceMismatch(candidates[i].snapshot.suite, stored, source);

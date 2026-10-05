@@ -39,7 +39,7 @@ contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(VENDORED_CREATION_CODE),
                 storedBytecodeHash: keccak256(hex""),
                 storedRuntimeCode: hex"",
-                artifactPath: "VendoredDeployable",
+                artifactPath: "test/concrete/VendoredDeployable.sol:VendoredDeployable",
                 dependencies: new address[](0)
             }),
             unanchorableReason: "Vendored third party deployment: the pinned creation code is the source."
