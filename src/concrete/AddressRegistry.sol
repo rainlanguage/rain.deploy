@@ -100,11 +100,16 @@ contract AddressRegistry is IAddressRegistryV1 {
         // stamp, not against any moment: the seconds of slack a validator has
         // cannot move a plausible timestamp past 2**96, and a chain whose clock
         // is already past 2**96 is not one a nudge put there.
-        // slither-disable-next-line timestamp
+        //
+        // Slither's is a start/end pair rather than a next-line because only
+        // one comment fits immediately above the `if` and that one has to be
+        // forge-lint's, which has no pair form.
+        // slither-disable-start timestamp
         // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp > type(uint96).max) {
             revert TimestampOverflow(block.timestamp);
         }
+        // slither-disable-end timestamp
         // Assigned whole, so the stamp of a re-bind replaces the stamp of the
         // bind before it in the same write that replaces the address.
         sBindings[name] = Binding({account: account, registeredAt: uint96(block.timestamp)});
@@ -117,9 +122,17 @@ contract AddressRegistry is IAddressRegistryV1 {
     /// consumer resolving a name in its constructor does.
     function get(bytes32 name) external view returns (address) {
         address account = sBindings[name].account;
+        // There is no time in this comparison. Slither reaches it because
+        // `account` is read out of a struct whose other half is written from
+        // `block.timestamp`, so the whole binding is tainted and an address
+        // check against zero is reported as a dangerous timestamp comparison.
+        // Suppressed on this one comparison rather than turned off for the
+        // repo.
+        // slither-disable-start timestamp
         if (account == address(0)) {
             revert NameNotRegistered(name);
         }
+        // slither-disable-end timestamp
         return account;
     }
 
@@ -129,9 +142,15 @@ contract AddressRegistry is IAddressRegistryV1 {
     /// mistaken for a name nobody bound.
     function registeredAt(bytes32 name) external view returns (uint256) {
         Binding memory binding = sBindings[name];
+        // Tainted for the same reason as the one in `get`, and time has no part
+        // in it for the same reason: this is the address half of the binding
+        // being checked against zero, which is what decides bound-ness. The
+        // stamp half is returned, never compared.
+        // slither-disable-start timestamp
         if (binding.account == address(0)) {
             revert NameNotRegistered(name);
         }
+        // slither-disable-end timestamp
         return binding.registeredAt;
     }
 }
