@@ -87,15 +87,9 @@ error NoDeployCandidates();
 /// candidate NAMES — its `artifactPath` — currently compiles to.
 error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, bytes32 sourceCreationCodeHash);
 
-/// Thrown when a candidate declares an `unanchorableReason` and the artifact
-/// its `artifactPath` names resolves anyway.
-///
-/// The reason says NO compiler produces this candidate's source. An artifact is
-/// that claim being false, so the declaration is refused rather than taken at
-/// its word. Otherwise the field is a way to spell "do not anchor me" on an
-/// ordinary candidate, and the one check that catches a snapshot of the wrong
-/// contract becomes opt-out after all — on the broadcast path as well as in CI,
-/// because both run this same definition.
+/// Thrown when a candidate declares an `unanchorableReason` and its
+/// `artifactPath` resolves anyway. An artifact is the claim being false, and
+/// taking it at its word would make the anchor opt-out for any candidate.
 /// @param suite The candidate's key.
 /// @param artifactPath The artifact id that resolved.
 error CandidateSourceCompiles(string suite, string artifactPath);
@@ -156,9 +150,7 @@ struct DeploySuite {
     /// resolves it through `vm.getCode`, so a path that resolves to no
     /// artifact, or to more than one, fails at the anchor before the broadcast.
     /// A candidate declaring an `unanchorableReason` inverts that: resolving to
-    /// no artifact is the state it declares, and resolving to one refuses it.
-    /// The path is still what the `forge verify-contract` line prints either
-    /// way.
+    /// no artifact is the declared state, and resolving to one refuses it.
     string artifactPath;
     /// Addresses that MUST already have code on a network before this suite is
     /// broadcast there. Ordinarily other suites' recorded addresses: a
@@ -174,32 +166,13 @@ struct DeployCandidate {
     /// The candidate's own recorded snapshot, checked exactly as any other
     /// suite is, and anchored to what its `artifactPath` compiles to.
     DeploySuite snapshot;
-    /// Why NO compiler produces this candidate's source. EMPTY for the
-    /// ordinary candidate, whose `artifactPath` resolves to an artifact.
+    /// Why no compiler produces this candidate's source — a vendored third
+    /// party deployment, or a data contract assembled from generated tables.
+    /// Empty for an ordinary candidate.
     ///
-    /// A third party deployment vendored as a pinned hex literal, or a data
-    /// contract assembled from generated tables: there is no source file, so
-    /// `vm.getCode` has nothing to resolve and the anchor has no second operand
-    /// to hold the record against. The recorded bytes ARE the only statement of
-    /// what the code is. Said here, in the candidate's own declaration, so that
-    /// a snapshot nothing can anchor says so where it is spelled rather than
-    /// leaving the anchor to look as though it anchored it.
-    ///
-    /// Prose rather than a flag, because the justification is the point: the
-    /// reader asking why this one contract is not anchored is asking at the
-    /// declaration, and a `true` answers nothing. Nothing checks what it SAYS —
-    /// only that it is non-empty — so it is the one field here held to being
-    /// read rather than to being right.
-    ///
-    /// It is not the removed `sourceCreationCode`. It carries no bytes, so
-    /// there is nothing for a consumer to point at the record and nothing for
-    /// the anchor to compare with itself
-    /// (rainlanguage/rain.factory.deploy#34). And it is REFUSED wherever the
-    /// `artifactPath` resolves — `CandidateSourceCompiles` — so it exempts only
-    /// what no compiler can answer for and never an ordinary candidate.
-    ///
-    /// Such a snapshot cannot be regenerated from `vm.getCode` either, so a
-    /// repo declaring one writes it from whatever produces the bytes.
+    /// Prose rather than a flag because the justification is the point.
+    /// Nothing checks what it says, only that it is non-empty, and it is
+    /// refused wherever `artifactPath` resolves.
     string unanchorableReason;
 }
 
@@ -300,12 +273,9 @@ abstract contract RainDeploySuitesBase {
     /// source — it records bytes that are already on chain — so anchoring one
     /// to source asserts something false by design.
     ///
-    /// The only thing a candidate can spell is `unanchorableReason`, and it is
-    /// not an exemption from the comparison: it is a declaration that there is
-    /// no second operand to make one with, refused wherever `vm.getCode` can
-    /// make one. A candidate no compiler produces is the one case where this
-    /// check has nothing to say, and saying that is better than looping over it
-    /// green or failing a repo out of its own deploy path.
+    /// `unanchorableReason` is not an exemption from the comparison but a
+    /// declaration that there is no second operand to make one with, refused
+    /// wherever `vm.getCode` can make one.
     function checkCandidatesAnchoredToSource() internal view {
         DeployCandidate[] memory candidates = checkedCandidateSuites();
         for (uint256 i = 0; i < candidates.length; i++) {
@@ -320,15 +290,13 @@ abstract contract RainDeploySuitesBase {
                 if (compiles) {
                     revert CandidateSourceCompiles(candidates[i].snapshot.suite, candidates[i].snapshot.artifactPath);
                 }
-                // The NEXT candidate, not the end of the loop: one declaration
-                // nothing can anchor must not stop the ones that can being.
+                // The next candidate, not the end of the loop.
                 continue;
             }
             bytes32 stored = keccak256(candidates[i].snapshot.creationCode);
-            // Called directly rather than through the `try` above, so a path
-            // that resolves to NOTHING and claims nothing still fails as the
-            // cheatcode's own revert — which says whether it matched no
-            // artifact or several, as an error raised here could not.
+            // Direct, not through the `try` above, so a path that resolves to
+            // nothing and claims nothing fails as the cheatcode's own revert,
+            // which says whether it matched none or several.
             bytes32 source = keccak256(StdConstants.VM.getCode(candidates[i].snapshot.artifactPath));
             if (stored != source) {
                 revert CandidateSourceMismatch(candidates[i].snapshot.suite, stored, source);

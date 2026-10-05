@@ -284,24 +284,9 @@ contract RainDeploySuitesBaseTest is Test {
         misanchored.externalCheckCandidatesAnchoredToSource();
     }
 
-    /// A candidate whose source NO compiler produces MUST be declarable, and
-    /// the anchor MUST pass over it rather than failing a repo out of its own
-    /// deploy path.
-    ///
-    /// A vendored third party deployment and a generated data contract have no
-    /// artifact for `vm.getCode` to resolve, so the anchor has no second operand
-    /// at all: the recorded bytes are the only statement of what the code is.
-    /// Both shapes the path takes are declared — a bare contract name and
-    /// nothing at all — because that is the whole of the difference between the
-    /// two repos the case arose in.
-    ///
-    /// The pass is not vacuous. `testUnanchorableCandidateThatCompilesIsRefused`
-    /// runs the same mechanism over a path that DOES resolve and is refused, so
-    /// this is the claim being honoured rather than the check being absent.
-    ///
-    /// Unanchored is not undeployed: the entries are keyed, listed and
-    /// selectable like any other suite, which is what the broadcast needs of
-    /// them.
+    /// The anchor passes over a candidate declaring a reason, for both path
+    /// shapes — a bare contract name and an empty one — and the entries stay
+    /// keyed, listed and selectable.
     function testUnanchorableCandidateIsAnchoredByNothing() external {
         UnanchorableDeploy unanchorable = new UnanchorableDeploy();
 
@@ -322,19 +307,9 @@ contract RainDeploySuitesBaseTest is Test {
         );
     }
 
-    /// A reason declared over a contract that DOES compile MUST be refused,
-    /// naming the candidate and the path that resolved.
-    ///
-    /// This is what stops the field being a way to spell "do not anchor me" on
-    /// an ordinary candidate, on the broadcast path as well as here. The refused
-    /// candidate records exactly what its artifact holds — it would pass the
-    /// anchor with the claim deleted — so what is refused is the DECLARATION,
-    /// and a check that only refused a claim it caught disagreeing with an
-    /// artifact lets this through.
-    ///
-    /// The refused candidate is the SECOND, behind a legitimately unanchorable
-    /// one, so this is also what says the loop passes OVER an exemption rather
-    /// than stopping at it.
+    /// A reason declared over a contract that compiles is refused, naming the
+    /// candidate and the path. It is second in the list, so this also pins that
+    /// the loop passes over an exemption rather than stopping at it.
     function testUnanchorableCandidateThatCompilesIsRefused() external {
         UnanchorableWithArtifactDeploySuites compiled = new UnanchorableWithArtifactDeploySuites();
 
@@ -348,16 +323,9 @@ contract RainDeploySuitesBaseTest is Test {
         compiled.externalCheckCandidatesAnchoredToSource();
     }
 
-    /// And over a STALE snapshot of a contract that compiles, it MUST be refused
-    /// as the claim being false rather than reported as the mismatch.
-    ///
-    /// This is the use a repo whose anchor has gone red would put the field to:
-    /// the record disagrees with the artifact, and one line makes the check stop
-    /// asking. `CandidateSourceCompiles` rather than `CandidateSourceMismatch`
-    /// is what says the claim was refused on its own terms — a check that
-    /// compared first and read the reason afterwards reverts with the other
-    /// error here, and is satisfied by the field everywhere a record happens to
-    /// agree.
+    /// Over a stale snapshot of a contract that compiles, the refusal is
+    /// `CandidateSourceCompiles`, not `CandidateSourceMismatch` — so the claim
+    /// is refused on its own terms rather than caught by the comparison.
     function testUnanchorableCandidateOverAStaleSnapshotIsRefused() external {
         UnanchorableWithStaleArtifactDeploySuites stale = new UnanchorableWithStaleArtifactDeploySuites();
 

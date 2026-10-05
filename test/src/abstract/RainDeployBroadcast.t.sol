@@ -423,25 +423,10 @@ contract RainDeployBroadcastTest is Test {
         misanchored.run();
     }
 
-    /// The broadcast MUST get PAST the anchor for a candidate whose source no
-    /// compiler produces.
-    ///
-    /// The anchor is the first statement of `run()` and it resolves
-    /// `artifactPath` through `vm.getCode`, so a candidate with no artifact was
-    /// a suite that could not be broadcast at all — not a red CI run but a repo
-    /// with no path to chain for a vendored deployment or a generated data
-    /// contract. Those are exactly the suites with no `type(X).creationCode` to
-    /// fall back on, and in one of the two repos it is the suite that must land
-    /// FIRST for anything after it to construct.
-    ///
-    /// This declaration names no key anything sets `DEPLOYMENT_SUITE` to, so
-    /// selection is where a run that cleared the anchor arrives, and the
-    /// anchor's own revert is what it would have produced instead. Nothing here
-    /// writes an env var, for the reason the test above gives.
-    ///
-    /// `RainDeploySuitesBaseTest.testUnanchorableCandidateThatCompilesIsRefused`
-    /// is the other half: the same definition refuses a declaration claiming
-    /// this of a contract the compiler does produce.
+    /// `run()` gets past the anchor — its first statement — for a candidate
+    /// whose source no compiler produces, so such a suite can be broadcast at
+    /// all. Reaching suite selection is the evidence; the declaration names no
+    /// key `DEPLOYMENT_SUITE` is set to.
     function testRunReachesSelectionPastAnUnanchorableCandidate() external {
         UnanchorableDeploy unanchorable = new UnanchorableDeploy();
 
