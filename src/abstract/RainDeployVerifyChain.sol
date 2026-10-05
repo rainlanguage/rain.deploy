@@ -56,10 +56,17 @@ struct DeclaredChainId {
 
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the
-/// repo: across every network in `LibRainDeploy.supportedNetworks()`, every
-/// RELEASED suite's derived address carries code with its derived code hash,
-/// and every chain id `[etherscan]` declares is the one that network's alias
-/// forks.
+/// repo: across every network the declaration's `supportedNetworks()` names,
+/// every RELEASED suite's derived address carries code with its derived code
+/// hash, and every chain id `[etherscan]` declares is the one that network's
+/// alias forks.
+///
+/// The declaration's, rather than this package's, and through the same hook
+/// `RainDeployBroadcast.deployNetworks()` defaults to. A repo that deploys to a
+/// subset is held to exactly that subset, and there is no way to spell a
+/// verification set narrower than the one it broadcasts to — see
+/// `RainDeploySuitesBase.supportedNetworks` for why that is one hook and not a
+/// `virtual` on each test below.
 ///
 /// This is the only group that can catch a suite that never deployed to a
 /// network, or that is not there any more. Neither is a fact the repo can hold:
@@ -161,7 +168,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             return;
         }
 
-        string[] memory networks = LibRainDeploy.supportedNetworks();
+        string[] memory networks = supportedNetworks();
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, networks);
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
@@ -275,6 +282,6 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// `{ access = "read", path = "./foundry.toml" }` in `fs_permissions` for
     /// THIS half as well as the snapshot half.
     function testSupportedNetworkChainIdsAreBound() external {
-        checkNetworkChainIds(declaredChainIds(vm.readFile("foundry.toml"), LibRainDeploy.supportedNetworks()));
+        checkNetworkChainIds(declaredChainIds(vm.readFile("foundry.toml"), supportedNetworks()));
     }
 }

@@ -3,7 +3,6 @@
 pragma solidity ^0.8.25;
 
 import {RainDeployVerifySnapshotBase} from "./RainDeployVerifySnapshotBase.sol";
-import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// @title RainDeployVerifySnapshot
@@ -90,16 +89,29 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
     /// no RPC and fails on the PR that drifts rather than at dispatch time.
     ///
     /// `vm.readFile` resolves against the project root of whatever runs it, so
-    /// the file read is the binder's own and the networks are this package's.
-    /// A binding repo therefore needs `{ access = "read", path =
+    /// the file read is the binder's own — and the networks are the binder's
+    /// own too, because `supportedNetworks()` is the declaration's hook rather
+    /// than this package's list. A repo that deploys to a subset holds its
+    /// config to that subset, which is the only scope that can be right here:
+    /// the set compared against is the set the deploy forks and the chain
+    /// matrix checks. A binding repo needs `{ access = "read", path =
     /// "./foundry.toml" }` in `fs_permissions`, and one without it fails here
     /// rather than passing on a file it never opened.
+    ///
+    /// Scoping to the declaration does NOT make the `[etherscan]` direction
+    /// per-consumer. An entry is still required for every network in the set,
+    /// and whether a network HAS an Etherscan deployment is a fact about the
+    /// network rather than about the repo: Robinhood (4663) is not indexed by
+    /// Etherscan v2 and is verified through Sourcify, so a repo that deploys
+    /// there and states no entry for it fails this with its config correct.
+    /// That set is a different set from this one, and no scoping of this hook
+    /// is it.
     ///
     /// The assertions themselves are `checkNetworksConfigured`, in the base,
     /// because they take the config as an argument and so can be handed one a
     /// test builds. Reading the binder's own file is the part that cannot be,
     /// and it is all that is left here.
     function testSupportedNetworksAreFullyConfigured() external view {
-        checkNetworksConfigured(vm.readFile("foundry.toml"), LibRainDeploy.supportedNetworks());
+        checkNetworksConfigured(vm.readFile("foundry.toml"), supportedNetworks());
     }
 }
