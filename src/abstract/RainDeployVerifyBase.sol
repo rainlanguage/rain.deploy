@@ -98,6 +98,13 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     /// carries, inside the same snapshot. Nothing resolves an address to an
     /// owning suite: a dependency need not be a suite of this repo at all.
     ///
+    /// That makes the derived code hash a function of what the declaration SAYS
+    /// is at each dependency, which is a claim about every network and not an
+    /// input this contract can settle. `LibRainDeploy.deployToNetworks` is what
+    /// settles it, hashing the live code at each address against the same
+    /// declared bytes before it broadcasts, so a wrong declaration is a red
+    /// deploy run rather than a wrong hash frozen into a release.
+    ///
     /// Etched FIRST, so the declaration cannot reach the two addresses this
     /// function owns — the subject, which must be deployed rather than etched
     /// or the derivation hands back the record it came from, and the Zoltu

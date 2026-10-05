@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Script} from "forge-std-1.17.0/src/Script.sol";
 
-import {DeploySuite, RainDeploySuitesBase, dependencyAddresses} from "./RainDeploySuitesBase.sol";
+import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 
 /// @title RainDeployBroadcast
@@ -107,7 +107,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             suite.artifactPath,
             suite.storedDeployedAddress,
             suite.storedBytecodeHash,
-            dependencyAddresses(suite.dependencies)
+            suite.dependencies
         );
     }
 }

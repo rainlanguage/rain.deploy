@@ -4,7 +4,11 @@ pragma solidity ^0.8.25;
 
 import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 
-import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
+// `DeployDependency` is imported rather than declared here, and is therefore
+// importable FROM here: this is the path every declaration and every generated
+// released lib names, and the struct lives beside `deployToNetworks`, which is
+// what holds a declared pair to a chain.
+import {DeployDependency, LibRainDeploy} from "../lib/LibRainDeploy.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
@@ -89,20 +93,6 @@ error NoDeployCandidates();
 /// candidate NAMES — its `artifactPath` — currently compiles to.
 error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, bytes32 sourceCreationCodeHash);
 
-/// One address a suite's deployment requires and the code that must be at it:
-/// the depended-on snapshot's own published `DEPLOYED_ADDRESS` and
-/// `RUNTIME_CODE`, written out by the declarer. Nothing here resolves an address
-/// back to a suite that owns it — a dependency need not be a suite of the
-/// declaring repo at all.
-struct DeployDependency {
-    /// The address that MUST already have code on a network before the suite
-    /// declaring it is broadcast there.
-    address deployedAddress;
-    /// The runtime code that MUST be at `deployedAddress`, which
-    /// `deriveDeployment` etches exactly.
-    bytes runtimeCode;
-}
-
 /// One deployable unit: a named snapshot of one contract.
 ///
 /// `creationCode` is the ONLY input. The Zoltu factory is `CREATE2` over its
@@ -164,6 +154,14 @@ struct DeploySuite {
     /// Ordinarily other suites' recorded pins — a constructor that bakes in a
     /// beacon, or a fallback that delegatecalls a facet, silently produces a
     /// broken deployment if its target is absent.
+    ///
+    /// The code half is a CLAIM about every network, and it is checked as one.
+    /// `RainDeployVerifyBase.deriveDeployment` etches it so that such a
+    /// constructor can run at all, which makes this suite's derived code hash a
+    /// function of what is declared here; `LibRainDeploy.deployToNetworks`
+    /// hashes the live code at each address against it, per network, before it
+    /// broadcasts anything. So a wrong declaration is a red deploy run rather
+    /// than a wrong hash frozen into a release.
     DeployDependency[] dependencies;
 }
 
@@ -174,18 +172,6 @@ struct DeployCandidate {
     /// The candidate's own recorded snapshot, checked exactly as any other
     /// suite is, and anchored to what its `artifactPath` compiles to.
     DeploySuite snapshot;
-}
-
-/// Just the addresses of a dependency list, in declaration order, for
-/// `LibRainDeploy`, which takes an `address[]` and only ever reads a chain.
-/// @param dependencies The dependency list to project.
-/// @return The addresses, positionally.
-function dependencyAddresses(DeployDependency[] memory dependencies) pure returns (address[] memory) {
-    address[] memory addresses = new address[](dependencies.length);
-    for (uint256 i = 0; i < dependencies.length; i++) {
-        addresses[i] = dependencies[i].deployedAddress;
-    }
-    return addresses;
 }
 
 /// @title RainDeploySuitesBase

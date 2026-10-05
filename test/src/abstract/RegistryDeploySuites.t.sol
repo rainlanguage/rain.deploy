@@ -44,10 +44,11 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     ///
     /// A dependency that is not really one is not inert. `deployToNetworks`
     /// refuses to broadcast on any network where a declared dependency has no
-    /// code, so an entry added here takes both registries off every new chain
-    /// until something nobody needs is deployed there first — and it fails at
-    /// dispatch, per network, after the fork, where nothing in this suite is
-    /// watching.
+    /// code, or holds code other than the `runtimeCode` the entry declares, so
+    /// an entry added here takes both registries off every new chain until
+    /// something nobody needs is deployed there first, with exactly the right
+    /// code — and it fails at dispatch, per network, after the fork, where
+    /// nothing in this suite is watching.
     function testCandidatesDeclareNoDependencies() external pure {
         DeployCandidate[] memory candidates = checkedCandidateSuites();
         for (uint256 i = 0; i < candidates.length; i++) {

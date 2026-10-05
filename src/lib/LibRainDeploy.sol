@@ -5,6 +5,28 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 
+/// One address a suite's deployment requires and the code that must be at it:
+/// the depended-on snapshot's own published `DEPLOYED_ADDRESS` and
+/// `RUNTIME_CODE`, written out by the declarer. Nothing here resolves an address
+/// back to a suite that owns it — a dependency need not be a suite of the
+/// declaring repo at all.
+///
+/// Here rather than on the declaration that carries it, because this is the
+/// file that checks a declared pair against a chain. `RainDeploySuitesBase`
+/// imports it and therefore re-exports it, which keeps that the one path every
+/// declaration and every generated released lib names.
+struct DeployDependency {
+    /// The address that MUST already have code on a network before the suite
+    /// declaring it is broadcast there.
+    address deployedAddress;
+    /// The runtime code that MUST be at `deployedAddress`:
+    /// `RainDeployVerifyBase.deriveDeployment` etches exactly these bytes, so
+    /// a derived code hash is a function of them, and
+    /// `LibRainDeploy.deployToNetworks` holds the chain to them before it
+    /// broadcasts.
+    bytes runtimeCode;
+}
+
 /// @title LibRainDeploy
 /// Library for deploying contracts via the Zoltu factory across all the networks
 /// currently supported by Rain by default. The Rain contracts can be deployed
@@ -37,6 +59,20 @@ library LibRainDeploy {
     error UnexpectedDeployedCodeHash(bytes32 expected, bytes32 actual);
 
     /// Thrown when a dependency's code hash does not match the expected value.
+    ///
+    /// Raised for the Zoltu factory against `ZOLTU_FACTORY_CODEHASH`, and for
+    /// every DECLARED dependency against the hash of the `runtimeCode` its
+    /// declaration carries. The declared half is not decoration: a derivation
+    /// etches it to run the constructor, so the code hash a suite records — and
+    /// a release freezes — is a function of what the declaration SAYS is at
+    /// that address. Nothing else ever compares that claim to a chain, so
+    /// without this the first thing to disagree is the deployed contract's own
+    /// code hash, after the gas.
+    /// @param network The network name, as configured in `[rpc_endpoints]`.
+    /// @param dependency The address checked.
+    /// @param expectedCodeHash The hash of the code that must be at it.
+    /// @param actualCodeHash The hash of the code actually at it on this
+    /// network.
     error DependencyChanged(string network, address dependency, bytes32 expectedCodeHash, bytes32 actualCodeHash);
 
     /// Thrown when no networks are provided for deployment.
@@ -456,8 +492,10 @@ library LibRainDeploy {
     /// rather than matching some other contract already deployed there and
     /// skipping every network.
     /// For each network it forks once. Where `expectedAddress` has no code it
-    /// verifies the Zoltu factory and every dependency have code (the factory
-    /// codehash must also match), then broadcasts the deploy on that same fork;
+    /// verifies that the Zoltu factory and every dependency have code AND that
+    /// each one's code hash is the one expected of it — the factory's constant,
+    /// a dependency's the hash of the `runtimeCode` its declaration carries —
+    /// then broadcasts the deploy on that same fork;
     /// where code already exists there, that verification is skipped along with
     /// the deploy, so a rerun proves nothing about the factory or the
     /// dependencies on an already-deployed network. Checking and deploying on a
@@ -482,7 +520,12 @@ library LibRainDeploy {
     /// the address the Zoltu factory derives for `creationCode`.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The addresses that must already have code on a
-    /// network before this contract can be broadcast there.
+    /// network before this contract can be broadcast there, each paired with
+    /// the runtime code that must be at it. The declared pair and not the
+    /// address alone, because a derivation etches the code to run this
+    /// contract's constructor: an address that merely has SOMETHING at it
+    /// satisfies no constructor that calls it, and the derived code hash this
+    /// broadcast carries was computed against the declared bytes.
     /// @return The deployed contract address.
     function deployToNetworks(
         Vm vm,
@@ -492,7 +535,7 @@ library LibRainDeploy {
         string memory contractPath,
         address expectedAddress,
         bytes32 expectedCodeHash,
-        address[] memory dependencies
+        DeployDependency[] memory dependencies
     ) internal returns (address) {
         if (networks.length == 0) {
             revert NoNetworks();
@@ -524,9 +567,22 @@ library LibRainDeploy {
                     revert DependencyChanged(networks[i], ZOLTU_FACTORY, ZOLTU_FACTORY_CODEHASH, ZOLTU_FACTORY.codehash);
                 }
                 for (uint256 j = 0; j < dependencies.length; j++) {
-                    console2.log(" - Dependency:", dependencies[j]);
-                    if (dependencies[j].code.length == 0) {
-                        revert MissingDependency(networks[i], dependencies[j]);
+                    address dependency = dependencies[j].deployedAddress;
+                    console2.log(" - Dependency:", dependency);
+                    // Presence first, and not folded into the hash
+                    // comparison below. An account with no code answers
+                    // `codehash` zero, which is a value no declaration can
+                    // produce — `keccak256` of the empty string is not zero —
+                    // so the hash check alone would report every absent
+                    // dependency as a changed one.
+                    if (dependency.code.length == 0) {
+                        revert MissingDependency(networks[i], dependency);
+                    }
+                    bytes32 expectedDependencyCodeHash = keccak256(dependencies[j].runtimeCode);
+                    if (dependency.codehash != expectedDependencyCodeHash) {
+                        revert DependencyChanged(
+                            networks[i], dependency, expectedDependencyCodeHash, dependency.codehash
+                        );
                     }
                 }
 
@@ -573,7 +629,8 @@ library LibRainDeploy {
     /// @param expectedAddress The expected deterministic address, which MUST be
     /// the address the Zoltu factory derives for `creationCode`.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
-    /// @param dependencies The dependency addresses to check.
+    /// @param dependencies The dependencies to check, each an address and the
+    /// runtime code that must be at it.
     /// @return The address of the deployed contract.
     function deployAndBroadcast(
         Vm vm,
@@ -583,7 +640,7 @@ library LibRainDeploy {
         string memory contractPath,
         address expectedAddress,
         bytes32 expectedCodeHash,
-        address[] memory dependencies
+        DeployDependency[] memory dependencies
     ) internal returns (address) {
         if (networks.length == 0) {
             revert NoNetworks();

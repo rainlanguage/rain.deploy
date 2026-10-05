@@ -633,9 +633,10 @@ library LibRainDeploySnapshot {
     /// spellings to being one path.
     ///
     /// The dependency list is frozen here with the rest, and it is not
-    /// metadata. `RainDeployBroadcast.run` hands a suite's dependency addresses
-    /// to `LibRainDeploy.deployToNetworks`, which refuses to broadcast on any
-    /// network where one of them has no code — so it is a precondition of the
+    /// metadata. `RainDeployBroadcast.run` hands a suite's dependency list to
+    /// `LibRainDeploy.deployToNetworks`, which refuses to broadcast on any
+    /// network where one of them has no code, or holds code that is not the
+    /// `runtimeCode` the entry declares — so it is a precondition of the
     /// deployment, decided when the release is cut. Re-broadcasting a past
     /// release onto a newly supported chain has to check the list THAT release
     /// was cut with; regenerating it from current source would drop a
@@ -1084,9 +1085,10 @@ library LibRainDeploySnapshot {
     /// FIVE fields per entry alias the frozen snapshot: the four consensus
     /// fields and the dependency list. The dependency list is aliased rather
     /// than rebuilt from `template` because it is a precondition of the
-    /// deployment and not metadata — `RainDeployBroadcast.run` passes its
-    /// addresses to `LibRainDeploy.deployToNetworks`, which refuses to
-    /// broadcast on a network where one of them has no code. Broadcasting a
+    /// deployment and not metadata — `RainDeployBroadcast.run` passes it to
+    /// `LibRainDeploy.deployToNetworks`, which refuses to broadcast on a
+    /// network where one of them has no code, or holds code other than the
+    /// `runtimeCode` the entry declares. Broadcasting a
     /// past release onto a newly supported chain therefore has to check the
     /// list that release was cut with, so it is read from that release's own
     /// frozen snapshot.

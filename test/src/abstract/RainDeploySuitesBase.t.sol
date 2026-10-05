@@ -6,13 +6,11 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {
     CandidateSourceMismatch,
-    DeployDependency,
     DeploySuite,
     DuplicateDeploySuite,
     InvalidDeploySuiteKey,
     NoDeployCandidates,
-    UnknownDeploymentSuite,
-    dependencyAddresses
+    UnknownDeploymentSuite
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {CollidingCandidateDeploySuites} from "../../concrete/CollidingCandidateDeploySuites.sol";
@@ -395,80 +393,6 @@ contract RainDeploySuitesBaseTest is Test {
             vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, i, refused[i]));
             sSuites.externalCheckSuiteKey(i, refused[i]);
         }
-    }
-
-    /// @dev A declared dependency's address, with two more so a projection can
-    /// be out of order at all.
-    address constant FIRST_DEPENDENCY = address(0xdef1);
-
-    /// @dev The second declared dependency's address.
-    address constant SECOND_DEPENDENCY = address(0xdef2);
-
-    /// @dev The third declared dependency's address.
-    address constant THIRD_DEPENDENCY = address(0xdef3);
-
-    /// A declaration over `addresses`, each entry carrying code of its own that
-    /// is nothing like its address, so a wrong field read is visible.
-    /// @param addresses The dependency addresses, in declaration order.
-    /// @return dependencies The declaration.
-    function declaration(address[] memory addresses) internal pure returns (DeployDependency[] memory dependencies) {
-        dependencies = new DeployDependency[](addresses.length);
-        for (uint256 i = 0; i < addresses.length; i++) {
-            dependencies[i] =
-            // Below the split, because the directive must be on the cast's line.
-            // forge-lint: disable-next-line(unsafe-typecast)
-            DeployDependency({deployedAddress: addresses[i], runtimeCode: abi.encodePacked(bytes1(uint8(i + 1)))});
-        }
-    }
-
-    /// A declaration with no entries MUST project to no addresses, rather than
-    /// to a one-entry array holding address zero.
-    function testDependencyAddressesOfNoDependencies() external pure {
-        address[] memory addresses = dependencyAddresses(new DeployDependency[](0));
-        assertEq(addresses.length, 0);
-    }
-
-    /// One declared dependency MUST project to its address alone.
-    function testDependencyAddressesOfOneDependency() external pure {
-        address[] memory declared = new address[](1);
-        declared[0] = FIRST_DEPENDENCY;
-
-        address[] memory addresses = dependencyAddresses(declaration(declared));
-
-        assertEq(addresses.length, 1);
-        assertEq(addresses[0], FIRST_DEPENDENCY);
-    }
-
-    /// EVERY declared dependency MUST project, into the position it was
-    /// declared in.
-    function testDependencyAddressesPreservesDeclarationOrder() external pure {
-        address[] memory declared = new address[](3);
-        declared[0] = FIRST_DEPENDENCY;
-        declared[1] = SECOND_DEPENDENCY;
-        declared[2] = THIRD_DEPENDENCY;
-
-        address[] memory addresses = dependencyAddresses(declaration(declared));
-
-        assertEq(addresses.length, 3);
-        assertEq(addresses[0], FIRST_DEPENDENCY);
-        assertEq(addresses[1], SECOND_DEPENDENCY);
-        assertEq(addresses[2], THIRD_DEPENDENCY);
-    }
-
-    /// The same three addresses declared DESCENDING MUST project descending, so
-    /// a projection that sorted or reversed cannot pass the test above.
-    function testDependencyAddressesOrderIsTheDeclarationsNotTheAddresses() external pure {
-        address[] memory declared = new address[](3);
-        declared[0] = THIRD_DEPENDENCY;
-        declared[1] = SECOND_DEPENDENCY;
-        declared[2] = FIRST_DEPENDENCY;
-
-        address[] memory addresses = dependencyAddresses(declaration(declared));
-
-        assertEq(addresses.length, 3);
-        assertEq(addresses[0], THIRD_DEPENDENCY);
-        assertEq(addresses[1], SECOND_DEPENDENCY);
-        assertEq(addresses[2], FIRST_DEPENDENCY);
     }
 
     /// The declared network set MUST default to every network Rain supports, in
