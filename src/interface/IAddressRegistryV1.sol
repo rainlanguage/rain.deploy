@@ -61,22 +61,32 @@ interface IAddressRegistryV1 {
     /// @param name The name that is not bound.
     error NameNotRegistered(bytes32 name);
 
-    /// Thrown by `register` when the clock is behind the moment the name
-    /// already carries, which would lower it.
+    /// Thrown by `register` when the clock is not STRICTLY after the moment the
+    /// name already carries.
     ///
-    /// A name's moment is non-decreasing, and that is a property callers rely on
-    /// rather than an accident of how clocks behave. Without it, a chain whose
-    /// clock moved backwards would let a re-bind write a SMALLER moment than the
-    /// binding it replaces, and a caller measuring `block.timestamp -` that
-    /// moment would compute an age LARGER than the time that has actually
-    /// passed — so a re-bind from moments ago could report as long-settled and
-    /// clear a freshness threshold. The whole value of the moment is that the
-    /// age derived from it is not an overstatement.
+    /// A name's moment is strictly increasing, and that is a property callers
+    /// rely on rather than an accident of how clocks behave. Two things follow
+    /// from it, and the strictness is needed for both.
+    ///
+    /// A clock BEHIND the stored moment would lower it. A caller measuring
+    /// `block.timestamp -` that moment would then compute an age LARGER than the
+    /// time that has actually passed, so a re-bind from moments ago could report
+    /// as long-settled and clear a freshness threshold. The whole value of the
+    /// moment is that the age derived from it is never an overstatement.
+    ///
+    /// A clock EQUAL to the stored moment is refused for a separate reason: two
+    /// transactions in one block share a `block.timestamp`, so an equal clock
+    /// means a re-bind that replaces the address while leaving the moment
+    /// identical — two distinct bindings a caller cannot tell apart by the only
+    /// signal the registry gives it about when it changed.
+    ///
+    /// The rule binds a RE-bind only. An unbound name carries no moment for a
+    /// new one to be after, so a first bind is unconstrained.
     /// @param name The name that was being bound.
     /// @param timestamp The clock the bind was attempted at.
-    /// @param registeredAt The moment the name already carries, which is ahead
-    /// of that clock.
-    error TimestampBeforeBinding(bytes32 name, uint256 timestamp, uint256 registeredAt);
+    /// @param registeredAt The moment the name already carries, which that clock
+    /// is not after.
+    error TimestampNotAfterBinding(bytes32 name, uint256 timestamp, uint256 registeredAt);
 
     /// Emitted every time `name` is bound, including when it is re-bound. The
     /// log is the complete history of the registry and the only way to discover
@@ -93,15 +103,17 @@ interface IAddressRegistryV1 {
     ///
     /// The implementation MUST revert `NotRoot` unless the caller is the root
     /// authority, and MUST revert `ZeroAccount` if `account` is the zero
-    /// address. It MUST revert `TimestampBeforeBinding` rather than lower a
-    /// name's moment, so a name's moment is non-decreasing however the chain's
-    /// clock behaves. On success it MUST emit `Register` and MUST record
-    /// `block.timestamp` as the binding's moment, in place of any moment it
-    /// already carries — including when `account` is the address `name` already
-    /// holds, which is a bind like any other. The moment dates the write, not
-    /// the value, so it can only make an answer look fresher than the address
-    /// really is; a caller refusing fresh answers therefore errs toward
-    /// refusing rather than toward accepting one it meant to refuse.
+    /// address. It MUST revert `TimestampNotAfterBinding` when re-binding a name
+    /// whose stored moment the clock is not strictly after, so a name's moment
+    /// is strictly increasing however the chain's clock behaves and a re-bind in
+    /// the same block as the bind it replaces is refused. On success it MUST
+    /// emit `Register` and MUST record `block.timestamp` as the binding's
+    /// moment, in place of any moment it already carries — including when
+    /// `account` is the address `name` already holds, which is a bind like any
+    /// other. The moment dates the write, not the value, so it can only make an
+    /// answer look fresher than the address really is; a caller refusing fresh
+    /// answers therefore errs toward refusing rather than toward accepting one
+    /// it meant to refuse.
     /// @param name The name to bind.
     /// @param account The address to bind it to.
     function register(bytes32 name, address account) external;

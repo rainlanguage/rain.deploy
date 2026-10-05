@@ -70,10 +70,10 @@ contract LibAddressRegistryTest is Test {
         vm.assume(bound != address(0));
         vm.assume(account != address(0));
         vm.assume(bound != account);
-        // A name's moment never goes backwards, so the re-bind is at or after
+        // A name's moment is strictly increasing, so the re-bind is strictly after
         // the first bind. `vm.assume` rather than `bound` because this test's
         // `bound` parameter shadows forge-std's helper of that name.
-        vm.assume(second >= first);
+        vm.assume(second > first);
         IAddressRegistryV1 registry = deployRegistry();
 
         vm.warp(first);
@@ -219,14 +219,19 @@ contract LibAddressRegistryTest is Test {
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, account);
 
+        extra = uint64(bound(extra, 1, type(uint64).max));
         vm.warp(block.timestamp + uint256(minAge) + uint256(extra));
         assertEq(LibAddressRegistry.resolveSafe(name, minAge), account);
     }
 
-    /// A binding exactly `minAge` old passes. The requirement is that it has
-    /// stood for AT LEAST that long, so the boundary is inclusive — an exclusive
-    /// one would refuse a binding that has met the caller's own condition.
-    function testResolveSafeExactlyMinAge(bytes32 name, address account, uint64 minAge) external {
+    /// A binding exactly `minAge` old is REFUSED. The edge instant counts as too
+    /// fresh, so the binding must have stood for strictly longer.
+    ///
+    /// This is the fail-safe resolution of the boundary: at the edge the two
+    /// readings are "just old enough" and "not quite old enough", and a guard
+    /// whose job is to refuse fresh bindings takes the second. An inclusive edge
+    /// would be a permissive default on a security check.
+    function testResolveSafeRefusesExactlyMinAge(bytes32 name, address account, uint64 minAge) external {
         vm.assume(account != address(0));
         vm.assume(minAge > 0);
         IAddressRegistryV1 registry = deployRegistry();
@@ -235,6 +240,23 @@ contract LibAddressRegistryTest is Test {
         registry.register(name, account);
 
         vm.warp(block.timestamp + uint256(minAge));
+        vm.expectRevert(
+            abi.encodeWithSelector(LibAddressRegistry.BindingTooFresh.selector, name, uint256(minAge), uint256(minAge))
+        );
+        this.externalResolveSafe(name, minAge);
+    }
+
+    /// One second past `minAge` is accepted, so the refusal above is a boundary
+    /// and not a rule that refuses everything near it.
+    function testResolveSafeAcceptsOneSecondPastMinAge(bytes32 name, address account, uint64 minAge) external {
+        vm.assume(account != address(0));
+        vm.assume(minAge > 0);
+        IAddressRegistryV1 registry = deployRegistry();
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+
+        vm.warp(block.timestamp + uint256(minAge) + 1);
         assertEq(LibAddressRegistry.resolveSafe(name, minAge), account);
     }
 
@@ -314,7 +336,8 @@ contract LibAddressRegistryTest is Test {
         vm.assume(boundTo != address(0));
         vm.assume(account != address(0));
         vm.assume(minAge > 0);
-        aged = uint64(bound(aged, minAge, type(uint64).max));
+        vm.assume(minAge < type(uint64).max);
+        aged = uint64(bound(aged, uint256(minAge) + 1, type(uint64).max));
         IAddressRegistryV1 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
@@ -434,6 +457,7 @@ contract LibAddressRegistryTest is Test {
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, account);
+        extra = uint64(bound(extra, 1, type(uint64).max));
         vm.warp(block.timestamp + uint256(minAge) + uint256(extra));
 
         MockSafeResolvedOwner consumer = new MockSafeResolvedOwner(name, minAge);

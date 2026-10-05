@@ -123,10 +123,24 @@ contract AddressRegistry is IAddressRegistryV1 {
         // regress between a bind and a read, which is what
         // `LibAddressRegistry.resolveSafe` reports as `BindingStampedInFuture`.
         // The two guards cover different moments and neither subsumes the other.
+        // STRICTLY greater, so an equal clock is refused too. Two transactions
+        // in one block share a `block.timestamp`, so allowing equality would let
+        // a re-bind overwrite a binding while leaving the moment identical —
+        // two distinct bindings a caller cannot tell apart by the only signal
+        // the registry gives it.
+        //
+        // The rule applies to a RE-bind only. An unbound name has no stored
+        // moment for a new one to be greater than, so a first bind is
+        // unconstrained; without that carve-out a chain at block time zero
+        // could never make its first binding.
+        //
+        // Read after the cheap guards, so a call this function was going to
+        // refuse anyway does not pay for the slot.
+        Binding memory existing = sBindings[name];
         // slither-disable-start timestamp
         // forge-lint: disable-next-line(block-timestamp)
-        if (block.timestamp < sBindings[name].registeredAt) {
-            revert TimestampBeforeBinding(name, block.timestamp, sBindings[name].registeredAt);
+        if (existing.account != address(0) && block.timestamp <= existing.registeredAt) {
+            revert TimestampNotAfterBinding(name, block.timestamp, existing.registeredAt);
         }
         // slither-disable-end timestamp
         // Assigned whole, so a re-bind replaces the moment in the same write

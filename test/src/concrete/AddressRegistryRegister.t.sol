@@ -75,6 +75,10 @@ contract AddressRegistryRegisterTest is Test {
         sRegistry.register(name, bound);
         assertEq(getAddress(sRegistry, name), bound);
 
+        // A re-bind has to be in a later block than the bind it replaces, so
+        // the moment can be strictly after. `testRegisterRefusesClockEqualToTheBinding`
+        // covers the same-block attempt.
+        vm.warp(block.timestamp + 1);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, account);
         assertEq(getAddress(sRegistry, name), account);
@@ -91,6 +95,7 @@ contract AddressRegistryRegisterTest is Test {
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, account);
 
+        vm.warp(block.timestamp + 1);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, account);
 
@@ -106,6 +111,9 @@ contract AddressRegistryRegisterTest is Test {
         }
 
         for (uint256 i = 0; i < accounts.length; i++) {
+            // Each re-bind is a block later than the last, because a name's
+            // moment must be strictly after the one it replaces.
+            vm.warp(block.timestamp + 1);
             vm.prank(ADDRESS_REGISTRY_ROOT);
             sRegistry.register(name, accounts[i]);
             assertEq(getAddress(sRegistry, name), accounts[i]);
@@ -192,6 +200,7 @@ contract AddressRegistryRegisterTest is Test {
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, bound);
 
+        vm.warp(block.timestamp + 1);
         vm.recordLogs();
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, account);
@@ -242,10 +251,12 @@ contract AddressRegistryRegisterTest is Test {
     ) external {
         vm.assume(bound_ != address(0));
         vm.assume(account != address(0));
-        // A name's moment never goes backwards, so the second bind happens at or
-        // after the first. `testRegisterRefusesClockBehindTheBinding` covers the
-        // other order.
-        second = uint96(bound(second, first, type(uint96).max));
+        // A name's moment is strictly increasing, so the second bind happens
+        // strictly after the first. `testRegisterRefusesClockBehindTheBinding`
+        // and `testRegisterRefusesClockEqualToTheBinding` cover the other two
+        // orders.
+        first = uint96(bound(first, 0, type(uint96).max - 1));
+        second = uint96(bound(second, uint256(first) + 1, type(uint96).max));
 
         vm.warp(first);
         vm.prank(ADDRESS_REGISTRY_ROOT);
@@ -338,7 +349,7 @@ contract AddressRegistryRegisterTest is Test {
         vm.warp(second);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IAddressRegistryV1.TimestampBeforeBinding.selector, name, uint256(second), uint256(first)
+                IAddressRegistryV1.TimestampNotAfterBinding.selector, name, uint256(second), uint256(first)
             )
         );
         vm.prank(ADDRESS_REGISTRY_ROOT);
@@ -349,11 +360,15 @@ contract AddressRegistryRegisterTest is Test {
         assertEq(getMoment(sRegistry, name), first);
     }
 
-    /// A re-bind at EXACTLY the moment the name carries is allowed. The rule is
-    /// that the moment must not go backwards, not that it must advance — and
-    /// re-binding twice in one block is the ordinary same-block case, which the
-    /// moment-refresh behaviour depends on.
-    function testRegisterAllowsClockEqualToTheBinding(bytes32 name, address bound_, address account, uint96 time)
+    /// A re-bind at EXACTLY the moment the name carries is refused too, so the
+    /// moment is strictly increasing rather than merely non-decreasing.
+    ///
+    /// Two transactions in one block share a `block.timestamp`, so allowing
+    /// equality would let a re-bind replace the address while leaving the moment
+    /// identical — two distinct bindings that a caller cannot tell apart by the
+    /// only signal the registry gives it about when the binding changed. The
+    /// permissive edge is refused rather than chosen by accident.
+    function testRegisterRefusesClockEqualToTheBinding(bytes32 name, address bound_, address account, uint96 time)
         external
     {
         vm.assume(bound_ != address(0));
@@ -363,11 +378,39 @@ contract AddressRegistryRegisterTest is Test {
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, bound_);
 
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IAddressRegistryV1.TimestampNotAfterBinding.selector, name, uint256(time), uint256(time)
+            )
+        );
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, account);
+
+        // The refused bind left the binding and its moment untouched.
+        assertEq(getAddress(sRegistry, name), bound_);
+        assertEq(getMoment(sRegistry, name), time);
+    }
+
+    /// One block later is enough. The rule is strictly-after, not some wider
+    /// gap, so a re-bind in the very next block is accepted — which is what
+    /// keeps a rotation an ordinary operation rather than a scheduled one.
+    function testRegisterAllowsClockOneAfterTheBinding(bytes32 name, address bound_, address account, uint96 time)
+        external
+    {
+        vm.assume(bound_ != address(0));
+        vm.assume(account != address(0));
+        time = uint96(bound(time, 0, type(uint96).max - 1));
+
+        vm.warp(time);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, bound_);
+
+        vm.warp(uint256(time) + 1);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, account);
 
         assertEq(getAddress(sRegistry, name), account);
-        assertEq(getMoment(sRegistry, name), time);
+        assertEq(getMoment(sRegistry, name), uint256(time) + 1);
     }
 
     /// The first bind of a name is never refused by the non-decreasing rule. An

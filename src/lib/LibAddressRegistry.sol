@@ -121,8 +121,13 @@ library LibAddressRegistry {
     /// somebody or something is watching. A caller that picks a `minAge` without
     /// arranging to watch the window has bought nothing but delay.
     ///
-    /// A binding exactly `minAge` old passes — the requirement is that it has
-    /// stood for at least that long, so the boundary is inclusive.
+    /// A binding exactly `minAge` old is REFUSED. The edge instant counts as
+    /// too fresh, so the binding must have stood for strictly longer than
+    /// `minAge`. That is the fail-safe resolution of the boundary: at the edge
+    /// the two readings are "just old enough" and "not quite old enough", and
+    /// a guard whose job is to refuse fresh bindings takes the second. An
+    /// inclusive edge here would be a permissive default on a security check,
+    /// chosen by accident rather than stated.
     ///
     /// A `minAge` of zero is REFUSED, before the registry is read at all. Zero
     /// accepts everything, so it would make this function `resolve` under a
@@ -172,7 +177,7 @@ library LibAddressRegistry {
             revert BindingStampedInFuture(name, registeredAt, block.timestamp);
         }
         uint256 age = block.timestamp - registeredAt;
-        if (age < minAge) {
+        if (age <= minAge) {
             revert BindingTooFresh(name, age, minAge);
         }
         // slither-disable-end timestamp
