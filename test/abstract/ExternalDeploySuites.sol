@@ -30,6 +30,11 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
         return suiteNames();
     }
 
+    /// @return The networks the declaration names.
+    function externalSupportedNetworks() external view returns (string[] memory) {
+        return supportedNetworks();
+    }
+
     function externalCheckSuiteKey(uint256 index, string memory suite) external pure {
         checkSuiteKey(index, suite);
     }

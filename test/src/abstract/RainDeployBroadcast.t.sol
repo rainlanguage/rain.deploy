@@ -7,6 +7,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {CandidateSourceMismatch, UnknownDeploymentSuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
+import {ExampleDeployNarrowNetworks} from "../../concrete/ExampleDeployNarrowNetworks.sol";
 import {ExampleDeploySingleNetwork} from "../../concrete/ExampleDeploySingleNetwork.sol";
 import {MisanchoredDeploy} from "../../concrete/MisanchoredDeploy.sol";
 import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
@@ -452,6 +453,38 @@ contract RainDeployBroadcastTest is Test {
         for (uint256 i = 0; i < supported.length; i++) {
             assertEq(networks[i], supported[i]);
         }
+    }
+
+    /// The default target set MUST come from the DECLARATION's
+    /// `supportedNetworks()` rather than from this package's list, so a repo
+    /// that deploys to a subset says so once and the broadcast and the
+    /// verification groups both follow that one answer.
+    ///
+    /// The test above cannot say it. The default declaration IS the library's
+    /// list, so both spellings agree there whichever one the body reads, and a
+    /// narrowed declaration is the only input that tells them apart. That the
+    /// library's list is still the nine is asserted beside it, because a
+    /// library narrowed to one network would make this pass for the wrong
+    /// reason.
+    ///
+    /// A value, because what `run()` does with it is already pinned:
+    /// `testRunSelectsTheSuiteFromTheEnvBeforeTheKeyNeverDefaultsAndBroadcastsIt`
+    /// asserts a completed run ends on the last network `deployNetworks()`
+    /// names, so this is the other half of the same path rather than a claim
+    /// nothing consults.
+    function testDeployNetworksFollowsTheDeclaredNetworks() external {
+        ExampleDeployNarrowNetworks narrow = new ExampleDeployNarrowNetworks();
+
+        string[] memory declared = narrow.externalSupportedNetworks();
+        assertEq(declared.length, 1);
+        assertEq(declared[0], LibRainDeploy.BASE);
+        assertGt(
+            LibRainDeploy.supportedNetworks().length, 1, "the library's list is one network, so this proves nothing"
+        );
+
+        string[] memory networks = narrow.externalDeployNetworks();
+        assertEq(networks.length, 1);
+        assertEq(networks[0], LibRainDeploy.BASE);
     }
 
     /// The suite a key selects MUST be the one that would be broadcast — the
