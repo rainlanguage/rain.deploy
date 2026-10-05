@@ -94,6 +94,14 @@ contract AddressRegistry is IAddressRegistryV1 {
         if (account == address(0)) {
             revert ZeroAccount(name);
         }
+        // The hazard behind a `block.timestamp` comparison — a validator
+        // nudging the clock to land on the side of it that suits them — does
+        // not reach this one. It compares the clock against the WIDTH of the
+        // stamp, not against any moment: the seconds of slack a validator has
+        // cannot move a plausible timestamp past 2**96, and a chain whose clock
+        // is already past 2**96 is not one a nudge put there.
+        // slither-disable-next-line timestamp
+        // forge-lint: disable-next-line(block-timestamp)
         if (block.timestamp > type(uint96).max) {
             revert TimestampOverflow(block.timestamp);
         }
