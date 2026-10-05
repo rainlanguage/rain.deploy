@@ -108,16 +108,11 @@ interface IAddressRegistryV1 {
     /// moment narrower than `block.timestamp` MUST reject what does not fit
     /// rather than truncate it, since a truncated moment reads as older.
     ///
-    /// A caller that needs an answer that cannot move MUST read once and store
-    /// the result, which is what a consumer resolving a name in its constructor
-    /// does. Reading at the point of use instead means reading whatever root
-    /// has bound most recently.
-    ///
-    /// A caller that cannot read at construction, such as an upgrade-time
-    /// reconcile, MUST check the moment against a threshold of its own rather
-    /// than read unguarded, and MUST NOT treat that as equivalent. A
-    /// constructor read settles the value the moment the contract exists; a
-    /// threshold only narrows the window.
+    /// A caller that needs an answer that cannot move reads once, at
+    /// construction, and stores it: that value is settled the moment the
+    /// contract exists. Reading later means reading whatever root has bound
+    /// most recently, which the moment lets a caller bound by age without
+    /// making it settled.
     /// @param name The name to read.
     /// @return The address bound to `name`. Never the zero address.
     /// @return The `block.timestamp` of the most recent `register` for `name`.
