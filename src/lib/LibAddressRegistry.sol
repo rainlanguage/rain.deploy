@@ -113,6 +113,14 @@ library LibAddressRegistry {
     /// refuse it. The threshold is the caller's, passed in here, because only
     /// the caller knows what it is resolving the name for.
     ///
+    /// What `minAge` buys is an OBSERVATION WINDOW, not protection, and the name
+    /// of this function should not be read as more than that. An attacker who
+    /// rebinds and then simply waits out `minAge` passes the check. What the
+    /// threshold guarantees is that the rebind was PUBLIC for at least that long
+    /// before it could affect any resolve — which is worth something only if
+    /// somebody or something is watching. A caller that picks a `minAge` without
+    /// arranging to watch the window has bought nothing but delay.
+    ///
     /// A binding exactly `minAge` old passes — the requirement is that it has
     /// stood for at least that long, so the boundary is inclusive.
     ///

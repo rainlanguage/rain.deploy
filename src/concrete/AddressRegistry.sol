@@ -14,22 +14,6 @@ import {IAddressRegistryV1} from "../interface/IAddressRegistryV1.sol";
 /// generates and the release that carries them.
 address constant ADDRESS_REGISTRY_ROOT = 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c;
 
-/// @dev One binding: the address a name is bound to, and when it was bound.
-///
-/// A struct because these are mapping values, which is where packing needs one.
-/// The two share a word, so `get` reads both out of one slot and `register`
-/// cannot write one without the other. 96 bits is what is left beside a
-/// 160-bit address, and far wider than a block timestamp needs — `2**96`
-/// seconds is some 2.5e21 years — but `register` checks rather than assumes it,
-/// because a truncated moment reads as an older binding.
-struct Binding {
-    /// The address the name is bound to. Zero if and only if the name is
-    /// unbound, which is what `register` rejecting the zero address preserves.
-    address account;
-    /// The `block.timestamp` of the most recent `register` for the name.
-    uint96 registeredAt;
-}
-
 /// @title AddressRegistry
 /// @notice The whole of `IAddressRegistryV1`: an immutable root authority binds
 /// a `bytes32` name, anyone reads a bound name and gets back the address with
@@ -66,6 +50,28 @@ contract AddressRegistry is IAddressRegistryV1 {
     /// truncation that fires silently and in the unsafe direction.
     /// @param timestamp The `block.timestamp` that did not fit.
     error TimestampOverflow(uint256 timestamp);
+
+    /// @dev One binding: the address a name is bound to, and when it was bound.
+    ///
+    /// A struct because these are mapping values, which is where packing needs
+    /// one. The two share a word, so `get` reads both out of one slot and
+    /// `register` cannot write one without the other. 96 bits is what is left
+    /// beside a 160-bit address, and far wider than a block timestamp needs —
+    /// `2**96` seconds is some 2.5e21 years — but `register` checks rather than
+    /// assumes it, because a truncated moment reads as an older binding.
+    ///
+    /// Declared inside the contract rather than at file scope because it is
+    /// this contract's storage layout and no part of anybody's ABI: `get`
+    /// returns two flat values. A file-scope struct would be importable, which
+    /// would invite a consumer to depend on the layout.
+    struct Binding {
+        /// The address the name is bound to. Zero if and only if the name is
+        /// unbound, which is what `register` rejecting the zero address
+        /// preserves.
+        address account;
+        /// The `block.timestamp` of the most recent `register` for the name.
+        uint96 registeredAt;
+    }
 
     /// The bindings. Not `public`: the only reader is `get`, which reverts on an
     /// unbound name. A name's `account` is the zero address if and only if it is

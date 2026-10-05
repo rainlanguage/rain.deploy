@@ -9,6 +9,7 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
 import {DELEGATION_DESIGNATOR_LENGTH, LibAccountCode} from "../../lib/LibAccountCode.sol";
+import {MockSafeResolvedOwner} from "../../concrete/MockSafeResolvedOwner.sol";
 
 /// @title LibAddressRegistryTest
 /// Tests for `LibAddressRegistry`. The registry is not mocked: the real
@@ -416,6 +417,42 @@ contract LibAddressRegistryTest is Test {
             )
         );
         this.externalResolveSafe(name, minAge);
+    }
+
+    /// A consumer in the documented shape — resolving once, in its constructor,
+    /// under its own threshold — comes into existence holding the vetted
+    /// address. Every other `resolveSafe` test here reaches it through an
+    /// external wrapper; this is the use the library actually describes.
+    function testResolveSafeFromConstructor(bytes32 name, address account, uint64 minAge, uint64 extra) external {
+        vm.assume(account != address(0));
+        vm.assume(minAge > 0);
+        IAddressRegistryV1 registry = deployRegistry();
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+        vm.warp(block.timestamp + uint256(minAge) + uint256(extra));
+
+        MockSafeResolvedOwner consumer = new MockSafeResolvedOwner(name, minAge);
+        assertEq(consumer.iOwner(), account);
+    }
+
+    /// A consumer refuses to come into existence at all against a binding that
+    /// has not stood long enough. The deploy reverts, so there is no contract
+    /// left holding an address nobody vetted — which is the point of checking at
+    /// construction rather than at the point of use.
+    function testResolveSafeFromConstructorRefusesFreshBinding(bytes32 name, address account, uint64 minAge, uint64 age)
+        external
+    {
+        vm.assume(account != address(0));
+        vm.assume(age < minAge);
+        IAddressRegistryV1 registry = deployRegistry();
+
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, account);
+        vm.warp(block.timestamp + uint256(age));
+
+        vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.BindingTooFresh.selector, name, age, minAge));
+        new MockSafeResolvedOwner(name, minAge);
     }
 
     /// The Zoltu deploy really does land the registry on its pinned address
