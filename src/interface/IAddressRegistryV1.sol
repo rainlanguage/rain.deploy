@@ -108,11 +108,9 @@ interface IAddressRegistryV1 {
     /// moment narrower than `block.timestamp` MUST reject what does not fit
     /// rather than truncate it, since a truncated moment reads as older.
     ///
-    /// A caller that needs an answer that cannot move reads once, at
-    /// construction, and stores it: that value is settled the moment the
-    /// contract exists. Reading later means reading whatever root has bound
-    /// most recently, which the moment lets a caller bound by age without
-    /// making it settled.
+    /// Answers with the current binding: whatever root has bound most
+    /// recently, and the moment it was bound. A caller that stores the result
+    /// keeps that value; one that reads again gets whatever is current then.
     /// @param name The name to read.
     /// @return The address bound to `name`. Never the zero address.
     /// @return The `block.timestamp` of the most recent `register` for `name`.

@@ -94,8 +94,7 @@ library LibAddressRegistry {
     /// What `minAge` buys is an observation WINDOW, not protection. An attacker
     /// who rebinds and waits it out passes. What it guarantees is that the
     /// rebind was public for that long first, which is worth something only if
-    /// something is watching. It bounds the age of an answer; it does not make
-    /// it settled the way a constructor read does.
+    /// something is watching.
     ///
     /// The boundary is exclusive: a binding exactly `minAge` old is refused, the
     /// fail-safe reading of the edge.
