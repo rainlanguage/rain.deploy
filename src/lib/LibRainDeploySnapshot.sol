@@ -9,7 +9,7 @@ import {
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
-import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 
 /// Thrown when `[external.package].version` is not strict `X.Y.Z`. A version
@@ -575,14 +575,15 @@ library LibRainDeploySnapshot {
     /// @param vm The Vm instance for string operations.
     /// @param deployed The address the creation code deployed to.
     /// @param creationCode The contract's creation code.
-    /// @param dependencies The addresses that must already have code on a
-    /// network before this contract can be broadcast there.
+    /// @param dependencies Each address that must already have code on a
+    /// network before this contract can be broadcast there, with that code.
     /// @return The constants, as Solidity source.
-    function snapshotConstants(Vm vm, address deployed, bytes memory creationCode, address[] memory dependencies)
-        internal
-        view
-        returns (string memory)
-    {
+    function snapshotConstants(
+        Vm vm,
+        address deployed,
+        bytes memory creationCode,
+        DeployDependency[] memory dependencies
+    ) internal view returns (string memory) {
         return string.concat(
             LibCodeGen.addressConstantString(
                 vm,
@@ -598,9 +599,10 @@ library LibRainDeploySnapshot {
             ),
             LibCodeGen.bytesConstantString(
                 vm,
-                "/// @dev The addresses that MUST already have code on a network before\n"
-                "/// this release can be broadcast there, `abi.encode`d as an `address[]`\n"
-                "/// because Solidity has no file-scope constant of dynamic array type.",
+                "/// @dev What MUST already be on a network before this release can be\n"
+                "/// broadcast there: an address, and the runtime code that belongs at it.\n"
+                "/// `abi.encode`d as a `DeployDependency[]` because Solidity has no\n"
+                "/// file-scope constant of dynamic array type.",
                 "DEPENDENCIES",
                 abi.encode(dependencies)
             )
@@ -631,9 +633,10 @@ library LibRainDeploySnapshot {
     /// spellings to being one path.
     ///
     /// The dependency list is frozen here with the rest, and it is not
-    /// metadata. `RainDeployBroadcast.run` hands a suite's `dependencies` to
+    /// metadata. `RainDeployBroadcast.run` hands a suite's dependency list to
     /// `LibRainDeploy.deployToNetworks`, which refuses to broadcast on any
-    /// network where one of them has no code — so it is a precondition of the
+    /// network where one of them has no code, or holds code that is not the
+    /// `runtimeCode` the entry declares — so it is a precondition of the
     /// deployment, decided when the release is cut. Re-broadcasting a past
     /// release onto a newly supported chain has to check the list THAT release
     /// was cut with; regenerating it from current source would drop a
@@ -655,8 +658,8 @@ library LibRainDeploySnapshot {
     /// snapshot declares.
     /// @param copyrightText The copyright text the written snapshot declares.
     /// @param creationCode That contract's creation code.
-    /// @param dependencies The addresses that must already have code on a
-    /// network before this contract can be broadcast there.
+    /// @param dependencies Each address that must already have code on a
+    /// network before this contract can be broadcast there, with that code.
     /// @return The path written.
     function writeSnapshot(
         Vm vm,
@@ -666,7 +669,7 @@ library LibRainDeploySnapshot {
         string memory spdxLicenseIdentifier,
         string memory copyrightText,
         bytes memory creationCode,
-        address[] memory dependencies
+        DeployDependency[] memory dependencies
     ) internal returns (string memory) {
         LibRainDeploy.etchZoltuFactory(vm);
 
@@ -691,8 +694,8 @@ library LibRainDeploySnapshot {
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
     /// @param creationCode That contract's creation code.
-    /// @param dependencies The addresses that must already have code on a
-    /// network before this contract can be broadcast there.
+    /// @param dependencies Each address that must already have code on a
+    /// network before this contract can be broadcast there, with that code.
     /// @return The path written.
     function writeSnapshot(
         Vm vm,
@@ -700,7 +703,7 @@ library LibRainDeploySnapshot {
         string memory dir,
         string memory contractName,
         bytes memory creationCode,
-        address[] memory dependencies
+        DeployDependency[] memory dependencies
     ) internal returns (string memory) {
         return writeSnapshot(
             vm, root, dir, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, creationCode, dependencies
@@ -1052,7 +1055,7 @@ library LibRainDeploySnapshot {
     /// written anywhere but into the immutable record.
     /// @param vm The Vm instance for string operations.
     /// @param paths The record's files, in the order they are emitted.
-    /// @param suitesImportPath The path the emitted lib reaches `DeploySuite`
+    /// @param suitesImportPath The path the emitted lib reaches the suite types
     /// by — `suitesImportPathInThisRepo` for a lib written into this repo's own
     /// `LIB_DIR`, and the consumer's remapped path otherwise.
     /// @return The import block.
@@ -1061,7 +1064,8 @@ library LibRainDeploySnapshot {
         pure
         returns (string memory)
     {
-        string memory imports = string.concat("import {DeploySuite} from \"", suitesImportPath, "\";\n\n");
+        string memory imports =
+            string.concat("import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n\n");
         for (uint256 i = 0; i < paths.length; i++) {
             imports = string.concat(imports, releasedImport(vm, paths[i]));
         }
@@ -1083,9 +1087,11 @@ library LibRainDeploySnapshot {
     /// than rebuilt from `template` because it is a precondition of the
     /// deployment and not metadata — `RainDeployBroadcast.run` passes it to
     /// `LibRainDeploy.deployToNetworks`, which refuses to broadcast on a
-    /// network where one of them has no code. Broadcasting a past release onto
-    /// a newly supported chain therefore has to check the list that release was
-    /// cut with, so it is read from that release's own frozen snapshot.
+    /// network where one of them has no code, or holds code other than the
+    /// `runtimeCode` the entry declares. Broadcasting a
+    /// past release onto a newly supported chain therefore has to check the
+    /// list that release was cut with, so it is read from that release's own
+    /// frozen snapshot.
     ///
     /// The other two come from `template`, the candidate declaration, and are
     /// regenerated from it on every build: the key and the artifact path are
@@ -1134,7 +1140,7 @@ library LibRainDeploySnapshot {
                 template.artifactPath,
                 "\",\n            dependencies: abi.decode(",
                 prefix,
-                "_DEPENDENCIES, (address[]))\n        });\n"
+                "_DEPENDENCIES, (DeployDependency[]))\n        });\n"
             );
         }
 

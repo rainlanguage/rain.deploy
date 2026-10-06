@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
+import {DeployDependency, LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
@@ -43,6 +43,17 @@ contract LibRainDeployTest is Test {
     /// CREATE2 over the factory address, a zero salt and the hash of empty
     /// creation code. An account is created there but it has no code.
     address constant ZOLTU_EMPTY_CREATION_CODE_ADDRESS = 0x5DC93B79FBDD6f26Ed9540597C78eD5893F9aC7A;
+
+    /// The runtime code declared for a dependency that is on no network, so
+    /// that an absence test is about the ADDRESS being empty. Non-empty,
+    /// because an empty declaration is a different case — see
+    /// `testDeployToNetworksAbsentDependencyDeclaringNoCodeIsStillMissing`.
+    bytes constant ABSENT_RUNTIME_CODE = hex"fe";
+
+    /// Runtime code nothing on any supported network holds, for a dependency
+    /// that IS present but declared as something it is not. Distinct from
+    /// `ABSENT_RUNTIME_CODE` so that a test cannot pass by confusing the two.
+    bytes constant WRONG_RUNTIME_CODE = hex"fd";
 
     /// The address the Zoltu factory deploys `MockDeployable` to. Derived from
     /// the mock's creation code by the same formula the factory applies, so it
@@ -432,7 +443,8 @@ contract LibRainDeployTest is Test {
     /// @param contractPath The contract path for verification commands.
     /// @param expectedAddress The expected deterministic address.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
-    /// @param dependencies The dependency addresses to check.
+    /// @param dependencies The dependencies to check, each an address and the
+    /// runtime code that must be at it.
     /// @return deployedAddress The deployed contract address.
     function externalDeployAndBroadcast(
         string[] memory networks,
@@ -441,7 +453,7 @@ contract LibRainDeployTest is Test {
         string memory contractPath,
         address expectedAddress,
         bytes32 expectedCodeHash,
-        address[] memory dependencies
+        DeployDependency[] memory dependencies
     ) external returns (address deployedAddress) {
         deployedAddress = LibRainDeploy.deployAndBroadcast(
             vm,
@@ -458,7 +470,7 @@ contract LibRainDeployTest is Test {
     /// Empty networks array MUST revert with `NoNetworks`.
     function testNoNetworksReverts() external {
         string[] memory networks = new string[](0);
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalDeployAndBroadcast(networks, 1, hex"", "", address(0), bytes32(0), dependencies);
     }
@@ -470,7 +482,7 @@ contract LibRainDeployTest is Test {
     /// never reached to report anything of its own.
     function testDeployAndBroadcastNoNetworksBeforeTheKey() external {
         string[] memory networks = new string[](0);
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalDeployAndBroadcast(networks, 0, hex"", "", address(0), bytes32(0), dependencies);
     }
@@ -479,7 +491,7 @@ contract LibRainDeployTest is Test {
     /// networks array, before any other input is checked.
     function testDeployToNetworksNoNetworksReverts() external {
         string[] memory networks = new string[](0);
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
     }
@@ -491,7 +503,7 @@ contract LibRainDeployTest is Test {
         string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.BASE;
         networks[1] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
 
         address result = this.externalDeployToNetworks(
             networks,
@@ -547,8 +559,10 @@ contract LibRainDeployTest is Test {
         networks[0] = LibRainDeploy.BASE;
         networks[1] = LibRainDeploy.ARBITRUM_ONE;
 
-        address[] memory dependencies = new address[](1);
-        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] = DeployDependency({
+            deployedAddress: LibRainDeploy.ZOLTU_FACTORY, runtimeCode: LibRainDeploy.ZOLTU_FACTORY_BYTECODE
+        });
 
         address result = this.externalDeployToNetworks(
             networks,
@@ -577,7 +591,8 @@ contract LibRainDeployTest is Test {
     /// @param expectedAddress The expected deterministic address.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The addresses that must already have code on a
-    /// network before this contract can be broadcast there.
+    /// network before this contract can be broadcast there, each paired with
+    /// the runtime code that must be at it.
     /// @return deployedAddress The deployed contract address.
     function externalDeployToNetworks(
         string[] memory networks,
@@ -586,7 +601,7 @@ contract LibRainDeployTest is Test {
         string memory contractPath,
         address expectedAddress,
         bytes32 expectedCodeHash,
-        address[] memory dependencies
+        DeployDependency[] memory dependencies
     ) external returns (address deployedAddress) {
         deployedAddress = LibRainDeploy.deployToNetworks(
             vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies
@@ -672,7 +687,7 @@ contract LibRainDeployTest is Test {
     function testUnexpectedDeployedAddressReverts() external {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.UnexpectedDeployedAddress.selector, address(0xdead), mockDeployableAddress()
@@ -688,7 +703,7 @@ contract LibRainDeployTest is Test {
     function testUnexpectedDeployedCodeHashReverts() external {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
         address expectedAddress = mockDeployableAddress();
         bytes32 wrongCodeHash = bytes32(uint256(1));
         vm.expectRevert(
@@ -706,7 +721,7 @@ contract LibRainDeployTest is Test {
     function testDeployAndBroadcastHappyPath() external {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
         address deployed = this.externalDeployAndBroadcast(
             networks,
             1,
@@ -731,7 +746,7 @@ contract LibRainDeployTest is Test {
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
 
         address result = this.externalDeployToNetworks(
             networks,
@@ -761,8 +776,8 @@ contract LibRainDeployTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         // A dependency with no code: it would revert MissingDependency on the
         // deploy path, but the target is already deployed so it is never checked.
-        address[] memory dependencies = new address[](1);
-        dependencies[0] = address(0xdead);
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: ABSENT_RUNTIME_CODE});
 
         address result = this.externalDeployToNetworks(
             networks,
@@ -795,7 +810,7 @@ contract LibRainDeployTest is Test {
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
 
         address result = this.externalDeployToNetworks(
             networks,
@@ -823,7 +838,7 @@ contract LibRainDeployTest is Test {
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -851,7 +866,7 @@ contract LibRainDeployTest is Test {
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -878,8 +893,8 @@ contract LibRainDeployTest is Test {
     function testDeployToNetworksMissingDependencyReverts() external {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](1);
-        dependencies[0] = address(0xdead);
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: ABSENT_RUNTIME_CODE});
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -906,18 +921,196 @@ contract LibRainDeployTest is Test {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
-        address[] memory dependencies = new address[](2);
-        // Present on arbitrum: the Zoltu factory, which the deploy needs
-        // anyway. Index 0 therefore passes and only a loop that reaches index 1
+        DeployDependency[] memory dependencies = new DeployDependency[](2);
+        // Present on arbitrum, declared with the code that really is there: the
+        // Zoltu factory, which the deploy needs anyway. Index 0 therefore
+        // passes both of its checks and only a loop that reaches index 1
         // reverts at all.
-        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
-        dependencies[1] = address(0xdead);
+        dependencies[0] = DeployDependency({
+            deployedAddress: LibRainDeploy.ZOLTU_FACTORY, runtimeCode: LibRainDeploy.ZOLTU_FACTORY_BYTECODE
+        });
+        dependencies[1] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: ABSENT_RUNTIME_CODE});
 
         // The revert names the LAST dependency, so a loop that reached index 1
         // but reported index 0 fails here too.
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdead)
+            )
+        );
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            mockDeployableAddress(),
+            bytes32(0),
+            dependencies
+        );
+    }
+
+    /// The Zoltu factory's runtime bytecode MUST hash to the code hash the
+    /// library expects of it.
+    ///
+    /// Not a restatement of two constants: it is what makes the factory
+    /// declarable AS a dependency, which the dependency tests below do because
+    /// it is the one address this repo knows is live on every supported
+    /// network. If these two drifted, a declaration carrying
+    /// `ZOLTU_FACTORY_BYTECODE` would fail the declared-code check on every
+    /// chain while the factory's own check passed, and the dependency tests
+    /// would be red for a reason that has nothing to do with the dependency
+    /// loop.
+    function testZoltuFactoryBytecodeHashesToItsCodeHash() external pure {
+        assertEq(keccak256(LibRainDeploy.ZOLTU_FACTORY_BYTECODE), LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
+    }
+
+    /// `deployToNetworks` MUST revert with `DependencyChanged` when a
+    /// dependency HAS code but not the code its declaration carries.
+    ///
+    /// The declared `runtimeCode` is not a presence marker and it is not
+    /// metadata. `RainDeployVerifyBase.deriveDeployment` etches exactly these
+    /// bytes so that a constructor which reads the dependency can run, so the
+    /// derived code hash — the one a release freezes and the one every
+    /// chain-anchored check compares against — is a function of what the
+    /// declaration SAYS is at this address. Nothing else ever puts that claim
+    /// to a chain: before this, a declaration carrying the wrong code derived a
+    /// wrong hash, froze it, and the first disagreement was the deployed
+    /// contract's own code hash, after the gas.
+    ///
+    /// The subject is the Zoltu factory, declared as something it is not. It is
+    /// the one address this repo knows is live on every supported network, so a
+    /// revert here can only be the declared-code comparison and never a chain
+    /// that happens not to have the dependency; and the factory's OWN check
+    /// runs first against its own constant and passes, so what fails is the
+    /// declaration and not the factory.
+    function testDeployToNetworksChangedDependencyReverts() external {
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] =
+            DeployDependency({deployedAddress: LibRainDeploy.ZOLTU_FACTORY, runtimeCode: WRONG_RUNTIME_CODE});
+
+        // The expectation is the hash of the DECLARED bytes and the actual is
+        // the factory's own, so a check that compared anything else — the
+        // factory constant against itself, or a bare presence read — cannot
+        // produce this payload.
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                LibRainDeploy.ZOLTU_FACTORY,
+                keccak256(WRONG_RUNTIME_CODE),
+                LibRainDeploy.ZOLTU_FACTORY_CODEHASH
+            )
+        );
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            mockDeployableAddress(),
+            bytes32(0),
+            dependencies
+        );
+    }
+
+    /// `deployToNetworks` MUST compare EVERY dependency's code, not only the
+    /// first. The misdeclared one here is the LAST, behind one that checks out,
+    /// so a loop that stopped after `dependencies[0]` would broadcast against a
+    /// dependency it never read.
+    function testDeployToNetworksChangedLaterDependencyReverts() external {
+        // A second present dependency, distinct from the Zoltu factory, so the
+        // revert payload names which entry failed. Deployed and made persistent
+        // for the reason `testDeployToNetworksEveryDependencyPresentDeploys`
+        // gives.
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        address dependency = this.externalDeployZoltu(type(MockDeployableV2).creationCode);
+        assertGt(dependency.code.length, 0);
+        vm.makePersistent(dependency);
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        DeployDependency[] memory dependencies = new DeployDependency[](2);
+        dependencies[0] = DeployDependency({
+            deployedAddress: LibRainDeploy.ZOLTU_FACTORY, runtimeCode: LibRainDeploy.ZOLTU_FACTORY_BYTECODE
+        });
+        dependencies[1] = DeployDependency({deployedAddress: dependency, runtimeCode: WRONG_RUNTIME_CODE});
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                dependency,
+                keccak256(WRONG_RUNTIME_CODE),
+                keccak256(type(MockDeployableV2).runtimeCode)
+            )
+        );
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            mockDeployableAddress(),
+            bytes32(0),
+            dependencies
+        );
+    }
+
+    /// An ABSENT dependency MUST report `MissingDependency` even where its
+    /// declaration carries no code at all.
+    ///
+    /// This is why presence is still checked rather than folded into the hash
+    /// comparison. An account with no code answers `codehash` zero, and zero is
+    /// a value no declaration can produce — `keccak256` of the empty string is
+    /// not zero — so a hash check standing alone would report every absent
+    /// dependency as a CHANGED one, sending the reader after a dependency that
+    /// moved rather than one that was never deployed.
+    function testDeployToNetworksAbsentDependencyDeclaringNoCodeIsStillMissing() external {
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: hex""});
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdead)
+            )
+        );
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            mockDeployableAddress(),
+            bytes32(0),
+            dependencies
+        );
+    }
+
+    /// A declaration carrying NO code MUST NOT pass at an address that has
+    /// some.
+    ///
+    /// The expectation is `keccak256` over the declared bytes whatever they
+    /// are, so an empty declaration expects the hash of the empty string and
+    /// matches nothing with code. It is not a wildcard, and it is not the
+    /// "declared nothing, so check nothing" that an address-only list was.
+    function testDeployToNetworksDependencyDeclaringNoCodeAtAPresentAddressIsChanged() external {
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] = DeployDependency({deployedAddress: LibRainDeploy.ZOLTU_FACTORY, runtimeCode: hex""});
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                LibRainDeploy.ZOLTU_FACTORY,
+                keccak256(hex""),
+                LibRainDeploy.ZOLTU_FACTORY_CODEHASH
             )
         );
         this.externalDeployToNetworks(
@@ -964,7 +1157,7 @@ contract LibRainDeployTest is Test {
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
 
         // Absent on the fork BEFORE the call, so the read after it is about
         // what the call did rather than about what arbitrum happens to hold.
@@ -1002,7 +1195,7 @@ contract LibRainDeployTest is Test {
         string[] memory networks = new string[](1);
         // Not a configured RPC alias, so forking it is itself an error.
         networks[0] = "unconfigured_network";
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -1029,7 +1222,7 @@ contract LibRainDeployTest is Test {
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -1694,13 +1887,16 @@ contract LibRainDeployTest is Test {
         assertEq(block.chainid, BASE_CHAIN_ID);
     }
 
-    /// `deployToNetworks` MUST deploy when every dependency has code on the
-    /// network, i.e. a present dependency is not treated as missing.
+    /// `deployToNetworks` MUST deploy when every dependency holds the code its
+    /// declaration carries, i.e. a dependency that checks out is not treated as
+    /// missing or as changed.
     function testDeployToNetworksPresentDependencyDeploys() external {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](1);
-        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] = DeployDependency({
+            deployedAddress: LibRainDeploy.ZOLTU_FACTORY, runtimeCode: LibRainDeploy.ZOLTU_FACTORY_BYTECODE
+        });
 
         address result = this.externalDeployToNetworks(
             networks,
@@ -1734,9 +1930,12 @@ contract LibRainDeployTest is Test {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
-        address[] memory dependencies = new address[](2);
-        dependencies[0] = LibRainDeploy.ZOLTU_FACTORY;
-        dependencies[1] = dependency;
+        DeployDependency[] memory dependencies = new DeployDependency[](2);
+        dependencies[0] = DeployDependency({
+            deployedAddress: LibRainDeploy.ZOLTU_FACTORY, runtimeCode: LibRainDeploy.ZOLTU_FACTORY_BYTECODE
+        });
+        dependencies[1] =
+            DeployDependency({deployedAddress: dependency, runtimeCode: type(MockDeployableV2).runtimeCode});
 
         address result = this.externalDeployToNetworks(
             networks,
@@ -1863,7 +2062,7 @@ contract LibRainDeployTest is Test {
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
 
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         // Stated rather than assumed: the key is a test constant that has never
@@ -1913,7 +2112,7 @@ contract LibRainDeployTest is Test {
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -1949,7 +2148,7 @@ contract LibRainDeployTest is Test {
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        address[] memory dependencies = new address[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
 
         this.externalDeployAndBroadcast(
             networks,

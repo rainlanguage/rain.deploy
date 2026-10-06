@@ -13,6 +13,7 @@ import {MisanchoredDeploy} from "../../concrete/MisanchoredDeploy.sol";
 import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
 import {StalePinDeploy, STALE_PIN_ADDRESS} from "../../concrete/StalePinDeploy.sol";
 import {MissingDependencyDeploy, ABSENT_DEPENDENCY} from "../../concrete/MissingDependencyDeploy.sol";
+import {ChangedDependencyDeploy, MISDECLARED_DEPENDENCY_RUNTIME_CODE} from "../../concrete/ChangedDependencyDeploy.sol";
 import {StaleCodeHashDeploy, STALE_CODE_HASH} from "../../concrete/StaleCodeHashDeploy.sol";
 import {MultiSuiteDeploy} from "../../concrete/MultiSuiteDeploy.sol";
 import {UnanchorableDeploy} from "../../concrete/UnanchorableDeploy.sol";
@@ -122,8 +123,10 @@ contract RainDeployBroadcastTest is Test {
     ///
     /// Further legs drive declarations that differ from the one above in
     /// exactly one thing: a recorded address its creation code does not derive,
-    /// a dependency that is on no network, a recorded code hash the deployed
-    /// code does not produce, and a second deployable entry nothing selected.
+    /// a dependency that is on no network, a dependency that is on the network
+    /// holding code its declaration does not claim, a recorded code hash the
+    /// deployed code does not produce, and a second deployable entry nothing
+    /// selected.
     /// Each fails, or leaves an address empty, where a `run()` that derived the
     /// pins, dropped the list or walked the whole registry would not. They all
     /// answer to the `DEPLOYMENT_SUITE` this test has already set, so none of
@@ -304,6 +307,29 @@ contract RainDeployBroadcastTest is Test {
             )
         );
         dependent.run();
+
+        // ## Including the CODE half of it, and not just the addresses
+        //
+        // A dependency entry is an address and the runtime code that must be at
+        // it, and the code half is what `deriveDeployment` etches to make a
+        // dependent constructor runnable — so the code hash this very suite
+        // records is a function of it. The leg above cannot see that half: its
+        // dependency is on no network, so a `run()` that projected the list
+        // down to an `address[]` refuses it on presence alone, which is what
+        // `run()` did. This declaration names an address that IS live on the
+        // target chain and declares the wrong code for it, so only a `run()`
+        // that carried both halves refuses.
+        ChangedDependencyDeploy misdeclared = new ChangedDependencyDeploy();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                LibRainDeploy.ZOLTU_FACTORY,
+                keccak256(MISDECLARED_DEPENDENCY_RUNTIME_CODE),
+                LibRainDeploy.ZOLTU_FACTORY_CODEHASH
+            )
+        );
+        misdeclared.run();
 
         // ## And so is the recorded code hash
         //

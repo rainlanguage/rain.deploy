@@ -2,7 +2,12 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDependency,
+    DeploySuite,
+    RainDeploySuitesBase
+} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {AddressRegistry} from "../../src/concrete/AddressRegistry.sol";
 import {
     BYTECODE_HASH as ADDRESS_REGISTRY_BYTECODE_HASH,
@@ -56,7 +61,7 @@ abstract contract SourceMismatchDeploySuites is RainDeploySuitesBase {
                 storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
                 storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             }),
             unanchorableReason: ""
         });
@@ -69,7 +74,7 @@ abstract contract SourceMismatchDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 // Deliberately NOT `MockDeployableV2`, which every recorded field above is.
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             }),
             unanchorableReason: ""
         });
