@@ -100,10 +100,9 @@ library LibRainDeploy {
     /// Thrown when no networks are provided for deployment.
     error NoNetworks();
 
-    /// Thrown when a check over forks that already exist is handed a fork id
-    /// list that does not pair up with its network names. The name is what a
-    /// failure reports and the id is what it reads, so an unpaired list would
-    /// report one network's result under another's name.
+    /// Thrown when a fork id list does not pair up with its network names. The
+    /// name is what a failure reports and the id is what it reads, so an
+    /// unpaired list reports one network's result under another's name.
     /// @param networksLength How many networks were named.
     /// @param forkIdsLength How many fork ids were given.
     error ForkIdsLengthMismatch(uint256 networksLength, uint256 forkIdsLength);
@@ -487,22 +486,13 @@ library LibRainDeploy {
         return declared;
     }
 
-    /// The refusals every resolved-address check makes about its read set,
-    /// before it reads anything. Held here so the network and fork loops can
-    /// make them before they fork or select, which is what makes them
-    /// reportable without an RPC round trip and unmaskable by an outage on the
-    /// first network.
+    /// The read-set refusals every resolved-address check makes before it reads
+    /// anything, so they are reportable without an RPC round trip.
     ///
-    /// An empty read set is REFUSED. A check with nothing to read returns having
-    /// asserted nothing, which is indistinguishable from every read checking
-    /// out, and it is what a consumer that built its read list from a source
-    /// that came back empty hands in — right before it migrates onto the
-    /// deployment this was supposed to verify.
-    ///
-    /// Emptiness is checked AFTER pairing, not before it: an unpaired call is a
-    /// mispairing whichever side is empty, and reporting the empty pair as a
-    /// mismatch of zero against zero would say nothing. The empty pair is the
-    /// one case pairing cannot see, so it is its own error.
+    /// An empty read set is REFUSED: a check with nothing to read returns having
+    /// asserted nothing, which no caller can tell from every read checking out.
+    /// Checked AFTER pairing, because the empty pair is the one mispairing that
+    /// pairing cannot see — zero against zero says nothing.
     /// @param target The deployed contract the reads are aimed at, for the
     /// refusal to name.
     /// @param readCalls The calldata for each read.
@@ -588,22 +578,18 @@ library LibRainDeploy {
         }
     }
 
-    /// Runs `checkResolvedAddresses` on forks that ALREADY EXIST, selecting each
-    /// in the order its network is named. A deployment verifies itself across
-    /// the whole target set here rather than in every consumer's deploy script.
+    /// SIMULATION verification: runs `checkResolvedAddresses` on forks that
+    /// ALREADY EXIST, which `deployToNetworks` returns the ids for.
     ///
-    /// This is SIMULATION verification, and `deployToNetworks` returns the fork
-    /// ids for it. A deploy script broadcasts nothing itself: it simulates on
-    /// each fork and records transactions, and forge submits them only once the
-    /// script has returned. So during the script the deployment exists on the
-    /// deploy's own forks and NOWHERE else, and verifying it there is the only
-    /// way a first-time deploy can be verified in the run that deploys it.
-    /// Verifying a deployment whose transactions have already confirmed is
-    /// `checkResolvedAddressesOnNetworks`, in a separate run.
+    /// A deploy script broadcasts nothing itself — it simulates on each fork and
+    /// records transactions, and forge submits them only once the script has
+    /// returned. So during the script the deployment exists on the deploy's own
+    /// forks and nowhere else, and this is the only way a first-time deploy can
+    /// be verified in the run that deploys it. Once the transactions confirm,
+    /// `checkResolvedAddressesOnNetworks` is the stage to use.
     ///
     /// An empty network set, an unpaired fork id list and an empty read set are
-    /// all REFUSED, before any fork is selected. The first and the last each
-    /// make this return success having read nothing at all.
+    /// all REFUSED before any fork is selected.
     /// @param vm The Vm instance to select forks with.
     /// @param networks The list of network names to check, naming the fork ids
     /// positionally. The name is what a failure reports.
@@ -635,27 +621,21 @@ library LibRainDeploy {
         }
     }
 
-    /// Runs `checkResolvedAddresses` on a FRESH fork of every network, so a
-    /// deployment verifies itself across the whole target set here rather than
-    /// in every consumer's deploy script.
-    ///
-    /// This is CONFIRMED-DEPLOYMENT verification: a run of its own, against
-    /// real network state, once the deploy's transactions have been submitted
-    /// and mined. A network where the deployed contract holds something other
-    /// than expected is a burned deterministic address, found while nothing
-    /// points at it yet — which is the whole reason to verify before migrating
-    /// onto a deployment rather than trusting it.
+    /// CONFIRMED-DEPLOYMENT verification: runs `checkResolvedAddresses` on a
+    /// FRESH fork of every network, a run of its own once the deploy's
+    /// transactions have been mined. A network holding something other than
+    /// expected is a burned deterministic address, found while nothing points
+    /// at it yet.
     ///
     /// It CANNOT verify a deploy made earlier in the same script. Nothing is
-    /// mined when `deployAndBroadcast` returns, so on a first-time deployment a
-    /// fresh fork has no code at the address, every read answers nothing, and
-    /// `ResolvedAddressReadFailed` takes the run down before forge submits the
-    /// transactions it collected. Same-script verification is
-    /// `checkResolvedAddressesOnForks`, on the fork ids the deploy hands back.
+    /// mined when `deployAndBroadcast` returns, so a fresh fork has no code at
+    /// the address, every read answers nothing, and `ResolvedAddressReadFailed`
+    /// takes the run down before forge submits what it collected. Same-script
+    /// verification is `checkResolvedAddressesOnForks`, on the ids the deploy
+    /// hands back.
     ///
-    /// An empty network set and an empty read set are both REFUSED, before
-    /// anything is forked. Either one makes this return success across every
-    /// network having read nothing at all.
+    /// An empty network set and an empty read set are both REFUSED before
+    /// anything is forked.
     /// @param vm The Vm instance to use for forking.
     /// @param networks The list of network names to check.
     /// @param target The deployed contract to read on each network.
