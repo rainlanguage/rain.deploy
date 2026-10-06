@@ -225,14 +225,17 @@ struct DeployCandidate {
 /// checked, but because there is nothing to disagree with.
 ///
 /// The networks are here for the same reason, and are one list for the same
-/// reason: `supportedNetworks` is what the broadcast targets and what every
-/// network-scoped assertion is made over, so a repo cannot be verified on a
-/// different set of networks than it deploys to either.
+/// reason: `supportedNetworks` is what the broadcast targets, what every
+/// network-scoped assertion is made over, and what the generated
+/// `[rpc_endpoints]`, `[etherscan]` and `.env.example` blocks are emitted from,
+/// so a repo cannot be verified on a different set of networks than it deploys
+/// to, nor configured for a set it does neither on.
 ///
 /// A repo overrides `releasedSuites` and `candidateSuites` on one abstract
-/// contract and inherits that into its deploy script and its test contracts,
-/// and overrides `supportedNetworks` there too if it deploys to fewer than all
-/// of them. Nothing else is per suite and nothing else is per network.
+/// contract and inherits that into its deploy script, its build script and its
+/// test contracts, and overrides `supportedNetworks` there too if it deploys to
+/// fewer than all of them. Nothing else is per suite and nothing else is per
+/// network.
 abstract contract RainDeploySuitesBase {
     /// Every FROZEN released suite, in any order. A released snapshot is
     /// immutable: its recorded bytes describe a deployment that already
@@ -262,13 +265,15 @@ abstract contract RainDeploySuitesBase {
     /// @return The candidates.
     function candidateSuites() internal pure virtual returns (DeployCandidate[] memory);
 
-    /// Every network this repo deals with: what a broadcast targets and the set
-    /// every network-scoped assertion is made over. Defaults to all of Rain's.
+    /// Every network this repo deals with: what a broadcast targets, the set
+    /// every network-scoped assertion is made over, and the set the network
+    /// config is generated from. Defaults to all of Rain's.
     ///
-    /// ONE hook, on the contract both sides inherit, because the set of networks
-    /// a repo deals with is one fact. A `virtual` per verification function
-    /// would be three ways for verification to end up narrower than what the
-    /// repo broadcasts to, with nothing to catch it.
+    /// ONE hook, on the contract all three sides inherit, because the set of
+    /// networks a repo deals with is one fact. A `virtual` per verification
+    /// function would be three ways for verification to end up narrower than
+    /// what the repo broadcasts to, with nothing to catch it, and a second one
+    /// on the build script would be config for networks nothing verifies.
     ///
     /// `deployNetworks` narrowing this is a different thing and stays
     /// available: that is one dispatch's targets, not the repo's set.

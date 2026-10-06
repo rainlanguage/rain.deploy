@@ -3,6 +3,9 @@
 pragma solidity ^0.8.25;
 
 import {Script} from "forge-std-1.17.0/src/Script.sol";
+import {RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
+import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
+import {LibRainDeployConfig} from "../lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// @title BuildScript
@@ -16,7 +19,25 @@ import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 ///
 /// Neither is `virtual`, so a repo inheriting this implements the hooks below
 /// and has no entry point to cut a release from other than `cutRelease()`.
-abstract contract BuildScript is Script {
+///
+/// The network config is generated here rather than through a hook a repo
+/// implements: the facts come out of `LibRainDeploy.supportedNetworkConfigs()`,
+/// this package's own catalogue, and which of them are emitted comes out of
+/// `supportedNetworks()` — the one hook on the declaration this inherits, which
+/// `RainDeployBroadcast` deploys to and the chain group forks. So a network
+/// arrives in a consumer's `foundry.toml` and `.env.example` by a version bump,
+/// a repo narrowing the set narrows what it deploys to and what it is verified
+/// on by the same answer, and there is no second place to spell either.
+///
+/// Inheriting the declaration is what makes that one answer: a hook of its own
+/// here would be a second statement of the repo's network set, and the config
+/// generated from it could cover networks nothing verifies with nothing red.
+///
+/// `run()` stages those two files rather than writing them, because foundry
+/// refuses a cheatcode write to the project root's own `foundry.toml`. A repo
+/// inheriting this needs `script/build.sh` to install what was staged — see
+/// `LibRainDeployConfig`.
+abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// Rewrite the rolling `candidate/` snapshots from what this repo currently
     /// compiles. Run by `cutRelease()` inside `freeze`, after its guards and
     /// before it copies anything.
@@ -42,8 +63,43 @@ abstract contract BuildScript is Script {
         return LibRainDeploySnapshot.LIB_FS_ROOT;
     }
 
+    /// The root holding the `foundry.toml` and `.env.example` whose network
+    /// blocks are generated, and the parent of the staging directory they are
+    /// written to.
+    ///
+    /// Overridable for the same reason `recordRoot` is: a writer that can only
+    /// be pointed at the committed tree can only be exercised against it. The
+    /// hazard is the same too — a repo pointing this anywhere but its own root
+    /// generates config nothing reads, and `Git is clean` then sees a tree that
+    /// never drifts because nothing regenerates it.
+    /// @return The config root.
+    function configRoot() internal view virtual returns (string memory) {
+        return LibRainDeployConfig.CONFIG_ROOT;
+    }
+
+    /// Rewrite the delimited network config blocks from the declared networks'
+    /// catalogue entries.
+    ///
+    /// Run by `run()` and not by `cutRelease()`: the config is not part of a
+    /// release record, and `run()` is what `Git is clean` calls on every push,
+    /// so a tree whose config has drifted from the declaration it pins fails
+    /// there.
+    ///
+    /// This STAGES the files; `script/build.sh` installs them. See
+    /// `LibRainDeployConfig` for why a script cannot write `foundry.toml`
+    /// itself.
+    function regenerateConfig() internal {
+        LibRainDeployConfig.writeStagedConfig(
+            vm,
+            configRoot(),
+            LibRainDeployConfig.BUILD_HOOK_PATH,
+            LibRainDeploy.declaredNetworkConfigs(supportedNetworks())
+        );
+    }
+
     /// @notice Regenerate everything this repo generates. Freezes nothing.
     function run() external {
+        regenerateConfig();
         regenerateSnapshots();
         regenerateLibs();
     }

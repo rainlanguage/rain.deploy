@@ -5,6 +5,28 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 
+/// One network the Rain org deploys to, as everything generated from the roster
+/// needs it. The roster is the single statement of the set: `foundry.toml`'s
+/// `[rpc_endpoints]` and `[etherscan]` sections and `.env.example` are written
+/// from it by `BuildScript`, so a network arrives everywhere by being added
+/// here.
+/// @param name The `[rpc_endpoints]` alias, the `[etherscan]` key, and the stem
+/// of both the `<NAME>_RPC_URL` and `CI_DEPLOY_<NAME>_ETHERSCAN_API_KEY`
+/// variables the generated entries interpolate.
+/// @param chainId The chain id the bound endpoint reports. Generation cannot
+/// settle this one — it is a claim about the world, checked by
+/// `RainDeployVerifyChain` against `block.chainid` on a fork.
+/// @param explorerUrl The explorer API `--verify` posts to, or empty for the
+/// one Etherscan V2 resolves from `chainId`.
+/// @param defaultRpcUrl The public endpoint `.env.example` binds for a local
+/// run. CI binds its own, so this is a convenience rather than a contract.
+struct SupportedNetwork {
+    string name;
+    uint256 chainId;
+    string explorerUrl;
+    string defaultRpcUrl;
+}
+
 /// One address a suite's deployment requires and the code that must be at it:
 /// the depended-on snapshot's own published `DEPLOYED_ADDRESS` and
 /// `RUNTIME_CODE`, written out by the declarer. Nothing here resolves an address
@@ -77,6 +99,20 @@ library LibRainDeploy {
 
     /// Thrown when no networks are provided for deployment.
     error NoNetworks();
+
+    /// Thrown when a declared network name has no entry in
+    /// `supportedNetworkConfigs()`. The catalogue is where a network's chain
+    /// id, explorer and default endpoint come from, so a name it says nothing
+    /// about is a name the generated config cannot state anything for — and
+    /// emitting the name alone is an `[etherscan]` entry with no `chain`,
+    /// which takes `--verify` down for every other entry in the section.
+    ///
+    /// This is the refusal that replaces comparing two hand-maintained lists:
+    /// a declaration naming a network this package does not support is red on
+    /// the build that generates from it rather than on an assertion somebody
+    /// had to think of.
+    /// @param network The declared name with no catalogue entry.
+    error NetworkNotInCatalogue(string network);
 
     /// Thrown when attempting to find the deploy block of a contract that has
     /// no code at the current block.
@@ -339,20 +375,108 @@ library LibRainDeploy {
         return forkIds;
     }
 
-    /// Returns the list of networks currently supported by Rain deployments.
+    /// Every network Rain deployments support, with everything the generated
+    /// config states about each.
+    ///
+    /// The CATALOGUE: what is true of a network, not which networks a repo
+    /// deals with. That second question is
+    /// `RainDeploySuitesBase.supportedNetworks()`, the one hook on the
+    /// declaration both sides read, and this is what its names select from —
+    /// `declaredNetworkConfigs` is the selection, `LibRainDeployConfig` writes
+    /// the config sections from it, and `RainDeployVerifyChain` forks it. So
+    /// the config cannot disagree with the declaration without `Git is clean`
+    /// failing the tree that says so, and there is nothing left for a test to
+    /// compare.
+    ///
+    /// Deriving the catalogue from the config instead would be the same facts
+    /// spelled once as well, and wrong: a repo that deleted an alias would
+    /// deploy to and verify fewer chains, green, because the thing that would
+    /// notice reads the same file.
+    /// @return The supported networks.
+    function supportedNetworkConfigs() internal pure returns (SupportedNetwork[] memory) {
+        SupportedNetwork[] memory networks = new SupportedNetwork[](9);
+        networks[0] = SupportedNetwork({
+            name: ARBITRUM_ONE, chainId: 42161, explorerUrl: "", defaultRpcUrl: "https://arb1.arbitrum.io/rpc"
+        });
+        networks[1] =
+            SupportedNetwork({name: BASE, chainId: 8453, explorerUrl: "", defaultRpcUrl: "https://mainnet.base.org"});
+        networks[2] = SupportedNetwork({
+            name: BASE_SEPOLIA, chainId: 84532, explorerUrl: "", defaultRpcUrl: "https://sepolia.base.org"
+        });
+        networks[3] = SupportedNetwork({
+            name: BSC, chainId: 56, explorerUrl: "", defaultRpcUrl: "https://bsc-dataseed.binance.org"
+        });
+        networks[4] = SupportedNetwork({
+            name: ETHEREUM, chainId: 1, explorerUrl: "", defaultRpcUrl: "https://eth-pokt.nodies.app"
+        });
+        networks[5] = SupportedNetwork({
+            name: FLARE, chainId: 14, explorerUrl: "", defaultRpcUrl: "https://flare-api.flare.network/ext/C/rpc"
+        });
+        networks[6] = SupportedNetwork({
+            name: HYPEREVM, chainId: 999, explorerUrl: "", defaultRpcUrl: "https://rpc.hyperliquid.xyz/evm"
+        });
+        networks[7] = SupportedNetwork({
+            name: POLYGON, chainId: 137, explorerUrl: "", defaultRpcUrl: "https://polygon-bor-rpc.publicnode.com"
+        });
+        // Robinhood Chain is not indexed by Etherscan V2, so `--verify` is
+        // pointed at its Blockscout explorer, which speaks the Etherscan API
+        // and ignores the key. Blockscout sits behind a browser challenge that
+        // has rejected non-browser clients, so if `--verify` fails on this
+        // network after a broadcast, verify afterwards through Sourcify (which
+        // supports 4663 and which Blockscout imports):
+        // `forge verify-contract --verifier sourcify --chain 4663 ...`.
+        networks[8] = SupportedNetwork({
+            name: ROBINHOOD,
+            chainId: 4663,
+            explorerUrl: "https://robinhoodchain.blockscout.com/api",
+            defaultRpcUrl: "https://rpc.mainnet.chain.robinhood.com"
+        });
+        return networks;
+    }
+
+    /// The names of the networks currently supported by Rain deployments, in
+    /// catalogue order.
     /// @return The list of supported network names.
     function supportedNetworks() internal pure returns (string[] memory) {
-        string[] memory networks = new string[](9);
-        networks[0] = ARBITRUM_ONE;
-        networks[1] = BASE;
-        networks[2] = BASE_SEPOLIA;
-        networks[3] = BSC;
-        networks[4] = ETHEREUM;
-        networks[5] = FLARE;
-        networks[6] = HYPEREVM;
-        networks[7] = POLYGON;
-        networks[8] = ROBINHOOD;
+        SupportedNetwork[] memory configs = supportedNetworkConfigs();
+        string[] memory networks = new string[](configs.length);
+        for (uint256 i = 0; i < configs.length; i++) {
+            networks[i] = configs[i].name;
+        }
         return networks;
+    }
+
+    /// The catalogue entries a declaration names, in the order it names them.
+    ///
+    /// Everything generated or forked per network goes through here, so a
+    /// declaration that narrows `supportedNetworks()` narrows the config, the
+    /// chain id checks and the deploy together, from one answer. The names a
+    /// repo declares are the selection and the catalogue is the facts, so there
+    /// are never two statements of either to drift apart.
+    ///
+    /// A name the catalogue says nothing about is refused rather than skipped:
+    /// skipping it would generate config for fewer networks than the repo
+    /// deploys to and verifies on, which is the silent green the whole
+    /// mechanism exists to remove.
+    /// @param networks The declared network names.
+    /// @return The catalogue entry for each, in declaration order.
+    function declaredNetworkConfigs(string[] memory networks) internal pure returns (SupportedNetwork[] memory) {
+        SupportedNetwork[] memory catalogue = supportedNetworkConfigs();
+        SupportedNetwork[] memory declared = new SupportedNetwork[](networks.length);
+        for (uint256 i = 0; i < networks.length; i++) {
+            bool found = false;
+            for (uint256 j = 0; j < catalogue.length; j++) {
+                if (keccak256(bytes(networks[i])) == keccak256(bytes(catalogue[j].name))) {
+                    declared[i] = catalogue[j];
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                revert NetworkNotInCatalogue(networks[i]);
+            }
+        }
+        return declared;
     }
 
     /// Asserts that an already-deployed contract holds the addresses the

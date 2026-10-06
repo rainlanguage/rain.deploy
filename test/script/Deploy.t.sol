@@ -36,11 +36,10 @@ contract DeployTest is Test {
     /// Matched against the config rather than against `supportedNetworks()`,
     /// which is the value the script's inherited body returns: an assertion
     /// written against that would be the implementation compared to itself and
-    /// would pass for any override that happened to call it. The config is a
-    /// separate statement of the same set, and
-    /// `testSupportedNetworksAreFullyConfigured` is what holds the two together
-    /// — so a narrowing here fails, and a network added to one place and not
-    /// the other fails there.
+    /// would pass for any override that happened to call it. The config is
+    /// GENERATED from the roster, so what the file says is the roster as of the
+    /// last build — which makes reading it here a read of the committed tree
+    /// and not of the constant, and a narrowing in the script fails against it.
     ///
     /// Both directions, because containment one way passes for a script that
     /// deploys to a subset and the other way for a config carrying an alias

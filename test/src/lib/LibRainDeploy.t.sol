@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {DeployDependency, LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
@@ -218,6 +218,118 @@ contract LibRainDeployTest is Test {
         assertEq(networks[6], LibRainDeploy.HYPEREVM);
         assertEq(networks[7], LibRainDeploy.POLYGON);
         assertEq(networks[8], LibRainDeploy.ROBINHOOD);
+    }
+
+    /// `supportedNetworks` MUST be the names of `supportedNetworkConfigs`, in
+    /// the same order and with nothing dropped.
+    ///
+    /// The two are one list or they are two lists, and two lists is what this
+    /// whole arrangement removes: the config sections are written from the
+    /// roster while the deploy and the fork matrix read the names.
+    function testSupportedNetworksAreTheRosterNames() external pure {
+        SupportedNetwork[] memory configs = LibRainDeploy.supportedNetworkConfigs();
+        string[] memory networks = LibRainDeploy.supportedNetworks();
+        assertEq(networks.length, configs.length);
+        for (uint256 i = 0; i < configs.length; i++) {
+            assertEq(networks[i], configs[i].name);
+        }
+    }
+
+    /// A wrapper so `declaredNetworkConfigs` reverts at a depth
+    /// `vm.expectRevert` reaches.
+    /// @param networks The declared network names.
+    /// @return The catalogue entries selected.
+    function externalDeclaredNetworkConfigs(string[] memory networks)
+        external
+        pure
+        returns (SupportedNetwork[] memory)
+    {
+        return LibRainDeploy.declaredNetworkConfigs(networks);
+    }
+
+    /// `declaredNetworkConfigs` MUST answer in the order the DECLARATION names,
+    /// not the order the catalogue lists.
+    ///
+    /// Declared backwards from the catalogue, and with seven of the nine left
+    /// out, so a selection that walked the catalogue instead answers neither
+    /// the right length nor the right first entry. The chain ids are the
+    /// literals `testSupportedNetworkChainIds` pins rather than a second read
+    /// of the catalogue, which would agree with any selection whatsoever.
+    function testDeclaredNetworkConfigsFollowTheDeclaration() external pure {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+
+        SupportedNetwork[] memory declared = LibRainDeploy.declaredNetworkConfigs(networks);
+
+        assertEq(declared.length, 2);
+        assertEq(declared[0].name, LibRainDeploy.BASE);
+        assertEq(declared[0].chainId, 8453);
+        assertEq(declared[0].defaultRpcUrl, "https://mainnet.base.org");
+        assertEq(declared[1].name, LibRainDeploy.ARBITRUM_ONE);
+        assertEq(declared[1].chainId, 42161);
+        assertEq(declared[1].defaultRpcUrl, "https://arb1.arbitrum.io/rpc");
+    }
+
+    /// Declaring every supported network MUST select the whole catalogue,
+    /// unchanged. This is the case every repo that narrows nothing is in.
+    function testDeclaredNetworkConfigsDefaultToTheWholeCatalogue() external pure {
+        SupportedNetwork[] memory catalogue = LibRainDeploy.supportedNetworkConfigs();
+        SupportedNetwork[] memory declared = LibRainDeploy.declaredNetworkConfigs(LibRainDeploy.supportedNetworks());
+        assertEq(declared.length, catalogue.length);
+        for (uint256 i = 0; i < catalogue.length; i++) {
+            assertEq(declared[i].name, catalogue[i].name);
+            assertEq(declared[i].chainId, catalogue[i].chainId);
+            assertEq(declared[i].explorerUrl, catalogue[i].explorerUrl);
+            assertEq(declared[i].defaultRpcUrl, catalogue[i].defaultRpcUrl);
+        }
+    }
+
+    /// A declared name the catalogue states nothing about MUST be refused,
+    /// naming it — not skipped, which would silently generate config for fewer
+    /// networks than the declaration asked for.
+    function testDeclaredNetworkConfigsRefuseAnUncataloguedName() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = "nowhere";
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NetworkNotInCatalogue.selector, "nowhere"));
+        this.externalDeclaredNetworkConfigs(networks);
+    }
+
+    /// Every roster entry MUST state the chain id its network really has.
+    ///
+    /// Spelled out here rather than looped, because a loop over the roster
+    /// comparing it to itself asserts nothing. These nine numbers came from
+    /// `cast chain-id` against the endpoints `.env.example` binds, and they are
+    /// what `--verify` submits as `chain`.
+    function testSupportedNetworkChainIds() external pure {
+        SupportedNetwork[] memory configs = LibRainDeploy.supportedNetworkConfigs();
+        assertEq(configs.length, 9);
+        assertEq(configs[0].chainId, 42161);
+        assertEq(configs[1].chainId, 8453);
+        assertEq(configs[2].chainId, 84532);
+        assertEq(configs[3].chainId, 56);
+        assertEq(configs[4].chainId, 1);
+        assertEq(configs[5].chainId, 14);
+        assertEq(configs[6].chainId, 999);
+        assertEq(configs[7].chainId, 137);
+        assertEq(configs[8].chainId, 4663);
+    }
+
+    /// Only Robinhood Chain states an explorer url, because it is the only
+    /// supported network Etherscan V2 does not index.
+    ///
+    /// A url stated on a network Etherscan does index would point `--verify` at
+    /// that url instead, silently, for that network alone.
+    function testSupportedNetworkExplorerUrls() external pure {
+        SupportedNetwork[] memory configs = LibRainDeploy.supportedNetworkConfigs();
+        for (uint256 i = 0; i < configs.length; i++) {
+            if (keccak256(bytes(configs[i].name)) == keccak256(bytes(LibRainDeploy.ROBINHOOD))) {
+                assertEq(configs[i].explorerUrl, "https://robinhoodchain.blockscout.com/api");
+            } else {
+                assertEq(configs[i].explorerUrl, "", configs[i].name);
+            }
+        }
     }
 
     /// `ZOLTU_FACTORY_CODEHASH` MUST match the actual codehash of the Zoltu

@@ -3,6 +3,8 @@
 pragma solidity =0.8.25;
 
 import {BuildScript} from "../../src/abstract/BuildScript.sol";
+import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeployConfig} from "../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 
 /// @title BuildScriptHarness
@@ -20,11 +22,42 @@ contract BuildScriptHarness is BuildScript {
     /// The single contract this fixture release freezes.
     string internal sContractName;
 
+    /// The declared network set, or empty for `RainDeploySuitesBase`'s own
+    /// default. Set by `declareNetworks` and only by it, so the default case is
+    /// the one every other test here drives.
+    string[] internal sNetworks;
+
     /// @param root The fixture record root, or empty for `BuildScript`'s own.
     /// @param contractName The contract the fixture snapshot describes.
     constructor(string memory root, string memory contractName) {
         sRoot = root;
         sContractName = contractName;
+    }
+
+    /// Narrows what this harness declares, which is what the config is
+    /// generated from.
+    /// @param networks The network names to declare.
+    function declareNetworks(string[] memory networks) external {
+        sNetworks = networks;
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    function supportedNetworks() internal view override returns (string[] memory) {
+        return sNetworks.length > 0 ? sNetworks : super.supportedNetworks();
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    /// @dev A fixture with no suites at all. Nothing `run()` or `cutRelease()`
+    /// reaches asks for one — the subject here is the wiring and the config —
+    /// and a declaration this harness does not drive is one a reader would take
+    /// for an assertion.
+    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
+        suites = new DeploySuite[](0);
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
+        candidates = new DeployCandidate[](0);
     }
 
     /// @inheritdoc BuildScript
@@ -36,6 +69,74 @@ contract BuildScriptHarness is BuildScript {
     /// @return The record root.
     function externalRecordRoot() external view returns (string memory) {
         return recordRoot();
+    }
+
+    /// @inheritdoc BuildScript
+    /// @dev The fixture root, never the repo's own. A `run()` here would
+    /// otherwise read the committed config and stage a spliced copy of it,
+    /// which the next `script/build.sh` would install.
+    function configRoot() internal view override returns (string memory) {
+        return sRoot;
+    }
+
+    /// The seeded `foundry.toml` `regenerateConfig` reads.
+    /// @return The fixture config path.
+    function externalConfigPath() external view returns (string memory) {
+        return LibRainDeployConfig.configPath(configRoot());
+    }
+
+    /// The seeded `.env.example` `regenerateConfig` reads.
+    /// @return The fixture `.env.example` path.
+    function externalEnvExamplePath() external view returns (string memory) {
+        return LibRainDeployConfig.envExamplePath(configRoot());
+    }
+
+    /// Where `regenerateConfig` stages the spliced config.
+    /// @return The staged config path.
+    function externalStagedConfigPath() external view returns (string memory) {
+        return LibRainDeployConfig.stagedPath(configRoot(), LibRainDeployConfig.CONFIG_NAME);
+    }
+
+    /// Where `regenerateConfig` stages the spliced `.env.example`.
+    /// @return The staged `.env.example` path.
+    function externalStagedEnvExamplePath() external view returns (string memory) {
+        return LibRainDeployConfig.stagedPath(configRoot(), LibRainDeployConfig.ENV_EXAMPLE_NAME);
+    }
+
+    /// The staging directory, so a test can assert whether anything was staged
+    /// at all.
+    /// @return The staging directory.
+    function externalStagedDir() external view returns (string memory) {
+        return LibRainDeployConfig.stagedDir(configRoot());
+    }
+
+    /// A fixture file carrying both `foundry.toml` blocks, with a stale body in
+    /// each and hand-written text around them.
+    /// @return The seed config.
+    function configSeed() public pure returns (string memory) {
+        return string.concat(
+            "# hand written\n",
+            "# rain-deploy:generated:rpc_endpoints:begin\n",
+            "STALE\n",
+            "# rain-deploy:generated:rpc_endpoints:end\n",
+            "# rain-deploy:generated:etherscan:begin\n",
+            "STALE\n",
+            "# rain-deploy:generated:etherscan:end\n"
+        );
+    }
+
+    /// A fixture file carrying the `.env.example` block.
+    /// @return The seed `.env.example`.
+    function envExampleSeed() public pure returns (string memory) {
+        return string.concat(
+            "# hand written\n", "# rain-deploy:generated:env:begin\n", "STALE=1\n", "# rain-deploy:generated:env:end\n"
+        );
+    }
+
+    /// Writes both config fixtures, so `run()` has markers to splice into.
+    function seedConfig() external {
+        writeFixture(LibRainDeployConfig.configPath(configRoot()), configSeed());
+        writeFixture(LibRainDeployConfig.envExamplePath(configRoot()), envExampleSeed());
     }
 
     /// Where `regenerateSnapshots` writes.
