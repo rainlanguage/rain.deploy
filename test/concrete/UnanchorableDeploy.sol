@@ -3,7 +3,12 @@
 pragma solidity =0.8.25;
 
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDependency,
+    DeploySuite,
+    RainDeploySuitesBase
+} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {
     BYTECODE_HASH as ADDRESS_REGISTRY_BYTECODE_HASH,
     CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE,
@@ -58,7 +63,7 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
                 storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             }),
             unanchorableReason: ""
         });
@@ -72,7 +77,7 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 // Qualified, and this repo compiles no such source, so it
                 // resolves to no artifact.
                 artifactPath: "test/concrete/VendoredDeployable.sol:VendoredDeployable",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             }),
             unanchorableReason: "Vendored third party deployment: the pinned creation code is the source."
         });
@@ -86,7 +91,7 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 // A data contract assembled at build time: the path names the
                 // file the tables would be compiled from, and there is none.
                 artifactPath: "test/concrete/AssembledTables.sol:AssembledTables",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             }),
             unanchorableReason: "Assembled from generated tables: there is no source file to compile."
         });

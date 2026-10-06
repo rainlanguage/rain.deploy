@@ -4,7 +4,11 @@ pragma solidity ^0.8.25;
 
 import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 
-import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
+// `DeployDependency` is imported rather than declared here, and is therefore
+// importable FROM here: this is the path every declaration and every generated
+// released lib names, and the struct lives beside `deployToNetworks`, which is
+// what holds a declared pair to a chain.
+import {DeployDependency, LibRainDeploy} from "../lib/LibRainDeploy.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
@@ -176,11 +180,20 @@ struct DeploySuite {
     /// declared state, and resolving to one refuses it. It is still held to
     /// `<path>:<Name>`, which it spells against the file it WOULD have.
     string artifactPath;
-    /// Addresses that MUST already have code on a network before this suite is
-    /// broadcast there. Ordinarily other suites' recorded addresses: a
-    /// constructor that bakes in a beacon, or a fallback that delegatecalls a
-    /// facet, silently produces a broken deployment if its target is absent.
-    address[] dependencies;
+    /// What MUST already be on a network before this suite is broadcast there:
+    /// an address and the runtime code that belongs at it, per dependency.
+    /// Ordinarily other suites' recorded pins — a constructor that bakes in a
+    /// beacon, or a fallback that delegatecalls a facet, silently produces a
+    /// broken deployment if its target is absent.
+    ///
+    /// The code half is a CLAIM about every network, and it is checked as one.
+    /// `RainDeployVerifyBase.deriveDeployment` etches it so that such a
+    /// constructor can run at all, which makes this suite's derived code hash a
+    /// function of what is declared here; `LibRainDeploy.deployToNetworks`
+    /// hashes the live code at each address against it, per network, before it
+    /// broadcasts anything. So a wrong declaration is a red deploy run rather
+    /// than a wrong hash frozen into a release.
+    DeployDependency[] dependencies;
 }
 
 /// The rolling candidate: a snapshot that tracks current source rather than a

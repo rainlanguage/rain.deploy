@@ -2,7 +2,12 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployDependency,
+    DeployCandidate,
+    DeploySuite,
+    RainDeploySuitesBase
+} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 import {MockDeployable} from "./MockDeployable.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
@@ -40,7 +45,7 @@ contract UnqualifiedArtifactPathDeploySuites is ExternalDeploySuites {
                 storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             }),
             unanchorableReason: ""
         });
@@ -52,7 +57,7 @@ contract UnqualifiedArtifactPathDeploySuites is ExternalDeploySuites {
                 storedBytecodeHash: keccak256(type(MockDeployableV2).runtimeCode),
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "MockDeployableV2",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             }),
             unanchorableReason: ""
         });

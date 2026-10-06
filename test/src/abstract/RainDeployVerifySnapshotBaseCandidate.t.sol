@@ -3,7 +3,12 @@
 pragma solidity =0.8.25;
 
 import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBase.sol";
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDependency,
+    DeploySuite,
+    RainDeploySuitesBase
+} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifySnapshotBase} from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
@@ -49,7 +54,7 @@ contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBa
                 storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
-                dependencies: new address[](0)
+                dependencies: new DeployDependency[](0)
             }),
             unanchorableReason: ""
         });

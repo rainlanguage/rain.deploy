@@ -18,10 +18,11 @@ import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 error ZoltuDerivationMismatch(string suite, address formulaAddress, address factoryAddress);
 
 /// Thrown when the state snapshot taken around a derivation could not be
-/// reverted. The derivation plants code at the derived address and clears its
-/// nonce; if that cannot be undone, every later derivation reads state this one
-/// created, and the chain-anchored checks compare a locally planted deployment
-/// against itself. There is no safe way to continue.
+/// reverted. The derivation plants code at the derived address, clears its
+/// nonce and etches the suite's declared dependencies; if that cannot be
+/// undone, every later derivation reads state this one created, and the
+/// chain-anchored checks compare a locally planted deployment against itself.
+/// There is no safe way to continue.
 /// @param suite The suite being derived when the revert failed.
 /// @param snapshotId The snapshot that could not be reverted.
 error DerivationSnapshotRevertFailed(string suite, uint256 snapshotId);
@@ -88,12 +89,36 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     ///   locally deployed contract that leaked into a fork would be compared
     ///   against itself, and every chain would pass whether or not anything is
     ///   deployed there.
+    ///
+    /// ## The suite's declared dependencies, etched
+    ///
+    /// A constructor that reads a dependency cannot run on an EVM where nothing
+    /// is deployed, which is the EVM a derivation happens on. So the declared
+    /// dependencies are etched here, from the runtime code the declaration
+    /// carries, inside the same snapshot. Nothing resolves an address to an
+    /// owning suite: a dependency need not be a suite of this repo at all.
+    ///
+    /// That makes the derived code hash a function of what the declaration SAYS
+    /// is at each dependency, which is a claim about every network and not an
+    /// input this contract can settle. `LibRainDeploy.deployToNetworks` is what
+    /// settles it, hashing the live code at each address against the same
+    /// declared bytes before it broadcasts, so a wrong declaration is a red
+    /// deploy run rather than a wrong hash frozen into a release.
+    ///
+    /// Etched FIRST, so the declaration cannot reach the two addresses this
+    /// function owns — the subject, which must be deployed rather than etched
+    /// or the derivation hands back the record it came from, and the Zoltu
+    /// factory it deploys through.
     /// @param suite The suite to derive from.
     /// @return The address and code hash the creation code produces.
     function deriveDeployment(DeploySuite memory suite) internal returns (DerivedDeploy memory) {
         address formulaAddress = LibRainDeploy.zoltuAddress(suite.creationCode);
 
         uint256 snapshotId = vm.snapshotState();
+
+        for (uint256 i = 0; i < suite.dependencies.length; i++) {
+            vm.etch(suite.dependencies[i].deployedAddress, suite.dependencies[i].runtimeCode);
+        }
 
         // Whatever is at the derived address is not part of the derivation.
         // The nonce goes too: `CREATE2` collides on a non-zero nonce as well as

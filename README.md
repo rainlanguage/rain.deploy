@@ -51,7 +51,8 @@ Approach:
 
 A repo declares its suites ONCE. A suite is a named snapshot: a key, the
 creation code, the recorded address/code hash/runtime code, the artifact path
-and the addresses that must already be on chain before it can be deployed.
+and the dependencies that must already be on chain before it can be deployed —
+each of those an address paired with the runtime code that belongs at it.
 
 ```solidity
 // src/abstract/MyDeploySuites.sol
@@ -128,6 +129,17 @@ stale pin fails instead of deploying to wherever the code happens to land.
 Deriving the pins at broadcast time would make that comparison
 derived-against-derived, and a guard that compares a value to itself is not a
 guard.
+
+**A suite's declared dependencies are etched for the derivation, and only the
+dependencies.** The local derivation runs before anything forks, so a declared
+dependency is absent there and a constructor that reads one cannot run.
+`deriveDeployment` etches each declared dependency's runtime code at its
+declared address, inside the state snapshot it already reverts. A dependency is
+declared as an address AND that code — the depended-on snapshot's published
+`DEPLOYED_ADDRESS` and `RUNTIME_CODE` — because an address alone cannot say what
+to put there. The dependencies are etched first, then the derived address is
+cleared, then the factory is planted, so a declaration can reach neither the
+subject's address nor the factory's.
 
 Five groups, sorted by what each is anchored to and therefore by what each can
 catch:
