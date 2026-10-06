@@ -314,13 +314,28 @@ first, the same way `LibRainDeploy` verifies the Zoltu factory's. It resolves a
 name to an address and stops there — what a consumer does with the address, and
 when, is the consumer's business.
 
-`LibRainDeploy.checkResolvedAddressesOnNetworks` is the **post-deploy**
-verification: on every target network, the deployed contract must hold the
-address the deployment expected. It runs after the deploy and before anything
-depends on it, against state the deployment has already settled, so nothing it
-reads can move underneath it. The same check run beforehand would be worth
-nothing against a mutable source. A network where the deployment took something
-else is a burned deterministic address, found while nothing points at it yet.
+`LibRainDeploy` carries the **post-deploy** verification: on every target
+network, the deployed contract must hold the address the deployment expected. It
+runs after the deploy and before anything depends on it, against state the
+deployment has already settled, so nothing it reads can move underneath it. The
+same check run beforehand would be worth nothing against a mutable source. A
+network where the deployment took something else is a burned deterministic
+address, found while nothing points at it yet.
+
+"After the deploy" is two different places, and they read two different chains.
+A deploy script broadcasts nothing itself: it simulates on a fork per network
+and records the transactions, which forge submits only once the script has
+returned. So for as long as the script runs, the deployment is on the deploy's
+own forks and nowhere else.
+
+- **Simulation verification** is `checkResolvedAddressesOnForks`, handed the
+  fork ids `deployToNetworks` returns. The only place a first-time deployment
+  can be verified in the run that deploys it.
+- **Confirmed-deployment verification** is `checkResolvedAddressesOnNetworks`, a
+  run of its own that forks each network fresh, once the transactions have been
+  submitted and mined. In the same script as the deploy it reads chains that
+  have no code at the address yet and takes the run down before forge broadcasts
+  anything.
 
 Only the consumer knows where it stored what it resolved, so the consumer
 supplies the reads (`abi.encodeCall(IOwnable.owner, ())` and the like) and this
