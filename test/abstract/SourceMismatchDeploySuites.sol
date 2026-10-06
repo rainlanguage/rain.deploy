@@ -62,7 +62,8 @@ abstract contract SourceMismatchDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
                 dependencies: new DeployDependency[](0)
-            })
+            }),
+            unanchorableReason: ""
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
@@ -74,7 +75,8 @@ abstract contract SourceMismatchDeploySuites is RainDeploySuitesBase {
                 // Deliberately NOT `MockDeployableV2`, which every recorded field above is.
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0)
-            })
+            }),
+            unanchorableReason: ""
         });
     }
 }

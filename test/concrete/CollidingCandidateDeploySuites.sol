@@ -49,7 +49,8 @@ contract CollidingCandidateDeploySuites is ExternalDeploySuites {
                 storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
                 dependencies: new DeployDependency[](0)
-            })
+            }),
+            unanchorableReason: ""
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
@@ -60,7 +61,8 @@ contract CollidingCandidateDeploySuites is ExternalDeploySuites {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0)
-            })
+            }),
+            unanchorableReason: ""
         });
     }
 }

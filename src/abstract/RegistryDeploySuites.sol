@@ -119,7 +119,8 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
                 dependencies: new DeployDependency[](0)
-            })
+            }),
+            unanchorableReason: ""
         });
     }
 
@@ -146,7 +147,8 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: MIGRATION_REGISTRY_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
                 dependencies: new DeployDependency[](0)
-            })
+            }),
+            unanchorableReason: ""
         });
     }
 }

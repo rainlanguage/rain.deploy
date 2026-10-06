@@ -70,7 +70,8 @@ contract ChangedDependencyDeploy is RainDeployBroadcast {
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: dependencies
-            })
+            }),
+            unanchorableReason: ""
         });
     }
 }
