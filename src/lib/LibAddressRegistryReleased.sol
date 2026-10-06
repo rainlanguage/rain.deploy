@@ -46,6 +46,14 @@ import {
     DEPENDENCIES as AddressRegistry_0_1_12_DEPENDENCIES
 } from "../generated/0_1_12/AddressRegistry.sol";
 
+import {
+    DEPLOYED_ADDRESS as AddressRegistry_0_1_14_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as AddressRegistry_0_1_14_BYTECODE_HASH,
+    CREATION_CODE as AddressRegistry_0_1_14_CREATION_CODE,
+    RUNTIME_CODE as AddressRegistry_0_1_14_RUNTIME_CODE,
+    DEPENDENCIES as AddressRegistry_0_1_14_DEPENDENCIES
+} from "../generated/0_1_14/AddressRegistry.sol";
+
 /// @title LibAddressRegistryReleased
 /// @notice Every frozen release of `AddressRegistry`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -66,7 +74,7 @@ library LibAddressRegistryReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](5);
+        DeploySuite[] memory suites = new DeploySuite[](6);
         suites[0] = DeploySuite({
             suite: "address-registry@0_1_7",
             creationCode: AddressRegistry_0_1_7_CREATION_CODE,
@@ -111,6 +119,15 @@ library LibAddressRegistryReleased {
             storedRuntimeCode: AddressRegistry_0_1_12_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_12_DEPENDENCIES, (DeployDependency[]))
+        });
+        suites[5] = DeploySuite({
+            suite: "address-registry@0_1_14",
+            creationCode: AddressRegistry_0_1_14_CREATION_CODE,
+            storedDeployedAddress: AddressRegistry_0_1_14_DEPLOYED_ADDRESS,
+            storedBytecodeHash: AddressRegistry_0_1_14_BYTECODE_HASH,
+            storedRuntimeCode: AddressRegistry_0_1_14_RUNTIME_CODE,
+            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            dependencies: abi.decode(AddressRegistry_0_1_14_DEPENDENCIES, (DeployDependency[]))
         });
         return suites;
     }
