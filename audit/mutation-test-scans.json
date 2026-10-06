@@ -172,5 +172,36 @@
       "Process defects in this run, recorded rather than hidden: the branch pass was first run after this run's own tests were written, forfeiting attribution and requiring the base pass above as recovery; the adversarial pass was skipped on the first attempt; and the first pass ran sequentially on one checkout instead of fanning out. The base pass was then run 12-way across 12 fresh clones at 193s, against 944s for 18 sequential mutants.",
       "Snapshot regeneration must run INSIDE the probe suite command. Mutating AddressRegistry moves its bytecode, so a stale pin makes testDeployMatchesPins and every LibAddressRegistry code-hash guard fail for every mutant regardless of behaviour, which is a universal killer that hides which test discriminates. The first attempt attributed all ten mutants to testDeployMatchesPins and was discarded."
     ]
+  },
+  {
+    "timestamp": "2026-10-06T18:40:00Z",
+    "commit": "dc554b391961dfe4bb268c44e32be1251dc02934",
+    "testsAfterCommit": "dc554b391961dfe4bb268c44e32be1251dc02934",
+    "publishedTag": "sol-v0.1.12",
+    "commitsAheadOfTag": 56,
+    "scope": "audit L01 (#264) only: LibRainDeploy's two-stage resolved-address verification",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 13,
+      "behavioursProbed": 13,
+      "killedByExistingTests": 0,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": [264]
+    },
+    "notes": [
+      "Narrowed to the L01 fix, so commit and testsAfterCommit are the same tree: the tests are part of the change under test and the units did not exist before it. killedByExistingTests is 0 and gapsFilled is 0 for that reason, not because nothing was probed — 13 of 13 behaviours were probed and all 13 KILLED. The matrix establishes that each new test discriminates, not which pre-existing test covered what, and no attribution pass was possible.",
+      "B13 pins L01 itself: the deploy handing back fresh forks instead of the ones it simulated on is the defect the finding describes, and only testDeployToNetworksReturnsTheForkItDeployedOn notices it.",
+      "The probe refused to start on a red baseline, which is how a flaky suite was found rather than averaged over. The gitignored .env bound ETHEREUM_RPC_URL to eth-pokt.nodies.app and HYPEREVM_RPC_URL to rpc.hyperliquid.xyz/evm, both measured earlier the same day as failing this suite, and the baseline moved between 668/0, 664/4 and 667/1 across runs. Repointed to tenderly for arbitrum and base and drpc for ethereum and hyperevm, after which the baseline was stable at 668 and every mutant scored.",
+      "Process defect, recorded rather than hidden: the first four mutation passes in this session — rain.deploy #260 and #262, rainix #404 and #405 — were hand-rolled mutants.toml and sed loops rather than this skill, and a subagent's sed harness ran 'git checkout -- <src>' against an uncommitted fix, reverting the fix instead of a mutant and producing 8 HARNESS-ERRORs with no evidence."
+    ]
   }
 ]
