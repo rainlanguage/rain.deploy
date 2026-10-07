@@ -59,6 +59,43 @@ contract LibRainDeployCloneTest is Test {
         });
     }
 
+    /// Puts the fixture's factory or implementation at its DECLARED Zoltu address
+    /// on the selected fork, or confirms what is already there is it.
+    ///
+    /// A bare `deployZoltu` cannot be used, and the reason is a real property of
+    /// this fixture rather than an inconvenience. `MockCloneFactory` is pure
+    /// delegation into `LibICloneableFactoryV4`, which is also exactly how the
+    /// factory `rain-factory-deploy` ships is written — and this repo compiles
+    /// with `bytecode_hash = "none"` and `cbor_metadata = false`, so there is
+    /// nothing left in the artifact to tell two identical sources apart. The
+    /// Zoltu address is a pure function of the creation code, so the mock's
+    /// declared address IS the production factory's, and the production factory
+    /// is already deployed there on every network `rain-factory-deploy` has
+    /// reached: measured at `0x12E8…Ac40` on both arbitrum and polygon, with the
+    /// same code hash the mock's runtime code has.
+    ///
+    /// A second `CREATE2` at an occupied address is a `CreateCollision`, which
+    /// consumes every unit of gas forwarded to it and surfaces as
+    /// `DeployFailed(false, address(0))`.
+    ///
+    /// So: deploy where absent, and where present assert the code is the code
+    /// the fixture derives its clone addresses from. The assertion is the point
+    /// of the branch — skipping the deploy without it would let this test predict
+    /// clone addresses against a factory it never checked, which is the one thing
+    /// a clone has no source anchor to catch.
+    /// @param creationCode The creation code whose Zoltu address is wanted.
+    /// @param runtimeCode The runtime code that creation code leaves behind.
+    /// @return The declared address, now holding that runtime code.
+    function zoltuDeployOrAdopt(bytes memory creationCode, bytes memory runtimeCode) internal returns (address) {
+        address declared = LibRainDeploy.zoltuAddress(creationCode);
+        if (declared.code.length == 0) {
+            assertEq(LibRainDeploy.deployZoltu(creationCode), declared, "zoltu deployed off its derived address");
+        } else {
+            assertEq(declared.codehash, keccak256(runtimeCode), "something else occupies the declared address");
+        }
+        return declared;
+    }
+
     /// @param network The network name a refusal should carry.
     /// @param deployer The address to broadcast as.
     /// @param cloneData The `abi.encode`d `CloneDeploy`.
@@ -499,10 +536,10 @@ contract LibRainDeployCloneTest is Test {
         vm.makePersistent(address(this));
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
 
-        address factory = LibRainDeploy.deployZoltu(type(MockCloneFactory).creationCode);
+        address factory = zoltuDeployOrAdopt(type(MockCloneFactory).creationCode, type(MockCloneFactory).runtimeCode);
         assertEq(factory, exampleCloneFactory(), "factory at its declared address");
         vm.makePersistent(factory);
-        address implementation = LibRainDeploy.deployZoltu(type(MockCloneable).creationCode);
+        address implementation = zoltuDeployOrAdopt(type(MockCloneable).creationCode, type(MockCloneable).runtimeCode);
         assertEq(implementation, exampleCloneImplementation(), "implementation at its declared address");
         vm.makePersistent(implementation);
 
@@ -512,6 +549,12 @@ contract LibRainDeployCloneTest is Test {
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        // The DEPLOY half of the claim has to be unconditional. A clone already
+        // at the expected address would send both calls down the skip branch and
+        // the test would pass having deployed nothing, measuring only that a
+        // no-op is a no-op.
+        assertEq(expected.code.length, 0, "the clone must not already be deployed");
 
         (address deployed,) = this.externalCloneToNetworks(networks, address(this), clone, expected, expectedCodeHash);
         assertEq(deployed, expected);
@@ -540,22 +583,29 @@ contract LibRainDeployCloneTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.POLYGON;
 
+        CloneDeploy memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
+        address expected = LibRainDeployClone.cloneDeployedAddress(clone);
+        bytes32 expectedCodeHash = LibRainDeployClone.cloneDeployedCodehash(exampleCloneImplementation());
+
         // The factory and the implementation have to be on BOTH, at the same
         // addresses, which is exactly the precondition `ICloneableFactoryV4`
         // names for a clone to be cross-network deterministic.
         for (uint256 i = 0; i < networks.length; i++) {
             vm.createSelectFork(networks[i]);
-            address factory = LibRainDeploy.deployZoltu(type(MockCloneFactory).creationCode);
+            address factory =
+                zoltuDeployOrAdopt(type(MockCloneFactory).creationCode, type(MockCloneFactory).runtimeCode);
             assertEq(factory, exampleCloneFactory());
-            address implementation = LibRainDeploy.deployZoltu(type(MockCloneable).creationCode);
+            address implementation =
+                zoltuDeployOrAdopt(type(MockCloneable).creationCode, type(MockCloneable).runtimeCode);
             assertEq(implementation, exampleCloneImplementation());
             vm.makePersistent(factory);
             vm.makePersistent(implementation);
+            // Per network, because "reaches every network" is a claim about a
+            // deploy happening on each. A clone already at the address on either
+            // one takes that network down the skip branch, and the code-hash
+            // assertions below would still pass.
+            assertEq(expected.code.length, 0, networks[i]);
         }
-
-        CloneDeploy memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
-        address expected = LibRainDeployClone.cloneDeployedAddress(clone);
-        bytes32 expectedCodeHash = LibRainDeployClone.cloneDeployedCodehash(exampleCloneImplementation());
 
         (address deployed, uint256[] memory forkIds) =
             this.externalCloneAndBroadcast(networks, 1, clone, expected, expectedCodeHash);
