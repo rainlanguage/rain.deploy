@@ -14,6 +14,7 @@ import {MockRevertingAnswerOwner} from "../../concrete/MockRevertingAnswerOwner.
 import {MockChainDependentOwner} from "../../concrete/MockChainDependentOwner.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
+import {MOCK_DEPLOYABLE_OWNER, MockDeployableOwner} from "../../concrete/MockDeployableOwner.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
 
 /// @title LibRainDeployTest
@@ -77,6 +78,37 @@ contract LibRainDeployTest is Test {
     /// @return The deterministic address for `MockDeployableV2`.
     function mockDeployableV2Address() internal pure returns (address) {
         return LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
+    }
+
+    /// Deploys `MockDeployableOwner` to each network through `deployToNetworks`:
+    /// a first-time deployment of a target that answers the resolved-address
+    /// read. Nothing is made persistent, so it exists on the returned forks and
+    /// nowhere else, which is the state a deploy script is in when it returns.
+    /// @param networks The network names to deploy to.
+    /// @return deployed The deterministic address it landed at.
+    /// @return forkIds The fork each network was deployed on.
+    function deployMockDeployableOwner(string[] memory networks)
+        internal
+        returns (address deployed, uint256[] memory forkIds)
+    {
+        (deployed, forkIds) = this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployableOwner).creationCode,
+            "test/concrete/MockDeployableOwner.sol:MockDeployableOwner",
+            LibRainDeploy.zoltuAddress(type(MockDeployableOwner).creationCode),
+            keccak256(type(MockDeployableOwner).runtimeCode),
+            new DeployDependency[](0)
+        );
+    }
+
+    /// The address `MockDeployableOwner.iChainOwner` answers on a given chain.
+    /// @param chainId The chain id.
+    /// @return The chain id as an address.
+    function chainOwner(uint256 chainId) internal pure returns (address) {
+        // The low 160 bits are the whole of any chain id this repo forks.
+        // forge-lint: disable-next-line(unsafe-typecast)
+        return address(uint160(chainId));
     }
 
     /// External wrapper for `isStartBlock` so that it can be called
@@ -446,6 +478,7 @@ contract LibRainDeployTest is Test {
     /// @param dependencies The dependencies to check, each an address and the
     /// runtime code that must be at it.
     /// @return deployedAddress The deployed contract address.
+    /// @return forkIds The fork each network was deployed on.
     function externalDeployAndBroadcast(
         string[] memory networks,
         uint256 deployerPrivateKey,
@@ -454,8 +487,8 @@ contract LibRainDeployTest is Test {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) external returns (address deployedAddress) {
-        deployedAddress = LibRainDeploy.deployAndBroadcast(
+    ) external returns (address deployedAddress, uint256[] memory forkIds) {
+        (deployedAddress, forkIds) = LibRainDeploy.deployAndBroadcast(
             vm,
             networks,
             deployerPrivateKey,
@@ -505,7 +538,7 @@ contract LibRainDeployTest is Test {
         networks[1] = LibRainDeploy.ARBITRUM_ONE;
         DeployDependency[] memory dependencies = new DeployDependency[](0);
 
-        address result = this.externalDeployToNetworks(
+        (address result,) = this.externalDeployToNetworks(
             networks,
             address(this),
             type(MockDeployable).creationCode,
@@ -564,7 +597,7 @@ contract LibRainDeployTest is Test {
             deployedAddress: LibRainDeploy.ZOLTU_FACTORY, runtimeCode: LibRainDeploy.ZOLTU_FACTORY_BYTECODE
         });
 
-        address result = this.externalDeployToNetworks(
+        (address result,) = this.externalDeployToNetworks(
             networks,
             address(this),
             type(MockDeployable).creationCode,
@@ -594,6 +627,7 @@ contract LibRainDeployTest is Test {
     /// network before this contract can be broadcast there, each paired with
     /// the runtime code that must be at it.
     /// @return deployedAddress The deployed contract address.
+    /// @return forkIds The fork each network was deployed on.
     function externalDeployToNetworks(
         string[] memory networks,
         address deployer,
@@ -602,8 +636,8 @@ contract LibRainDeployTest is Test {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) external returns (address deployedAddress) {
-        deployedAddress = LibRainDeploy.deployToNetworks(
+    ) external returns (address deployedAddress, uint256[] memory forkIds) {
+        (deployedAddress, forkIds) = LibRainDeploy.deployToNetworks(
             vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies
         );
     }
@@ -722,7 +756,7 @@ contract LibRainDeployTest is Test {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         DeployDependency[] memory dependencies = new DeployDependency[](0);
-        address deployed = this.externalDeployAndBroadcast(
+        (address deployed,) = this.externalDeployAndBroadcast(
             networks,
             1,
             type(MockDeployable).creationCode,
@@ -748,7 +782,7 @@ contract LibRainDeployTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         DeployDependency[] memory dependencies = new DeployDependency[](0);
 
-        address result = this.externalDeployToNetworks(
+        (address result,) = this.externalDeployToNetworks(
             networks,
             address(this),
             type(MockDeployable).creationCode,
@@ -779,7 +813,7 @@ contract LibRainDeployTest is Test {
         DeployDependency[] memory dependencies = new DeployDependency[](1);
         dependencies[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: ABSENT_RUNTIME_CODE});
 
-        address result = this.externalDeployToNetworks(
+        (address result,) = this.externalDeployToNetworks(
             networks,
             address(this),
             type(MockDeployable).creationCode,
@@ -812,7 +846,7 @@ contract LibRainDeployTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         DeployDependency[] memory dependencies = new DeployDependency[](0);
 
-        address result = this.externalDeployToNetworks(
+        (address result,) = this.externalDeployToNetworks(
             networks,
             address(this),
             type(MockDeployable).creationCode,
@@ -1263,6 +1297,14 @@ contract LibRainDeployTest is Test {
     function ownerReadCalls() internal pure returns (bytes[] memory) {
         bytes[] memory readCalls = new bytes[](1);
         readCalls[0] = abi.encodeWithSignature("iOwner()");
+        return readCalls;
+    }
+
+    /// The calldata for reading the chain `MockDeployableOwner` is read on.
+    /// @return The single-element read call list.
+    function chainOwnerReadCalls() internal pure returns (bytes[] memory) {
+        bytes[] memory readCalls = new bytes[](1);
+        readCalls[0] = abi.encodeWithSignature("iChainOwner()");
         return readCalls;
     }
 
@@ -1887,6 +1929,192 @@ contract LibRainDeployTest is Test {
         assertEq(block.chainid, BASE_CHAIN_ID);
     }
 
+    /// External wrapper for `checkResolvedAddressesOnForks` so that
+    /// `vm.expectRevert` works at the correct call depth.
+    /// @param networks The list of network names to check.
+    /// @param forkIds The fork to check each network on.
+    /// @param target The deployed contract to read on each fork.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedAddresses The address each read MUST answer with.
+    function externalCheckResolvedAddressesOnForks(
+        string[] memory networks,
+        uint256[] memory forkIds,
+        address target,
+        bytes[] memory readCalls,
+        address[] memory expectedAddresses
+    ) external {
+        LibRainDeploy.checkResolvedAddressesOnForks(vm, networks, forkIds, target, readCalls, expectedAddresses);
+    }
+
+    /// A fork id no fork has, so selecting it is itself an error. That is what
+    /// makes "refused before anything is selected" observable from outside.
+    /// @param length How many of them to make.
+    /// @return The list.
+    function unselectableForkIds(uint256 length) internal pure returns (uint256[] memory) {
+        uint256[] memory forkIds = new uint256[](length);
+        for (uint256 i = 0; i < length; i++) {
+            forkIds[i] = type(uint256).max;
+        }
+        return forkIds;
+    }
+
+    /// `deployToNetworks` MUST hand back the fork it deployed on for each
+    /// network, positionally paired with the names it was given.
+    ///
+    /// Each returned id is selected and asserted to be on the chain its name
+    /// says AND to hold the deployment. The chain id alone would pass a list of
+    /// fresh forks of the right chains; the code hash is what says these are the
+    /// forks the deploy ran on, which is the only thing they are returned for.
+    function testDeployToNetworksReturnsTheForkItDeployedOn() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+
+        (address result, uint256[] memory forkIds) = this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "test/concrete/MockDeployable.sol:MockDeployable",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            new DeployDependency[](0)
+        );
+        assertEq(forkIds.length, networks.length);
+
+        vm.selectFork(forkIds[0]);
+        assertEq(block.chainid, BASE_CHAIN_ID);
+        assertEq(result.codehash, mockDeployableCodeHash());
+
+        vm.selectFork(forkIds[1]);
+        assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
+        assertEq(result.codehash, mockDeployableCodeHash());
+    }
+
+    /// A first-time deploy MUST be verifiable in the run that deploys it, on the
+    /// forks `deployToNetworks` hands back.
+    ///
+    /// Nothing is made persistent, deliberately. The deployment exists on the
+    /// deploy's own forks and nowhere else, so a target carried across forks by
+    /// `vm.makePersistent` would pass whichever forks the check used — which is
+    /// why rainlanguage/rain.deploy#264 went unnoticed.
+    function testDeployThenCheckResolvedAddressesOnTheDeployForks() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
+
+        (address deployed, uint256[] memory forkIds) = deployMockDeployableOwner(networks);
+
+        LibRainDeploy.checkResolvedAddressesOnForks(
+            vm, networks, forkIds, deployed, ownerReadCalls(), expected(MOCK_DEPLOYABLE_OWNER)
+        );
+    }
+
+    /// `checkResolvedAddressesOnForks` MUST select every fork it is given, not
+    /// only the first.
+    ///
+    /// The deployment answers `iChainOwner` with the chain it is read on, so the
+    /// expected value holds on the first fork and nothing else. A check that
+    /// never advanced would pass; this one fails naming the SECOND network and
+    /// the chain id it actually read there.
+    function testCheckResolvedAddressesOnForksReachesEveryFork() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
+
+        (address deployed, uint256[] memory forkIds) = deployMockDeployableOwner(networks);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                LibRainDeploy.BASE,
+                deployed,
+                uint256(0),
+                chainOwner(ARBITRUM_ONE_CHAIN_ID),
+                chainOwner(BASE_CHAIN_ID)
+            )
+        );
+        this.externalCheckResolvedAddressesOnForks(
+            networks, forkIds, deployed, chainOwnerReadCalls(), expected(chainOwner(ARBITRUM_ONE_CHAIN_ID))
+        );
+    }
+
+    /// `checkResolvedAddressesOnNetworks` MUST NOT be able to see a deployment
+    /// simulated earlier in the same run, and MUST say so as a read that could
+    /// not be answered.
+    ///
+    /// It forks fresh and nothing is mined until forge submits what the deploy
+    /// recorded, so on a first-time deployment the address has no code on the
+    /// real chain, the static call answers nothing, and the run goes down before
+    /// forge broadcasts anything. That is the whole of
+    /// rainlanguage/rain.deploy#264, pinned rather than papered over: the two
+    /// stages read different state, and a fresh fork is right for the one that
+    /// runs once the transactions have confirmed.
+    function testCheckResolvedAddressesOnNetworksCannotSeeASimulatedDeploy() external {
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        (address deployed,) = deployMockDeployableOwner(networks);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedAddressReadFailed.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                deployed,
+                uint256(0),
+                bytes("")
+            )
+        );
+        this.externalCheckResolvedAddressesOnNetworks(
+            networks, deployed, ownerReadCalls(), expected(MOCK_DEPLOYABLE_OWNER)
+        );
+    }
+
+    /// `checkResolvedAddressesOnForks` MUST revert with `NoNetworks` when given
+    /// none, and MUST report that ahead of every other refusal it has. With no
+    /// networks, no fork ids and no reads, all three are true at once; the
+    /// network set is what the call is for.
+    function testCheckResolvedAddressesOnForksNoNetworksBeatsEverything() external {
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        this.externalCheckResolvedAddressesOnForks(
+            new string[](0), new uint256[](0), address(this), new bytes[](0), new address[](0)
+        );
+    }
+
+    /// `checkResolvedAddressesOnForks` MUST refuse a fork id list that does not
+    /// pair up with its networks, before it selects anything. The one id given
+    /// belongs to no fork, so a loop that ran at all would fail on the select
+    /// rather than on the pairing.
+    function testCheckResolvedAddressesOnForksForkIdsLengthMismatchReverts() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, uint256(2), uint256(1)));
+        this.externalCheckResolvedAddressesOnForks(
+            networks, unselectableForkIds(1), address(this), ownerReadCalls(), expected(address(0xf00))
+        );
+    }
+
+    /// And the read set is checked before anything is selected too, both ways it
+    /// can be unusable, so neither is reported only after a fork has been
+    /// selected. The fork id given belongs to no fork.
+    function testCheckResolvedAddressesOnForksReadSetRefusedBeforeSelecting() external {
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.ResolvedAddressesLengthMismatch.selector, uint256(2), uint256(1))
+        );
+        this.externalCheckResolvedAddressesOnForks(
+            networks, unselectableForkIds(1), address(this), new bytes[](2), new address[](1)
+        );
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoResolvedAddressReads.selector, address(this)));
+        this.externalCheckResolvedAddressesOnForks(
+            networks, unselectableForkIds(1), address(this), new bytes[](0), new address[](0)
+        );
+    }
+
     /// `deployToNetworks` MUST deploy when every dependency holds the code its
     /// declaration carries, i.e. a dependency that checks out is not treated as
     /// missing or as changed.
@@ -1898,7 +2126,7 @@ contract LibRainDeployTest is Test {
             deployedAddress: LibRainDeploy.ZOLTU_FACTORY, runtimeCode: LibRainDeploy.ZOLTU_FACTORY_BYTECODE
         });
 
-        address result = this.externalDeployToNetworks(
+        (address result,) = this.externalDeployToNetworks(
             networks,
             address(this),
             type(MockDeployable).creationCode,
@@ -1937,7 +2165,7 @@ contract LibRainDeployTest is Test {
         dependencies[1] =
             DeployDependency({deployedAddress: dependency, runtimeCode: type(MockDeployableV2).runtimeCode});
 
-        address result = this.externalDeployToNetworks(
+        (address result,) = this.externalDeployToNetworks(
             networks,
             address(this),
             type(MockDeployable).creationCode,

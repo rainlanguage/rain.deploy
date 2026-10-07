@@ -100,6 +100,13 @@ library LibRainDeploy {
     /// Thrown when no networks are provided for deployment.
     error NoNetworks();
 
+    /// Thrown when a fork id list does not pair up with its network names. The
+    /// name is what a failure reports and the id is what it reads, so an
+    /// unpaired list reports one network's result under another's name.
+    /// @param networksLength How many networks were named.
+    /// @param forkIdsLength How many fork ids were given.
+    error ForkIdsLengthMismatch(uint256 networksLength, uint256 forkIdsLength);
+
     /// Thrown when a declared network name has no entry in
     /// `supportedNetworkConfigs()`. The catalogue is where a network's chain
     /// id, explorer and default endpoint come from, so a name it says nothing
@@ -479,6 +486,30 @@ library LibRainDeploy {
         return declared;
     }
 
+    /// The read-set refusals every resolved-address check makes before it reads
+    /// anything, so they are reportable without an RPC round trip.
+    ///
+    /// An empty read set is REFUSED: a check with nothing to read returns having
+    /// asserted nothing, which no caller can tell from every read checking out.
+    /// Checked AFTER pairing, because the empty pair is the one mispairing that
+    /// pairing cannot see — zero against zero says nothing.
+    /// @param target The deployed contract the reads are aimed at, for the
+    /// refusal to name.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedAddresses The address each read MUST answer with,
+    /// positionally paired with `readCalls`.
+    function checkResolvedAddressReads(address target, bytes[] memory readCalls, address[] memory expectedAddresses)
+        private
+        pure
+    {
+        if (readCalls.length != expectedAddresses.length) {
+            revert ResolvedAddressesLengthMismatch(readCalls.length, expectedAddresses.length);
+        }
+        if (readCalls.length == 0) {
+            revert NoResolvedAddressReads(target);
+        }
+    }
+
     /// Asserts that an already-deployed contract holds the addresses the
     /// deployment expects, on whichever network is currently selected.
     ///
@@ -498,12 +529,6 @@ library LibRainDeploy {
     /// Only the consumer knows where it stored what it resolved, so the consumer
     /// supplies the reads. Each entry in `readCalls` is static-called against
     /// `target` and MUST answer with exactly one address.
-    ///
-    /// An empty read set is REFUSED. A check with nothing to read returns having
-    /// asserted nothing, which is indistinguishable from every read checking
-    /// out, and it is what a consumer that built its read list from a source
-    /// that came back empty hands in — right before it migrates onto the
-    /// deployment this was supposed to verify.
     /// @param network The network name, for the error only.
     /// @param target The deployed contract to read.
     /// @param readCalls The calldata for each read, e.g.
@@ -516,16 +541,7 @@ library LibRainDeploy {
         bytes[] memory readCalls,
         address[] memory expectedAddresses
     ) internal view {
-        if (readCalls.length != expectedAddresses.length) {
-            revert ResolvedAddressesLengthMismatch(readCalls.length, expectedAddresses.length);
-        }
-        // After the pairing check, not before it: an unpaired call is a
-        // mispairing whichever side is empty, and reporting the empty pair as a
-        // mismatch of zero against zero would say nothing. The empty pair is the
-        // one case pairing cannot see, so it is its own error.
-        if (readCalls.length == 0) {
-            revert NoResolvedAddressReads(target);
-        }
+        checkResolvedAddressReads(target, readCalls, expectedAddresses);
         for (uint256 i = 0; i < readCalls.length; i++) {
             // The consumer supplies the reads, so the call is low level by
             // construction: there is no interface here to call through. Excluded
@@ -562,19 +578,64 @@ library LibRainDeploy {
         }
     }
 
-    /// Runs `checkResolvedAddresses` on every network, so a deployment verifies
-    /// itself across the whole target set here rather than in every consumer's
-    /// deploy script.
+    /// SIMULATION verification: runs `checkResolvedAddresses` on forks that
+    /// ALREADY EXIST, which `deployToNetworks` returns the ids for.
     ///
-    /// Run this after `deployAndBroadcast` and before anything depends on the
-    /// deployment. A network where the deployed contract holds something other
-    /// than expected is a burned deterministic address, found while nothing
-    /// points at it yet — which is the whole reason to verify before migrating
-    /// onto a deployment rather than trusting it.
+    /// A deploy script broadcasts nothing itself — it simulates on each fork and
+    /// records transactions, and forge submits them only once the script has
+    /// returned. So during the script the deployment exists on the deploy's own
+    /// forks and nowhere else, and this is the only way a first-time deploy can
+    /// be verified in the run that deploys it. Once the transactions confirm,
+    /// `checkResolvedAddressesOnNetworks` is the stage to use.
     ///
-    /// An empty network set and an empty read set are both REFUSED, before
-    /// anything is forked. Either one makes this return success across every
-    /// network having read nothing at all.
+    /// An empty network set, an unpaired fork id list and an empty read set are
+    /// all REFUSED before any fork is selected.
+    /// @param vm The Vm instance to select forks with.
+    /// @param networks The list of network names to check, naming the fork ids
+    /// positionally. The name is what a failure reports.
+    /// @param forkIds The fork to check each network on, positionally paired
+    /// with `networks`.
+    /// @param target The deployed contract to read on each network.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedAddresses The address each read MUST answer with,
+    /// positionally paired with `readCalls`.
+    function checkResolvedAddressesOnForks(
+        Vm vm,
+        string[] memory networks,
+        uint256[] memory forkIds,
+        address target,
+        bytes[] memory readCalls,
+        address[] memory expectedAddresses
+    ) internal {
+        if (networks.length == 0) {
+            revert NoNetworks();
+        }
+        if (forkIds.length != networks.length) {
+            revert ForkIdsLengthMismatch(networks.length, forkIds.length);
+        }
+        checkResolvedAddressReads(target, readCalls, expectedAddresses);
+        for (uint256 i = 0; i < networks.length; i++) {
+            vm.selectFork(forkIds[i]);
+            console2.log("Checking resolved addresses on network:", networks[i]);
+            checkResolvedAddresses(networks[i], target, readCalls, expectedAddresses);
+        }
+    }
+
+    /// CONFIRMED-DEPLOYMENT verification: runs `checkResolvedAddresses` on a
+    /// FRESH fork of every network, a run of its own once the deploy's
+    /// transactions have been mined. A network holding something other than
+    /// expected is a burned deterministic address, found while nothing points
+    /// at it yet.
+    ///
+    /// It CANNOT verify a deploy made earlier in the same script. Nothing is
+    /// mined when `deployAndBroadcast` returns, so a fresh fork has no code at
+    /// the address, every read answers nothing, and `ResolvedAddressReadFailed`
+    /// takes the run down before forge submits what it collected. Same-script
+    /// verification is `checkResolvedAddressesOnForks`, on the ids the deploy
+    /// hands back.
+    ///
+    /// An empty network set and an empty read set are both REFUSED before
+    /// anything is forked.
     /// @param vm The Vm instance to use for forking.
     /// @param networks The list of network names to check.
     /// @param target The deployed contract to read on each network.
@@ -591,22 +652,10 @@ library LibRainDeploy {
         if (networks.length == 0) {
             revert NoNetworks();
         }
-        // Checked before any fork so a mispaired call fails immediately rather
-        // than after an RPC round trip.
-        if (readCalls.length != expectedAddresses.length) {
-            revert ResolvedAddressesLengthMismatch(readCalls.length, expectedAddresses.length);
-        }
-        // Same reason: an empty read set is reported without an RPC round trip,
-        // so it cannot be masked by an outage on the first network.
-        if (readCalls.length == 0) {
-            revert NoResolvedAddressReads(target);
-        }
-        uint256[] memory forkIds = createForks(vm, networks);
-        for (uint256 i = 0; i < networks.length; i++) {
-            vm.selectFork(forkIds[i]);
-            console2.log("Checking resolved addresses on network:", networks[i]);
-            checkResolvedAddresses(networks[i], target, readCalls, expectedAddresses);
-        }
+        // Repeated here rather than left to the fork loop, so a mispaired or
+        // empty read set is reported without an RPC round trip.
+        checkResolvedAddressReads(target, readCalls, expectedAddresses);
+        checkResolvedAddressesOnForks(vm, networks, createForks(vm, networks), target, readCalls, expectedAddresses);
     }
 
     /// Everything that MUST already be on a network before a deploy is
@@ -682,7 +731,12 @@ library LibRainDeploy {
     /// contract's constructor: an address that merely has SOMETHING at it
     /// satisfies no constructor that calls it, and the derived code hash this
     /// broadcast carries was computed against the declared bytes.
-    /// @return The deployed contract address.
+    /// @return deployedAddress The deployed contract address.
+    /// @return forkIds The fork each network was deployed on, positionally
+    /// paired with `networks`. Handed back rather than dropped because the
+    /// deployment exists ONLY on them until forge submits what this recorded,
+    /// so they are what `checkResolvedAddressesOnForks` verifies a first-time
+    /// deploy on.
     function deployToNetworks(
         Vm vm,
         string[] memory networks,
@@ -692,7 +746,7 @@ library LibRainDeploy {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (address) {
+    ) internal returns (address deployedAddress, uint256[] memory forkIds) {
         if (networks.length == 0) {
             revert NoNetworks();
         }
@@ -706,7 +760,7 @@ library LibRainDeploy {
         if (derivedAddress != expectedAddress) {
             revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);
         }
-        uint256[] memory forkIds = createForks(vm, networks);
+        forkIds = createForks(vm, networks);
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
             console2.log("Deploying to network:", networks[i]);
@@ -717,10 +771,10 @@ library LibRainDeploy {
 
                 console2.log(" - Deploying via Zoltu");
                 vm.startBroadcast(deployer);
-                address deployedAddress = deployZoltu(creationCode);
+                address zoltuDeployedAddress = deployZoltu(creationCode);
                 vm.stopBroadcast();
-                if (deployedAddress != expectedAddress) {
-                    revert UnexpectedDeployedAddress(expectedAddress, deployedAddress);
+                if (zoltuDeployedAddress != expectedAddress) {
+                    revert UnexpectedDeployedAddress(expectedAddress, zoltuDeployedAddress);
                 }
             } else {
                 // Already deployed on this network. The Zoltu deploy is
@@ -744,7 +798,7 @@ library LibRainDeploy {
             );
         }
 
-        return expectedAddress;
+        return (expectedAddress, forkIds);
     }
 
     /// Deploys the given creation code via the Zoltu factory to the given
@@ -760,7 +814,9 @@ library LibRainDeploy {
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The dependencies to check, each an address and the
     /// runtime code that must be at it.
-    /// @return The address of the deployed contract.
+    /// @return deployedAddress The address of the deployed contract.
+    /// @return forkIds The fork each network was deployed on, as
+    /// `deployToNetworks` returns them.
     function deployAndBroadcast(
         Vm vm,
         string[] memory networks,
@@ -770,7 +826,7 @@ library LibRainDeploy {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (address) {
+    ) internal returns (address deployedAddress, uint256[] memory forkIds) {
         if (networks.length == 0) {
             revert NoNetworks();
         }
