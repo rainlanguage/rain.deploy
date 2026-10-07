@@ -813,7 +813,7 @@ library LibRainDeploy {
         Vm vm,
         string[] memory networks,
         address deployer,
-        function (Vm, string memory, address, bytes memory) internal returns (address) deployStep,
+        function(Vm, string memory, address, bytes memory) internal returns (address) deployStep,
         bytes memory deployStepData,
         string memory contractPath,
         address expectedAddress,

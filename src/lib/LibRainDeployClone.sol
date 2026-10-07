@@ -175,9 +175,7 @@ library LibRainDeployClone {
     /// @return The predicted clone address.
     function cloneDeployedAddress(CloneDeploy memory clone) internal pure returns (address) {
         return LibICloneableFactoryV4.predictCloneAddress(
-            clone.factory,
-            clone.implementation,
-            LibICloneableFactoryV4.effectiveOpenSalt(clone.salt, clone.data)
+            clone.factory, clone.implementation, LibICloneableFactoryV4.effectiveOpenSalt(clone.salt, clone.data)
         );
     }
 
@@ -251,9 +249,8 @@ library LibRainDeployClone {
         }
 
         address expectedAddress = cloneDeployedAddress(clone);
-        address factoryPredictedAddress = ICloneableFactoryV4(clone.factory).predictDeterministicAddressOpenSalt(
-            clone.implementation, clone.data, clone.salt
-        );
+        address factoryPredictedAddress = ICloneableFactoryV4(clone.factory)
+            .predictDeterministicAddressOpenSalt(clone.implementation, clone.data, clone.salt);
         if (factoryPredictedAddress != expectedAddress) {
             revert CloneFactoryPredictionMismatch(network, clone.factory, expectedAddress, factoryPredictedAddress);
         }

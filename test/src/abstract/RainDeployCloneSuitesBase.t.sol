@@ -111,9 +111,7 @@ contract RainDeployCloneSuitesBaseTest is Test {
         assertEq(second.suite, "example-clone-second-salt");
 
         // Not merely a different key: a different clone, at a different address.
-        assertNotEq(
-            LibRainDeployClone.cloneDeployedAddress(first), LibRainDeployClone.cloneDeployedAddress(second)
-        );
+        assertNotEq(LibRainDeployClone.cloneDeployedAddress(first), LibRainDeployClone.cloneDeployedAddress(second));
 
         // The selected clone and the selected SUITE agree, which is the one list
         // claim at the point it matters: the broadcast reads the clone, the

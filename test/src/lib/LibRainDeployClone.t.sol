@@ -55,11 +55,7 @@ contract LibRainDeployCloneTest is Test {
     /// @return The clone declaration.
     function localClone(address factory, address implementation) internal pure returns (CloneDeploy memory) {
         return CloneDeploy({
-            suite: "local-clone",
-            factory: factory,
-            implementation: implementation,
-            data: TEST_DATA,
-            salt: TEST_SALT
+            suite: "local-clone", factory: factory, implementation: implementation, data: TEST_DATA, salt: TEST_SALT
         });
     }
 
@@ -145,7 +141,8 @@ contract LibRainDeployCloneTest is Test {
 
         // The independent derivation: the standard's prefix past the preamble,
         // then the address, then the shared suffix.
-        bytes memory runtimePrefix = new bytes(EIP1167_CREATION_CODE_PREFIX.length - EIP1167_CREATION_CODE_PREFIX_LENGTH);
+        bytes memory runtimePrefix =
+            new bytes(EIP1167_CREATION_CODE_PREFIX.length - EIP1167_CREATION_CODE_PREFIX_LENGTH);
         for (uint256 i = 0; i < runtimePrefix.length; i++) {
             runtimePrefix[i] = EIP1167_CREATION_CODE_PREFIX[i + EIP1167_CREATION_CODE_PREFIX_LENGTH];
         }
@@ -181,8 +178,7 @@ contract LibRainDeployCloneTest is Test {
             keccak256(LibRainDeployClone.cloneRuntimeCode(implementation))
         );
         assertNotEq(
-            LibRainDeployClone.cloneDeployedCodehash(implementation),
-            LibRainDeployClone.cloneDeployedCodehash(other)
+            LibRainDeployClone.cloneDeployedCodehash(implementation), LibRainDeployClone.cloneDeployedCodehash(other)
         );
     }
 
@@ -267,11 +263,7 @@ contract LibRainDeployCloneTest is Test {
         assertNotEq(
             LibRainDeployClone.cloneDeployedAddress(
                 CloneDeploy({
-                    suite: "base",
-                    factory: otherFactory,
-                    implementation: implementation,
-                    data: data,
-                    salt: salt
+                    suite: "base", factory: otherFactory, implementation: implementation, data: data, salt: salt
                 })
             ),
             base,
@@ -280,11 +272,7 @@ contract LibRainDeployCloneTest is Test {
         assertNotEq(
             LibRainDeployClone.cloneDeployedAddress(
                 CloneDeploy({
-                    suite: "base",
-                    factory: factory,
-                    implementation: otherImplementation,
-                    data: data,
-                    salt: salt
+                    suite: "base", factory: factory, implementation: otherImplementation, data: data, salt: salt
                 })
             ),
             base,
@@ -293,11 +281,7 @@ contract LibRainDeployCloneTest is Test {
         assertNotEq(
             LibRainDeployClone.cloneDeployedAddress(
                 CloneDeploy({
-                    suite: "base",
-                    factory: factory,
-                    implementation: implementation,
-                    data: data,
-                    salt: otherSalt
+                    suite: "base", factory: factory, implementation: implementation, data: data, salt: otherSalt
                 })
             ),
             base,
@@ -306,11 +290,7 @@ contract LibRainDeployCloneTest is Test {
         assertNotEq(
             LibRainDeployClone.cloneDeployedAddress(
                 CloneDeploy({
-                    suite: "base",
-                    factory: factory,
-                    implementation: implementation,
-                    data: otherData,
-                    salt: salt
+                    suite: "base", factory: factory, implementation: implementation, data: otherData, salt: salt
                 })
             ),
             base,
@@ -401,9 +381,7 @@ contract LibRainDeployCloneTest is Test {
         assertEq(clone.factory.code.length, 0);
 
         vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, clone.factory
-            )
+            abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, clone.factory)
         );
         this.externalCloneDeployStep(LibRainDeploy.ARBITRUM_ONE, address(this), abi.encode(clone));
     }
@@ -490,9 +468,7 @@ contract LibRainDeployCloneTest is Test {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived)
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
         this.externalCloneToNetworks(networks, address(this), clone, stale, bytes32(0));
     }
 
@@ -506,9 +482,7 @@ contract LibRainDeployCloneTest is Test {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived)
-        );
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
         this.externalCloneAndBroadcast(networks, 1, clone, stale, bytes32(0));
     }
 
