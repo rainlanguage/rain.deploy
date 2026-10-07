@@ -53,7 +53,7 @@ abstract contract RainDeployCloneSuitesBase is RainDeploySuitesBase {
     /// anything reads the candidates: every loop over an empty list passes, so a
     /// guard per reader is a rule with as many spellings as readers and the one
     /// spelled wrong is the reader that silently stops asserting.
-    /// @return The clones.
+    /// @return clones The clones.
     function checkedCloneDeploys() internal pure returns (CloneDeploy[] memory clones) {
         clones = cloneDeploys();
         if (clones.length == 0) {
