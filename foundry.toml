@@ -79,6 +79,13 @@ fs_permissions = [
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
 rain-lib-memkv = "0.2.0"
+# The clone factory's interface and its address/salt derivations, for the clone
+# deploy step. Its `src` imports nothing outside itself and it does not depend on
+# `rain-deploy`, so this edge introduces no cycle. `rain-factory-deploy` — which
+# is where the deployed factory's address and code hash are pinned — DOES depend
+# on `rain-deploy`, which is why a clone's factory address is a parameter here
+# rather than a constant.
+rain-factory = "0.1.30"
 
 [soldeer]
 recursive_deps = false

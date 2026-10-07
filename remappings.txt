@@ -1,3 +1,4 @@
 forge-std-1.17.0/=dependencies/forge-std-1.17.0/
+rain-factory-0.1.30/=dependencies/rain-factory-0.1.30/
 rain-lib-memkv-0.2.0/=dependencies/rain-lib-memkv-0.2.0/
 rain-sol-codegen-0.1.39/=dependencies/rain-sol-codegen-0.1.39/
