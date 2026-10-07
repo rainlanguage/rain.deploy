@@ -1,7 +1,9 @@
 # Release metadata, not foundry config: `LibRainDeploySnapshot.deployTag` reads
-# `version` as the release being built, and `rainix-tag-release` rewrites it
-# from the tag. `[external.*]` is the section foundry reserves for another
-# tool's config: it never merges it into a profile and never warns about it.
+# `version` as the release being built, and `release-guard` refuses a `sol-v*`
+# tag whose version this line does not already carry in the tagged commit — it
+# is not rewritten from the tag. `[external.*]` is the section foundry reserves
+# for another tool's config: it never merges it into a profile and never warns
+# about it.
 [external.package]
 name = "rain-deploy"
 # Deploy repo: this is the version of the LAST Soldeer publish, not a
@@ -9,7 +11,7 @@ name = "rain-deploy"
 # moves it, in lockstep with the frozen src/generated/<tag>/ record that release
 # writes. A version published before this lifecycle has no such record, so
 # src/generated/ holds no directory for it.
-version = "0.1.12"
+version = "0.1.14"
 
 # SPDX-License-Identifier: LicenseRef-DCL-1.0
 # SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
