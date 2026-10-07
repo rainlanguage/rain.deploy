@@ -307,7 +307,15 @@ library LibRainDeployClone {
         if (derivedAddress != expectedAddress) {
             revert LibRainDeploy.UnexpectedDeployedAddress(expectedAddress, derivedAddress);
         }
-        return LibRainDeploy.deployStepToNetworks(
+        // Assigned to the named returns rather than returned directly from the
+        // call. Identical behaviour, and it is what `unused-return` can see: the
+        // detector reads a CROSS-LIBRARY call's return values as discarded where
+        // the same forwarding inside `LibRainDeploy` is an internal call it does
+        // not model, which is why `deployToNetworks` can `return` its own
+        // forwarding and this cannot. A suppression here would be a directive
+        // that outlives the detector's reason for firing; naming both values is
+        // the shape that needs none.
+        (deployedAddress, forkIds) = LibRainDeploy.deployStepToNetworks(
             vm,
             networks,
             deployer,
