@@ -22,6 +22,7 @@ import {exampleCloneFactory, exampleCloneImplementation} from "../../abstract/Ex
 import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
 import {MockMispredictingCloneFactory} from "../../concrete/MockMispredictingCloneFactory.sol";
+import {MockUncloneableMispredictingCloneFactory} from "../../concrete/MockUncloneableMispredictingCloneFactory.sol";
 
 /// @title LibRainDeployCloneTest
 /// Tests for `LibRainDeployClone`. External wrappers are used for library
@@ -468,24 +469,79 @@ contract LibRainDeployCloneTest is Test {
         assertEq(deployed.codehash, LibRainDeployClone.cloneDeployedCodehash(clone.implementation));
     }
 
+    /// `cloneDeployStep` MUST refuse a mispredicting factory BEFORE it opens the
+    /// broadcast window. A claim about ORDER, not about which error comes back.
+    ///
+    /// The mismatch test above cannot make it. Its refusal reverts the whole
+    /// external call, so a clone a step had already broadcast is rolled back with
+    /// it and `code.length == 0` afterwards is true whether the guard ran first or
+    /// last — the assertion reads as a proof of order and is not one. A factory
+    /// that CANNOT clone is what makes the order observable: reaching the
+    /// broadcast window is an error of its own, so the mismatch coming back
+    /// instead is proof nothing was broadcast.
+    ///
+    /// Which matters because a clone at an address nobody declared cannot be taken
+    /// back — `CREATE2` through a factory is permanent on whatever chain the
+    /// dispatch reached.
+    function testCloneDeployStepRefusesThePredictionBeforeBroadcasting() external {
+        MockUncloneableMispredictingCloneFactory factory = new MockUncloneableMispredictingCloneFactory();
+        MockCloneable implementation = new MockCloneable();
+        CloneDeploy memory clone = localClone(address(factory), address(implementation));
+
+        address expected = LibRainDeployClone.cloneDeployedAddress(clone);
+        address predicted = factory.predictDeterministicAddressOpenSalt(clone.implementation, clone.data, clone.salt);
+        assertEq(predicted, address(uint160(expected) + 1), "the mock must disagree by exactly one");
+
+        // Stated rather than assumed: reaching this factory's clone path is an
+        // error, which is the entire mechanism of the assertion below.
+        vm.expectRevert(MockUncloneableMispredictingCloneFactory.CloneWasReached.selector);
+        factory.cloneDeterministicOpenSalt(clone.implementation, clone.data, clone.salt);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployClone.CloneFactoryPredictionMismatch.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                address(factory),
+                expected,
+                predicted
+            )
+        );
+        this.externalCloneDeployStep(LibRainDeploy.ARBITRUM_ONE, address(this), abi.encode(clone));
+    }
+
     /// `cloneToNetworks` MUST refuse an empty network list rather than report a
     /// successful deploy to nowhere. Checked before any fork, so no RPC is
     /// touched.
+    ///
+    /// The declared address is STALE, and that is what makes the refusal THIS
+    /// guard's. `deployStepToNetworks` below carries the same empty-list guard, so
+    /// a declared address that agreed with the clone would get `NoNetworks` back
+    /// from down there even with this one gone; a disagreeing one gets
+    /// `UnexpectedDeployedAddress` from the derivation check instead. So
+    /// `NoNetworks` on a stale address is reachable only from here, which is also
+    /// the ordering claim: the empty list is refused before the address is.
     function testCloneToNetworksNoNetworksReverts() external {
         CloneDeploy memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
+        address stale = address(uint160(LibRainDeployClone.cloneDeployedAddress(clone)) + 1);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalCloneToNetworks(
-            new string[](0), address(this), clone, LibRainDeployClone.cloneDeployedAddress(clone), bytes32(0)
-        );
+        this.externalCloneToNetworks(new string[](0), address(this), clone, stale, bytes32(0));
     }
 
     /// `cloneAndBroadcast` MUST make the same refusal, and MUST make it before
     /// remembering the key: an empty list is a misconfiguration, not a deploy.
+    ///
+    /// The key is ZERO, which is what makes the order observable from outside, the
+    /// same way `testDeployAndBroadcastNoNetworksBeforeTheKey` makes it on the
+    /// Zoltu path. A zero private key has no wallet to remember, so a call with
+    /// neither a network to deploy to nor a usable key can only answer
+    /// `NoNetworks` if the list was refused before the key was reached. With a
+    /// valid key the refusal is indistinguishable from the one `cloneToNetworks`
+    /// makes below, which carries the same guard.
     function testCloneAndBroadcastNoNetworksReverts() external {
         CloneDeploy memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalCloneAndBroadcast(
-            new string[](0), 1, clone, LibRainDeployClone.cloneDeployedAddress(clone), bytes32(0)
+            new string[](0), 0, clone, LibRainDeployClone.cloneDeployedAddress(clone), bytes32(0)
         );
     }
 
@@ -576,6 +632,12 @@ contract LibRainDeployCloneTest is Test {
     /// Two networks, not one: a loop that stopped after the first would pass a
     /// single-network test, and "the same address on every network" is not a
     /// claim one network can support.
+    ///
+    /// It is also where the key handling is observable. `cloneAndBroadcast`
+    /// REMEMBERS the deploy key rather than merely deriving its address, because
+    /// `vm.startBroadcast` signs as an address forge holds a key for and an
+    /// address derived without remembering is one it cannot sign for. Nothing
+    /// short of a broadcast that succeeds can tell the two apart.
     function testCloneAndBroadcastReachesEveryNetwork() external {
         vm.makePersistent(address(this));
 
@@ -586,6 +648,12 @@ contract LibRainDeployCloneTest is Test {
         CloneDeploy memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
         address expected = LibRainDeployClone.cloneDeployedAddress(clone);
         bytes32 expectedCodeHash = LibRainDeployClone.cloneDeployedCodehash(exampleCloneImplementation());
+
+        // Stated before the call as well as after, so the wallet holding the key
+        // afterwards is what this call did rather than what the harness arrived
+        // with.
+        address deployer = vm.addr(1);
+        assertFalse(walletsHold(deployer));
 
         // The factory and the implementation have to be on BOTH, at the same
         // addresses, which is exactly the precondition `ICloneableFactoryV4`
@@ -611,11 +679,25 @@ contract LibRainDeployCloneTest is Test {
             this.externalCloneAndBroadcast(networks, 1, clone, expected, expectedCodeHash);
         assertEq(deployed, expected);
         assertEq(forkIds.length, networks.length);
+        assertTrue(walletsHold(deployer));
 
         // On each fork the loop used, the clone is there with the declared hash.
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
             assertEq(expected.codehash, expectedCodeHash, networks[i]);
         }
+    }
+
+    /// Whether the forge wallet holds a key for the given address.
+    /// @param account The address to look for.
+    /// @return Whether the wallet holds it.
+    function walletsHold(address account) internal view returns (bool) {
+        address[] memory wallets = vm.getWallets();
+        for (uint256 i = 0; i < wallets.length; i++) {
+            if (wallets[i] == account) {
+                return true;
+            }
+        }
+        return false;
     }
 }
