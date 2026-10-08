@@ -117,6 +117,57 @@ it was told nothing.
 Every suite is individually selectable, including a frozen release — which is
 how a snapshot from before a network existed reaches that network.
 
+### Factory clones
+
+A repo whose deployment is an EIP-1167 clone of an audited implementation,
+rather than a contract it compiles itself, declares the clone and nothing else:
+
+```solidity
+// src/abstract/MyCloneDeploys.sol
+abstract contract MyCloneDeploys is RainDeployCloneSuitesBase {
+    function cloneDeploys() internal pure override returns (CloneDeploy[] memory);
+}
+
+// script/Deploy.sol
+contract Deploy is MyCloneDeploys, RainDeployCloneBroadcast {}
+```
+
+A `CloneDeploy` is five values — suite key, factory, implementation, init data
+and salt — and `RainDeployCloneSuitesBase` derives `candidateSuites()` from them
+with `LibRainDeployClone.cloneCandidate`. So it is still ONE list: the broadcast
+reads `cloneDeploys()` and the verification reads candidates derived from the
+same entries, which is the same property the Zoltu path has for the same reason.
+
+A clone is **unanchorable** — no compiler produces a proxy assembled from an
+address — so the candidate carries `unanchorableReason` and a constant
+`artifactPath` that resolves to no artifact in any repo. The empty string is NOT
+that path: the qualifier rule is the shape `<path>.sol:<Name>` and it applies to
+unanchorable candidates too, so `""` is refused with
+`UnqualifiedCandidateArtifactPath`.
+
+`RainDeployCloneBroadcast` overrides exactly one function, `broadcastSuite`. The
+suite selection, the key handling, the network list, the forks, the idempotent
+skip and the address and code hash assertions are `RainDeployBroadcast.run()`
+and `LibRainDeploy.deployStepToNetworks`, shared with the Zoltu path — the
+deploy STEP is the parameter, `cloneDeterministicOpenSalt` in place of `CREATE2`
+over creation code. Two copies of that loop could not be told apart by any
+passing test, and the one that fell behind would be the one whose deploys
+stopped being checked.
+
+The clone factory's address is a **parameter** rather than a pinned constant,
+because the deployed factory's address and code hash are pinned in
+`rain-factory-deploy`, which depends on this package. What replaces the pin is
+stronger than a code hash: per network, before the broadcast window opens, the
+factory is asked where it would put this exact clone and refused with
+`CloneFactoryPredictionMismatch` if it disagrees. A code hash says the factory
+is a known build; this says the factory agrees about the address.
+
+The **open** salt, not the namespaced one, because the open-salt digest covers
+the implementation and the init data and not the caller — so every account
+reaches the same address on every network. The namespaced derivation bakes the
+deploying account into the address, which a retired key makes unreachable
+forever.
+
 ## Deploy verification
 
 **The creation code is the only input.** The Zoltu factory is `CREATE2` over its

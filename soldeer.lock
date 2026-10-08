@@ -6,6 +6,13 @@ checksum = "a77ad38d5fbef0ec10d1f4d191698e5fbaa2bffbee5d1aced91a39da5e9b908c"
 integrity = "fa706c8a7caf3426c90f75e6aafa3224b0a6c899b490800cf6944e4ec42f9344"
 
 [[dependencies]]
+name = "rain-factory"
+version = "0.1.30"
+url = "https://soldeer-revisions.s3.amazonaws.com/rain-factory/0_1_30_21-09-2026_12:10:56_rain.zip"
+checksum = "fb058ca8cc5153090a49d4885f76031b2291a87310d06417d631a2a78a105049"
+integrity = "e782d94d46b3a1a762ff3fffaad11463e571a59b19df5549f575425ce3a0a3fd"
+
+[[dependencies]]
 name = "rain-lib-memkv"
 version = "0.2.0"
 url = "https://soldeer-revisions.s3.amazonaws.com/rain-lib-memkv/0_2_0_18-09-2026_21:06:03_rain.lib.zip"

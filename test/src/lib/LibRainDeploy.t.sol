@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeployDependency, LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
@@ -529,6 +530,24 @@ contract LibRainDeployTest is Test {
         this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
     }
 
+    /// `deployStepToNetworks` MUST revert with `NoNetworks` when given an empty
+    /// networks array, and it has to be ASKED directly, because nothing above it
+    /// can ask on its behalf.
+    ///
+    /// `deployToNetworks`, `deployAndBroadcast`, `cloneToNetworks` and
+    /// `cloneAndBroadcast` all carry the same guard and all sit above this one, so
+    /// each of their empty-list tests is answered by its own guard and none of
+    /// them can see whether this one is still here. Without it the loop forks
+    /// nothing, iterates nothing and RETURNS — reporting the declared address as
+    /// deployed, to no network at all, which is the one failure the guard exists
+    /// to make impossible.
+    function testDeployStepToNetworksNoNetworksReverts() external {
+        string[] memory networks = new string[](0);
+        DeployDependency[] memory dependencies = new DeployDependency[](0);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        this.externalDeployStepToNetworks(networks, address(this), address(0), bytes32(0), dependencies);
+    }
+
     /// `deployToNetworks` MUST deploy to every network in the list, forking each
     /// independently. Two networks that start without the target both end up with
     /// the deterministic contract, and the call returns its address.
@@ -639,6 +658,44 @@ contract LibRainDeployTest is Test {
     ) external returns (address deployedAddress, uint256[] memory forkIds) {
         (deployedAddress, forkIds) = LibRainDeploy.deployToNetworks(
             vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies
+        );
+    }
+
+    /// Thrown by `unreachableDeployStep`, so a loop that ran a step says so.
+    error DeployStepWasReached();
+
+    /// A deploy step that cannot run without reporting it, for the tests whose
+    /// claim is that the loop refuses its inputs BEFORE it reaches a step.
+    /// @return Never: this always reverts.
+    function unreachableDeployStep(Vm, string memory, address, bytes memory) internal pure returns (address) {
+        revert DeployStepWasReached();
+    }
+
+    /// External wrapper for `deployStepToNetworks` so that `vm.expectRevert` works
+    /// at the correct call depth.
+    ///
+    /// The step is one that cannot run. `deployStepToNetworks` is the shared loop
+    /// and takes its mechanism as a parameter, so a test that reaches a step would
+    /// be testing that step rather than the loop; a step that reports being
+    /// reached makes "the loop refused before running anything" an assertion
+    /// rather than a hope.
+    /// @param networks The list of network names to deploy to.
+    /// @param deployer The deployer address.
+    /// @param expectedAddress The expected deterministic address.
+    /// @param expectedCodeHash The expected code hash of the deployed contract.
+    /// @param dependencies The addresses that must already have code on a
+    /// network, each paired with the runtime code that must be at it.
+    /// @return deployedAddress The deployed contract address.
+    /// @return forkIds The fork each network was deployed on.
+    function externalDeployStepToNetworks(
+        string[] memory networks,
+        address deployer,
+        address expectedAddress,
+        bytes32 expectedCodeHash,
+        DeployDependency[] memory dependencies
+    ) external returns (address deployedAddress, uint256[] memory forkIds) {
+        (deployedAddress, forkIds) = LibRainDeploy.deployStepToNetworks(
+            vm, networks, deployer, unreachableDeployStep, hex"", "", expectedAddress, expectedCodeHash, dependencies
         );
     }
 

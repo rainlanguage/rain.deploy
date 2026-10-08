@@ -27,6 +27,7 @@ import {ShortestKeyDeploySuites} from "../../concrete/ShortestKeyDeploySuites.so
 import {UnanchorableDeploy, ASSEMBLED_CREATION_CODE} from "../../concrete/UnanchorableDeploy.sol";
 import {UnanchorableWithArtifactDeploySuites} from "../../concrete/UnanchorableWithArtifactDeploySuites.sol";
 import {UnanchorableWithStaleArtifactDeploySuites} from "../../concrete/UnanchorableWithStaleArtifactDeploySuites.sol";
+import {EmptyArtifactPathDeploySuites} from "../../concrete/EmptyArtifactPathDeploySuites.sol";
 import {UnqualifiedArtifactPathDeploySuites} from "../../concrete/UnqualifiedArtifactPathDeploySuites.sol";
 import {VersionQualifiedArtifactPathDeploySuites} from "../../concrete/VersionQualifiedArtifactPathDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
@@ -311,6 +312,43 @@ contract RainDeploySuitesBaseTest is Test {
         // quietly selectable.
         vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
         unqualified.externalSuiteByName("qualified-candidate");
+    }
+
+    /// The EMPTY artifact path MUST be refused too, on every reader.
+    ///
+    /// The case an unanchorable candidate reaches for first: "no compiler produces
+    /// this contract" reads as "there is no path", so a consumer writes `""` and
+    /// expects `unanchorableReason` to carry the explanation alone. The qualifier
+    /// rule is the SHAPE `<path>.sol:<Name>`, applied to unanchorable candidates
+    /// as well, and the empty string has no shape — so it falls through the scan
+    /// (`j + 5 <= 0` is false, so the body never runs) and is refused.
+    ///
+    /// Measured here rather than read off the loop bounds, because this refusal is
+    /// the entire reason `LibRainDeployClone` declares a constant
+    /// `CLONE_ARTIFACT_PATH` instead of the empty string a clone candidate would
+    /// otherwise want.
+    function testEmptyCandidateArtifactPathReverts() external {
+        EmptyArtifactPathDeploySuites emptyPath = new EmptyArtifactPathDeploySuites();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, ""));
+        emptyPath.externalCheckedCandidateSuites();
+
+        // The reader the BROADCAST runs, and the one check that catches a
+        // snapshot of the wrong contract.
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, ""));
+        emptyPath.externalCheckCandidatesAnchoredToSource();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, ""));
+        emptyPath.externalAllSuites();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, ""));
+        emptyPath.externalSuiteNames();
+
+        // A non-empty `unanchorableReason` does not excuse it. The reason says
+        // why no ARTIFACT exists; the path still has to name the file the
+        // contract would have been in.
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, ""));
+        emptyPath.externalSuiteByName("qualified-candidate");
     }
 
     /// A colon is not a file. forge reads `Name:0.8.25` as a contract name plus

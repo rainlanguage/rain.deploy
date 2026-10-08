@@ -48,6 +48,17 @@ import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 /// only for the flattest repos; `st0x.deploy` groups concretes under
 /// `deploy/` and `authorize/`, so a convention would be wrong for most of its
 /// suites.
+///
+/// ## One mechanism hook, not a second script
+///
+/// A contract deployed as a factory CLONE differs from a Zoltu deploy in one
+/// step: `cloneDeterministicOpenSalt` through the clone factory instead of
+/// `CREATE2` over creation code through Zoltu. The anchor, the suite selection,
+/// the key, the network list, the forks, the skip and the assertions are
+/// identical — so `broadcastSuite` is the one thing a clone repo overrides, and
+/// `RainDeployCloneBroadcast` is that override and nothing else. A parallel
+/// script would be this file copied with one call swapped, and the copy that
+/// fell behind is the one whose deploys stop being checked.
 abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// The networks to broadcast to. Every network the declaration supports by
     /// default, which is what a deterministic deployment usually wants: one
@@ -99,9 +110,39 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
 
         uint256 deployerPrivateKey = vm.envUint("DEPLOYMENT_KEY");
 
+        broadcastSuite(suite, deployNetworks(), deployerPrivateKey);
+    }
+
+    /// The MECHANISM: how the selected suite's bytes get to an address. The one
+    /// thing that varies between a Zoltu deploy and a factory clone, and
+    /// therefore the only thing a clone repo overrides.
+    ///
+    /// Zoltu by default, which is what a deploy repo compiling its own contract
+    /// wants. `RainDeployCloneBroadcast` overrides it with
+    /// `LibRainDeployClone.cloneAndBroadcast`, and both of those run the same
+    /// `LibRainDeploy.deployStepToNetworks` loop over the same network list with
+    /// the same skip and the same assertions — only the step inside it differs.
+    ///
+    /// The recorded address and code hash are passed from the suite, not derived
+    /// here. They are derivable — that is exactly what `RainDeployVerifySnapshot`
+    /// derives them for — but deriving them at broadcast time would defeat the
+    /// check that matters most at broadcast time: each mechanism compares the
+    /// recorded address against the address its own derivation gives BEFORE it
+    /// forks anything, precisely so a stale pin fails instead of silently
+    /// deploying somewhere the repo's constants do not describe. Feeding it a
+    /// derived value would make that comparison derived-against-derived, and a
+    /// guard that compares a value to itself is not a guard.
+    /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
+    /// @param networks The networks to broadcast to, as `deployNetworks()` gave
+    /// them.
+    /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
+    function broadcastSuite(DeploySuite memory suite, string[] memory networks, uint256 deployerPrivateKey)
+        internal
+        virtual
+    {
         LibRainDeploy.deployAndBroadcast(
             vm,
-            deployNetworks(),
+            networks,
             deployerPrivateKey,
             suite.creationCode,
             suite.artifactPath,
