@@ -350,7 +350,7 @@ library LibAddressRegistryRegister {
 
     /// Reverts unless every given fork's registry binds `name` to `account`,
     /// read through `LibAddressRegistry.resolve` exactly as a consumer reads
-    /// it.
+    /// it, logging the moment each was bound.
     /// @param vm The Vm instance to select forks with.
     /// @param selected The networks the forks are of.
     /// @param declared The networks the declaration supports.
@@ -373,11 +373,11 @@ library LibAddressRegistryRegister {
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
             checkChain(networks[i]);
-            (address actual,) = LibAddressRegistry.resolve(hashed);
+            (address actual, uint256 registeredAt) = LibAddressRegistry.resolve(hashed);
             if (actual != account) {
                 revert UnexpectedBinding(networks[i].name, hashed, account, actual);
             }
-            console2.log("Bound on", networks[i].name);
+            console2.log(string.concat("Bound on ", networks[i].name, " at ", vm.toString(registeredAt)));
         }
     }
 
