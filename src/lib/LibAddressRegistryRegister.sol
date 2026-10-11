@@ -211,6 +211,76 @@ library LibAddressRegistryRegister {
         }
     }
 
+    /// The calldata of the bind of `name` to `account`: what the device signs,
+    /// and what `registerOnSelectedChain` sends.
+    /// @param name The hashed name.
+    /// @param account The account to bind it to.
+    /// @return The `register` calldata.
+    function registerCalldata(bytes32 name, address account) internal pure returns (bytes memory) {
+        return abi.encodeCall(IAddressRegistryV1.register, (name, account));
+    }
+
+    /// The record of a run's inputs, printed before any network: everything the
+    /// device is asked to sign, exactly as it will be signed.
+    /// @param vm The Vm instance to format with.
+    /// @param name The name as a consumer writes it.
+    /// @param account The account to bind it to.
+    /// @param sender The account that signs.
+    /// @return The record, one field per line.
+    function describeInputs(Vm vm, string memory name, address account, address sender)
+        internal
+        pure
+        returns (string memory)
+    {
+        bytes32 hashed = nameHash(name);
+        return string.concat(
+            "Name: ",
+            name,
+            "\nName hash (keccak256 of the name): ",
+            vm.toString(hashed),
+            "\nAccount: ",
+            vm.toString(account),
+            "\nSender (root): ",
+            vm.toString(sender),
+            "\nRegistry: ",
+            vm.toString(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS),
+            "\nCalldata: ",
+            vm.toString(registerCalldata(hashed, account))
+        );
+    }
+
+    /// The record of one network: its chain id, the current binding, and what
+    /// the run does to it — `SKIP` when it is bound to `account` already,
+    /// `BIND` when it is unbound, `REBIND` otherwise.
+    /// @param vm The Vm instance to format with.
+    /// @param network The network's name.
+    /// @param chainId The chain the network forked.
+    /// @param bound The account the name is bound to, or zero.
+    /// @param registeredAt The moment it was bound, or zero.
+    /// @param account The account to bind it to.
+    /// @return The record, one field per line.
+    function describeNetwork(
+        Vm vm,
+        string memory network,
+        uint256 chainId,
+        address bound,
+        uint256 registeredAt,
+        address account
+    ) internal pure returns (string memory) {
+        string memory current = bound == address(0)
+            ? "unbound"
+            : string.concat(vm.toString(bound), " (bound at ", vm.toString(registeredAt), ")");
+        string memory action;
+        if (bound == account) {
+            action = string.concat("SKIP: already bound to ", vm.toString(account));
+        } else {
+            action = string.concat(bound == address(0) ? "BIND" : "REBIND", ": -> ", vm.toString(account));
+        }
+        return string.concat(
+            "Network: ", network, "\n  chain id: ", vm.toString(chainId), "\n  current: ", current, "\n  ", action
+        );
+    }
+
     /// Binds `name` to `account` on the selected chain from `sender`, unless it
     /// is bound to `account` already. Logs the current binding and what is
     /// about to happen to it.
@@ -230,20 +300,10 @@ library LibAddressRegistryRegister {
         checkChain(network);
         (address bound, uint256 registeredAt) = currentBinding(name);
 
-        console2.log("Network:", network.name);
-        console2.log("  chain id:", block.chainid);
-        if (bound == address(0)) {
-            console2.log("  current: unbound");
-        } else {
-            console2.log(
-                string.concat("  current: ", vm.toString(bound), " (bound at ", vm.toString(registeredAt), ")")
-            );
-        }
+        console2.log(describeNetwork(vm, network.name, block.chainid, bound, registeredAt, account));
         if (bound == account) {
-            console2.log("  SKIP: already bound to", account);
             return false;
         }
-        console2.log(string.concat("  ", bound == address(0) ? "BIND" : "REBIND", ": -> ", vm.toString(account)));
 
         vm.startBroadcast(sender);
         IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).register(name, account);
@@ -279,12 +339,7 @@ library LibAddressRegistryRegister {
         SupportedNetwork[] memory networks = selectNetworks(selected, declared);
         checkSender(sender);
 
-        console2.log("Name:", name);
-        console2.log("Name hash (keccak256 of the name):", vm.toString(hashed));
-        console2.log("Account:", account);
-        console2.log("Sender (root):", sender);
-        console2.log("Registry:", LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
-        console2.log("Calldata:", vm.toString(abi.encodeCall(IAddressRegistryV1.register, (hashed, account))));
+        console2.log(describeInputs(vm, name, account, sender));
 
         forkIds = LibRainDeploy.createForks(vm, selected);
         for (uint256 i = 0; i < networks.length; i++) {

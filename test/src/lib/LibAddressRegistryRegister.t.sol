@@ -428,4 +428,83 @@ contract LibAddressRegistryRegisterTest is Test {
         assertEq(bound_, address(0));
         assertEq(registeredAt, 0);
     }
+
+    /// The bind's calldata is `register(bytes32,address)` — selector
+    /// `0xd22057a9`, from `cast sig` — over the name hash and the account
+    /// left-padded to a word, and it is exactly the call the bind makes.
+    function testRegisterCalldataIsTheCallSent(bytes32 name, address account) external {
+        vm.assume(account != address(0));
+        bytes memory expected = abi.encodePacked(bytes4(0xd22057a9), name, uint256(uint160(account)));
+        assertEq(LibAddressRegistryRegister.registerCalldata(name, account), expected);
+
+        deployRegistry();
+        vm.warp(1);
+        vm.expectCall(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS, expected, 1);
+        this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, name, account);
+    }
+
+    /// The inputs record, field for field, for st0x's token-owner Safe. The
+    /// hash and calldata are `cast keccak st0x.token-owner-safe` and
+    /// `cast calldata "register(bytes32,address)" <hash> 0x…dEaD`.
+    function testDescribeInputs() external pure {
+        assertEq(
+            LibAddressRegistryRegister.describeInputs(
+                vm, "st0x.token-owner-safe", address(0xdEaD), ADDRESS_REGISTRY_ROOT
+            ),
+            string.concat(
+                "Name: st0x.token-owner-safe\n",
+                "Name hash (keccak256 of the name): 0xba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8\n",
+                "Account: 0x000000000000000000000000000000000000dEaD\n",
+                "Sender (root): 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c\n",
+                "Registry: 0xe2B4C27224DdeFFf7D2B3b0e66E3955ab4e2466A\n",
+                "Calldata: 0xd22057a9ba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
+                "000000000000000000000000000000000000000000000000000000000000dead"
+            )
+        );
+    }
+
+    /// The inputs record refuses a non-canonical name, as the bind does.
+    function testDescribeInputsRefusesNonCanonicalName() external {
+        vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NonCanonicalName.selector, "A"));
+        this.externalDescribeInputs("A");
+    }
+
+    function externalDescribeInputs(string memory name) external pure returns (string memory) {
+        return LibAddressRegistryRegister.describeInputs(vm, name, address(0xdEaD), ADDRESS_REGISTRY_ROOT);
+    }
+
+    /// An unbound name is a BIND.
+    function testDescribeNetworkUnbound() external pure {
+        assertEq(
+            LibAddressRegistryRegister.describeNetwork(vm, "base", 8453, address(0), 0, address(0xdEaD)),
+            "Network: base\n  chain id: 8453\n  current: unbound\n  BIND: -> 0x000000000000000000000000000000000000dEaD"
+        );
+    }
+
+    /// A name bound elsewhere is a REBIND, showing the old binding and when it
+    /// was made.
+    function testDescribeNetworkRebind() external pure {
+        assertEq(
+            LibAddressRegistryRegister.describeNetwork(
+                vm, "arbitrum", 42161, ADDRESS_REGISTRY_ROOT, 7, address(0xdEaD)
+            ),
+            string.concat(
+                "Network: arbitrum\n  chain id: 42161\n",
+                "  current: 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c (bound at 7)\n",
+                "  REBIND: -> 0x000000000000000000000000000000000000dEaD"
+            )
+        );
+    }
+
+    /// A name bound to the account already is a SKIP.
+    function testDescribeNetworkSkip() external pure {
+        assertEq(
+            LibAddressRegistryRegister.describeNetwork(vm, "flare", 14, address(0xdEaD), 7, address(0xdEaD)),
+            string.concat(
+                "Network: flare\n  chain id: 14\n",
+                "  current: 0x000000000000000000000000000000000000dEaD (bound at 7)\n",
+                "  SKIP: already bound to 0x000000000000000000000000000000000000dEaD"
+            )
+        );
+    }
 }

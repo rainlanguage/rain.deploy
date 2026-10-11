@@ -88,6 +88,16 @@ contract LibAddressRegistryRegisterOnForksTest is Test {
         vm.selectFork(forkIds[1]);
         assertEq(block.chainid, 42161);
         LibAddressRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, account);
+
+        // Forks paired with the wrong networks are refused on the chain id,
+        // even though both registries hold the binding.
+        uint256[] memory swapped = new uint256[](2);
+        swapped[0] = forkIds[1];
+        swapped[1] = forkIds[0];
+        vm.expectRevert(
+            abi.encodeWithSelector(LibAddressRegistryRegister.UnexpectedChainId.selector, "base", 8453, 42161)
+        );
+        this.externalCheckRegisteredOnForks(networks, swapped, name, account);
         (address bound,) = IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(hashed);
         assertEq(bound, account);
     }
