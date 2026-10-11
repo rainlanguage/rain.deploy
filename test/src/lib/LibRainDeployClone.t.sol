@@ -8,6 +8,7 @@ import {
     LibICloneableFactoryV4
 } from "rain-factory-0.1.30/src/lib/LibICloneableFactoryV4.sol";
 import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
+import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {
     CLONE_ARTIFACT_PATH,
@@ -358,6 +359,50 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         address deployed = this.externalCloneDeployStep(LibRainDeploy.ARBITRUM_ONE, address(this), abi.encode(clone));
         assertEq(deployed, LibRainDeployClone.cloneDeployedAddress(clone));
         assertEq(deployed.codehash, LibRainDeployClone.cloneDeployedCodehash(clone.implementation));
+    }
+
+    /// `cloneDeployStep` MUST return the address the factory's clone call
+    /// reports, not the address it predicted. The shared loop compares that
+    /// return against the declared address, so a factory that predicts one
+    /// address and clones to another is refused as `UnexpectedDeployedAddress`
+    /// naming where the clone actually went.
+    function testCloneDeployStepReturnsWhereTheFactoryCloned() external {
+        MockCloneFactory factory = new MockCloneFactory();
+        MockCloneable implementation = new MockCloneable();
+        CloneTarget memory clone = localClone(address(factory), address(implementation));
+        address elsewhere = address(uint160(LibRainDeployClone.cloneDeployedAddress(clone)) + 1);
+        vm.mockCall(
+            address(factory),
+            abi.encodeWithSelector(ICloneableFactoryV4.cloneDeterministicOpenSalt.selector),
+            abi.encode(elsewhere)
+        );
+
+        address deployed = this.externalCloneDeployStep(LibRainDeploy.ARBITRUM_ONE, address(this), abi.encode(clone));
+        assertEq(deployed, elsewhere);
+    }
+
+    /// The clone call MUST be broadcast as the deployer the step is handed —
+    /// the address whose key `rememberDeployer` put in the wallet. Broadcast as
+    /// any other sender, a real run would sign with a key the deployer never
+    /// authorised, or fail to sign at all.
+    function testCloneDeployStepBroadcastsAsTheDeployer() external {
+        MockCloneFactory factory = new MockCloneFactory();
+        MockCloneable implementation = new MockCloneable();
+        CloneTarget memory clone = localClone(address(factory), address(implementation));
+        address deployer = address(0xD3910E8);
+
+        vm.startStateDiffRecording();
+        this.externalCloneDeployStep(LibRainDeploy.ARBITRUM_ONE, deployer, abi.encode(clone));
+        Vm.AccountAccess[] memory accesses = vm.stopAndReturnStateDiff();
+
+        uint256 cloneCalls = 0;
+        for (uint256 i = 0; i < accesses.length; i++) {
+            if (accesses[i].account == address(factory) && accesses[i].kind == VmSafe.AccountAccessKind.Call) {
+                assertEq(accesses[i].accessor, deployer, "clone call not sent by the deployer");
+                cloneCalls++;
+            }
+        }
+        assertEq(cloneCalls, 1);
     }
 
     /// `cloneDeployStep` MUST refuse a mispredicting factory BEFORE it opens the
