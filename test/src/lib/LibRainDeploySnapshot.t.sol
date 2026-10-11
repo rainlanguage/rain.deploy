@@ -3487,4 +3487,30 @@ contract LibRainDeploySnapshotTest is Test {
             assertEq(suite.dependencies[i].deployedAddress.code.length, 0);
         }
     }
+
+    /// The clone writer records what the mechanism deployed, not what the
+    /// suite claims about it: a suite whose stored address and runtime code
+    /// are wrong still writes the committed record, whose address and runtime
+    /// are read off the local clone.
+    function testCloneWriterRecordsTheDeployNotTheSuiteClaims() external {
+        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(exampleCloneRelease()).snapshot;
+        suite.storedDeployedAddress = address(uint160(suite.storedDeployedAddress) + 1);
+        suite.storedRuntimeCode = hex"00";
+
+        string memory written = LibRainDeploySnapshot.writeSnapshot(
+            vm, CLONE_RECORD_FIXTURE_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT, suite
+        );
+        string memory reproduced = vm.readFile(written);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CLONE_RECORD_FIXTURE_ROOT, true);
+
+        assertEq(
+            reproduced,
+            vm.readFile(
+                LibRainDeploySnapshot.pathForSnapshot(
+                    EXAMPLE_CLONE_RECORD_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT
+                )
+            )
+        );
+    }
 }
