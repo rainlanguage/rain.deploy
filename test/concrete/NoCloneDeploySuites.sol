@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
+import {DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {CloneDeploy} from "../../src/lib/LibRainDeployClone.sol";
 import {ExternalCloneDeploySuites} from "../abstract/ExternalCloneDeploySuites.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
@@ -18,6 +19,11 @@ import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 /// get is `NoDeployCandidates`, which names the DERIVED list and sends a consumer
 /// looking at `candidateSuites()`, a function a clone repo does not write.
 contract NoCloneDeploySuites is ExternalCloneDeploySuites, ExternalDeploySuites {
+    /// @inheritdoc RainDeploySuitesBase
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        return new DeploySuite[](0);
+    }
+
     /// @inheritdoc RainDeployCloneSuitesBase
     function cloneDeploys() internal pure override returns (CloneDeploy[] memory) {
         return new CloneDeploy[](0);

@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
+    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -29,7 +30,9 @@ abstract contract MisanchoredDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 // Deliberately NOT `MockDeployableV2`, which every recorded field above is.
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
-                dependencies: new DeployDependency[](0)
+                dependencies: new DeployDependency[](0),
+                mechanism: DeployMechanism.Zoltu,
+                mechanismData: ""
             }),
             unanchorableReason: ""
         });

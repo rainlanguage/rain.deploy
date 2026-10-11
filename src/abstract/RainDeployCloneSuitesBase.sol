@@ -2,41 +2,41 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {CloneDeploy, LibRainDeployClone} from "../lib/LibRainDeployClone.sol";
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase, UnknownDeploymentSuite} from "./RainDeploySuitesBase.sol";
+import {CloneDeploy} from "../lib/LibRainDeployClone.sol";
+import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
+import {DeployCandidate, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 
 /// Thrown when a declaration names no clone at all. The clone list is the only
-/// thing this declaration is, so an empty one is a repo that inherited the clone
-/// machinery and declared nothing for it to deploy — and
+/// thing this declaration's candidates are, so an empty one is a repo that
+/// inherited the clone machinery and declared nothing for it to deploy — and
 /// `NoDeployCandidates` would be the refusal it actually got, naming the derived
 /// list rather than the one a consumer wrote.
 error NoCloneDeploys();
 
 /// @title RainDeployCloneSuitesBase
-/// @notice The declaration for a repo whose deployments are EIP-1167 factory
+/// @notice The declaration for a repo whose candidates are EIP-1167 factory
 /// clones: the clone list, and the candidates derived FROM it.
 ///
-/// A clone is wholly described by five values — factory, implementation, init
-/// data, salt and suite key — so a repo declares those and nothing else.
-/// `candidateSuites()` is not a hook here; it is `cloneCandidate` mapped over
-/// `cloneDeploys()`, which is the point. The hazard this package exists to close
-/// is a repo that broadcasts one thing while its tests verify another, and that
-/// can only happen where there are two lists to disagree. Here the broadcast
-/// reads `cloneDeploys()` and the verification reads candidates derived from the
-/// same entries, so there is nothing to keep in step.
+/// A clone is wholly described by its `CloneDeploy` — suite key, factory,
+/// implementation, init data, salt and dependencies — so a repo declares those.
+/// `candidateSuites()` is not a hook here; it is
+/// `LibRainDeployMechanism.cloneCandidate` mapped over `cloneDeploys()`, and
+/// each candidate carries `DeployMechanism.Clone` and its `CloneTarget`. From
+/// there it is an ordinary suite: `RainDeployBroadcast` broadcasts it,
+/// `RainDeployVerifySnapshot` and `RainDeployVerifyChain` derive it, and
+/// `LibRainDeploySnapshot.writeSnapshot` records it, all through the same
+/// mechanism dispatch on the same entry.
 ///
-/// It is NOT `virtual`, for that reason. A repo that deploys compiled contracts
-/// as well as clones declares them on its own `RainDeploySuitesBase` and
-/// dispatches them through `RainDeployBroadcast`; it does not reach back in here
-/// and append, because a `candidateSuites()` free to answer something other than
-/// the clone list is the second list again.
+/// It is NOT `virtual`, for that reason. A `candidateSuites()` free to answer
+/// something other than the clone list is a second list.
 ///
-/// Inherited by both sides, like every declaration in this package: the clone
-/// broadcast inherits it through `RainDeployCloneBroadcast`, and a repo's
-/// `RainDeployVerifyChain` contract inherits it directly — so the chain matrix
-/// checks the same clone the broadcast would deploy.
+/// `releasedSuites()` is the consumer's, as on any declaration: the generated
+/// `Lib<Contract>Released` over the frozen record, whose entries carry the
+/// mechanism and the `CloneTarget` each release was cut with. A clone repo that
+/// has released nothing declares an empty list, and the record group holds that
+/// declaration to the record like any other.
 abstract contract RainDeployCloneSuitesBase is RainDeploySuitesBase {
-    /// Every clone this repo deploys.
+    /// Every clone candidate this repo deploys.
     ///
     /// The ONE list. A repo adds a clone by adding an entry, and its suite key,
     /// its candidate, its declared address and its broadcast all follow from
@@ -62,52 +62,14 @@ abstract contract RainDeployCloneSuitesBase is RainDeploySuitesBase {
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    /// @dev Nothing released. A released suite records bytes already frozen into
-    /// this repo's own record for a deploy that already happened, and a clone has
-    /// no such bytes to freeze: it is a pure function of `cloneDeploys()`, which
-    /// is current source, and the implementation it delegates into is published
-    /// by whoever deployed THAT.
-    ///
-    /// Still `virtual`, because a repo that has cut releases of its own compiled
-    /// contracts and also deploys clones declares them, and an empty default is
-    /// a convenience rather than a rule.
-    function releasedSuites() internal pure virtual override returns (DeploySuite[] memory) {
-        return new DeploySuite[](0);
-    }
-
-    /// @inheritdoc RainDeploySuitesBase
-    /// @dev `LibRainDeployClone.cloneCandidate` over the clone list, in order.
-    /// Not a hook — see this contract's own notes for why there is exactly one
-    /// list here.
+    /// @dev `LibRainDeployMechanism.cloneCandidate` over the clone list, in
+    /// order. Not a hook — see this contract's own notes for why there is
+    /// exactly one list here.
     function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
         CloneDeploy[] memory clones = checkedCloneDeploys();
         candidates = new DeployCandidate[](clones.length);
         for (uint256 i = 0; i < clones.length; i++) {
-            candidates[i] = LibRainDeployClone.cloneCandidate(clones[i]);
+            candidates[i] = LibRainDeployMechanism.cloneCandidate(clones[i]);
         }
-    }
-
-    /// The clone a suite key selects.
-    ///
-    /// Keyed off the same string the candidate carries, because the candidate was
-    /// derived from this very entry — so a key that selects a suite selects the
-    /// clone that suite IS. Iterating rather than branching, for the reason
-    /// `suiteByName` iterates: a repo adds a clone by adding an entry.
-    ///
-    /// Refuses with `UnknownDeploymentSuite` and the full declared key list, the
-    /// same refusal `suiteByName` makes, because a key that is a released suite
-    /// rather than a clone is a key this mechanism cannot broadcast and the
-    /// caller needs to be told which keys it can.
-    /// @param requested The key to select, from `DEPLOYMENT_SUITE`.
-    /// @return The selected clone.
-    function cloneDeployByName(string memory requested) internal pure returns (CloneDeploy memory) {
-        CloneDeploy[] memory clones = checkedCloneDeploys();
-        bytes32 requestedHash = keccak256(bytes(requested));
-        for (uint256 i = 0; i < clones.length; i++) {
-            if (keccak256(bytes(clones[i].suite)) == requestedHash) {
-                return clones[i];
-            }
-        }
-        revert UnknownDeploymentSuite(requested, suiteNames());
     }
 }

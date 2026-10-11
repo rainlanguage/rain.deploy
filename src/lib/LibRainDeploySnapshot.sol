@@ -9,8 +9,9 @@ import {
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
-import {DeployDependency, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
+import {LibRainDeployMechanism} from "./LibRainDeployMechanism.sol";
 
 /// Thrown when `[external.package].version` is not strict `X.Y.Z`. A version
 /// like `0.1.7-rc1` maps to the directory `0_1_7-rc1`, which the append-only
@@ -57,6 +58,14 @@ error NonMonotonicRelease(string tag, string newestFrozenTag);
 /// standing between a generated file and an arbitrary location on disk.
 /// @param root The rejected root.
 error InvalidRecordRoot(string root);
+
+/// Thrown when the state snapshot taken around a clone snapshot's local deploy
+/// could not be reverted. The deploy etches the declared factory and
+/// implementation and plants the clone; left in place, they would be read by
+/// whatever the calling script does next as if they were real.
+/// @param suite The suite whose snapshot was being written.
+/// @param snapshotId The state snapshot that could not be reverted.
+error SnapshotStateRevertFailed(string suite, uint256 snapshotId);
 
 /// @title LibRainDeploySnapshot
 /// @notice Which release is being built, where its record lives, and how it is
@@ -710,6 +719,134 @@ library LibRainDeploySnapshot {
         );
     }
 
+    /// The constants a CLONE snapshot declares below `BYTECODE_HASH`: the
+    /// Zoltu snapshot's four, with the deploy address described as the clone's,
+    /// and `MECHANISM_DATA` — the `abi.encode`d `CloneTarget` the release was
+    /// cut with, so a frozen clone is broadcast and derived with the factory,
+    /// implementation, init data and salt it was recorded with.
+    /// @param vm The Vm instance for string operations.
+    /// @param deployed The address the clone deployed to.
+    /// @param suite The clone suite.
+    /// @return The constants, as Solidity source.
+    function cloneSnapshotConstants(Vm vm, address deployed, DeploySuite memory suite)
+        internal
+        view
+        returns (string memory)
+    {
+        return string.concat(
+            LibCodeGen.addressConstantString(
+                vm,
+                "/// @dev The deterministic deploy address of the EIP-1167 clone, through its\n"
+                "/// factory's open salt.",
+                "DEPLOYED_ADDRESS",
+                deployed
+            ),
+            LibCodeGen.bytesConstantString(
+                vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", suite.creationCode
+            ),
+            LibCodeGen.bytesConstantString(
+                vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", deployed.code
+            ),
+            LibCodeGen.bytesConstantString(
+                vm,
+                "/// @dev What MUST already be on a network before this release can be\n"
+                "/// broadcast there: an address, and the runtime code that belongs at it.\n"
+                "/// `abi.encode`d as a `DeployDependency[]` because Solidity has no\n"
+                "/// file-scope constant of dynamic array type.",
+                "DEPENDENCIES",
+                abi.encode(suite.dependencies)
+            ),
+            LibCodeGen.bytesConstantString(
+                vm,
+                "/// @dev The clone factory call this release was cut with: the\n"
+                "/// `abi.encode`d `CloneTarget` a released suite carries as its\n" "/// `mechanismData`.",
+                "MECHANISM_DATA",
+                suite.mechanismData
+            )
+        );
+    }
+
+    /// Generate one snapshot for one SUITE, by the mechanism it declares.
+    ///
+    /// A Zoltu suite is the `(creationCode, dependencies)` writer above, and its
+    /// output is byte-for-byte that writer's.
+    ///
+    /// A clone suite is deployed through `LibRainDeployMechanism.deployLocally`
+    /// — the same local deploy every verification group derives through, so a
+    /// written record and a derivation of it agree by construction — inside a
+    /// state snapshot that is reverted once the file is written. The file is
+    /// built BEFORE the revert because `LibFs` reads the code hash from the
+    /// deployed instance.
+    /// @param vm The Vm instance for file operations.
+    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// MUST be a path of record root segments.
+    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// @param contractName The contract the snapshot describes.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written
+    /// snapshot declares.
+    /// @param copyrightText The copyright text the written snapshot declares.
+    /// @param suite The suite to snapshot.
+    /// @return The path written.
+    function writeSnapshot(
+        Vm vm,
+        string memory root,
+        string memory dir,
+        string memory contractName,
+        string memory spdxLicenseIdentifier,
+        string memory copyrightText,
+        DeploySuite memory suite
+    ) internal returns (string memory) {
+        if (suite.mechanism != DeployMechanism.Clone) {
+            LibRainDeployMechanism.checkZoltuMechanismData(suite);
+            return writeSnapshot(
+                vm,
+                root,
+                dir,
+                contractName,
+                spdxLicenseIdentifier,
+                copyrightText,
+                suite.creationCode,
+                suite.dependencies
+            );
+        }
+
+        uint256 snapshotId = vm.snapshotState();
+        address deployed = LibRainDeployMechanism.deployLocally(vm, suite);
+        LibFs.buildFileForContract(
+            vm,
+            deployed,
+            dirForSnapshot(root, dir),
+            contractName,
+            spdxLicenseIdentifier,
+            copyrightText,
+            cloneSnapshotConstants(vm, deployed, suite)
+        );
+        if (!vm.revertToState(snapshotId)) {
+            revert SnapshotStateRevertFailed(suite.suite, snapshotId);
+        }
+
+        return pathForSnapshot(root, dir, contractName);
+    }
+
+    /// `writeSnapshot` for a suite, applied to `RAIN_SPDX_LICENSE_IDENTIFIER`
+    /// and `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
+    /// @param vm The Vm instance for file operations.
+    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// MUST be a path of record root segments.
+    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// @param contractName The contract the snapshot describes.
+    /// @param suite The suite to snapshot.
+    /// @return The path written.
+    function writeSnapshot(
+        Vm vm,
+        string memory root,
+        string memory dir,
+        string memory contractName,
+        DeploySuite memory suite
+    ) internal returns (string memory) {
+        return writeSnapshot(vm, root, dir, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, suite);
+    }
+
     /// The import block of a generated alias lib.
     /// @param contractName The contract the snapshot describes.
     /// @param constantPrefix The prefix for the emitted constants.
@@ -1016,16 +1153,28 @@ library LibRainDeploySnapshot {
     }
 
     /// The aliased import one record file contributes: all four consensus
-    /// fields and the frozen dependency list, under that release's prefix.
+    /// fields and the frozen dependency list, under that release's prefix —
+    /// and, for a clone, its `MECHANISM_DATA`.
+    ///
+    /// The mechanism KIND comes from the template, the current declaration,
+    /// and the data from the record. A clone template over a record with no
+    /// `MECHANISM_DATA` imports a name the record does not declare, which is a
+    /// loud compile error in the emitted lib rather than a release silently
+    /// read as Zoltu.
     ///
     /// Split per file rather than inlined into the block for the same reason
-    /// `snapshotConstants` is split out of `writeSnapshot`: five aliases and
+    /// `snapshotConstants` is split out of `writeSnapshot`: the aliases and
     /// the path they come from are more live values than the legacy codegen has
     /// stack for.
     /// @param vm The Vm instance for string operations.
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @param mechanism The mechanism the template declares.
     /// @return The import statement, and the blank line after it.
-    function releasedImport(Vm vm, string memory path) internal pure returns (string memory) {
+    function releasedImport(Vm vm, string memory path, DeployMechanism mechanism)
+        internal
+        pure
+        returns (string memory)
+    {
         string memory prefix = releasedConstantPrefix(vm, path);
         return string.concat(
             "import {\n    DEPLOYED_ADDRESS as ",
@@ -1038,7 +1187,11 @@ library LibRainDeploySnapshot {
             prefix,
             "_RUNTIME_CODE,\n    DEPENDENCIES as ",
             prefix,
-            "_DEPENDENCIES\n} from \"../generated/",
+            "_DEPENDENCIES",
+            mechanism == DeployMechanism.Clone
+                ? string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA")
+                : string(""),
+            "\n} from \"../generated/",
             tagForRecordPath(vm, path),
             "/",
             contractForRecordPath(vm, path),
@@ -1058,16 +1211,19 @@ library LibRainDeploySnapshot {
     /// @param suitesImportPath The path the emitted lib reaches the suite types
     /// by — `suitesImportPathInThisRepo` for a lib written into this repo's own
     /// `LIB_DIR`, and the consumer's remapped path otherwise.
+    /// @param mechanism The mechanism the template declares.
     /// @return The import block.
-    function releasedImportBlock(Vm vm, string[] memory paths, string memory suitesImportPath)
-        internal
-        pure
-        returns (string memory)
-    {
-        string memory imports =
-            string.concat("import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n\n");
+    function releasedImportBlock(
+        Vm vm,
+        string[] memory paths,
+        string memory suitesImportPath,
+        DeployMechanism mechanism
+    ) internal pure returns (string memory) {
+        string memory imports = string.concat(
+            "import {DeployDependency, DeployMechanism, DeploySuite} from \"", suitesImportPath, "\";\n\n"
+        );
         for (uint256 i = 0; i < paths.length; i++) {
-            imports = string.concat(imports, releasedImport(vm, paths[i]));
+            imports = string.concat(imports, releasedImport(vm, paths[i], mechanism));
         }
         return imports;
     }
@@ -1075,9 +1231,59 @@ library LibRainDeploySnapshot {
     /// `releasedImportBlock` applied to this repo's own `suitesImportPathInThisRepo`.
     /// @param vm The Vm instance for string operations.
     /// @param paths The record's files, in the order they are emitted.
+    /// @param mechanism The mechanism the template declares.
     /// @return The import block.
-    function releasedImportBlock(Vm vm, string[] memory paths) internal pure returns (string memory) {
-        return releasedImportBlock(vm, paths, suitesImportPathInThisRepo());
+    function releasedImportBlock(Vm vm, string[] memory paths, DeployMechanism mechanism)
+        internal
+        pure
+        returns (string memory)
+    {
+        return releasedImportBlock(vm, paths, suitesImportPathInThisRepo(), mechanism);
+    }
+
+    /// One `suites[i] = DeploySuite({...});` entry of a generated
+    /// released-suites lib. `releasedLibraryBlock` says where each field comes
+    /// from. Two `string.concat`s rather than one, to stay inside the stack.
+    /// @param vm The Vm instance for string operations.
+    /// @param i The entry's index.
+    /// @param path The record file the entry aliases.
+    /// @param template The candidate declaration the metadata comes from.
+    /// @return The entry.
+    function releasedSuiteEntry(Vm vm, uint256 i, string memory path, DeploySuite memory template)
+        internal
+        pure
+        returns (string memory)
+    {
+        string memory prefix = releasedConstantPrefix(vm, path);
+        string memory head = string.concat(
+            "        suites[",
+            vm.toString(i),
+            "] = DeploySuite({\n            suite: \"",
+            template.suite,
+            "@",
+            tagForRecordPath(vm, path),
+            "\",\n            creationCode: ",
+            prefix,
+            "_CREATION_CODE,\n            storedDeployedAddress: ",
+            prefix,
+            "_DEPLOYED_ADDRESS,\n            storedBytecodeHash: ",
+            prefix,
+            "_BYTECODE_HASH,\n            storedRuntimeCode: ",
+            prefix
+        );
+        string memory mechanism = template.mechanism == DeployMechanism.Clone
+            ? string.concat("DeployMechanism.Clone,\n            mechanismData: ", prefix, "_MECHANISM_DATA")
+            : string("DeployMechanism.Zoltu,\n            mechanismData: \"\"");
+        return string.concat(
+            head,
+            "_RUNTIME_CODE,\n            artifactPath: \"",
+            template.artifactPath,
+            "\",\n            dependencies: abi.decode(",
+            prefix,
+            "_DEPENDENCIES, (DeployDependency[])),\n            mechanism: ",
+            mechanism,
+            "\n        });\n"
+        );
     }
 
     /// The library block of a generated released-suites lib.
@@ -1093,11 +1299,16 @@ library LibRainDeploySnapshot {
     /// list that release was cut with, so it is read from that release's own
     /// frozen snapshot.
     ///
-    /// The other two come from `template`, the candidate declaration, and are
-    /// regenerated from it on every build: the key and the artifact path are
+    /// The key and the artifact path come from `template`, the candidate
+    /// declaration, and are regenerated from it on every build: they are
     /// explorer and ordering metadata rather than anything a broadcast acts on,
     /// and preserving what a previous generation wrote would mean parsing
     /// generated Solidity back in.
+    ///
+    /// The mechanism KIND comes from `template` too, and the mechanism DATA
+    /// from the record: `""` for Zoltu, the release's own `MECHANISM_DATA` for
+    /// a clone, so a frozen clone is broadcast with the `CloneTarget` it was
+    /// cut with. `releasedImport` says what a kind the record cannot back does.
     ///
     /// The key is the template's with the tag appended, so every entry is
     /// unique and `allSuites`'s duplicate check is satisfied by construction
@@ -1117,31 +1328,7 @@ library LibRainDeploySnapshot {
     ) internal pure returns (string memory) {
         string memory entries = "";
         for (uint256 i = 0; i < paths.length; i++) {
-            string memory index = vm.toString(i);
-            string memory prefix = releasedConstantPrefix(vm, paths[i]);
-
-            entries = string.concat(
-                entries,
-                "        suites[",
-                index,
-                "] = DeploySuite({\n            suite: \"",
-                template.suite,
-                "@",
-                tagForRecordPath(vm, paths[i]),
-                "\",\n            creationCode: ",
-                prefix,
-                "_CREATION_CODE,\n            storedDeployedAddress: ",
-                prefix,
-                "_DEPLOYED_ADDRESS,\n            storedBytecodeHash: ",
-                prefix,
-                "_BYTECODE_HASH,\n            storedRuntimeCode: ",
-                prefix,
-                "_RUNTIME_CODE,\n            artifactPath: \"",
-                template.artifactPath,
-                "\",\n            dependencies: abi.decode(",
-                prefix,
-                "_DEPENDENCIES, (DeployDependency[]))\n        });\n"
-            );
+            entries = string.concat(entries, releasedSuiteEntry(vm, i, paths[i], template));
         }
 
         return string.concat(
@@ -1237,7 +1424,7 @@ library LibRainDeploySnapshot {
         {
             string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
             body = string.concat(
-                releasedImportBlock(vm, paths, suitesImportPath),
+                releasedImportBlock(vm, paths, suitesImportPath, template.mechanism),
                 releasedLibraryBlock(vm, libraryName, contractName, paths, template)
             );
         }

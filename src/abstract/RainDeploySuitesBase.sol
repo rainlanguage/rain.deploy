@@ -119,14 +119,35 @@ error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, byte
 /// @param artifactPath The artifact id that resolved.
 error CandidateSourceCompiles(string suite, string artifactPath);
 
+/// How a suite's code gets to its address.
+///
+/// A field of the suite rather than a choice made by whichever script or test
+/// handles it, so the broadcast, the derivation every verification group
+/// compares against, the frozen record match and the snapshot writer all read
+/// the mechanism from the one entry they were handed. `LibRainDeployMechanism`
+/// is the one place each of those dispatches on it.
+enum DeployMechanism {
+    /// `CREATE2` over `creationCode` through the Zoltu factory at a zero salt.
+    /// `mechanismData` is empty.
+    Zoltu,
+    /// An EIP-1167 clone through an `ICloneableFactoryV4` at its open salt.
+    /// `mechanismData` is the `abi.encode`d `CloneTarget`, and the factory and
+    /// the implementation it names MUST both be declared `dependencies`.
+    Clone
+}
+
 /// One deployable unit: a named snapshot of one contract.
 ///
-/// `creationCode` is the ONLY input. The Zoltu factory is `CREATE2` over its
-/// calldata under a zero salt, so the deploy address is a pure function of it
-/// and identical on every network, and running it once locally yields the
-/// runtime code and its hash. The address, code hash and runtime code recorded
-/// beside it are checked OUTPUTS, which is what the verification abstracts
-/// check them as.
+/// The inputs are `mechanism`, `creationCode` and `mechanismData`. For a Zoltu
+/// suite `creationCode` is the only one that carries anything: the Zoltu
+/// factory is `CREATE2` over its calldata under a zero salt, so the deploy
+/// address is a pure function of it and identical on every network, and
+/// running it once locally yields the runtime code and its hash. For a clone
+/// the address is the factory's open-salt `CREATE2` over the `CloneTarget` in
+/// `mechanismData`, and running the declared factory locally yields the runtime
+/// code. Either way the address, code hash and runtime code recorded beside
+/// them are checked OUTPUTS, which is what the verification abstracts check
+/// them as.
 ///
 /// They are recorded rather than derived on purpose. `LibRainDeploy` compares
 /// the recorded address against the creation code before it forks anything, so
@@ -194,6 +215,13 @@ struct DeploySuite {
     /// broadcasts anything. So a wrong declaration is a red deploy run rather
     /// than a wrong hash frozen into a release.
     DeployDependency[] dependencies;
+    /// How this suite's code gets to its address — see `DeployMechanism`.
+    DeployMechanism mechanism;
+    /// What the mechanism needs beyond `creationCode`: empty for Zoltu, the
+    /// `abi.encode`d `CloneTarget` for a clone. A generated `MECHANISM_DATA`
+    /// constant for a released clone, so a frozen clone is broadcast with the
+    /// factory, implementation, init data and salt its release was cut with.
+    bytes mechanismData;
 }
 
 /// The rolling candidate: a snapshot that tracks current source rather than a

@@ -5,11 +5,11 @@ pragma solidity ^0.8.25;
 import {Script} from "forge-std-1.17.0/src/Script.sol";
 
 import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
-import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
+import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 
 /// @title RainDeployBroadcast
 /// @notice The broadcast, inherited rather than rewritten per repo. Selects one
-/// suite by `DEPLOYMENT_SUITE` and deploys it through the Zoltu factory.
+/// suite by `DEPLOYMENT_SUITE` and deploys it by the mechanism the suite declares.
 ///
 /// A deploy repo's whole script becomes the declaration plus this:
 ///
@@ -33,12 +33,12 @@ import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 ///
 /// ## What is NOT derived, and why
 ///
-/// The recorded address and code hash are passed to `deployAndBroadcast`, not
-/// derived from the creation code here. They are derivable — that is exactly
+/// The recorded address and code hash are passed to the broadcast, not
+/// derived from the suite here. They are derivable — that is exactly
 /// what `RainDeployVerifySnapshot` derives them for — but deriving them at
 /// broadcast time would defeat the check that matters most at broadcast time.
-/// `LibRainDeploy.deployToNetworks` compares the recorded address against the
-/// address the creation code derives BEFORE it forks anything, precisely so a
+/// Each mechanism compares the recorded address against the address it
+/// derives BEFORE it forks anything, precisely so a
 /// stale pin fails instead of silently deploying somewhere the repo's constants
 /// do not describe. Feeding it a derived value would make that comparison
 /// derived-against-derived, and a guard that compares a value to itself is not
@@ -49,16 +49,15 @@ import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 /// `deploy/` and `authorize/`, so a convention would be wrong for most of its
 /// suites.
 ///
-/// ## One mechanism hook, not a second script
+/// ## One script for every mechanism
 ///
 /// A contract deployed as a factory CLONE differs from a Zoltu deploy in one
 /// step: `cloneDeterministicOpenSalt` through the clone factory instead of
 /// `CREATE2` over creation code through Zoltu. The anchor, the suite selection,
 /// the key, the network list, the forks, the skip and the assertions are
-/// identical — so `broadcastSuite` is the one thing a clone repo overrides, and
-/// `RainDeployCloneBroadcast` is that override and nothing else. A parallel
-/// script would be this file copied with one call swapped, and the copy that
-/// fell behind is the one whose deploys stop being checked.
+/// identical, and the step is chosen by the suite's own `mechanism` field in
+/// `LibRainDeployMechanism`. A clone repo's script is therefore this contract
+/// unchanged, over a declaration of clone suites.
 abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// The networks to broadcast to. Every network the declaration supports by
     /// default, which is what a deterministic deployment usually wants: one
@@ -113,15 +112,13 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         broadcastSuite(suite, deployNetworks(), deployerPrivateKey);
     }
 
-    /// The MECHANISM: how the selected suite's bytes get to an address. The one
-    /// thing that varies between a Zoltu deploy and a factory clone, and
-    /// therefore the only thing a clone repo overrides.
+    /// Broadcasts the selected suite by ITS mechanism, through
+    /// `LibRainDeployMechanism` — the same dispatch every verification group
+    /// derives through, so what is broadcast is what was verified.
     ///
-    /// Zoltu by default, which is what a deploy repo compiling its own contract
-    /// wants. `RainDeployCloneBroadcast` overrides it with
-    /// `LibRainDeployClone.cloneAndBroadcast`, and both of those run the same
-    /// `LibRainDeploy.deployStepToNetworks` loop over the same network list with
-    /// the same skip and the same assertions — only the step inside it differs.
+    /// Not `virtual`. The mechanism is a field of the suite, so a repo that
+    /// deploys clones declares clone suites and inherits this unchanged; an
+    /// override would be a second place the mechanism is chosen.
     ///
     /// The recorded address and code hash are passed from the suite, not derived
     /// here. They are derivable — that is exactly what `RainDeployVerifySnapshot`
@@ -129,26 +126,12 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// check that matters most at broadcast time: each mechanism compares the
     /// recorded address against the address its own derivation gives BEFORE it
     /// forks anything, precisely so a stale pin fails instead of silently
-    /// deploying somewhere the repo's constants do not describe. Feeding it a
-    /// derived value would make that comparison derived-against-derived, and a
-    /// guard that compares a value to itself is not a guard.
+    /// deploying somewhere the repo's constants do not describe.
     /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
     /// @param networks The networks to broadcast to, as `deployNetworks()` gave
     /// them.
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
-    function broadcastSuite(DeploySuite memory suite, string[] memory networks, uint256 deployerPrivateKey)
-        internal
-        virtual
-    {
-        LibRainDeploy.deployAndBroadcast(
-            vm,
-            networks,
-            deployerPrivateKey,
-            suite.creationCode,
-            suite.artifactPath,
-            suite.storedDeployedAddress,
-            suite.storedBytecodeHash,
-            suite.dependencies
-        );
+    function broadcastSuite(DeploySuite memory suite, string[] memory networks, uint256 deployerPrivateKey) internal {
+        LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, suite);
     }
 }

@@ -6,6 +6,7 @@ import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {
     DeployCandidate,
     DeployDependency,
+    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -63,7 +64,9 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
                 storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-                dependencies: new DeployDependency[](0)
+                dependencies: new DeployDependency[](0),
+                mechanism: DeployMechanism.Zoltu,
+                mechanismData: ""
             }),
             unanchorableReason: ""
         });
@@ -77,7 +80,9 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 // Qualified, and this repo compiles no such source, so it
                 // resolves to no artifact.
                 artifactPath: "test/concrete/VendoredDeployable.sol:VendoredDeployable",
-                dependencies: new DeployDependency[](0)
+                dependencies: new DeployDependency[](0),
+                mechanism: DeployMechanism.Zoltu,
+                mechanismData: ""
             }),
             unanchorableReason: "Vendored third party deployment: the pinned creation code is the source."
         });
@@ -91,7 +96,9 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 // A data contract assembled at build time: the path names the
                 // file the tables would be compiled from, and there is none.
                 artifactPath: "test/concrete/AssembledTables.sol:AssembledTables",
-                dependencies: new DeployDependency[](0)
+                dependencies: new DeployDependency[](0),
+                mechanism: DeployMechanism.Zoltu,
+                mechanismData: ""
             }),
             unanchorableReason: "Assembled from generated tables: there is no source file to compile."
         });

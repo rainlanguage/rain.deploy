@@ -3,9 +3,10 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {DeployCandidate, DeploySuite, UnknownDeploymentSuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployCandidate} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {NoCloneDeploys} from "../../../src/abstract/RainDeployCloneSuitesBase.sol";
-import {CLONE_ARTIFACT_PATH, CloneDeploy, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
+import {CLONE_ARTIFACT_PATH, CloneDeploy} from "../../../src/lib/LibRainDeployClone.sol";
+import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {ExampleCloneDeploy} from "../../concrete/ExampleCloneDeploy.sol";
 import {NoCloneDeploySuites} from "../../concrete/NoCloneDeploySuites.sol";
 
@@ -33,13 +34,16 @@ contract RainDeployCloneSuitesBaseTest is Test {
         assertEq(clones.length, 2, "the fixture declares two, so a loop that stops early is visible");
 
         for (uint256 i = 0; i < clones.length; i++) {
-            DeployCandidate memory derived = LibRainDeployClone.cloneCandidate(clones[i]);
+            DeployCandidate memory derived = LibRainDeployMechanism.cloneCandidate(clones[i]);
             assertEq(candidates[i].snapshot.suite, derived.snapshot.suite);
             assertEq(candidates[i].snapshot.creationCode, derived.snapshot.creationCode);
             assertEq(candidates[i].snapshot.storedDeployedAddress, derived.snapshot.storedDeployedAddress);
             assertEq(candidates[i].snapshot.storedBytecodeHash, derived.snapshot.storedBytecodeHash);
             assertEq(candidates[i].snapshot.storedRuntimeCode, derived.snapshot.storedRuntimeCode);
             assertEq(candidates[i].snapshot.artifactPath, CLONE_ARTIFACT_PATH);
+            assertEq(uint256(candidates[i].snapshot.mechanism), uint256(derived.snapshot.mechanism));
+            assertEq(candidates[i].snapshot.mechanismData, derived.snapshot.mechanismData);
+            assertEq(candidates[i].snapshot.dependencies.length, derived.snapshot.dependencies.length);
             assertEq(candidates[i].unanchorableReason, derived.unanchorableReason);
         }
 
@@ -59,14 +63,6 @@ contract RainDeployCloneSuitesBaseTest is Test {
         // which is what the non-empty `unanchorableReason` declares. A path that
         // resolved would be refused by `CandidateSourceCompiles`.
         fixtureDeploy.externalCheckCandidatesAnchoredToSource();
-    }
-
-    /// `releasedSuites()` MUST default to empty, so `allSuites()` is the clone
-    /// list alone and a clone repo declares nothing it has not cut.
-    function testReleasedSuitesDefaultsToEmpty() external {
-        ExampleCloneDeploy fixtureDeploy = new ExampleCloneDeploy();
-        DeploySuite[] memory all = fixtureDeploy.externalAllSuites();
-        assertEq(all.length, 2, "the clones and nothing else");
     }
 
     /// An empty clone list MUST be refused with `NoCloneDeploys`, on EVERY reader
@@ -93,41 +89,5 @@ contract RainDeployCloneSuitesBaseTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
         empty.externalSuiteNames();
-
-        vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
-        empty.externalCloneDeployByName("anything");
-    }
-
-    /// `cloneDeployByName` MUST select the clone the suite key names, and the
-    /// candidate that key selects MUST be the one derived from it — which is what
-    /// makes the broadcast and the verification the same clone.
-    function testCloneDeployByNameSelectsTheDeclaredClone() external {
-        ExampleCloneDeploy fixtureDeploy = new ExampleCloneDeploy();
-
-        CloneDeploy memory first = fixtureDeploy.externalCloneDeployByName("example-clone");
-        assertEq(first.suite, "example-clone");
-
-        CloneDeploy memory second = fixtureDeploy.externalCloneDeployByName("example-clone-second-salt");
-        assertEq(second.suite, "example-clone-second-salt");
-
-        // Not merely a different key: a different clone, at a different address.
-        assertNotEq(LibRainDeployClone.cloneDeployedAddress(first), LibRainDeployClone.cloneDeployedAddress(second));
-
-        // The selected clone and the selected SUITE agree, which is the one list
-        // claim at the point it matters: the broadcast reads the clone, the
-        // verification reads the suite.
-        DeploySuite memory suite = fixtureDeploy.externalSuiteByName("example-clone");
-        assertEq(suite.storedDeployedAddress, LibRainDeployClone.cloneDeployedAddress(first));
-        assertEq(suite.storedBytecodeHash, LibRainDeployClone.cloneDeployedCodehash(first.implementation));
-    }
-
-    /// An unknown key MUST be refused with `UnknownDeploymentSuite` carrying the
-    /// full declared key list, so a caller is told which keys it CAN use.
-    function testCloneDeployByNameUnknownKeyReverts() external {
-        ExampleCloneDeploy fixtureDeploy = new ExampleCloneDeploy();
-        string memory names = fixtureDeploy.externalSuiteNames();
-
-        vm.expectRevert(abi.encodeWithSelector(UnknownDeploymentSuite.selector, "not-a-clone", names));
-        fixtureDeploy.externalCloneDeployByName("not-a-clone");
     }
 }

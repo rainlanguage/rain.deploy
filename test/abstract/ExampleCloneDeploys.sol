@@ -3,8 +3,9 @@
 pragma solidity ^0.8.25;
 
 import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
+import {DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {CloneDeploy} from "../../src/lib/LibRainDeployClone.sol";
-import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {DeployDependency, LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {MockCloneFactory} from "../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../concrete/MockCloneable.sol";
 
@@ -38,6 +39,19 @@ function exampleCloneImplementation() pure returns (address) {
     return LibRainDeploy.zoltuAddress(type(MockCloneable).creationCode);
 }
 
+/// The factory and the implementation every example clone is made from, declared
+/// as dependencies with the runtime code each MUST hold: the clone mechanism
+/// requires both to be declared, and a network holding anything else at either
+/// address is refused before the clone is broadcast there.
+/// @return dependencies The factory, then the implementation.
+function exampleCloneDependencies() pure returns (DeployDependency[] memory dependencies) {
+    dependencies = new DeployDependency[](2);
+    dependencies[0] =
+        DeployDependency({deployedAddress: exampleCloneFactory(), runtimeCode: type(MockCloneFactory).runtimeCode});
+    dependencies[1] =
+        DeployDependency({deployedAddress: exampleCloneImplementation(), runtimeCode: type(MockCloneable).runtimeCode});
+}
+
 /// @title ExampleCloneDeploys
 /// @notice A clone deploy repo's declaration, as the abstracts see it: the clone
 /// list and nothing else, with the candidates derived from it by
@@ -64,6 +78,11 @@ function exampleCloneImplementation() pure returns (address) {
 /// that special-cased or skipped empty data would pass a fixture where every
 /// entry had some.
 abstract contract ExampleCloneDeploys is RainDeployCloneSuitesBase {
+    /// @inheritdoc RainDeploySuitesBase
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        return new DeploySuite[](0);
+    }
+
     /// @inheritdoc RainDeployCloneSuitesBase
     function cloneDeploys() internal pure override returns (CloneDeploy[] memory clones) {
         clones = new CloneDeploy[](2);
@@ -72,14 +91,16 @@ abstract contract ExampleCloneDeploys is RainDeployCloneSuitesBase {
             factory: exampleCloneFactory(),
             implementation: exampleCloneImplementation(),
             data: "",
-            salt: bytes32(uint256(1))
+            salt: bytes32(uint256(1)),
+            dependencies: exampleCloneDependencies()
         });
         clones[1] = CloneDeploy({
             suite: "example-clone-second-salt",
             factory: exampleCloneFactory(),
             implementation: exampleCloneImplementation(),
             data: hex"abcd",
-            salt: bytes32(uint256(2))
+            salt: bytes32(uint256(2)),
+            dependencies: exampleCloneDependencies()
         });
     }
 }

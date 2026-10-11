@@ -4,20 +4,20 @@ pragma solidity ^0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
-import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
+import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 
 /// Thrown when the deploy address recorded for a version is not the address its
-/// own creation code derives.
+/// own mechanism derives.
 /// @param suite The suite that failed.
 /// @param storedAddress The address the suite records.
-/// @param derivedAddress The address its creation code derives.
+/// @param derivedAddress The address its mechanism derives.
 error StoredAddressMismatch(string suite, address storedAddress, address derivedAddress);
 
 /// Thrown when the deployed code hash recorded for a version is not the hash
-/// its own creation code produces.
+/// its own mechanism produces.
 /// @param suite The suite that failed.
 /// @param storedCodeHash The code hash the suite records.
-/// @param derivedCodeHash The code hash its creation code produces.
+/// @param derivedCodeHash The code hash its mechanism produces.
 error StoredCodeHashMismatch(string suite, bytes32 storedCodeHash, bytes32 derivedCodeHash);
 
 /// Thrown when the runtime code recorded for a version does not hash to the
@@ -39,7 +39,7 @@ error FrozenSnapshotNotReleased(string path);
 /// @param path The record file the record ran out of declarations at.
 /// @param deployedAddress The address that file declares.
 /// @param records The record files declaring it, up to and including `path`.
-/// @param released The released suites whose creation code derives it.
+/// @param released The released suites whose mechanism derives it.
 error FrozenSnapshotsOutnumberReleases(string path, address deployedAddress, uint256 records, uint256 released);
 
 /// Thrown when a file in the frozen record declares no deployed address. The
@@ -67,8 +67,8 @@ error FrozenSnapshotAmbiguous(string path);
 /// documented as such because it is easy to read the first as covering the
 /// second.
 ///
-/// **Internal to the recorded set.** The address a suite's creation code
-/// derives is the address it records, the code hash that creation code produces
+/// **Internal to the recorded set.** The address a suite's mechanism
+/// derives is the address it records, the code hash that mechanism produces
 /// is the code hash it records, and the runtime code it records hashes to that
 /// same code hash. These are real derivations and they catch a set generated
 /// inconsistently — a hand-edited constant, a snapshot regenerated for one
@@ -130,7 +130,7 @@ error FrozenSnapshotAmbiguous(string path);
 /// one spelling. Inheriting a narrower contract is a choice a reader sees in
 /// the inheritance list; overriding a test to nothing is one they do not.
 abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
-    /// Checks one suite against itself: derive from its creation code, then
+    /// Checks one suite against itself: derive through its mechanism, then
     /// require everything it records to agree with the derivation.
     /// @param suite The suite to check.
     function checkInternallyConsistent(DeploySuite memory suite) internal {
@@ -265,9 +265,10 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// exactly what the chain group does not check.
     ///
     /// The match is by address: the address a file DECLARES against the address
-    /// a suite's creation code DERIVES. The derived side is a pure function of
-    /// the creation code, so a suite whose creation code derives the address a
-    /// file records IS a release of those bytes.
+    /// a suite's mechanism DERIVES, through `LibRainDeployMechanism` — the
+    /// creation code for a Zoltu suite, the `CloneTarget` for a clone. The
+    /// derived side is a pure function of the suite, so a suite that derives
+    /// the address a file records IS a release of what that file records.
     ///
     /// Nothing is matched by name, which would assert only that a convention
     /// was followed. Nothing is matched by searching the file's text either: a
@@ -286,7 +287,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
 
             uint256 declarations = 0;
             for (uint256 j = 0; j < released.length; j++) {
-                if (recorded[i] == LibRainDeploy.zoltuAddress(released[j].creationCode)) {
+                if (recorded[i] == LibRainDeployMechanism.deployedAddress(released[j])) {
                     declarations++;
                 }
             }
@@ -309,7 +310,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     }
 
     /// Every declared suite MUST be internally consistent: what it records is
-    /// what its own creation code derives.
+    /// what its own mechanism derives.
     function testSnapshotInternallyConsistent() external {
         DeploySuite[] memory suites = allSuites();
         for (uint256 i = 0; i < suites.length; i++) {

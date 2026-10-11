@@ -9,16 +9,18 @@ import {
     LibICloneableFactoryV4
 } from "rain-factory-0.1.30/src/lib/LibICloneableFactoryV4.sol";
 import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
-import {DeployCandidate} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {
     CLONE_ARTIFACT_PATH,
-    CLONE_UNANCHORABLE_REASON,
-    CloneDeploy,
+    CloneTarget,
     EIP1167_CREATION_CODE_PREFIX_LENGTH,
     LibRainDeployClone
 } from "../../../src/lib/LibRainDeployClone.sol";
-import {exampleCloneFactory, exampleCloneImplementation} from "../../abstract/ExampleCloneDeploys.sol";
+import {
+    exampleCloneDependencies,
+    exampleCloneFactory,
+    exampleCloneImplementation
+} from "../../abstract/ExampleCloneDeploys.sol";
 import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
 import {MockMispredictingCloneFactory} from "../../concrete/MockMispredictingCloneFactory.sol";
@@ -54,10 +56,8 @@ contract LibRainDeployCloneTest is Test {
     /// @param factory The factory to clone through.
     /// @param implementation The implementation to clone.
     /// @return The clone declaration.
-    function localClone(address factory, address implementation) internal pure returns (CloneDeploy memory) {
-        return CloneDeploy({
-            suite: "local-clone", factory: factory, implementation: implementation, data: TEST_DATA, salt: TEST_SALT
-        });
+    function localClone(address factory, address implementation) internal pure returns (CloneTarget memory) {
+        return CloneTarget({factory: factory, implementation: implementation, data: TEST_DATA, salt: TEST_SALT});
     }
 
     /// Puts the fixture's factory or implementation at its DECLARED Zoltu address
@@ -99,7 +99,7 @@ contract LibRainDeployCloneTest is Test {
 
     /// @param network The network name a refusal should carry.
     /// @param deployer The address to broadcast as.
-    /// @param cloneData The `abi.encode`d `CloneDeploy`.
+    /// @param cloneData The `abi.encode`d `CloneTarget`.
     /// @return The address the step deployed to.
     function externalCloneDeployStep(string memory network, address deployer, bytes memory cloneData)
         external
@@ -113,17 +113,19 @@ contract LibRainDeployCloneTest is Test {
     /// @param clone The clone to deploy.
     /// @param expectedAddress The declared clone address.
     /// @param expectedCodeHash The declared clone code hash.
+    /// @param dependencies The dependencies declared beside the clone.
     /// @return deployedAddress The deployed clone address.
     /// @return forkIds The forks each network was deployed on.
     function externalCloneToNetworks(
         string[] memory networks,
         address deployer,
-        CloneDeploy memory clone,
+        CloneTarget memory clone,
         address expectedAddress,
-        bytes32 expectedCodeHash
+        bytes32 expectedCodeHash,
+        DeployDependency[] memory dependencies
     ) external returns (address deployedAddress, uint256[] memory forkIds) {
         return LibRainDeployClone.cloneToNetworks(
-            vm, networks, deployer, clone, "", expectedAddress, expectedCodeHash, new DeployDependency[](0)
+            vm, networks, deployer, clone, "", expectedAddress, expectedCodeHash, dependencies
         );
     }
 
@@ -132,17 +134,19 @@ contract LibRainDeployCloneTest is Test {
     /// @param clone The clone to deploy.
     /// @param expectedAddress The declared clone address.
     /// @param expectedCodeHash The declared clone code hash.
+    /// @param dependencies The dependencies declared beside the clone.
     /// @return deployedAddress The deployed clone address.
     /// @return forkIds The forks each network was deployed on.
     function externalCloneAndBroadcast(
         string[] memory networks,
         uint256 deployerPrivateKey,
-        CloneDeploy memory clone,
+        CloneTarget memory clone,
         address expectedAddress,
-        bytes32 expectedCodeHash
+        bytes32 expectedCodeHash,
+        DeployDependency[] memory dependencies
     ) external returns (address deployedAddress, uint256[] memory forkIds) {
         return LibRainDeployClone.cloneAndBroadcast(
-            vm, networks, deployerPrivateKey, clone, "", expectedAddress, expectedCodeHash, new DeployDependency[](0)
+            vm, networks, deployerPrivateKey, clone, "", expectedAddress, expectedCodeHash, dependencies
         );
     }
 
@@ -233,7 +237,7 @@ contract LibRainDeployCloneTest is Test {
     function testCloneDerivationsMatchARealFactoryDeploy() external {
         MockCloneFactory factory = new MockCloneFactory();
         MockCloneable implementation = new MockCloneable();
-        CloneDeploy memory clone = localClone(address(factory), address(implementation));
+        CloneTarget memory clone = localClone(address(factory), address(implementation));
 
         address predicted = LibRainDeployClone.cloneDeployedAddress(clone);
         assertEq(predicted.code.length, 0, "nothing at the predicted address before the deploy");
@@ -259,13 +263,8 @@ contract LibRainDeployCloneTest is Test {
     function testCloneDeployedAddressMatchesTheFactoryPrediction(bytes32 salt, bytes memory data) external {
         MockCloneFactory factory = new MockCloneFactory();
         MockCloneable implementation = new MockCloneable();
-        CloneDeploy memory clone = CloneDeploy({
-            suite: "local-clone",
-            factory: address(factory),
-            implementation: address(implementation),
-            data: data,
-            salt: salt
-        });
+        CloneTarget memory clone =
+            CloneTarget({factory: address(factory), implementation: address(implementation), data: data, salt: salt});
         assertEq(
             LibRainDeployClone.cloneDeployedAddress(clone),
             factory.predictDeterministicAddressOpenSalt(address(implementation), data, salt)
@@ -291,7 +290,7 @@ contract LibRainDeployCloneTest is Test {
         vm.assume(keccak256(data) != keccak256(otherData));
 
         address base = LibRainDeployClone.cloneDeployedAddress(
-            CloneDeploy({suite: "base", factory: factory, implementation: implementation, data: data, salt: salt})
+            CloneTarget({factory: factory, implementation: implementation, data: data, salt: salt})
         );
 
         // Each variant built fresh rather than by mutating a copy: assigning one
@@ -300,88 +299,32 @@ contract LibRainDeployCloneTest is Test {
         // itself.
         assertNotEq(
             LibRainDeployClone.cloneDeployedAddress(
-                CloneDeploy({
-                    suite: "base", factory: otherFactory, implementation: implementation, data: data, salt: salt
-                })
+                CloneTarget({factory: otherFactory, implementation: implementation, data: data, salt: salt})
             ),
             base,
             "factory"
         );
         assertNotEq(
             LibRainDeployClone.cloneDeployedAddress(
-                CloneDeploy({
-                    suite: "base", factory: factory, implementation: otherImplementation, data: data, salt: salt
-                })
+                CloneTarget({factory: factory, implementation: otherImplementation, data: data, salt: salt})
             ),
             base,
             "implementation"
         );
         assertNotEq(
             LibRainDeployClone.cloneDeployedAddress(
-                CloneDeploy({
-                    suite: "base", factory: factory, implementation: implementation, data: data, salt: otherSalt
-                })
+                CloneTarget({factory: factory, implementation: implementation, data: data, salt: otherSalt})
             ),
             base,
             "salt"
         );
         assertNotEq(
             LibRainDeployClone.cloneDeployedAddress(
-                CloneDeploy({
-                    suite: "base", factory: factory, implementation: implementation, data: otherData, salt: salt
-                })
+                CloneTarget({factory: factory, implementation: implementation, data: otherData, salt: salt})
             ),
             base,
             "data"
         );
-    }
-
-    /// The suite key MUST NOT move the address. It names the clone in the
-    /// declaration; it is not part of what gets deployed, and a derivation that
-    /// hashed it in would make a rename a redeploy to a new address.
-    function testCloneAddressIgnoresTheSuiteKey() external pure {
-        CloneDeploy memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
-        address before = LibRainDeployClone.cloneDeployedAddress(clone);
-        clone.suite = "renamed-clone";
-        assertEq(LibRainDeployClone.cloneDeployedAddress(clone), before);
-    }
-
-    /// `cloneCandidate` MUST derive every field of the candidate from the clone,
-    /// and MUST carry the standard unanchorable reason. Each field asserted
-    /// against its own derivation, because the point of the builder is that a
-    /// consumer no longer writes these five by hand.
-    function testCloneCandidateDerivesEveryField() external pure {
-        CloneDeploy memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
-        DeployCandidate memory candidate = LibRainDeployClone.cloneCandidate(clone);
-
-        assertEq(candidate.snapshot.suite, clone.suite);
-        assertEq(candidate.snapshot.creationCode, LibRainDeployClone.cloneCreationCode(clone.implementation));
-        assertEq(candidate.snapshot.storedDeployedAddress, LibRainDeployClone.cloneDeployedAddress(clone));
-        assertEq(candidate.snapshot.storedBytecodeHash, LibRainDeployClone.cloneDeployedCodehash(clone.implementation));
-        assertEq(candidate.snapshot.storedRuntimeCode, LibRainDeployClone.cloneRuntimeCode(clone.implementation));
-        assertEq(candidate.snapshot.artifactPath, CLONE_ARTIFACT_PATH);
-        assertEq(candidate.snapshot.dependencies.length, 0);
-        assertEq(candidate.unanchorableReason, CLONE_UNANCHORABLE_REASON);
-
-        // The reason has to be NON-empty: an empty one is what says a candidate
-        // IS anchorable, which would send the source anchor looking for an
-        // artifact that cannot exist.
-        assertNotEq(bytes(candidate.unanchorableReason).length, 0);
-    }
-
-    /// The recorded code hash MUST be the hash of the recorded runtime code, and
-    /// the recorded address MUST be where the recorded creation code lands. The
-    /// candidate's internal consistency, which the verification abstracts assume.
-    function testCloneCandidateIsInternallyConsistent() external {
-        MockCloneFactory factory = new MockCloneFactory();
-        MockCloneable implementation = new MockCloneable();
-        CloneDeploy memory clone = localClone(address(factory), address(implementation));
-        DeployCandidate memory candidate = LibRainDeployClone.cloneCandidate(clone);
-
-        assertEq(candidate.snapshot.storedBytecodeHash, keccak256(candidate.snapshot.storedRuntimeCode));
-        address deployed = factory.cloneDeterministicOpenSalt(clone.implementation, clone.data, clone.salt);
-        assertEq(deployed, candidate.snapshot.storedDeployedAddress);
-        assertEq(deployed.codehash, candidate.snapshot.storedBytecodeHash);
     }
 
     /// `CLONE_ARTIFACT_PATH` MUST be shaped `<path>.sol:<Name>` so
@@ -409,21 +352,6 @@ contract LibRainDeployCloneTest is Test {
         } catch {}
     }
 
-    /// `cloneDeployStep` MUST refuse a network whose clone factory has no code,
-    /// naming the network and the factory, BEFORE it broadcasts anything.
-    function testCloneDeployStepMissingFactoryReverts() external {
-        MockCloneable implementation = new MockCloneable();
-        // An address with no code, which is what a factory not yet deployed to a
-        // network looks like.
-        CloneDeploy memory clone = localClone(address(uint160(0xF00D)), address(implementation));
-        assertEq(clone.factory.code.length, 0);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, clone.factory)
-        );
-        this.externalCloneDeployStep(LibRainDeploy.ARBITRUM_ONE, address(this), abi.encode(clone));
-    }
-
     /// `cloneDeployStep` MUST refuse a factory that does not predict the address
     /// this package derives, naming the network, the factory and both addresses —
     /// and MUST do it before the broadcast, because a clone at an address nobody
@@ -434,7 +362,7 @@ contract LibRainDeployCloneTest is Test {
     function testCloneDeployStepPredictionMismatchReverts() external {
         MockMispredictingCloneFactory factory = new MockMispredictingCloneFactory();
         MockCloneable implementation = new MockCloneable();
-        CloneDeploy memory clone = localClone(address(factory), address(implementation));
+        CloneTarget memory clone = localClone(address(factory), address(implementation));
 
         address expected = LibRainDeployClone.cloneDeployedAddress(clone);
         address predicted = factory.predictDeterministicAddressOpenSalt(clone.implementation, clone.data, clone.salt);
@@ -462,7 +390,7 @@ contract LibRainDeployCloneTest is Test {
     function testCloneDeployStepAcceptsAnAgreeingFactory() external {
         MockCloneFactory factory = new MockCloneFactory();
         MockCloneable implementation = new MockCloneable();
-        CloneDeploy memory clone = localClone(address(factory), address(implementation));
+        CloneTarget memory clone = localClone(address(factory), address(implementation));
 
         address deployed = this.externalCloneDeployStep(LibRainDeploy.ARBITRUM_ONE, address(this), abi.encode(clone));
         assertEq(deployed, LibRainDeployClone.cloneDeployedAddress(clone));
@@ -486,7 +414,7 @@ contract LibRainDeployCloneTest is Test {
     function testCloneDeployStepRefusesThePredictionBeforeBroadcasting() external {
         MockUncloneableMispredictingCloneFactory factory = new MockUncloneableMispredictingCloneFactory();
         MockCloneable implementation = new MockCloneable();
-        CloneDeploy memory clone = localClone(address(factory), address(implementation));
+        CloneTarget memory clone = localClone(address(factory), address(implementation));
 
         address expected = LibRainDeployClone.cloneDeployedAddress(clone);
         address predicted = factory.predictDeterministicAddressOpenSalt(clone.implementation, clone.data, clone.salt);
@@ -521,10 +449,12 @@ contract LibRainDeployCloneTest is Test {
     /// `NoNetworks` on a stale address is reachable only from here, which is also
     /// the ordering claim: the empty list is refused before the address is.
     function testCloneToNetworksNoNetworksReverts() external {
-        CloneDeploy memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
+        CloneTarget memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
         address stale = address(uint160(LibRainDeployClone.cloneDeployedAddress(clone)) + 1);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalCloneToNetworks(new string[](0), address(this), clone, stale, bytes32(0));
+        this.externalCloneToNetworks(
+            new string[](0), address(this), clone, stale, bytes32(0), exampleCloneDependencies()
+        );
     }
 
     /// `cloneAndBroadcast` MUST make the same refusal, and MUST make it before
@@ -538,10 +468,15 @@ contract LibRainDeployCloneTest is Test {
     /// valid key the refusal is indistinguishable from the one `cloneToNetworks`
     /// makes below, which carries the same guard.
     function testCloneAndBroadcastNoNetworksReverts() external {
-        CloneDeploy memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
+        CloneTarget memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalCloneAndBroadcast(
-            new string[](0), 0, clone, LibRainDeployClone.cloneDeployedAddress(clone), bytes32(0)
+            new string[](0),
+            0,
+            clone,
+            LibRainDeployClone.cloneDeployedAddress(clone),
+            bytes32(0),
+            exampleCloneDependencies()
         );
     }
 
@@ -554,7 +489,7 @@ contract LibRainDeployCloneTest is Test {
     /// reverts here with no RPC configured is itself the proof that it runs
     /// before `createForks` — a guard inside the loop could not.
     function testCloneToNetworksStaleDeclaredAddressReverts() external {
-        CloneDeploy memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
+        CloneTarget memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
         address derived = LibRainDeployClone.cloneDeployedAddress(clone);
         address stale = address(uint160(derived) + 1);
 
@@ -562,13 +497,13 @@ contract LibRainDeployCloneTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
-        this.externalCloneToNetworks(networks, address(this), clone, stale, bytes32(0));
+        this.externalCloneToNetworks(networks, address(this), clone, stale, bytes32(0), exampleCloneDependencies());
     }
 
     /// The same guard on `cloneAndBroadcast`, which is the entry point a
     /// broadcast script actually calls.
     function testCloneAndBroadcastStaleDeclaredAddressReverts() external {
-        CloneDeploy memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
+        CloneTarget memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
         address derived = LibRainDeployClone.cloneDeployedAddress(clone);
         address stale = address(uint160(derived) + 1);
 
@@ -576,7 +511,96 @@ contract LibRainDeployCloneTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
-        this.externalCloneAndBroadcast(networks, 1, clone, stale, bytes32(0));
+        this.externalCloneAndBroadcast(networks, 1, clone, stale, bytes32(0), exampleCloneDependencies());
+    }
+
+    /// `cloneToNetworks` MUST refuse a clone whose FACTORY is not among the
+    /// declared dependencies, naming it, before any network is forked. An
+    /// undeclared factory is one no network is held to, so the clone would be
+    /// made by whatever code happens to sit at that address.
+    function testCloneToNetworksUndeclaredFactoryReverts() external {
+        CloneTarget memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] = exampleCloneDependencies()[1];
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneDependencyUndeclared.selector, clone.factory));
+        this.externalCloneToNetworks(
+            networks, address(this), clone, LibRainDeployClone.cloneDeployedAddress(clone), bytes32(0), dependencies
+        );
+    }
+
+    /// The same refusal for an undeclared IMPLEMENTATION, which is the code
+    /// every call into the clone runs.
+    function testCloneToNetworksUndeclaredImplementationReverts() external {
+        CloneTarget memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] = exampleCloneDependencies()[0];
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeployClone.CloneDependencyUndeclared.selector, clone.implementation)
+        );
+        this.externalCloneToNetworks(
+            networks, address(this), clone, LibRainDeployClone.cloneDeployedAddress(clone), bytes32(0), dependencies
+        );
+    }
+
+    /// The dependency refusal MUST come before the declared-address check: with
+    /// a STALE declared address and no dependencies declared, the answer is
+    /// `CloneDependencyUndeclared`, not `UnexpectedDeployedAddress`. Through
+    /// `cloneAndBroadcast`, the entry point a broadcast script calls.
+    function testCloneAndBroadcastUndeclaredDependencyRefusedBeforeTheAddress() external {
+        CloneTarget memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
+        address stale = address(uint160(LibRainDeployClone.cloneDeployedAddress(clone)) + 1);
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneDependencyUndeclared.selector, clone.factory));
+        this.externalCloneAndBroadcast(networks, 1, clone, stale, bytes32(0), new DeployDependency[](0));
+    }
+
+    /// A declared factory whose code on the network is NOT the declared runtime
+    /// code MUST be refused with `DependencyChanged` before anything is
+    /// broadcast: the declared dependency is what pins what
+    /// `cloneDeterministicOpenSalt` does on each network.
+    function testCloneToNetworksChangedFactoryReverts() external {
+        vm.makePersistent(address(this));
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+
+        address factory = zoltuDeployOrAdopt(type(MockCloneFactory).creationCode, type(MockCloneFactory).runtimeCode);
+        vm.makePersistent(factory);
+        address implementation = zoltuDeployOrAdopt(type(MockCloneable).creationCode, type(MockCloneable).runtimeCode);
+        vm.makePersistent(implementation);
+
+        CloneTarget memory clone = localClone(factory, implementation);
+        DeployDependency[] memory dependencies = exampleCloneDependencies();
+        // Declared as the implementation's code, which the factory address
+        // does not hold.
+        dependencies[0].runtimeCode = type(MockCloneable).runtimeCode;
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                factory,
+                keccak256(type(MockCloneable).runtimeCode),
+                factory.codehash
+            )
+        );
+        this.externalCloneToNetworks(
+            networks,
+            address(this),
+            clone,
+            LibRainDeployClone.cloneDeployedAddress(clone),
+            LibRainDeployClone.cloneDeployedCodehash(implementation),
+            dependencies
+        );
     }
 
     /// `cloneToNetworks` MUST deploy the clone on a real network, and a RERUN
@@ -599,7 +623,7 @@ contract LibRainDeployCloneTest is Test {
         assertEq(implementation, exampleCloneImplementation(), "implementation at its declared address");
         vm.makePersistent(implementation);
 
-        CloneDeploy memory clone = localClone(factory, implementation);
+        CloneTarget memory clone = localClone(factory, implementation);
         address expected = LibRainDeployClone.cloneDeployedAddress(clone);
         bytes32 expectedCodeHash = LibRainDeployClone.cloneDeployedCodehash(implementation);
 
@@ -612,7 +636,9 @@ contract LibRainDeployCloneTest is Test {
         // no-op is a no-op.
         assertEq(expected.code.length, 0, "the clone must not already be deployed");
 
-        (address deployed,) = this.externalCloneToNetworks(networks, address(this), clone, expected, expectedCodeHash);
+        (address deployed,) = this.externalCloneToNetworks(
+            networks, address(this), clone, expected, expectedCodeHash, exampleCloneDependencies()
+        );
         assertEq(deployed, expected);
         assertEq(deployed.codehash, expectedCodeHash);
         assertEq(deployed.code, LibRainDeployClone.cloneRuntimeCode(implementation));
@@ -621,7 +647,9 @@ contract LibRainDeployCloneTest is Test {
         // the only reason a second run does not revert `CloneAddressOccupied`
         // out of the factory.
         vm.makePersistent(deployed);
-        (address again,) = this.externalCloneToNetworks(networks, address(this), clone, expected, expectedCodeHash);
+        (address again,) = this.externalCloneToNetworks(
+            networks, address(this), clone, expected, expectedCodeHash, exampleCloneDependencies()
+        );
         assertEq(again, expected);
         assertEq(again.codehash, expectedCodeHash);
     }
@@ -645,7 +673,7 @@ contract LibRainDeployCloneTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.POLYGON;
 
-        CloneDeploy memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
+        CloneTarget memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
         address expected = LibRainDeployClone.cloneDeployedAddress(clone);
         bytes32 expectedCodeHash = LibRainDeployClone.cloneDeployedCodehash(exampleCloneImplementation());
 
@@ -676,7 +704,7 @@ contract LibRainDeployCloneTest is Test {
         }
 
         (address deployed, uint256[] memory forkIds) =
-            this.externalCloneAndBroadcast(networks, 1, clone, expected, expectedCodeHash);
+            this.externalCloneAndBroadcast(networks, 1, clone, expected, expectedCodeHash, exampleCloneDependencies());
         assertEq(deployed, expected);
         assertEq(forkIds.length, networks.length);
         assertTrue(walletsHold(deployer));

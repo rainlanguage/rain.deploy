@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
+    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -53,7 +54,9 @@ contract EmptyArtifactPathDeploySuites is ExternalDeploySuites {
                 storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
-                dependencies: new DeployDependency[](0)
+                dependencies: new DeployDependency[](0),
+                mechanism: DeployMechanism.Zoltu,
+                mechanismData: ""
             }),
             unanchorableReason: ""
         });
@@ -65,7 +68,9 @@ contract EmptyArtifactPathDeploySuites is ExternalDeploySuites {
                 storedBytecodeHash: keccak256(type(MockDeployableV2).runtimeCode),
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "",
-                dependencies: new DeployDependency[](0)
+                dependencies: new DeployDependency[](0),
+                mechanism: DeployMechanism.Zoltu,
+                mechanismData: ""
             }),
             // Non-empty, because this is the shape a consumer reaching for the
             // empty path actually writes: the reason is SUPPOSED to be what

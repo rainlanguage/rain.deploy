@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {GeneratedContract} from "../../script/Build.sol";
-import {DeployCandidate} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployCandidate, DeployMechanism} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibCodeGen} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {LibReleasedSuitesAggregate} from "../lib/LibReleasedSuitesAggregate.sol";
@@ -303,7 +303,7 @@ contract BuildTest is Test {
                 string.concat(
                     LibCodeGen.filePrefix(),
                     "\n",
-                    LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+                    LibRainDeploySnapshot.releasedImportBlock(vm, paths, DeployMechanism.Zoltu),
                     LibRainDeploySnapshot.releasedLibraryBlock(
                         vm, libraryName, generated[i].contractName, paths, generated[i].candidate.snapshot
                     )
