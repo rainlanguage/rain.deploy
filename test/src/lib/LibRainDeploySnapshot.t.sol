@@ -1105,7 +1105,12 @@ contract LibRainDeploySnapshotTest is Test {
     /// `RELEASED_FIXTURE_ROOT` is not `WALK_FIXTURE_ROOT`: forge runs the tests
     /// in a contract concurrently, and two of them writing one lib path read
     /// each other's output.
-    string constant FIXTURE_LIB_ROOT = "fixture-lib";
+    ///
+    /// A subdirectory of `fixture-lib` rather than `fixture-lib` itself:
+    /// `setUp` clears this root, and other test contracts, which forge runs
+    /// concurrently with this one, write their own lib fixtures under
+    /// `fixture-lib`.
+    string constant FIXTURE_LIB_ROOT = "fixture-lib/snapshot";
 
     /// `LIB_DIR` is the directory a build points every lib writer at, so the
     /// committed libs MUST be the files that directory holds. A `LIB_DIR`
@@ -2377,7 +2382,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// fails the whole build until it is deleted by hand. Spelled out rather
     /// than concatenated from `FIXTURE_LIB_ROOT`, because solc refuses
     /// `string.concat` in a constant initialiser.
-    string constant AGGREGATE_PATH_FIXTURE_DIR = "fixture-lib/aggregate-path";
+    string constant AGGREGATE_PATH_FIXTURE_DIR = "fixture-lib/snapshot/aggregate-path";
 
     /// Where `testWriteReleasedSuitesAggregateDefaultsToTheOrgHeader` points
     /// the writer, for the reason `RELEASED_FIXTURE_ROOT` is not
@@ -2385,7 +2390,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// two of them creating, writing, reading and removing one directory see
     /// each other's files and each other's removals. Under `FIXTURE_LIB_ROOT`,
     /// spelled out for the reason `AGGREGATE_PATH_FIXTURE_DIR` gives.
-    string constant AGGREGATE_DEFAULTS_FIXTURE_DIR = "fixture-lib/aggregate-defaults";
+    string constant AGGREGATE_DEFAULTS_FIXTURE_DIR = "fixture-lib/snapshot/aggregate-defaults";
 
     /// The aggregate MUST land at `<libDir>/LibReleasedSuites.sol`, holding
     /// exactly the prefix, imports and library the emitters produce for the
