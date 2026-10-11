@@ -21,7 +21,7 @@ import {
     UnreleasableVersion
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
+import {LibRainDeployMechanism, UnexpectedMechanismData} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {
     EXAMPLE_CLONE_RECORD_CONTRACT,
@@ -3425,6 +3425,41 @@ contract LibRainDeploySnapshotTest is Test {
             vm.readFile(
                 LibRainDeploySnapshot.pathForSnapshot(
                     EXAMPLE_CLONE_RECORD_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT
+                )
+            )
+        );
+    }
+
+    /// External wrapper so a refused suite write is a failed call.
+    /// @param suite The suite to write.
+    function externalWriteSuiteSnapshot(DeploySuite memory suite) external returns (string memory) {
+        return LibRainDeploySnapshot.writeSnapshot(
+            vm, CLONE_RECORD_FIXTURE_ROOT, EXAMPLE_CLONE_RELEASE_TAG, FIXTURE_CONTRACT, suite
+        );
+    }
+
+    /// A Zoltu suite carrying mechanism data is refused by the suite writer
+    /// before anything is written: it is declared as one mechanism and filled
+    /// in as another, and a record cut from it would describe a deploy of the
+    /// creation code alone.
+    function testSuiteWriterRefusesAZoltuSuiteCarryingMechanismData() external {
+        DeploySuite memory suite = DeploySuite({
+            suite: "zoltu-with-data",
+            creationCode: type(MockDeployable).creationCode,
+            storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
+            storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
+            storedRuntimeCode: type(MockDeployable).runtimeCode,
+            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
+            dependencies: new DeployDependency[](0),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: hex"00"
+        });
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
+        this.externalWriteSuiteSnapshot(suite);
+        assertFalse(
+            vm.exists(
+                LibRainDeploySnapshot.pathForSnapshot(
+                    CLONE_RECORD_FIXTURE_ROOT, EXAMPLE_CLONE_RELEASE_TAG, FIXTURE_CONTRACT
                 )
             )
         );
