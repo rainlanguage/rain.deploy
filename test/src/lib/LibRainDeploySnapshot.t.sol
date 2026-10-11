@@ -21,7 +21,14 @@ import {
     UnreleasableVersion
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
+import {
+    EXAMPLE_CLONE_RECORD_CONTRACT,
+    EXAMPLE_CLONE_RECORD_ROOT,
+    EXAMPLE_CLONE_RELEASE_TAG,
+    exampleCloneRelease
+} from "../../abstract/ExampleCloneDeploys.sol";
 import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
 import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.2.0/src/lib/LibMemoryKV.sol";
 
@@ -3384,5 +3391,37 @@ contract LibRainDeploySnapshotTest is Test {
         vm.removeDir(AGGREGATE_DEFAULTS_FIXTURE_DIR, true);
 
         assertEq(defaulted, explicitly);
+    }
+
+    /// The record the clone writer produces into. Under `FIXTURE_ROOT`, so the
+    /// `setUp` clear covers what a failed run leaves behind.
+    string constant CLONE_RECORD_FIXTURE_ROOT = "test/generated-snapshot/clone-record";
+
+    /// The committed release record of `example-clone` is what the clone writer
+    /// produces for `exampleCloneRelease()`, byte for byte. The released clone
+    /// suite every clone fixture declares is read from that record, so a record
+    /// that drifted from the writer would put the fixtures to a release no
+    /// current cut could produce.
+    function testCloneWriterReproducesTheCommittedCloneRecord() external {
+        string memory written = LibRainDeploySnapshot.writeSnapshot(
+            vm,
+            CLONE_RECORD_FIXTURE_ROOT,
+            EXAMPLE_CLONE_RELEASE_TAG,
+            EXAMPLE_CLONE_RECORD_CONTRACT,
+            LibRainDeployMechanism.cloneCandidate(exampleCloneRelease()).snapshot
+        );
+        string memory reproduced = vm.readFile(written);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CLONE_RECORD_FIXTURE_ROOT, true);
+
+        assertEq(
+            reproduced,
+            vm.readFile(
+                LibRainDeploySnapshot.pathForSnapshot(
+                    EXAMPLE_CLONE_RECORD_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT
+                )
+            )
+        );
     }
 }

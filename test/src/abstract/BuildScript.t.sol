@@ -7,6 +7,12 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
+import {CloneBuildScriptHarness} from "../../concrete/CloneBuildScriptHarness.sol";
+import {
+    EXAMPLE_CLONE_RECORD_CONTRACT,
+    EXAMPLE_CLONE_RECORD_ROOT,
+    EXAMPLE_CLONE_RELEASE_TAG
+} from "../../abstract/ExampleCloneDeploys.sol";
 
 /// A memory struct so a recursion into a subtree writes what it finds where the
 /// caller can read it: every frame of the walk shares this one accumulator.
@@ -48,6 +54,14 @@ contract BuildScriptTest is Test {
     /// parallel, so a root two of them share is one deleting the tree the other
     /// is midway through reading.
     string constant CUT_CONFIG_FIXTURE_ROOT = "test/generated-buildscript-cut-config";
+
+    /// Where the clone `cutRelease()` fixture's record is built.
+    string constant CLONE_CUT_FIXTURE_ROOT = "test/generated-buildscript-clone-cut";
+
+    /// Where the clone `cutRelease()` fixture's released-suites lib is written.
+    /// Under `fixture-lib`, which nothing compiles: the lib imports paths that
+    /// resolve only from `src/lib`.
+    string constant CLONE_CUT_LIB_DIR = "fixture-lib/buildscript-clone-cut";
 
     /// Carries its AST because `foundry.toml` sets `ast = true`.
     string constant BASE_ARTIFACT = "out/BuildScript.sol/BuildScript.json";
@@ -170,6 +184,59 @@ contract BuildScriptTest is Test {
     /// The sources staying byte-identical is the half `script/build.sh` then
     /// depends on: a `run()` that wrote them directly would be refused for
     /// `foundry.toml` and would make the hook's copy a no-op for the other.
+    /// PROPERTY: a clone deploy repo's release goes through the same
+    /// `cutRelease()` as a Zoltu one. Its regeneration writes the clone record
+    /// through the suite writer, the freeze copies it unchanged, and the
+    /// released-suites lib regenerated from the record declares the release as
+    /// a CLONE carrying the record's own `MECHANISM_DATA` — not as a Zoltu
+    /// release, which would derive it at the Zoltu address of the proxy's
+    /// creation code.
+    ///
+    /// The frozen record is also held to the committed `example-clone` record,
+    /// which was written from the same declaration: a cut of it is that file.
+    function testCutReleaseFreezesACloneRecordAndReleasesItAsAClone() external {
+        resetFixture(CLONE_CUT_FIXTURE_ROOT);
+        resetFixture(CLONE_CUT_LIB_DIR);
+        CloneBuildScriptHarness harness = new CloneBuildScriptHarness(CLONE_CUT_FIXTURE_ROOT, CLONE_CUT_LIB_DIR);
+        harness.cutRelease();
+
+        // Read while the fixture is still there, asserted once it is gone.
+        string memory frozen = vm.readFile(harness.frozenPath());
+        string memory rolling = vm.readFile(harness.rollingPath());
+        string memory lib = vm.readFile(harness.releasedLibPath());
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CLONE_CUT_FIXTURE_ROOT, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CLONE_CUT_LIB_DIR, true);
+
+        assertEq(frozen, rolling);
+        assertEq(
+            frozen,
+            vm.readFile(
+                LibRainDeploySnapshot.pathForSnapshot(
+                    EXAMPLE_CLONE_RECORD_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT
+                )
+            )
+        );
+
+        string memory prefix = string.concat(EXAMPLE_CLONE_RECORD_CONTRACT, "_", LibRainDeploySnapshot.deployTag(vm));
+        assertTrue(
+            vm.contains(lib, string.concat("suite: \"example-clone@", LibRainDeploySnapshot.deployTag(vm), "\"")),
+            "the release is keyed by the template suite and the tag"
+        );
+        assertTrue(vm.contains(lib, "mechanism: DeployMechanism.Clone"), "the release is declared a clone");
+        assertFalse(vm.contains(lib, "DeployMechanism.Zoltu"), "and not a Zoltu release");
+        assertTrue(
+            vm.contains(lib, string.concat("MECHANISM_DATA as ", prefix, "_MECHANISM_DATA")),
+            "the record's mechanism data is imported"
+        );
+        assertTrue(
+            vm.contains(lib, string.concat("mechanismData: ", prefix, "_MECHANISM_DATA")),
+            "and is the release's mechanism data"
+        );
+    }
+
     function testRunStagesTheNetworkConfig() external {
         resetFixture(RUN_CONFIG_FIXTURE_ROOT);
         BuildScriptHarness harness = new BuildScriptHarness(RUN_CONFIG_FIXTURE_ROOT, FIXTURE_CONTRACT);

@@ -811,21 +811,41 @@ library LibRainDeploySnapshot {
         }
 
         uint256 snapshotId = vm.snapshotState();
-        address deployed = LibRainDeployMechanism.deployLocally(vm, suite);
-        LibFs.buildFileForContract(
-            vm,
-            deployed,
-            dirForSnapshot(root, dir),
-            contractName,
-            spdxLicenseIdentifier,
-            copyrightText,
-            cloneSnapshotConstants(vm, deployed, suite)
-        );
+        writeCloneSnapshotFile(vm, dirForSnapshot(root, dir), contractName, spdxLicenseIdentifier, copyrightText, suite);
         if (!vm.revertToState(snapshotId)) {
             revert SnapshotStateRevertFailed(suite.suite, snapshotId);
         }
 
         return pathForSnapshot(root, dir, contractName);
+    }
+
+    /// Deploy a clone suite locally and write its record into `snapshotDir`.
+    /// The caller owns the state snapshot around it: the file is built while
+    /// the clone is still deployed because `LibFs` reads the code hash from
+    /// the deployed instance. Split out of `writeSnapshot` because the deploy,
+    /// the constants and `LibFs`'s seven arguments alongside that function's
+    /// own seven parameters are stack too deep on solc 0.8.25 without
+    /// `--via-ir`.
+    /// @param vm The Vm instance for file operations.
+    /// @param snapshotDir The checked directory to write into.
+    /// @param contractName The contract the snapshot describes.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written
+    /// snapshot declares.
+    /// @param copyrightText The copyright text the written snapshot declares.
+    /// @param suite The clone suite to snapshot.
+    function writeCloneSnapshotFile(
+        Vm vm,
+        string memory snapshotDir,
+        string memory contractName,
+        string memory spdxLicenseIdentifier,
+        string memory copyrightText,
+        DeploySuite memory suite
+    ) internal {
+        address deployed = LibRainDeployMechanism.deployLocally(vm, suite);
+        string memory constants = cloneSnapshotConstants(vm, deployed, suite);
+        LibFs.buildFileForContract(
+            vm, deployed, snapshotDir, contractName, spdxLicenseIdentifier, copyrightText, constants
+        );
     }
 
     /// `writeSnapshot` for a suite, applied to `RAIN_SPDX_LICENSE_IDENTIFIER`

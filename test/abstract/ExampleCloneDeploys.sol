@@ -3,11 +3,19 @@
 pragma solidity ^0.8.25;
 
 import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
-import {DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
-import {CloneDeploy} from "../../src/lib/LibRainDeployClone.sol";
+import {DeployMechanism, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {CLONE_ARTIFACT_PATH, CloneDeploy} from "../../src/lib/LibRainDeployClone.sol";
 import {DeployDependency, LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {MockCloneFactory} from "../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../concrete/MockCloneable.sol";
+import {
+    BYTECODE_HASH as EXAMPLE_CLONE_BYTECODE_HASH,
+    CREATION_CODE as EXAMPLE_CLONE_CREATION_CODE,
+    DEPENDENCIES as EXAMPLE_CLONE_DEPENDENCIES,
+    DEPLOYED_ADDRESS as EXAMPLE_CLONE_DEPLOYED_ADDRESS,
+    MECHANISM_DATA as EXAMPLE_CLONE_MECHANISM_DATA,
+    RUNTIME_CODE as EXAMPLE_CLONE_RUNTIME_CODE
+} from "../fixture-clone-record/0_0_1/ExampleClone.sol";
 
 /// The address the Zoltu factory derives for `MockCloneFactory`, which is where a
 /// test puts it.
@@ -52,10 +60,38 @@ function exampleCloneDependencies() pure returns (DeployDependency[] memory depe
         DeployDependency({deployedAddress: exampleCloneImplementation(), runtimeCode: type(MockCloneable).runtimeCode});
 }
 
+/// @dev The record root holding the committed `example-clone` release record.
+string constant EXAMPLE_CLONE_RECORD_ROOT = "test/fixture-clone-record";
+
+/// @dev The tag of the one `example-clone` release.
+string constant EXAMPLE_CLONE_RELEASE_TAG = "0_0_1";
+
+/// @dev The contract name the `example-clone` release record is written under.
+string constant EXAMPLE_CLONE_RECORD_CONTRACT = "ExampleClone";
+
+/// The declaration the committed release record of `example-clone` was written
+/// from. Its salt is not either candidate's, so the release sits at an address
+/// of its own and a check that read a candidate in place of the release would
+/// name the wrong clone.
+/// @return The release's clone declaration.
+function exampleCloneRelease() pure returns (CloneDeploy memory) {
+    return CloneDeploy({
+        suite: "example-clone@0_0_1",
+        factory: exampleCloneFactory(),
+        implementation: exampleCloneImplementation(),
+        data: "",
+        salt: bytes32(uint256(3)),
+        dependencies: exampleCloneDependencies()
+    });
+}
+
 /// @title ExampleCloneDeploys
 /// @notice A clone deploy repo's declaration, as the abstracts see it: the clone
-/// list and nothing else, with the candidates derived from it by
-/// `RainDeployCloneSuitesBase`.
+/// list, with the candidates derived from it by `RainDeployCloneSuitesBase`, and
+/// one frozen release read from its committed record under
+/// `EXAMPLE_CLONE_RECORD_ROOT`. The release is a clone at a salt neither
+/// candidate uses, so every check that reads releases is put to a clone address
+/// no candidate shares.
 ///
 /// TWO entries, for the reason `ExampleDeploySuites` carries two: every loop here
 /// runs over a list, and proving a loop does not stop at the first entry requires
@@ -79,8 +115,19 @@ function exampleCloneDependencies() pure returns (DeployDependency[] memory depe
 /// entry had some.
 abstract contract ExampleCloneDeploys is RainDeployCloneSuitesBase {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
-        return new DeploySuite[](0);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
+        suites = new DeploySuite[](1);
+        suites[0] = DeploySuite({
+            suite: "example-clone@0_0_1",
+            creationCode: EXAMPLE_CLONE_CREATION_CODE,
+            storedDeployedAddress: EXAMPLE_CLONE_DEPLOYED_ADDRESS,
+            storedBytecodeHash: EXAMPLE_CLONE_BYTECODE_HASH,
+            storedRuntimeCode: EXAMPLE_CLONE_RUNTIME_CODE,
+            artifactPath: CLONE_ARTIFACT_PATH,
+            dependencies: abi.decode(EXAMPLE_CLONE_DEPENDENCIES, (DeployDependency[])),
+            mechanism: DeployMechanism.Clone,
+            mechanismData: EXAMPLE_CLONE_MECHANISM_DATA
+        });
     }
 
     /// @inheritdoc RainDeployCloneSuitesBase

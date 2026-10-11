@@ -2,9 +2,11 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.17.0/src/Test.sol";
-
-import {CandidateSourceMismatch, UnknownDeploymentSuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    CandidateSourceMismatch,
+    DeploySuite,
+    UnknownDeploymentSuite
+} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {ExampleDeployNarrowNetworks} from "../../concrete/ExampleDeployNarrowNetworks.sol";
@@ -19,6 +21,11 @@ import {MultiSuiteDeploy} from "../../concrete/MultiSuiteDeploy.sol";
 import {UnanchorableDeploy} from "../../concrete/UnanchorableDeploy.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
+import {ExampleCloneDeploy} from "../../concrete/ExampleCloneDeploy.sol";
+import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
+import {MockCloneable} from "../../concrete/MockCloneable.sol";
+import {ZoltuDeployOrAdopt} from "../../abstract/ZoltuDeployOrAdopt.sol";
+import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
 
 /// @title RainDeployBroadcastTest
 /// @notice The broadcast entry point, driven exactly as the `Manual sol
@@ -37,7 +44,7 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 /// library through this same path on. Without it, the org's only broadcast
 /// entry point, inherited by every downstream deploy repo, asserts nothing
 /// about what it would deploy or where.
-contract RainDeployBroadcastTest is Test {
+contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
     /// Chain id of Arbitrum One, which is what `deployNetworks()` being honoured
     /// looks like from inside a completed run.
     ///
@@ -531,5 +538,66 @@ contract RainDeployBroadcastTest is Test {
             sDeploy.externalSuiteByName("address-registry@0_0_1").artifactPath,
             "src/concrete/AddressRegistry.sol:AddressRegistry"
         );
+    }
+
+    /// `broadcastSuite` hands a clone suite to the clone broadcast with the
+    /// clone the KEY selects and the address the suite RECORDS. The recorded
+    /// address is staled by one, so the clone path's pre-fork address check
+    /// refuses it naming both the recorded address and the address derived for
+    /// the selected clone: a hand-over that derived the address itself, read
+    /// another entry, or dispatched the clone as Zoltu would name a different
+    /// pair.
+    function testBroadcastSuiteHandsOverTheSelectedCloneAndTheRecordedAddress() external {
+        ExampleCloneDeploy deploy = new ExampleCloneDeploy();
+
+        DeploySuite memory suite = deploy.externalSuiteByName("example-clone-second-salt");
+        address derived = LibRainDeployMechanism.deployedAddress(suite);
+
+        // Stated rather than assumed: the declaration agrees before this test
+        // stales it, so the refusal below is this test's doing.
+        assertEq(suite.storedDeployedAddress, derived, "the declaration must agree before it is staled");
+        // The key is load-bearing: the other clone derives a DIFFERENT address.
+        assertNotEq(
+            derived,
+            LibRainDeployMechanism.deployedAddress(deploy.externalSuiteByName("example-clone")),
+            "the two declared clones must derive apart"
+        );
+        assertNotEq(derived, LibRainDeploy.zoltuAddress(suite.creationCode), "the clone is not at its Zoltu address");
+
+        suite.storedDeployedAddress = address(uint160(derived) + 1);
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedAddress.selector, suite.storedDeployedAddress, derived
+            )
+        );
+        deploy.externalBroadcastSuite(suite, networks, 1);
+    }
+
+    /// A frozen clone release is broadcast by its key like any other release:
+    /// selected from `releasedSuites()`, cloned through the factory and
+    /// implementation it declares, and landing at the address its record
+    /// holds, with the code the record holds.
+    function testBroadcastsTheFrozenCloneReleaseByKey() external {
+        ExampleCloneDeploy deploy = new ExampleCloneDeploy();
+        vm.makePersistent(address(this));
+        vm.makePersistent(address(deploy));
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+
+        vm.makePersistent(zoltuDeployOrAdopt(type(MockCloneFactory).creationCode, type(MockCloneFactory).runtimeCode));
+        vm.makePersistent(zoltuDeployOrAdopt(type(MockCloneable).creationCode, type(MockCloneable).runtimeCode));
+
+        DeploySuite memory release = deploy.externalSuiteByName("example-clone@0_0_1");
+        assertEq(release.storedDeployedAddress.code.length, 0, "the release must not already be deployed");
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        deploy.externalBroadcastSuite(release, networks, 1);
+
+        assertEq(release.storedDeployedAddress.code, release.storedRuntimeCode);
+        assertEq(release.storedDeployedAddress.codehash, release.storedBytecodeHash);
     }
 }
