@@ -242,5 +242,38 @@
       "Attribution: every behaviour in scope is new on this branch, so there is no older suite to credit and no pre-existing-suite pass was possible. killedByExistingTests counts the 49 mutants whose killer list names at least one test already committed on this branch before this run; none of the 49 was killed only by a test this run added or strengthened, so each would have been killed at the scanned commit too. gapsFilled counts the 8 that survived at the scanned commit and are killed at testsAfterCommit. The matrix establishes that this PR's tests discriminate, not which older test covered what.",
       "No adversarial findings were filed. The adversarial pass's one candidate was C07's fragile equivalence, which is a note above rather than an issue because the current behaviour is correct."
     ]
+  },
+  {
+    "timestamp": "2026-10-11T18:41:44Z",
+    "commit": "7c369ae0b322cdd5d4e6315de15fc786d1491604",
+    "testsAfterCommit": "07f8bbed5a0b837ca00998701f9260c808fa4847",
+    "publishedTag": "sol-v0.1.15",
+    "commitsAheadOfTag": 14,
+    "scope": "PR #272 (#270), the mechanism-on-DeploySuite redesign: src/lib/LibRainDeployMechanism.sol (N), src/lib/LibRainDeployClone.sol (C), src/abstract/RainDeployCloneSuitesBase.sol (S), src/abstract/RainDeployBroadcast.sol broadcastSuite (B), src/abstract/RainDeployVerifyBase.sol deriveDeployment (V), src/abstract/RainDeployVerifySnapshotBase.sol checkFrozenSnapshotsReleased (R), the clone writer and released-lib emission of src/lib/LibRainDeploySnapshot.sol (P)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 7,
+      "behaviours": 62,
+      "behavioursProbed": 62,
+      "killedByExistingTests": 54,
+      "gapsFilled": 7,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 1,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "62 mutants over seven units (N 23, C 19, S 2, B 1, V 2, R 1, P 14; the N numbering skips N19, no such mutant was declared). Probed against the scanned commit's suite (baseline green at 714) in two passes: pass 1 N01-P06, pass 2 P02, P05 and P07-P14. 54 KILLED by the pre-existing suite, 7 SURVIVED and closed, 1 unkillable defensive guard.",
+      "Harness: the suite command is the transport-aware check.sh recorded in the 2026-10-08 entry. A KILLED verdict therefore always carries at least one non-transport failure; each kill was additionally read back from its retained run log rather than the probe's killer list, because every list carried 429 and HyperEVM 'invalid block height' noise. Genuine killers named for the kills the fail-pattern could not name: P06, P07 testCloneWriterReproducesTheCommittedCloneRecord / testCutReleaseFreezesACloneRecordAndReleasesItAsAClone; P10 testReleasedImportBlockAliasesEveryRecord, testEveryCommittedReleasedLibIsWhatTheGeneratorEmits; P13 testEveryCommittedReleasedLibIsWhatTheGeneratorEmits, testReleasedLibraryBlockDeclaresEveryRecord. The greedy fail-pattern '\\[FAIL.*\\] (\\S+)' cannot name a killer whose assertion message spans lines (a whole-file text diff), so P06's probe list named only a transport failure; its real killer is the clone record reproduction test.",
+      "P02 (writer skips the state revert) scored NO-RUN in both passes: its last attempt was 712 passed with the only 2 failures transport (HyperEVM fork 'invalid block height'). Attributed by hand: those two tests, testChainDerivationOpensNoForkOfItsOwn and testCloneReleaseMissingFromANetworkIsRefusedAtTheCloneAddress, were rerun under the mutant and PASSED, so P02 survived the pre-existing suite and is counted in gapsFilled.",
+      "P05's pass-1 HARNESS-ERROR was a target occurring in both the Zoltu and clone writers; re-anchored on the clone writer's preceding suite.creationCode and re-probed (SURVIVED).",
+      "Gaps filled (each baseline PASS and mutant FAIL proven on the tests tree): C13 testCloneDeployStepReturnsWhereTheFactoryCloned, C14 testCloneDeployStepBroadcastsAsTheDeployer, P01 testSuiteWriterRefusesAZoltuSuiteCarryingMechanismData, P02 testCloneWriterLeavesNoDeployBehind, P04 and P05 testCloneWriterRecordsTheDeployNotTheSuiteClaims (stored address and runtime code staled, record must still match the committed fixture), P11 testReleasedImportBlockDefaultsToThisRepoSuitesImportPath strengthened in place to pass a clone mechanism through the short arity.",
+      "P03 (writer ignores a failed revertToState) is an unkillable defensive guard: revertToState returns false only for an invalid snapshot id, which the writer's own snapshotState never produces, and cheatcodes cannot be mocked to force it."
+    ]
   }
 ]
