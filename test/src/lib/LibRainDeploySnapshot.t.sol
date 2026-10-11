@@ -3464,4 +3464,27 @@ contract LibRainDeploySnapshotTest is Test {
             )
         );
     }
+
+    /// The clone writer deploys locally only to read what it records, inside a
+    /// state snapshot it reverts: after the write, neither the clone nor the
+    /// dependencies etched for it are left in the caller's state, where they
+    /// would stand in for a deploy that never happened.
+    function testCloneWriterLeavesNoDeployBehind() external {
+        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(exampleCloneRelease()).snapshot;
+        assertEq(suite.storedDeployedAddress.code.length, 0);
+        for (uint256 i = 0; i < suite.dependencies.length; i++) {
+            assertEq(suite.dependencies[i].deployedAddress.code.length, 0);
+        }
+
+        LibRainDeploySnapshot.writeSnapshot(
+            vm, CLONE_RECORD_FIXTURE_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT, suite
+        );
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CLONE_RECORD_FIXTURE_ROOT, true);
+
+        assertEq(suite.storedDeployedAddress.code.length, 0);
+        for (uint256 i = 0; i < suite.dependencies.length; i++) {
+            assertEq(suite.dependencies[i].deployedAddress.code.length, 0);
+        }
+    }
 }
