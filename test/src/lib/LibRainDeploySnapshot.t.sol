@@ -1510,7 +1510,9 @@ contract LibRainDeploySnapshotTest is Test {
     }
 
     /// Omitting the path MUST be this repo's own `suitesImportPathInThisRepo`, so the
-    /// arity every existing caller spells keeps emitting what it emitted.
+    /// arity every existing caller spells keeps emitting what it emitted. The
+    /// mechanism MUST pass through unchanged, so a clone block from the
+    /// shorter arity still aliases `MECHANISM_DATA`.
     function testReleasedImportBlockDefaultsToThisRepoSuitesImportPath() external pure {
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2), DeployMechanism.Zoltu),
@@ -1518,6 +1520,15 @@ contract LibRainDeploySnapshotTest is Test {
                 vm, recordOf(2), LibRainDeploySnapshot.suitesImportPathInThisRepo(), DeployMechanism.Zoltu
             )
         );
+
+        string memory clone = LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2), DeployMechanism.Clone);
+        assertEq(
+            clone,
+            LibRainDeploySnapshot.releasedImportBlock(
+                vm, recordOf(2), LibRainDeploySnapshot.suitesImportPathInThisRepo(), DeployMechanism.Clone
+            )
+        );
+        assertTrue(vm.contains(clone, "MECHANISM_DATA as "));
     }
 
     /// The aggregate's `DeploySuite` import MUST be the caller's path too, for
