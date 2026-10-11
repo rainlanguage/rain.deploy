@@ -197,6 +197,9 @@ contract BuildScriptTest is Test {
     function testCutReleaseFreezesACloneRecordAndReleasesItAsAClone() external {
         resetFixture(CLONE_CUT_FIXTURE_ROOT);
         resetFixture(CLONE_CUT_LIB_DIR);
+        // The lib writer writes into its directory and does not create it.
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(CLONE_CUT_LIB_DIR, true);
         CloneBuildScriptHarness harness = new CloneBuildScriptHarness(CLONE_CUT_FIXTURE_ROOT, CLONE_CUT_LIB_DIR);
         harness.cutRelease();
 
