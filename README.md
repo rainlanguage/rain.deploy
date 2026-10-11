@@ -120,23 +120,49 @@ how a snapshot from before a network existed reaches that network.
 ### Factory clones
 
 A repo whose deployment is an EIP-1167 clone of an audited implementation,
-rather than a contract it compiles itself, declares the clone and nothing else:
+rather than a contract it compiles itself, declares the clones and its releases,
+and binds the same broadcast as any other repo:
 
 ```solidity
 // src/abstract/MyCloneDeploys.sol
 abstract contract MyCloneDeploys is RainDeployCloneSuitesBase {
     function cloneDeploys() internal pure override returns (CloneDeploy[] memory);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory);
 }
 
 // script/Deploy.sol
-contract Deploy is MyCloneDeploys, RainDeployCloneBroadcast {}
+contract Deploy is MyCloneDeploys, RainDeployBroadcast {}
 ```
 
-A `CloneDeploy` is five values — suite key, factory, implementation, init data
-and salt — and `RainDeployCloneSuitesBase` derives `candidateSuites()` from them
-with `LibRainDeployClone.cloneCandidate`. So it is still ONE list: the broadcast
-reads `cloneDeploys()` and the verification reads candidates derived from the
-same entries, which is the same property the Zoltu path has for the same reason.
+A `CloneDeploy` is the suite key, the factory, the implementation, the init
+data, the salt and the dependencies. The dependencies MUST name both the factory
+and the implementation, each paired with its runtime code; a clone missing
+either is refused with `CloneDependencyUndeclared`. The factory's entry pins the
+code that performs the clone, and the implementation's pins the code the clone
+delegates to — the clone's own code hash only says WHICH address it delegates
+to.
+
+`RainDeployCloneSuitesBase` derives `candidateSuites()` from the clone list with
+`LibRainDeployMechanism.cloneCandidate`, so it is still ONE list. Each candidate
+is an ordinary `DeploySuite` whose `mechanism` is `DeployMechanism.Clone` and
+whose `mechanismData` is the `abi.encode`d `CloneTarget` (factory,
+implementation, init data, salt). Every consumer — `RainDeployBroadcast`, the
+verification abstracts and `LibRainDeploySnapshot.writeSnapshot` — reads the
+suite through `LibRainDeployMechanism`, which answers the deployed address and
+performs the local and broadcast deploy for whichever mechanism the suite
+declares. A Zoltu suite carries `DeployMechanism.Zoltu` and empty
+`mechanismData`; anything else is refused with `UnexpectedMechanismData`.
+
+Releases follow the normal lifecycle. `BuildScript` regenerates the clone's
+snapshot through `writeSnapshot(DeploySuite)`, which records `MECHANISM_DATA`
+beside the usual constants; `cutRelease()` freezes it under
+`src/generated/<tag>/`; and the generated `Lib<Contract>Released` entry carries
+the mechanism and that `MECHANISM_DATA`. The mechanism KIND comes from the
+declaration the release was cut from, so a clone release over a record that has
+no `MECHANISM_DATA` does not compile. From there the frozen clone is checked
+like any frozen suite: the record group holds it to its released entry at the
+CLONE address, the chain group requires its code at that address on every
+supported network, and it is selectable by key for broadcast.
 
 A clone is **unanchorable** — no compiler produces a proxy assembled from an
 address — so the candidate carries `unanchorableReason` and a constant
@@ -145,22 +171,30 @@ that path: the qualifier rule is the shape `<path>.sol:<Name>` and it applies to
 unanchorable candidates too, so `""` is refused with
 `UnqualifiedCandidateArtifactPath`.
 
-`RainDeployCloneBroadcast` overrides exactly one function, `broadcastSuite`. The
-suite selection, the key handling, the network list, the forks, the idempotent
-skip and the address and code hash assertions are `RainDeployBroadcast.run()`
-and `LibRainDeploy.deployStepToNetworks`, shared with the Zoltu path — the
-deploy STEP is the parameter, `cloneDeterministicOpenSalt` in place of `CREATE2`
-over creation code. Two copies of that loop could not be told apart by any
-passing test, and the one that fell behind would be the one whose deploys
-stopped being checked.
+The local derivation deploys the clone the way the chain does: the declared
+dependencies are etched first, then the etched factory's
+`cloneDeterministicOpenSalt` runs. A suite whose `creationCode` is not the
+EIP-1167 initcode for its implementation is refused with
+`CloneCreationCodeMismatch`, and a factory that lands the clone anywhere but the
+derived address with `CloneDerivationMismatch`.
 
-The clone factory's address is a **parameter** rather than a pinned constant,
-because the deployed factory's address and code hash are pinned in
-`rain-factory-deploy`, which depends on this package. What replaces the pin is
-stronger than a code hash: per network, before the broadcast window opens, the
-factory is asked where it would put this exact clone and refused with
-`CloneFactoryPredictionMismatch` if it disagrees. A code hash says the factory
-is a known build; this says the factory agrees about the address.
+The broadcast is `RainDeployBroadcast.run()` and
+`LibRainDeploy.deployStepToNetworks`, shared with the Zoltu path: the suite
+selection, the key handling, the network list, the forks, the dependency checks,
+the idempotent skip and the address and code hash assertions are one loop, and
+the deploy STEP is the parameter — `cloneDeterministicOpenSalt` in place of
+`CREATE2` over creation code.
+
+The clone factory's address is a **parameter** rather than a constant in this
+package, because the deployed factory's address and code hash are pinned in
+`rain-factory-deploy`, which depends on this package; the declared factory
+dependency pins its runtime code on every network before the step runs. Per
+network, before the broadcast window opens, the factory is also asked where it
+would put this exact clone and refused with `CloneFactoryPredictionMismatch` if
+it disagrees with `rain-factory`'s formula — not an `ICloneableFactoryV4`, a
+different open-salt domain tag, a different proxy layout. That check says
+nothing about what `cloneDeterministicOpenSalt` itself does; the factory
+dependency pin covers that.
 
 The **open** salt, not the namespaced one, because the open-salt digest covers
 the implementation and the init data and not the caller — so every account
