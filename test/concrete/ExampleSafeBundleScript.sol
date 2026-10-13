@@ -11,14 +11,14 @@ import {MockCallRecorder} from "./MockCallRecorder.sol";
 
 /// A bundle of two calls from a Safe into a call recorder, with each hook's
 /// behaviour set by the test so the inherited `run()` and `verify()` can be
-/// driven through every refusal.
+/// driven through every refusal. It keeps the default `assertReversible`.
 contract ExampleSafeBundleScript is SafeBundleScript {
     /// `preflight` refuses.
     error NotAuthorable();
     /// `assertPostState` refuses.
     error PostStateMissing(uint256 callCount);
-    /// `assertReversible` refuses.
-    error NotReversible();
+    /// `authorBundle` cannot derive the bundle from an unauthorable state.
+    error BundleUnderivable();
 
     Safe internal sSafe;
     MockCallRecorder internal sRecorder;
@@ -26,7 +26,6 @@ contract ExampleSafeBundleScript is SafeBundleScript {
     bool internal sRefusePreflight;
     bytes internal sSecondCallData;
     uint256 internal sSecondCallValue;
-    bool internal sRefuseReversible;
 
     /// @param bundleSafe The Safe the bundle is for.
     /// @param recorder The call target.
@@ -54,11 +53,6 @@ contract ExampleSafeBundleScript is SafeBundleScript {
         sSecondCallValue = value;
     }
 
-    /// @param refuse Whether `assertReversible` refuses.
-    function setRefuseReversible(bool refuse) external {
-        sRefuseReversible = refuse;
-    }
-
     /// @param bundleSafe The Safe the script now targets.
     function setSafe(Safe bundleSafe) external {
         sSafe = bundleSafe;
@@ -75,7 +69,9 @@ contract ExampleSafeBundleScript is SafeBundleScript {
     }
 
     /// @inheritdoc SafeBundleScript
+    /// @dev Reverts `BundleUnderivable` in the state `preflight` refuses.
     function authorBundle() internal view override returns (SafeTx[] memory) {
+        if (sRefusePreflight) revert BundleUnderivable();
         SafeTx[] memory txs = new SafeTx[](2);
         txs[0] = SafeTx({to: address(sRecorder), value: 0, data: "first", operation: Enum.Operation.Call});
         txs[1] = SafeTx({
@@ -88,11 +84,6 @@ contract ExampleSafeBundleScript is SafeBundleScript {
     function assertPostState() internal view override {
         uint256 callCount = sRecorder.callCount();
         if (callCount != 2) revert PostStateMissing(callCount);
-    }
-
-    /// @inheritdoc SafeBundleScript
-    function assertReversible() internal view override {
-        if (sRefuseReversible) revert NotReversible();
     }
 
     /// @inheritdoc SafeBundleScript
