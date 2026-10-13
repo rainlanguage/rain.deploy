@@ -25,3 +25,10 @@ version = "0.1.39"
 url = "https://soldeer-revisions.s3.amazonaws.com/rain-sol-codegen/0_1_39_01-10-2026_22:33:18_rain.sol.zip"
 checksum = "356774c9461a4486196d4c7c59f6e6e7099aa567eff4c40bb21ebc5f752f9389"
 integrity = "29de970d9b88ec2eac8a4914a04f76736862b96936aba8b5d61d99189064bbd4"
+
+[[dependencies]]
+name = "safe-global-safe-smart-account"
+version = "1.4.1"
+url = "https://soldeer-revisions.s3.amazonaws.com/safe-global-safe-smart-account/1_4_1_27-08-2024_07:11:34_safe-global-safe-smart-account-1.4.zip"
+checksum = "d565288ecfea33352f9ecc3c9e2cce1d94e16fc0b5eeed37f4fe03e9685e8e40"
+integrity = "6547392e6d5e82c9f45d4583f1a33b80558a84f00cb0278acbdb0c3b403dcef4"

@@ -6,38 +6,14 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {LibSafe} from "../../../src/lib/LibSafe.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {ISafe} from "../../../src/interface/ISafe.sol";
+import {Safe} from "safe-global-safe-smart-account-1.4.1/contracts/Safe.sol";
+import {IProxy} from "safe-global-safe-smart-account-1.4.1/contracts/proxies/SafeProxy.sol";
+import {SafeProxyFactory} from "safe-global-safe-smart-account-1.4.1/contracts/proxies/SafeProxyFactory.sol";
 
-/// The Safe v1.4.1 calls the tests make to create a Safe and to move it out of
-/// a configuration, all but `setup` callable only by the Safe itself.
-interface ISafeAdmin {
-    function setup(
-        address[] calldata owners,
-        uint256 threshold,
-        address to,
-        bytes calldata data,
-        address fallbackHandler,
-        address paymentToken,
-        uint256 payment,
-        address payable paymentReceiver
-    ) external;
-    function enableModule(address module) external;
-    function setGuard(address guard) external;
-    function setFallbackHandler(address handler) external;
-}
-
-/// The SafeToL2Setup entry point `setup` delegatecalls.
+/// The `SafeToL2Setup` entry point `setup` delegatecalls. `SafeToL2Setup` is
+/// not in the `safe-global-safe-smart-account` 1.4.1 package.
 interface ISafeToL2Setup {
     function setupToL2(address l2Singleton) external;
-}
-
-/// `createProxyWithNonce` has this signature on both the v1.3.0 and the v1.4.1
-/// factory.
-interface ISafeProxyFactory {
-    function createProxyWithNonce(address singleton, bytes memory initializer, uint256 saltNonce)
-        external
-        returns (address);
-    function proxyCreationCode() external pure returns (bytes memory);
 }
 
 /// A guard v1.4.1 `setGuard` accepts: it checks only ERC-165 support.
@@ -54,42 +30,43 @@ contract AcceptingGuard {
 /// to the account it inspects.
 contract LibSafeTest is Test {
     /// The canonical v1.3.0 `GnosisSafeProxyFactory`, the factory that creates
-    /// proxies with `LibSafe.SAFE_V1_3_0_PROXY_CODEHASH`.
+    /// proxies with `LibSafe.SAFE_V1_3_0_PROXY_CODEHASH`. Its
+    /// `createProxyWithNonce` has the v1.4.1 `SafeProxyFactory` signature.
     address constant SAFE_V1_3_0_PROXY_FACTORY = 0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2;
 
     function externalAssertCanonicalContracts() external view {
         LibSafe.assertCanonicalContracts();
     }
 
-    function externalAssertIdentity(ISafe target) external view {
+    function externalAssertIdentity(Safe target) external view {
         LibSafe.assertIdentity(target);
     }
 
-    function externalAssertNoModules(ISafe target) external view {
+    function externalAssertNoModules(Safe target) external view {
         LibSafe.assertNoModules(target);
     }
 
-    function externalAssertNoGuard(ISafe target) external view {
+    function externalAssertNoGuard(Safe target) external view {
         LibSafe.assertNoGuard(target);
     }
 
-    function externalAssertFallbackHandler(ISafe target, address expected) external view {
+    function externalAssertFallbackHandler(Safe target, address expected) external view {
         LibSafe.assertFallbackHandler(target, expected);
     }
 
-    function externalAssertLockedDown(ISafe target) external view {
+    function externalAssertLockedDown(Safe target) external view {
         LibSafe.assertLockedDown(target);
     }
 
-    function externalAssertOwnersInOrder(ISafe target, address[] memory expected) external view {
+    function externalAssertOwnersInOrder(Safe target, address[] memory expected) external view {
         LibSafe.assertOwnersInOrder(target, expected);
     }
 
-    function externalAssertOwnersAsSet(ISafe target, address[] memory expected) external view {
+    function externalAssertOwnersAsSet(Safe target, address[] memory expected) external view {
         LibSafe.assertOwnersAsSet(target, expected);
     }
 
-    function externalAssertThreshold(ISafe target, uint256 expected) external view {
+    function externalAssertThreshold(Safe target, uint256 expected) external view {
         LibSafe.assertThreshold(target, expected);
     }
 
@@ -108,7 +85,7 @@ contract LibSafeTest is Test {
     /// handler.
     function toL2Initializer() internal returns (bytes memory) {
         return abi.encodeCall(
-            ISafeAdmin.setup,
+            Safe.setup,
             (
                 owners(),
                 2,
@@ -124,16 +101,18 @@ contract LibSafeTest is Test {
 
     /// A Safe created on the selected chain through the v1.4.1 factory on the
     /// L1 singleton with `setupToL2`, as the Safe UI creates one.
-    function createSafe() internal returns (ISafe) {
-        return ISafe(
-            ISafeProxyFactory(LibSafe.SAFE_V1_4_1_PROXY_FACTORY)
-                .createProxyWithNonce(LibSafe.SAFE_V1_4_1_L1_SINGLETON, toL2Initializer(), 0)
+    function createSafe() internal returns (Safe) {
+        return Safe(
+            payable(address(
+                    SafeProxyFactory(LibSafe.SAFE_V1_4_1_PROXY_FACTORY)
+                        .createProxyWithNonce(LibSafe.SAFE_V1_4_1_L1_SINGLETON, toL2Initializer(), 0)
+                ))
         );
     }
 
     /// A Safe created by `setUp` on a Base fork. Every test starts from the
     /// state `setUp` leaves, fuzz runs included, so the fork is created once.
-    ISafe safe;
+    Safe safe;
 
     function setUp() external {
         vm.createSelectFork(LibRainDeploy.BASE);
@@ -194,7 +173,7 @@ contract LibSafeTest is Test {
         assertEq(
             keccak256(
                 abi.encodePacked(
-                    ISafeProxyFactory(LibSafe.SAFE_V1_4_1_PROXY_FACTORY).proxyCreationCode(),
+                    SafeProxyFactory(LibSafe.SAFE_V1_4_1_PROXY_FACTORY).proxyCreationCode(),
                     uint256(uint160(LibSafe.SAFE_V1_4_1_L1_SINGLETON))
                 )
             ),
@@ -207,8 +186,10 @@ contract LibSafeTest is Test {
             LibSafe.SAFE_V1_4_1_L1_PROXY_INITCODE_HASH,
             LibSafe.SAFE_V1_4_1_PROXY_FACTORY
         );
-        address created = ISafeProxyFactory(LibSafe.SAFE_V1_4_1_PROXY_FACTORY)
-            .createProxyWithNonce(LibSafe.SAFE_V1_4_1_L1_SINGLETON, initializer, saltNonce);
+        address created = address(
+            SafeProxyFactory(LibSafe.SAFE_V1_4_1_PROXY_FACTORY)
+                .createProxyWithNonce(LibSafe.SAFE_V1_4_1_L1_SINGLETON, initializer, saltNonce)
+        );
         assertEq(created, derived);
     }
 
@@ -218,7 +199,7 @@ contract LibSafeTest is Test {
     function testCreatedSafePassesOnBase() external {
         this.externalAssertCanonicalContracts();
         assertEq(address(safe).codehash, LibSafe.SAFE_V1_4_1_PROXY_CODEHASH);
-        assertEq(safe.masterCopy(), LibSafe.SAFE_V1_4_1_L2_SINGLETON);
+        assertEq(IProxy(address(safe)).masterCopy(), LibSafe.SAFE_V1_4_1_L2_SINGLETON);
         assertEq(
             LibSafe.readStorageAddress(safe, LibSafe.SAFE_SINGLETON_STORAGE_SLOT), LibSafe.SAFE_V1_4_1_L2_SINGLETON
         );
@@ -232,8 +213,8 @@ contract LibSafeTest is Test {
     /// singleton, which is equally a genuine v1.4.1 Safe.
     function testCreatedSafePassesOnEthereum() external {
         vm.createSelectFork(LibRainDeploy.ETHEREUM);
-        ISafe l1 = createSafe();
-        assertEq(l1.masterCopy(), LibSafe.SAFE_V1_4_1_L1_SINGLETON);
+        Safe l1 = createSafe();
+        assertEq(IProxy(address(l1)).masterCopy(), LibSafe.SAFE_V1_4_1_L1_SINGLETON);
         this.externalAssertLockedDown(l1);
     }
 
@@ -241,7 +222,7 @@ contract LibSafeTest is Test {
     /// the pinned v1.3.0 proxy code.
     function testV130ProxyOnV141SingletonPasses() external {
         bytes memory initializer = abi.encodeCall(
-            ISafeAdmin.setup,
+            Safe.setup,
             (
                 owners(),
                 2,
@@ -253,9 +234,11 @@ contract LibSafeTest is Test {
                 payable(address(0))
             )
         );
-        ISafe v130 = ISafe(
-            ISafeProxyFactory(SAFE_V1_3_0_PROXY_FACTORY)
-                .createProxyWithNonce(LibSafe.SAFE_V1_4_1_L2_SINGLETON, initializer, 0)
+        Safe v130 = Safe(
+            payable(address(
+                    SafeProxyFactory(SAFE_V1_3_0_PROXY_FACTORY)
+                        .createProxyWithNonce(LibSafe.SAFE_V1_4_1_L2_SINGLETON, initializer, 0)
+                ))
         );
         assertEq(address(v130).codehash, LibSafe.SAFE_V1_3_0_PROXY_CODEHASH);
         this.externalAssertLockedDown(v130);
@@ -298,7 +281,7 @@ contract LibSafeTest is Test {
     /// A singleton reporting any other version fails.
     function testIdentityRejectsOtherVersion(string memory version) external {
         vm.assume(keccak256(bytes(version)) != keccak256(bytes(LibSafe.SAFE_V1_4_1_VERSION)));
-        vm.mockCall(address(safe), abi.encodeCall(ISafe.VERSION, ()), abi.encode(version));
+        vm.mockCall(address(safe), abi.encodeCall(safe.VERSION, ()), abi.encode(version));
         vm.expectRevert(abi.encodeWithSelector(LibSafe.SafeVersionMismatch.selector, address(safe), version));
         this.externalAssertIdentity(safe);
     }
@@ -308,7 +291,7 @@ contract LibSafeTest is Test {
     function testModuleRejected() external {
         address module = makeAddr("module");
         vm.prank(address(safe));
-        ISafeAdmin(address(safe)).enableModule(module);
+        safe.enableModule(module);
         bytes memory err = abi.encodeWithSelector(LibSafe.SafeUnexpectedModule.selector, address(safe), module);
         vm.expectRevert(err);
         this.externalAssertNoModules(safe);
@@ -321,7 +304,7 @@ contract LibSafeTest is Test {
     function testGuardRejected() external {
         address guard = address(new AcceptingGuard());
         vm.prank(address(safe));
-        ISafeAdmin(address(safe)).setGuard(guard);
+        safe.setGuard(guard);
         assertEq(LibSafe.readStorageAddress(safe, LibSafe.SAFE_GUARD_STORAGE_SLOT), guard);
         bytes memory err = abi.encodeWithSelector(LibSafe.SafeUnexpectedGuard.selector, address(safe), guard);
         vm.expectRevert(err);
@@ -336,7 +319,7 @@ contract LibSafeTest is Test {
     function testFallbackHandlerChecked(address handler) external {
         vm.assume(handler != address(safe) && handler != LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER);
         vm.prank(address(safe));
-        ISafeAdmin(address(safe)).setFallbackHandler(handler);
+        safe.setFallbackHandler(handler);
         this.externalAssertFallbackHandler(safe, handler);
         bytes memory err = abi.encodeWithSelector(
             LibSafe.SafeFallbackHandlerMismatch.selector,

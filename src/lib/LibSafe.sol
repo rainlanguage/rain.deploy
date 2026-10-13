@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {ISafe} from "../interface/ISafe.sol";
+import {Safe} from "safe-global-safe-smart-account-1.4.1/contracts/Safe.sol";
+import {IProxy} from "safe-global-safe-smart-account-1.4.1/contracts/proxies/SafeProxy.sol";
 
 /// @title LibSafe
 /// @notice The canonical Safe v1.4.1 deployment — addresses, runtime code
@@ -198,14 +199,14 @@ library LibSafe {
     /// pinned code, and reporting `SAFE_V1_4_1_VERSION`. See "Trust order" for
     /// why the checks run in this order.
     /// @param safe The Safe.
-    function assertIdentity(ISafe safe) internal view {
+    function assertIdentity(Safe safe) internal view {
         bytes32 proxyCodehash = address(safe).codehash;
         if (proxyCodehash != SAFE_V1_4_1_PROXY_CODEHASH && proxyCodehash != SAFE_V1_3_0_PROXY_CODEHASH) {
             revert SafeUnknownProxyCodehash(address(safe), proxyCodehash);
         }
 
         // Answered by the proxy code just pinned, not by the singleton.
-        address singleton = safe.masterCopy();
+        address singleton = IProxy(address(safe)).masterCopy();
         if (singleton != SAFE_V1_4_1_L1_SINGLETON && singleton != SAFE_V1_4_1_L2_SINGLETON) {
             revert SafeUnknownSingleton(address(safe), singleton);
         }
@@ -226,7 +227,7 @@ library LibSafe {
     /// The Safe has no module enabled. A module executes transactions without
     /// owner signatures.
     /// @param safe The Safe.
-    function assertNoModules(ISafe safe) internal view {
+    function assertNoModules(Safe safe) internal view {
         // One is enough: any enabled module is the first on the first page.
         //slither-disable-next-line unused-return
         (address[] memory modules,) = safe.getModulesPaginated(SAFE_MODULES_SENTINEL, 1);
@@ -236,7 +237,7 @@ library LibSafe {
     /// The Safe has no transaction guard. A guard can block every transaction,
     /// including the one that would remove it.
     /// @param safe The Safe.
-    function assertNoGuard(ISafe safe) internal view {
+    function assertNoGuard(Safe safe) internal view {
         address guard = readStorageAddress(safe, SAFE_GUARD_STORAGE_SLOT);
         if (guard != address(0)) revert SafeUnexpectedGuard(address(safe), guard);
     }
@@ -245,7 +246,7 @@ library LibSafe {
     /// every selector the singleton does not implement.
     /// @param safe The Safe.
     /// @param expected The expected fallback handler.
-    function assertFallbackHandler(ISafe safe, address expected) internal view {
+    function assertFallbackHandler(Safe safe, address expected) internal view {
         address handler = readStorageAddress(safe, SAFE_FALLBACK_HANDLER_STORAGE_SLOT);
         if (handler != expected) revert SafeFallbackHandlerMismatch(address(safe), expected, handler);
     }
@@ -254,7 +255,7 @@ library LibSafe {
     /// compatibility fallback handler: a v1.4.1 Safe that nothing but its
     /// owners' signatures can move.
     /// @param safe The Safe.
-    function assertLockedDown(ISafe safe) internal view {
+    function assertLockedDown(Safe safe) internal view {
         assertIdentity(safe);
         assertNoModules(safe);
         assertNoGuard(safe);
@@ -266,7 +267,7 @@ library LibSafe {
     /// @param safe The Safe.
     /// @param slot The slot.
     /// @return The address in `slot`.
-    function readStorageAddress(ISafe safe, bytes32 slot) internal view returns (address) {
+    function readStorageAddress(Safe safe, bytes32 slot) internal view returns (address) {
         bytes memory word = safe.getStorageAt(uint256(slot), 1);
         // forge-lint: disable-next-line(unsafe-typecast)
         return address(uint160(uint256(bytes32(word))));
@@ -278,7 +279,7 @@ library LibSafe {
     /// `assertOwnersAsSet` where only membership matters.
     /// @param safe The Safe.
     /// @param expected The expected owners in `getOwners()` order.
-    function assertOwnersInOrder(ISafe safe, address[] memory expected) internal view {
+    function assertOwnersInOrder(Safe safe, address[] memory expected) internal view {
         address[] memory actual = safe.getOwners();
         if (actual.length != expected.length) {
             revert SafeOwnerCountMismatch(address(safe), expected.length, actual.length);
@@ -296,7 +297,7 @@ library LibSafe {
     /// `[a, b, c]`.
     /// @param safe The Safe.
     /// @param expected The expected owners, in any order.
-    function assertOwnersAsSet(ISafe safe, address[] memory expected) internal view {
+    function assertOwnersAsSet(Safe safe, address[] memory expected) internal view {
         address[] memory actual = safe.getOwners();
         if (actual.length != expected.length) {
             revert SafeOwnerCountMismatch(address(safe), expected.length, actual.length);
@@ -316,7 +317,7 @@ library LibSafe {
     /// The Safe's threshold is `expected`.
     /// @param safe The Safe.
     /// @param expected The expected threshold.
-    function assertThreshold(ISafe safe, uint256 expected) internal view {
+    function assertThreshold(Safe safe, uint256 expected) internal view {
         uint256 actual = safe.getThreshold();
         if (actual != expected) revert SafeThresholdMismatch(address(safe), expected, actual);
     }
