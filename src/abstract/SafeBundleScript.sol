@@ -17,10 +17,11 @@ import {LibSafeTxBuilderJson} from "../lib/LibSafeTxBuilderJson.sol";
 ///
 /// - `run()` authors the bundle for the Safe on the selected fork: refuses an
 ///   unauthorable state (`preflight`), builds the transactions
-///   (`authorBundle`), simulates each one as the Safe, requires the state the
-///   bundle exists to produce (`assertPostState`), writes the Safe Transaction
-///   Builder JSON to `artifactPath()` and logs the MultiSend `safeTxHash` at the
-///   Safe's current nonce — the hash the signers' devices show.
+///   (`authorBundle`), executes the MultiSend through the Safe, requires the
+///   state the bundle exists to produce (`assertPostState`), writes the Safe
+///   Transaction Builder JSON to `artifactPath()`, proves the bundle reversible
+///   (`assertReversible`, optional) and logs the MultiSend `safeTxHash` at the
+///   Safe's nonce before execution — the hash the signers' devices show.
 /// - `verify(jsonPath)` re-derives the bundle from live state and refuses an
 ///   artifact whose transactions, chain or Safe differ from it, then logs the
 ///   hash at the live nonce.
@@ -58,6 +59,13 @@ abstract contract SafeBundleScript is Script {
     /// state the bundle exists to produce.
     function assertPostState() internal view virtual;
 
+    /// Reverts unless the executed bundle can be undone by the Safe at its live
+    /// threshold, for a bundle whose script proves that (an n+1 reversal, for
+    /// example `LibSafeFork.simulateNPlus1`). Runs after the artifact is written,
+    /// on the fork the bundle executed on. A bundle with nothing to prove keeps
+    /// this default.
+    function assertReversible() internal virtual {}
+
     /// Where `run()` writes the Safe Transaction Builder JSON.
     /// @return The path.
     function artifactPath() internal view virtual returns (string memory);
@@ -66,20 +74,29 @@ abstract contract SafeBundleScript is Script {
     /// @return The name.
     function bundleName() internal pure virtual returns (string memory);
 
-    /// Authors the bundle on the selected fork, simulates it as the Safe,
-    /// requires its post-state, writes the artifact and logs its hash.
+    /// Authors the bundle on the selected fork, executes it through the Safe as
+    /// its owners would, requires its post-state, writes the artifact, proves
+    /// it reversible and logs its hash.
+    ///
+    /// The bundle is EXECUTED, not replayed call by call: the Safe runs the
+    /// MultiSend transaction whose `safeTxHash` the signers sign, with every
+    /// transaction's value, so the post-state is the state those exact bytes
+    /// produce. The fork's nonce moves; the logged hash is at the nonce the
+    /// signers will sign at.
     function run() external {
         preflight();
         SafeTx[] memory txs = authorBundle();
         Safe bundleSafe = safe();
         uint256 nonce = bundleSafe.nonce();
         bytes32 bundleSafeTxHash = LibSafeTx.multiSendSafeTxHash(bundleSafe, txs, nonce);
-        for (uint256 i = 0; i < txs.length; i++) {
-            LibSafeFork.simulateCall(vm, bundleSafe, txs[i].to, txs[i].data);
-        }
+        LibSafeFork.executeBundle(vm, bundleSafe, txs);
         assertPostState();
         string memory json = LibSafeTxBuilderJson.toJson(vm, address(bundleSafe), block.chainid, bundleName(), txs);
         vm.writeFile(artifactPath(), json);
+        assertReversible();
+        console2.log("==== TX BUILDER JSON BEGIN ====");
+        console2.log(json);
+        console2.log("==== TX BUILDER JSON END ====");
         console2.log("Safe:", address(bundleSafe));
         console2.log("Chain:", block.chainid);
         console2.log("Nonce:", nonce);

@@ -17,12 +17,16 @@ contract ExampleSafeBundleScript is SafeBundleScript {
     error NotAuthorable();
     /// `assertPostState` refuses.
     error PostStateMissing(uint256 callCount);
+    /// `assertReversible` refuses.
+    error NotReversible();
 
     Safe internal sSafe;
     MockCallRecorder internal sRecorder;
     string internal sArtifactPath;
     bool internal sRefusePreflight;
     bytes internal sSecondCallData;
+    uint256 internal sSecondCallValue;
+    bool internal sRefuseReversible;
 
     /// @param bundleSafe The Safe the bundle is for.
     /// @param recorder The call target.
@@ -45,6 +49,16 @@ contract ExampleSafeBundleScript is SafeBundleScript {
         sSecondCallData = data;
     }
 
+    /// @param value The second call's value.
+    function setSecondCallValue(uint256 value) external {
+        sSecondCallValue = value;
+    }
+
+    /// @param refuse Whether `assertReversible` refuses.
+    function setRefuseReversible(bool refuse) external {
+        sRefuseReversible = refuse;
+    }
+
     /// @param bundleSafe The Safe the script now targets.
     function setSafe(Safe bundleSafe) external {
         sSafe = bundleSafe;
@@ -64,7 +78,9 @@ contract ExampleSafeBundleScript is SafeBundleScript {
     function authorBundle() internal view override returns (SafeTx[] memory) {
         SafeTx[] memory txs = new SafeTx[](2);
         txs[0] = SafeTx({to: address(sRecorder), value: 0, data: "first", operation: Enum.Operation.Call});
-        txs[1] = SafeTx({to: address(sRecorder), value: 0, data: sSecondCallData, operation: Enum.Operation.Call});
+        txs[1] = SafeTx({
+            to: address(sRecorder), value: sSecondCallValue, data: sSecondCallData, operation: Enum.Operation.Call
+        });
         return txs;
     }
 
@@ -72,6 +88,11 @@ contract ExampleSafeBundleScript is SafeBundleScript {
     function assertPostState() internal view override {
         uint256 callCount = sRecorder.callCount();
         if (callCount != 2) revert PostStateMissing(callCount);
+    }
+
+    /// @inheritdoc SafeBundleScript
+    function assertReversible() internal view override {
+        if (sRefuseReversible) revert NotReversible();
     }
 
     /// @inheritdoc SafeBundleScript

@@ -40,9 +40,10 @@ contract SafeBundleScriptTest is Test {
         sScript = new ExampleSafeBundleScript(sSafe, sRecorder, sPath);
     }
 
-    /// `run()` simulates every transaction as the Safe, leaves the Safe's nonce
-    /// where it was, and writes an artifact that `verify()` accepts.
-    function testRunSimulatesWritesAndVerifies() external {
+    /// `run()` executes the bundle through the Safe as one MultiSend
+    /// transaction, consuming exactly one nonce, and writes an artifact that
+    /// `verify()` accepts.
+    function testRunExecutesWritesAndVerifies() external {
         setUpScript("run");
         uint256 nonce = sSafe.nonce();
 
@@ -53,13 +54,37 @@ contract SafeBundleScriptTest is Test {
         assertEq(sRecorder.calls(0).data, bytes("first"));
         assertEq(sRecorder.calls(1).caller, address(sSafe));
         assertEq(sRecorder.calls(1).data, bytes("second"));
-        assertEq(sSafe.nonce(), nonce);
+        assertEq(sSafe.nonce(), nonce + 1);
         sScript.verify(sPath);
     }
 
+    /// A transaction's value reaches its target: the bundle is executed with
+    /// the value the artifact carries, not replayed without it.
+    function testRunCarriesValue() external {
+        setUpScript("value");
+        vm.deal(address(sSafe), 1 ether);
+        sScript.setSecondCallValue(0.25 ether);
+
+        sScript.run();
+
+        assertEq(sRecorder.calls(1).value, 0.25 ether);
+        assertEq(address(sRecorder).balance, 0.25 ether);
+        sScript.verify(sPath);
+    }
+
+    /// `run()` refuses when the bundle cannot be shown reversible, after the
+    /// bundle executed.
+    function testRunRefusesIrreversibleBundle() external {
+        setUpScript("reversible");
+        sScript.setRefuseReversible(true);
+
+        vm.expectRevert(ExampleSafeBundleScript.NotReversible.selector);
+        sScript.run();
+    }
+
     /// The written artifact is the bundle itself: parsed back and executed by
-    /// the Safe's owners, it makes exactly the calls `run()` simulated.
-    function testArtifactExecutesTheSimulatedBundle() external {
+    /// the Safe's owners, it makes exactly the calls `run()` executed.
+    function testArtifactExecutesTheAuthoredBundle() external {
         setUpScript("execute");
         sScript.run();
         uint256 simulated = sRecorder.callCount();
@@ -96,12 +121,14 @@ contract SafeBundleScriptTest is Test {
         sScript.run();
     }
 
-    /// `run()` refuses when a transaction reverts in simulation.
+    /// `run()` refuses when a transaction reverts: the Safe executing the
+    /// MultiSend refuses the whole bundle with `GS013`, exactly as it would on
+    /// chain.
     function testRunRefusesRevertingTransaction() external {
         setUpScript("reverting");
         sScript.setSecondCallData("revert");
 
-        vm.expectRevert(MockCallRecorder.Refused.selector);
+        vm.expectRevert(bytes("GS013"));
         sScript.run();
     }
 
