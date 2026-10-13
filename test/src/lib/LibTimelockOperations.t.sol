@@ -245,16 +245,20 @@ contract LibTimelockOperationsTest is Test {
     }
 
     /// A governance timelock on Base and one operation it really scheduled:
-    /// `updateDelay(172800)` on itself, scheduled with `schedule` in block
-    /// `FORK_SCHEDULE_BLOCK` and since executed. Read off the chain's own
-    /// `eth_getLogs` for that block, independently of this library.
+    /// `updateDelay(172800)` on itself, scheduled with `schedule` in
+    /// `FORK_SCHEDULE_BLOCK`, cancelled in `FORK_CANCEL_BLOCK`, scheduled
+    /// again in `FORK_RESCHEDULE_BLOCK` and executed in `FORK_EXECUTED_BLOCK`.
+    /// Read off the chain's own `eth_getLogs` over those blocks, independently
+    /// of this library.
     address constant FORK_TIMELOCK = address(0x48ba1371A78E6cC54157c63721756ab444510DB3);
     uint256 constant FORK_SCHEDULE_BLOCK = 50143676;
     uint256 constant FORK_SCHEDULE_TIMESTAMP = 1787076699;
     uint256 constant FORK_DELAY = 172800;
     bytes32 constant FORK_OPERATION_ID = 0x92707146398fe693c20e79ad13494d985affa342144be25ed3973d33063be358;
-    /// A block after the operation executed.
-    uint256 constant FORK_EXECUTED_BLOCK = 52562593;
+    uint256 constant FORK_CANCEL_BLOCK = 50181351;
+    uint256 constant FORK_RESCHEDULE_BLOCK = 50186887;
+    uint256 constant FORK_RESCHEDULE_TIMESTAMP = 1787163121;
+    uint256 constant FORK_EXECUTED_BLOCK = 50273568;
 
     /// Pinned to the scheduling block itself, the operation is pending and
     /// reads back with its call, predecessor and ready time. The log sits in
@@ -319,5 +323,36 @@ contract LibTimelockOperationsTest is Test {
             LibTimelockOperations.scheduledLogs(vm, FORK_TIMELOCK, FORK_SCHEDULE_BLOCK - 3, FORK_SCHEDULE_BLOCK + 3, 7);
         assertEq(logs.length, 1);
         assertEq(LibTimelockOperations.pendingFromLogs(logs, FORK_TIMELOCK).length, 0);
+    }
+
+    /// Pinned to the cancel block, the cancelled operation is not pending.
+    function testForkCancelledOperationNotPending() external {
+        vm.createSelectFork(LibRainDeploy.BASE, FORK_CANCEL_BLOCK);
+        assertEq(ITimelockOperationState(FORK_TIMELOCK).getTimestamp(FORK_OPERATION_ID), 0, "cancelled");
+        Vm.EthGetLogs[] memory logs =
+            LibTimelockOperations.scheduledLogs(vm, FORK_TIMELOCK, FORK_SCHEDULE_BLOCK - 3, FORK_SCHEDULE_BLOCK + 3, 7);
+        assertEq(logs.length, 1);
+        assertEq(LibTimelockOperations.pendingFromLogs(logs, FORK_TIMELOCK).length, 0);
+    }
+
+    /// Pinned to the reschedule block, both schedulings come back, in chain
+    /// order and across chunks, and read as one pending operation whose ready
+    /// time is the second scheduling's.
+    function testForkRescheduledOperationReadsOnce() external {
+        vm.createSelectFork(LibRainDeploy.BASE, FORK_RESCHEDULE_BLOCK);
+        Vm.EthGetLogs[] memory logs =
+            LibTimelockOperations.scheduledLogs(vm, FORK_TIMELOCK, FORK_SCHEDULE_BLOCK, block.number, 1000);
+        assertEq(logs.length, 2);
+        assertEq(logs[0].blockNumber, FORK_SCHEDULE_BLOCK);
+        assertEq(logs[1].blockNumber, FORK_RESCHEDULE_BLOCK);
+        assertEq(logs[0].topics[1], FORK_OPERATION_ID);
+        assertEq(logs[1].topics[1], FORK_OPERATION_ID);
+
+        TimelockOperation[] memory ops = LibTimelockOperations.pendingFromLogs(logs, FORK_TIMELOCK);
+        assertEq(ops.length, 1);
+        assertEq(ops[0].id, FORK_OPERATION_ID);
+        assertEq(ops[0].readyAt, FORK_RESCHEDULE_TIMESTAMP + FORK_DELAY);
+        assertEq(ops[0].calls.length, 1);
+        assertEq(ops[0].calls[0].data, abi.encodeWithSignature("updateDelay(uint256)", FORK_DELAY));
     }
 }
