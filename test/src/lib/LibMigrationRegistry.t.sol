@@ -1509,4 +1509,81 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationRegistry.applyMigrationHistory(namespace, migrationB, block.timestamp, listB);
         assertEq(abi.encode(LibMigrationRegistry.appliedAfter(address(this), namespace, migrationB)), abi.encode(listB));
     }
+
+    /// `onto` is one entry, and that entry is exactly the writer, the
+    /// namespace and the head it was given, each in its own field. It is
+    /// pure, so it answers the same with no registry deployed.
+    function testOntoIsTheHeadAlone(address writer, bytes32 namespace, bytes32 headMigration) external pure {
+        Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(writer, namespace, headMigration);
+
+        assertEq(prerequisites.length, 1);
+        assertEq(prerequisites[0].writer, writer);
+        assertEq(prerequisites[0].namespace, namespace);
+        assertEq(prerequisites[0].migration, headMigration);
+    }
+
+    /// A line written entirely with `onto` lands on a deployed registry, on
+    /// both writes: the first migration onto genesis, the next onto the
+    /// first. Each record answers the list `onto` built as what it was
+    /// applied after, and the head it named as what it was applied onto.
+    function testOntoRoundTripsThroughApplyMigration(
+        bytes32 namespace,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        uint32 appliedAt
+    ) external {
+        vm.assume(namespace != bytes32(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+        vm.assume(appliedAt != 0);
+        deployRegistry();
+        vm.warp(appliedAt);
+
+        Prerequisite[] memory listA = LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS);
+        LibMigrationRegistry.applyMigration(namespace, migrationA, listA);
+
+        assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationA), appliedAt);
+        assertEq(LibMigrationRegistry.head(address(this), namespace), migrationA);
+        assertEq(LibMigrationRegistry.appliedOnto(address(this), namespace, migrationA), MIGRATION_HEAD_GENESIS);
+        assertEq(abi.encode(LibMigrationRegistry.appliedAfter(address(this), namespace, migrationA)), abi.encode(listA));
+
+        Prerequisite[] memory listB = LibMigrationRegistry.onto(address(this), namespace, migrationA);
+        LibMigrationRegistry.applyMigrationHistory(namespace, migrationB, appliedAt, listB);
+
+        assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationB), appliedAt);
+        assertEq(LibMigrationRegistry.head(address(this), namespace), migrationB);
+        assertEq(LibMigrationRegistry.appliedOnto(address(this), namespace, migrationB), migrationA);
+        assertEq(abi.encode(LibMigrationRegistry.appliedAfter(address(this), namespace, migrationB)), abi.encode(listB));
+    }
+
+    /// `onto` a head the line has moved past is refused, naming the head it
+    /// gave and the head the line is at: the list carries the script's
+    /// belief, and a stale belief fails rather than lands.
+    function testOntoStaleHeadIsRefused(bytes32 namespace, bytes32 migrationA, bytes32 migrationB) external {
+        vm.assume(namespace != bytes32(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+        deployRegistry();
+
+        LibMigrationRegistry.applyMigration(
+            namespace, migrationA, LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
+                address(this),
+                namespace,
+                namespace,
+                MIGRATION_HEAD_GENESIS,
+                migrationA
+            )
+        );
+        this.externalApplyMigration(
+            namespace, migrationB, LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS)
+        );
+        assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationB), 0);
+    }
 }
