@@ -544,7 +544,7 @@ library LibRainDeploy {
     /// @param network The network name, for the error only.
     /// @param target The deployed contract to read.
     /// @param readCalls The calldata for each read, e.g.
-    /// `abi.encodeCall(IOwnable.owner, ())`.
+    /// `abi.encodeCall(IERC5313.owner, ())`.
     /// @param expectedAddresses The address each read MUST answer with,
     /// positionally paired with `readCalls`.
     function checkResolvedAddresses(
