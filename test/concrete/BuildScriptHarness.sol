@@ -51,13 +51,15 @@ contract BuildScriptHarness is BuildScript {
     /// reaches asks for one — the subject here is the wiring and the config —
     /// and a declaration this harness does not drive is one a reader would take
     /// for an assertion.
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](0);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](0);
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](0);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](0);
+        return candidates;
     }
 
     /// @inheritdoc BuildScript

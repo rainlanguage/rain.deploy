@@ -33,19 +33,21 @@ bytes32 constant STALE_CODE_HASH = bytes32(uint256(0xdead));
 /// `StalePinDeploy` gives.
 contract StaleCodeHashDeploy is RainDeployBroadcast {
     /// @inheritdoc RainDeployBroadcast
-    function deployNetworks() internal pure override returns (string[] memory networks) {
-        networks = new string[](1);
+    function deployNetworks() internal pure override returns (string[] memory) {
+        string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        return networks;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](0);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](0);
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](1);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "second-address-candidate",
@@ -58,5 +60,6 @@ contract StaleCodeHashDeploy is RainDeployBroadcast {
             }),
             unanchorableReason: ""
         });
+        return candidates;
     }
 }

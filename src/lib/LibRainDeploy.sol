@@ -121,20 +121,6 @@ library LibRainDeploy {
     /// @param network The declared name with no catalogue entry.
     error NetworkNotInCatalogue(string network);
 
-    /// Thrown when attempting to find the deploy block of a contract that has
-    /// no code at the current block.
-    error NotDeployed(address target);
-
-    /// Thrown when a code hash check is handed the zero code hash. An account
-    /// with no code answers `codehash` zero, so a zero expectation is met by
-    /// the ABSENCE of a contract and missed at every block one exists. A true
-    /// from it is indistinguishable at the call site from a real match.
-    error NoExpectedCodeHash(address target);
-
-    /// Thrown when the target already has code at the start block, meaning
-    /// the deploy may have happened before the search range.
-    error DeployedBeforeStartBlock(address target, uint256 startBlock);
-
     /// Thrown when a deployed contract holds an address other than the one the
     /// deployment expects, on a network.
     error UnexpectedResolvedAddress(string network, address target, uint256 index, address expected, address actual);
@@ -192,116 +178,6 @@ library LibRainDeploy {
     /// canonical runtime, so deterministic deploys land at the same addresses
     /// as on every other supported network.
     string constant ROBINHOOD = "robinhood";
-
-    /// Checks whether a block is the first block where a contract with the
-    /// expected code hash exists. True when the target has the expected code
-    /// hash at `blockNumber` and does NOT have it at `blockNumber - 1`. At
-    /// block 0, only the first condition is checked. The fork is restored to
-    /// its original block number after checking.
-    ///
-    /// "First" is only true of a target whose code hash is MONOTONE: once it
-    /// equals `expectedCodeHash` at some block it equals it at every later
-    /// block. This reads two adjacent blocks and nothing else, so on a target
-    /// that held `expectedCodeHash`, lost it and holds it again — a pre-Cancun
-    /// `SELFDESTRUCT` followed by a `CREATE2` redeploy of the same code at the
-    /// same address, say — it answers true at EVERY block where the hash
-    /// reappears, not only the earliest. Monotonicity is the caller's to know:
-    /// two blocks cannot show it.
-    /// @param vm The Vm instance for fork manipulation.
-    /// @param target The contract address to check.
-    /// @param expectedCodeHash The code hash to look for. MUST NOT be zero;
-    /// `NoExpectedCodeHash` says why.
-    /// @param blockNumber The block number to check.
-    /// @return True if the contract first appears at this block.
-    function isStartBlock(Vm vm, address target, bytes32 expectedCodeHash, uint256 blockNumber)
-        internal
-        returns (bool)
-    {
-        if (expectedCodeHash == bytes32(0)) {
-            revert NoExpectedCodeHash(target);
-        }
-
-        uint256 originalBlock = block.number;
-        vm.rollFork(blockNumber);
-        bool isStart = target.codehash == expectedCodeHash;
-        if (isStart && blockNumber > 0) {
-            vm.rollFork(blockNumber - 1);
-            isStart = target.codehash != expectedCodeHash;
-        }
-        vm.rollFork(originalBlock);
-        return isStart;
-    }
-
-    /// Finds the block number at which a contract was first deployed by binary
-    /// searching the fork history. Requires an active fork with archive access
-    /// back to `startBlock`. The fork is restored to its original block
-    /// number before returning. The target's code hash is verified against the
-    /// expected value before searching.
-    ///
-    /// The search REQUIRES the target's code hash to be monotone over
-    /// `[startBlock, block.number]`, in the sense `isStartBlock` describes.
-    /// Against a target that held `expectedCodeHash`, lost it and holds it
-    /// again, the search converges on one of those appearances with no way to
-    /// say which, and the result is meaningless as the subgraph start block it
-    /// is typically used as.
-    ///
-    /// That is the caller's precondition because nothing here can check it, and
-    /// `isStartBlock` least of all. `high` is only ever a block where the code
-    /// hash matches: it starts at the current block, checked above, and
-    /// otherwise takes a `mid` the loop has just read as matching. `low` is
-    /// either `startBlock`, checked above as NOT matching, or one past a `mid`
-    /// the loop has just read as not matching. It cannot still be `startBlock`
-    /// when the loop ends, because that needs `high` down at `startBlock` and
-    /// `high` is only ever a matching block, so where they meet the hash
-    /// matches and did not match at the block before — `isStartBlock`'s exact
-    /// condition, satisfied by construction and satisfied on a non-monotone
-    /// history just the same. Running it on the result would read two more
-    /// archive blocks to agree with itself.
-    /// @param vm The Vm instance for fork manipulation.
-    /// @param target The contract address to search for.
-    /// @param expectedCodeHash The expected code hash of the target contract.
-    /// @param startBlock The earliest block to search from. The target MUST
-    /// NOT have the expected code hash at this block.
-    /// @return The first block number where `target` has the expected code
-    /// hash.
-    function findDeployBlock(Vm vm, address target, bytes32 expectedCodeHash, uint256 startBlock)
-        internal
-        returns (uint256)
-    {
-        if (target.code.length == 0) {
-            revert NotDeployed(target);
-        }
-        if (target.codehash != expectedCodeHash) {
-            revert UnexpectedDeployedCodeHash(expectedCodeHash, target.codehash);
-        }
-
-        uint256 originalBlock = block.number;
-
-        // Verify the target does not already have the expected code at
-        // startBlock. If it does, the deploy happened before our search
-        // range and the result would be meaningless.
-        vm.rollFork(startBlock);
-        if (target.codehash == expectedCodeHash) {
-            vm.rollFork(originalBlock);
-            revert DeployedBeforeStartBlock(target, startBlock);
-        }
-
-        uint256 low = startBlock;
-        uint256 high = originalBlock;
-
-        while (low < high) {
-            uint256 mid = (low + high) / 2;
-            vm.rollFork(mid);
-            if (target.codehash == expectedCodeHash) {
-                high = mid;
-            } else {
-                low = mid + 1;
-            }
-        }
-
-        vm.rollFork(originalBlock);
-        return low;
-    }
 
     /// Etches the Zoltu factory bytecode into the factory address. Useful for
     /// networks where the factory is not yet deployed.
@@ -743,8 +619,8 @@ library LibRainDeploy {
     /// contract's constructor: an address that merely has SOMETHING at it
     /// satisfies no constructor that calls it, and the derived code hash this
     /// broadcast carries was computed against the declared bytes.
-    /// @return deployedAddress The deployed contract address.
-    /// @return forkIds The fork each network was deployed on, positionally
+    /// @return The deployed contract address.
+    /// @return The fork each network was deployed on, positionally
     /// paired with `networks`. Handed back rather than dropped because the
     /// deployment exists ONLY on them until forge submits what this recorded,
     /// so they are what `checkResolvedAddressesOnForks` verifies a first-time
@@ -758,7 +634,7 @@ library LibRainDeploy {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (address deployedAddress, uint256[] memory forkIds) {
+    ) internal returns (address, uint256[] memory) {
         if (networks.length == 0) {
             revert NoNetworks();
         }
@@ -772,7 +648,7 @@ library LibRainDeploy {
         if (derivedAddress != expectedAddress) {
             revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);
         }
-        forkIds = createForks(vm, networks);
+        uint256[] memory forkIds = createForks(vm, networks);
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
             console2.log("Deploying to network:", networks[i]);
@@ -826,8 +702,8 @@ library LibRainDeploy {
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The dependencies to check, each an address and the
     /// runtime code that must be at it.
-    /// @return deployedAddress The address of the deployed contract.
-    /// @return forkIds The fork each network was deployed on, as
+    /// @return The address of the deployed contract.
+    /// @return The fork each network was deployed on, as
     /// `deployToNetworks` returns them.
     function deployAndBroadcast(
         Vm vm,
@@ -838,7 +714,7 @@ library LibRainDeploy {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (address deployedAddress, uint256[] memory forkIds) {
+    ) internal returns (address, uint256[] memory) {
         if (networks.length == 0) {
             revert NoNetworks();
         }

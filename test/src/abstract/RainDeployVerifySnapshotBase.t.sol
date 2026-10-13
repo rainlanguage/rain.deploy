@@ -118,21 +118,23 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// same file a freeze copies into `src/generated/<tag>/`, and the exemplar's
     /// first released suite is declared from it, so the pair below is a real
     /// record checked against a real declaration.
-    /// @return paths The one-file record.
-    function recordOfTheGeneratedSnapshot() internal pure returns (string[] memory paths) {
-        paths = new string[](1);
+    /// @return The one-file record.
+    function recordOfTheGeneratedSnapshot() internal pure returns (string[] memory) {
+        string[] memory paths = new string[](1);
         paths[0] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry");
+        return paths;
     }
 
     /// A record of BOTH committed snapshots. `AddressRegistry` is what the
     /// exemplar's first released suite derives; `MigrationRegistry` is declared
     /// by no released suite here, so it is a real record file that really is
     /// undeclared, and the undeclared one is the LAST.
-    /// @return paths The two-file record.
-    function recordOfBothGeneratedSnapshots() internal pure returns (string[] memory paths) {
-        paths = new string[](2);
+    /// @return The two-file record.
+    function recordOfBothGeneratedSnapshots() internal pure returns (string[] memory) {
+        string[] memory paths = new string[](2);
         paths[0] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry");
         paths[1] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "MigrationRegistry");
+        return paths;
     }
 
     /// A record declared by a released suite MUST pass, so the failing cases
@@ -163,10 +165,11 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), wrongRelease);
     }
 
-    function recordOfTheTwinReleases() internal pure returns (string[] memory paths) {
-        paths = new string[](2);
+    function recordOfTheTwinReleases() internal pure returns (string[] memory) {
+        string[] memory paths = new string[](2);
         paths[0] = LibRainDeploySnapshot.pathForSnapshot("0_1_10", "AddressRegistry");
         paths[1] = LibRainDeploySnapshot.pathForSnapshot("0_1_11", "AddressRegistry");
+        return paths;
     }
 
     function declaredOlderTwin() internal pure returns (DeploySuite memory) {
