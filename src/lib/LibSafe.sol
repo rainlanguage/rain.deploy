@@ -309,14 +309,18 @@ library LibSafe {
     }
 
     /// `assertIdentity`, then no module, no guard, and the canonical
-    /// compatibility fallback handler: a v1.4.1 Safe that nothing but its
-    /// owners' signatures can move.
+    /// compatibility fallback handler carrying its pinned code: a v1.4.1 Safe
+    /// that nothing but its owners' signatures can move. The handler's code is
+    /// checked for the reason the singleton's is: the Safe forwards every
+    /// selector the singleton does not implement to it, so its address alone
+    /// says nothing about what answers those calls.
     /// @param safe The Safe.
     function assertLockedDown(Safe safe) internal view {
         assertIdentity(safe);
         assertNoModules(safe);
         assertNoGuard(safe);
         assertFallbackHandler(safe, SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER);
+        assertCodehash(SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER, SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER_CODEHASH);
     }
 
     /// The address in the low 20 bytes of the Safe's storage `slot`, the
