@@ -347,6 +347,23 @@ contract LibSafeTest is Test {
         this.externalAssertLockedDown(safe);
     }
 
+    /// `assertLockedDown` fails when the canonical fallback handler the Safe
+    /// points at carries other code or none.
+    function testLockedDownChecksFallbackHandlerCode(bool empty) external {
+        address handler = LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER;
+        this.externalAssertLockedDown(safe);
+        vm.etch(handler, empty ? bytes("") : bytes(hex"fe"));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibSafe.SafeCodehashMismatch.selector,
+                handler,
+                LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER_CODEHASH,
+                handler.codehash
+            )
+        );
+        this.externalAssertLockedDown(safe);
+    }
+
     /// `assertLockedDown` runs `assertIdentity`.
     function testLockedDownChecksIdentity() external {
         vm.etch(address(safe), hex"fe");
