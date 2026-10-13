@@ -133,7 +133,13 @@ enum DeployMechanism {
     /// An EIP-1167 clone through an `ICloneableFactoryV4` at its open salt.
     /// `mechanismData` is the `abi.encode`d `CloneTarget`, and the factory and
     /// the implementation it names MUST both be declared `dependencies`.
-    Clone
+    Clone,
+    /// An EIP-1167 clone through an `ICloneableFactoryV4` at its open salt,
+    /// with init data — and therefore an address — per network.
+    /// `mechanismData` is the `abi.encode`d `CloneNetworks`, which records
+    /// each network's address, so `storedDeployedAddress` MUST be zero; the
+    /// factory and the implementation MUST both be declared `dependencies`.
+    ClonePerNetwork
 }
 
 /// One deployable unit: a named snapshot of one contract.
@@ -179,7 +185,9 @@ struct DeploySuite {
     /// check that catches a snapshot of the wrong contract comparing source to
     /// itself, green.
     bytes creationCode;
-    /// The deploy address recorded for this suite.
+    /// The deploy address recorded for this suite, on every network. Zero for
+    /// a `ClonePerNetwork` suite, whose `mechanismData` records an address per
+    /// network instead.
     address storedDeployedAddress;
     /// The deployed code hash recorded for this suite.
     bytes32 storedBytecodeHash;

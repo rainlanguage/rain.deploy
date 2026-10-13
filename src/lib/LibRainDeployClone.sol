@@ -7,7 +7,7 @@ import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
 import {LibICloneableFactoryV4} from "rain-factory-0.1.30/src/lib/LibICloneableFactoryV4.sol";
 
-import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
+import {DeployDependency, LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 
 /// @dev How many leading bytes of the EIP-1167 creation code are the deploy
 /// preamble rather than the runtime code it returns: `3d602d80600a3d3981f3`, ten
@@ -80,8 +80,62 @@ struct CloneTarget {
     bytes32 salt;
 }
 
+/// One network's init data, for a clone whose init data differs by network.
+struct CloneNetworkData {
+    /// The chain id of the network this data is for.
+    uint256 chainId;
+    /// The init data on that network. See `CloneTarget.data`.
+    bytes data;
+}
+
+/// One network's clone, as a per-network clone suite records it: the init data
+/// on that network and the address that data puts the clone at.
+struct CloneNetwork {
+    /// The chain id of the network.
+    uint256 chainId;
+    /// The init data on that network. See `CloneTarget.data`.
+    bytes data;
+    /// The address recorded for the clone on that network. A recorded output,
+    /// checked against the derivation for the reason `DeploySuite` records
+    /// `storedDeployedAddress` rather than deriving it.
+    address deployedAddress;
+}
+
+/// A clone whose init data differs by network, and therefore whose address
+/// does: the clone half of a `DeployMechanism.ClonePerNetwork` suite, carried
+/// `abi.encode`d in its `mechanismData`.
+///
+/// Every network the clone is deployed to or verified on MUST have an entry.
+/// A network without one is refused with
+/// `LibRainDeployClone.CloneNetworkUndeclared`, never given some other
+/// network's data: the init data is what the clone is initialized with, so a
+/// defaulted network is a clone initialized with values nobody declared for it.
+///
+/// The factory, the implementation and the salt are the same on every network.
+/// So is the code hash: an EIP-1167 clone's runtime code embeds only the
+/// implementation address, so one recorded code hash serves every network.
+struct CloneNetworks {
+    /// See `CloneTarget.factory`.
+    address factory;
+    /// See `CloneTarget.implementation`.
+    address implementation;
+    /// See `CloneTarget.salt`.
+    bytes32 salt;
+    /// One entry per network, keyed by chain id. MUST NOT be empty and MUST
+    /// NOT name a chain id twice.
+    CloneNetwork[] networks;
+}
+
 /// One contract a repo deploys as an EIP-1167 clone, as a clone repo declares
 /// it: the suite key, the `CloneTarget` fields, and the dependencies.
+///
+/// The init data is declared one of two ways. A clone initialized with the
+/// same bytes everywhere declares them in `data` and leaves `networkData`
+/// empty; it lands at one address on every network. A clone initialized
+/// differently per network — an admin that is a different account on one
+/// chain — declares one `networkData` entry per network and leaves `data`
+/// empty; it lands at a different address wherever its data differs, and a
+/// network with no entry is refused rather than defaulted.
 ///
 /// `LibRainDeployMechanism.cloneCandidate` turns it into the candidate every
 /// other part of this package reads, so the declaration is this one entry.
@@ -94,8 +148,12 @@ struct CloneDeploy {
     address factory;
     /// See `CloneTarget.implementation`.
     address implementation;
-    /// See `CloneTarget.data`.
+    /// The init data on every network. See `CloneTarget.data`. MUST be empty
+    /// when `networkData` is not.
     bytes data;
+    /// The init data per network, keyed by chain id. Empty for a clone whose
+    /// init data is `data` on every network.
+    CloneNetworkData[] networkData;
     /// See `CloneTarget.salt`.
     bytes32 salt;
     /// What MUST already be on a network, with exactly this code, before the
@@ -156,6 +214,32 @@ library LibRainDeployClone {
     /// @param dependency The factory or implementation address no declared
     /// dependency names.
     error CloneDependencyUndeclared(address dependency);
+
+    /// Thrown when a per-network clone names no network at all. Every check
+    /// over its networks would pass having checked nothing.
+    error NoCloneNetworks();
+
+    /// Thrown when a per-network clone names one chain id twice, so which
+    /// init data that network gets would depend on which entry a reader
+    /// happened to stop at.
+    /// @param chainId The chain id named more than once.
+    error DuplicateCloneNetwork(uint256 chainId);
+
+    /// Thrown when a per-network clone is asked for a network it has no entry
+    /// for. Refused rather than defaulted: the init data is what the clone is
+    /// initialized with, and no other network's data was declared for this
+    /// one.
+    /// @param chainId The chain id with no entry.
+    error CloneNetworkUndeclared(uint256 chainId);
+
+    /// Thrown when a per-network clone step finds itself on a network whose
+    /// chain id is not the one its init data was resolved for: an endpoint
+    /// that serves a different chain than its name says. Broadcasting there
+    /// would initialize the clone with another network's data.
+    /// @param network The network name the step was handed.
+    /// @param declared The chain id the init data was resolved for.
+    /// @param reported The chain id the network reports.
+    error CloneNetworkChainIdMismatch(string network, uint256 declared, uint256 reported);
 
     /// The clone's creation code: the EIP-1167 initcode the factory `CREATE2`s,
     /// from `rain-factory`'s own helper.
@@ -233,6 +317,52 @@ library LibRainDeployClone {
         }
     }
 
+    /// Requires a per-network clone to name at least one network, no chain id
+    /// twice, and its factory and implementation among the declared
+    /// dependencies.
+    /// @param clones The per-network clone.
+    /// @param dependencies The dependencies declared beside it.
+    function checkCloneNetworks(CloneNetworks memory clones, DeployDependency[] memory dependencies) internal pure {
+        if (clones.networks.length == 0) {
+            revert NoCloneNetworks();
+        }
+        for (uint256 i = 0; i < clones.networks.length; i++) {
+            for (uint256 j = 0; j < i; j++) {
+                if (clones.networks[j].chainId == clones.networks[i].chainId) {
+                    revert DuplicateCloneNetwork(clones.networks[i].chainId);
+                }
+            }
+        }
+        checkCloneDependencies(cloneNetworkTarget(clones, 0), dependencies);
+    }
+
+    /// Where a chain id's entry is in a per-network clone.
+    /// @param clones The per-network clone.
+    /// @param chainId The chain id to find.
+    /// @return The index of its entry in `clones.networks`.
+    function cloneNetworkIndex(CloneNetworks memory clones, uint256 chainId) internal pure returns (uint256) {
+        for (uint256 i = 0; i < clones.networks.length; i++) {
+            if (clones.networks[i].chainId == chainId) {
+                return i;
+            }
+        }
+        revert CloneNetworkUndeclared(chainId);
+    }
+
+    /// The `CloneTarget` one entry of a per-network clone describes: the shared
+    /// factory, implementation and salt, with that entry's init data.
+    /// @param clones The per-network clone.
+    /// @param index The entry's index in `clones.networks`.
+    /// @return The target.
+    function cloneNetworkTarget(CloneNetworks memory clones, uint256 index) internal pure returns (CloneTarget memory) {
+        return CloneTarget({
+            factory: clones.factory,
+            implementation: clones.implementation,
+            data: clones.networks[index].data,
+            salt: clones.salt
+        });
+    }
+
     /// The CLONE mechanism as a `LibRainDeploy.deployStepToNetworks` step: the
     /// one thing a clone deploy does that a Zoltu deploy does not.
     ///
@@ -270,6 +400,33 @@ library LibRainDeployClone {
             .cloneDeterministicOpenSalt(target.implementation, target.data, target.salt);
         vm.stopBroadcast();
         return cloneDeployedAddr;
+    }
+
+    /// `cloneDeployStep` for one network of a per-network clone: the same step,
+    /// after requiring the selected network to report the chain id the init
+    /// data was resolved for.
+    ///
+    /// The network list is names and the init data is keyed by chain id, so
+    /// the name's chain id is resolved from the catalogue before any fork. An
+    /// endpoint serving a different chain than its name is the one way that
+    /// resolution can be wrong on the network itself, and on a per-network
+    /// clone that is a clone initialized with another network's data, so the
+    /// step reads `block.chainid` before it broadcasts.
+    /// @param vm The Vm instance to broadcast with.
+    /// @param network The network being deployed to, for a refusal to name.
+    /// @param deployer The deployer address to broadcast as.
+    /// @param stepData The step data: the `abi.encode`d chain id and
+    /// `CloneTarget` resolved for this network.
+    /// @return The address the factory deployed the clone to.
+    function cloneNetworkDeployStep(Vm vm, string memory network, address deployer, bytes memory stepData)
+        internal
+        returns (address)
+    {
+        (uint256 chainId, CloneTarget memory target) = abi.decode(stepData, (uint256, CloneTarget));
+        if (block.chainid != chainId) {
+            revert CloneNetworkChainIdMismatch(network, chainId, block.chainid);
+        }
+        return cloneDeployStep(vm, network, deployer, abi.encode(target));
     }
 
     /// Deploys the clone to each network through its factory's open salt:
@@ -321,22 +478,20 @@ library LibRainDeployClone {
         if (derivedAddress != expectedAddress) {
             revert LibRainDeploy.UnexpectedDeployedAddress(expectedAddress, derivedAddress);
         }
-        // Assigned to the named returns rather than returned directly from the
-        // call. Identical behaviour, and it is what `unused-return` can see: the
-        // detector reads a CROSS-LIBRARY call's return values as discarded where
-        // the same forwarding inside `LibRainDeploy` is an internal call it does
-        // not model.
-        (deployedAddress, forkIds) = LibRainDeploy.deployStepToNetworks(
+        (bytes[] memory stepData, address[] memory expectedAddresses) =
+            LibRainDeploy.everyNetwork(networks.length, abi.encode(target), expectedAddress);
+        forkIds = LibRainDeploy.deployStepToNetworks(
             vm,
             networks,
             deployer,
             cloneDeployStep,
-            abi.encode(target),
+            stepData,
             contractPath,
-            expectedAddress,
+            expectedAddresses,
             expectedCodeHash,
             dependencies
         );
+        deployedAddress = expectedAddress;
     }
 
     /// Deploys the clone to each network, broadcasting as the given private key.
@@ -374,6 +529,109 @@ library LibRainDeployClone {
             target,
             contractPath,
             expectedAddress,
+            expectedCodeHash,
+            dependencies
+        );
+    }
+
+    /// Deploys a per-network clone to each network through its factory's open
+    /// salt: `LibRainDeploy.deployStepToNetworks` with `cloneNetworkDeployStep`
+    /// as the mechanism, and each network's own init data and address.
+    ///
+    /// Before any network is forked: the clone MUST pass
+    /// `checkCloneNetworks`, every network MUST be in the catalogue and have an
+    /// entry for its chain id — `CloneNetworkUndeclared` otherwise, so a
+    /// network the declaration says nothing about stops the run before
+    /// anything is broadcast anywhere — and each entry's recorded address MUST
+    /// be the address its init data derives, for the reason `cloneToNetworks`
+    /// requires that of its one address.
+    /// @param vm The Vm instance to use for forking and broadcasting.
+    /// @param networks The list of network names to deploy to.
+    /// @param deployer The deployer address.
+    /// @param clones The per-network clone, with each network's recorded
+    /// address.
+    /// @param contractPath The contract path for verification commands.
+    /// @param expectedCodeHash The recorded code hash of the deployed clone,
+    /// the same on every network.
+    /// @param dependencies The addresses that must already have code on a
+    /// network before the clone can be broadcast there, each paired with the
+    /// runtime code that must be at it. MUST include the factory and the
+    /// implementation.
+    /// @return deployedAddresses The clone's address on each network,
+    /// positionally paired with `networks`.
+    /// @return forkIds The fork each network was deployed on.
+    function cloneNetworksToNetworks(
+        Vm vm,
+        string[] memory networks,
+        address deployer,
+        CloneNetworks memory clones,
+        string memory contractPath,
+        bytes32 expectedCodeHash,
+        DeployDependency[] memory dependencies
+    ) internal returns (address[] memory deployedAddresses, uint256[] memory forkIds) {
+        if (networks.length == 0) {
+            revert LibRainDeploy.NoNetworks();
+        }
+        checkCloneNetworks(clones, dependencies);
+        SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
+        bytes[] memory stepData = new bytes[](networks.length);
+        deployedAddresses = new address[](networks.length);
+        for (uint256 i = 0; i < networks.length; i++) {
+            uint256 index = cloneNetworkIndex(clones, configs[i].chainId);
+            CloneTarget memory target = cloneNetworkTarget(clones, index);
+            address derivedAddress = cloneDeployedAddress(target);
+            if (derivedAddress != clones.networks[index].deployedAddress) {
+                revert LibRainDeploy.UnexpectedDeployedAddress(clones.networks[index].deployedAddress, derivedAddress);
+            }
+            stepData[i] = abi.encode(configs[i].chainId, target);
+            deployedAddresses[i] = derivedAddress;
+        }
+        forkIds = LibRainDeploy.deployStepToNetworks(
+            vm,
+            networks,
+            deployer,
+            cloneNetworkDeployStep,
+            stepData,
+            contractPath,
+            deployedAddresses,
+            expectedCodeHash,
+            dependencies
+        );
+    }
+
+    /// Deploys a per-network clone to each network, broadcasting as the given
+    /// private key: `cloneNetworksToNetworks` as `cloneAndBroadcast` is
+    /// `cloneToNetworks`.
+    /// @param vm The Vm instance to use for forking and broadcasting.
+    /// @param networks The list of network names to deploy to.
+    /// @param deployerPrivateKey The private key to use for broadcasting.
+    /// @param clones The per-network clone, with each network's recorded
+    /// address.
+    /// @param contractPath The contract path for verification commands.
+    /// @param expectedCodeHash The recorded code hash of the deployed clone.
+    /// @param dependencies The dependencies to check, each an address and the
+    /// runtime code that must be at it. MUST include the factory and the
+    /// implementation.
+    /// @return deployedAddresses The clone's address on each network.
+    /// @return forkIds The fork each network was deployed on.
+    function cloneNetworksAndBroadcast(
+        Vm vm,
+        string[] memory networks,
+        uint256 deployerPrivateKey,
+        CloneNetworks memory clones,
+        string memory contractPath,
+        bytes32 expectedCodeHash,
+        DeployDependency[] memory dependencies
+    ) internal returns (address[] memory deployedAddresses, uint256[] memory forkIds) {
+        if (networks.length == 0) {
+            revert LibRainDeploy.NoNetworks();
+        }
+        return cloneNetworksToNetworks(
+            vm,
+            networks,
+            LibRainDeploy.rememberDeployer(vm, deployerPrivateKey),
+            clones,
+            contractPath,
             expectedCodeHash,
             dependencies
         );
