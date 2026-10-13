@@ -22,7 +22,7 @@ import {
 /// about the consumption. The snapshot group compares the derivation against
 /// the recorded fields and names the SUITE argument in its errors, never the
 /// derivation's own key; the chain group is the only reader of
-/// `DerivedDeploy.suite` and `DerivedDeploy.deployedAddress` as such, and every
+/// `DerivedDeploy.suite` and `DerivedDeploy.deployedAddresses` as such, and every
 /// one of its tests forks. So a derivation that returned the recorded fields
 /// back, or an empty key, is invisible to a run with no RPC credentials — which
 /// is the run the snapshot half exists to be.
@@ -55,12 +55,13 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         DerivedDeploy memory derived = deriveDeployment(suite);
 
         assertEq(derived.suite, "a-declared-key");
-        assertEq(derived.deployedAddress, ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
+        assertEq(derived.deployedAddresses.length, 1);
+        assertEq(derived.deployedAddresses[0], ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
         assertEq(derived.bytecodeHash, keccak256(ADDRESS_REGISTRY_RUNTIME_CODE));
 
         // The recorded fields really were something else, so agreeing with the
         // creation code is a different answer from echoing them back.
-        assertNotEq(derived.deployedAddress, suite.storedDeployedAddress);
+        assertNotEq(derived.deployedAddresses[0], suite.storedDeployedAddress);
         assertNotEq(derived.bytecodeHash, suite.storedBytecodeHash);
         assertNotEq(derived.bytecodeHash, keccak256(suite.storedRuntimeCode));
     }
@@ -83,14 +84,14 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
 
         for (uint256 i = 0; i < suites.length; i++) {
             assertEq(derived[i].suite, suites[i].suite);
-            assertEq(derived[i].deployedAddress, suites[i].storedDeployedAddress);
+            assertEq(derived[i].deployedAddresses[0], suites[i].storedDeployedAddress);
             assertEq(derived[i].bytecodeHash, suites[i].storedBytecodeHash);
         }
 
         // Positional is a claim only while the positions differ. The first two
         // suites are different contracts at different addresses, and the last
         // is neither of them.
-        assertNotEq(derived[0].deployedAddress, derived[1].deployedAddress);
+        assertNotEq(derived[0].deployedAddresses[0], derived[1].deployedAddresses[0]);
         assertNotEq(derived[0].bytecodeHash, derived[1].bytecodeHash);
         assertNotEq(derived[3].suite, derived[0].suite);
     }
@@ -179,11 +180,11 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         DerivedDeploy memory derived =
             deriveDeployment(dependentSuite(creationCode, mockDeployableDependencies(addresses)));
 
-        assertEq(derived.deployedAddress, LibRainDeploy.zoltuAddress(creationCode));
+        assertEq(derived.deployedAddresses[0], LibRainDeploy.zoltuAddress(creationCode));
         assertEq(derived.bytecodeHash, keccak256(type(MockDependentDeployable).runtimeCode));
 
         assertEq(FIRST_DEPENDENCY.code.length, 0, "the dependency etch survived the derivation");
-        assertEq(derived.deployedAddress.code.length, 0, "the local deploy survived the derivation");
+        assertEq(derived.deployedAddresses[0].code.length, 0, "the local deploy survived the derivation");
     }
 
     /// The same creation code with a declaration carrying nothing MUST fail, so
@@ -204,7 +205,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         DerivedDeploy memory derived =
             deriveDeployment(dependentSuite(creationCode, mockDeployableDependencies(addresses)));
 
-        assertEq(derived.deployedAddress, LibRainDeploy.zoltuAddress(creationCode));
+        assertEq(derived.deployedAddresses[0], LibRainDeploy.zoltuAddress(creationCode));
         assertEq(derived.bytecodeHash, keccak256(type(MockDependentDeployable).runtimeCode));
 
         assertEq(FIRST_DEPENDENCY.code.length, 0, "the first dependency etch survived the derivation");
@@ -239,7 +240,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
 
         DerivedDeploy memory derived = deriveDeployment(dependentSuite(creationCode, dependencies));
 
-        assertEq(derived.deployedAddress, subject);
+        assertEq(derived.deployedAddresses[0], subject);
         assertEq(derived.bytecodeHash, keccak256(type(MockDependentDeployable).runtimeCode));
         assertNotEq(derived.bytecodeHash, keccak256(type(MockDeployable).runtimeCode));
     }
@@ -261,7 +262,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
 
         DerivedDeploy memory derived = deriveDeployment(dependentSuite(creationCode, dependencies));
 
-        assertEq(derived.deployedAddress, LibRainDeploy.zoltuAddress(creationCode));
+        assertEq(derived.deployedAddresses[0], LibRainDeploy.zoltuAddress(creationCode));
         assertEq(derived.bytecodeHash, keccak256(type(MockDependentDeployable).runtimeCode));
     }
 

@@ -180,6 +180,21 @@ library LibRainDeployMechanism {
         addresses[0] = suite.storedDeployedAddress;
     }
 
+    /// The chain id each of a suite's addresses is for, in the suite's address
+    /// order: empty for a Zoltu or `Clone` suite, whose one address is on every
+    /// network, and each entry's chain id for a `ClonePerNetwork` suite.
+    /// @param suite The suite.
+    /// @return chainIds The chain ids.
+    function addressChainIds(DeploySuite memory suite) internal pure returns (uint256[] memory chainIds) {
+        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
+            CloneNetworks memory clones = cloneNetworks(suite);
+            chainIds = new uint256[](clones.networks.length);
+            for (uint256 i = 0; i < clones.networks.length; i++) {
+                chainIds[i] = clones.networks[i].chainId;
+            }
+        }
+    }
+
     /// Runs a suite's mechanism on the local EVM and returns where it landed,
     /// each address cross-checked against the formula's.
     ///
@@ -228,7 +243,8 @@ library LibRainDeployMechanism {
             targets = new CloneTarget[](1);
             targets[0] = cloneTarget(suite);
         }
-        if (keccak256(suite.creationCode) != keccak256(LibRainDeployClone.cloneCreationCode(targets[0].implementation))) {
+        if (keccak256(suite.creationCode) != keccak256(LibRainDeployClone.cloneCreationCode(targets[0].implementation)))
+        {
             revert CloneCreationCodeMismatch(suite.suite);
         }
         for (uint256 i = 0; i < targets.length; i++) {

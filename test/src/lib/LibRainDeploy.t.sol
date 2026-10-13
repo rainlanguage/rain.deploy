@@ -685,7 +685,6 @@ contract LibRainDeployTest is Test {
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The addresses that must already have code on a
     /// network, each paired with the runtime code that must be at it.
-    /// @return deployedAddress The deployed contract address.
     /// @return forkIds The fork each network was deployed on.
     function externalDeployStepToNetworks(
         string[] memory networks,
@@ -693,9 +692,19 @@ contract LibRainDeployTest is Test {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) external returns (address deployedAddress, uint256[] memory forkIds) {
-        (deployedAddress, forkIds) = LibRainDeploy.deployStepToNetworks(
-            vm, networks, deployer, unreachableDeployStep, hex"", "", expectedAddress, expectedCodeHash, dependencies
+    ) external returns (uint256[] memory forkIds) {
+        (bytes[] memory stepData, address[] memory expectedAddresses) =
+            LibRainDeploy.everyNetwork(networks.length, hex"", expectedAddress);
+        forkIds = LibRainDeploy.deployStepToNetworks(
+            vm,
+            networks,
+            deployer,
+            unreachableDeployStep,
+            stepData,
+            "",
+            expectedAddresses,
+            expectedCodeHash,
+            dependencies
         );
     }
 

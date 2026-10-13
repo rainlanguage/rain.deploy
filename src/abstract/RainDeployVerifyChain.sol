@@ -3,7 +3,9 @@
 pragma solidity ^0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
+import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
+import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 
 /// Thrown when a version's derived address has no code on a network. Either it
 /// never deployed there, or it is not there any more.
@@ -118,46 +120,65 @@ error NetworkChainIdMismatch(string network, uint256 declared, uint256 reported)
 /// own so that binding the snapshot half alone remains a thing a
 /// credential-free job can do.
 abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
-    /// Checks one derived suite against whichever network is currently
+    /// Checks one suite's address against whichever network is currently
     /// selected.
     /// @param network The network name, for the error only.
-    /// @param derived The derivation to check for.
-    function checkDeployedOnNetwork(string memory network, DerivedDeploy memory derived) internal view {
-        if (derived.deployedAddress.code.length == 0) {
-            revert NotDeployedOnNetwork(network, derived.suite, derived.deployedAddress);
+    /// @param suite The suite's key, for the error only.
+    /// @param deployedAddress The suite's derived address on this network.
+    /// @param bytecodeHash The suite's derived code hash.
+    function checkDeployedOnNetwork(
+        string memory network,
+        string memory suite,
+        address deployedAddress,
+        bytes32 bytecodeHash
+    ) internal view {
+        if (deployedAddress.code.length == 0) {
+            revert NotDeployedOnNetwork(network, suite, deployedAddress);
         }
-        bytes32 actualCodeHash = derived.deployedAddress.codehash;
-        if (actualCodeHash != derived.bytecodeHash) {
-            revert CodeHashMismatchOnNetwork(
-                network, derived.suite, derived.deployedAddress, derived.bytecodeHash, actualCodeHash
-            );
+        bytes32 actualCodeHash = deployedAddress.codehash;
+        if (actualCodeHash != bytecodeHash) {
+            revert CodeHashMismatchOnNetwork(network, suite, deployedAddress, bytecodeHash, actualCodeHash);
         }
     }
 
-    /// Checks every derived suite against every supported network, forking
-    /// each network once and checking every suite on it.
+    /// Checks every suite against every supported network, forking each
+    /// network once and checking every suite on it.
     ///
-    /// The derivations are taken as an argument, already computed, because they
-    /// have to be computed before anything forks: on a fork the derived address
-    /// is the very address the deployment under test occupies, so deriving
-    /// there would either collide with it or read it back as its own
-    /// expectation.
-    /// @param derived The derivation of every suite to check.
-    function checkDeployedOnSupportedNetworks(DerivedDeploy[] memory derived) internal {
+    /// Everything compared is computed before anything forks. The code hashes
+    /// are derived first because on a fork the derived address is the very
+    /// address the deployment under test occupies, so deriving there would
+    /// either collide with it or read it back as its own expectation. Each
+    /// suite's address on each network is resolved first too, by that
+    /// network's chain id from the catalogue: a per-network clone has a
+    /// different address per network, and refuses a network it declares
+    /// nothing for with `LibRainDeployClone.CloneNetworkUndeclared` — before
+    /// any endpoint is touched, rather than partway down the list.
+    /// @param suites The suites to check.
+    function checkDeployedOnSupportedNetworks(DeploySuite[] memory suites) internal {
         // Nothing to check is not a reason to touch every RPC endpoint. Forking
         // to check nothing turns an outage into the failure of an assertion
         // that has no subject, which is the one failure this contract is
         // supposed to be legible against.
-        if (derived.length == 0) {
+        if (suites.length == 0) {
             return;
         }
 
+        DerivedDeploy[] memory derived = deriveDeployments(suites);
         string[] memory networks = supportedNetworks();
+        SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
+        address[][] memory addresses = new address[][](networks.length);
+        for (uint256 i = 0; i < networks.length; i++) {
+            addresses[i] = new address[](suites.length);
+            for (uint256 j = 0; j < suites.length; j++) {
+                addresses[i][j] = LibRainDeployMechanism.deployedAddress(suites[j], configs[i].chainId);
+            }
+        }
+
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, networks);
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
-            for (uint256 j = 0; j < derived.length; j++) {
-                checkDeployedOnNetwork(networks[i], derived[j]);
+            for (uint256 j = 0; j < suites.length; j++) {
+                checkDeployedOnNetwork(networks[i], derived[j].suite, addresses[i][j], derived[j].bytecodeHash);
             }
         }
     }
@@ -165,7 +186,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// Every RELEASED suite MUST be live, with the code its creation code
     /// produces, on every supported network.
     function testSuitesLiveOnEverySupportedNetwork() external {
-        checkDeployedOnSupportedNetworks(deriveDeployments(releasedSuites()));
+        checkDeployedOnSupportedNetworks(releasedSuites());
     }
 
     /// Checks one network's declared chain id against whichever chain id the

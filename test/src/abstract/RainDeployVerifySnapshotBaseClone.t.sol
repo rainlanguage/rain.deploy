@@ -42,7 +42,7 @@ contract RainDeployVerifySnapshotBaseCloneTest is ExampleCloneDeploys, RainDeplo
     /// is a statement about the clone derivation.
     function testFrozenCloneReleaseIsNotAtItsZoltuAddress() external pure {
         DeploySuite memory release = releasedSuites()[0];
-        assertEq(release.storedDeployedAddress, LibRainDeployMechanism.deployedAddress(release));
+        assertEq(release.storedDeployedAddress, LibRainDeployMechanism.deployedAddresses(release)[0]);
         assertNotEq(release.storedDeployedAddress, LibRainDeploy.zoltuAddress(release.creationCode));
         assertEq(
             release.storedDeployedAddress,

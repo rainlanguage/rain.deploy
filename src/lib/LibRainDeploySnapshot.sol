@@ -11,6 +11,7 @@ import {
 import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
 import {DeployDependency, DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
+import {CloneNetworks} from "./LibRainDeployClone.sol";
 import {LibRainDeployMechanism} from "./LibRainDeployMechanism.sol";
 
 /// Thrown when `[external.package].version` is not strict `X.Y.Z`. A version
@@ -724,28 +725,47 @@ library LibRainDeploySnapshot {
     /// and `MECHANISM_DATA` — the `abi.encode`d `CloneTarget` the release was
     /// cut with, so a frozen clone is broadcast and derived with the factory,
     /// implementation, init data and salt it was recorded with.
+    ///
+    /// A per-network clone declares `DEPLOYED_ADDRESS_<chainId>` per network,
+    /// in its address order, in place of the one `DEPLOYED_ADDRESS`, and its
+    /// `MECHANISM_DATA` is its `CloneNetworks` — see
+    /// `perNetworkAddressConstants`.
     /// @param vm The Vm instance for string operations.
-    /// @param deployed The address the clone deployed to.
+    /// @param deployed Where the local deploy put the clone, in the suite's
+    /// address order.
     /// @param suite The clone suite.
     /// @return The constants, as Solidity source.
-    function cloneSnapshotConstants(Vm vm, address deployed, DeploySuite memory suite)
+    function cloneSnapshotConstants(Vm vm, address[] memory deployed, DeploySuite memory suite)
         internal
         view
         returns (string memory)
     {
-        return string.concat(
-            LibCodeGen.addressConstantString(
+        string memory addressConstants;
+        string memory mechanismDataComment;
+        bytes memory mechanismData;
+        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
+            (addressConstants, mechanismData) = perNetworkAddressConstants(vm, deployed, suite);
+            mechanismDataComment = "/// @dev The clone factory call this release was cut with: the\n"
+                "/// `abi.encode`d `CloneNetworks` a released suite carries as its\n" "/// `mechanismData`.";
+        } else {
+            addressConstants = LibCodeGen.addressConstantString(
                 vm,
                 "/// @dev The deterministic deploy address of the EIP-1167 clone, through its\n"
                 "/// factory's open salt.",
                 "DEPLOYED_ADDRESS",
-                deployed
-            ),
+                deployed[0]
+            );
+            mechanismData = suite.mechanismData;
+            mechanismDataComment = "/// @dev The clone factory call this release was cut with: the\n"
+                "/// `abi.encode`d `CloneTarget` a released suite carries as its\n" "/// `mechanismData`.";
+        }
+        return string.concat(
+            addressConstants,
             LibCodeGen.bytesConstantString(
                 vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", suite.creationCode
             ),
             LibCodeGen.bytesConstantString(
-                vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", deployed.code
+                vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", deployed[0].code
             ),
             LibCodeGen.bytesConstantString(
                 vm,
@@ -756,14 +776,48 @@ library LibRainDeploySnapshot {
                 "DEPENDENCIES",
                 abi.encode(suite.dependencies)
             ),
-            LibCodeGen.bytesConstantString(
-                vm,
-                "/// @dev The clone factory call this release was cut with: the\n"
-                "/// `abi.encode`d `CloneTarget` a released suite carries as its\n" "/// `mechanismData`.",
-                "MECHANISM_DATA",
-                suite.mechanismData
-            )
+            LibCodeGen.bytesConstantString(vm, mechanismDataComment, "MECHANISM_DATA", mechanismData)
         );
+    }
+
+    /// A per-network clone's `DEPLOYED_ADDRESS_<chainId>` constants, one per
+    /// network in its address order, and the `CloneNetworks` its record
+    /// carries as `MECHANISM_DATA`.
+    ///
+    /// Both record the LOCAL deploy's addresses, never the suite's: the suite's
+    /// recorded addresses are a claim the record is what checks, so writing
+    /// them back would record a claim as its own evidence.
+    /// @param vm The Vm instance for string operations.
+    /// @param deployed Where the local deploy put the clone on each network, in
+    /// the suite's address order.
+    /// @param suite The per-network clone suite.
+    /// @return addressConstants The constants, as Solidity source.
+    /// @return mechanismData The `abi.encode`d `CloneNetworks`, carrying the
+    /// local deploy's addresses.
+    function perNetworkAddressConstants(Vm vm, address[] memory deployed, DeploySuite memory suite)
+        internal
+        pure
+        returns (string memory addressConstants, bytes memory mechanismData)
+    {
+        CloneNetworks memory clones = LibRainDeployMechanism.cloneNetworks(suite);
+        for (uint256 i = 0; i < clones.networks.length; i++) {
+            clones.networks[i].deployedAddress = deployed[i];
+            string memory chainId = vm.toString(clones.networks[i].chainId);
+            addressConstants = string.concat(
+                addressConstants,
+                LibCodeGen.addressConstantString(
+                    vm,
+                    string.concat(
+                        "/// @dev The deterministic deploy address of the EIP-1167 clone on chain id\n/// ",
+                        chainId,
+                        ", through its factory's open salt with that network's init data."
+                    ),
+                    string.concat("DEPLOYED_ADDRESS_", chainId),
+                    deployed[i]
+                )
+            );
+        }
+        mechanismData = abi.encode(clones);
     }
 
     /// Generate one snapshot for one SUITE, by the mechanism it declares.
@@ -796,7 +850,7 @@ library LibRainDeploySnapshot {
         string memory copyrightText,
         DeploySuite memory suite
     ) internal returns (string memory) {
-        if (suite.mechanism != DeployMechanism.Clone) {
+        if (suite.mechanism == DeployMechanism.Zoltu) {
             LibRainDeployMechanism.checkZoltuMechanismData(suite);
             return writeSnapshot(
                 vm,
@@ -841,10 +895,10 @@ library LibRainDeploySnapshot {
         string memory copyrightText,
         DeploySuite memory suite
     ) internal {
-        address deployed = LibRainDeployMechanism.deployLocally(vm, suite);
+        address[] memory deployed = LibRainDeployMechanism.deployLocally(vm, suite);
         string memory constants = cloneSnapshotConstants(vm, deployed, suite);
         LibFs.buildFileForContract(
-            vm, deployed, snapshotDir, contractName, spdxLicenseIdentifier, copyrightText, constants
+            vm, deployed[0], snapshotDir, contractName, spdxLicenseIdentifier, copyrightText, constants
         );
     }
 
@@ -1174,7 +1228,9 @@ library LibRainDeploySnapshot {
 
     /// The aliased import one record file contributes: all four consensus
     /// fields and the frozen dependency list, under that release's prefix —
-    /// and, for a clone, its `MECHANISM_DATA`.
+    /// and, for a clone, its `MECHANISM_DATA`. A per-network clone imports no
+    /// `DEPLOYED_ADDRESS`: its record declares one per network, and its entry
+    /// reads them from its `MECHANISM_DATA`.
     ///
     /// The mechanism KIND comes from the template, the current declaration,
     /// and the data from the record. A clone template over a record with no
@@ -1197,9 +1253,10 @@ library LibRainDeploySnapshot {
     {
         string memory prefix = releasedConstantPrefix(vm, path);
         return string.concat(
-            "import {\n    DEPLOYED_ADDRESS as ",
-            prefix,
-            "_DEPLOYED_ADDRESS,\n    BYTECODE_HASH as ",
+            mechanism == DeployMechanism.ClonePerNetwork
+                ? string("import {\n    ")
+                : string.concat("import {\n    DEPLOYED_ADDRESS as ", prefix, "_DEPLOYED_ADDRESS,\n    "),
+            "BYTECODE_HASH as ",
             prefix,
             "_BYTECODE_HASH,\n    CREATION_CODE as ",
             prefix,
@@ -1208,9 +1265,9 @@ library LibRainDeploySnapshot {
             "_RUNTIME_CODE,\n    DEPENDENCIES as ",
             prefix,
             "_DEPENDENCIES",
-            mechanism == DeployMechanism.Clone
-                ? string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA")
-                : string(""),
+            mechanism == DeployMechanism.Zoltu
+                ? string("")
+                : string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA"),
             "\n} from \"../generated/",
             tagForRecordPath(vm, path),
             "/",
@@ -1285,15 +1342,24 @@ library LibRainDeploySnapshot {
             "\",\n            creationCode: ",
             prefix,
             "_CREATION_CODE,\n            storedDeployedAddress: ",
-            prefix,
-            "_DEPLOYED_ADDRESS,\n            storedBytecodeHash: ",
+            template.mechanism == DeployMechanism.ClonePerNetwork
+                ? string("address(0)")
+                : string.concat(prefix, "_DEPLOYED_ADDRESS"),
+            ",\n            storedBytecodeHash: ",
             prefix,
             "_BYTECODE_HASH,\n            storedRuntimeCode: ",
             prefix
         );
-        string memory mechanism = template.mechanism == DeployMechanism.Clone
-            ? string.concat("DeployMechanism.Clone,\n            mechanismData: ", prefix, "_MECHANISM_DATA")
-            : string("DeployMechanism.Zoltu,\n            mechanismData: \"\"");
+        string memory mechanism = template.mechanism == DeployMechanism.Zoltu
+            ? string("DeployMechanism.Zoltu,\n            mechanismData: \"\"")
+            : string.concat(
+                template.mechanism == DeployMechanism.Clone
+                    ? "DeployMechanism.Clone"
+                    : "DeployMechanism.ClonePerNetwork",
+                ",\n            mechanismData: ",
+                prefix,
+                "_MECHANISM_DATA"
+            );
         return string.concat(
             head,
             "_RUNTIME_CODE,\n            artifactPath: \"",
@@ -1327,8 +1393,11 @@ library LibRainDeploySnapshot {
     ///
     /// The mechanism KIND comes from `template` too, and the mechanism DATA
     /// from the record: `""` for Zoltu, the release's own `MECHANISM_DATA` for
-    /// a clone, so a frozen clone is broadcast with the `CloneTarget` it was
-    /// cut with. `releasedImport` says what a kind the record cannot back does.
+    /// a clone, so a frozen clone is broadcast with the `CloneTarget` or
+    /// `CloneNetworks` it was cut with. A per-network clone's entry records
+    /// `storedDeployedAddress` as zero, since its `CloneNetworks` records its
+    /// address on each network. `releasedImport` says what a kind the record
+    /// cannot back does.
     ///
     /// The key is the template's with the tag appended, so every entry is
     /// unique and `allSuites`'s duplicate check is satisfied by construction

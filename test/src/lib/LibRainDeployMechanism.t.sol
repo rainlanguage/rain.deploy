@@ -9,6 +9,7 @@ import {
     CLONE_ARTIFACT_PATH,
     CLONE_UNANCHORABLE_REASON,
     CloneDeploy,
+    CloneNetworkData,
     CloneTarget,
     LibRainDeployClone
 } from "../../../src/lib/LibRainDeployClone.sol";
@@ -55,6 +56,7 @@ contract LibRainDeployMechanismTest is Test {
             factory: factory,
             implementation: implementation,
             data: TEST_DATA,
+            networkData: new CloneNetworkData[](0),
             salt: TEST_SALT,
             dependencies: dependencies
         });
@@ -142,23 +144,23 @@ contract LibRainDeployMechanismTest is Test {
     /// @param suite The suite whose address is wanted.
     /// @return The address the suite's mechanism derives.
     function externalDeployedAddress(DeploySuite memory suite) external pure returns (address) {
-        return LibRainDeployMechanism.deployedAddress(suite);
+        return LibRainDeployMechanism.deployedAddresses(suite)[0];
     }
 
     /// @param suite The suite to deploy locally.
     /// @return The address the suite was deployed to.
     function externalDeployLocally(DeploySuite memory suite) external returns (address) {
-        return LibRainDeployMechanism.deployLocally(vm, suite);
+        return LibRainDeployMechanism.deployLocally(vm, suite)[0];
     }
 
     /// @param networks The networks to broadcast to.
     /// @param suite The suite to broadcast.
-    /// @return deployed The address the suite was deployed to.
+    /// @return forkIds The fork each network was deployed on.
     function externalDeployAndBroadcast(string[] memory networks, DeploySuite memory suite)
         external
-        returns (address deployed)
+        returns (uint256[] memory forkIds)
     {
-        (deployed,) = LibRainDeployMechanism.deployAndBroadcast(vm, networks, 1, suite);
+        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, 1, suite);
     }
 
     /// The example clone over its declared factory and implementation, as a

@@ -551,7 +551,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         ExampleCloneDeploy deploy = new ExampleCloneDeploy();
 
         DeploySuite memory suite = deploy.externalSuiteByName("example-clone-second-salt");
-        address derived = LibRainDeployMechanism.deployedAddress(suite);
+        address derived = LibRainDeployMechanism.deployedAddresses(suite)[0];
 
         // Stated rather than assumed: the declaration agrees before this test
         // stales it, so the refusal below is this test's doing.
@@ -559,7 +559,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         // The key is load-bearing: the other clone derives a DIFFERENT address.
         assertNotEq(
             derived,
-            LibRainDeployMechanism.deployedAddress(deploy.externalSuiteByName("example-clone")),
+            LibRainDeployMechanism.deployedAddresses(deploy.externalSuiteByName("example-clone"))[0],
             "the two declared clones must derive apart"
         );
         assertNotEq(derived, LibRainDeploy.zoltuAddress(suite.creationCode), "the clone is not at its Zoltu address");

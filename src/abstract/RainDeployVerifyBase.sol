@@ -25,9 +25,13 @@ error DerivationSnapshotRevertFailed(string suite, uint256 snapshotId);
 struct DerivedDeploy {
     /// The suite the derivation came from.
     string suite;
-    /// The address the suite's mechanism deploys it to, on every network.
-    address deployedAddress;
-    /// The code hash the mechanism leaves behind at that address.
+    /// The addresses the suite's mechanism deploys it to, in the suite's
+    /// address order (see `LibRainDeployMechanism`): one address on every
+    /// network for Zoltu and `Clone`, one per declared network for
+    /// `ClonePerNetwork`.
+    address[] deployedAddresses;
+    /// The code hash the mechanism leaves behind at those addresses. One value:
+    /// a suite's runtime code is the same wherever it lands.
     bytes32 bytecodeHash;
 }
 
@@ -98,13 +102,13 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     /// declared bytes before it broadcasts, so a wrong declaration is a red
     /// deploy run rather than a wrong hash frozen into a release.
     /// @param suite The suite to derive from.
-    /// @return The address and code hash the suite's mechanism produces.
+    /// @return The addresses and code hash the suite's mechanism produces.
     function deriveDeployment(DeploySuite memory suite) internal returns (DerivedDeploy memory) {
         uint256 snapshotId = vm.snapshotState();
 
-        address deployedAddress = LibRainDeployMechanism.deployLocally(vm, suite);
+        address[] memory deployedAddresses = LibRainDeployMechanism.deployLocally(vm, suite);
         DerivedDeploy memory derived = DerivedDeploy({
-            suite: suite.suite, deployedAddress: deployedAddress, bytecodeHash: deployedAddress.codehash
+            suite: suite.suite, deployedAddresses: deployedAddresses, bytecodeHash: deployedAddresses[0].codehash
         });
 
         // A failed revert is unrecoverable, not a warning to silence. The etch

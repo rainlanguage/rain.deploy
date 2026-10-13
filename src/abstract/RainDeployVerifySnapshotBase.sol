@@ -35,12 +35,12 @@ error StoredRuntimeCodeHashMismatch(string suite, bytes32 storedBytecodeHash, by
 error FrozenSnapshotNotReleased(string path);
 
 /// Thrown when the frozen record holds more files recording one deploy address
-/// than the declaration holds released suites deriving it.
+/// list than the declaration holds released suites deriving it.
 /// @param path The record file the record ran out of declarations at.
-/// @param deployedAddress The address that file declares.
-/// @param records The record files declaring it, up to and including `path`.
-/// @param released The released suites whose mechanism derives it.
-error FrozenSnapshotsOutnumberReleases(string path, address deployedAddress, uint256 records, uint256 released);
+/// @param deployedAddresses The addresses that file declares, in file order.
+/// @param records The record files declaring them, up to and including `path`.
+/// @param released The released suites whose mechanism derives them.
+error FrozenSnapshotsOutnumberReleases(string path, address[] deployedAddresses, uint256 records, uint256 released);
 
 /// Thrown when a file in the frozen record declares no deployed address. The
 /// record holds generated snapshots and nothing else, and `DEPLOYED_ADDRESS` is
@@ -49,16 +49,19 @@ error FrozenSnapshotsOutnumberReleases(string path, address deployedAddress, uin
 /// is a declaration that is missing something — this is a record that cannot be
 /// read at all, and reporting it as undeclared would send the reader after the
 /// wrong thing.
-/// @param path The record file with no `DEPLOYED_ADDRESS` declaration.
+/// @param path The record file with no `DEPLOYED_ADDRESS` or
+/// `DEPLOYED_ADDRESS_<chainId>` declaration.
 error FrozenSnapshotUnreadable(string path);
 
 /// Thrown when a file in the frozen record declares its deployed address more
-/// than once. Solidity rejects a second file-scope `DEPLOYED_ADDRESS`, so no
-/// compiler reads such a file at all, and every rule for choosing between the
-/// copies — first, last, either — reads a value the compiler never would. A
-/// hand edit is what this group exists to catch and a position rule is what it
+/// than once: `DEPLOYED_ADDRESS` twice, one `DEPLOYED_ADDRESS_<chainId>` twice,
+/// or `DEPLOYED_ADDRESS` beside any `DEPLOYED_ADDRESS_<chainId>`. Solidity
+/// rejects a second file-scope constant of one name, so no compiler reads the
+/// first two at all, and the third is two answers to where the release is.
+/// Every rule for choosing between them — first, last, either — reads a value
+/// the generator never wrote. A hand edit is what this group exists to catch and a position rule is what it
 /// would aim at, so the reader refuses rather than choosing.
-/// @param path The record file declaring `DEPLOYED_ADDRESS` more than once.
+/// @param path The record file declaring its deployed address more than once.
 error FrozenSnapshotAmbiguous(string path);
 
 /// @title RainDeployVerifySnapshotBase
@@ -136,8 +139,13 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     function checkInternallyConsistent(DeploySuite memory suite) internal {
         DerivedDeploy memory derived = deriveDeployment(suite);
 
-        if (suite.storedDeployedAddress != derived.deployedAddress) {
-            revert StoredAddressMismatch(suite.suite, suite.storedDeployedAddress, derived.deployedAddress);
+        // Both lists are in the suite's address order, from the same decode of
+        // the same suite, so they pair by position.
+        address[] memory recorded = LibRainDeployMechanism.recordedAddresses(suite);
+        for (uint256 i = 0; i < recorded.length; i++) {
+            if (recorded[i] != derived.deployedAddresses[i]) {
+                revert StoredAddressMismatch(suite.suite, recorded[i], derived.deployedAddresses[i]);
+            }
         }
 
         if (suite.storedBytecodeHash != derived.bytecodeHash) {
@@ -167,14 +175,29 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// that what it runs on is what the compiler would see.
     string constant DEPLOYED_ADDRESS_DECLARATION = "address constant DEPLOYED_ADDRESS =";
 
-    /// The address a frozen record declares as its deploy address.
+    /// @dev The start of the declaration a per-network snapshot records one
+    /// network's deploy address in: `DEPLOYED_ADDRESS_<chainId> =`. Matched
+    /// from the start of its line for the reasons `DEPLOYED_ADDRESS_DECLARATION`
+    /// is.
+    string constant DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX = "address constant DEPLOYED_ADDRESS_";
+
+    /// The addresses a frozen record declares as its deploy addresses, and the
+    /// chain id each is for.
+    ///
+    /// A record declares either ONE `DEPLOYED_ADDRESS`, the address on every
+    /// network, or one `DEPLOYED_ADDRESS_<chainId>` per network, which is what
+    /// a per-network clone records. The first reads as one address and no
+    /// chain ids; the second as each declaration's chain id and address, in
+    /// file order — the order the writer emits them, which is the suite's
+    /// address order.
     ///
     /// `LibCodeGen` emits an address constant on ONE line — wrapping needs 120
-    /// characters and this declaration occupies 88 — so the declaration is a
-    /// line, and its value is that line's last token with the type wrapper and
-    /// the terminator stripped. `address(0x...);` and a bare `0x...;` read the
-    /// same, so which wrapper the generator chose is not something this has to
-    /// know.
+    /// characters, `DEPLOYED_ADDRESS` occupies 88 and `DEPLOYED_ADDRESS_<chainId>`
+    /// would need a chain id of more than 31 digits — so a declaration is a
+    /// line, and its value is that line's last token with the
+    /// type wrapper and the terminator stripped. `address(0x...);` and a bare
+    /// `0x...;` read the same, so which wrapper the generator chose is not
+    /// something this has to know.
     ///
     /// That every generated snapshot HAS this declaration, second, of type
     /// `address`, is pinned by `GeneratedSnapshotShapeTest` against the
@@ -184,30 +207,59 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// disambiguates those by whatever else happens to share the basename.
     ///
     /// The whole record is scanned before a match is read, so a record
-    /// carrying two declarations is refused rather than resolved by position.
+    /// carrying `DEPLOYED_ADDRESS` twice, one chain id twice, or both forms is
+    /// refused rather than resolved by position.
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
-    /// @return The address the record declares.
-    function recordedDeployedAddress(string memory path, string memory record) internal pure returns (address) {
+    /// @return chainIds The chain id each address is for: empty for a record
+    /// declaring `DEPLOYED_ADDRESS`.
+    /// @return addresses The addresses the record declares, in file order.
+    function recordedDeployedAddresses(string memory path, string memory record)
+        internal
+        pure
+        returns (uint256[] memory chainIds, address[] memory addresses)
+    {
         string[] memory lines = vm.split(withoutBlockComments(record), "\n");
-        bool found = false;
-        address declared;
+        chainIds = new uint256[](lines.length);
+        addresses = new address[](lines.length);
+        uint256 perNetwork = 0;
+        bool everyNetwork = false;
         for (uint256 i = 0; i < lines.length; i++) {
-            if (vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) != 0) {
+            bool isEveryNetwork = vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) == 0;
+            if (!isEveryNetwork && vm.indexOf(lines[i], DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX) != 0) {
                 continue;
             }
-            if (found) {
+            if (everyNetwork || (isEveryNetwork && perNetwork != 0)) {
                 revert FrozenSnapshotAmbiguous(path);
             }
             string[] memory tokens = vm.split(lines[i], " ");
-            string memory literal = tokens[tokens.length - 1];
-            declared = vm.parseAddress(vm.replace(vm.replace(vm.replace(literal, "address(", ""), ")", ""), ";", ""));
-            found = true;
+            address declared = vm.parseAddress(
+                vm.replace(vm.replace(vm.replace(tokens[tokens.length - 1], "address(", ""), ")", ""), ";", "")
+            );
+            if (isEveryNetwork) {
+                everyNetwork = true;
+                addresses[0] = declared;
+                continue;
+            }
+            uint256 chainId = vm.parseUint(vm.replace(tokens[2], "DEPLOYED_ADDRESS_", ""));
+            for (uint256 j = 0; j < perNetwork; j++) {
+                if (chainIds[j] == chainId) {
+                    revert FrozenSnapshotAmbiguous(path);
+                }
+            }
+            chainIds[perNetwork] = chainId;
+            addresses[perNetwork] = declared;
+            perNetwork++;
         }
-        if (!found) {
+        if (!everyNetwork && perNetwork == 0) {
             revert FrozenSnapshotUnreadable(path);
         }
-        return declared;
+        uint256 chainIdsLength = perNetwork;
+        uint256 addressesLength = everyNetwork ? 1 : perNetwork;
+        assembly ("memory-safe") {
+            mstore(chainIds, chainIdsLength)
+            mstore(addresses, addressesLength)
+        }
     }
 
     /// A record's text with every block comment removed, so that a declaration
@@ -264,11 +316,16 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// would let the candidate declare a frozen release — and the candidate is
     /// exactly what the chain group does not check.
     ///
-    /// The match is by address: the address a file DECLARES against the address
-    /// a suite's mechanism DERIVES, through `LibRainDeployMechanism` — the
-    /// creation code for a Zoltu suite, the `CloneTarget` for a clone. The
-    /// derived side is a pure function of the suite, so a suite that derives
-    /// the address a file records IS a release of what that file records.
+    /// The match is by address: the addresses a file DECLARES, with the chain
+    /// id each is declared for, against the addresses a suite's mechanism
+    /// DERIVES, through `LibRainDeployMechanism` — the creation code for a
+    /// Zoltu suite, the `CloneTarget` for a clone, each network's entry for a
+    /// per-network clone — with the chain id each is for. The whole ordered
+    /// list is the identity, so a per-network record matches only a suite
+    /// deriving every one of its addresses for the chain id it labels it with.
+    /// The derived side is a pure function of the suite, so a suite that
+    /// derives the addresses a file records IS a release of what that file
+    /// records.
     ///
     /// Nothing is matched by name, which would assert only that a convention
     /// was followed. Nothing is matched by searching the file's text either: a
@@ -280,14 +337,25 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// @param paths The frozen record's files.
     /// @param released The declared released suites.
     function checkFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released) internal view {
-        address[] memory recorded = new address[](paths.length);
+        bytes32[] memory releasedIdentities = new bytes32[](released.length);
+        for (uint256 j = 0; j < released.length; j++) {
+            releasedIdentities[j] = keccak256(
+                abi.encode(
+                    LibRainDeployMechanism.addressChainIds(released[j]),
+                    LibRainDeployMechanism.deployedAddresses(released[j])
+                )
+            );
+        }
 
+        bytes32[] memory recorded = new bytes32[](paths.length);
         for (uint256 i = 0; i < paths.length; i++) {
-            recorded[i] = recordedDeployedAddress(paths[i], vm.readFile(paths[i]));
+            (uint256[] memory chainIds, address[] memory addresses) =
+                recordedDeployedAddresses(paths[i], vm.readFile(paths[i]));
+            recorded[i] = keccak256(abi.encode(chainIds, addresses));
 
             uint256 declarations = 0;
             for (uint256 j = 0; j < released.length; j++) {
-                if (recorded[i] == LibRainDeployMechanism.deployedAddress(released[j])) {
+                if (recorded[i] == releasedIdentities[j]) {
                     declarations++;
                 }
             }
@@ -304,7 +372,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
             }
 
             if (records > declarations) {
-                revert FrozenSnapshotsOutnumberReleases(paths[i], recorded[i], records, declarations);
+                revert FrozenSnapshotsOutnumberReleases(paths[i], addresses, records, declarations);
             }
         }
     }

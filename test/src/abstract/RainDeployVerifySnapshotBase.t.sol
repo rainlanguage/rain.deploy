@@ -106,13 +106,28 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         checkFrozenSnapshotsReleased(paths, released);
     }
 
-    /// External wrapper for `recordedDeployedAddress` so `vm.expectRevert`
-    /// works at the correct call depth.
+    /// External wrapper for `recordedDeployedAddresses` so `vm.expectRevert`
+    /// works at the correct call depth, for a record declaring ONE
+    /// `DEPLOYED_ADDRESS`: requires the reading to be that one address and no
+    /// chain id.
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
     /// @return The address the record declares.
     function externalRecordedDeployedAddress(string memory path, string memory record) external pure returns (address) {
-        return recordedDeployedAddress(path, record);
+        (uint256[] memory chainIds, address[] memory addresses) = recordedDeployedAddresses(path, record);
+        assertEq(chainIds.length, 0);
+        assertEq(addresses.length, 1);
+        return addresses[0];
+    }
+
+    /// A one-address list, as `FrozenSnapshotsOutnumberReleases` carries a
+    /// record that declares `DEPLOYED_ADDRESS`.
+    /// @param deployedAddress The address.
+    /// @return The list.
+    function oneAddress(address deployedAddress) internal pure returns (address[] memory) {
+        address[] memory addresses = new address[](1);
+        addresses[0] = deployedAddress;
+        return addresses;
     }
 
     /// The real generated snapshot, standing in for a frozen record. It is the
@@ -215,7 +230,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             abi.encodeWithSelector(
                 FrozenSnapshotsOutnumberReleases.selector,
                 recordOfTheTwinReleases()[1],
-                ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
+                oneAddress(ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS),
                 uint256(2),
                 uint256(1)
             )
