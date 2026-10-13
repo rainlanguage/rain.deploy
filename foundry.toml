@@ -79,6 +79,7 @@ fs_permissions = [
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
 rain-lib-memkv = "0.2.0"
+"@openzeppelin-contracts" = "5.7.0"
 
 [soldeer]
 recursive_deps = false

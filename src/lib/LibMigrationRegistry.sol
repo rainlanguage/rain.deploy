@@ -16,7 +16,8 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// That is the whole library. It answers when a writer applied a migration in
 /// a namespace, what it applied it onto and after, and where that line has
 /// got to, and it applies one under the caller in a namespace it names, after
-/// the head and the migrations in any other line the caller names. Which
+/// the head and the migrations in any other line the caller names, building
+/// the list for a write that waits on nothing but the head. Which
 /// writer a test trusts, which namespace a repo writes, which invariant each
 /// answer selects, and how an id is derived are entirely the consumer's
 /// business and none of this library's.
@@ -78,7 +79,8 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// been, so a script whose migration depends on another Safe's, another
 /// deployer's or another repo's states that dependency as a fact for the
 /// registry to check instead of re-reading the other migration's post-state.
-/// A migration that waits on nothing else passes the head alone.
+/// A migration that waits on nothing else passes the head alone, which is
+/// the list `onto` builds.
 ///
 /// `head` reads that value back, which is how an author finds what a new script
 /// must name and how an operator sees which migration a chain is at. It is not
@@ -221,6 +223,36 @@ library LibMigrationRegistry {
         checkCodeHash();
         return
             IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS).head(writer, namespace);
+    }
+
+    /// The list a write applied onto `headMigration` in `writer`'s line in
+    /// `namespace` passes when it waits on nothing else: that head alone, as
+    /// the first and only entry.
+    ///
+    /// Pure, so it reads nothing and checks nothing. The registry checks the
+    /// entry when the write lands — that `writer` is the caller, that
+    /// `namespace` is the one the write names, that `headMigration` is the
+    /// line's actual head — and refuses it if any is not.
+    ///
+    /// `headMigration` is the migration the script believes the line is at,
+    /// fixed when the script is written. Passing what `head` answers in the
+    /// same transaction instead names whatever the line is at when the write
+    /// lands, so a chain that never got the predecessor, or a sibling that
+    /// landed first, is applied onto rather than refused.
+    /// @param writer The writer the write lands under: the account the
+    /// transaction is sent from. Never the zero address.
+    /// @param namespace The line under `writer` the write names. Never zero.
+    /// @param headMigration The migration `writer` applied last in
+    /// `namespace`, or `MIGRATION_HEAD_GENESIS` for the first in the line.
+    /// @return prerequisites The one-entry list, in the shape `applyMigration`
+    /// and `applyMigrationHistory` take and `appliedAfter` answers.
+    function onto(address writer, bytes32 namespace, bytes32 headMigration)
+        internal
+        pure
+        returns (Prerequisite[] memory prerequisites)
+    {
+        prerequisites = new Prerequisite[](1);
+        prerequisites[0] = Prerequisite({writer: writer, namespace: namespace, migration: headMigration});
     }
 
     /// Applies `migration` under the CALLER in `namespace`, after
