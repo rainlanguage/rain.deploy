@@ -62,6 +62,14 @@ import {
     DEPENDENCIES as MigrationRegistry_0_1_15_DEPENDENCIES
 } from "../generated/0_1_15/MigrationRegistry.sol";
 
+import {
+    DEPLOYED_ADDRESS as MigrationRegistry_0_1_17_DEPLOYED_ADDRESS,
+    BYTECODE_HASH as MigrationRegistry_0_1_17_BYTECODE_HASH,
+    CREATION_CODE as MigrationRegistry_0_1_17_CREATION_CODE,
+    RUNTIME_CODE as MigrationRegistry_0_1_17_RUNTIME_CODE,
+    DEPENDENCIES as MigrationRegistry_0_1_17_DEPENDENCIES
+} from "../generated/0_1_17/MigrationRegistry.sol";
+
 /// @title LibMigrationRegistryReleased
 /// @notice Every frozen release of `MigrationRegistry`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
@@ -82,7 +90,7 @@ library LibMigrationRegistryReleased {
     /// Every frozen release, in tag order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](7);
+        DeploySuite[] memory suites = new DeploySuite[](8);
         suites[0] = DeploySuite({
             suite: "migration-registry@0_1_7",
             creationCode: MigrationRegistry_0_1_7_CREATION_CODE,
@@ -145,6 +153,15 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_15_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_15_DEPENDENCIES, (DeployDependency[]))
+        });
+        suites[7] = DeploySuite({
+            suite: "migration-registry@0_1_17",
+            creationCode: MigrationRegistry_0_1_17_CREATION_CODE,
+            storedDeployedAddress: MigrationRegistry_0_1_17_DEPLOYED_ADDRESS,
+            storedBytecodeHash: MigrationRegistry_0_1_17_BYTECODE_HASH,
+            storedRuntimeCode: MigrationRegistry_0_1_17_RUNTIME_CODE,
+            artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
+            dependencies: abi.decode(MigrationRegistry_0_1_17_DEPENDENCIES, (DeployDependency[]))
         });
         return suites;
     }
