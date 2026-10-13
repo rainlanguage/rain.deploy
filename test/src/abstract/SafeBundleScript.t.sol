@@ -6,7 +6,8 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
 
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {SafeTx} from "../../../src/lib/LibSafeTx.sol";
+import {SafeTx, LibSafeTx} from "../../../src/lib/LibSafeTx.sol";
+import {Enum} from "safe-global-safe-smart-account-1.4.1-3/contracts/common/Enum.sol";
 import {LibSafeFork} from "../../../src/lib/LibSafeFork.sol";
 import {LibSafeTxBuilderJson} from "../../../src/lib/LibSafeTxBuilderJson.sol";
 import {ExampleSafeBundleScript} from "../../concrete/ExampleSafeBundleScript.sol";
@@ -42,6 +43,15 @@ contract SafeBundleScriptTest is Test {
         if (vm.exists(sPath)) vm.removeFile(sPath);
     }
 
+    /// The two calls `ExampleSafeBundleScript` authors by default.
+    /// @return The transactions.
+    function authoredBundle() internal view returns (SafeTx[] memory) {
+        SafeTx[] memory txs = new SafeTx[](2);
+        txs[0] = SafeTx({to: address(sRecorder), value: 0, data: "first", operation: Enum.Operation.Call});
+        txs[1] = SafeTx({to: address(sRecorder), value: 0, data: "second", operation: Enum.Operation.Call});
+        return txs;
+    }
+
     /// `setUpFork`, and the example script writing to `name`'s artifact path.
     /// @param name The artifact's file name.
     function setUpScript(string memory name) internal {
@@ -51,12 +61,15 @@ contract SafeBundleScriptTest is Test {
 
     /// `run()` executes the bundle through the Safe as one MultiSend
     /// transaction, consuming exactly one nonce, and writes an artifact that
-    /// `verify()` accepts.
+    /// `verify()` accepts. Both return the MultiSend `safeTxHash` the signers
+    /// sign: `run()` at the nonce before execution, `verify()` at the live one.
     function testRunExecutesWritesAndVerifies() external {
         setUpScript("run");
         uint256 nonce = sSafe.nonce();
+        SafeTx[] memory txs = authoredBundle();
+        bytes32 expectedHash = LibSafeTx.multiSendSafeTxHash(sSafe, txs, nonce);
 
-        sScript.run();
+        assertEq(sScript.run(), expectedHash);
 
         assertEq(sRecorder.callCount(), 2);
         assertEq(sRecorder.calls(0).caller, address(sSafe));
@@ -64,7 +77,7 @@ contract SafeBundleScriptTest is Test {
         assertEq(sRecorder.calls(1).caller, address(sSafe));
         assertEq(sRecorder.calls(1).data, bytes("second"));
         assertEq(sSafe.nonce(), nonce + 1);
-        sScript.verify(sPath);
+        assertEq(sScript.verify(sPath), LibSafeTx.multiSendSafeTxHash(sSafe, txs, nonce + 1));
     }
 
     /// A transaction's value reaches its target: the bundle is executed with
@@ -82,19 +95,14 @@ contract SafeBundleScriptTest is Test {
     }
 
     /// `run()` refuses when the bundle cannot be shown reversible, after the
-    /// bundle executed, its post-state held and its artifact was written.
+    /// bundle executed and its post-state held, and writes no artifact for it.
     function testRunRefusesIrreversibleBundle() external {
         setUpFork("reversible");
         sScript = new IrreversibleExampleSafeBundleScript(sSafe, sRecorder, sPath);
 
         vm.expectRevert(IrreversibleExampleSafeBundleScript.NotReversible.selector);
         sScript.run();
-
-        (, address artifactSafe, SafeTx[] memory txs) = LibSafeTxBuilderJson.fromJson(vm, vm.readFile(sPath));
-        assertEq(artifactSafe, address(sSafe));
-        assertEq(txs.length, 2);
-        assertEq(txs[0].data, bytes("first"));
-        assertEq(txs[1].data, bytes("second"));
+        assertFalse(vm.exists(sPath));
     }
 
     /// A script that keeps the default `assertReversible` runs to completion:
