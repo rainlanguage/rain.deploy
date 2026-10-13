@@ -76,7 +76,7 @@ contract LibTimelockRehearsalTest is Test {
             abi.encodeWithSelector(
                 TimelockController.TimelockUnexpectedOperationState.selector,
                 id,
-                bytes32(1 << uint8(TimelockController.OperationState.Unset))
+                bytes32(uint256(1) << uint8(TimelockController.OperationState.Unset))
             )
         );
         callAs(PROPOSER, target, scheduleCall);
