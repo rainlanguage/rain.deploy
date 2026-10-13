@@ -3409,9 +3409,13 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(defaulted, explicitly);
     }
 
-    /// The record the clone writer produces into. Under `FIXTURE_ROOT`, so the
-    /// `setUp` clear covers what a failed run leaves behind.
-    string constant CLONE_RECORD_FIXTURE_ROOT = "test/generated-snapshot/clone-record";
+    /// The roots the clone writer tests produce into, one per test for the
+    /// reason `FIXTURE_ROOT` gives. Under `FIXTURE_ROOT`, so the `setUp` clear
+    /// covers what a failed run leaves behind.
+    string constant CLONE_RECORD_REPRODUCE_ROOT = "test/generated-snapshot/clone-record-reproduce";
+    string constant CLONE_RECORD_ZOLTU_DATA_ROOT = "test/generated-snapshot/clone-record-zoltu-data";
+    string constant CLONE_RECORD_NO_RESIDUE_ROOT = "test/generated-snapshot/clone-record-no-residue";
+    string constant CLONE_RECORD_DEPLOY_NOT_CLAIMS_ROOT = "test/generated-snapshot/clone-record-deploy-not-claims";
 
     /// The committed release record of `example-clone` is what the clone writer
     /// produces for `exampleCloneRelease()`, byte for byte. The released clone
@@ -3421,7 +3425,7 @@ contract LibRainDeploySnapshotTest is Test {
     function testCloneWriterReproducesTheCommittedCloneRecord() external {
         string memory written = LibRainDeploySnapshot.writeSnapshot(
             vm,
-            CLONE_RECORD_FIXTURE_ROOT,
+            CLONE_RECORD_REPRODUCE_ROOT,
             EXAMPLE_CLONE_RELEASE_TAG,
             EXAMPLE_CLONE_RECORD_CONTRACT,
             LibRainDeployMechanism.cloneCandidate(exampleCloneRelease()).snapshot
@@ -3429,7 +3433,7 @@ contract LibRainDeploySnapshotTest is Test {
         string memory reproduced = vm.readFile(written);
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeDir(CLONE_RECORD_FIXTURE_ROOT, true);
+        vm.removeDir(CLONE_RECORD_REPRODUCE_ROOT, true);
 
         assertEq(
             reproduced,
@@ -3445,7 +3449,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// @param suite The suite to write.
     function externalWriteSuiteSnapshot(DeploySuite memory suite) external returns (string memory) {
         return LibRainDeploySnapshot.writeSnapshot(
-            vm, CLONE_RECORD_FIXTURE_ROOT, EXAMPLE_CLONE_RELEASE_TAG, FIXTURE_CONTRACT, suite
+            vm, CLONE_RECORD_ZOLTU_DATA_ROOT, EXAMPLE_CLONE_RELEASE_TAG, FIXTURE_CONTRACT, suite
         );
     }
 
@@ -3470,7 +3474,7 @@ contract LibRainDeploySnapshotTest is Test {
         assertFalse(
             vm.exists(
                 LibRainDeploySnapshot.pathForSnapshot(
-                    CLONE_RECORD_FIXTURE_ROOT, EXAMPLE_CLONE_RELEASE_TAG, FIXTURE_CONTRACT
+                    CLONE_RECORD_ZOLTU_DATA_ROOT, EXAMPLE_CLONE_RELEASE_TAG, FIXTURE_CONTRACT
                 )
             )
         );
@@ -3488,10 +3492,10 @@ contract LibRainDeploySnapshotTest is Test {
         }
 
         LibRainDeploySnapshot.writeSnapshot(
-            vm, CLONE_RECORD_FIXTURE_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT, suite
+            vm, CLONE_RECORD_NO_RESIDUE_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT, suite
         );
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeDir(CLONE_RECORD_FIXTURE_ROOT, true);
+        vm.removeDir(CLONE_RECORD_NO_RESIDUE_ROOT, true);
 
         assertEq(suite.storedDeployedAddress.code.length, 0);
         for (uint256 i = 0; i < suite.dependencies.length; i++) {
@@ -3509,11 +3513,11 @@ contract LibRainDeploySnapshotTest is Test {
         suite.storedRuntimeCode = hex"00";
 
         string memory written = LibRainDeploySnapshot.writeSnapshot(
-            vm, CLONE_RECORD_FIXTURE_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT, suite
+            vm, CLONE_RECORD_DEPLOY_NOT_CLAIMS_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT, suite
         );
         string memory reproduced = vm.readFile(written);
         //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeDir(CLONE_RECORD_FIXTURE_ROOT, true);
+        vm.removeDir(CLONE_RECORD_DEPLOY_NOT_CLAIMS_ROOT, true);
 
         assertEq(
             reproduced,
