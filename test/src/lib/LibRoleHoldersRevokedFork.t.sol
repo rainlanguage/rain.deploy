@@ -4,14 +4,10 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
+import {IAccessControl} from "@openzeppelin-contracts-5.7.0/access/IAccessControl.sol";
+
 import {LibRoleHolders, RoleGrant} from "../../../src/lib/LibRoleHolders.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-
-/// The `AccessControl` writes the tests drive on the fork.
-interface IRoleGrantor {
-    function hasRole(bytes32 role, address account) external view returns (bool);
-    function grantRole(bytes32 role, address account) external;
-}
 
 /// @title LibRoleHoldersRevokedForkTest
 /// @notice Enumeration over a window of a live OpenZeppelin `AccessControl` on
@@ -58,7 +54,7 @@ contract LibRoleHoldersRevokedForkTest is Test {
     /// revoked, leaves the replay denying a pair the contract holds.
     function testReplayRevokedButStateHeld() external {
         vm.prank(ROLE_ADMIN);
-        IRoleGrantor(ACL).grantRole(keccak256("WITHDRAW"), REVOKED_ACCOUNT);
+        IAccessControl(ACL).grantRole(keccak256("WITHDRAW"), REVOKED_ACCOUNT);
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRoleHolders.ReplayDisagreesWithState.selector, ACL, keccak256("WITHDRAW"), REVOKED_ACCOUNT, false

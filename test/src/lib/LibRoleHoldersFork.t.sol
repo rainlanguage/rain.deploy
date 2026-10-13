@@ -4,15 +4,10 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
+import {IAccessControl} from "@openzeppelin-contracts-5.7.0/access/IAccessControl.sol";
+
 import {LibRoleHolders, RoleGrant} from "../../../src/lib/LibRoleHolders.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-
-/// The `AccessControl` writes the tests drive on the fork.
-interface IRoleAdmin {
-    function hasRole(bytes32 role, address account) external view returns (bool);
-    function grantRole(bytes32 role, address account) external;
-    function revokeRole(bytes32 role, address account) external;
-}
 
 /// @title LibRoleHoldersForkTest
 /// @notice Enumeration against a live OpenZeppelin `TimelockController` on
@@ -115,7 +110,7 @@ contract LibRoleHoldersForkTest is Test {
         for (uint256 i = 0; i < logs.length; i++) {
             assertEq(logs[i].emitter, TIMELOCK);
             assertEq(logs[i].blockNumber, CREATION_BLOCK);
-            assertEq(logs[i].topics[0], LibRoleHolders.ROLE_GRANTED_TOPIC);
+            assertEq(logs[i].topics[0], IAccessControl.RoleGranted.selector);
             assertEq(logs[i].topics[1], expected[i].role);
             if (i > 0) {
                 assertGt(logs[i].logIndex, logs[i - 1].logIndex);
@@ -196,7 +191,7 @@ contract LibRoleHoldersForkTest is Test {
     /// pair the contract no longer holds.
     function testReplayHeldButStateRevoked() external {
         vm.prank(TIMELOCK);
-        IRoleAdmin(TIMELOCK).revokeRole(PROPOSER_ROLE, PROPOSER);
+        IAccessControl(TIMELOCK).revokeRole(PROPOSER_ROLE, PROPOSER);
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRoleHolders.ReplayDisagreesWithState.selector, TIMELOCK, PROPOSER_ROLE, PROPOSER, true
@@ -211,8 +206,8 @@ contract LibRoleHoldersForkTest is Test {
     function testGrantWithoutLogIsInvisible() external {
         address stranger = makeAddr("stranger");
         vm.prank(TIMELOCK);
-        IRoleAdmin(TIMELOCK).grantRole(PROPOSER_ROLE, stranger);
-        assertTrue(IRoleAdmin(TIMELOCK).hasRole(PROPOSER_ROLE, stranger));
+        IAccessControl(TIMELOCK).grantRole(PROPOSER_ROLE, stranger);
+        assertTrue(IAccessControl(TIMELOCK).hasRole(PROPOSER_ROLE, stranger));
         assertGrantsEq(this.externalHoldersOf(CREATION_BLOCK, MAX_RANGE), constructorGrants());
     }
 

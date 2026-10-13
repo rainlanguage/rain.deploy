@@ -4,6 +4,8 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
+import {IAccessControl} from "@openzeppelin-contracts-5.7.0/access/IAccessControl.sol";
+
 import {LibRoleHolders, RoleGrant} from "../../../src/lib/LibRoleHolders.sol";
 
 /// @title LibRoleHoldersReplayTest
@@ -18,11 +20,6 @@ contract LibRoleHoldersReplayTest is Test {
     address constant SENDER = address(uint160(uint256(keccak256("role holders sender"))));
     bytes32 constant ROLE_A = keccak256("ROLE_A");
     bytes32 constant ROLE_B = keccak256("ROLE_B");
-
-    /// Every OpenZeppelin `AccessControl` membership event, spelled as the
-    /// signature the compiler hashes.
-    bytes32 constant GRANTED = keccak256("RoleGranted(bytes32,address,address)");
-    bytes32 constant REVOKED = keccak256("RoleRevoked(bytes32,address,address)");
 
     function roleLog(bytes32 signature, bytes32 role, address account, uint64 blockNumber, uint256 logIndex)
         internal
@@ -70,17 +67,13 @@ contract LibRoleHoldersReplayTest is Test {
         return LibRoleHolders.replay(ACL, logs);
     }
 
-    function testEventTopicsAreOpenZeppelinSignatures() external pure {
-        assertEq(LibRoleHolders.ROLE_GRANTED_TOPIC, GRANTED);
-        assertEq(LibRoleHolders.ROLE_REVOKED_TOPIC, REVOKED);
-    }
-
     function testReplayEmptyStreamHoldsNothing() external pure {
         assertEq(LibRoleHolders.replay(ACL, new Vm.EthGetLogs[](0)).length, 0);
     }
 
     function testReplayGrantIsHeld() external pure {
-        RoleGrant[] memory holders = LibRoleHolders.replay(ACL, stream1(roleLog(GRANTED, ROLE_A, ALICE, 1, 0)));
+        RoleGrant[] memory holders =
+            LibRoleHolders.replay(ACL, stream1(roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 1, 0)));
         assertEq(holders.length, 1);
         assertEq(holders[0].role, ROLE_A);
         assertEq(holders[0].grantee, ALICE);
@@ -88,7 +81,11 @@ contract LibRoleHoldersReplayTest is Test {
 
     function testReplayGrantThenRevokeIsNotHeld() external pure {
         RoleGrant[] memory holders = LibRoleHolders.replay(
-            ACL, stream2(roleLog(GRANTED, ROLE_A, ALICE, 1, 0), roleLog(REVOKED, ROLE_A, ALICE, 2, 0))
+            ACL,
+            stream2(
+                roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 1, 0),
+                roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 2, 0)
+            )
         );
         assertEq(holders.length, 0);
     }
@@ -97,9 +94,9 @@ contract LibRoleHoldersReplayTest is Test {
         RoleGrant[] memory holders = LibRoleHolders.replay(
             ACL,
             stream3(
-                roleLog(GRANTED, ROLE_A, ALICE, 1, 0),
-                roleLog(REVOKED, ROLE_A, ALICE, 1, 1),
-                roleLog(GRANTED, ROLE_A, ALICE, 3, 0)
+                roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 1, 0),
+                roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 1, 1),
+                roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 3, 0)
             )
         );
         assertEq(holders.length, 1);
@@ -110,10 +107,10 @@ contract LibRoleHoldersReplayTest is Test {
     /// account, same account other role.
     function testReplayRevokeIsPerPair() external pure {
         Vm.EthGetLogs[] memory logs = new Vm.EthGetLogs[](4);
-        logs[0] = roleLog(GRANTED, ROLE_A, ALICE, 1, 0);
-        logs[1] = roleLog(GRANTED, ROLE_A, BOB, 1, 1);
-        logs[2] = roleLog(GRANTED, ROLE_B, ALICE, 1, 2);
-        logs[3] = roleLog(REVOKED, ROLE_A, ALICE, 2, 0);
+        logs[0] = roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 1, 0);
+        logs[1] = roleLog(IAccessControl.RoleGranted.selector, ROLE_A, BOB, 1, 1);
+        logs[2] = roleLog(IAccessControl.RoleGranted.selector, ROLE_B, ALICE, 1, 2);
+        logs[3] = roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 2, 0);
         RoleGrant[] memory holders = LibRoleHolders.replay(ACL, logs);
         assertEq(holders.length, 2);
         assertEq(holders[0].role, ROLE_A);
@@ -124,7 +121,11 @@ contract LibRoleHoldersReplayTest is Test {
 
     function testReplayPairsReportsRevokedPairs() external pure {
         (RoleGrant[] memory pairs, bool[] memory held) = LibRoleHolders.replayPairs(
-            ACL, stream2(roleLog(GRANTED, ROLE_A, ALICE, 1, 0), roleLog(REVOKED, ROLE_A, ALICE, 2, 0))
+            ACL,
+            stream2(
+                roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 1, 0),
+                roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 2, 0)
+            )
         );
         assertEq(pairs.length, 1);
         assertEq(held.length, 1);
@@ -136,7 +137,7 @@ contract LibRoleHoldersReplayTest is Test {
     /// stream touched, and it is not held.
     function testReplayPairsReportsBareRevoke() external pure {
         (RoleGrant[] memory pairs, bool[] memory held) =
-            LibRoleHolders.replayPairs(ACL, stream1(roleLog(REVOKED, ROLE_A, ALICE, 1, 0)));
+            LibRoleHolders.replayPairs(ACL, stream1(roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 1, 0)));
         assertEq(pairs.length, 1);
         assertFalse(held[0]);
     }
@@ -150,11 +151,11 @@ contract LibRoleHoldersReplayTest is Test {
     /// event it would revoke that grant.
     function testReplaySkipsOtherEvents() external pure {
         Vm.EthGetLogs[] memory logs = new Vm.EthGetLogs[](4);
-        logs[0] = roleLog(GRANTED, ROLE_A, ALICE, 1, 0);
-        logs[1] = roleLog(GRANTED, ROLE_A, address(0), 1, 1);
-        logs[2] = roleLog(keccak256("RoleAdminChanged(bytes32,bytes32,bytes32)"), ROLE_A, address(0), 1, 2);
+        logs[0] = roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 1, 0);
+        logs[1] = roleLog(IAccessControl.RoleGranted.selector, ROLE_A, address(0), 1, 1);
+        logs[2] = roleLog(IAccessControl.RoleAdminChanged.selector, ROLE_A, address(0), 1, 2);
         logs[2].topics[3] = ROLE_B;
-        logs[3] = roleLog(GRANTED, ROLE_A, BOB, 1, 3);
+        logs[3] = roleLog(IAccessControl.RoleGranted.selector, ROLE_A, BOB, 1, 3);
         logs[3].topics = new bytes32[](0);
         RoleGrant[] memory holders = LibRoleHolders.replay(ACL, logs);
         assertEq(holders.length, 2);
@@ -165,7 +166,7 @@ contract LibRoleHoldersReplayTest is Test {
     }
 
     function testReplayRejectsForeignEmitter() external {
-        Vm.EthGetLogs memory log = roleLog(GRANTED, ROLE_A, ALICE, 1, 0);
+        Vm.EthGetLogs memory log = roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 1, 0);
         log.emitter = BOB;
         vm.expectRevert(abi.encodeWithSelector(LibRoleHolders.ForeignEmitter.selector, ACL, BOB));
         this.externalReplay(stream1(log));
@@ -181,39 +182,58 @@ contract LibRoleHoldersReplayTest is Test {
     }
 
     function testReplayRejectsRemovedLog() external {
-        Vm.EthGetLogs memory log = roleLog(REVOKED, ROLE_A, ALICE, 7, 3);
+        Vm.EthGetLogs memory log = roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 7, 3);
         log.removed = true;
         vm.expectRevert(abi.encodeWithSelector(LibRoleHolders.RemovedLog.selector, uint64(7), uint256(3)));
-        this.externalReplay(stream2(roleLog(GRANTED, ROLE_A, ALICE, 1, 0), log));
+        this.externalReplay(stream2(roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 1, 0), log));
     }
 
     function testReplayRejectsEarlierBlock() external {
         vm.expectRevert(abi.encodeWithSelector(LibRoleHolders.LogsOutOfOrder.selector, uint64(1), uint256(5)));
-        this.externalReplay(stream2(roleLog(GRANTED, ROLE_A, ALICE, 2, 0), roleLog(REVOKED, ROLE_A, ALICE, 1, 5)));
+        this.externalReplay(
+            stream2(
+                roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 2, 0),
+                roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 1, 5)
+            )
+        );
     }
 
     function testReplayRejectsEarlierLogIndexInBlock() external {
         vm.expectRevert(abi.encodeWithSelector(LibRoleHolders.LogsOutOfOrder.selector, uint64(2), uint256(3)));
-        this.externalReplay(stream2(roleLog(GRANTED, ROLE_A, ALICE, 2, 4), roleLog(REVOKED, ROLE_A, ALICE, 2, 3)));
+        this.externalReplay(
+            stream2(
+                roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 2, 4),
+                roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 2, 3)
+            )
+        );
     }
 
     /// A repeated `(blockNumber, logIndex)` is the same log twice, which a
     /// chunked fetch with overlapping ranges would produce.
     function testReplayRejectsDuplicateLog() external {
         vm.expectRevert(abi.encodeWithSelector(LibRoleHolders.LogsOutOfOrder.selector, uint64(2), uint256(4)));
-        this.externalReplay(stream2(roleLog(GRANTED, ROLE_A, ALICE, 2, 4), roleLog(GRANTED, ROLE_A, BOB, 2, 4)));
+        this.externalReplay(
+            stream2(
+                roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 2, 4),
+                roleLog(IAccessControl.RoleGranted.selector, ROLE_A, BOB, 2, 4)
+            )
+        );
     }
 
     /// A later block with a lower log index is in order.
     function testReplayAcceptsLaterBlockLowerLogIndex() external pure {
         RoleGrant[] memory holders = LibRoleHolders.replay(
-            ACL, stream2(roleLog(GRANTED, ROLE_A, ALICE, 1, 9), roleLog(REVOKED, ROLE_A, ALICE, 2, 0))
+            ACL,
+            stream2(
+                roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 1, 9),
+                roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 2, 0)
+            )
         );
         assertEq(holders.length, 0);
     }
 
     function testReplayRejectsShortRoleLog() external {
-        Vm.EthGetLogs memory log = roleLog(GRANTED, ROLE_A, ALICE, 4, 1);
+        Vm.EthGetLogs memory log = roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 4, 1);
         bytes32[] memory topics = new bytes32[](3);
         topics[0] = log.topics[0];
         topics[1] = log.topics[1];
@@ -224,7 +244,7 @@ contract LibRoleHoldersReplayTest is Test {
     }
 
     function testReplayRejectsLongRoleLog() external {
-        Vm.EthGetLogs memory log = roleLog(REVOKED, ROLE_A, ALICE, 4, 1);
+        Vm.EthGetLogs memory log = roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 4, 1);
         bytes32[] memory topics = new bytes32[](5);
         for (uint256 i = 0; i < 4; i++) {
             topics[i] = log.topics[i];
@@ -239,7 +259,7 @@ contract LibRoleHoldersReplayTest is Test {
     /// contract never named.
     function testReplayRejectsDirtyAccountTopic(uint256 dirt) external {
         dirt = bound(dirt, 1, type(uint96).max);
-        Vm.EthGetLogs memory log = roleLog(GRANTED, ROLE_A, ALICE, 4, 1);
+        Vm.EthGetLogs memory log = roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 4, 1);
         log.topics[2] = bytes32((dirt << 160) | uint256(uint160(ALICE)));
         vm.expectRevert(abi.encodeWithSelector(LibRoleHolders.MalformedRoleLog.selector, uint64(4), uint256(1)));
         this.externalReplay(stream1(log));
@@ -247,28 +267,36 @@ contract LibRoleHoldersReplayTest is Test {
 
     /// The highest clean account topic is accepted.
     function testReplayAcceptsMaxAddress() external pure {
-        RoleGrant[] memory holders =
-            LibRoleHolders.replay(ACL, stream1(roleLog(GRANTED, ROLE_A, address(type(uint160).max), 1, 0)));
+        RoleGrant[] memory holders = LibRoleHolders.replay(
+            ACL, stream1(roleLog(IAccessControl.RoleGranted.selector, ROLE_A, address(type(uint160).max), 1, 0))
+        );
         assertEq(holders.length, 1);
         assertEq(holders[0].grantee, address(type(uint160).max));
     }
 
     function testMergeInterleavesByBlockThenLogIndex() external pure {
         Vm.EthGetLogs[] memory granted = stream3(
-            roleLog(GRANTED, ROLE_A, ALICE, 1, 0),
-            roleLog(GRANTED, ROLE_A, ALICE, 2, 5),
-            roleLog(GRANTED, ROLE_A, ALICE, 4, 0)
+            roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 1, 0),
+            roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 2, 5),
+            roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 4, 0)
         );
         Vm.EthGetLogs[] memory revoked = stream3(
-            roleLog(REVOKED, ROLE_A, ALICE, 1, 1),
-            roleLog(REVOKED, ROLE_A, ALICE, 2, 4),
-            roleLog(REVOKED, ROLE_A, ALICE, 3, 0)
+            roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 1, 1),
+            roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 2, 4),
+            roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, 3, 0)
         );
         Vm.EthGetLogs[] memory merged = LibRoleHolders.merge(granted, revoked);
         assertEq(merged.length, 6);
         uint64[6] memory blocks = [uint64(1), 1, 2, 2, 3, 4];
         uint256[6] memory indexes = [uint256(0), 1, 4, 5, 0, 0];
-        bytes32[6] memory signatures = [GRANTED, REVOKED, REVOKED, GRANTED, REVOKED, GRANTED];
+        bytes32[6] memory signatures = [
+            IAccessControl.RoleGranted.selector,
+            IAccessControl.RoleRevoked.selector,
+            IAccessControl.RoleRevoked.selector,
+            IAccessControl.RoleGranted.selector,
+            IAccessControl.RoleRevoked.selector,
+            IAccessControl.RoleGranted.selector
+        ];
         for (uint256 i = 0; i < 6; i++) {
             assertEq(merged[i].blockNumber, blocks[i]);
             assertEq(merged[i].logIndex, indexes[i]);
@@ -277,7 +305,10 @@ contract LibRoleHoldersReplayTest is Test {
     }
 
     function testMergeWithEmptySide() external pure {
-        Vm.EthGetLogs[] memory one = stream2(roleLog(GRANTED, ROLE_A, ALICE, 1, 0), roleLog(GRANTED, ROLE_A, BOB, 2, 0));
+        Vm.EthGetLogs[] memory one = stream2(
+            roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 1, 0),
+            roleLog(IAccessControl.RoleGranted.selector, ROLE_A, BOB, 2, 0)
+        );
         Vm.EthGetLogs[] memory left = LibRoleHolders.merge(one, new Vm.EthGetLogs[](0));
         Vm.EthGetLogs[] memory right = LibRoleHolders.merge(new Vm.EthGetLogs[](0), one);
         assertEq(left.length, 2);
@@ -296,8 +327,8 @@ contract LibRoleHoldersReplayTest is Test {
         for (uint256 i = 0; i < 5; i++) {
             blockA += uint64(uint256(keccak256(abi.encode(seed, "a", i))) % 3) + 1;
             blockB += uint64(uint256(keccak256(abi.encode(seed, "b", i))) % 3) + 1;
-            a[i] = roleLog(GRANTED, ROLE_A, ALICE, blockA, 2 * i);
-            b[i] = roleLog(REVOKED, ROLE_A, ALICE, blockB, 2 * i + 1);
+            a[i] = roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, blockA, 2 * i);
+            b[i] = roleLog(IAccessControl.RoleRevoked.selector, ROLE_A, ALICE, blockB, 2 * i + 1);
         }
         Vm.EthGetLogs[] memory merged = LibRoleHolders.merge(a, b);
         assertEq(merged.length, 10);
@@ -312,8 +343,11 @@ contract LibRoleHoldersReplayTest is Test {
 
     function testConcatKeepsOrder() external pure {
         Vm.EthGetLogs[] memory joined = LibRoleHolders.concat(
-            stream1(roleLog(GRANTED, ROLE_A, ALICE, 1, 0)),
-            stream2(roleLog(GRANTED, ROLE_A, BOB, 2, 0), roleLog(GRANTED, ROLE_B, BOB, 3, 0))
+            stream1(roleLog(IAccessControl.RoleGranted.selector, ROLE_A, ALICE, 1, 0)),
+            stream2(
+                roleLog(IAccessControl.RoleGranted.selector, ROLE_A, BOB, 2, 0),
+                roleLog(IAccessControl.RoleGranted.selector, ROLE_B, BOB, 3, 0)
+            )
         );
         assertEq(joined.length, 3);
         assertEq(joined[0].blockNumber, 1);

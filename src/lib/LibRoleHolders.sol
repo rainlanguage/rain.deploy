@@ -3,16 +3,12 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {IAccessControl} from "@openzeppelin-contracts-5.7.0/access/IAccessControl.sol";
 
 /// @notice A `(role, grantee)` pair on an OpenZeppelin `AccessControl`.
 struct RoleGrant {
     bytes32 role;
     address grantee;
-}
-
-/// @notice The `hasRole` read every OpenZeppelin `AccessControl` exposes.
-interface IHasRole {
-    function hasRole(bytes32 role, address account) external view returns (bool);
 }
 
 /// @title LibRoleHolders
@@ -32,11 +28,6 @@ interface IHasRole {
 /// stops short of the selected block or drops logs inside the range, but
 /// cannot see a pair whose every log fell outside it.
 library LibRoleHolders {
-    /// `RoleGranted(bytes32 indexed role, address indexed account, address indexed sender)`.
-    bytes32 internal constant ROLE_GRANTED_TOPIC = keccak256("RoleGranted(bytes32,address,address)");
-    /// `RoleRevoked(bytes32 indexed role, address indexed account, address indexed sender)`.
-    bytes32 internal constant ROLE_REVOKED_TOPIC = keccak256("RoleRevoked(bytes32,address,address)");
-
     /// @notice A log in the replayed stream was emitted by another contract.
     error ForeignEmitter(address acl, address emitter);
     /// @notice A log in the replayed stream is marked removed by a reorg.
@@ -134,9 +125,9 @@ library LibRoleHolders {
         returns (Vm.EthGetLogs[] memory)
     {
         bytes32[] memory filter = new bytes32[](1);
-        filter[0] = ROLE_GRANTED_TOPIC;
+        filter[0] = IAccessControl.RoleGranted.selector;
         Vm.EthGetLogs[] memory granted = vm.eth_getLogs(start, end, acl, filter);
-        filter[0] = ROLE_REVOKED_TOPIC;
+        filter[0] = IAccessControl.RoleRevoked.selector;
         return merge(granted, vm.eth_getLogs(start, end, acl, filter));
     }
 
@@ -183,7 +174,7 @@ library LibRoleHolders {
                 continue;
             }
             bytes32 signature = log.topics[0];
-            if (signature != ROLE_GRANTED_TOPIC && signature != ROLE_REVOKED_TOPIC) {
+            if (signature != IAccessControl.RoleGranted.selector && signature != IAccessControl.RoleRevoked.selector) {
                 continue;
             }
             if (log.topics.length != 4 || uint256(log.topics[2]) > type(uint160).max) {
@@ -203,7 +194,7 @@ library LibRoleHolders {
             // `signature` is one of the two role topics here; the grant topic
             // is the held one.
             // slither-disable-next-line incorrect-equality
-            seenHeld[j] = signature == ROLE_GRANTED_TOPIC;
+            seenHeld[j] = signature == IAccessControl.RoleGranted.selector;
         }
 
         pairs = new RoleGrant[](seenLength);
@@ -242,7 +233,7 @@ library LibRoleHolders {
         (RoleGrant[] memory pairs, bool[] memory held) =
             replayPairs(acl, fetchRoleLogs(vm, acl, fromBlock, block.number, maxRange));
         for (uint256 i = 0; i < pairs.length; i++) {
-            if (IHasRole(acl).hasRole(pairs[i].role, pairs[i].grantee) != held[i]) {
+            if (IAccessControl(acl).hasRole(pairs[i].role, pairs[i].grantee) != held[i]) {
                 revert ReplayDisagreesWithState(acl, pairs[i].role, pairs[i].grantee, held[i]);
             }
         }
@@ -273,7 +264,7 @@ library LibRoleHolders {
     /// @param grants The pinned map.
     function assertMapHeld(address acl, RoleGrant[] memory grants) internal view {
         for (uint256 i = 0; i < grants.length; i++) {
-            if (!IHasRole(acl).hasRole(grants[i].role, grants[i].grantee)) {
+            if (!IAccessControl(acl).hasRole(grants[i].role, grants[i].grantee)) {
                 revert ExpectedGrantMissing(acl, grants[i].role, grants[i].grantee);
             }
         }
