@@ -64,8 +64,9 @@ library LibTimelockOperations {
         keccak256("CallScheduled(bytes32,uint256,address,uint256,bytes,bytes32,uint256)");
 
     /// The block span of one `eth_getLogs` request in `pendingOperations`
-    /// without an explicit span. Public RPCs commonly refuse ranges above
-    /// 10_000 blocks.
+    /// without an explicit span. Many RPCs cap one request at 10_000 blocks
+    /// and some public endpoints far lower; the four-argument form takes a
+    /// span for those.
     uint256 internal constant DEFAULT_LOG_SPAN = 10_000;
 
     /// Thrown when the log range starts after the fork's block.
@@ -189,9 +190,7 @@ library LibTimelockOperations {
         uint256 idCount = 0;
         for (uint256 i = 0; i < logs.length; i++) {
             Vm.EthGetLogs memory log = logs[i];
-            if (
-                log.emitter != timelock || log.topics.length != 3 || log.topics[0] != CALL_SCHEDULED_TOPIC
-            ) {
+            if (log.emitter != timelock || log.topics.length != 3 || log.topics[0] != CALL_SCHEDULED_TOPIC) {
                 revert UnexpectedLog(i);
             }
             if (log.removed) {

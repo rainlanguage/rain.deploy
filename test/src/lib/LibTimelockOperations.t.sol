@@ -232,7 +232,9 @@ contract LibTimelockOperationsTest is Test {
 
     /// A range that starts after it ends is refused before any request.
     function testInvertedRangeRefused() external {
-        vm.expectRevert(abi.encodeWithSelector(LibTimelockOperations.InvalidLogRange.selector, uint256(11), uint256(10)));
+        vm.expectRevert(
+            abi.encodeWithSelector(LibTimelockOperations.InvalidLogRange.selector, uint256(11), uint256(10))
+        );
         this.externalScheduledLogs(address(timelock), 11, 10, 100);
     }
 
@@ -301,7 +303,8 @@ contract LibTimelockOperationsTest is Test {
             assertEq(logs[0].topics[1], FORK_OPERATION_ID);
         }
         assertEq(
-            LibTimelockOperations.scheduledLogs(vm, FORK_TIMELOCK, FORK_SCHEDULE_BLOCK, FORK_SCHEDULE_BLOCK, 1).length, 1
+            LibTimelockOperations.scheduledLogs(vm, FORK_TIMELOCK, FORK_SCHEDULE_BLOCK, FORK_SCHEDULE_BLOCK, 1).length,
+            1
         );
         assertEq(
             LibTimelockOperations.scheduledLogs(vm, FORK_TIMELOCK, fromBlock, FORK_SCHEDULE_BLOCK - 1, 2).length, 0

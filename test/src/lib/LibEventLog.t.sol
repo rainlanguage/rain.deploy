@@ -45,11 +45,7 @@ contract LibEventLogTest is Test {
 
     /// `only` reached through a call, so `vm.expectRevert` has an external
     /// call to attach to.
-    function externalOnly(Vm.Log[] memory logs, address emitter, bytes32 topic0)
-        external
-        pure
-        returns (Vm.Log memory)
-    {
+    function externalOnly(Vm.Log[] memory logs, address emitter, bytes32 topic0) external pure returns (Vm.Log memory) {
         return LibEventLog.only(logs, emitter, topic0);
     }
 
