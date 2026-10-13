@@ -172,8 +172,8 @@ library LibTimelockOperations {
     /// Each id appears once however its logs arrived: a `scheduleBatch` logs
     /// its id once per call, and an id cancelled and scheduled again logs the
     /// same calls again (the id commits to them), so a batch index seen twice
-    /// is the same call written twice. A log the chain has marked `removed` is not
-    /// part of it and is skipped.
+    /// is the same call written twice. A log the chain has marked `removed`
+    /// is not part of it and is skipped.
     /// @param logs `CallScheduled` logs from `timelock`, in chain order.
     /// @param timelock The timelock.
     /// @return operations The pending operations, in order of first
@@ -267,6 +267,8 @@ library LibTimelockOperations {
     /// @return The position.
     function indexOf(bytes32[] memory ids, uint256 count, bytes32 id) private pure returns (uint256) {
         for (uint256 i = 0; i < count; i++) {
+            // Identity of two ids, not a balance or timestamp.
+            // slither-disable-next-line incorrect-equality
             if (ids[i] == id) {
                 return i;
             }

@@ -137,6 +137,21 @@ contract LibEventLogTest is Test {
         this.externalOnly(logs, address(a), EventLogEmitter.Deployed.selector);
     }
 
+    /// Two matches are already too many.
+    function testOnlyRevertsOnTwoMatches() external {
+        vm.recordLogs();
+        a.deployed(1);
+        a.deployed(2);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibEventLog.EventNotUnique.selector, address(a), EventLogEmitter.Deployed.selector, uint256(2)
+            )
+        );
+        this.externalOnly(logs, address(a), EventLogEmitter.Deployed.selector);
+    }
+
     /// `filter` agrees with a direct count over fuzzed emissions.
     function testFilterCountFuzz(uint8[] memory script) external {
         vm.assume(script.length < 32);
