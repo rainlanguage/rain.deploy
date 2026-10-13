@@ -382,29 +382,31 @@ library LibRainDeploy {
     /// @param target The address read.
     /// @param readCall The calldata of the read.
     /// @param expectedAnswer The bytes the read must return.
-    /// @return holds True when the read returns exactly `expectedAnswer`.
-    /// @return success Whether the read returned rather than reverted.
-    /// @return actualAnswer The bytes the read returned, or its revert data.
+    /// @return True when the read returns exactly `expectedAnswer`.
+    /// @return Whether the read returned rather than reverted.
+    /// @return The bytes the read returned, or its revert data.
     function readAnswers(address target, bytes memory readCall, bytes memory expectedAnswer)
         private
         view
-        returns (bool holds, bool success, bytes memory actualAnswer)
+        returns (bool, bool, bytes memory)
     {
         // The consumer supplies the read, so the call is low level by
         // construction: there is no interface here to call through.
         // slither-disable-next-line low-level-calls
-        (success, actualAnswer) = target.staticcall(readCall);
-        holds = success && keccak256(actualAnswer) == keccak256(expectedAnswer);
+        (bool success, bytes memory actualAnswer) = target.staticcall(readCall);
+        bool holds = success && keccak256(actualAnswer) == keccak256(expectedAnswer);
+        return (holds, success, actualAnswer);
     }
 
     /// `readAnswers` over a read and answer packed for
     /// `bisectFirstHoldingBlock`.
     /// @param target The address read.
     /// @param context `abi.encode(readCall, expectedAnswer)`.
-    /// @return holds True when the read returns exactly `expectedAnswer`.
-    function readHolds(address target, bytes memory context) private view returns (bool holds) {
+    /// @return True when the read returns exactly `expectedAnswer`.
+    function readHolds(address target, bytes memory context) private view returns (bool) {
         (bytes memory readCall, bytes memory expectedAnswer) = abi.decode(context, (bytes, bytes));
-        (holds,,) = readAnswers(target, readCall, expectedAnswer);
+        (bool holds,,) = readAnswers(target, readCall, expectedAnswer);
+        return holds;
     }
 
     /// The first block in `[low, high]` at which `holds` is true, by binary
@@ -870,8 +872,8 @@ library LibRainDeploy {
     /// contract's constructor: an address that merely has SOMETHING at it
     /// satisfies no constructor that calls it, and the derived code hash this
     /// broadcast carries was computed against the declared bytes.
-    /// @return deployedAddress The deployed contract address.
-    /// @return forkIds The fork each network was deployed on, positionally
+    /// @return The deployed contract address.
+    /// @return The fork each network was deployed on, positionally
     /// paired with `networks`. Handed back rather than dropped because the
     /// deployment exists ONLY on them until forge submits what this recorded,
     /// so they are what `checkResolvedAddressesOnForks` verifies a first-time
@@ -885,7 +887,7 @@ library LibRainDeploy {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (address deployedAddress, uint256[] memory forkIds) {
+    ) internal returns (address, uint256[] memory) {
         if (networks.length == 0) {
             revert NoNetworks();
         }
@@ -899,7 +901,7 @@ library LibRainDeploy {
         if (derivedAddress != expectedAddress) {
             revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);
         }
-        forkIds = createForks(vm, networks);
+        uint256[] memory forkIds = createForks(vm, networks);
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
             console2.log("Deploying to network:", networks[i]);
@@ -953,8 +955,8 @@ library LibRainDeploy {
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The dependencies to check, each an address and the
     /// runtime code that must be at it.
-    /// @return deployedAddress The address of the deployed contract.
-    /// @return forkIds The fork each network was deployed on, as
+    /// @return The address of the deployed contract.
+    /// @return The fork each network was deployed on, as
     /// `deployToNetworks` returns them.
     function deployAndBroadcast(
         Vm vm,
@@ -965,7 +967,7 @@ library LibRainDeploy {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (address deployedAddress, uint256[] memory forkIds) {
+    ) internal returns (address, uint256[] memory) {
         if (networks.length == 0) {
             revert NoNetworks();
         }
