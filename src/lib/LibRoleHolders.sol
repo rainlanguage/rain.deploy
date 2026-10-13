@@ -99,6 +99,10 @@ library LibRoleHolders {
         while (true) {
             uint256 end = chunkEnd(start, toBlock, maxRange);
             logs = concat(logs, fetchRoleLogsChunk(vm, acl, start, end));
+            // `end` never passes `toBlock`, so equality is the exact test for
+            // the last chunk; slither reads it as a strict equality on state
+            // an attacker can move.
+            // slither-disable-next-line incorrect-equality
             if (end == toBlock) {
                 break;
             }
@@ -161,6 +165,10 @@ library LibRoleHolders {
             if (log.removed) {
                 revert RemovedLog(log.blockNumber, log.logIndex);
             }
+            // Logs are keyed by `(blockNumber, logIndex)`: a block tie falls
+            // through to the index, so equality is part of the order. slither
+            // reports the condition's own lines, not the `if`, hence the pair.
+            // slither-disable-start incorrect-equality
             if (
                 i > 0
                     && (log.blockNumber < logs[i - 1].blockNumber
@@ -168,6 +176,9 @@ library LibRoleHolders {
             ) {
                 revert LogsOutOfOrder(log.blockNumber, log.logIndex);
             }
+            // slither-disable-end incorrect-equality
+            // An anonymous event has no signature topic to read.
+            // slither-disable-next-line incorrect-equality
             if (log.topics.length == 0) {
                 continue;
             }
@@ -189,6 +200,9 @@ library LibRoleHolders {
                 seen[j] = RoleGrant(role, account);
                 seenLength++;
             }
+            // `signature` is one of the two role topics here; the grant topic
+            // is the held one.
+            // slither-disable-next-line incorrect-equality
             seenHeld[j] = signature == ROLE_GRANTED_TOPIC;
         }
 
@@ -300,6 +314,9 @@ library LibRoleHolders {
         uint256 i = 0;
         uint256 j = 0;
         for (uint256 k = 0; k < merged.length; k++) {
+            // `j == b.length` is the exhausted-stream test and a block tie
+            // falls through to the log index.
+            // slither-disable-start incorrect-equality
             if (
                 j == b.length
                     || (i < a.length
@@ -312,6 +329,7 @@ library LibRoleHolders {
                 merged[k] = b[j];
                 j++;
             }
+            // slither-disable-end incorrect-equality
         }
     }
 

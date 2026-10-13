@@ -143,14 +143,25 @@ contract LibRoleHoldersReplayTest is Test {
 
     /// Any other event the contract emits (`RoleAdminChanged`, or anything
     /// else) is skipped, as is an anonymous log with no topics.
+    /// `RoleAdminChanged(role, previousAdminRole, newAdminRole)` has the same
+    /// four-topic shape as a role event, and a previous admin of
+    /// `DEFAULT_ADMIN_ROLE` (zero) reads as `address(0)` in the account slot,
+    /// which is a real grantee (open execution on a timelock). Read as a role
+    /// event it would revoke that grant.
     function testReplaySkipsOtherEvents() external pure {
-        Vm.EthGetLogs memory other = roleLog(keccak256("RoleAdminChanged(bytes32,bytes32,bytes32)"), ROLE_A, BOB, 1, 1);
-        Vm.EthGetLogs memory anonymousLog = roleLog(GRANTED, ROLE_A, BOB, 1, 2);
-        anonymousLog.topics = new bytes32[](0);
-        RoleGrant[] memory holders =
-            LibRoleHolders.replay(ACL, stream3(roleLog(GRANTED, ROLE_A, ALICE, 1, 0), other, anonymousLog));
-        assertEq(holders.length, 1);
+        Vm.EthGetLogs[] memory logs = new Vm.EthGetLogs[](4);
+        logs[0] = roleLog(GRANTED, ROLE_A, ALICE, 1, 0);
+        logs[1] = roleLog(GRANTED, ROLE_A, address(0), 1, 1);
+        logs[2] = roleLog(keccak256("RoleAdminChanged(bytes32,bytes32,bytes32)"), ROLE_A, address(0), 1, 2);
+        logs[2].topics[3] = ROLE_B;
+        logs[3] = roleLog(GRANTED, ROLE_A, BOB, 1, 3);
+        logs[3].topics = new bytes32[](0);
+        RoleGrant[] memory holders = LibRoleHolders.replay(ACL, logs);
+        assertEq(holders.length, 2);
+        assertEq(holders[0].role, ROLE_A);
         assertEq(holders[0].grantee, ALICE);
+        assertEq(holders[1].role, ROLE_A);
+        assertEq(holders[1].grantee, address(0));
     }
 
     function testReplayRejectsForeignEmitter() external {
