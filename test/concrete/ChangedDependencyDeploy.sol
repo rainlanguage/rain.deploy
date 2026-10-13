@@ -43,24 +43,26 @@ bytes constant MISDECLARED_DEPENDENCY_RUNTIME_CODE = hex"fd";
 /// `second-address-candidate` for the reason `StalePinDeploy` gives.
 contract ChangedDependencyDeploy is RainDeployBroadcast {
     /// @inheritdoc RainDeployBroadcast
-    function deployNetworks() internal pure override returns (string[] memory networks) {
-        networks = new string[](1);
+    function deployNetworks() internal pure override returns (string[] memory) {
+        string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        return networks;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](0);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](0);
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
         DeployDependency[] memory dependencies = new DeployDependency[](1);
         dependencies[0] = DeployDependency({
             deployedAddress: LibRainDeploy.ZOLTU_FACTORY, runtimeCode: MISDECLARED_DEPENDENCY_RUNTIME_CODE
         });
 
-        candidates = new DeployCandidate[](1);
+        DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "second-address-candidate",
@@ -73,5 +75,6 @@ contract ChangedDependencyDeploy is RainDeployBroadcast {
             }),
             unanchorableReason: ""
         });
+        return candidates;
     }
 }

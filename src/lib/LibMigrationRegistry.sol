@@ -249,15 +249,16 @@ library LibMigrationRegistry {
     /// @param namespace The line under `writer` the write names. Never zero.
     /// @param headMigration The migration `writer` applied last in
     /// `namespace`, or `MIGRATION_HEAD_GENESIS` for the first in the line.
-    /// @return prerequisites The one-entry list, in the shape `applyMigration`
+    /// @return The one-entry list, in the shape `applyMigration`
     /// and `applyMigrationHistory` take and `appliedAfter` answers.
     function onto(address writer, bytes32 namespace, bytes32 headMigration)
         internal
         pure
-        returns (Prerequisite[] memory prerequisites)
+        returns (Prerequisite[] memory)
     {
-        prerequisites = new Prerequisite[](1);
+        Prerequisite[] memory prerequisites = new Prerequisite[](1);
         prerequisites[0] = Prerequisite({writer: writer, namespace: namespace, migration: headMigration});
+        return prerequisites;
     }
 
     /// Applies `migration` under the CALLER in `namespace`, after
@@ -378,16 +379,17 @@ library LibMigrationRegistry {
     /// `MIGRATION_HEAD_GENESIS`.
     /// @param prerequisites What `migration` is applied after, in the shape
     /// `applyMigration` takes, its head entry naming the sending account.
-    /// @return to The registry address.
-    /// @return data The `IMigrationRegistryV2.applyMigration` calldata.
+    /// @return The registry address.
+    /// @return The `IMigrationRegistryV2.applyMigration` calldata.
     function applyMigrationCall(bytes32 namespace, bytes32 migration, Prerequisite[] memory prerequisites)
         internal
         view
-        returns (address to, bytes memory data)
+        returns (address, bytes memory)
     {
         checkCodeHash();
-        to = LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS;
-        data = abi.encodeCall(IMigrationRegistryV2.applyMigration, (namespace, migration, prerequisites));
+        address to = LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS;
+        bytes memory data = abi.encodeCall(IMigrationRegistryV2.applyMigration, (namespace, migration, prerequisites));
+        return (to, data);
     }
 
     /// The call that applies `migration` in `namespace`, after
@@ -409,18 +411,19 @@ library LibMigrationRegistry {
     /// after the block the write lands in.
     /// @param prerequisites What `migration` is applied after, in the shape
     /// `applyMigration` takes, its head entry naming the sending account.
-    /// @return to The registry address.
-    /// @return data The `IMigrationRegistryV2.applyMigrationHistory` calldata.
+    /// @return The registry address.
+    /// @return The `IMigrationRegistryV2.applyMigrationHistory` calldata.
     function applyMigrationHistoryCall(
         bytes32 namespace,
         bytes32 migration,
         uint256 appliedAt,
         Prerequisite[] memory prerequisites
-    ) internal view returns (address to, bytes memory data) {
+    ) internal view returns (address, bytes memory) {
         checkCodeHash();
-        to = LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS;
-        data = abi.encodeCall(
+        address to = LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS;
+        bytes memory data = abi.encodeCall(
             IMigrationRegistryV2.applyMigrationHistory, (namespace, migration, appliedAt, prerequisites)
         );
+        return (to, data);
     }
 }

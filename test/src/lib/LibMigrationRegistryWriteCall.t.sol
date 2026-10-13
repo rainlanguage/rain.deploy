@@ -47,14 +47,11 @@ contract LibMigrationRegistryWriteCallTest is Test {
     /// @param writer The entry's writer.
     /// @param namespace The entry's namespace.
     /// @param migration The entry's migration.
-    /// @return prerequisites The one-entry list.
-    function one(address writer, bytes32 namespace, bytes32 migration)
-        internal
-        pure
-        returns (Prerequisite[] memory prerequisites)
-    {
-        prerequisites = new Prerequisite[](1);
+    /// @return The one-entry list.
+    function one(address writer, bytes32 namespace, bytes32 migration) internal pure returns (Prerequisite[] memory) {
+        Prerequisite[] memory prerequisites = new Prerequisite[](1);
         prerequisites[0] = Prerequisite({writer: writer, namespace: namespace, migration: migration});
+        return prerequisites;
     }
 
     /// Sends `data` to `to` from `sender` as a low-level call, which is how a
@@ -74,12 +71,12 @@ contract LibMigrationRegistryWriteCallTest is Test {
     /// @param namespace The line to apply in.
     /// @param migration The migration to apply.
     /// @param prerequisites The list.
-    /// @return to The call's target.
-    /// @return data The call's data.
+    /// @return The call's target.
+    /// @return The call's data.
     function externalApplyMigrationCall(bytes32 namespace, bytes32 migration, Prerequisite[] memory prerequisites)
         external
         view
-        returns (address to, bytes memory data)
+        returns (address, bytes memory)
     {
         return LibMigrationRegistry.applyMigrationCall(namespace, migration, prerequisites);
     }
@@ -90,14 +87,14 @@ contract LibMigrationRegistryWriteCallTest is Test {
     /// @param migration The migration to apply.
     /// @param appliedAt The moment to record.
     /// @param prerequisites The list.
-    /// @return to The call's target.
-    /// @return data The call's data.
+    /// @return The call's target.
+    /// @return The call's data.
     function externalApplyMigrationHistoryCall(
         bytes32 namespace,
         bytes32 migration,
         uint256 appliedAt,
         Prerequisite[] memory prerequisites
-    ) external view returns (address to, bytes memory data) {
+    ) external view returns (address, bytes memory) {
         return LibMigrationRegistry.applyMigrationHistoryCall(namespace, migration, appliedAt, prerequisites);
     }
 

@@ -51,10 +51,11 @@ contract LibMigrationRegistryTest is Test {
     /// refusing the clearing form — a delegation to zero leaves the account
     /// empty, which is what the `NoRegistry` cases already cover.
     /// @param delegate The fuzzed delegate.
-    /// @return designator The 23-byte designator.
-    function assumedDesignator(address delegate) internal pure returns (bytes memory designator) {
+    /// @return The 23-byte designator.
+    function assumedDesignator(address delegate) internal pure returns (bytes memory) {
         vm.assume(delegate != address(0));
-        designator = LibAccountCode.delegationDesignator(delegate);
+        bytes memory designator = LibAccountCode.delegationDesignator(delegate);
+        return designator;
     }
 
     /// External wrapper for `applied` so that `vm.expectRevert` works at the
@@ -134,14 +135,11 @@ contract LibMigrationRegistryTest is Test {
     /// @param writer The entry's writer.
     /// @param namespace The entry's namespace.
     /// @param migration The entry's migration.
-    /// @return prerequisites The one-entry list.
-    function one(address writer, bytes32 namespace, bytes32 migration)
-        internal
-        pure
-        returns (Prerequisite[] memory prerequisites)
-    {
-        prerequisites = new Prerequisite[](1);
+    /// @return The one-entry list.
+    function one(address writer, bytes32 namespace, bytes32 migration) internal pure returns (Prerequisite[] memory) {
+        Prerequisite[] memory prerequisites = new Prerequisite[](1);
         prerequisites[0] = Prerequisite({writer: writer, namespace: namespace, migration: migration});
+        return prerequisites;
     }
 
     /// The list a write takes: `writer` in `namespace` at `head`, then
@@ -150,17 +148,18 @@ contract LibMigrationRegistryTest is Test {
     /// @param namespace The line it is writing.
     /// @param head The head it believes it is at.
     /// @param prerequisites The migrations that must already be applied.
-    /// @return list The list.
+    /// @return The list.
     function headThen(address writer, bytes32 namespace, bytes32 head, Prerequisite[] memory prerequisites)
         internal
         pure
-        returns (Prerequisite[] memory list)
+        returns (Prerequisite[] memory)
     {
-        list = new Prerequisite[](prerequisites.length + 1);
+        Prerequisite[] memory list = new Prerequisite[](prerequisites.length + 1);
         list[0] = Prerequisite({writer: writer, namespace: namespace, migration: head});
         for (uint256 i = 0; i < prerequisites.length; i++) {
             list[i + 1] = prerequisites[i];
         }
+        return list;
     }
 
     /// The Zoltu deploy really does land the registry on its pinned address
