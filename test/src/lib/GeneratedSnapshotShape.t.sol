@@ -62,10 +62,39 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     }
 
     /// The artifact for one generated snapshot, which carries its AST.
+    ///
+    /// Found by the source path its AST records rather than built from the
+    /// name. A snapshot shares its file name with the contract it describes, so
+    /// forge disambiguates the two artifacts, and how it does that depends on
+    /// what else compiles: a nested `out/candidate/` directory for
+    /// `AddressRegistry`, and a compiler-profile suffix inside the shared
+    /// `out/TimelockController.sol/` for OpenZeppelin's `TimelockController`,
+    /// whose 2000-runs build takes the unsuffixed name. Both directories are
+    /// searched and the artifact whose AST is the snapshot's source is read.
     /// @param contractName The contract the snapshot describes.
     /// @return The artifact path.
-    function artifactPath(string memory contractName) internal pure returns (string memory) {
-        return string.concat("out/", LibRainDeploySnapshot.CANDIDATE, "/", contractName, ".sol/", contractName, ".json");
+    function artifactPath(string memory contractName) internal view returns (string memory) {
+        string memory source = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, contractName);
+        string[2] memory dirs = [
+            string.concat("out/", LibRainDeploySnapshot.CANDIDATE, "/", contractName, ".sol"),
+            string.concat("out/", contractName, ".sol")
+        ];
+        for (uint256 i = 0; i < dirs.length; i++) {
+            if (!vm.isDir(dirs[i])) {
+                continue;
+            }
+            Vm.DirEntry[] memory entries = vm.readDir(dirs[i]);
+            for (uint256 j = 0; j < entries.length; j++) {
+                string memory json = vm.readFile(entries[j].path);
+                if (
+                    vm.keyExistsJson(json, "$.ast.absolutePath")
+                        && keccak256(bytes(vm.parseJsonString(json, "$.ast.absolutePath"))) == keccak256(bytes(source))
+                ) {
+                    return entries[j].path;
+                }
+            }
+        }
+        revert(string.concat("no artifact carries the AST of ", source));
     }
 
     /// The node types of a generated snapshot's source unit, in file order.
@@ -382,8 +411,12 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     }
 
     /// PROPERTY: every parameterised contract's artifact path is `<path>:<Name>`
-    /// naming a file this repo has, for the reason
-    /// `testEveryCandidateArtifactPathResolves` gives for candidates.
+    /// and resolves to compiled code.
+    ///
+    /// No `vm.isFile` on the path half, unlike a candidate: a parameterised
+    /// contract is a dependency's, under `dependencies/`, outside the
+    /// `fs_permissions` roots, and its path is not printed for
+    /// `forge verify-contract`.
     function testEveryParameterisedArtifactPathResolves() external view {
         ParameterisedContract[] memory parameterised = parameterisedContracts();
         for (uint256 i = 0; i < parameterised.length; i++) {
@@ -391,7 +424,6 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
             string[] memory parts = vm.split(declared, ":");
 
             assertEq(parts.length, 2, string.concat("artifact path is not <path>:<Name>: ", declared));
-            assertTrue(vm.isFile(parts[0]), string.concat("artifact path names no such file: ", declared));
             assertGt(vm.getCode(declared).length, 0, string.concat("artifact path resolves to no code: ", declared));
         }
     }
