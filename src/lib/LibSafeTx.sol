@@ -75,7 +75,8 @@ library LibSafeTx {
     /// @param nonce The nonce the transaction consumes.
     /// @return The Safe transaction hash.
     function safeTxHash(ISafe safe, SafeTx memory txn, uint256 nonce) internal view returns (bytes32) {
-        return safe.getTransactionHash(txn.to, txn.value, txn.data, txn.operation, 0, 0, 0, address(0), address(0), nonce);
+        return
+            safe.getTransactionHash(txn.to, txn.value, txn.data, txn.operation, 0, 0, 0, address(0), address(0), nonce);
     }
 
     /// The `multiSend(bytes)` calldata that executes `txs` in order: each
@@ -84,7 +85,7 @@ library LibSafeTx {
     /// @param txs The bundle. Every entry MUST be a CALL.
     /// @return The `multiSend(bytes)` calldata.
     function encodeMultiSend(SafeTx[] memory txs) internal pure returns (bytes memory) {
-        bytes memory payload;
+        bytes memory payload = "";
         for (uint256 i = 0; i < txs.length; i++) {
             requireCall(i, txs[i].operation);
             payload = bytes.concat(

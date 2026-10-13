@@ -34,15 +34,17 @@ contract LibSafeTxBuilderJsonTest is Test {
 
     function twoTxs() internal pure returns (SafeTx[] memory txs) {
         txs = new SafeTx[](2);
-        txs[0] = SafeTx({to: address(0x1111111111111111111111111111111111111111), value: 12, data: hex"aabb", operation: 0});
+        txs[0] =
+            SafeTx({to: address(0x1111111111111111111111111111111111111111), value: 12, data: hex"aabb", operation: 0});
         txs[1] = SafeTx({to: address(0x2222222222222222222222222222222222222222), value: 0, data: "", operation: 0});
     }
 
     /// The JSON is exactly the Transaction Builder import shape.
     function testToJsonExact() external {
         vm.warp(1700000000);
-        string memory json =
-            LibSafeTxBuilderJson.toJson(vm, address(0x3333333333333333333333333333333333333333), 8453, "bundle", twoTxs());
+        string memory json = LibSafeTxBuilderJson.toJson(
+            vm, address(0x3333333333333333333333333333333333333333), 8453, "bundle", twoTxs()
+        );
         assertEq(
             json,
             string.concat(
@@ -163,9 +165,7 @@ contract LibSafeTxBuilderJsonTest is Test {
     /// A value past `type(uint256).max` reverts rather than wrapping.
     function testParseDecimalOverflow() external {
         vm.expectRevert();
-        this.externalParseDecimal(
-            "115792089237316195423570985008687907853269984665640564039457584007913129639936"
-        );
+        this.externalParseDecimal("115792089237316195423570985008687907853269984665640564039457584007913129639936");
     }
 
     /// A malformed `value` field fails the read.

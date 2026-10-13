@@ -14,7 +14,8 @@ import {LibForkSafe} from "../../lib/LibForkSafe.sol";
 /// MultiSend and signature encodings against byte layouts written out by hand.
 contract LibSafeTxTest is Test {
     /// Safe v1.4.1 `DOMAIN_SEPARATOR_TYPEHASH`.
-    bytes32 internal constant DOMAIN_SEPARATOR_TYPEHASH = keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
+    bytes32 internal constant DOMAIN_SEPARATOR_TYPEHASH =
+        keccak256("EIP712Domain(uint256 chainId,address verifyingContract)");
 
     /// Safe v1.4.1 `SAFE_TX_TYPEHASH`.
     bytes32 internal constant SAFE_TX_TYPEHASH = keccak256(
@@ -80,7 +81,8 @@ contract LibSafeTxTest is Test {
     /// dataLength || data`, in order, behind the `multiSend(bytes)` selector.
     function testEncodeMultiSendLayout() external pure {
         SafeTx[] memory txs = new SafeTx[](2);
-        txs[0] = SafeTx({to: address(0x1111111111111111111111111111111111111111), value: 2, data: hex"aabb", operation: 0});
+        txs[0] =
+            SafeTx({to: address(0x1111111111111111111111111111111111111111), value: 2, data: hex"aabb", operation: 0});
         txs[1] = SafeTx({to: address(0x2222222222222222222222222222222222222222), value: 0, data: "", operation: 0});
         bytes memory payload = bytes.concat(
             hex"00",

@@ -130,6 +130,9 @@ library LibSafeFork {
         for (uint256 i = 0; i < short.length; i++) {
             short[i] = approvers[i];
         }
+        // Any return means the undersigned follow-up was accepted, whatever it
+        // reports, so the value is not read.
+        //slither-disable-next-line unused-return
         try safe.execTransaction(
             followup.to,
             followup.value,
