@@ -451,6 +451,18 @@ library LibRainDeploy {
         vm.etch(ZOLTU_FACTORY, ZOLTU_FACTORY_BYTECODE);
     }
 
+    /// Deploys the given creation code via the Zoltu factory in the current
+    /// EVM, etching the factory first so the deploy does not depend on the
+    /// factory already being there. A local EVM and a simulated fork are what
+    /// it is for: the etch is a cheatcode, so a broadcast never carries it.
+    /// @param vm The Vm instance to etch the factory with.
+    /// @param creationCode The creation code to deploy.
+    /// @return The address of the deployed contract.
+    function etchAndDeployZoltu(Vm vm, bytes memory creationCode) internal returns (address) {
+        etchZoltuFactory(vm);
+        return deployZoltu(creationCode);
+    }
+
     /// Derives the address the Zoltu factory deploys the given creation code
     /// to. The factory is CREATE2 over its calldata with a zero salt, so the
     /// address is a pure function of the creation code and is identical on
@@ -673,7 +685,7 @@ library LibRainDeploy {
     /// @param network The network name, for the error only.
     /// @param target The deployed contract to read.
     /// @param readCalls The calldata for each read, e.g.
-    /// `abi.encodeCall(IOwnable.owner, ())`.
+    /// `abi.encodeCall(IERC5313.owner, ())`.
     /// @param expectedAddresses The address each read MUST answer with,
     /// positionally paired with `readCalls`.
     function checkResolvedAddresses(

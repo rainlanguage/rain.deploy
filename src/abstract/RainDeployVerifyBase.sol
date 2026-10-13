@@ -126,8 +126,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         vm.etch(formulaAddress, hex"");
         vm.resetNonce(formulaAddress);
 
-        LibRainDeploy.etchZoltuFactory(vm);
-        address factoryAddress = LibRainDeploy.deployZoltu(suite.creationCode);
+        address factoryAddress = LibRainDeploy.etchAndDeployZoltu(vm, suite.creationCode);
         if (factoryAddress != formulaAddress) {
             revert ZoltuDerivationMismatch(suite.suite, formulaAddress, factoryAddress);
         }
