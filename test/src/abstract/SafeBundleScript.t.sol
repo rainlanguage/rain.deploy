@@ -6,7 +6,8 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
 
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {SafeTx, LibSafeTx} from "../../../src/lib/LibSafeTx.sol";
+import {SafeTx} from "../../../src/lib/LibSafeTx.sol";
+import {LibSafe} from "../../../src/lib/LibSafe.sol";
 import {Enum} from "safe-global-safe-smart-account-1.4.1-3/contracts/common/Enum.sol";
 import {LibSafeFork} from "../../../src/lib/LibSafeFork.sol";
 import {LibSafeTxBuilderJson} from "../../../src/lib/LibSafeTxBuilderJson.sol";
@@ -43,13 +44,38 @@ contract SafeBundleScriptTest is Test {
         if (vm.exists(sPath)) vm.removeFile(sPath);
     }
 
-    /// The two calls `ExampleSafeBundleScript` authors by default.
-    /// @return The transactions.
-    function authoredBundle() internal view returns (SafeTx[] memory) {
-        SafeTx[] memory txs = new SafeTx[](2);
-        txs[0] = SafeTx({to: address(sRecorder), value: 0, data: "first", operation: Enum.Operation.Call});
-        txs[1] = SafeTx({to: address(sRecorder), value: 0, data: "second", operation: Enum.Operation.Call});
-        return txs;
+    /// The Safe's own `getTransactionHash` of the MultiSend for the two calls
+    /// `ExampleSafeBundleScript` authors by default, with the MultiSend payload
+    /// packed by hand (operation, to, value, data length, data per call), so the
+    /// hash `run()` and `verify()` return is checked against the Safe rather than
+    /// against `LibSafeTx`.
+    /// @param nonce The Safe nonce the hash is at.
+    /// @return The hash.
+    function expectedBundleHash(uint256 nonce) internal view returns (bytes32) {
+        bytes memory payload = abi.encodePacked(
+            uint8(0),
+            address(sRecorder),
+            uint256(0),
+            uint256(5),
+            bytes("first"),
+            uint8(0),
+            address(sRecorder),
+            uint256(0),
+            uint256(6),
+            bytes("second")
+        );
+        return sSafe.getTransactionHash(
+            LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY,
+            0,
+            abi.encodeWithSignature("multiSend(bytes)", payload),
+            Enum.Operation.DelegateCall,
+            0,
+            0,
+            0,
+            address(0),
+            address(0),
+            nonce
+        );
     }
 
     /// `setUpFork`, and the example script writing to `name`'s artifact path.
@@ -66,10 +92,7 @@ contract SafeBundleScriptTest is Test {
     function testRunExecutesWritesAndVerifies() external {
         setUpScript("run");
         uint256 nonce = sSafe.nonce();
-        SafeTx[] memory txs = authoredBundle();
-        bytes32 expectedHash = LibSafeTx.multiSendSafeTxHash(sSafe, txs, nonce);
-
-        assertEq(sScript.run(), expectedHash);
+        assertEq(sScript.run(), expectedBundleHash(nonce));
 
         assertEq(sRecorder.callCount(), 2);
         assertEq(sRecorder.calls(0).caller, address(sSafe));
@@ -77,7 +100,7 @@ contract SafeBundleScriptTest is Test {
         assertEq(sRecorder.calls(1).caller, address(sSafe));
         assertEq(sRecorder.calls(1).data, bytes("second"));
         assertEq(sSafe.nonce(), nonce + 1);
-        assertEq(sScript.verify(sPath), LibSafeTx.multiSendSafeTxHash(sSafe, txs, nonce + 1));
+        assertEq(sScript.verify(sPath), expectedBundleHash(nonce + 1));
     }
 
     /// A transaction's value reaches its target: the bundle is executed with
@@ -98,6 +121,18 @@ contract SafeBundleScriptTest is Test {
     /// bundle executed and its post-state held, and writes no artifact for it.
     function testRunRefusesIrreversibleBundle() external {
         setUpFork("reversible");
+        sScript = new IrreversibleExampleSafeBundleScript(sSafe, sRecorder, sPath);
+
+        vm.expectRevert(IrreversibleExampleSafeBundleScript.NotReversible.selector);
+        sScript.run();
+        assertFalse(vm.exists(sPath));
+    }
+
+    /// A refused `run()` leaves no artifact even where an earlier run wrote
+    /// one: the stale artifact is removed before anything is authored.
+    function testRunRefusalRemovesStaleArtifact() external {
+        setUpFork("stale");
+        vm.writeFile(sPath, "stale artifact");
         sScript = new IrreversibleExampleSafeBundleScript(sSafe, sRecorder, sPath);
 
         vm.expectRevert(IrreversibleExampleSafeBundleScript.NotReversible.selector);
