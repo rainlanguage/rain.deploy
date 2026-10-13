@@ -39,7 +39,7 @@ library LibTimelockControllerDeploy {
     /// @param minDelay The minimum delay in seconds.
     /// @param proposer The sole proposer.
     /// @param expectedTimelock The address the caller expects the timelock at.
-    /// @return timelock The timelock address.
+    /// @return The timelock address.
     function deployTimelock(
         Vm vm,
         string memory network,
@@ -47,7 +47,7 @@ library LibTimelockControllerDeploy {
         uint256 minDelay,
         address proposer,
         address expectedTimelock
-    ) internal returns (address timelock) {
+    ) internal returns (address) {
         bytes memory initCode = LibTimelockController.timelockInitCode(minDelay, proposer);
         address derived = LibRainDeploy.zoltuAddress(initCode);
         if (derived != expectedTimelock) {
@@ -64,7 +64,7 @@ library LibTimelockControllerDeploy {
         LibRainDeploy.checkDeployRequirements(network, new DeployDependency[](0));
 
         vm.startBroadcast(deployer);
-        timelock = LibRainDeploy.deployZoltu(initCode);
+        address timelock = LibRainDeploy.deployZoltu(initCode);
         vm.stopBroadcast();
         if (timelock != derived) {
             revert LibRainDeploy.UnexpectedDeployedAddress(derived, timelock);
@@ -73,5 +73,6 @@ library LibTimelockControllerDeploy {
         console2.log(" - Timelock:", timelock);
         console2.log(" - Min delay (seconds):", minDelay);
         console2.log(" - Proposer:", proposer);
+        return timelock;
     }
 }

@@ -42,8 +42,8 @@ import {
 /// declaration, so a second scope is a second contract.
 contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](1);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = DeploySuite({
             suite: "address-registry@0_0_1",
             creationCode: ADDRESS_REGISTRY_CREATION_CODE,
@@ -53,11 +53,12 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0)
         });
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](1);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "second-address-candidate",
@@ -70,6 +71,7 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
             }),
             unanchorableReason: ""
         });
+        return candidates;
     }
 
     /// The RELEASE is live everywhere and the CANDIDATE is nowhere, both by

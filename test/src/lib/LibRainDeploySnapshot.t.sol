@@ -1365,14 +1365,15 @@ contract LibRainDeploySnapshotTest is Test {
     /// A record of `count` releases, `0_0_1` upwards, as
     /// `frozenSnapshotPaths` spells them.
     /// @param count How many releases.
-    /// @return paths The record's files.
-    function recordOf(uint256 count) internal pure returns (string[] memory paths) {
-        paths = new string[](count);
+    /// @return The record's files.
+    function recordOf(uint256 count) internal pure returns (string[] memory) {
+        string[] memory paths = new string[](count);
         for (uint256 i = 0; i < count; i++) {
             paths[i] = string.concat(
                 LibRainDeploySnapshot.LIB_FS_ROOT, "/0_0_", vm.toString(i + 1), "/", EMITTED_CONTRACT, ".sol"
             );
         }
+        return paths;
     }
 
     /// The aliased import one release contributes.
@@ -2214,17 +2215,18 @@ contract LibRainDeploySnapshotTest is Test {
     /// does to it. Reverts above three rather than quietly emitting a shorter
     /// list, which is the failure a test helper is worst at reporting.
     /// @param count How many contracts.
-    /// @return names The contract names.
-    function aggregateNames(uint256 count) internal pure returns (string[] memory names) {
+    /// @return The contract names.
+    function aggregateNames(uint256 count) internal pure returns (string[] memory) {
         string[] memory all = new string[](3);
         all[0] = "AddressRegistry";
         all[1] = "MigrationRegistry";
         all[2] = "ThirdRegistry";
 
-        names = new string[](count);
+        string[] memory names = new string[](count);
         for (uint256 i = 0; i < count; i++) {
             names[i] = all[i];
         }
+        return names;
     }
 
     /// The import every aggregate carries whatever it aggregates.
