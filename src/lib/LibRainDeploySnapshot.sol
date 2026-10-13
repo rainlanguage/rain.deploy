@@ -671,9 +671,7 @@ library LibRainDeploySnapshot {
         bytes memory creationCode,
         DeployDependency[] memory dependencies
     ) internal returns (string memory) {
-        LibRainDeploy.etchZoltuFactory(vm);
-
-        address deployed = LibRainDeploy.deployZoltu(creationCode);
+        address deployed = LibRainDeploy.etchAndDeployZoltu(vm, creationCode);
         string memory constants = snapshotConstants(vm, deployed, creationCode, dependencies);
 
         // The directory is created by the writer, from the same root and tag

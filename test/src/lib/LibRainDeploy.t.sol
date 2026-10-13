@@ -692,6 +692,34 @@ contract LibRainDeployTest is Test {
         this.externalDeployZoltu(type(MockReverter).creationCode);
     }
 
+    /// External wrapper for `LibRainDeploy.etchAndDeployZoltu` so
+    /// `expectRevert` can catch its revert.
+    /// @param creationCode The creation code to deploy.
+    /// @return deployedAddress The address of the deployed contract.
+    function externalEtchAndDeployZoltu(bytes memory creationCode) external returns (address deployedAddress) {
+        deployedAddress = LibRainDeploy.etchAndDeployZoltu(vm, creationCode);
+    }
+
+    /// `etchAndDeployZoltu` MUST deploy in an EVM that has no Zoltu factory,
+    /// to the address the live factory deploys the same creation code to,
+    /// leaving the factory's own bytecode behind it.
+    function testEtchAndDeployZoltuWithoutFactory() external {
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+        address deployed = LibRainDeploy.etchAndDeployZoltu(vm, type(MockDeployable).creationCode);
+        // Pinned literal, the same address `testDeployZoltu` pins against the
+        // live factory on a fork.
+        assertEq(deployed, 0x7DA611e4146dCf0107407Bb331599acC53E8B62c);
+        assertEq(deployed.codehash, mockDeployableCodeHash());
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
+    }
+
+    /// `etchAndDeployZoltu` MUST surface a failed deploy as `DeployFailed`,
+    /// not hand back an address with nothing at it.
+    function testEtchAndDeployZoltuRevertsRevertingConstructor() external {
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, false, address(0)));
+        this.externalEtchAndDeployZoltu(type(MockReverter).creationCode);
+    }
+
     /// `deployZoltu` MUST report the zero address when the factory call fails,
     /// even when the factory reverts with data that reads as an address. The
     /// call output buffer holds revert data on the failure path, so anything
@@ -1285,8 +1313,7 @@ contract LibRainDeployTest is Test {
         internal
         returns (IAddressRegistryV1 registry, MockResolvedOwner consumer)
     {
-        LibRainDeploy.etchZoltuFactory(vm);
-        registry = IAddressRegistryV1(LibRainDeploy.deployZoltu(type(AddressRegistry).creationCode));
+        registry = IAddressRegistryV1(LibRainDeploy.etchAndDeployZoltu(vm, type(AddressRegistry).creationCode));
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, account);
         consumer = new MockResolvedOwner(name);
