@@ -10,6 +10,7 @@ import {SafeTx} from "../../../src/lib/LibSafeTx.sol";
 import {LibSafeFork} from "../../../src/lib/LibSafeFork.sol";
 import {LibSafeTxBuilderJson} from "../../../src/lib/LibSafeTxBuilderJson.sol";
 import {ExampleSafeBundleScript} from "../../concrete/ExampleSafeBundleScript.sol";
+import {IrreversibleExampleSafeBundleScript} from "../../concrete/IrreversibleExampleSafeBundleScript.sol";
 import {MockCallRecorder} from "../../concrete/MockCallRecorder.sol";
 import {LibForkSafe} from "../../lib/LibForkSafe.sol";
 
@@ -25,10 +26,11 @@ contract SafeBundleScriptTest is Test {
     ExampleSafeBundleScript internal sScript;
     string internal sPath;
 
-    /// A fork Safe with two owners and a threshold of two, a recorder, and the
-    /// example script writing to `name`'s own artifact path.
+    /// A fork Safe with two owners and a threshold of two, a recorder, and
+    /// `name`'s own artifact path with no artifact at it, so only what this
+    /// test writes can be read back.
     /// @param name The artifact's file name.
-    function setUpScript(string memory name) internal {
+    function setUpFork(string memory name) internal {
         vm.createSelectFork(LibRainDeploy.BASE);
         address[] memory owners = new address[](2);
         owners[0] = makeAddr("owner0");
@@ -37,6 +39,13 @@ contract SafeBundleScriptTest is Test {
         sRecorder = new MockCallRecorder();
         vm.createDir(ARTIFACT_ROOT, true);
         sPath = string.concat(ARTIFACT_ROOT, "/", name, ".json");
+        if (vm.exists(sPath)) vm.removeFile(sPath);
+    }
+
+    /// `setUpFork`, and the example script writing to `name`'s artifact path.
+    /// @param name The artifact's file name.
+    function setUpScript(string memory name) internal {
+        setUpFork(name);
         sScript = new ExampleSafeBundleScript(sSafe, sRecorder, sPath);
     }
 
@@ -73,13 +82,39 @@ contract SafeBundleScriptTest is Test {
     }
 
     /// `run()` refuses when the bundle cannot be shown reversible, after the
-    /// bundle executed.
+    /// bundle executed, its post-state held and its artifact was written.
     function testRunRefusesIrreversibleBundle() external {
-        setUpScript("reversible");
-        sScript.setRefuseReversible(true);
+        setUpFork("reversible");
+        sScript = new IrreversibleExampleSafeBundleScript(sSafe, sRecorder, sPath);
 
-        vm.expectRevert(ExampleSafeBundleScript.NotReversible.selector);
+        vm.expectRevert(IrreversibleExampleSafeBundleScript.NotReversible.selector);
         sScript.run();
+
+        (, address artifactSafe, SafeTx[] memory txs) = LibSafeTxBuilderJson.fromJson(vm, vm.readFile(sPath));
+        assertEq(artifactSafe, address(sSafe));
+        assertEq(txs.length, 2);
+        assertEq(txs[0].data, bytes("first"));
+        assertEq(txs[1].data, bytes("second"));
+    }
+
+    /// A script that keeps the default `assertReversible` runs to completion:
+    /// the default proves nothing and refuses nothing.
+    function testRunAcceptsDefaultReversibility() external {
+        setUpScript("default-reversible");
+
+        sScript.run();
+
+        assertEq(sRecorder.callCount(), 2);
+    }
+
+    /// The artifact names the bundle: its `meta.name` is the script's
+    /// `bundleName`.
+    function testRunWritesBundleName() external {
+        setUpScript("name");
+
+        sScript.run();
+
+        assertEq(vm.parseJsonString(vm.readFile(sPath), ".meta.name"), "Example bundle");
     }
 
     /// The written artifact is the bundle itself: parsed back and executed by
@@ -98,7 +133,8 @@ contract SafeBundleScriptTest is Test {
         assertEq(sRecorder.calls(simulated + 1).data, bytes("second"));
     }
 
-    /// `run()` authors nothing when `preflight` refuses.
+    /// `run()` refuses when `preflight` refuses, before deriving the bundle,
+    /// and executes nothing.
     function testRunRefusesUnauthorableState() external {
         setUpScript("preflight-run");
         sScript.setRefusePreflight(true);
@@ -109,7 +145,7 @@ contract SafeBundleScriptTest is Test {
     }
 
     /// `run()` refuses when the simulated bundle does not leave the state it
-    /// exists to produce.
+    /// exists to produce, and writes no artifact for it.
     function testRunRefusesMissingPostState() external {
         setUpScript("post-state");
         // A call already recorded means the bundle's two leave three.
@@ -119,6 +155,7 @@ contract SafeBundleScriptTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(ExampleSafeBundleScript.PostStateMissing.selector, uint256(3)));
         sScript.run();
+        assertFalse(vm.exists(sPath));
     }
 
     /// `run()` refuses when a transaction reverts: the Safe executing the
@@ -155,8 +192,8 @@ contract SafeBundleScriptTest is Test {
         sScript.verify(sPath);
     }
 
-    /// `verify()` refuses when `preflight` refuses, before reading the
-    /// artifact.
+    /// `verify()` refuses when `preflight` refuses, before deriving the
+    /// bundle or reading the artifact.
     function testVerifyRefusesUnauthorableState() external {
         setUpScript("preflight-verify");
         sScript.run();
@@ -164,5 +201,17 @@ contract SafeBundleScriptTest is Test {
 
         vm.expectRevert(ExampleSafeBundleScript.NotAuthorable.selector);
         sScript.verify(sPath);
+    }
+
+    /// `verify()` checks the artifact at the path it is given, not the one
+    /// `run()` writes to.
+    function testVerifyReadsGivenPath() external {
+        setUpScript("given-path");
+        sScript.run();
+        string memory copy = string.concat(ARTIFACT_ROOT, "/given-path-copy.json");
+        vm.copyFile(sPath, copy);
+        vm.writeFile(sPath, "not an artifact");
+
+        sScript.verify(copy);
     }
 }
