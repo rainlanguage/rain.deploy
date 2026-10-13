@@ -1,0 +1,47 @@
+// SPDX-License-Identifier: LicenseRef-DCL-1.0
+// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+pragma solidity ^0.8.25;
+
+import {ISafe} from "../../src/interface/ISafe.sol";
+
+/// @title LibForkSafe
+/// @notice Creates a real Safe v1.4.1 on a fork of a chain that has the
+/// canonical v1.4.1 deployments, so tests run the Safe's own hashing,
+/// signature checking and execution rather than a model of them.
+library LibForkSafe {
+    /// The canonical Safe v1.4.1 `SafeL2` singleton.
+    address internal constant SAFE_L2_SINGLETON_1_4_1 = 0x29fcB43b46531BcA003ddC8FCB67FFE91900C762;
+
+    /// The canonical Safe v1.4.1 `SafeProxyFactory`.
+    address internal constant SAFE_PROXY_FACTORY_1_4_1 = 0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67;
+
+    /// A new Safe proxy with `owners` and `threshold`, no modules, no
+    /// fallback handler.
+    /// @param owners The owners.
+    /// @param threshold The threshold.
+    /// @return The Safe.
+    function deploy(address[] memory owners, uint256 threshold) internal returns (ISafe) {
+        bytes memory setup = abi.encodeWithSignature(
+            "setup(address[],uint256,address,bytes,address,address,uint256,address)",
+            owners,
+            threshold,
+            address(0),
+            "",
+            address(0),
+            address(0),
+            uint256(0),
+            address(0)
+        );
+        // slither-disable-next-line low-level-calls
+        (bool ok, bytes memory ret) = SAFE_PROXY_FACTORY_1_4_1.call(
+            abi.encodeWithSignature(
+                "createProxyWithNonce(address,bytes,uint256)",
+                SAFE_L2_SINGLETON_1_4_1,
+                setup,
+                uint256(keccak256(abi.encode(owners, threshold)))
+            )
+        );
+        require(ok, "LibForkSafe: createProxyWithNonce failed");
+        return ISafe(abi.decode(ret, (address)));
+    }
+}
