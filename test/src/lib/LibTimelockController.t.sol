@@ -137,6 +137,26 @@ contract LibTimelockControllerTest is Test {
         this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, cancellers);
     }
 
+    /// The first listed canceller is checked as well as the later ones.
+    function testAssertRequiresTheFirstCanceller() external {
+        address timelock = deployTimelock();
+        address[] memory cancellers = new address[](2);
+        cancellers[0] = address(0xCA01);
+        cancellers[1] = address(0xCA02);
+
+        vm.prank(timelock);
+        IAccessControl(timelock).grantRole(LibTimelockController.CANCELLER_ROLE, cancellers[1]);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibTimelockController.TimelockMissingRole.selector,
+                timelock,
+                LibTimelockController.CANCELLER_ROLE,
+                cancellers[0]
+            )
+        );
+        this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, cancellers);
+    }
+
     /// An account with no code is refused before anything is called on it.
     function testAssertRefusesNoCode() external {
         address missing = LibTimelockController.expectedTimelockAddress(MIN_DELAY, PROPOSER);

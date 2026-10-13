@@ -16,9 +16,11 @@ import {LibTimelockController} from "./LibTimelockController.sol";
 library LibTimelockControllerDeploy {
     /// Deploys the timelock for `(minDelay, proposer)` on the selected fork
     /// through the Zoltu factory, broadcasting as `deployer`, or skips the
-    /// deploy where the timelock is already there. Either way the timelock is
-    /// then held to `LibTimelockController.assertTimelockState` with no further
-    /// cancellers.
+    /// deploy where the timelock is already there, after holding it to
+    /// `LibTimelockController.assertTimelockState` with no further cancellers.
+    /// A fresh deploy needs no such check: the address is a function of the
+    /// init code, so the contract landing there was constructed from exactly
+    /// `timelockInitCode(minDelay, proposer)` in this transaction.
     ///
     /// `expectedTimelock` is the caller's pinned address and is refused, before
     /// anything is read from the chain, unless it is the address the parameters
@@ -67,8 +69,6 @@ library LibTimelockControllerDeploy {
         if (timelock != derived) {
             revert LibRainDeploy.UnexpectedDeployedAddress(derived, timelock);
         }
-
-        LibTimelockController.assertTimelockState(timelock, minDelay, proposer, noCancellers);
 
         console2.log(" - Timelock:", timelock);
         console2.log(" - Min delay (seconds):", minDelay);
