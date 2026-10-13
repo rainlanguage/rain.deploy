@@ -61,19 +61,6 @@ library LibTimelockController {
     /// @param account The account holding it.
     error TimelockUnexpectedRole(address timelock, bytes32 role, address account);
 
-    /// `PROPOSER_ROLE` as `TimelockController` defines it, named here so a call
-    /// site needs no deployed instance to read it from.
-    bytes32 internal constant PROPOSER_ROLE = keccak256("PROPOSER_ROLE");
-
-    /// `EXECUTOR_ROLE` as `TimelockController` defines it.
-    bytes32 internal constant EXECUTOR_ROLE = keccak256("EXECUTOR_ROLE");
-
-    /// `CANCELLER_ROLE` as `TimelockController` defines it.
-    bytes32 internal constant CANCELLER_ROLE = keccak256("CANCELLER_ROLE");
-
-    /// `DEFAULT_ADMIN_ROLE` as `AccessControl` defines it.
-    bytes32 internal constant DEFAULT_ADMIN_ROLE = bytes32(0);
-
     /// The FROZEN creation code of the timelock: OpenZeppelin 5.7.0
     /// `TimelockController` compiled by solc 0.8.25, optimizer on at 2000 runs,
     /// `cancun`, no CBOR metadata. This generation is deployed in production, so
@@ -144,25 +131,32 @@ library LibTimelockController {
             revert TimelockCodehashMismatch(timelock, TIMELOCK_RUNTIME_CODEHASH, actualCodehash);
         }
 
-        uint256 actualMinDelay = TimelockController(payable(timelock)).getMinDelay();
+        TimelockController controller = TimelockController(payable(timelock));
+        uint256 actualMinDelay = controller.getMinDelay();
         if (actualMinDelay != minDelay) {
             revert TimelockMinDelayMismatch(timelock, minDelay, actualMinDelay);
         }
 
+        // The role ids are read from the instance, so the check is against the
+        // ids its code enforces.
+        bytes32 proposerRole = controller.PROPOSER_ROLE();
+        bytes32 executorRole = controller.EXECUTOR_ROLE();
+        bytes32 cancellerRole = controller.CANCELLER_ROLE();
+        bytes32 adminRole = controller.DEFAULT_ADMIN_ROLE();
         IAccessControl acl = IAccessControl(timelock);
 
-        assertHasRole(acl, PROPOSER_ROLE, proposer);
-        assertHasRole(acl, CANCELLER_ROLE, proposer);
+        assertHasRole(acl, proposerRole, proposer);
+        assertHasRole(acl, cancellerRole, proposer);
         for (uint256 i = 0; i < cancellers.length; i++) {
-            assertHasRole(acl, CANCELLER_ROLE, cancellers[i]);
+            assertHasRole(acl, cancellerRole, cancellers[i]);
         }
-        assertHasRole(acl, DEFAULT_ADMIN_ROLE, timelock);
-        assertHasRole(acl, EXECUTOR_ROLE, address(0));
+        assertHasRole(acl, adminRole, timelock);
+        assertHasRole(acl, executorRole, address(0));
 
-        assertNotHeld(acl, DEFAULT_ADMIN_ROLE, proposer);
-        assertNotHeld(acl, PROPOSER_ROLE, address(0));
-        assertNotHeld(acl, CANCELLER_ROLE, address(0));
-        assertNotHeld(acl, DEFAULT_ADMIN_ROLE, address(0));
+        assertNotHeld(acl, adminRole, proposer);
+        assertNotHeld(acl, proposerRole, address(0));
+        assertNotHeld(acl, cancellerRole, address(0));
+        assertNotHeld(acl, adminRole, address(0));
     }
 
     /// Reverts `TimelockMissingRole` unless `account` holds `role` on `acl`.

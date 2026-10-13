@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {IAccessControl} from "@openzeppelin-contracts-5.7.0/access/IAccessControl.sol";
+import {TimelockController} from "@openzeppelin-contracts-5.7.0/governance/TimelockController.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibTimelockController} from "../../../src/lib/LibTimelockController.sol";
 import {LibTimelockControllerDeploy} from "../../../src/lib/LibTimelockControllerDeploy.sol";
@@ -34,11 +35,12 @@ contract LibTimelockControllerDeployTest is Test {
         address timelock = this.callDeployTimelock(DEPLOYER, MIN_DELAY, PROPOSER, expected());
         assertEq(timelock, expected());
         LibTimelockController.assertTimelockState(timelock, MIN_DELAY, PROPOSER, new address[](0));
+        TimelockController controller = TimelockController(payable(timelock));
         bytes32[4] memory roles = [
-            LibTimelockController.PROPOSER_ROLE,
-            LibTimelockController.CANCELLER_ROLE,
-            LibTimelockController.EXECUTOR_ROLE,
-            LibTimelockController.DEFAULT_ADMIN_ROLE
+            controller.PROPOSER_ROLE(),
+            controller.CANCELLER_ROLE(),
+            controller.EXECUTOR_ROLE(),
+            controller.DEFAULT_ADMIN_ROLE()
         ];
         for (uint256 i = 0; i < roles.length; i++) {
             assertFalse(IAccessControl(timelock).hasRole(roles[i], DEPLOYER));
@@ -71,14 +73,12 @@ contract LibTimelockControllerDeployTest is Test {
     function testExistingTimelockOutOfStateIsRefused() external {
         LibRainDeploy.etchZoltuFactory(vm);
         address timelock = LibRainDeploy.deployZoltu(LibTimelockController.timelockInitCode(MIN_DELAY, PROPOSER));
+        bytes32 proposerRole = TimelockController(payable(timelock)).PROPOSER_ROLE();
         vm.prank(timelock);
-        IAccessControl(timelock).grantRole(LibTimelockController.PROPOSER_ROLE, address(0));
+        IAccessControl(timelock).grantRole(proposerRole, address(0));
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibTimelockController.TimelockUnexpectedRole.selector,
-                timelock,
-                LibTimelockController.PROPOSER_ROLE,
-                address(0)
+                LibTimelockController.TimelockUnexpectedRole.selector, timelock, proposerRole, address(0)
             )
         );
         this.callDeployTimelock(DEPLOYER, MIN_DELAY, PROPOSER, expected());

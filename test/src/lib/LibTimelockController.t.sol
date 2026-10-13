@@ -88,23 +88,18 @@ contract LibTimelockControllerTest is Test {
     /// proposer and canceller, open execution and self-administration.
     function testInitCodeConstructsTheRoleModel() external {
         TimelockController timelock = TimelockController(payable(deployTimelock()));
+        bytes32 proposerRole = timelock.PROPOSER_ROLE();
+        bytes32 executorRole = timelock.EXECUTOR_ROLE();
+        bytes32 cancellerRole = timelock.CANCELLER_ROLE();
+        bytes32 adminRole = timelock.DEFAULT_ADMIN_ROLE();
         assertEq(timelock.getMinDelay(), MIN_DELAY);
-        assertTrue(timelock.hasRole(LibTimelockController.PROPOSER_ROLE, PROPOSER));
-        assertTrue(timelock.hasRole(LibTimelockController.CANCELLER_ROLE, PROPOSER));
-        assertTrue(timelock.hasRole(LibTimelockController.EXECUTOR_ROLE, address(0)));
-        assertTrue(timelock.hasRole(LibTimelockController.DEFAULT_ADMIN_ROLE, address(timelock)));
-        assertFalse(timelock.hasRole(LibTimelockController.DEFAULT_ADMIN_ROLE, PROPOSER));
-        assertFalse(timelock.hasRole(LibTimelockController.EXECUTOR_ROLE, PROPOSER));
-        assertFalse(timelock.hasRole(LibTimelockController.DEFAULT_ADMIN_ROLE, LibRainDeploy.ZOLTU_FACTORY));
-    }
-
-    /// The role constants are the ones the timelock answers with.
-    function testRoleConstantsMatchTheTimelock() external {
-        TimelockController timelock = TimelockController(payable(deployTimelock()));
-        assertEq(LibTimelockController.PROPOSER_ROLE, timelock.PROPOSER_ROLE());
-        assertEq(LibTimelockController.EXECUTOR_ROLE, timelock.EXECUTOR_ROLE());
-        assertEq(LibTimelockController.CANCELLER_ROLE, timelock.CANCELLER_ROLE());
-        assertEq(LibTimelockController.DEFAULT_ADMIN_ROLE, timelock.DEFAULT_ADMIN_ROLE());
+        assertTrue(timelock.hasRole(proposerRole, PROPOSER));
+        assertTrue(timelock.hasRole(cancellerRole, PROPOSER));
+        assertTrue(timelock.hasRole(executorRole, address(0)));
+        assertTrue(timelock.hasRole(adminRole, address(timelock)));
+        assertFalse(timelock.hasRole(adminRole, PROPOSER));
+        assertFalse(timelock.hasRole(executorRole, PROPOSER));
+        assertFalse(timelock.hasRole(adminRole, LibRainDeploy.ZOLTU_FACTORY));
     }
 
     /// A fresh deploy is in the role model's state.
@@ -116,42 +111,38 @@ contract LibTimelockControllerTest is Test {
     /// does.
     function testAssertRequiresEveryCanceller() external {
         address timelock = deployTimelock();
+        bytes32 cancellerRole = TimelockController(payable(timelock)).CANCELLER_ROLE();
         address[] memory cancellers = new address[](2);
         cancellers[0] = address(0xCA01);
         cancellers[1] = address(0xCA02);
 
         vm.prank(timelock);
-        IAccessControl(timelock).grantRole(LibTimelockController.CANCELLER_ROLE, cancellers[0]);
+        IAccessControl(timelock).grantRole(cancellerRole, cancellers[0]);
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibTimelockController.TimelockMissingRole.selector,
-                timelock,
-                LibTimelockController.CANCELLER_ROLE,
-                cancellers[1]
+                LibTimelockController.TimelockMissingRole.selector, timelock, cancellerRole, cancellers[1]
             )
         );
         this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, cancellers);
 
         vm.prank(timelock);
-        IAccessControl(timelock).grantRole(LibTimelockController.CANCELLER_ROLE, cancellers[1]);
+        IAccessControl(timelock).grantRole(cancellerRole, cancellers[1]);
         this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, cancellers);
     }
 
     /// The first listed canceller is checked as well as the later ones.
     function testAssertRequiresTheFirstCanceller() external {
         address timelock = deployTimelock();
+        bytes32 cancellerRole = TimelockController(payable(timelock)).CANCELLER_ROLE();
         address[] memory cancellers = new address[](2);
         cancellers[0] = address(0xCA01);
         cancellers[1] = address(0xCA02);
 
         vm.prank(timelock);
-        IAccessControl(timelock).grantRole(LibTimelockController.CANCELLER_ROLE, cancellers[1]);
+        IAccessControl(timelock).grantRole(cancellerRole, cancellers[1]);
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibTimelockController.TimelockMissingRole.selector,
-                timelock,
-                LibTimelockController.CANCELLER_ROLE,
-                cancellers[0]
+                LibTimelockController.TimelockMissingRole.selector, timelock, cancellerRole, cancellers[0]
             )
         );
         this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, cancellers);
@@ -196,11 +187,12 @@ contract LibTimelockControllerTest is Test {
     /// self-administration last, because nothing can re-grant it once gone.
     function testAssertRefusesEveryMissingRole() external {
         address timelock = deployTimelock();
-        bytes32[3] memory roles = [
-            LibTimelockController.PROPOSER_ROLE,
-            LibTimelockController.CANCELLER_ROLE,
-            LibTimelockController.EXECUTOR_ROLE
-        ];
+        TimelockController controller = TimelockController(payable(timelock));
+        bytes32 proposerRole = controller.PROPOSER_ROLE();
+        bytes32 cancellerRole = controller.CANCELLER_ROLE();
+        bytes32 executorRole = controller.EXECUTOR_ROLE();
+        bytes32 adminRole = controller.DEFAULT_ADMIN_ROLE();
+        bytes32[3] memory roles = [proposerRole, cancellerRole, executorRole];
         address[3] memory holders = [PROPOSER, PROPOSER, address(0)];
         for (uint256 i = 0; i < roles.length; i++) {
             vm.prank(timelock);
@@ -217,14 +209,9 @@ contract LibTimelockControllerTest is Test {
         }
 
         vm.prank(timelock);
-        IAccessControl(timelock).revokeRole(LibTimelockController.DEFAULT_ADMIN_ROLE, timelock);
+        IAccessControl(timelock).revokeRole(adminRole, timelock);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                LibTimelockController.TimelockMissingRole.selector,
-                timelock,
-                LibTimelockController.DEFAULT_ADMIN_ROLE,
-                timelock
-            )
+            abi.encodeWithSelector(LibTimelockController.TimelockMissingRole.selector, timelock, adminRole, timelock)
         );
         this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, noCancellers());
     }
@@ -233,11 +220,11 @@ contract LibTimelockControllerTest is Test {
     /// address, and the state passes again once it is closed.
     function testAssertRefusesEveryOpenRole() external {
         address timelock = deployTimelock();
-        bytes32[3] memory roles = [
-            LibTimelockController.PROPOSER_ROLE,
-            LibTimelockController.CANCELLER_ROLE,
-            LibTimelockController.DEFAULT_ADMIN_ROLE
-        ];
+        TimelockController controller = TimelockController(payable(timelock));
+        bytes32 proposerRole = controller.PROPOSER_ROLE();
+        bytes32 cancellerRole = controller.CANCELLER_ROLE();
+        bytes32 adminRole = controller.DEFAULT_ADMIN_ROLE();
+        bytes32[3] memory roles = [proposerRole, cancellerRole, adminRole];
         for (uint256 i = 0; i < roles.length; i++) {
             vm.prank(timelock);
             IAccessControl(timelock).grantRole(roles[i], address(0));
@@ -265,13 +252,9 @@ contract LibTimelockControllerTest is Test {
                 LibTimelockController.TIMELOCK_CREATION_CODE, abi.encode(MIN_DELAY, proposers, executors, PROPOSER)
             )
         );
+        bytes32 adminRole = TimelockController(payable(timelock)).DEFAULT_ADMIN_ROLE();
         vm.expectRevert(
-            abi.encodeWithSelector(
-                LibTimelockController.TimelockUnexpectedRole.selector,
-                timelock,
-                LibTimelockController.DEFAULT_ADMIN_ROLE,
-                PROPOSER
-            )
+            abi.encodeWithSelector(LibTimelockController.TimelockUnexpectedRole.selector, timelock, adminRole, PROPOSER)
         );
         this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, noCancellers());
     }
@@ -281,16 +264,16 @@ contract LibTimelockControllerTest is Test {
     /// nor cancel.
     function testAnyoneExecutesOnlyProposerSchedulesAndCancels() external {
         TimelockController timelock = TimelockController(payable(deployTimelock()));
+        bytes32 proposerRole = timelock.PROPOSER_ROLE();
+        bytes32 cancellerRole = timelock.CANCELLER_ROLE();
         address anon = address(0xA904);
-        bytes memory data = abi.encodeCall(IAccessControl.grantRole, (LibTimelockController.CANCELLER_ROLE, anon));
+        bytes memory data = abi.encodeCall(IAccessControl.grantRole, (cancellerRole, anon));
         bytes32 salt = keccak256("anyone-executes");
         bytes32 id = timelock.hashOperation(address(timelock), 0, data, bytes32(0), salt);
 
         vm.prank(anon);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, anon, LibTimelockController.PROPOSER_ROLE
-            )
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, anon, proposerRole)
         );
         timelock.schedule(address(timelock), 0, data, bytes32(0), salt, MIN_DELAY);
 
@@ -299,9 +282,7 @@ contract LibTimelockControllerTest is Test {
 
         vm.prank(anon);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                IAccessControl.AccessControlUnauthorizedAccount.selector, anon, LibTimelockController.CANCELLER_ROLE
-            )
+            abi.encodeWithSelector(IAccessControl.AccessControlUnauthorizedAccount.selector, anon, cancellerRole)
         );
         timelock.cancel(id);
 
@@ -309,6 +290,6 @@ contract LibTimelockControllerTest is Test {
         vm.prank(anon);
         timelock.execute(address(timelock), 0, data, bytes32(0), salt);
         assertTrue(timelock.isOperationDone(id));
-        assertTrue(timelock.hasRole(LibTimelockController.CANCELLER_ROLE, anon));
+        assertTrue(timelock.hasRole(cancellerRole, anon));
     }
 }
