@@ -58,6 +58,35 @@ contract Build is BuildScript, RegistryDeploySuites {
         return names;
     }
 
+    /// @inheritdoc BuildScript
+    /// @dev The deploy suites, then each parameterised contract's snapshot under
+    /// the name `regenerateSnapshots` writes it as: the artifact's contract name.
+    function releaseRecordNames() internal pure override returns (string[] memory) {
+        string[] memory suites = snapshotContractNames();
+        ParameterisedContract[] memory parameterised = parameterisedContracts();
+        string[] memory names = new string[](suites.length + parameterised.length);
+        for (uint256 i = 0; i < suites.length; i++) {
+            names[i] = suites[i];
+        }
+        for (uint256 i = 0; i < parameterised.length; i++) {
+            names[suites.length + i] = parameterisedSnapshotName(parameterised[i]);
+        }
+        return names;
+    }
+
+    /// The name a parameterised contract's snapshot is written and frozen
+    /// under: the contract name after the artifact path's last `:`.
+    /// @param parameterised The parameterised contract.
+    /// @return The snapshot name.
+    function parameterisedSnapshotName(ParameterisedContract memory parameterised)
+        internal
+        pure
+        returns (string memory)
+    {
+        string[] memory parts = vm.split(parameterised.artifactPath, ":");
+        return parts[parts.length - 1];
+    }
+
     /// The directory every generated lib is written into.
     ///
     /// Overridable for the reason `BuildScript.recordRoot` is: a hook that can
@@ -104,12 +133,11 @@ contract Build is BuildScript, RegistryDeploySuites {
 
         ParameterisedContract[] memory parameterised = parameterisedContracts();
         for (uint256 i = 0; i < parameterised.length; i++) {
-            string[] memory parts = vm.split(parameterised[i].artifactPath, ":");
             LibRainDeploySnapshot.writeParameterisedSnapshot(
                 vm,
                 recordRoot(),
                 LibRainDeploySnapshot.CANDIDATE,
-                parts[parts.length - 1],
+                parameterisedSnapshotName(parameterised[i]),
                 parameterised[i].spdxLicenseIdentifier,
                 parameterised[i].copyrightText,
                 vm.getCode(parameterised[i].artifactPath),
