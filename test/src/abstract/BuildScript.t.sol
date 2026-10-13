@@ -8,6 +8,12 @@ import {LibRainDeployConfig} from "../../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
 import {CloneBuildScriptHarness} from "../../concrete/CloneBuildScriptHarness.sol";
+import {PerNetworkCloneBuildScriptHarness} from "../../concrete/PerNetworkCloneBuildScriptHarness.sol";
+import {
+    PER_NETWORK_CLONE_RECORD_CONTRACT,
+    PER_NETWORK_CLONE_RECORD_ROOT,
+    PER_NETWORK_CLONE_RELEASE_TAG
+} from "../../abstract/PerNetworkCloneDeploys.sol";
 import {
     EXAMPLE_CLONE_RECORD_CONTRACT,
     EXAMPLE_CLONE_RECORD_ROOT,
@@ -62,6 +68,13 @@ contract BuildScriptTest is Test {
     /// Under `fixture-lib`, which nothing compiles: the lib imports paths that
     /// resolve only from `src/lib`.
     string constant CLONE_CUT_LIB_DIR = "fixture-lib/buildscript-clone-cut";
+
+    /// Where the per-network clone `cutRelease()` fixture's record is built.
+    string constant PER_NETWORK_CLONE_CUT_FIXTURE_ROOT = "test/generated-buildscript-per-network-clone-cut";
+
+    /// Where the per-network clone `cutRelease()` fixture's released-suites lib
+    /// is written, under `fixture-lib` for the reason `CLONE_CUT_LIB_DIR` is.
+    string constant PER_NETWORK_CLONE_CUT_LIB_DIR = "fixture-lib/buildscript-per-network-clone-cut";
 
     /// Carries its AST because `foundry.toml` sets `ast = true`.
     string constant BASE_ARTIFACT = "out/BuildScript.sol/BuildScript.json";
@@ -228,8 +241,72 @@ contract BuildScriptTest is Test {
             vm.contains(lib, string.concat("suite: \"example-clone@", LibRainDeploySnapshot.deployTag(vm), "\"")),
             "the release is keyed by the template suite and the tag"
         );
-        assertTrue(vm.contains(lib, "mechanism: DeployMechanism.Clone"), "the release is declared a clone");
+        assertTrue(vm.contains(lib, "mechanism: DeployMechanism.Clone,\n"), "the release is declared a clone");
+        assertFalse(vm.contains(lib, "DeployMechanism.ClonePerNetwork"), "at one address on every network");
         assertFalse(vm.contains(lib, "DeployMechanism.Zoltu"), "and not a Zoltu release");
+        assertTrue(
+            vm.contains(lib, string.concat("MECHANISM_DATA as ", prefix, "_MECHANISM_DATA")),
+            "the record's mechanism data is imported"
+        );
+        assertTrue(
+            vm.contains(lib, string.concat("mechanismData: ", prefix, "_MECHANISM_DATA")),
+            "and is the release's mechanism data"
+        );
+    }
+
+    /// PROPERTY: a per-network clone deploy repo's release goes through the
+    /// same `cutRelease()` as every other. Its regeneration writes one
+    /// `DEPLOYED_ADDRESS_<chainId>` per network through the suite writer, the
+    /// freeze copies it unchanged, and the released-suites lib regenerated
+    /// from the record declares the release `ClonePerNetwork` with no stored
+    /// address and the record's own `MECHANISM_DATA` — not as a `Clone`, which
+    /// would put it at one address on every network.
+    ///
+    /// The frozen record is also held to the committed `per-network-clone`
+    /// record, which was written from the same declaration.
+    function testCutReleaseFreezesAPerNetworkCloneRecordAndReleasesItPerNetwork() external {
+        resetFixture(PER_NETWORK_CLONE_CUT_FIXTURE_ROOT);
+        resetFixture(PER_NETWORK_CLONE_CUT_LIB_DIR);
+        // The lib writer writes into its directory and does not create it.
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(PER_NETWORK_CLONE_CUT_LIB_DIR, true);
+        PerNetworkCloneBuildScriptHarness harness =
+            new PerNetworkCloneBuildScriptHarness(PER_NETWORK_CLONE_CUT_FIXTURE_ROOT, PER_NETWORK_CLONE_CUT_LIB_DIR);
+        harness.cutRelease();
+
+        // Read while the fixture is still there, asserted once it is gone.
+        string memory frozen = vm.readFile(harness.frozenPath());
+        string memory rolling = vm.readFile(harness.rollingPath());
+        string memory lib = vm.readFile(harness.releasedLibPath());
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(PER_NETWORK_CLONE_CUT_FIXTURE_ROOT, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(PER_NETWORK_CLONE_CUT_LIB_DIR, true);
+
+        assertEq(frozen, rolling);
+        assertEq(
+            frozen,
+            vm.readFile(
+                LibRainDeploySnapshot.pathForSnapshot(
+                    PER_NETWORK_CLONE_RECORD_ROOT, PER_NETWORK_CLONE_RELEASE_TAG, PER_NETWORK_CLONE_RECORD_CONTRACT
+                )
+            )
+        );
+
+        string memory prefix =
+            string.concat(PER_NETWORK_CLONE_RECORD_CONTRACT, "_", LibRainDeploySnapshot.deployTag(vm));
+        assertTrue(
+            vm.contains(lib, string.concat("suite: \"per-network-clone@", LibRainDeploySnapshot.deployTag(vm), "\"")),
+            "the release is keyed by the template suite and the tag"
+        );
+        assertTrue(
+            vm.contains(lib, "mechanism: DeployMechanism.ClonePerNetwork"), "the release is declared per network"
+        );
+        assertFalse(vm.contains(lib, "mechanism: DeployMechanism.Clone,"), "and not as one clone everywhere");
+        assertFalse(vm.contains(lib, "DeployMechanism.Zoltu"), "nor as a Zoltu release");
+        assertTrue(vm.contains(lib, "storedDeployedAddress: address(0)"), "it stores no single address");
+        assertFalse(vm.contains(lib, "DEPLOYED_ADDRESS"), "and imports none the record does not declare");
         assertTrue(
             vm.contains(lib, string.concat("MECHANISM_DATA as ", prefix, "_MECHANISM_DATA")),
             "the record's mechanism data is imported"

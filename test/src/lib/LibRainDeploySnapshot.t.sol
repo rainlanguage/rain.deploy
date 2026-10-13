@@ -29,6 +29,16 @@ import {
     EXAMPLE_CLONE_RELEASE_TAG,
     exampleCloneRelease
 } from "../../abstract/ExampleCloneDeploys.sol";
+import {
+    PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
+    PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
+    PER_NETWORK_CLONE_RECORD_CONTRACT,
+    PER_NETWORK_CLONE_RECORD_ROOT,
+    PER_NETWORK_CLONE_RELEASE_TAG,
+    perNetworkClone,
+    perNetworkCloneRelease
+} from "../../abstract/PerNetworkCloneDeploys.sol";
+import {CloneNetworks} from "../../../src/lib/LibRainDeployClone.sol";
 import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
 import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.2.0/src/lib/LibMemoryKV.sol";
 
@@ -3527,5 +3537,161 @@ contract LibRainDeploySnapshotTest is Test {
                 )
             )
         );
+    }
+
+    /// The roots the per-network clone writer tests produce into, one per test
+    /// for the reason `FIXTURE_ROOT` gives.
+    string constant PER_NETWORK_RECORD_REPRODUCE_ROOT = "test/generated-snapshot/per-network-record-reproduce";
+    string constant PER_NETWORK_RECORD_DEPLOY_NOT_CLAIMS_ROOT =
+        "test/generated-snapshot/per-network-record-deploy-not-claims";
+
+    /// The committed release record of `per-network-clone` is what the writer
+    /// produces for `perNetworkCloneRelease()`, byte for byte: one
+    /// `DEPLOYED_ADDRESS_<chainId>` per network in declaration order, and the
+    /// `CloneNetworks` as `MECHANISM_DATA`. The per-network fixtures read their
+    /// release from that record, so a record the writer no longer produces
+    /// would put them to a release no current cut could make.
+    function testPerNetworkCloneWriterReproducesTheCommittedRecord() external {
+        string memory written = LibRainDeploySnapshot.writeSnapshot(
+            vm,
+            PER_NETWORK_RECORD_REPRODUCE_ROOT,
+            PER_NETWORK_CLONE_RELEASE_TAG,
+            PER_NETWORK_CLONE_RECORD_CONTRACT,
+            LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease()).snapshot
+        );
+        string memory reproduced = vm.readFile(written);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(PER_NETWORK_RECORD_REPRODUCE_ROOT, true);
+
+        assertEq(reproduced, vm.readFile(perNetworkRecordPaths()[0]));
+    }
+
+    /// The per-network writer records each network's address from the LOCAL
+    /// deploy, not from the addresses the suite's `CloneNetworks` claims: a
+    /// suite whose claimed addresses are swapped between its two networks, and
+    /// whose runtime code is wrong, still writes the committed record. Swapped
+    /// rather than zeroed, so a writer that copied the claims through would
+    /// record each network at the OTHER network's real address.
+    function testPerNetworkCloneWriterRecordsTheDeployNotTheSuiteClaims() external {
+        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease()).snapshot;
+        CloneNetworks memory clones = abi.decode(suite.mechanismData, (CloneNetworks));
+        assertEq(clones.networks.length, 2);
+        assertEq(clones.networks[0].chainId, PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
+        assertEq(clones.networks[1].chainId, PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        assertTrue(clones.networks[0].deployedAddress != clones.networks[1].deployedAddress);
+        (clones.networks[0].deployedAddress, clones.networks[1].deployedAddress) =
+        (clones.networks[1].deployedAddress, clones.networks[0].deployedAddress);
+        suite.mechanismData = abi.encode(clones);
+        suite.storedRuntimeCode = hex"00";
+
+        string memory written = LibRainDeploySnapshot.writeSnapshot(
+            vm,
+            PER_NETWORK_RECORD_DEPLOY_NOT_CLAIMS_ROOT,
+            PER_NETWORK_CLONE_RELEASE_TAG,
+            PER_NETWORK_CLONE_RECORD_CONTRACT,
+            suite
+        );
+        string memory reproduced = vm.readFile(written);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(PER_NETWORK_RECORD_DEPLOY_NOT_CLAIMS_ROOT, true);
+
+        assertEq(reproduced, vm.readFile(perNetworkRecordPaths()[0]));
+    }
+
+    /// The import a per-network clone release contributes to its released
+    /// lib: every record constant but `DEPLOYED_ADDRESS`, which a per-network
+    /// record does not declare, and its `MECHANISM_DATA`.
+    string constant EXPECTED_PER_NETWORK_IMPORT = "import {\n"
+        "    BYTECODE_HASH as PerNetworkClone_0_0_1_BYTECODE_HASH,\n"
+        "    CREATION_CODE as PerNetworkClone_0_0_1_CREATION_CODE,\n"
+        "    RUNTIME_CODE as PerNetworkClone_0_0_1_RUNTIME_CODE,\n"
+        "    DEPENDENCIES as PerNetworkClone_0_0_1_DEPENDENCIES,\n"
+        "    MECHANISM_DATA as PerNetworkClone_0_0_1_MECHANISM_DATA\n"
+        "} from \"../generated/0_0_1/PerNetworkClone.sol\";\n\n";
+
+    /// The entry a per-network clone release contributes: no stored address,
+    /// since its `CloneNetworks` records one per network, declared
+    /// `ClonePerNetwork` and carrying the record's own `MECHANISM_DATA`.
+    string constant EXPECTED_PER_NETWORK_ENTRY = "        suites[0] = DeploySuite({\n"
+        "            suite: \"per-network-clone@0_0_1\",\n"
+        "            creationCode: PerNetworkClone_0_0_1_CREATION_CODE,\n"
+        "            storedDeployedAddress: address(0),\n"
+        "            storedBytecodeHash: PerNetworkClone_0_0_1_BYTECODE_HASH,\n"
+        "            storedRuntimeCode: PerNetworkClone_0_0_1_RUNTIME_CODE,\n"
+        "            artifactPath: \"rain-factory/EIP1167Clone.sol:EIP1167Clone\",\n"
+        "            dependencies: abi.decode(PerNetworkClone_0_0_1_DEPENDENCIES, (DeployDependency[])),\n"
+        "            mechanism: DeployMechanism.ClonePerNetwork,\n"
+        "            mechanismData: PerNetworkClone_0_0_1_MECHANISM_DATA\n" "        });\n";
+
+    /// The committed `per-network-clone` record's path, as
+    /// `frozenSnapshotPaths` spells it.
+    /// @return paths The one record file.
+    function perNetworkRecordPaths() internal pure returns (string[] memory paths) {
+        paths = new string[](1);
+        paths[0] = LibRainDeploySnapshot.pathForSnapshot(
+            PER_NETWORK_CLONE_RECORD_ROOT, PER_NETWORK_CLONE_RELEASE_TAG, PER_NETWORK_CLONE_RECORD_CONTRACT
+        );
+    }
+
+    /// The candidate the per-network released lib takes its metadata from.
+    /// @return The `per-network-clone` candidate's suite.
+    function perNetworkTemplate() internal pure returns (DeploySuite memory) {
+        return LibRainDeployMechanism.cloneCandidate(perNetworkClone("per-network-clone", bytes32(uint256(4)))).snapshot;
+    }
+
+    /// A per-network clone release is imported without `DEPLOYED_ADDRESS` —
+    /// the record declares none, so importing it would not compile — and with
+    /// its `MECHANISM_DATA`.
+    function testReleasedImportOfAPerNetworkCloneRelease() external pure {
+        assertEq(
+            LibRainDeploySnapshot.releasedImport(vm, perNetworkRecordPaths()[0], DeployMechanism.ClonePerNetwork),
+            EXPECTED_PER_NETWORK_IMPORT
+        );
+    }
+
+    /// A per-network clone release's entry stores no address and is declared
+    /// `ClonePerNetwork` with the record's `MECHANISM_DATA`, the shape of
+    /// `PerNetworkCloneDeploys.releasedSuites()`.
+    function testReleasedSuiteEntryOfAPerNetworkCloneRelease() external pure {
+        assertEq(
+            LibRainDeploySnapshot.releasedSuiteEntry(vm, 0, perNetworkRecordPaths()[0], perNetworkTemplate()),
+            EXPECTED_PER_NETWORK_ENTRY
+        );
+    }
+
+    /// The released lib written from the committed per-network record over a
+    /// `ClonePerNetwork` template is the prefix, the per-network import and the
+    /// per-network entry: the writer hands the template's mechanism to both
+    /// halves.
+    function testWriteReleasedSuitesLibOfAPerNetworkCloneRecord() external {
+        string memory libDir = string.concat(FIXTURE_LIB_ROOT, "/released-per-network");
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(libDir, true);
+
+        string memory written = LibRainDeploySnapshot.writeReleasedSuitesLib(
+            vm, libDir, PER_NETWORK_CLONE_RECORD_ROOT, PER_NETWORK_CLONE_RECORD_CONTRACT, perNetworkTemplate()
+        );
+        string memory emitted = vm.readFile(written);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(libDir, true);
+
+        assertEq(
+            emitted,
+            string.concat(
+                generatedFilePrefix(),
+                "import {DeployDependency, DeployMechanism, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                EXPECTED_PER_NETWORK_IMPORT,
+                LibRainDeploySnapshot.releasedLibraryBlock(
+                    vm,
+                    "LibPerNetworkCloneReleased",
+                    PER_NETWORK_CLONE_RECORD_CONTRACT,
+                    perNetworkRecordPaths(),
+                    perNetworkTemplate()
+                )
+            )
+        );
+        assertTrue(vm.contains(emitted, EXPECTED_PER_NETWORK_ENTRY));
+        assertFalse(vm.contains(emitted, "DEPLOYED_ADDRESS"));
     }
 }

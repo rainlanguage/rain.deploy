@@ -134,13 +134,14 @@ abstract contract MyCloneDeploys is RainDeployCloneSuitesBase {
 contract Deploy is MyCloneDeploys, RainDeployBroadcast {}
 ```
 
-A `CloneDeploy` is the suite key, the factory, the implementation, the init
-data, the salt and the dependencies. The dependencies MUST name both the factory
-and the implementation, each paired with its runtime code; a clone missing
-either is refused with `CloneDependencyUndeclared`. The factory's entry pins the
-code that performs the clone, and the implementation's pins the code the clone
-delegates to — the clone's own code hash only says WHICH address it delegates
-to.
+A `CloneDeploy` is the suite key, the factory, the implementation, the init data
+— one `data` for every network, or `networkData` per network (see
+[Init data per network](#init-data-per-network)) — the salt and the
+dependencies. The dependencies MUST name both the factory and the
+implementation, each paired with its runtime code; a clone missing either is
+refused with `CloneDependencyUndeclared`. The factory's entry pins the code that
+performs the clone, and the implementation's pins the code the clone delegates
+to — the clone's own code hash only says WHICH address it delegates to.
 
 `RainDeployCloneSuitesBase` derives `candidateSuites()` from the clone list with
 `LibRainDeployMechanism.cloneCandidate`, so it is still ONE list. Each candidate
@@ -206,6 +207,54 @@ the implementation and the init data and not the caller — so every account
 reaches the same address on every network. The namespaced derivation bakes the
 deploying account into the address, which a retired key makes unreachable
 forever.
+
+#### Init data per network
+
+A clone's address covers its init data, so a clone initialized differently on
+each network — an admin that is a different Safe on one chain than on the others
+— is at a different address on each. Such a clone declares `networkData`, a
+`CloneNetworkData` (chain id, init data) per network, and leaves `data` empty;
+declaring both is refused with `CloneDataAmbiguous`. A clone whose init data is
+the same everywhere declares `data` and an empty `networkData`, and is the
+`Clone` suite described above.
+
+`cloneCandidate` turns a `networkData` declaration into a suite whose
+`mechanism` is `DeployMechanism.ClonePerNetwork` and whose `mechanismData` is
+the `abi.encode`d `CloneNetworks`: the shared factory, implementation and salt,
+and per network its chain id, init data and the address derived from them. Its
+`storedDeployedAddress` is zero — the addresses live in `CloneNetworks` — and a
+nonzero one is refused with `UnexpectedStoredDeployedAddress`. A `CloneNetworks`
+with no networks is refused with `NoCloneNetworks`, and one naming a chain id
+twice with `DuplicateCloneNetwork`. Its code hash is one value on every network:
+an EIP-1167 clone's runtime code embeds only the implementation.
+
+A suite's addresses are a list, in the order its `CloneNetworks` names the
+networks: one address for Zoltu and `Clone`, one per declared network for
+`ClonePerNetwork`. Every reader resolves by network:
+
+- **Broadcast.** `RainDeployBroadcast.broadcastSuite` and
+  `LibRainDeployMechanism.deployAndBroadcast` return the suite's address on each
+  network and the fork each was deployed on, both positionally paired with the
+  networks broadcast to. For a per-network clone, every network's chain id is
+  read from the network catalogue and its entry resolved, and the recorded
+  address held to the derived one, before any fork is created; the deploy step
+  then refuses to run on a fork whose `block.chainid` is not the entry's, with
+  `CloneNetworkChainIdMismatch`.
+- **Undeclared networks.** A network the suite has no entry for is refused with
+  `CloneNetworkUndeclared`, before any fork, at broadcast and in the chain
+  group. It is never given another network's init data.
+- **Record.** The snapshot writer deploys the clone locally once per network —
+  networks sharing init data share an address and are deployed once — and
+  records `DEPLOYED_ADDRESS_<chainId>` per network in place of the one
+  `DEPLOYED_ADDRESS`, and the `CloneNetworks` as `MECHANISM_DATA`, both from the
+  local deploy rather than from the addresses the suite claims. The generated
+  `Lib<Contract>Released` entry imports no `DEPLOYED_ADDRESS`, stores
+  `address(0)`, and carries `DeployMechanism.ClonePerNetwork` and that
+  `MECHANISM_DATA`.
+- **Verification.** The record group holds each network's recorded address to
+  its derivation and matches a frozen record to its release by chain id AND
+  address, so a record whose per-network labels were swapped matches no release.
+  The chain group requires the clone's code at each network's own address.
 
 ## Deploy verification
 
