@@ -29,8 +29,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
     /// Deploys `MigrationRegistry` through the Zoltu factory, which lands it at
     /// the pinned address.
     function deployRegistry() internal {
-        LibRainDeploy.etchZoltuFactory(vm);
-        LibRainDeploy.deployZoltu(type(MigrationRegistry).creationCode);
+        LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode);
     }
 
     /// An account a Safe or a timelock could be: not zero, and not one of the
