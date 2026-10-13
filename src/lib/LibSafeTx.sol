@@ -2,7 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {ISafe} from "../interface/ISafe.sol";
+import {Safe} from "safe-global-safe-smart-account-1.4.1/contracts/Safe.sol";
+import {Enum} from "safe-global-safe-smart-account-1.4.1/contracts/common/Enum.sol";
+import {MultiSendCallOnly} from "safe-global-safe-smart-account-1.4.1/contracts/libraries/MultiSendCallOnly.sol";
 
 /// One Safe transaction: the fields of `execTransaction` a bundle author
 /// chooses. The gas and refund fields are always zero here, which is what the
@@ -10,13 +12,12 @@ import {ISafe} from "../interface/ISafe.sol";
 /// @param to The destination.
 /// @param value The native value forwarded to `to`.
 /// @param data The calldata forwarded to `to`.
-/// @param operation `LibSafeTx.OPERATION_CALL` or
-/// `LibSafeTx.OPERATION_DELEGATECALL`.
+/// @param operation CALL or DELEGATECALL.
 struct SafeTx {
     address to;
     uint256 value;
     bytes data;
-    uint8 operation;
+    Enum.Operation operation;
 }
 
 /// @title LibSafeTx
@@ -24,12 +25,6 @@ struct SafeTx {
 /// owners sign, the `MultiSendCallOnly` batch a bundle executes as, and the
 /// approved-hash signature blob `execTransaction` accepts.
 library LibSafeTx {
-    /// A transaction the Safe CALLs.
-    uint8 internal constant OPERATION_CALL = 0;
-
-    /// A transaction the Safe DELEGATECALLs.
-    uint8 internal constant OPERATION_DELEGATECALL = 1;
-
     /// The canonical Safe v1.4.1 `MultiSendCallOnly`, the contract the Safe
     /// Transaction Builder DELEGATECALLs to execute a bundle at one nonce. Its
     /// address is the same on every chain it is deployed to.
@@ -49,7 +44,7 @@ library LibSafeTx {
     /// a non-CALL entry cannot be represented in either.
     /// @param index The entry's index in the bundle.
     /// @param operation The entry's operation.
-    error UnsupportedOperation(uint256 index, uint8 operation);
+    error UnsupportedOperation(uint256 index, Enum.Operation operation);
 
     /// `MULTISEND_CALL_ONLY_1_4_1` does not hold the canonical code on this
     /// chain.
@@ -64,8 +59,8 @@ library LibSafeTx {
     /// Revert `UnsupportedOperation` unless `operation` is a CALL.
     /// @param index The entry's index, surfaced in the revert.
     /// @param operation The entry's operation.
-    function requireCall(uint256 index, uint8 operation) internal pure {
-        if (operation != OPERATION_CALL) revert UnsupportedOperation(index, operation);
+    function requireCall(uint256 index, Enum.Operation operation) internal pure {
+        if (operation != Enum.Operation.Call) revert UnsupportedOperation(index, operation);
     }
 
     /// The hash owners sign for `safe` to execute `txn` at `nonce`, as `safe`
@@ -74,7 +69,7 @@ library LibSafeTx {
     /// @param txn The transaction.
     /// @param nonce The nonce the transaction consumes.
     /// @return The Safe transaction hash.
-    function safeTxHash(ISafe safe, SafeTx memory txn, uint256 nonce) internal view returns (bytes32) {
+    function safeTxHash(Safe safe, SafeTx memory txn, uint256 nonce) internal view returns (bytes32) {
         return
             safe.getTransactionHash(txn.to, txn.value, txn.data, txn.operation, 0, 0, 0, address(0), address(0), nonce);
     }
@@ -89,10 +84,11 @@ library LibSafeTx {
         for (uint256 i = 0; i < txs.length; i++) {
             requireCall(i, txs[i].operation);
             payload = bytes.concat(
-                payload, abi.encodePacked(txs[i].operation, txs[i].to, txs[i].value, txs[i].data.length, txs[i].data)
+                payload,
+                abi.encodePacked(uint8(txs[i].operation), txs[i].to, txs[i].value, txs[i].data.length, txs[i].data)
             );
         }
-        return abi.encodeWithSignature("multiSend(bytes)", payload);
+        return abi.encodeCall(MultiSendCallOnly.multiSend, (payload));
     }
 
     /// The single transaction a Safe executes `txs` as: a DELEGATECALL to
@@ -104,7 +100,7 @@ library LibSafeTx {
         bytes32 codeHash = MULTISEND_CALL_ONLY_1_4_1.codehash;
         if (codeHash != MULTISEND_CALL_ONLY_1_4_1_CODEHASH) revert MultiSendCallOnlyNotDeployed(codeHash);
         return SafeTx({
-            to: MULTISEND_CALL_ONLY_1_4_1, value: 0, data: encodeMultiSend(txs), operation: OPERATION_DELEGATECALL
+            to: MULTISEND_CALL_ONLY_1_4_1, value: 0, data: encodeMultiSend(txs), operation: Enum.Operation.DelegateCall
         });
     }
 
@@ -113,15 +109,15 @@ library LibSafeTx {
     /// @param txs The bundle. Every entry MUST be a CALL.
     /// @param nonce The nonce the bundle consumes.
     /// @return The Safe transaction hash.
-    function multiSendSafeTxHash(ISafe safe, SafeTx[] memory txs, uint256 nonce) internal view returns (bytes32) {
+    function multiSendSafeTxHash(Safe safe, SafeTx[] memory txs, uint256 nonce) internal view returns (bytes32) {
         return safeTxHash(safe, multiSendTx(txs), nonce);
     }
 
     /// `addrs` sorted ascending, in a new array.
     /// @param addrs The addresses.
-    /// @return sorted The same addresses, ascending.
-    function sortAscending(address[] memory addrs) internal pure returns (address[] memory sorted) {
-        sorted = new address[](addrs.length);
+    /// @return The same addresses, ascending.
+    function sortAscending(address[] memory addrs) internal pure returns (address[] memory) {
+        address[] memory sorted = new address[](addrs.length);
         for (uint256 i = 0; i < addrs.length; i++) {
             sorted[i] = addrs[i];
         }
@@ -134,6 +130,7 @@ library LibSafeTx {
             }
             sorted[j] = current;
         }
+        return sorted;
     }
 
     /// The `execTransaction` signature blob in which every one of `signers`
@@ -141,12 +138,14 @@ library LibSafeTx {
     /// `r = signer` (left-padded), `s = 0`, `v = 1`. Reverts `DuplicateSigner`
     /// if a signer repeats.
     /// @param signers The approving owners, in any order.
-    /// @return packed `signers.length * SIGNATURE_LENGTH` bytes.
-    function approvedHashSignatures(address[] memory signers) internal pure returns (bytes memory packed) {
+    /// @return `signers.length * SIGNATURE_LENGTH` bytes.
+    function approvedHashSignatures(address[] memory signers) internal pure returns (bytes memory) {
         address[] memory sorted = sortAscending(signers);
+        bytes memory packed = "";
         for (uint256 i = 0; i < sorted.length; i++) {
             if (i > 0 && sorted[i] == sorted[i - 1]) revert DuplicateSigner(sorted[i]);
             packed = bytes.concat(packed, bytes32(uint256(uint160(sorted[i]))), bytes32(0), bytes1(0x01));
         }
+        return packed;
     }
 }

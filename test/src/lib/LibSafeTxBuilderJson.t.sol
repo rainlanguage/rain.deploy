@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {Enum} from "safe-global-safe-smart-account-1.4.1/contracts/common/Enum.sol";
 import {LibSafeTx, SafeTx} from "../../../src/lib/LibSafeTx.sol";
 import {LibSafeTxBuilderJson} from "../../../src/lib/LibSafeTxBuilderJson.sol";
 
@@ -32,11 +33,18 @@ contract LibSafeTxBuilderJsonTest is Test {
         LibSafeTxBuilderJson.requireUnescaped(value);
     }
 
-    function twoTxs() internal pure returns (SafeTx[] memory txs) {
-        txs = new SafeTx[](2);
-        txs[0] =
-            SafeTx({to: address(0x1111111111111111111111111111111111111111), value: 12, data: hex"aabb", operation: 0});
-        txs[1] = SafeTx({to: address(0x2222222222222222222222222222222222222222), value: 0, data: "", operation: 0});
+    function twoTxs() internal pure returns (SafeTx[] memory) {
+        SafeTx[] memory txs = new SafeTx[](2);
+        txs[0] = SafeTx({
+            to: address(0x1111111111111111111111111111111111111111),
+            value: 12,
+            data: hex"aabb",
+            operation: Enum.Operation.Call
+        });
+        txs[1] = SafeTx({
+            to: address(0x2222222222222222222222222222222222222222), value: 0, data: "", operation: Enum.Operation.Call
+        });
+        return txs;
     }
 
     /// The JSON is exactly the Transaction Builder import shape.
@@ -65,7 +73,9 @@ contract LibSafeTxBuilderJsonTest is Test {
         SafeTx[] memory txs = new SafeTx[](tos.length);
         for (uint256 i = 0; i < tos.length; i++) {
             bytes32 r = keccak256(abi.encode(seed, i));
-            txs[i] = SafeTx({to: tos[i], value: uint256(r) >> (i * 8), data: abi.encodePacked(r, i), operation: 0});
+            txs[i] = SafeTx({
+                to: tos[i], value: uint256(r) >> (i * 8), data: abi.encodePacked(r, i), operation: Enum.Operation.Call
+            });
             if (i % 3 == 0) txs[i].data = "";
         }
         string memory json = LibSafeTxBuilderJson.toJson(vm, safe, chainId, "round trip", txs);
@@ -77,7 +87,7 @@ contract LibSafeTxBuilderJsonTest is Test {
             assertEq(parsed[i].to, txs[i].to);
             assertEq(parsed[i].value, txs[i].value);
             assertEq(parsed[i].data, txs[i].data);
-            assertEq(parsed[i].operation, 0);
+            assertEq(uint8(parsed[i].operation), uint8(Enum.Operation.Call));
         }
     }
 
@@ -111,12 +121,11 @@ contract LibSafeTxBuilderJsonTest is Test {
         );
     }
 
-    /// A non-CALL entry is not written.
-    function testToJsonRejectsNonCall(uint8 operation) external {
-        vm.assume(operation != 0);
+    /// A DELEGATECALL entry is not written.
+    function testToJsonRejectsDelegateCall() external {
         SafeTx[] memory txs = twoTxs();
-        txs[1].operation = operation;
-        vm.expectRevert(abi.encodeWithSelector(LibSafeTx.UnsupportedOperation.selector, 1, operation));
+        txs[1].operation = Enum.Operation.DelegateCall;
+        vm.expectRevert(abi.encodeWithSelector(LibSafeTx.UnsupportedOperation.selector, 1, Enum.Operation.DelegateCall));
         this.externalToJson(address(1), 1, "x", txs);
     }
 
@@ -222,7 +231,7 @@ contract LibSafeTxBuilderJsonTest is Test {
         expectMismatch(json, address(3), expected, "value");
 
         expected = twoTxs();
-        expected[1].operation = 1;
+        expected[1].operation = Enum.Operation.DelegateCall;
         expectMismatch(json, address(3), expected, "operation");
 
         expected = twoTxs();

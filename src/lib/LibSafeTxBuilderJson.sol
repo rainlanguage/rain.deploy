@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {Enum} from "safe-global-safe-smart-account-1.4.1/contracts/common/Enum.sol";
 import {LibSafeTx, SafeTx} from "./LibSafeTx.sol";
 
 /// @title LibSafeTxBuilderJson
@@ -97,17 +98,13 @@ library LibSafeTxBuilderJson {
     /// Read a Transaction Builder JSON bundle. Every entry reads as a CALL.
     /// @param vm The Vm, for the JSON cheatcodes.
     /// @param json The JSON.
-    /// @return chainId The `chainId` field.
-    /// @return safe The `meta.createdFromSafeAddress` field.
-    /// @return txs The transactions, in order. Reverts `NoTransactions` if
-    /// there are none.
-    function fromJson(Vm vm, string memory json)
-        internal
-        view
-        returns (uint256 chainId, address safe, SafeTx[] memory txs)
-    {
-        chainId = parseDecimal(vm.parseJsonString(json, ".chainId"));
-        safe = vm.parseJsonAddress(json, ".meta.createdFromSafeAddress");
+    /// @return The `chainId` field.
+    /// @return The `meta.createdFromSafeAddress` field.
+    /// @return The transactions, in order. Reverts `NoTransactions` if there
+    /// are none.
+    function fromJson(Vm vm, string memory json) internal view returns (uint256, address, SafeTx[] memory) {
+        uint256 chainId = parseDecimal(vm.parseJsonString(json, ".chainId"));
+        address safe = vm.parseJsonAddress(json, ".meta.createdFromSafeAddress");
 
         uint256 count = 0;
         while (vm.keyExistsJson(json, string.concat(".transactions[", vm.toString(count), "]"))) {
@@ -115,16 +112,17 @@ library LibSafeTxBuilderJson {
         }
         if (count == 0) revert NoTransactions();
 
-        txs = new SafeTx[](count);
+        SafeTx[] memory txs = new SafeTx[](count);
         for (uint256 i = 0; i < count; i++) {
             string memory entry = string.concat(".transactions[", vm.toString(i), "]");
             txs[i] = SafeTx({
                 to: vm.parseJsonAddress(json, string.concat(entry, ".to")),
                 value: parseDecimal(vm.parseJsonString(json, string.concat(entry, ".value"))),
                 data: vm.parseJsonBytes(json, string.concat(entry, ".data")),
-                operation: LibSafeTx.OPERATION_CALL
+                operation: Enum.Operation.Call
             });
         }
+        return (chainId, safe, txs);
     }
 
     /// Revert `ArtifactMismatch` unless `json` is exactly the bundle `expected`
@@ -150,15 +148,17 @@ library LibSafeTxBuilderJson {
     /// Parse one or more ASCII digits as an unsigned integer. Reverts
     /// `NotDecimal` on anything else, and on overflow.
     /// @param value The digits.
-    /// @return result The integer.
-    function parseDecimal(string memory value) internal pure returns (uint256 result) {
+    /// @return The integer.
+    function parseDecimal(string memory value) internal pure returns (uint256) {
         bytes memory raw = bytes(value);
         if (raw.length == 0) revert NotDecimal(value);
+        uint256 result = 0;
         for (uint256 i = 0; i < raw.length; i++) {
             uint8 c = uint8(raw[i]);
             if (c < 0x30 || c > 0x39) revert NotDecimal(value);
             result = result * 10 + (c - 0x30);
         }
+        return result;
     }
 
     /// Revert `UnescapedJsonString` if `value` contains `"`, `\` or a control

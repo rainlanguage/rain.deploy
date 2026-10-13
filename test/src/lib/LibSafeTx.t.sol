@@ -4,7 +4,8 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibSafeTx, SafeTx} from "../../../src/lib/LibSafeTx.sol";
-import {ISafe} from "../../../src/interface/ISafe.sol";
+import {Safe} from "safe-global-safe-smart-account-1.4.1/contracts/Safe.sol";
+import {Enum} from "safe-global-safe-smart-account-1.4.1/contracts/common/Enum.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibForkSafe} from "../../lib/LibForkSafe.sol";
 
@@ -34,7 +35,7 @@ contract LibSafeTxTest is Test {
         return LibSafeTx.approvedHashSignatures(signers);
     }
 
-    function forkSafe() internal returns (ISafe) {
+    function forkSafe() internal returns (Safe) {
         vm.createSelectFork(LibRainDeploy.BASE);
         address[] memory owners = new address[](2);
         owners[0] = makeAddr("owner0");
@@ -43,7 +44,7 @@ contract LibSafeTxTest is Test {
     }
 
     /// The Safe v1.4.1 EIP-712 hash of a zero-refund transaction.
-    function eip712(ISafe safe, SafeTx memory txn, uint256 nonce) internal view returns (bytes32) {
+    function eip712(Safe safe, SafeTx memory txn, uint256 nonce) internal view returns (bytes32) {
         bytes32 domainSeparator = keccak256(abi.encode(DOMAIN_SEPARATOR_TYPEHASH, block.chainid, address(safe)));
         bytes32 structHash = keccak256(
             abi.encode(
@@ -66,10 +67,11 @@ contract LibSafeTxTest is Test {
     /// `safeTxHash` is the EIP-712 hash the Safe signs, under that Safe's
     /// domain, for every field and nonce.
     function testSafeTxHashIsEip712() external {
-        ISafe safe = forkSafe();
-        SafeTx memory txn = SafeTx({to: address(0xdead), value: 7, data: hex"abcdef", operation: 1});
+        Safe safe = forkSafe();
+        SafeTx memory txn =
+            SafeTx({to: address(0xdead), value: 7, data: hex"abcdef", operation: Enum.Operation.DelegateCall});
         assertEq(LibSafeTx.safeTxHash(safe, txn, 3), eip712(safe, txn, 3));
-        txn.operation = 0;
+        txn.operation = Enum.Operation.Call;
         assertEq(LibSafeTx.safeTxHash(safe, txn, 0), eip712(safe, txn, 0));
         txn.to = address(safe);
         txn.value = 0;
@@ -81,9 +83,15 @@ contract LibSafeTxTest is Test {
     /// dataLength || data`, in order, behind the `multiSend(bytes)` selector.
     function testEncodeMultiSendLayout() external pure {
         SafeTx[] memory txs = new SafeTx[](2);
-        txs[0] =
-            SafeTx({to: address(0x1111111111111111111111111111111111111111), value: 2, data: hex"aabb", operation: 0});
-        txs[1] = SafeTx({to: address(0x2222222222222222222222222222222222222222), value: 0, data: "", operation: 0});
+        txs[0] = SafeTx({
+            to: address(0x1111111111111111111111111111111111111111),
+            value: 2,
+            data: hex"aabb",
+            operation: Enum.Operation.Call
+        });
+        txs[1] = SafeTx({
+            to: address(0x2222222222222222222222222222222222222222), value: 0, data: "", operation: Enum.Operation.Call
+        });
         bytes memory payload = bytes.concat(
             hex"00",
             hex"1111111111111111111111111111111111111111",
@@ -103,14 +111,16 @@ contract LibSafeTxTest is Test {
         assertEq(LibSafeTx.encodeMultiSend(new SafeTx[](0)), abi.encodeWithSelector(bytes4(0x8d80ff0a), ""));
     }
 
-    /// Any non-CALL entry is rejected, naming its index and operation.
-    function testEncodeMultiSendRejectsNonCall(uint8 operation, uint8 length, uint8 index) external {
-        vm.assume(operation != 0);
+    /// A DELEGATECALL entry anywhere in the bundle is rejected, naming its
+    /// index and operation.
+    function testEncodeMultiSendRejectsDelegateCall(uint8 length, uint8 index) external {
         length = uint8(bound(length, 1, 8));
         index = uint8(bound(index, 0, length - 1));
         SafeTx[] memory txs = new SafeTx[](length);
-        txs[index].operation = operation;
-        vm.expectRevert(abi.encodeWithSelector(LibSafeTx.UnsupportedOperation.selector, index, operation));
+        txs[index].operation = Enum.Operation.DelegateCall;
+        vm.expectRevert(
+            abi.encodeWithSelector(LibSafeTx.UnsupportedOperation.selector, index, Enum.Operation.DelegateCall)
+        );
         this.externalEncodeMultiSend(txs);
     }
 
@@ -139,14 +149,14 @@ contract LibSafeTxTest is Test {
     /// A bundle is one DELEGATECALL of its MultiSend encoding, and its hash is
     /// that transaction's EIP-712 hash.
     function testMultiSendTxAndHash() external {
-        ISafe safe = forkSafe();
+        Safe safe = forkSafe();
         SafeTx[] memory txs = new SafeTx[](2);
-        txs[0] = SafeTx({to: address(0xbeef), value: 1, data: hex"01", operation: 0});
-        txs[1] = SafeTx({to: address(safe), value: 0, data: hex"0203", operation: 0});
+        txs[0] = SafeTx({to: address(0xbeef), value: 1, data: hex"01", operation: Enum.Operation.Call});
+        txs[1] = SafeTx({to: address(safe), value: 0, data: hex"0203", operation: Enum.Operation.Call});
         SafeTx memory wrapped = LibSafeTx.multiSendTx(txs);
         assertEq(wrapped.to, LibSafeTx.MULTISEND_CALL_ONLY_1_4_1);
         assertEq(wrapped.value, 0);
-        assertEq(wrapped.operation, 1);
+        assertEq(uint8(wrapped.operation), uint8(Enum.Operation.DelegateCall));
         assertEq(wrapped.data, LibSafeTx.encodeMultiSend(txs));
         assertEq(LibSafeTx.multiSendSafeTxHash(safe, txs, 5), eip712(safe, wrapped, 5));
     }
@@ -222,17 +232,16 @@ contract LibSafeTxTest is Test {
         this.externalApprovedHashSignatures(signers);
     }
 
-    /// A non-CALL operation is rejected; a CALL is not.
-    function testRequireCall(uint8 operation, uint256 index) external {
-        if (operation == 0) {
-            LibSafeTx.requireCall(index, operation);
-        } else {
-            vm.expectRevert(abi.encodeWithSelector(LibSafeTx.UnsupportedOperation.selector, index, operation));
-            this.externalRequireCall(index, operation);
-        }
+    /// A DELEGATECALL is rejected, naming its index; a CALL is not.
+    function testRequireCall(uint256 index) external {
+        LibSafeTx.requireCall(index, Enum.Operation.Call);
+        vm.expectRevert(
+            abi.encodeWithSelector(LibSafeTx.UnsupportedOperation.selector, index, Enum.Operation.DelegateCall)
+        );
+        this.externalRequireCall(index, Enum.Operation.DelegateCall);
     }
 
-    function externalRequireCall(uint256 index, uint8 operation) external pure {
+    function externalRequireCall(uint256 index, Enum.Operation operation) external pure {
         LibSafeTx.requireCall(index, operation);
     }
 }

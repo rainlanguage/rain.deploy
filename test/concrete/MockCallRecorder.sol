@@ -23,6 +23,11 @@ contract MockCallRecorder {
         sCalls.push(Call({caller: msg.sender, value: msg.value, data: msg.data}));
     }
 
+    /// Records a call with empty calldata like any other.
+    receive() external payable {
+        sCalls.push(Call({caller: msg.sender, value: msg.value, data: ""}));
+    }
+
     /// @return How many calls were received.
     function callCount() external view returns (uint256) {
         return sCalls.length;
