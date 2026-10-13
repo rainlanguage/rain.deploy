@@ -197,14 +197,18 @@ contract LibTimelockControllerTest is Test {
     function testAssertRefusesEveryMissingRole() external {
         address timelock = deployTimelock();
         bytes32[3] memory roles = [
-            LibTimelockController.PROPOSER_ROLE, LibTimelockController.CANCELLER_ROLE, LibTimelockController.EXECUTOR_ROLE
+            LibTimelockController.PROPOSER_ROLE,
+            LibTimelockController.CANCELLER_ROLE,
+            LibTimelockController.EXECUTOR_ROLE
         ];
         address[3] memory holders = [PROPOSER, PROPOSER, address(0)];
         for (uint256 i = 0; i < roles.length; i++) {
             vm.prank(timelock);
             IAccessControl(timelock).revokeRole(roles[i], holders[i]);
             vm.expectRevert(
-                abi.encodeWithSelector(LibTimelockController.TimelockMissingRole.selector, timelock, roles[i], holders[i])
+                abi.encodeWithSelector(
+                    LibTimelockController.TimelockMissingRole.selector, timelock, roles[i], holders[i]
+                )
             );
             this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, noCancellers());
             vm.prank(timelock);

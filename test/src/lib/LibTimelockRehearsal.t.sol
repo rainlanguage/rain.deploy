@@ -18,10 +18,9 @@ contract LibTimelockRehearsalTest is Test {
 
     function deployTimelock() internal returns (TimelockController) {
         LibRainDeploy.etchZoltuFactory(vm);
-        return
-            TimelockController(
-                payable(LibRainDeploy.deployZoltu(LibTimelockController.timelockInitCode(MIN_DELAY, PROPOSER)))
-            );
+        return TimelockController(
+            payable(LibRainDeploy.deployZoltu(LibTimelockController.timelockInitCode(MIN_DELAY, PROPOSER)))
+        );
     }
 
     function callAs(address caller, address target, bytes memory data) internal {

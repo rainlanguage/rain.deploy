@@ -44,8 +44,7 @@ library LibTimelockRehearsal {
     /// @param salt The rehearsal's salt.
     /// @return The `schedule` calldata.
     function scheduleCalldata(address timelock, uint256 minDelay, bytes32 salt) internal pure returns (bytes memory) {
-        return
-            abi.encodeCall(TimelockController.schedule, (timelock, 0, payload(minDelay), bytes32(0), salt, minDelay));
+        return abi.encodeCall(TimelockController.schedule, (timelock, 0, payload(minDelay), bytes32(0), salt, minDelay));
     }
 
     /// Calldata for a canceller to cancel the pending rehearsal.
