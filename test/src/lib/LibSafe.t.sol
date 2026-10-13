@@ -9,18 +9,12 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {Safe} from "safe-global-safe-smart-account-1.4.1/contracts/Safe.sol";
 import {IProxy} from "safe-global-safe-smart-account-1.4.1/contracts/proxies/SafeProxy.sol";
 import {SafeProxyFactory} from "safe-global-safe-smart-account-1.4.1/contracts/proxies/SafeProxyFactory.sol";
+import {AcceptingGuard} from "../../concrete/AcceptingGuard.sol";
 
 /// The `SafeToL2Setup` entry point `setup` delegatecalls. `SafeToL2Setup` is
 /// not in the `safe-global-safe-smart-account` 1.4.1 package.
 interface ISafeToL2Setup {
     function setupToL2(address l2Singleton) external;
-}
-
-/// A guard v1.4.1 `setGuard` accepts: it checks only ERC-165 support.
-contract AcceptingGuard {
-    function supportsInterface(bytes4) external pure returns (bool) {
-        return true;
-    }
 }
 
 /// @title LibSafeTest
