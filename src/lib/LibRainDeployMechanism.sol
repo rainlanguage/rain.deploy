@@ -289,13 +289,16 @@ library LibRainDeployMechanism {
     /// @param networks The networks to broadcast to.
     /// @param deployerPrivateKey The key to broadcast as.
     /// @param suite The suite to broadcast.
+    /// @return addresses Where the suite is on each network,
+    /// positionally paired with `networks`: one address on every network for
+    /// Zoltu and `Clone`, each network's own for `ClonePerNetwork`.
     /// @return forkIds The fork each network was deployed on.
     function deployAndBroadcast(Vm vm, string[] memory networks, uint256 deployerPrivateKey, DeploySuite memory suite)
         internal
-        returns (uint256[] memory forkIds)
+        returns (address[] memory addresses, uint256[] memory forkIds)
     {
         if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
-            (, forkIds) = LibRainDeployClone.cloneNetworksAndBroadcast(
+            (addresses, forkIds) = LibRainDeployClone.cloneNetworksAndBroadcast(
                 vm,
                 networks,
                 deployerPrivateKey,
@@ -304,8 +307,11 @@ library LibRainDeployMechanism {
                 suite.storedBytecodeHash,
                 suite.dependencies
             );
-        } else if (suite.mechanism == DeployMechanism.Clone) {
-            (, forkIds) = LibRainDeployClone.cloneAndBroadcast(
+            return (addresses, forkIds);
+        }
+        address deployed;
+        if (suite.mechanism == DeployMechanism.Clone) {
+            (deployed, forkIds) = LibRainDeployClone.cloneAndBroadcast(
                 vm,
                 networks,
                 deployerPrivateKey,
@@ -317,7 +323,7 @@ library LibRainDeployMechanism {
             );
         } else {
             checkZoltuMechanismData(suite);
-            (, forkIds) = LibRainDeploy.deployAndBroadcast(
+            (deployed, forkIds) = LibRainDeploy.deployAndBroadcast(
                 vm,
                 networks,
                 deployerPrivateKey,
@@ -327,6 +333,10 @@ library LibRainDeployMechanism {
                 suite.storedBytecodeHash,
                 suite.dependencies
             );
+        }
+        addresses = new address[](networks.length);
+        for (uint256 i = 0; i < networks.length; i++) {
+            addresses[i] = deployed;
         }
     }
 
@@ -346,7 +356,9 @@ library LibRainDeployMechanism {
     function cloneCandidate(CloneDeploy memory clone) internal pure returns (DeployCandidate memory) {
         DeployMechanism mechanism;
         bytes memory mechanismData;
-        address storedDeployedAddress;
+        // Zero unless one address serves every network: a `ClonePerNetwork`
+        // suite records its addresses in its `mechanismData`.
+        address storedDeployedAddress = address(0);
         if (clone.networkData.length == 0) {
             CloneTarget memory target = CloneTarget({
                 factory: clone.factory, implementation: clone.implementation, data: clone.data, salt: clone.salt

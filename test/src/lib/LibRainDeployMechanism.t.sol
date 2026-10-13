@@ -160,7 +160,7 @@ contract LibRainDeployMechanismTest is Test {
         external
         returns (uint256[] memory forkIds)
     {
-        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, 1, suite);
+        (, forkIds) = LibRainDeployMechanism.deployAndBroadcast(vm, networks, 1, suite);
     }
 
     /// The example clone over its declared factory and implementation, as a

@@ -548,6 +548,75 @@ contract LibRainDeployTest is Test {
         this.externalDeployStepToNetworks(networks, address(this), address(0), bytes32(0), dependencies);
     }
 
+    /// External wrapper for `deployStepToNetworks` with the per-network lists
+    /// given as they are, through the step that cannot run.
+    /// @param networks The list of network names to deploy to.
+    /// @param stepData The step data per network.
+    /// @param expectedAddresses The expected address per network.
+    /// @return forkIds The fork each network was deployed on.
+    function externalDeployStepToNetworksPerNetwork(
+        string[] memory networks,
+        bytes[] memory stepData,
+        address[] memory expectedAddresses
+    ) external returns (uint256[] memory forkIds) {
+        forkIds = LibRainDeploy.deployStepToNetworks(
+            vm,
+            networks,
+            address(this),
+            unreachableDeployStep,
+            stepData,
+            "",
+            expectedAddresses,
+            bytes32(0),
+            new DeployDependency[](0)
+        );
+    }
+
+    /// `deployStepToNetworks` MUST refuse step data or expected addresses that
+    /// do not pair one for one with the networks, each list on its own and in
+    /// either direction, and MUST do it before forking anything. The lists are
+    /// read by position, so a short one deploys one network's data on another,
+    /// and a long one has entries no network is deployed with.
+    function testDeployStepToNetworksUnpairedListsRevert() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.POLYGON;
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 1, 2));
+        this.externalDeployStepToNetworksPerNetwork(networks, new bytes[](1), new address[](2));
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 3, 2));
+        this.externalDeployStepToNetworksPerNetwork(networks, new bytes[](3), new address[](2));
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 2, 1));
+        this.externalDeployStepToNetworksPerNetwork(networks, new bytes[](2), new address[](1));
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 2, 3));
+        this.externalDeployStepToNetworksPerNetwork(networks, new bytes[](2), new address[](3));
+
+        (bool forked,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", uint256(0)));
+        assertFalse(forked, "the loop forked a network before refusing the lists");
+    }
+
+    /// `everyNetwork` MUST hand back the one step data and the one address
+    /// once per network.
+    /// @param length How many networks.
+    /// @param stepData The step data.
+    /// @param expectedAddress The address.
+    function testEveryNetworkRepeatsOneEntryPerNetwork(uint8 length, bytes memory stepData, address expectedAddress)
+        external
+        pure
+    {
+        (bytes[] memory everyStepData, address[] memory everyExpectedAddress) =
+            LibRainDeploy.everyNetwork(length, stepData, expectedAddress);
+        assertEq(everyStepData.length, length);
+        assertEq(everyExpectedAddress.length, length);
+        for (uint256 i = 0; i < length; i++) {
+            assertEq(everyStepData[i], stepData);
+            assertEq(everyExpectedAddress[i], expectedAddress);
+        }
+    }
+
     /// `deployToNetworks` MUST deploy to every network in the list, forking each
     /// independently. Two networks that start without the target both end up with
     /// the deterministic contract, and the call returns its address.

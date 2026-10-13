@@ -1,0 +1,147 @@
+// SPDX-License-Identifier: LicenseRef-DCL-1.0
+// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+pragma solidity ^0.8.25;
+
+import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
+import {DeployMechanism, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {CLONE_ARTIFACT_PATH, CloneDeploy, CloneNetworkData} from "../../src/lib/LibRainDeployClone.sol";
+import {DeployDependency, LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {exampleCloneDependencies, exampleCloneFactory, exampleCloneImplementation} from "./ExampleCloneDeploys.sol";
+import {
+    BYTECODE_HASH as PER_NETWORK_CLONE_BYTECODE_HASH,
+    CREATION_CODE as PER_NETWORK_CLONE_CREATION_CODE,
+    DEPENDENCIES as PER_NETWORK_CLONE_DEPENDENCIES,
+    MECHANISM_DATA as PER_NETWORK_CLONE_MECHANISM_DATA,
+    RUNTIME_CODE as PER_NETWORK_CLONE_RUNTIME_CODE
+} from "../fixture-clone-per-network-record/0_0_1/PerNetworkClone.sol";
+
+/// Thrown by `perNetworkCloneAdmin` for a chain id it names no admin for.
+/// @param chainId The chain id.
+error NoPerNetworkCloneAdmin(uint256 chainId);
+
+/// @dev Arbitrum One's chain id, as a fact of the world rather than a read of
+/// the catalogue the code under test resolves through.
+uint256 constant PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID = 42161;
+
+/// @dev Polygon's chain id, for the reason `PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID`
+/// is a literal.
+uint256 constant PER_NETWORK_CLONE_POLYGON_CHAIN_ID = 137;
+
+/// @dev The admin the per-network clone is initialized with on Arbitrum One.
+address constant PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN = address(0xA1A1a1a1A1A1A1A1A1a1a1a1a1a1A1A1a1A1a1a1);
+
+/// @dev The admin the per-network clone is initialized with on Polygon.
+address constant PER_NETWORK_CLONE_POLYGON_ADMIN = address(0xb2b2b2b2b2B2b2B2B2b2b2B2B2b2B2B2b2b2b2b2);
+
+/// @dev The record root holding the committed `per-network-clone` release
+/// record.
+string constant PER_NETWORK_CLONE_RECORD_ROOT = "test/fixture-clone-per-network-record";
+
+/// @dev The tag of the one `per-network-clone` release.
+string constant PER_NETWORK_CLONE_RELEASE_TAG = "0_0_1";
+
+/// @dev The contract name the `per-network-clone` release record is written
+/// under.
+string constant PER_NETWORK_CLONE_RECORD_CONTRACT = "PerNetworkClone";
+
+/// The admin a network's clone is initialized with: a different account per
+/// chain id, the way an issuer's Safe is a different account on one chain than
+/// on the others.
+/// @param chainId The network's chain id.
+/// @return The admin on that network.
+function perNetworkCloneAdmin(uint256 chainId) pure returns (address) {
+    if (chainId == PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID) {
+        return PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN;
+    }
+    if (chainId == PER_NETWORK_CLONE_POLYGON_CHAIN_ID) {
+        return PER_NETWORK_CLONE_POLYGON_ADMIN;
+    }
+    revert NoPerNetworkCloneAdmin(chainId);
+}
+
+/// The per-network init data: each network's admin, `abi.encode`d, keyed by
+/// that network's chain id.
+/// @return networkData Arbitrum One's entry, then Polygon's.
+function perNetworkCloneData() pure returns (CloneNetworkData[] memory networkData) {
+    networkData = new CloneNetworkData[](2);
+    networkData[0] = CloneNetworkData({
+        chainId: PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
+        data: abi.encode(perNetworkCloneAdmin(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID))
+    });
+    networkData[1] = CloneNetworkData({
+        chainId: PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
+        data: abi.encode(perNetworkCloneAdmin(PER_NETWORK_CLONE_POLYGON_CHAIN_ID))
+    });
+}
+
+/// A per-network clone declaration over the example factory and
+/// implementation.
+/// @param suite The suite key.
+/// @param salt The salt.
+/// @return The clone declaration.
+function perNetworkClone(string memory suite, bytes32 salt) pure returns (CloneDeploy memory) {
+    return CloneDeploy({
+        suite: suite,
+        factory: exampleCloneFactory(),
+        implementation: exampleCloneImplementation(),
+        data: "",
+        networkData: perNetworkCloneData(),
+        salt: salt,
+        dependencies: exampleCloneDependencies()
+    });
+}
+
+/// The declaration the committed release record of `per-network-clone` was
+/// written from. Its salt is not the candidate's, so the release sits at
+/// addresses of its own and a check that read the candidate in place of the
+/// release would name the wrong clone.
+/// @return The release's clone declaration.
+function perNetworkCloneRelease() pure returns (CloneDeploy memory) {
+    return perNetworkClone("per-network-clone@0_0_1", bytes32(uint256(5)));
+}
+
+/// @title PerNetworkCloneDeploys
+/// @notice A clone deploy repo whose clone is initialized with a different
+/// admin on each network — an issuer's authoriser whose admin is that chain's
+/// Safe — so the clone lands at a different address on each.
+///
+/// Two networks, each with its own admin, so the two addresses differ and a
+/// reader that resolved every network to one entry, or paired an address with
+/// the other network's chain id, reads an address that is not there.
+/// `supportedNetworks()` is exactly those two: every network the repo is
+/// verified on MUST have an entry, and the networks are Arbitrum One and
+/// Polygon because those are the forks the factory and implementation are
+/// deployed onto by the broadcast tests.
+///
+/// One candidate and one frozen release, read from its committed record under
+/// `PER_NETWORK_CLONE_RECORD_ROOT`, at different salts.
+abstract contract PerNetworkCloneDeploys is RainDeployCloneSuitesBase {
+    /// @inheritdoc RainDeploySuitesBase
+    function supportedNetworks() internal view virtual override returns (string[] memory networks) {
+        networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.POLYGON;
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
+        suites = new DeploySuite[](1);
+        suites[0] = DeploySuite({
+            suite: "per-network-clone@0_0_1",
+            creationCode: PER_NETWORK_CLONE_CREATION_CODE,
+            storedDeployedAddress: address(0),
+            storedBytecodeHash: PER_NETWORK_CLONE_BYTECODE_HASH,
+            storedRuntimeCode: PER_NETWORK_CLONE_RUNTIME_CODE,
+            artifactPath: CLONE_ARTIFACT_PATH,
+            dependencies: abi.decode(PER_NETWORK_CLONE_DEPENDENCIES, (DeployDependency[])),
+            mechanism: DeployMechanism.ClonePerNetwork,
+            mechanismData: PER_NETWORK_CLONE_MECHANISM_DATA
+        });
+    }
+
+    /// @inheritdoc RainDeployCloneSuitesBase
+    function cloneDeploys() internal pure override returns (CloneDeploy[] memory clones) {
+        clones = new CloneDeploy[](1);
+        clones[0] = perNetworkClone("per-network-clone", bytes32(uint256(4)));
+    }
+}
