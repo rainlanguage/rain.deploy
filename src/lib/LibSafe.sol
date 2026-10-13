@@ -206,19 +206,15 @@ library LibSafe {
 
         // Answered by the proxy code just pinned, not by the singleton.
         address singleton = safe.masterCopy();
-        bytes32 expectedSingletonCodehash;
-        if (singleton == SAFE_V1_4_1_L1_SINGLETON) {
-            expectedSingletonCodehash = SAFE_V1_4_1_L1_SINGLETON_CODEHASH;
-        } else if (singleton == SAFE_V1_4_1_L2_SINGLETON) {
-            expectedSingletonCodehash = SAFE_V1_4_1_L2_SINGLETON_CODEHASH;
-        } else {
+        if (singleton != SAFE_V1_4_1_L1_SINGLETON && singleton != SAFE_V1_4_1_L2_SINGLETON) {
             revert SafeUnknownSingleton(address(safe), singleton);
         }
+        bytes32 expectedSingletonCodehash = singleton == SAFE_V1_4_1_L1_SINGLETON
+            ? SAFE_V1_4_1_L1_SINGLETON_CODEHASH
+            : SAFE_V1_4_1_L2_SINGLETON_CODEHASH;
         bytes32 singletonCodehash = singleton.codehash;
         if (singletonCodehash != expectedSingletonCodehash) {
-            revert SafeSingletonCodehashMismatch(
-                address(safe), singleton, expectedSingletonCodehash, singletonCodehash
-            );
+            revert SafeSingletonCodehashMismatch(address(safe), singleton, expectedSingletonCodehash, singletonCodehash);
         }
 
         string memory version = safe.VERSION();

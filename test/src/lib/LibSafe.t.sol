@@ -125,9 +125,8 @@ contract LibSafeTest is Test {
     /// L1 singleton with `setupToL2`, as the Safe UI creates one.
     function createSafe() internal returns (ISafe) {
         return ISafe(
-            ISafeProxyFactory(LibSafe.SAFE_V1_4_1_PROXY_FACTORY).createProxyWithNonce(
-                LibSafe.SAFE_V1_4_1_L1_SINGLETON, toL2Initializer(), 0
-            )
+            ISafeProxyFactory(LibSafe.SAFE_V1_4_1_PROXY_FACTORY)
+                .createProxyWithNonce(LibSafe.SAFE_V1_4_1_L1_SINGLETON, toL2Initializer(), 0)
         );
     }
 
@@ -207,15 +206,16 @@ contract LibSafeTest is Test {
             LibSafe.SAFE_V1_4_1_L1_PROXY_INITCODE_HASH,
             LibSafe.SAFE_V1_4_1_PROXY_FACTORY
         );
-        address created = ISafeProxyFactory(LibSafe.SAFE_V1_4_1_PROXY_FACTORY).createProxyWithNonce(
-            LibSafe.SAFE_V1_4_1_L1_SINGLETON, initializer, saltNonce
-        );
+        address created = ISafeProxyFactory(LibSafe.SAFE_V1_4_1_PROXY_FACTORY)
+            .createProxyWithNonce(LibSafe.SAFE_V1_4_1_L1_SINGLETON, initializer, saltNonce);
         assertEq(created, derived);
     }
 
-    /// Off Ethereum mainnet `setupToL2` moves the Safe to the L2 singleton, and
+    /// The canonical contracts are on Base with their pinned code. Off Ethereum
+    /// mainnet `setupToL2` moves the Safe to the L2 singleton, and
     /// the Safe passes every assertion in the configuration it was created in.
     function testCreatedSafePassesOnBase() external {
+        this.externalAssertCanonicalContracts();
         assertEq(address(safe).codehash, LibSafe.SAFE_V1_4_1_PROXY_CODEHASH);
         assertEq(safe.masterCopy(), LibSafe.SAFE_V1_4_1_L2_SINGLETON);
         assertEq(
@@ -253,9 +253,8 @@ contract LibSafeTest is Test {
             )
         );
         ISafe v130 = ISafe(
-            ISafeProxyFactory(SAFE_V1_3_0_PROXY_FACTORY).createProxyWithNonce(
-                LibSafe.SAFE_V1_4_1_L2_SINGLETON, initializer, 0
-            )
+            ISafeProxyFactory(SAFE_V1_3_0_PROXY_FACTORY)
+                .createProxyWithNonce(LibSafe.SAFE_V1_4_1_L2_SINGLETON, initializer, 0)
         );
         assertEq(address(v130).codehash, LibSafe.SAFE_V1_3_0_PROXY_CODEHASH);
         this.externalAssertLockedDown(v130);
