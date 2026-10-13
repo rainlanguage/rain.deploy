@@ -52,6 +52,16 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// @return The contract names.
     function snapshotContractNames() internal view virtual returns (string[] memory);
 
+    /// Every rolling snapshot a release freezes into its record: the
+    /// `snapshotContractNames()` deploy suites and any other snapshot the repo
+    /// regenerates into the candidate, so the frozen record holds the WHOLE
+    /// candidate the release guard compares it against. Defaults to
+    /// `snapshotContractNames()` for a repo whose candidate holds nothing else.
+    /// @return The snapshot names.
+    function releaseRecordNames() internal view virtual returns (string[] memory) {
+        return snapshotContractNames();
+    }
+
     /// The record root a release is frozen into, and the one the rolling
     /// snapshots are read from.
     ///
@@ -107,7 +117,7 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// @notice Regenerate the rolling snapshots, freeze them as this release's
     /// record, then regenerate the libs from the record.
     function cutRelease() external {
-        LibRainDeploySnapshot.freeze(vm, recordRoot(), regenerateSnapshots, snapshotContractNames());
+        LibRainDeploySnapshot.freeze(vm, recordRoot(), regenerateSnapshots, releaseRecordNames());
         regenerateLibs();
     }
 }

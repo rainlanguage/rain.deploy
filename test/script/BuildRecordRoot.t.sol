@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {BuildRecordRootHarness} from "../concrete/BuildRecordRootHarness.sol";
 
@@ -78,5 +79,50 @@ contract BuildRecordRootTest is Test {
                 string.concat("snapshot under the record root is not the committed one: ", names[i])
             );
         }
+    }
+
+    /// PROPERTY: the record `cutRelease()` freezes is the WHOLE candidate: every
+    /// file the regeneration writes to `<root>/candidate/` is frozen, byte for
+    /// byte, into `<root>/<tag>/`, and nothing else is.
+    ///
+    /// The release guard refuses a tag whose frozen record differs from the
+    /// freshly regenerated candidate, so a freeze that leaves a candidate file
+    /// out cuts a release that can never publish.
+    function testFreezeRecordsTheWholeCandidate() external {
+        string memory root = string.concat(FIXTURE_ROOT, "-freeze");
+        resetFixture(root);
+        BuildRecordRootHarness harness = new BuildRecordRootHarness(root);
+
+        harness.externalFreeze();
+
+        string memory tag = LibRainDeploySnapshot.deployTag(vm);
+        Vm.DirEntry[] memory candidate = vm.readDir(string.concat(root, "/", LibRainDeploySnapshot.CANDIDATE));
+        Vm.DirEntry[] memory frozen = vm.readDir(string.concat(root, "/", tag));
+        string[] memory candidateBytes = new string[](candidate.length);
+        string[] memory frozenBytes = new string[](candidate.length);
+        bool[] memory isFrozen = new bool[](candidate.length);
+        for (uint256 i = 0; i < candidate.length; i++) {
+            candidateBytes[i] = vm.readFile(candidate[i].path);
+            string memory frozenPath = string.concat(root, "/", tag, "/", fileName(candidate[i].path));
+            isFrozen[i] = vm.exists(frozenPath);
+            frozenBytes[i] = isFrozen[i] ? vm.readFile(frozenPath) : "";
+        }
+
+        resetFixture(root);
+
+        assertTrue(candidate.length > 0, "the regeneration wrote no candidate");
+        assertEq(frozen.length, candidate.length, "the frozen record and the candidate hold different file counts");
+        for (uint256 i = 0; i < candidate.length; i++) {
+            assertTrue(isFrozen[i], string.concat("candidate file not frozen: ", candidate[i].path));
+            assertEq(frozenBytes[i], candidateBytes[i], string.concat("frozen bytes differ: ", candidate[i].path));
+        }
+    }
+
+    /// The last path component.
+    /// @param path The path.
+    /// @return The file name.
+    function fileName(string memory path) internal pure returns (string memory) {
+        string[] memory parts = vm.split(path, "/");
+        return parts[parts.length - 1];
     }
 }
