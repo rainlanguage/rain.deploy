@@ -94,24 +94,35 @@ library LibRoleHolders {
         if (maxRange == 0 || fromBlock > toBlock) {
             revert InvalidLogRange(fromBlock, toBlock, maxRange);
         }
-        bytes32[] memory grantedFilter = new bytes32[](1);
-        grantedFilter[0] = ROLE_GRANTED_TOPIC;
-        bytes32[] memory revokedFilter = new bytes32[](1);
-        revokedFilter[0] = ROLE_REVOKED_TOPIC;
-
         logs = new Vm.EthGetLogs[](0);
         uint256 start = fromBlock;
         while (true) {
             uint256 end = toBlock - start < maxRange ? toBlock : start + maxRange - 1;
-            logs = concat(
-                logs,
-                merge(vm.eth_getLogs(start, end, acl, grantedFilter), vm.eth_getLogs(start, end, acl, revokedFilter))
-            );
+            logs = concat(logs, fetchRoleLogsChunk(vm, acl, start, end));
             if (end == toBlock) {
                 break;
             }
             start = end + 1;
         }
+    }
+
+    /// @notice One chunk of `fetchRoleLogs`: one `eth_getLogs` call per event,
+    /// merged into chain order.
+    /// @param vm The Vm instance to fetch with.
+    /// @param acl The `AccessControl` whose logs are fetched.
+    /// @param start The first block fetched, inclusive.
+    /// @param end The last block fetched, inclusive.
+    /// @return The chunk's role logs, ascending by `(blockNumber, logIndex)`.
+    function fetchRoleLogsChunk(Vm vm, address acl, uint256 start, uint256 end)
+        internal
+        view
+        returns (Vm.EthGetLogs[] memory)
+    {
+        bytes32[] memory filter = new bytes32[](1);
+        filter[0] = ROLE_GRANTED_TOPIC;
+        Vm.EthGetLogs[] memory granted = vm.eth_getLogs(start, end, acl, filter);
+        filter[0] = ROLE_REVOKED_TOPIC;
+        return merge(granted, vm.eth_getLogs(start, end, acl, filter));
     }
 
     /// @notice Replay a role log stream into the state of every pair it
