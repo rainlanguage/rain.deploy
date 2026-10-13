@@ -135,6 +135,26 @@ library LibRainDeploy {
     /// the deploy may have happened before the search range.
     error DeployedBeforeStartBlock(address target, uint256 startBlock);
 
+    /// Thrown when a transition search is handed an empty expected answer. A
+    /// call to an account with no code succeeds and answers nothing, so an
+    /// empty expectation is met by the ABSENCE of a contract, the same hole
+    /// `NoExpectedCodeHash` closes for a code hash.
+    error NoExpectedAnswer(address target, bytes readCall);
+
+    /// Thrown when the read does not answer the expected bytes at the block
+    /// the fork is on, so there is no transition at or before it to find.
+    /// @param target The address read.
+    /// @param readCall The calldata of the read.
+    /// @param expectedAnswer The answer the transition produces.
+    /// @param success Whether the read returned rather than reverted.
+    /// @param actualAnswer The bytes the read returned, or its revert data.
+    error TransitionNotReached(address target, bytes readCall, bytes expectedAnswer, bool success, bytes actualAnswer);
+
+    /// Thrown when the read already answers the expected bytes at the start
+    /// block, meaning the transition may have happened before the search
+    /// range.
+    error TransitionBeforeStartBlock(address target, uint256 startBlock);
+
     /// Thrown when a deployed contract holds an address other than the one the
     /// deployment expects, on a network.
     error UnexpectedResolvedAddress(string network, address target, uint256 index, address expected, address actual);
@@ -276,23 +296,139 @@ library LibRainDeploy {
         }
 
         uint256 originalBlock = block.number;
+        bytes memory context = abi.encode(expectedCodeHash);
 
         // Verify the target does not already have the expected code at
         // startBlock. If it does, the deploy happened before our search
         // range and the result would be meaningless.
         vm.rollFork(startBlock);
-        if (target.codehash == expectedCodeHash) {
+        if (codeHashHolds(target, context)) {
             vm.rollFork(originalBlock);
             revert DeployedBeforeStartBlock(target, startBlock);
         }
 
-        uint256 low = startBlock;
-        uint256 high = originalBlock;
+        return bisectFirstHoldingBlock(vm, codeHashHolds, target, context, startBlock, originalBlock);
+    }
 
+    /// Finds the block in which a view read of `target` first answered
+    /// `expectedAnswer`, by binary searching the fork history: the block a
+    /// state transition such as an ownership transfer or a role grant executed
+    /// in. Requires an active fork with archive access back to `startBlock`.
+    /// The fork is restored to its original block number before returning.
+    ///
+    /// The read is a `staticcall` of `readCall` against `target`, and it holds
+    /// at a block when it returns AND its return data is byte-for-byte
+    /// `expectedAnswer`. A read that reverts does not hold, whatever its revert
+    /// data, so a target that gained the read in an upgrade reads as before
+    /// the transition; so does one with no code yet, which answers empty
+    /// bytes.
+    ///
+    /// The search REQUIRES the read to be monotone over
+    /// `[startBlock, block.number]`: once it answers `expectedAnswer` it
+    /// answers it at every later block. An owner that was handed away and back
+    /// again breaks that, and the search converges on one of the handovers with
+    /// no way to say which. Where the answer is `expectedAnswer` and was not at
+    /// the block before follows by construction, as `findDeployBlock` sets out
+    /// for the code hash case.
+    /// @param vm The Vm instance for fork manipulation.
+    /// @param target The address the read is sent to.
+    /// @param readCall The calldata of the read, e.g.
+    /// `abi.encodeWithSignature("owner()")`.
+    /// @param expectedAnswer The exact return data the read answers once the
+    /// transition has happened, e.g. `abi.encode(newOwner)`. MUST NOT be
+    /// empty; `NoExpectedAnswer` says why.
+    /// @param startBlock The earliest block to search from. The read MUST NOT
+    /// answer `expectedAnswer` at this block.
+    /// @return The first block at which the read answers `expectedAnswer`.
+    function findTransitionBlock(
+        Vm vm,
+        address target,
+        bytes memory readCall,
+        bytes memory expectedAnswer,
+        uint256 startBlock
+    ) internal returns (uint256) {
+        if (expectedAnswer.length == 0) {
+            revert NoExpectedAnswer(target, readCall);
+        }
+        {
+            (bool holds, bool success, bytes memory actualAnswer) = readAnswers(target, readCall, expectedAnswer);
+            if (!holds) {
+                revert TransitionNotReached(target, readCall, expectedAnswer, success, actualAnswer);
+            }
+        }
+
+        uint256 originalBlock = block.number;
+        bytes memory context = abi.encode(readCall, expectedAnswer);
+
+        vm.rollFork(startBlock);
+        if (readHolds(target, context)) {
+            vm.rollFork(originalBlock);
+            revert TransitionBeforeStartBlock(target, startBlock);
+        }
+
+        return bisectFirstHoldingBlock(vm, readHolds, target, context, startBlock, originalBlock);
+    }
+
+    /// Whether `target` has the code hash `context` encodes, at the block the
+    /// fork is on.
+    /// @param target The address checked.
+    /// @param context `abi.encode(expectedCodeHash)`.
+    /// @return True when the code hash matches.
+    function codeHashHolds(address target, bytes memory context) private view returns (bool) {
+        return target.codehash == abi.decode(context, (bytes32));
+    }
+
+    /// Whether a read answers `expectedAnswer`, at the block the fork is on.
+    /// @param target The address read.
+    /// @param readCall The calldata of the read.
+    /// @param expectedAnswer The bytes the read must return.
+    /// @return holds True when the read returns exactly `expectedAnswer`.
+    /// @return success Whether the read returned rather than reverted.
+    /// @return actualAnswer The bytes the read returned, or its revert data.
+    function readAnswers(address target, bytes memory readCall, bytes memory expectedAnswer)
+        private
+        view
+        returns (bool holds, bool success, bytes memory actualAnswer)
+    {
+        (success, actualAnswer) = target.staticcall(readCall);
+        holds = success && keccak256(actualAnswer) == keccak256(expectedAnswer);
+    }
+
+    /// `readAnswers` over a read and answer packed for
+    /// `bisectFirstHoldingBlock`.
+    /// @param target The address read.
+    /// @param context `abi.encode(readCall, expectedAnswer)`.
+    /// @return holds True when the read returns exactly `expectedAnswer`.
+    function readHolds(address target, bytes memory context) private view returns (bool holds) {
+        (bytes memory readCall, bytes memory expectedAnswer) = abi.decode(context, (bytes, bytes));
+        (holds,,) = readAnswers(target, readCall, expectedAnswer);
+    }
+
+    /// The first block in `[low, high]` at which `holds` is true, by binary
+    /// search, leaving the fork on `high`. The caller MUST have established
+    /// that `holds` is false at `low` and true at `high`, and is responsible
+    /// for `holds` being monotone over the range; `findDeployBlock` sets out
+    /// why the answer is then the exact transition.
+    /// @param vm The Vm instance for fork manipulation.
+    /// @param holds The condition searched for.
+    /// @param target The address `holds` is evaluated against.
+    /// @param context The condition's parameters, as `holds` decodes them.
+    /// @param low A block at which `holds` is false.
+    /// @param high A block at which `holds` is true; the fork's original block.
+    /// @return The first block at which `holds` is true.
+    function bisectFirstHoldingBlock(
+        Vm vm,
+        function(address, bytes memory) view returns (bool) holds,
+        address target,
+        bytes memory context,
+        uint256 low,
+        uint256 high
+    ) private returns (uint256) {
+        uint256 originalBlock = high;
         while (low < high) {
             uint256 mid = (low + high) / 2;
             vm.rollFork(mid);
-            if (target.codehash == expectedCodeHash) {
+            if (holds(target, context)) {
                 high = mid;
             } else {
                 low = mid + 1;
