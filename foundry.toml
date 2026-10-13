@@ -33,6 +33,15 @@ evm_version = "cancun"
 cbor_metadata = false
 bytecode_hash = "none"
 
+# LibTimelockController pins the creation code of OpenZeppelin's
+# `TimelockController` as compiled at 2000 optimizer runs and otherwise the
+# settings above: the generation deployed in production. This profile compiles
+# the dependency under exactly those settings, so a test can hold the pin to it.
+additional_compiler_profiles = [{ name = "timelock", optimizer_runs = 2000 }]
+compilation_restrictions = [
+  { paths = "dependencies/@openzeppelin-contracts-5.7.0/governance/TimelockController.sol", optimizer_runs = 2000 },
+]
+
 # GeneratedSnapshotShapeTest asserts the SHAPE of a generated deploy snapshot
 # from the compiler's own AST, so the AST has to be in the artifacts that a
 # plain `forge test` produces — not only under an explicit `--ast`.
@@ -79,6 +88,7 @@ fs_permissions = [
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
 rain-lib-memkv = "0.2.0"
+"@openzeppelin-contracts" = "5.7.0"
 
 [soldeer]
 recursive_deps = false
