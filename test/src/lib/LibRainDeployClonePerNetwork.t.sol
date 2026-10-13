@@ -5,8 +5,11 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {CloneNetwork, CloneNetworks, CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
-import {exampleCloneDependencies, exampleCloneImplementation} from "../../abstract/ExampleCloneDeploys.sol";
-import {exampleCloneFactory} from "../../abstract/ExampleCloneDeploys.sol";
+import {
+    exampleCloneDependencies,
+    exampleCloneFactory,
+    exampleCloneImplementation
+} from "../../abstract/ExampleCloneDeploys.sol";
 import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
 import {MockUncloneableMispredictingCloneFactory} from "../../concrete/MockUncloneableMispredictingCloneFactory.sol";
@@ -219,9 +222,8 @@ contract LibRainDeployClonePerNetworkTest is Test {
         });
         vm.chainId(137);
 
-        address deployed = this.externalCloneNetworkDeployStep(
-            LibRainDeploy.POLYGON, address(this), abi.encode(uint256(137), target)
-        );
+        address deployed =
+            this.externalCloneNetworkDeployStep(LibRainDeploy.POLYGON, address(this), abi.encode(uint256(137), target));
         assertEq(deployed, LibRainDeployClone.cloneDeployedAddress(target));
         assertEq(MockCloneable(deployed).sInitData(), target.data);
     }

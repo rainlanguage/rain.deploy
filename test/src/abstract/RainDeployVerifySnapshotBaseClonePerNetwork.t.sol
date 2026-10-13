@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     FrozenSnapshotAmbiguous,
     FrozenSnapshotNotReleased,
@@ -34,6 +34,16 @@ import {
 /// `RainDeployVerifySnapshotBase` and not `RainDeployVerifySnapshot`, for the
 /// reason `RainDeployVerifySnapshotBaseCloneTest` gives.
 contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeploys, RainDeployVerifySnapshotBase {
+    /// @inheritdoc PerNetworkCloneDeploys
+    function supportedNetworks()
+        internal
+        view
+        override(PerNetworkCloneDeploys, RainDeploySuitesBase)
+        returns (string[] memory)
+    {
+        return PerNetworkCloneDeploys.supportedNetworks();
+    }
+
     /// @param paths The frozen record paths.
     /// @param released The released suites.
     function externalCheckFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released) external view {

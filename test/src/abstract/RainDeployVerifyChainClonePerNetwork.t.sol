@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {NotDeployedOnNetwork, RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
@@ -20,6 +20,16 @@ import {PerNetworkCloneDeploys} from "../../abstract/PerNetworkCloneDeploys.sol"
 /// matrix that checked one address everywhere passes one of them, and one
 /// that swapped the networks' addresses names the other network.
 contract RainDeployVerifyChainClonePerNetworkTest is PerNetworkCloneDeploys, RainDeployVerifyChain {
+    /// @inheritdoc PerNetworkCloneDeploys
+    function supportedNetworks()
+        internal
+        view
+        override(PerNetworkCloneDeploys, RainDeploySuitesBase)
+        returns (string[] memory)
+    {
+        return PerNetworkCloneDeploys.supportedNetworks();
+    }
+
     /// Puts the released clone at its address for each network, on every fork.
     function setUp() external {
         DeploySuite memory release = releasedSuites()[0];

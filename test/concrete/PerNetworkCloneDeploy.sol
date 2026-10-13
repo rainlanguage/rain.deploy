@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
-import {DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {PerNetworkCloneDeploys} from "../abstract/PerNetworkCloneDeploys.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 
@@ -12,6 +12,16 @@ import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 /// `RainDeployBroadcast`, with external wrappers so a plain `Test` contract
 /// can drive it.
 contract PerNetworkCloneDeploy is PerNetworkCloneDeploys, ExternalDeploySuites, RainDeployBroadcast {
+    /// @inheritdoc PerNetworkCloneDeploys
+    function supportedNetworks()
+        internal
+        view
+        override(PerNetworkCloneDeploys, RainDeploySuitesBase)
+        returns (string[] memory)
+    {
+        return PerNetworkCloneDeploys.supportedNetworks();
+    }
+
     /// External wrapper for `broadcastSuite`.
     /// @param suite The suite to broadcast.
     /// @param networks The networks to broadcast to.
