@@ -118,18 +118,24 @@ contract LibSafeTxBuilderJsonTest is Test {
         this.externalToJson(address(1), 1, "x", txs);
     }
 
-    /// A name that would need escaping is not written.
-    function testToJsonRejectsUnescapedName(uint8 c) external {
-        vm.assume(c == 0x22 || c == 0x5c || c < 0x20);
-        string memory name = string(abi.encodePacked("a", bytes1(c), "b"));
-        vm.expectRevert(abi.encodeWithSelector(LibSafeTxBuilderJson.UnescapedJsonString.selector, name));
-        this.externalToJson(address(1), 1, name, twoTxs());
+    /// A name that would need escaping is not written: `"`, `\`, and the
+    /// control characters 0x00 to 0x1f.
+    function testToJsonRejectsUnescapedName() external {
+        bytes memory rejected = hex"0001091f225c";
+        for (uint256 i = 0; i < rejected.length; i++) {
+            string memory name = string(abi.encodePacked("a", rejected[i], "b"));
+            vm.expectRevert(abi.encodeWithSelector(LibSafeTxBuilderJson.UnescapedJsonString.selector, name));
+            this.externalToJson(address(1), 1, name, twoTxs());
+        }
     }
 
-    /// Every other byte is left alone.
-    function testRequireUnescapedAccepts(uint8 c) external pure {
-        vm.assume(c != 0x22 && c != 0x5c && c >= 0x20);
-        LibSafeTxBuilderJson.requireUnescaped(string(abi.encodePacked("a", bytes1(c), "b")));
+    /// The bytes either side of the rejected ones, and the top of the range,
+    /// are left alone.
+    function testRequireUnescapedAccepts() external pure {
+        bytes memory accepted = hex"2021235b5d7e7fff";
+        for (uint256 i = 0; i < accepted.length; i++) {
+            LibSafeTxBuilderJson.requireUnescaped(string(abi.encodePacked("a", accepted[i], "b")));
+        }
     }
 
     /// `parseDecimal` inverts `vm.toString`.
