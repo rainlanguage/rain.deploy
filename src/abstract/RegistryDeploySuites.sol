@@ -14,6 +14,23 @@ import {
 import {LibAddressRegistryDeploy} from "../lib/LibAddressRegistryDeploy.sol";
 import {LibMigrationRegistryDeploy} from "../lib/LibMigrationRegistryDeploy.sol";
 import {LibReleasedSuites} from "../lib/LibReleasedSuites.sol";
+import {LibTimelockController} from "../lib/LibTimelockController.sol";
+
+/// A contract this repo records the code of but does not declare as a deploy
+/// suite, because its constructor takes arguments: its Zoltu address is a
+/// function of the creation code WITH those arguments, so every argument set
+/// is its own deploy and there is no one address a suite could pin, broadcast
+/// to or verify on every network. `script/Build.sol` writes its code to the
+/// rolling snapshot with `LibRainDeploySnapshot.writeParameterisedSnapshot`,
+/// and the library that picks the arguments derives the address and deploys.
+struct ParameterisedContract {
+    /// `<path>:<Name>`, the artifact the recorded code is compiled from. The
+    /// name is the snapshot's file name.
+    string artifactPath;
+    /// Any valid constructor arguments, for the reference deploy the runtime
+    /// code is read from.
+    bytes referenceConstructorArgs;
+}
 
 /// @title RegistryDeploySuites
 /// @notice Everything this repo deploys, declared ONCE.
@@ -150,5 +167,26 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
             }),
             unanchorableReason: ""
         });
+    }
+
+    /// Every contract this repo records the code of without declaring it as a
+    /// deploy suite. Its snapshot is in `src/generated/candidate/` beside the
+    /// candidates', so `GeneratedSnapshotShapeTest` matches that directory
+    /// against both lists.
+    ///
+    /// Not frozen by `cutRelease()` and not in the released suites: a release
+    /// records what its suites deploy at one address on every network, and
+    /// these have no such address. The timelock's code is held to production
+    /// instead, by deriving the deployed timelocks' addresses from it.
+    /// @return The parameterised contracts.
+    function parameterisedContracts() internal pure returns (ParameterisedContract[] memory) {
+        ParameterisedContract[] memory contracts = new ParameterisedContract[](1);
+        contracts[0] = ParameterisedContract({
+            artifactPath: "dependencies/@openzeppelin-contracts-5.7.0/governance/TimelockController.sol:TimelockController",
+            // `TimelockController` has no immutables, so any proposer and delay
+            // deploy the same runtime code.
+            referenceConstructorArgs: LibTimelockController.timelockConstructorArgs(0, address(1))
+        });
+        return contracts;
     }
 }
