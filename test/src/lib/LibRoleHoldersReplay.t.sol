@@ -310,6 +310,31 @@ contract LibRoleHoldersReplayTest is Test {
         assertEq(joined[2].blockNumber, 3);
     }
 
+    /// A chunk never spans more than `maxRange` blocks, which is the provider
+    /// cap it exists to respect, and never runs past `toBlock`.
+    function testChunkEndBoundaries() external pure {
+        // Exactly `maxRange` blocks remain: one chunk takes them all.
+        assertEq(LibRoleHolders.chunkEnd(100, 299, 200), 299);
+        // One more than `maxRange` remain: the chunk stops one short.
+        assertEq(LibRoleHolders.chunkEnd(100, 300, 200), 299);
+        // Fewer remain.
+        assertEq(LibRoleHolders.chunkEnd(100, 150, 200), 150);
+        // A single block.
+        assertEq(LibRoleHolders.chunkEnd(7, 7, 1), 7);
+        assertEq(LibRoleHolders.chunkEnd(7, 8, 1), 7);
+    }
+
+    function testChunkEndSpan(uint256 start, uint256 toBlock, uint256 maxRange) external pure {
+        toBlock = bound(toBlock, 0, type(uint64).max);
+        start = bound(start, 0, toBlock);
+        maxRange = bound(maxRange, 1, type(uint64).max);
+        uint256 end = LibRoleHolders.chunkEnd(start, toBlock, maxRange);
+        assertGe(end, start);
+        assertLe(end, toBlock);
+        assertLe(end - start + 1, maxRange);
+        assertTrue(end == toBlock || end - start + 1 == maxRange);
+    }
+
     function testMapAssignsMatchesBothFields() external pure {
         RoleGrant[] memory grants = new RoleGrant[](2);
         grants[0] = RoleGrant(ROLE_A, ALICE);

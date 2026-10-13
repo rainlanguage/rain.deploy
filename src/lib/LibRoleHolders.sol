@@ -97,13 +97,24 @@ library LibRoleHolders {
         logs = new Vm.EthGetLogs[](0);
         uint256 start = fromBlock;
         while (true) {
-            uint256 end = toBlock - start < maxRange ? toBlock : start + maxRange - 1;
+            uint256 end = chunkEnd(start, toBlock, maxRange);
             logs = concat(logs, fetchRoleLogsChunk(vm, acl, start, end));
             if (end == toBlock) {
                 break;
             }
             start = end + 1;
         }
+    }
+
+    /// @notice The last block of the chunk that starts at `start`: `toBlock`
+    /// when at most `maxRange` blocks remain, otherwise the block that makes
+    /// the chunk exactly `maxRange` blocks long.
+    /// @param start The chunk's first block. At most `toBlock`.
+    /// @param toBlock The fetch's last block.
+    /// @param maxRange The most blocks one chunk spans. Non-zero.
+    /// @return The chunk's last block, inclusive.
+    function chunkEnd(uint256 start, uint256 toBlock, uint256 maxRange) internal pure returns (uint256) {
+        return toBlock - start < maxRange ? toBlock : start + maxRange - 1;
     }
 
     /// @notice One chunk of `fetchRoleLogs`: one `eth_getLogs` call per event,
