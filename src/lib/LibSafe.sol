@@ -4,17 +4,47 @@ pragma solidity ^0.8.25;
 
 import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
 import {IProxy} from "safe-global-safe-smart-account-1.4.1-3/contracts/proxies/SafeProxy.sol";
+import {
+    BYTECODE_HASH as SAFE_V1_4_1_SAFE_BYTECODE_HASH,
+    RUNTIME_CODE as SAFE_V1_4_1_SAFE_RUNTIME_CODE
+} from "../generated/safe_v1_4_1/Safe.sol";
+import {
+    BYTECODE_HASH as SAFE_V1_4_1_SAFE_L2_BYTECODE_HASH,
+    RUNTIME_CODE as SAFE_V1_4_1_SAFE_L2_RUNTIME_CODE
+} from "../generated/safe_v1_4_1/SafeL2.sol";
+import {
+    BYTECODE_HASH as SAFE_V1_4_1_SAFE_PROXY_FACTORY_BYTECODE_HASH,
+    RUNTIME_CODE as SAFE_V1_4_1_SAFE_PROXY_FACTORY_RUNTIME_CODE
+} from "../generated/safe_v1_4_1/SafeProxyFactory.sol";
+import {
+    BYTECODE_HASH as SAFE_V1_4_1_COMPAT_HANDLER_BYTECODE_HASH,
+    RUNTIME_CODE as SAFE_V1_4_1_COMPAT_HANDLER_RUNTIME_CODE
+} from "../generated/safe_v1_4_1/CompatibilityFallbackHandler.sol";
+import {
+    BYTECODE_HASH as SAFE_V1_4_1_SAFE_TO_L2_SETUP_BYTECODE_HASH,
+    RUNTIME_CODE as SAFE_V1_4_1_SAFE_TO_L2_SETUP_RUNTIME_CODE
+} from "../generated/safe_v1_4_1/SafeToL2Setup.sol";
+import {
+    BYTECODE_HASH as SAFE_V1_4_1_SAFE_PROXY_BYTECODE_HASH,
+    RUNTIME_CODE as SAFE_V1_4_1_SAFE_PROXY_RUNTIME_CODE
+} from "../generated/safe_v1_4_1/SafeProxy.sol";
+import {
+    BYTECODE_HASH as SAFE_V1_3_0_GNOSIS_SAFE_PROXY_BYTECODE_HASH,
+    RUNTIME_CODE as SAFE_V1_3_0_GNOSIS_SAFE_PROXY_RUNTIME_CODE
+} from "../generated/safe_v1_3_0/GnosisSafeProxy.sol";
 
 /// @title LibSafe
-/// @notice The canonical Safe v1.4.1 deployment — addresses, runtime code
-/// hashes and storage slots — and assertions that a Safe on the selected chain
-/// is a genuine v1.4.1 Safe in a given configuration. Every assertion returns
-/// silently when it holds and reverts with a typed error naming the drift when
-/// it does not.
+/// @notice The canonical Safe v1.4.1 deployment — addresses, runtime code,
+/// runtime code hashes and storage slots — and assertions that a Safe on the
+/// selected chain is a genuine v1.4.1 Safe in a given configuration. Every
+/// assertion returns silently when it holds and reverts with a typed error
+/// naming the drift when it does not.
 ///
-/// Addresses and code hashes are those of
-/// https://github.com/safe-global/safe-deployments v1.4.1, identical on every
-/// network this repo supports. Storage slots are those of
+/// Addresses are those of https://github.com/safe-global/safe-deployments
+/// v1.4.1, identical on every network this repo supports. Runtime code and its
+/// hash are the records `script/BuildSafeRecords.sol` reads from the chain
+/// into `src/generated/safe_v1_4_1/` and `src/generated/safe_v1_3_0/`. Storage
+/// slots are those of
 /// https://github.com/safe-global/safe-smart-account/tree/v1.4.1/contracts.
 ///
 /// ## Trust order
@@ -103,21 +133,24 @@ library LibSafe {
     /// Ethereum mainnet.
     address internal constant SAFE_V1_4_1_L1_SINGLETON = 0x41675C099F32341bf84BFc5382aF534df5C7461a;
     /// Runtime code hash of `SAFE_V1_4_1_L1_SINGLETON`.
-    bytes32 internal constant SAFE_V1_4_1_L1_SINGLETON_CODEHASH =
-        0x1fe2df852ba3299d6534ef416eefa406e56ced995bca886ab7a553e6d0c5e1c4;
+    bytes32 internal constant SAFE_V1_4_1_L1_SINGLETON_CODEHASH = SAFE_V1_4_1_SAFE_BYTECODE_HASH;
+    /// Runtime code of `SAFE_V1_4_1_L1_SINGLETON`.
+    bytes internal constant SAFE_V1_4_1_L1_SINGLETON_RUNTIME_CODE = SAFE_V1_4_1_SAFE_RUNTIME_CODE;
 
     /// The v1.4.1 `SafeL2` singleton: `Safe` plus events for indexers. The
     /// default off Ethereum mainnet.
     address internal constant SAFE_V1_4_1_L2_SINGLETON = 0x29fcB43b46531BcA003ddC8FCB67FFE91900C762;
     /// Runtime code hash of `SAFE_V1_4_1_L2_SINGLETON`.
-    bytes32 internal constant SAFE_V1_4_1_L2_SINGLETON_CODEHASH =
-        0xb1f926978a0f44a2c0ec8fe822418ae969bd8c3f18d61e5103100339894f81ff;
+    bytes32 internal constant SAFE_V1_4_1_L2_SINGLETON_CODEHASH = SAFE_V1_4_1_SAFE_L2_BYTECODE_HASH;
+    /// Runtime code of `SAFE_V1_4_1_L2_SINGLETON`.
+    bytes internal constant SAFE_V1_4_1_L2_SINGLETON_RUNTIME_CODE = SAFE_V1_4_1_SAFE_L2_RUNTIME_CODE;
 
     /// The v1.4.1 `SafeProxyFactory`.
     address internal constant SAFE_V1_4_1_PROXY_FACTORY = 0x4e1DCf7AD4e460CfD30791CCC4F9c8a4f820ec67;
     /// Runtime code hash of `SAFE_V1_4_1_PROXY_FACTORY`.
-    bytes32 internal constant SAFE_V1_4_1_PROXY_FACTORY_CODEHASH =
-        0x50c3cdc4074750a7a974204a716c999edd37482f907608d960b2b025ee0b3317;
+    bytes32 internal constant SAFE_V1_4_1_PROXY_FACTORY_CODEHASH = SAFE_V1_4_1_SAFE_PROXY_FACTORY_BYTECODE_HASH;
+    /// Runtime code of `SAFE_V1_4_1_PROXY_FACTORY`.
+    bytes internal constant SAFE_V1_4_1_PROXY_FACTORY_RUNTIME_CODE = SAFE_V1_4_1_SAFE_PROXY_FACTORY_RUNTIME_CODE;
 
     /// The init code hash `SAFE_V1_4_1_PROXY_FACTORY` CREATE2s over for a proxy
     /// on `SAFE_V1_4_1_L1_SINGLETON`:
@@ -132,30 +165,37 @@ library LibSafe {
     address internal constant SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER = 0xfd0732Dc9E303f09fCEf3a7388Ad10A83459Ec99;
     /// Runtime code hash of `SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER`.
     bytes32 internal constant SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER_CODEHASH =
-        0x7c6007a5d711cea8dfd5d91f5940ec29c7f200fe511eb1fc1397b367af3c42f9;
+        SAFE_V1_4_1_COMPAT_HANDLER_BYTECODE_HASH;
+    /// Runtime code of `SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER`.
+    bytes internal constant SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER_RUNTIME_CODE =
+        SAFE_V1_4_1_COMPAT_HANDLER_RUNTIME_CODE;
 
     /// The v1.4.1 `SafeToL2Setup`: delegatecalled from `setup`, it moves a
     /// proxy created on `SAFE_V1_4_1_L1_SINGLETON` to
     /// `SAFE_V1_4_1_L2_SINGLETON` on any chain but Ethereum mainnet.
     address internal constant SAFE_V1_4_1_TO_L2_SETUP = 0xBD89A1CE4DDe368FFAB0eC35506eEcE0b1fFdc54;
     /// Runtime code hash of `SAFE_V1_4_1_TO_L2_SETUP`.
-    bytes32 internal constant SAFE_V1_4_1_TO_L2_SETUP_CODEHASH =
-        0x2f25df28caf984366ee584e13241707e85dcd5a6ea0c14267928dafc1fd6274b;
+    bytes32 internal constant SAFE_V1_4_1_TO_L2_SETUP_CODEHASH = SAFE_V1_4_1_SAFE_TO_L2_SETUP_BYTECODE_HASH;
+    /// Runtime code of `SAFE_V1_4_1_TO_L2_SETUP`.
+    bytes internal constant SAFE_V1_4_1_TO_L2_SETUP_RUNTIME_CODE = SAFE_V1_4_1_SAFE_TO_L2_SETUP_RUNTIME_CODE;
 
     /// Runtime code hash of a proxy created by the v1.4.1 `SafeProxyFactory`.
     /// The singleton lives in the proxy's storage, not its code, so every such
     /// proxy has this hash whatever its singleton.
-    bytes32 internal constant SAFE_V1_4_1_PROXY_CODEHASH =
-        0xd7d408ebcd99b2b70be43e20253d6d92a8ea8fab29bd3be7f55b10032331fb4c;
+    bytes32 internal constant SAFE_V1_4_1_PROXY_CODEHASH = SAFE_V1_4_1_SAFE_PROXY_BYTECODE_HASH;
+    /// Runtime code of a v1.4.1-factory proxy.
+    bytes internal constant SAFE_V1_4_1_PROXY_RUNTIME_CODE = SAFE_V1_4_1_SAFE_PROXY_RUNTIME_CODE;
+
+    /// The canonical v1.3.0 `GnosisSafeProxyFactory`. Its
+    /// `createProxyWithNonce` has the v1.4.1 `SafeProxyFactory` signature.
+    address internal constant SAFE_V1_3_0_PROXY_FACTORY = 0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2;
 
     /// Runtime code hash of a proxy created by the v1.3.0
     /// `GnosisSafeProxyFactory`. Such a proxy runs a v1.4.1 singleton once it
     /// has been migrated to one, so it is a v1.4.1 Safe on this proxy code.
-    bytes32 internal constant SAFE_V1_3_0_PROXY_CODEHASH =
-        0xb89c1b3bdf2cf8827818646bce9a8f6e372885f8c55e5c07acbd307cb133b000;
-
-    /// The proxy's storage slot holding its singleton.
-    bytes32 internal constant SAFE_SINGLETON_STORAGE_SLOT = bytes32(0);
+    bytes32 internal constant SAFE_V1_3_0_PROXY_CODEHASH = SAFE_V1_3_0_GNOSIS_SAFE_PROXY_BYTECODE_HASH;
+    /// Runtime code of a v1.3.0-factory proxy.
+    bytes internal constant SAFE_V1_3_0_PROXY_RUNTIME_CODE = SAFE_V1_3_0_GNOSIS_SAFE_PROXY_RUNTIME_CODE;
 
     /// `keccak256("guard_manager.guard.address")`: the slot `GuardManager`
     /// holds the transaction guard in.

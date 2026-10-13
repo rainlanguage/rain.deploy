@@ -18,10 +18,9 @@ import {AcceptingGuard} from "../../concrete/AcceptingGuard.sol";
 /// code and every failure is driven by the Safe's own mutators or by a change
 /// to the account it inspects.
 contract LibSafeTest is Test {
-    /// The canonical v1.3.0 `GnosisSafeProxyFactory`, the factory that creates
-    /// proxies with `LibSafe.SAFE_V1_3_0_PROXY_CODEHASH`. Its
-    /// `createProxyWithNonce` has the v1.4.1 `SafeProxyFactory` signature.
-    address constant SAFE_V1_3_0_PROXY_FACTORY = 0xa6B71E26C5e0845f74c812102Ca7114b6a896AB2;
+    /// The proxy storage slot `SafeProxy` holds its singleton in, written to
+    /// put a proxy on another singleton.
+    bytes32 constant SINGLETON_SLOT = bytes32(0);
 
     function externalAssertCanonicalContracts() external view {
         LibSafe.assertCanonicalContracts();
@@ -108,23 +107,39 @@ contract LibSafeTest is Test {
         safe = createSafe();
     }
 
-    /// The storage slots are the hashes `GuardManager` and `FallbackManager`
-    /// name them by.
-    function testStorageSlotsAreTheirPreimages() external pure {
-        assertEq(LibSafe.SAFE_GUARD_STORAGE_SLOT, keccak256("guard_manager.guard.address"));
-        assertEq(LibSafe.SAFE_FALLBACK_HANDLER_STORAGE_SLOT, keccak256("fallback_manager.handler.address"));
-        assertEq(LibSafe.SAFE_SINGLETON_STORAGE_SLOT, bytes32(0));
-        assertEq(LibSafe.SAFE_MODULES_SENTINEL, address(1));
+    /// Each recorded runtime code hashes to the code hash pinned beside it.
+    function testRuntimeCodeHashesToCodehash() external pure {
+        assertEq(keccak256(LibSafe.SAFE_V1_4_1_L1_SINGLETON_RUNTIME_CODE), LibSafe.SAFE_V1_4_1_L1_SINGLETON_CODEHASH);
+        assertEq(keccak256(LibSafe.SAFE_V1_4_1_L2_SINGLETON_RUNTIME_CODE), LibSafe.SAFE_V1_4_1_L2_SINGLETON_CODEHASH);
+        assertEq(keccak256(LibSafe.SAFE_V1_4_1_PROXY_FACTORY_RUNTIME_CODE), LibSafe.SAFE_V1_4_1_PROXY_FACTORY_CODEHASH);
+        assertEq(
+            keccak256(LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER_RUNTIME_CODE),
+            LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER_CODEHASH
+        );
+        assertEq(keccak256(LibSafe.SAFE_V1_4_1_TO_L2_SETUP_RUNTIME_CODE), LibSafe.SAFE_V1_4_1_TO_L2_SETUP_CODEHASH);
+        assertEq(keccak256(LibSafe.SAFE_V1_4_1_PROXY_RUNTIME_CODE), LibSafe.SAFE_V1_4_1_PROXY_CODEHASH);
+        assertEq(keccak256(LibSafe.SAFE_V1_3_0_PROXY_RUNTIME_CODE), LibSafe.SAFE_V1_3_0_PROXY_CODEHASH);
     }
 
     /// Every canonical contract is on every network this repo supports with its
-    /// pinned code.
+    /// pinned code, and that code is byte for byte the recorded runtime code.
     function testCanonicalContractsOnEverySupportedNetwork() external {
         string[] memory networks = LibRainDeploy.supportedNetworks();
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, networks);
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
             this.externalAssertCanonicalContracts();
+            assertEq(
+                LibSafe.SAFE_V1_4_1_PROXY_FACTORY.code, LibSafe.SAFE_V1_4_1_PROXY_FACTORY_RUNTIME_CODE, networks[i]
+            );
+            assertEq(LibSafe.SAFE_V1_4_1_L1_SINGLETON.code, LibSafe.SAFE_V1_4_1_L1_SINGLETON_RUNTIME_CODE, networks[i]);
+            assertEq(LibSafe.SAFE_V1_4_1_L2_SINGLETON.code, LibSafe.SAFE_V1_4_1_L2_SINGLETON_RUNTIME_CODE, networks[i]);
+            assertEq(LibSafe.SAFE_V1_4_1_TO_L2_SETUP.code, LibSafe.SAFE_V1_4_1_TO_L2_SETUP_RUNTIME_CODE, networks[i]);
+            assertEq(
+                LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER.code,
+                LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER_RUNTIME_CODE,
+                networks[i]
+            );
         }
     }
 
@@ -188,10 +203,8 @@ contract LibSafeTest is Test {
     function testCreatedSafePassesOnBase() external {
         this.externalAssertCanonicalContracts();
         assertEq(address(safe).codehash, LibSafe.SAFE_V1_4_1_PROXY_CODEHASH);
+        assertEq(address(safe).code, LibSafe.SAFE_V1_4_1_PROXY_RUNTIME_CODE);
         assertEq(IProxy(address(safe)).masterCopy(), LibSafe.SAFE_V1_4_1_L2_SINGLETON);
-        assertEq(
-            LibSafe.readStorageAddress(safe, LibSafe.SAFE_SINGLETON_STORAGE_SLOT), LibSafe.SAFE_V1_4_1_L2_SINGLETON
-        );
         this.externalAssertLockedDown(safe);
         this.externalAssertOwnersInOrder(safe, owners());
         this.externalAssertOwnersAsSet(safe, owners());
@@ -225,11 +238,12 @@ contract LibSafeTest is Test {
         );
         Safe v130 = Safe(
             payable(address(
-                    SafeProxyFactory(SAFE_V1_3_0_PROXY_FACTORY)
+                    SafeProxyFactory(LibSafe.SAFE_V1_3_0_PROXY_FACTORY)
                         .createProxyWithNonce(LibSafe.SAFE_V1_4_1_L2_SINGLETON, initializer, 0)
                 ))
         );
         assertEq(address(v130).codehash, LibSafe.SAFE_V1_3_0_PROXY_CODEHASH);
+        assertEq(address(v130).code, LibSafe.SAFE_V1_3_0_PROXY_RUNTIME_CODE);
         this.externalAssertLockedDown(v130);
     }
 
@@ -247,7 +261,7 @@ contract LibSafeTest is Test {
     /// canonical v1.3.0 singleton included.
     function testIdentityRejectsUnknownSingleton(address singleton) external {
         vm.assume(singleton != LibSafe.SAFE_V1_4_1_L1_SINGLETON && singleton != LibSafe.SAFE_V1_4_1_L2_SINGLETON);
-        vm.store(address(safe), LibSafe.SAFE_SINGLETON_STORAGE_SLOT, bytes32(uint256(uint160(singleton))));
+        vm.store(address(safe), SINGLETON_SLOT, bytes32(uint256(uint160(singleton))));
         vm.expectRevert(abi.encodeWithSelector(LibSafe.SafeUnknownSingleton.selector, address(safe), singleton));
         this.externalAssertIdentity(safe);
     }
@@ -257,7 +271,7 @@ contract LibSafeTest is Test {
     function testIdentityRejectsReplacedSingletonCode(bool l1) external {
         address singleton = l1 ? LibSafe.SAFE_V1_4_1_L1_SINGLETON : LibSafe.SAFE_V1_4_1_L2_SINGLETON;
         bytes32 expected = l1 ? LibSafe.SAFE_V1_4_1_L1_SINGLETON_CODEHASH : LibSafe.SAFE_V1_4_1_L2_SINGLETON_CODEHASH;
-        vm.store(address(safe), LibSafe.SAFE_SINGLETON_STORAGE_SLOT, bytes32(uint256(uint160(singleton))));
+        vm.store(address(safe), SINGLETON_SLOT, bytes32(uint256(uint160(singleton))));
         vm.etch(singleton, hex"fe");
         vm.expectRevert(
             abi.encodeWithSelector(
