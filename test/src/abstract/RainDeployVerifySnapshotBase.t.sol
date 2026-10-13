@@ -10,6 +10,10 @@ import {
     DeploySuite
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
+    FrozenCodeRecordAmbiguous,
+    FrozenCodeRecordDeclaresDeployedAddress,
+    FrozenCodeRecordInconsistent,
+    FrozenCodeRecordUnreadable,
     FrozenSnapshotAmbiguous,
     FrozenSnapshotNotReleased,
     FrozenSnapshotsOutnumberReleases,
@@ -112,6 +116,27 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// @return The address the record declares.
     function externalRecordedDeployedAddress(string memory path, string memory record) external pure returns (address) {
         return recordedDeployedAddress(path, record);
+    }
+
+    /// External wrapper for `checkFrozenCodeRecord` so `vm.expectRevert` works
+    /// at the correct call depth.
+    /// @param path The record file, for the error only.
+    /// @param record The record file's contents.
+    function externalCheckFrozenCodeRecord(string memory path, string memory record) external pure {
+        checkFrozenCodeRecord(path, record);
+    }
+
+    /// External wrapper for `partitionFrozenRecords`.
+    /// @param paths The frozen record's files.
+    /// @param codeRecordNames The code records' names.
+    /// @return The deploy records.
+    /// @return The code records.
+    function externalPartitionFrozenRecords(string[] memory paths, string[] memory codeRecordNames)
+        external
+        pure
+        returns (string[] memory, string[] memory)
+    {
+        return partitionFrozenRecords(paths, codeRecordNames);
     }
 
     /// The real generated snapshot, standing in for a frozen record. It is the
@@ -829,5 +854,103 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         for (uint256 i = 0; i < suites.length; i++) {
             assertEq(suites[i].storedDeployedAddress.code.length, 0);
         }
+    }
+
+    /// The committed code record: the parameterised `TimelockController`
+    /// snapshot, as a freeze copies it.
+    /// @return Its contents.
+    function committedCodeRecord() internal view returns (string memory) {
+        return vm.readFile(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "TimelockController"));
+    }
+
+    /// A real code record passes: three code constants, no deploy address, the
+    /// runtime code hashing to the recorded hash.
+    function testFrozenCodeRecordConsistentPasses() external view {
+        this.externalCheckFrozenCodeRecord("record.sol", committedCodeRecord());
+    }
+
+    /// A code record whose runtime code was edited no longer hashes to its
+    /// recorded hash, and is refused naming both hashes.
+    function testFrozenCodeRecordRuntimeEditedReverts() external {
+        string memory record = committedCodeRecord();
+        string[] memory parts = vm.split(record, "bytes constant RUNTIME_CODE =\n    hex\"");
+        assertEq(parts.length, 2, "the record's runtime code is not where the generator writes it");
+        string memory edited = string.concat(parts[0], "bytes constant RUNTIME_CODE =\n    hex\"00", parts[1]);
+        vm.expectPartialRevert(FrozenCodeRecordInconsistent.selector);
+        this.externalCheckFrozenCodeRecord("record.sol", edited);
+    }
+
+    /// A code record that declares a deploy address is a deploy record under a
+    /// code record's name, and is refused.
+    function testFrozenCodeRecordWithADeployedAddressReverts() external {
+        string memory record = string.concat(
+            committedCodeRecord(),
+            "\naddress constant DEPLOYED_ADDRESS = address(0x000000000000000000000000000000000000dEaD);\n"
+        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
+        this.externalCheckFrozenCodeRecord("record.sol", record);
+    }
+
+    /// A deploy record named as a code record is refused for its address, so a
+    /// name cannot move a deploy record out of the deploy check.
+    function testFrozenCodeRecordNamingADeployRecordReverts() external {
+        string memory record =
+            vm.readFile(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry"));
+        vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
+        this.externalCheckFrozenCodeRecord("record.sol", record);
+    }
+
+    /// A code record missing one of its constants is unreadable.
+    function testFrozenCodeRecordWithoutRuntimeCodeReverts() external {
+        string memory record =
+            vm.replace(committedCodeRecord(), "bytes constant RUNTIME_CODE =", "bytes constant OTHER_CODE =");
+        vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+        this.externalCheckFrozenCodeRecord("record.sol", record);
+    }
+
+    /// A code record declaring a constant twice is refused rather than read
+    /// by position.
+    function testFrozenCodeRecordWithTwoHashesReverts() external {
+        string memory record = string.concat(
+            committedCodeRecord(),
+            "\nbytes32 constant BYTECODE_HASH = bytes32(0x0000000000000000000000000000000000000000000000000000000000000000);\n"
+        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordAmbiguous.selector, "record.sol"));
+        this.externalCheckFrozenCodeRecord("record.sol", record);
+    }
+
+    /// The partition puts a path in the code records exactly when its file is
+    /// a named code record, and keeps each side in the order given.
+    function testPartitionFrozenRecordsSplitsByFileName() external view {
+        string[] memory paths = new string[](4);
+        paths[0] = "src/generated/0_1_17/AddressRegistry.sol";
+        paths[1] = "src/generated/0_1_17/TimelockController.sol";
+        paths[2] = "src/generated/0_1_18/MigrationRegistry.sol";
+        paths[3] = "src/generated/0_1_18/TimelockController.sol";
+        string[] memory names = new string[](1);
+        names[0] = "TimelockController";
+
+        (string[] memory deployRecords, string[] memory codeRecords) = this.externalPartitionFrozenRecords(paths, names);
+
+        assertEq(deployRecords.length, 2);
+        assertEq(deployRecords[0], paths[0]);
+        assertEq(deployRecords[1], paths[2]);
+        assertEq(codeRecords.length, 2);
+        assertEq(codeRecords[0], paths[1]);
+        assertEq(codeRecords[1], paths[3]);
+    }
+
+    /// With no names, every path is a deploy record: the default leaves a repo
+    /// that freezes only suites exactly as it was.
+    function testPartitionFrozenRecordsWithNoNamesIsAllDeploy() external view {
+        string[] memory paths = new string[](2);
+        paths[0] = "src/generated/0_1_18/AddressRegistry.sol";
+        paths[1] = "src/generated/0_1_18/TimelockController.sol";
+
+        (string[] memory deployRecords, string[] memory codeRecords) =
+            this.externalPartitionFrozenRecords(paths, new string[](0));
+
+        assertEq(deployRecords.length, 2);
+        assertEq(codeRecords.length, 0);
     }
 }

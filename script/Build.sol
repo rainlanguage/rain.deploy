@@ -69,22 +69,9 @@ contract Build is BuildScript, RegistryDeploySuites {
             names[i] = suites[i];
         }
         for (uint256 i = 0; i < parameterised.length; i++) {
-            names[suites.length + i] = parameterisedSnapshotName(parameterised[i]);
+            names[suites.length + i] = parameterisedContractName(parameterised[i]);
         }
         return names;
-    }
-
-    /// The name a parameterised contract's snapshot is written and frozen
-    /// under: the contract name after the artifact path's last `:`.
-    /// @param parameterised The parameterised contract.
-    /// @return The snapshot name.
-    function parameterisedSnapshotName(ParameterisedContract memory parameterised)
-        internal
-        pure
-        returns (string memory)
-    {
-        string[] memory parts = vm.split(parameterised.artifactPath, ":");
-        return parts[parts.length - 1];
     }
 
     /// The directory every generated lib is written into.
@@ -137,7 +124,7 @@ contract Build is BuildScript, RegistryDeploySuites {
                 vm,
                 recordRoot(),
                 LibRainDeploySnapshot.CANDIDATE,
-                parameterisedSnapshotName(parameterised[i]),
+                parameterisedContractName(parameterised[i]),
                 parameterised[i].spdxLicenseIdentifier,
                 parameterised[i].copyrightText,
                 vm.getCode(parameterised[i].artifactPath),

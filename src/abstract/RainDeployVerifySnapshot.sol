@@ -55,6 +55,24 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
     /// to spell the exemption, while the release it names goes on being checked
     /// by everything anchored to a chain.
     function testEveryFrozenSnapshotIsReleased() external view {
-        checkFrozenSnapshotsReleased(LibRainDeploySnapshot.frozenSnapshotPaths(vm), releasedSuites());
+        (string[] memory deployRecords,) =
+            partitionFrozenRecords(LibRainDeploySnapshot.frozenSnapshotPaths(vm), frozenCodeRecordNames());
+        checkFrozenSnapshotsReleased(deployRecords, releasedSuites());
+    }
+
+    /// Every frozen code record MUST be one: a parameterised contract's
+    /// snapshot, named by `frozenCodeRecordNames`, declaring its code and no
+    /// deploy, with its runtime code hashing to the hash recorded beside it.
+    ///
+    /// The same walk as `testEveryFrozenSnapshotIsReleased`, split the same
+    /// way, so the two tests between them read every file in the record: a
+    /// code record the names miss is refused there as unreadable, and a deploy
+    /// record the names claim is refused here for its address.
+    function testEveryFrozenCodeRecordIsConsistent() external view {
+        (, string[] memory codeRecords) =
+            partitionFrozenRecords(LibRainDeploySnapshot.frozenSnapshotPaths(vm), frozenCodeRecordNames());
+        for (uint256 i = 0; i < codeRecords.length; i++) {
+            checkFrozenCodeRecord(codeRecords[i], vm.readFile(codeRecords[i]));
+        }
     }
 }

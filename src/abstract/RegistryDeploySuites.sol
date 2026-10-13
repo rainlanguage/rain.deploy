@@ -179,10 +179,15 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// candidates', so `GeneratedSnapshotShapeTest` matches that directory
     /// against both lists.
     ///
-    /// Not frozen by `cutRelease()` and not in the released suites: a release
-    /// records what its suites deploy at one address on every network, and
-    /// these have no such address. The timelock's code is held to production
-    /// instead, by deriving the deployed timelocks' addresses from it.
+    /// Frozen by `cutRelease()` beside the suites' records (`releaseRecordNames`),
+    /// so each release states the generation of this code it shipped: a
+    /// compiler-profile or dependency change regenerates the candidate and moves
+    /// every address derived from it, and the frozen copy is what still names
+    /// the generation production was deployed from. Not in the released suites,
+    /// which record a deploy at one address on every network; a frozen code
+    /// record is held to itself by `testEveryFrozenCodeRecordIsConsistent`, and
+    /// the candidate's code to production by deriving the deployed timelocks'
+    /// addresses from it.
     /// @return The parameterised contracts.
     function parameterisedContracts() internal pure returns (ParameterisedContract[] memory) {
         ParameterisedContract[] memory contracts = new ParameterisedContract[](1);
@@ -197,5 +202,38 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
             copyrightText: "Copyright (c) 2016-2026 Zeppelin Group Ltd"
         });
         return contracts;
+    }
+
+    /// The contract a parameterised contract declaration describes, taken from
+    /// its `<path>:<Name>` artifact path: the text after the last `:`. It is
+    /// also the name its snapshot is written and frozen under.
+    /// @param declared The declaration to name.
+    /// @return The contract name.
+    function parameterisedContractName(ParameterisedContract memory declared) internal pure returns (string memory) {
+        bytes memory path = bytes(declared.artifactPath);
+        uint256 start = 0;
+        for (uint256 i = path.length; i > 0; i--) {
+            if (path[i - 1] == ":") {
+                start = i;
+                break;
+            }
+        }
+        bytes memory name = new bytes(path.length - start);
+        for (uint256 i = 0; i < name.length; i++) {
+            name[i] = path[start + i];
+        }
+        return string(name);
+    }
+
+    /// Every parameterised contract's name, in declaration order: the names
+    /// a release freezes their code records under.
+    /// @return The names.
+    function parameterisedContractNames() internal pure returns (string[] memory) {
+        ParameterisedContract[] memory parameterised = parameterisedContracts();
+        string[] memory names = new string[](parameterised.length);
+        for (uint256 i = 0; i < parameterised.length; i++) {
+            names[i] = parameterisedContractName(parameterised[i]);
+        }
+        return names;
     }
 }
