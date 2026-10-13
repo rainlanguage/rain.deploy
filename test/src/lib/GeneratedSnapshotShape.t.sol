@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 import {DeployCandidate} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
+import {ParameterisedContract, RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
 import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.2.0/src/lib/LibMemoryKV.sol";
@@ -62,10 +62,39 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     }
 
     /// The artifact for one generated snapshot, which carries its AST.
+    ///
+    /// Found by the source path its AST records rather than built from the
+    /// name. A snapshot shares its file name with the contract it describes, so
+    /// forge disambiguates the two artifacts, and how it does that depends on
+    /// what else compiles: a nested `out/candidate/` directory for
+    /// `AddressRegistry`, and a compiler-profile suffix inside the shared
+    /// `out/TimelockController.sol/` for OpenZeppelin's `TimelockController`,
+    /// whose 2000-runs build takes the unsuffixed name. Both directories are
+    /// searched and the artifact whose AST is the snapshot's source is read.
     /// @param contractName The contract the snapshot describes.
     /// @return The artifact path.
-    function artifactPath(string memory contractName) internal pure returns (string memory) {
-        return string.concat("out/", LibRainDeploySnapshot.CANDIDATE, "/", contractName, ".sol/", contractName, ".json");
+    function artifactPath(string memory contractName) internal view returns (string memory) {
+        string memory source = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, contractName);
+        string[2] memory dirs = [
+            string.concat("out/", LibRainDeploySnapshot.CANDIDATE, "/", contractName, ".sol"),
+            string.concat("out/", contractName, ".sol")
+        ];
+        for (uint256 i = 0; i < dirs.length; i++) {
+            if (!vm.isDir(dirs[i])) {
+                continue;
+            }
+            Vm.DirEntry[] memory entries = vm.readDir(dirs[i]);
+            for (uint256 j = 0; j < entries.length; j++) {
+                string memory json = vm.readFile(entries[j].path);
+                if (
+                    vm.keyExistsJson(json, "$.ast.absolutePath")
+                        && keccak256(bytes(vm.parseJsonString(json, "$.ast.absolutePath"))) == keccak256(bytes(source))
+                ) {
+                    return entries[j].path;
+                }
+            }
+        }
+        revert(string.concat("no artifact carries the AST of ", source));
     }
 
     /// The node types of a generated snapshot's source unit, in file order.
@@ -135,28 +164,71 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
         return components[components.length - 1];
     }
 
-    /// PROPERTY: the rolling snapshots and the declared candidates are the same
-    /// set, matched by name.
+    /// The contract a parameterised contract declaration describes, taken from
+    /// its `<path>:<Name>` artifact path, which is also its snapshot's name.
+    /// @param declared The declaration to name.
+    /// @return The contract name.
+    function parameterisedContractName(ParameterisedContract memory declared) internal pure returns (string memory) {
+        string[] memory components = vm.split(declared.artifactPath, ":");
+        return components[components.length - 1];
+    }
+
+    /// Every rolling snapshot the walk found that is a deploy record — every
+    /// one except the parameterised contracts' code records.
+    /// @return One entry per deploy snapshot.
+    function deploySnapshotNames() internal view returns (string[] memory) {
+        string[] memory snapshots = snapshotContractNames();
+        ParameterisedContract[] memory parameterised = parameterisedContracts();
+        MemoryKV parameterisedSet = MemoryKV.wrap(0);
+        for (uint256 i = 0; i < parameterised.length; i++) {
+            parameterisedSet = parameterisedSet.set(
+                MemoryKVKey.wrap(keccak256(bytes(parameterisedContractName(parameterised[i])))), MemoryKVVal.wrap(0)
+            );
+        }
+
+        string[] memory found = new string[](snapshots.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < snapshots.length; i++) {
+            if (!parameterisedSet.has(MemoryKVKey.wrap(keccak256(bytes(snapshots[i]))))) {
+                found[count] = snapshots[i];
+                count++;
+            }
+        }
+        string[] memory names = new string[](count);
+        for (uint256 i = 0; i < count; i++) {
+            names[i] = found[i];
+        }
+        return names;
+    }
+
+    /// PROPERTY: the rolling snapshots and the declared contracts — the
+    /// candidates and the parameterised contracts — are the same set, matched
+    /// by name.
     ///
     /// Every other assertion here loops over the snapshots the walk found, and
     /// a loop over a short list passes. This is what says the list is neither
-    /// short nor somebody else's: a candidate with no rolling snapshot is a
-    /// contract whose generated shape nothing below checks, and a snapshot with
-    /// no candidate is a record of something this repo no longer declares.
+    /// short nor somebody else's: a declared contract with no rolling snapshot
+    /// is a contract whose generated shape nothing below checks, and a snapshot
+    /// with no declaration is a record of something this repo no longer
+    /// declares.
     ///
     /// Matched by name in both directions rather than by counting, because
     /// equal counts are also what a missing snapshot and a stale one left
     /// behind together produce, and that is the pair a walk of a directory is
-    /// most likely to find. The counts are asserted as well, so two candidates
-    /// naming one contract cannot pass by both matching its single snapshot.
-    function testEveryCandidateHasASnapshot() external view {
+    /// most likely to find. The counts are asserted as well, so two
+    /// declarations naming one contract cannot pass by both matching its single
+    /// snapshot.
+    function testEveryDeclaredContractHasASnapshot() external view {
         string[] memory snapshots = snapshotContractNames();
         DeployCandidate[] memory candidates = checkedCandidateSuites();
+        ParameterisedContract[] memory parameterised = parameterisedContracts();
 
-        string[] memory declared = new string[](candidates.length);
+        string[] memory declared = new string[](candidates.length + parameterised.length);
         MemoryKV declaredSet = MemoryKV.wrap(0);
-        for (uint256 i = 0; i < candidates.length; i++) {
-            declared[i] = candidateContractName(candidates[i]);
+        for (uint256 i = 0; i < declared.length; i++) {
+            declared[i] = i < candidates.length
+                ? candidateContractName(candidates[i])
+                : parameterisedContractName(parameterised[i - candidates.length]);
             declaredSet = declaredSet.set(MemoryKVKey.wrap(keccak256(bytes(declared[i]))), MemoryKVVal.wrap(0));
         }
 
@@ -166,20 +238,22 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
         }
 
         assertEq(
-            snapshots.length, declared.length, "a candidate has no rolling snapshot, or a snapshot has no candidate"
+            snapshots.length,
+            declared.length,
+            "a declared contract has no rolling snapshot, or a snapshot has no declaration"
         );
 
         for (uint256 i = 0; i < declared.length; i++) {
             assertTrue(
                 snapshotSet.has(MemoryKVKey.wrap(keccak256(bytes(declared[i])))),
-                string.concat("candidate has no rolling snapshot: ", declared[i])
+                string.concat("declared contract has no rolling snapshot: ", declared[i])
             );
         }
 
         for (uint256 i = 0; i < snapshots.length; i++) {
             assertTrue(
                 declaredSet.has(MemoryKVKey.wrap(keccak256(bytes(snapshots[i])))),
-                string.concat("rolling snapshot has no candidate: ", snapshots[i])
+                string.concat("rolling snapshot has no declaration: ", snapshots[i])
             );
         }
     }
@@ -231,7 +305,8 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     }
 
     /// PROPERTY: the released aggregate declares exactly the contracts that
-    /// have a rolling snapshot.
+    /// have a rolling deploy snapshot. A parameterised contract's code record
+    /// is not a release and is not in the aggregate.
     ///
     /// `releasedSuites()` reads `src/lib/LibReleasedSuites.sol` and nothing
     /// else, so a contract missing from it has no declared release at all: its
@@ -248,9 +323,9 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// defect back — and it fails at the moment of the mistake instead of at
     /// the release.
     ///
-    /// Matched against the rolling snapshots rather than against a list here,
+    /// Matched against the rolling deploy snapshots rather than against a list here,
     /// because a list here would be one more place to add a contract to and
-    /// that is the whole finding. `testEveryCandidateHasASnapshot` above pins
+    /// that is the whole finding. `testEveryDeclaredContractHasASnapshot` above pins
     /// that same set to the declaration, so the two together run the chain from
     /// the declared candidates through the generator to what `releasedSuites()`
     /// returns.
@@ -259,7 +334,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// an aggregate that imports one contract twice and another not at all has
     /// the right number of imports, and a copied import line is how it happens.
     function testEverySnapshotIsInTheReleasedAggregate() external view {
-        string[] memory snapshots = snapshotContractNames();
+        string[] memory snapshots = deploySnapshotNames();
         string[] memory declared = LibReleasedSuitesAggregate.declaredContractNames(
             vm, vm.readFile(LibRainDeploySnapshot.pathForLib(LibRainDeploySnapshot.RELEASED_SUITES_LIBRARY))
         );
@@ -295,7 +370,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
         }
     }
 
-    /// PROPERTY: every snapshot declares exactly the five constants a deploy
+    /// PROPERTY: every deploy snapshot declares exactly the five constants a deploy
     /// record is for, of these types, in this order. A rename, a retype, a
     /// reorder or a sixth constant each fail here and name what broke.
     ///
@@ -305,7 +380,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// type is a language constraint, so it is asserted here as one rather than
     /// left to look like a choice somebody could tidy up.
     function testSnapshotDeclaresTheFiveDeployConstantsInOrder() external view {
-        string[] memory contractNames = snapshotContractNames();
+        string[] memory contractNames = deploySnapshotNames();
         for (uint256 i = 0; i < contractNames.length; i++) {
             string[] memory declarations = constantDeclarations(contractNames[i]);
 
@@ -315,6 +390,41 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
             assertEq(declarations[2], "bytes CREATION_CODE", "third constant is not bytes CREATION_CODE");
             assertEq(declarations[3], "bytes RUNTIME_CODE", "fourth constant is not bytes RUNTIME_CODE");
             assertEq(declarations[4], "bytes DEPENDENCIES", "fifth constant is not bytes DEPENDENCIES");
+        }
+    }
+
+    /// PROPERTY: every parameterised contract's snapshot declares exactly the
+    /// three code constants, of these types, in this order: no
+    /// `DEPLOYED_ADDRESS`, because each constructor argument set deploys to its
+    /// own address, and no `DEPENDENCIES`, because it is not broadcast as a
+    /// suite.
+    function testParameterisedSnapshotDeclaresTheThreeCodeConstantsInOrder() external view {
+        ParameterisedContract[] memory parameterised = parameterisedContracts();
+        for (uint256 i = 0; i < parameterised.length; i++) {
+            string[] memory declarations = constantDeclarations(parameterisedContractName(parameterised[i]));
+
+            assertEq(declarations.length, 3, "snapshot declares an unexpected number of constants");
+            assertEq(declarations[0], "bytes32 BYTECODE_HASH", "first constant is not bytes32 BYTECODE_HASH");
+            assertEq(declarations[1], "bytes CREATION_CODE", "second constant is not bytes CREATION_CODE");
+            assertEq(declarations[2], "bytes RUNTIME_CODE", "third constant is not bytes RUNTIME_CODE");
+        }
+    }
+
+    /// PROPERTY: every parameterised contract's artifact path is `<path>:<Name>`
+    /// and resolves to compiled code.
+    ///
+    /// No `vm.isFile` on the path half, unlike a candidate: a parameterised
+    /// contract is a dependency's, under `dependencies/`, outside the
+    /// `fs_permissions` roots, and its path is not printed for
+    /// `forge verify-contract`.
+    function testEveryParameterisedArtifactPathResolves() external view {
+        ParameterisedContract[] memory parameterised = parameterisedContracts();
+        for (uint256 i = 0; i < parameterised.length; i++) {
+            string memory declared = parameterised[i].artifactPath;
+            string[] memory parts = vm.split(declared, ":");
+
+            assertEq(parts.length, 2, string.concat("artifact path is not <path>:<Name>: ", declared));
+            assertGt(vm.getCode(declared).length, 0, string.concat("artifact path resolves to no code: ", declared));
         }
     }
 
