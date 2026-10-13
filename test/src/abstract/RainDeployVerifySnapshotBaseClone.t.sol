@@ -46,7 +46,8 @@ contract RainDeployVerifySnapshotBaseCloneTest is ExampleCloneDeploys, RainDeplo
         assertNotEq(release.storedDeployedAddress, LibRainDeploy.zoltuAddress(release.creationCode));
         assertEq(
             release.storedDeployedAddress,
-            LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot.storedDeployedAddress
+            LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot
+                .storedDeployedAddress
         );
     }
 

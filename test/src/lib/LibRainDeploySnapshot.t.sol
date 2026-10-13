@@ -3496,7 +3496,8 @@ contract LibRainDeploySnapshotTest is Test {
     /// dependencies etched for it are left in the caller's state, where they
     /// would stand in for a deploy that never happened.
     function testCloneWriterLeavesNoDeployBehind() external {
-        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot;
+        DeploySuite memory suite =
+        LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot;
         assertEq(suite.storedDeployedAddress.code.length, 0);
         for (uint256 i = 0; i < suite.dependencies.length; i++) {
             assertEq(suite.dependencies[i].deployedAddress.code.length, 0);
@@ -3519,7 +3520,8 @@ contract LibRainDeploySnapshotTest is Test {
     /// are wrong still writes the committed record, whose address and runtime
     /// are read off the local clone.
     function testCloneWriterRecordsTheDeployNotTheSuiteClaims() external {
-        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot;
+        DeploySuite memory suite =
+        LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot;
         suite.storedDeployedAddress = address(uint160(suite.storedDeployedAddress) + 1);
         suite.storedRuntimeCode = hex"00";
 
@@ -3575,7 +3577,8 @@ contract LibRainDeploySnapshotTest is Test {
     /// rather than zeroed, so a writer that copied the claims through would
     /// record each network at the OTHER network's real address.
     function testPerNetworkCloneWriterRecordsTheDeployNotTheSuiteClaims() external {
-        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease(), perNetworkCloneChainIds()).snapshot;
+        DeploySuite memory suite =
+        LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease(), perNetworkCloneChainIds()).snapshot;
         CloneNetworks memory clones = abi.decode(suite.mechanismData, (CloneNetworks));
         assertEq(clones.networks.length, 2);
         assertEq(clones.networks[0].chainId, PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
@@ -3638,7 +3641,10 @@ contract LibRainDeploySnapshotTest is Test {
     /// The candidate the per-network released lib takes its metadata from.
     /// @return The `per-network-clone` candidate's suite.
     function perNetworkTemplate() internal view returns (DeploySuite memory) {
-        return LibRainDeployMechanism.cloneCandidate(perNetworkClone("per-network-clone", bytes32(uint256(4))), perNetworkCloneChainIds()).snapshot;
+        return LibRainDeployMechanism.cloneCandidate(
+            perNetworkClone("per-network-clone", bytes32(uint256(4))), perNetworkCloneChainIds()
+        )
+        .snapshot;
     }
 
     /// A per-network clone release is imported without `DEPLOYED_ADDRESS` —

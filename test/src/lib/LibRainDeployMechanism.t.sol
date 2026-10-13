@@ -327,8 +327,9 @@ contract LibRainDeployMechanismTest is Test {
         view
         returns (DeployCandidate memory)
     {
-        CloneDeploy memory clone =
-            declaredClone("example", exampleCloneFactory(), exampleCloneImplementation(), exampleCloneDependencies());
+        CloneDeploy memory clone = declaredClone(
+            "example", exampleCloneFactory(), exampleCloneImplementation(), exampleCloneDependencies()
+        );
         clone.data = "";
         clone.initDataPerNetwork = true;
         return LibRainDeployMechanism.cloneCandidate(clone, chainIds);
@@ -369,7 +370,10 @@ contract LibRainDeployMechanismTest is Test {
     /// as a suite.
     /// @return The per-network clone suite.
     function perNetworkSuite() internal view returns (DeploySuite memory) {
-        return LibRainDeployMechanism.cloneCandidate(perNetworkClone("per-network", TEST_SALT), perNetworkCloneChainIds()).snapshot;
+        return LibRainDeployMechanism.cloneCandidate(
+            perNetworkClone("per-network", TEST_SALT), perNetworkCloneChainIds()
+        )
+        .snapshot;
     }
 
     /// The address the example factory clones the example implementation to

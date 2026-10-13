@@ -361,7 +361,8 @@ library LibRainDeployMechanism {
     function cloneCandidate(CloneDeploy memory clone, uint256[] memory chainIds)
         internal
         view
-        returns (DeployCandidate memory) {
+        returns (DeployCandidate memory)
+    {
         DeployMechanism mechanism;
         bytes memory mechanismData;
         // Zero unless one address serves every network: a `ClonePerNetwork`
@@ -385,8 +386,9 @@ library LibRainDeployMechanism {
                 networks: new CloneNetwork[](chainIds.length)
             });
             for (uint256 i = 0; i < chainIds.length; i++) {
-                clones.networks[i] =
-                    CloneNetwork({chainId: chainIds[i], data: clone.initData(chainIds[i]), deployedAddress: address(0)});
+                clones.networks[i] = CloneNetwork({
+                    chainId: chainIds[i], data: clone.initData(chainIds[i]), deployedAddress: address(0)
+                });
                 clones.networks[i].deployedAddress =
                     LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(clones, i));
             }
