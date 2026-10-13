@@ -19,8 +19,7 @@ contract LibAddressRegistryTest is Test {
     /// Deploys `AddressRegistry` through the Zoltu factory.
     /// @return The deployed registry.
     function deployRegistry() internal returns (IAddressRegistryV1) {
-        LibRainDeploy.etchZoltuFactory(vm);
-        return IAddressRegistryV1(LibRainDeploy.deployZoltu(type(AddressRegistry).creationCode));
+        return IAddressRegistryV1(LibRainDeploy.etchAndDeployZoltu(vm, type(AddressRegistry).creationCode));
     }
 
     /// External wrapper for `resolve`, for `vm.expectRevert`'s call depth.

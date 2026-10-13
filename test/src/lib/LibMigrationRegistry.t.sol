@@ -29,8 +29,7 @@ contract LibMigrationRegistryTest is Test {
     /// the pinned address.
     /// @return The deployed registry.
     function deployRegistry() internal returns (IMigrationRegistryV2) {
-        LibRainDeploy.etchZoltuFactory(vm);
-        return IMigrationRegistryV2(LibRainDeploy.deployZoltu(type(MigrationRegistry).creationCode));
+        return IMigrationRegistryV2(LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode));
     }
 
     /// Occupant code that is ORDINARY contract code rather than a delegation
