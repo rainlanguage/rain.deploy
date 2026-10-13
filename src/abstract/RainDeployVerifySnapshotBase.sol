@@ -61,6 +61,30 @@ error FrozenSnapshotUnreadable(string path);
 /// @param path The record file declaring `DEPLOYED_ADDRESS` more than once.
 error FrozenSnapshotAmbiguous(string path);
 
+/// Thrown when a frozen code record — a parameterised contract's snapshot,
+/// which records code and no deploy — declares a deployed address. A code
+/// record with an address is a deploy record filed under a code record's
+/// name, and the deploy check would never see it.
+/// @param path The record file.
+error FrozenCodeRecordDeclaresDeployedAddress(string path);
+
+/// Thrown when a frozen code record does not declare one of the constants a
+/// code record is: `BYTECODE_HASH`, `CREATION_CODE` and `RUNTIME_CODE`.
+/// @param path The record file.
+error FrozenCodeRecordUnreadable(string path);
+
+/// Thrown when a frozen code record declares one of its constants more than
+/// once, for the reason `FrozenSnapshotAmbiguous` gives.
+/// @param path The record file.
+error FrozenCodeRecordAmbiguous(string path);
+
+/// Thrown when a frozen code record's runtime code does not hash to the code
+/// hash recorded beside it.
+/// @param path The record file.
+/// @param storedBytecodeHash The hash the record declares.
+/// @param runtimeCodeHash The hash of the runtime code it declares.
+error FrozenCodeRecordInconsistent(string path, bytes32 storedBytecodeHash, bytes32 runtimeCodeHash);
+
 /// @title RainDeployVerifySnapshotBase
 /// @notice Every deploy-pin assertion that needs no network, for every suite
 /// a repo declares. Three groups, which catch different things and are
@@ -166,6 +190,12 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// does. Block comments come out of the record before this rule runs, so
     /// that what it runs on is what the compiler would see.
     string constant DEPLOYED_ADDRESS_DECLARATION = "address constant DEPLOYED_ADDRESS =";
+
+    /// @dev The declarations a code record carries, matched as
+    /// `DEPLOYED_ADDRESS_DECLARATION` is.
+    string constant BYTECODE_HASH_DECLARATION = "bytes32 constant BYTECODE_HASH =";
+    string constant CREATION_CODE_DECLARATION = "bytes constant CREATION_CODE =";
+    string constant RUNTIME_CODE_DECLARATION = "bytes constant RUNTIME_CODE =";
 
     /// The address a frozen record declares as its deploy address.
     ///
@@ -305,6 +335,155 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
             if (records > declarations) {
                 revert FrozenSnapshotsOutnumberReleases(paths[i], recorded[i], records, declarations);
             }
+        }
+    }
+
+    /// The frozen code records' names: the contracts whose code a release
+    /// freezes without deploying them as suites — parameterised contracts,
+    /// recorded as `BYTECODE_HASH`, `CREATION_CODE` and `RUNTIME_CODE` and no
+    /// deploy address. A frozen file with one of these names is checked as a
+    /// code record by `checkFrozenCodeRecord`; every other frozen file is a
+    /// deploy record and goes through `checkFrozenSnapshotsReleased`.
+    ///
+    /// Matched by name, unlike a deploy record, because a code record has
+    /// nothing else to match on: no address to derive, and bytes that
+    /// legitimately differ between releases — a compiler-profile or dependency
+    /// change regenerates them, and the frozen copy is what keeps the
+    /// generation each release shipped. The name cannot silence anything: a
+    /// deploy record named here is refused for its address, and a code record
+    /// not named here reaches the deploy check and is refused as unreadable.
+    ///
+    /// Empty by default: a repo that freezes only deploy suites names none.
+    /// @return The names, e.g. `TimelockController`.
+    function frozenCodeRecordNames() internal view virtual returns (string[] memory) {
+        return new string[](0);
+    }
+
+    /// `paths` split into the deploy records and the code records, each in
+    /// the order given. A path is a code record when its file name is one of
+    /// `codeRecordNames` plus `.sol`.
+    /// @param paths The frozen record's files.
+    /// @param codeRecordNames The code records' names.
+    /// @return The deploy records.
+    /// @return The code records.
+    function partitionFrozenRecords(string[] memory paths, string[] memory codeRecordNames)
+        internal
+        pure
+        returns (string[] memory, string[] memory)
+    {
+        bool[] memory isCode = new bool[](paths.length);
+        uint256 codeCount = 0;
+        for (uint256 i = 0; i < paths.length; i++) {
+            string[] memory components = vm.split(paths[i], "/");
+            bytes32 file = keccak256(bytes(components[components.length - 1]));
+            for (uint256 j = 0; j < codeRecordNames.length; j++) {
+                if (file == keccak256(bytes(string.concat(codeRecordNames[j], ".sol")))) {
+                    isCode[i] = true;
+                    codeCount++;
+                    break;
+                }
+            }
+        }
+        string[] memory deployRecords = new string[](paths.length - codeCount);
+        string[] memory codeRecords = new string[](codeCount);
+        uint256 deployIndex = 0;
+        uint256 codeIndex = 0;
+        for (uint256 i = 0; i < paths.length; i++) {
+            if (isCode[i]) {
+                codeRecords[codeIndex] = paths[i];
+                codeIndex++;
+            } else {
+                deployRecords[deployIndex] = paths[i];
+                deployIndex++;
+            }
+        }
+        return (deployRecords, codeRecords);
+    }
+
+    /// The line, among `lines`, that starts with `declaration`: exactly one.
+    /// @param path The record file, for the error only.
+    /// @param lines The record's lines, block comments removed.
+    /// @param declaration The declaration text a line must start with.
+    /// @return The line's index.
+    function declarationLine(string memory path, string[] memory lines, string memory declaration)
+        internal
+        pure
+        returns (uint256)
+    {
+        bool found = false;
+        uint256 index = 0;
+        for (uint256 i = 0; i < lines.length; i++) {
+            if (vm.indexOf(lines[i], declaration) != 0) {
+                continue;
+            }
+            if (found) {
+                revert FrozenCodeRecordAmbiguous(path);
+            }
+            index = i;
+            found = true;
+        }
+        if (!found) {
+            revert FrozenCodeRecordUnreadable(path);
+        }
+        return index;
+    }
+
+    /// The value of a `bytes` constant a code record declares: the `hex"..."`
+    /// literal on the declaration's line, or on the line after it when the
+    /// generator wrapped the declaration.
+    /// @param path The record file, for the error only.
+    /// @param lines The record's lines, block comments removed.
+    /// @param line The declaration's line.
+    /// @return The bytes.
+    function declaredBytes(string memory path, string[] memory lines, uint256 line)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        string memory literal = lines[line];
+        if (vm.indexOf(literal, "hex\"") == type(uint256).max) {
+            if (line + 1 >= lines.length) {
+                revert FrozenCodeRecordUnreadable(path);
+            }
+            literal = lines[line + 1];
+        }
+        string[] memory opened = vm.split(literal, "hex\"");
+        if (opened.length != 2) {
+            revert FrozenCodeRecordUnreadable(path);
+        }
+        string[] memory closed = vm.split(opened[1], "\"");
+        return vm.parseBytes(string.concat("0x", closed[0]));
+    }
+
+    /// Checks one frozen code record against itself: it declares the three
+    /// code constants once each and no deploy address, and its runtime code
+    /// hashes to the code hash recorded beside it. Read from the text as
+    /// `recordedDeployedAddress` reads, for the reasons it gives.
+    ///
+    /// The creation code is checked for presence only: with no constructor
+    /// arguments recorded it deploys nothing here, and what it should be is a
+    /// question for the release that cut it, which held its candidate to the
+    /// dependency it was generated from.
+    /// @param path The record file, for the error only.
+    /// @param record The record file's contents.
+    function checkFrozenCodeRecord(string memory path, string memory record) internal pure {
+        string[] memory lines = vm.split(withoutBlockComments(record), "\n");
+        for (uint256 i = 0; i < lines.length; i++) {
+            if (vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) == 0) {
+                revert FrozenCodeRecordDeclaresDeployedAddress(path);
+            }
+        }
+        uint256 hashLine = declarationLine(path, lines, BYTECODE_HASH_DECLARATION);
+        declarationLine(path, lines, CREATION_CODE_DECLARATION);
+        uint256 runtimeLine = declarationLine(path, lines, RUNTIME_CODE_DECLARATION);
+
+        string[] memory tokens = vm.split(lines[hashLine], " ");
+        string memory literal = tokens[tokens.length - 1];
+        bytes32 storedBytecodeHash =
+            vm.parseBytes32(vm.replace(vm.replace(vm.replace(literal, "bytes32(", ""), ")", ""), ";", ""));
+        bytes32 runtimeCodeHash = keccak256(declaredBytes(path, lines, runtimeLine));
+        if (runtimeCodeHash != storedBytecodeHash) {
+            revert FrozenCodeRecordInconsistent(path, storedBytecodeHash, runtimeCodeHash);
         }
     }
 

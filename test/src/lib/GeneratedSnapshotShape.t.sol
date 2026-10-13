@@ -164,15 +164,6 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
         return components[components.length - 1];
     }
 
-    /// The contract a parameterised contract declaration describes, taken from
-    /// its `<path>:<Name>` artifact path, which is also its snapshot's name.
-    /// @param declared The declaration to name.
-    /// @return The contract name.
-    function parameterisedContractName(ParameterisedContract memory declared) internal pure returns (string memory) {
-        string[] memory components = vm.split(declared.artifactPath, ":");
-        return components[components.length - 1];
-    }
-
     /// Every rolling snapshot the walk found that is a deploy record — every
     /// one except the parameterised contracts' code records.
     /// @return One entry per deploy snapshot.

@@ -77,7 +77,7 @@ contract BuildHarness is Build {
         ParameterisedContract[] memory parameterised = parameterisedContracts();
         string[] memory names = new string[](parameterised.length);
         for (uint256 i = 0; i < parameterised.length; i++) {
-            names[i] = parameterisedSnapshotName(parameterised[i]);
+            names[i] = parameterisedContractName(parameterised[i]);
         }
         return names;
     }
