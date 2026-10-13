@@ -42,17 +42,6 @@ contract LibMigrationRegistryWriteCallTest is Test {
         vm.assume(sender != address(vm));
     }
 
-    /// One entry, as a list.
-    /// @param writer The entry's writer.
-    /// @param namespace The entry's namespace.
-    /// @param migration The entry's migration.
-    /// @return The one-entry list.
-    function one(address writer, bytes32 namespace, bytes32 migration) internal pure returns (Prerequisite[] memory) {
-        Prerequisite[] memory prerequisites = new Prerequisite[](1);
-        prerequisites[0] = Prerequisite({writer: writer, namespace: namespace, migration: migration});
-        return prerequisites;
-    }
-
     /// Sends `data` to `to` from `sender` as a low-level call, which is how a
     /// Safe executes a bundle entry and a timelock a batch call, and requires
     /// it to succeed.
@@ -122,7 +111,11 @@ contract LibMigrationRegistryWriteCallTest is Test {
         vm.warp(landedAt);
         vm.prank(upstream);
         IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigration(upstreamNamespace, prerequisite, one(upstream, upstreamNamespace, MIGRATION_HEAD_GENESIS));
+            .applyMigration(
+                upstreamNamespace,
+                prerequisite,
+                LibMigrationRegistry.onto(upstream, upstreamNamespace, MIGRATION_HEAD_GENESIS)
+            );
 
         Prerequisite[] memory prerequisites = new Prerequisite[](2);
         prerequisites[0] = Prerequisite({writer: sender, namespace: namespace, migration: MIGRATION_HEAD_GENESIS});
@@ -168,10 +161,10 @@ contract LibMigrationRegistryWriteCallTest is Test {
         vm.warp(builtAt);
 
         (address toA, bytes memory dataA) = LibMigrationRegistry.applyMigrationHistoryCall(
-            namespace, migrationA, appliedAt, one(sender, namespace, MIGRATION_HEAD_GENESIS)
+            namespace, migrationA, appliedAt, LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS)
         );
         (address toB, bytes memory dataB) = LibMigrationRegistry.applyMigrationHistoryCall(
-            namespace, migrationB, appliedAt, one(sender, namespace, migrationA)
+            namespace, migrationB, appliedAt, LibMigrationRegistry.onto(sender, namespace, migrationA)
         );
         assertEq(toA, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         assertEq(toB, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
@@ -186,7 +179,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assertEq(LibMigrationRegistry.appliedOnto(sender, namespace, migrationB), migrationA);
         assertEq(
             abi.encode(LibMigrationRegistry.appliedAfter(sender, namespace, migrationB)),
-            abi.encode(one(sender, namespace, migrationA))
+            abi.encode(LibMigrationRegistry.onto(sender, namespace, migrationA))
         );
         assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationA), 0);
     }
@@ -203,7 +196,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
         deployRegistry();
 
         (address to, bytes memory data) = LibMigrationRegistry.applyMigrationCall(
-            namespace, migration, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
+            namespace, migration, LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS)
         );
 
         vm.prank(sender);
@@ -232,7 +225,8 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assumeSender(sender);
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
         bytes memory data = abi.encodeCall(
-            IMigrationRegistryV2.applyMigration, (namespace, migration, one(sender, namespace, MIGRATION_HEAD_GENESIS))
+            IMigrationRegistryV2.applyMigration,
+            (namespace, migration, LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS))
         );
         send(sender, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, data);
 
@@ -243,7 +237,9 @@ contract LibMigrationRegistryWriteCallTest is Test {
                 bytes32(0)
             )
         );
-        this.externalApplyMigrationCall(namespace, migration, one(sender, namespace, MIGRATION_HEAD_GENESIS));
+        this.externalApplyMigrationCall(
+            namespace, migration, LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS)
+        );
     }
 
     /// Nor is the history call built for a chain with no registry.
