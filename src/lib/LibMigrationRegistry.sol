@@ -244,15 +244,16 @@ library LibMigrationRegistry {
     /// @param namespace The line under `writer` the write names. Never zero.
     /// @param headMigration The migration `writer` applied last in
     /// `namespace`, or `MIGRATION_HEAD_GENESIS` for the first in the line.
-    /// @return prerequisites The one-entry list, in the shape `applyMigration`
+    /// @return The one-entry list, in the shape `applyMigration`
     /// and `applyMigrationHistory` take and `appliedAfter` answers.
     function onto(address writer, bytes32 namespace, bytes32 headMigration)
         internal
         pure
-        returns (Prerequisite[] memory prerequisites)
+        returns (Prerequisite[] memory)
     {
-        prerequisites = new Prerequisite[](1);
+        Prerequisite[] memory prerequisites = new Prerequisite[](1);
         prerequisites[0] = Prerequisite({writer: writer, namespace: namespace, migration: headMigration});
+        return prerequisites;
     }
 
     /// Applies `migration` under the CALLER in `namespace`, after

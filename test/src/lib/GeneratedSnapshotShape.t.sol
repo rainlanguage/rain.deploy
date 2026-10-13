@@ -49,15 +49,16 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// remembering to add it — which is the failure mode a shape spec is least
     /// able to notice, since a file nobody checks looks exactly like a file
     /// that passes.
-    /// @return names One entry per snapshot, e.g. `AddressRegistry`.
-    function snapshotContractNames() internal view returns (string[] memory names) {
+    /// @return One entry per snapshot, e.g. `AddressRegistry`.
+    function snapshotContractNames() internal view returns (string[] memory) {
         Vm.DirEntry[] memory entries = vm.readDir(LibRainDeploySnapshot.dirForSnapshot(LibRainDeploySnapshot.CANDIDATE));
 
-        names = new string[](entries.length);
+        string[] memory names = new string[](entries.length);
         for (uint256 i = 0; i < entries.length; i++) {
             string[] memory components = vm.split(entries[i].path, "/");
             names[i] = vm.replace(components[components.length - 1], ".sol", "");
         }
+        return names;
     }
 
     /// The artifact for one generated snapshot, which carries its AST.
@@ -73,8 +74,8 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// wildcard: foundry's JSON path support requires a path to resolve to
     /// exactly one value, so the wildcard is rejected outright.
     /// @param contractName The contract the snapshot describes.
-    /// @return types One entry per top-level AST node.
-    function nodeTypes(string memory contractName) internal view returns (string[] memory types) {
+    /// @return One entry per top-level AST node.
+    function nodeTypes(string memory contractName) internal view returns (string[] memory) {
         string memory json = vm.readFile(artifactPath(contractName));
         string[] memory found = new string[](64);
         uint256 count = 0;
@@ -82,17 +83,18 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
             found[count] = vm.parseJsonString(json, string.concat("$.ast.nodes[", vm.toString(count), "].nodeType"));
             count++;
         }
-        types = new string[](count);
+        string[] memory types = new string[](count);
         for (uint256 i = 0; i < count; i++) {
             types[i] = found[i];
         }
+        return types;
     }
 
     /// The declared constants of a generated snapshot, in file order, as
     /// `<type> <NAME>` — read from the AST, so formatting cannot affect it.
     /// @param contractName The contract the snapshot describes.
-    /// @return declarations One entry per file-level constant.
-    function constantDeclarations(string memory contractName) internal view returns (string[] memory declarations) {
+    /// @return One entry per file-level constant.
+    function constantDeclarations(string memory contractName) internal view returns (string[] memory) {
         string memory json = vm.readFile(artifactPath(contractName));
         string[] memory types = nodeTypes(contractName);
 
@@ -111,10 +113,11 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
             );
             count++;
         }
-        declarations = new string[](count);
+        string[] memory declarations = new string[](count);
         for (uint256 i = 0; i < count; i++) {
             declarations[i] = found[i];
         }
+        return declarations;
     }
 
     /// The contract a candidate describes, taken from the `<path>:<Name>`

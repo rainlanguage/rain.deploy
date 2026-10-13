@@ -26,8 +26,8 @@ import {
 /// candidate is present and correct.
 contract NoCandidateDeploySuites is ExternalDeploySuites {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](1);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = DeploySuite({
             suite: "address-registry@0_0_1",
             creationCode: ADDRESS_REGISTRY_CREATION_CODE,
@@ -37,10 +37,12 @@ contract NoCandidateDeploySuites is ExternalDeploySuites {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0)
         });
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](0);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](0);
+        return candidates;
     }
 }

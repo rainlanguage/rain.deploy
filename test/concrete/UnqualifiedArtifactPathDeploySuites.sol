@@ -30,13 +30,14 @@ import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 /// and the position is what names the entry at fault.
 contract UnqualifiedArtifactPathDeploySuites is ExternalDeploySuites {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](0);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](0);
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](2);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "qualified-candidate",
@@ -61,5 +62,6 @@ contract UnqualifiedArtifactPathDeploySuites is ExternalDeploySuites {
             }),
             unanchorableReason: ""
         });
+        return candidates;
     }
 }

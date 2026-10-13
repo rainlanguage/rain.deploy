@@ -46,13 +46,14 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 /// `DEPLOYMENT_SUITE` is a process-wide variable other tests write.
 abstract contract SourceMismatchDeploySuites is RainDeploySuitesBase {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](0);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](0);
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](2);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "anchored-candidate",
@@ -78,5 +79,6 @@ abstract contract SourceMismatchDeploySuites is RainDeploySuitesBase {
             }),
             unanchorableReason: ""
         });
+        return candidates;
     }
 }

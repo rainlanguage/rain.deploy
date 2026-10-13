@@ -34,9 +34,10 @@ contract RainDeployVerifyChainNarrowNetworksTest is ExampleDeploySuites, RainDep
     /// @inheritdoc RainDeploySuitesBase
     /// @dev ONE network, and base rather than either end of the library's
     /// list, so a run that ignored the declaration ends on arbitrum or polygon.
-    function supportedNetworks() internal pure override returns (string[] memory networks) {
-        networks = new string[](1);
+    function supportedNetworks() internal pure override returns (string[] memory) {
+        string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.BASE;
+        return networks;
     }
 
     /// The second suite's address, derived from `MockDeployableV2`'s creation

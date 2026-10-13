@@ -743,8 +743,8 @@ library LibRainDeploy {
     /// contract's constructor: an address that merely has SOMETHING at it
     /// satisfies no constructor that calls it, and the derived code hash this
     /// broadcast carries was computed against the declared bytes.
-    /// @return deployedAddress The deployed contract address.
-    /// @return forkIds The fork each network was deployed on, positionally
+    /// @return The deployed contract address.
+    /// @return The fork each network was deployed on, positionally
     /// paired with `networks`. Handed back rather than dropped because the
     /// deployment exists ONLY on them until forge submits what this recorded,
     /// so they are what `checkResolvedAddressesOnForks` verifies a first-time
@@ -758,7 +758,7 @@ library LibRainDeploy {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (address deployedAddress, uint256[] memory forkIds) {
+    ) internal returns (address, uint256[] memory) {
         if (networks.length == 0) {
             revert NoNetworks();
         }
@@ -772,7 +772,7 @@ library LibRainDeploy {
         if (derivedAddress != expectedAddress) {
             revert UnexpectedDeployedAddress(expectedAddress, derivedAddress);
         }
-        forkIds = createForks(vm, networks);
+        uint256[] memory forkIds = createForks(vm, networks);
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
             console2.log("Deploying to network:", networks[i]);
@@ -826,8 +826,8 @@ library LibRainDeploy {
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The dependencies to check, each an address and the
     /// runtime code that must be at it.
-    /// @return deployedAddress The address of the deployed contract.
-    /// @return forkIds The fork each network was deployed on, as
+    /// @return The address of the deployed contract.
+    /// @return The fork each network was deployed on, as
     /// `deployToNetworks` returns them.
     function deployAndBroadcast(
         Vm vm,
@@ -838,7 +838,7 @@ library LibRainDeploy {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (address deployedAddress, uint256[] memory forkIds) {
+    ) internal returns (address, uint256[] memory) {
         if (networks.length == 0) {
             revert NoNetworks();
         }

@@ -33,14 +33,11 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// @param writer The prerequisite's writer.
     /// @param namespace The prerequisite's namespace.
     /// @param migration The prerequisite's migration.
-    /// @return prerequisites The one-entry list.
-    function one(address writer, bytes32 namespace, bytes32 migration)
-        internal
-        pure
-        returns (Prerequisite[] memory prerequisites)
-    {
-        prerequisites = new Prerequisite[](1);
+    /// @return The one-entry list.
+    function one(address writer, bytes32 namespace, bytes32 migration) internal pure returns (Prerequisite[] memory) {
+        Prerequisite[] memory prerequisites = new Prerequisite[](1);
         prerequisites[0] = Prerequisite({writer: writer, namespace: namespace, migration: migration});
+        return prerequisites;
     }
 
     /// Two prerequisites, as a list, in the order given.
@@ -50,7 +47,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// @param writerB The second prerequisite's writer.
     /// @param namespaceB The second prerequisite's namespace.
     /// @param migrationB The second prerequisite's migration.
-    /// @return prerequisites The two-entry list.
+    /// @return The two-entry list.
     function two(
         address writerA,
         bytes32 namespaceA,
@@ -58,10 +55,11 @@ contract MigrationRegistryApplyMigrationTest is Test {
         address writerB,
         bytes32 namespaceB,
         bytes32 migrationB
-    ) internal pure returns (Prerequisite[] memory prerequisites) {
-        prerequisites = new Prerequisite[](2);
+    ) internal pure returns (Prerequisite[] memory) {
+        Prerequisite[] memory prerequisites = new Prerequisite[](2);
         prerequisites[0] = Prerequisite({writer: writerA, namespace: namespaceA, migration: migrationA});
         prerequisites[1] = Prerequisite({writer: writerB, namespace: namespaceB, migration: migrationB});
+        return prerequisites;
     }
 
     /// The list a write under `writer` in `namespace` onto `head` after
@@ -71,17 +69,18 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// @param namespace The namespace the record is in.
     /// @param head The head it is applied onto.
     /// @param prerequisites The records it waits on.
-    /// @return list The head-first list.
+    /// @return The head-first list.
     function headThen(address writer, bytes32 namespace, bytes32 head, Prerequisite[] memory prerequisites)
         internal
         pure
-        returns (Prerequisite[] memory list)
+        returns (Prerequisite[] memory)
     {
-        list = new Prerequisite[](prerequisites.length + 1);
+        Prerequisite[] memory list = new Prerequisite[](prerequisites.length + 1);
         list[0] = Prerequisite({writer: writer, namespace: namespace, migration: head});
         for (uint256 i = 0; i < prerequisites.length; i++) {
             list[i + 1] = prerequisites[i];
         }
+        return list;
     }
 
     /// The list of a write under `writer` in `namespace` onto `head` that
@@ -102,9 +101,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// entry is a key. The reserved values are still refused rather than
     /// mapped around, so nothing here quietly redefines what a key is.
     /// @param seeds The fuzzed seeds.
-    /// @return prerequisites One key per seed, in seed order.
-    function keysFromSeeds(bytes32[] memory seeds) internal pure returns (Prerequisite[] memory prerequisites) {
-        prerequisites = new Prerequisite[](seeds.length);
+    /// @return One key per seed, in seed order.
+    function keysFromSeeds(bytes32[] memory seeds) internal pure returns (Prerequisite[] memory) {
+        Prerequisite[] memory prerequisites = new Prerequisite[](seeds.length);
         for (uint256 i = 0; i < seeds.length; i++) {
             prerequisites[i] = Prerequisite({
                 writer: address(uint160(uint256(keccak256(abi.encode(seeds[i], "writer"))))),
@@ -115,6 +114,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
             vm.assume(prerequisites[i].namespace != bytes32(0));
             LibMigrationFuzz.assumeMigration(vm, prerequisites[i].migration);
         }
+        return prerequisites;
     }
 
     /// Applies `migration` under `writer` in `namespace` onto wherever that
