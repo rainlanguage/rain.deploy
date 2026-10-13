@@ -61,6 +61,11 @@ library LibTimelockController {
     /// @param account The account holding it.
     error TimelockUnexpectedRole(address timelock, bytes32 role, address account);
 
+    /// The proposer is `address(0)`. The constructor would grant
+    /// `PROPOSER_ROLE` to an account no caller can act as, so nobody could
+    /// ever schedule on the timelock.
+    error TimelockZeroProposer();
+
     /// The FROZEN creation code of the timelock: OpenZeppelin 5.7.0
     /// `TimelockController` compiled by solc 0.8.25, optimizer on at 2000 runs,
     /// `cancun`, no CBOR metadata. This generation is deployed in production, so
@@ -84,12 +89,16 @@ library LibTimelockController {
     /// with the constructor arguments of the role model appended — `minDelay`,
     /// `proposer` as the sole proposer (and so a canceller), `address(0)` as the
     /// sole executor so execution is open, and `address(0)` as `admin` so the
-    /// timelock administers itself from birth.
+    /// timelock administers itself from birth. Reverts with
+    /// `TimelockZeroProposer` when `proposer` is `address(0)`.
     /// @param minDelay The minimum delay in seconds between `schedule` and
     /// `execute`.
     /// @param proposer The sole proposer.
     /// @return The creation code including constructor arguments.
     function timelockInitCode(uint256 minDelay, address proposer) internal pure returns (bytes memory) {
+        if (proposer == address(0)) {
+            revert TimelockZeroProposer();
+        }
         address[] memory proposers = new address[](1);
         proposers[0] = proposer;
         address[] memory executors = new address[](1);

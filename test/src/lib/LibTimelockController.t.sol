@@ -26,6 +26,14 @@ contract LibTimelockControllerTest is Test {
         LibTimelockController.assertTimelockState(timelock, minDelay, proposer, cancellers);
     }
 
+    function callTimelockInitCode(uint256 minDelay, address proposer) external pure returns (bytes memory) {
+        return LibTimelockController.timelockInitCode(minDelay, proposer);
+    }
+
+    function callExpectedTimelockAddress(uint256 minDelay, address proposer) external pure returns (address) {
+        return LibTimelockController.expectedTimelockAddress(minDelay, proposer);
+    }
+
     function noCancellers() internal pure returns (address[] memory) {
         return new address[](0);
     }
@@ -82,6 +90,18 @@ contract LibTimelockControllerTest is Test {
         address base = LibTimelockController.expectedTimelockAddress(MIN_DELAY, PROPOSER);
         assertNotEq(base, LibTimelockController.expectedTimelockAddress(MIN_DELAY + 1, PROPOSER));
         assertNotEq(base, LibTimelockController.expectedTimelockAddress(MIN_DELAY, address(0xBEEF)));
+    }
+
+    /// A zero proposer is refused: nobody could ever schedule on the timelock.
+    function testInitCodeRefusesZeroProposer(uint256 minDelay) external {
+        vm.expectRevert(abi.encodeWithSelector(LibTimelockController.TimelockZeroProposer.selector));
+        this.callTimelockInitCode(minDelay, address(0));
+    }
+
+    /// The address derivation refuses a zero proposer, as the init code does.
+    function testExpectedAddressRefusesZeroProposer(uint256 minDelay) external {
+        vm.expectRevert(abi.encodeWithSelector(LibTimelockController.TimelockZeroProposer.selector));
+        this.callExpectedTimelockAddress(minDelay, address(0));
     }
 
     /// The init code constructs the role model: the delay, the proposer as

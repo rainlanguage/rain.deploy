@@ -100,6 +100,14 @@ contract LibTimelockControllerDeployTest is Test {
         this.callDeployTimelock(DEPLOYER, MIN_DELAY, PROPOSER, address(0));
     }
 
+    /// A zero proposer is refused with its own error, before the expected
+    /// address is compared or the chain is read.
+    function testZeroProposerIsRefused() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        vm.expectRevert(abi.encodeWithSelector(LibTimelockController.TimelockZeroProposer.selector));
+        this.callDeployTimelock(DEPLOYER, MIN_DELAY, address(0), expected());
+    }
+
     /// A fresh deploy without the factory is refused.
     function testMissingFactoryIsRefused() external {
         vm.expectRevert(
