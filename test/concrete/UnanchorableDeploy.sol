@@ -48,13 +48,14 @@ bytes constant ASSEMBLED_CREATION_CODE = hex"600160005360016000f3";
 /// repo actually has rather than one where nothing is anchored.
 contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](0);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](0);
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](3);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](3);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "compiled-candidate",
@@ -95,5 +96,6 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
             }),
             unanchorableReason: "Assembled from generated tables: there is no source file to compile."
         });
+        return candidates;
     }
 }

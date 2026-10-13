@@ -30,14 +30,11 @@ contract MigrationRegistryAppliedAfterTest is Test {
     /// @param writer The prerequisite's writer.
     /// @param namespace The prerequisite's namespace.
     /// @param migration The prerequisite's migration.
-    /// @return prerequisites The one-entry list.
-    function one(address writer, bytes32 namespace, bytes32 migration)
-        internal
-        pure
-        returns (Prerequisite[] memory prerequisites)
-    {
-        prerequisites = new Prerequisite[](1);
+    /// @return The one-entry list.
+    function one(address writer, bytes32 namespace, bytes32 migration) internal pure returns (Prerequisite[] memory) {
+        Prerequisite[] memory prerequisites = new Prerequisite[](1);
         prerequisites[0] = Prerequisite({writer: writer, namespace: namespace, migration: migration});
+        return prerequisites;
     }
 
     /// The empty list, so a test says what it expects rather than a length.
@@ -52,18 +49,19 @@ contract MigrationRegistryAppliedAfterTest is Test {
     /// @param namespace The line the record is in.
     /// @param head The head it is applied onto.
     /// @param prerequisites The records it waits on.
-    /// @return recorded The head under the writer in the namespace, then the
+    /// @return The head under the writer in the namespace, then the
     /// prerequisites.
     function headThen(address writer, bytes32 namespace, bytes32 head, Prerequisite[] memory prerequisites)
         internal
         pure
-        returns (Prerequisite[] memory recorded)
+        returns (Prerequisite[] memory)
     {
-        recorded = new Prerequisite[](prerequisites.length + 1);
+        Prerequisite[] memory recorded = new Prerequisite[](prerequisites.length + 1);
         recorded[0] = Prerequisite({writer: writer, namespace: namespace, migration: head});
         for (uint256 i = 0; i < prerequisites.length; i++) {
             recorded[i + 1] = prerequisites[i];
         }
+        return recorded;
     }
 
     /// Applies `migration` under `writer` in `namespace` onto wherever that

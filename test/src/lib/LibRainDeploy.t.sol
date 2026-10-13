@@ -85,13 +85,10 @@ contract LibRainDeployTest is Test {
     /// read. Nothing is made persistent, so it exists on the returned forks and
     /// nowhere else, which is the state a deploy script is in when it returns.
     /// @param networks The network names to deploy to.
-    /// @return deployed The deterministic address it landed at.
-    /// @return forkIds The fork each network was deployed on.
-    function deployMockDeployableOwner(string[] memory networks)
-        internal
-        returns (address deployed, uint256[] memory forkIds)
-    {
-        (deployed, forkIds) = this.externalDeployToNetworks(
+    /// @return The deterministic address it landed at.
+    /// @return The fork each network was deployed on.
+    function deployMockDeployableOwner(string[] memory networks) internal returns (address, uint256[] memory) {
+        (address deployed, uint256[] memory forkIds) = this.externalDeployToNetworks(
             networks,
             address(this),
             type(MockDeployableOwner).creationCode,
@@ -100,6 +97,7 @@ contract LibRainDeployTest is Test {
             keccak256(type(MockDeployableOwner).runtimeCode),
             new DeployDependency[](0)
         );
+        return (deployed, forkIds);
     }
 
     /// The address `MockDeployableOwner.iChainOwner` answers on a given chain.
@@ -116,12 +114,13 @@ contract LibRainDeployTest is Test {
     /// @param target The contract address to check.
     /// @param expectedCodeHash The code hash to look for.
     /// @param blockNumber The block number to check.
-    /// @return isStart True if the contract first appears at this block.
+    /// @return True if the contract first appears at this block.
     function externalIsStartBlock(address target, bytes32 expectedCodeHash, uint256 blockNumber)
         external
-        returns (bool isStart)
+        returns (bool)
     {
-        isStart = LibRainDeploy.isStartBlock(vm, target, expectedCodeHash, blockNumber);
+        bool isStart = LibRainDeploy.isStartBlock(vm, target, expectedCodeHash, blockNumber);
+        return isStart;
     }
 
     /// External wrapper for `findDeployBlock` so that `vm.expectRevert`
@@ -129,12 +128,13 @@ contract LibRainDeployTest is Test {
     /// @param target The contract address to search for.
     /// @param expectedCodeHash The expected code hash of the target.
     /// @param startBlock The earliest block to search from.
-    /// @return deployBlock The first block number where `target` has code.
+    /// @return The first block number where `target` has code.
     function externalFindDeployBlock(address target, bytes32 expectedCodeHash, uint256 startBlock)
         external
-        returns (uint256 deployBlock)
+        returns (uint256)
     {
-        deployBlock = LibRainDeploy.findDeployBlock(vm, target, expectedCodeHash, startBlock);
+        uint256 deployBlock = LibRainDeploy.findDeployBlock(vm, target, expectedCodeHash, startBlock);
+        return deployBlock;
     }
 
     /// `isStartBlock` MUST return false when the target has no code at the
@@ -477,8 +477,8 @@ contract LibRainDeployTest is Test {
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The dependencies to check, each an address and the
     /// runtime code that must be at it.
-    /// @return deployedAddress The deployed contract address.
-    /// @return forkIds The fork each network was deployed on.
+    /// @return The deployed contract address.
+    /// @return The fork each network was deployed on.
     function externalDeployAndBroadcast(
         string[] memory networks,
         uint256 deployerPrivateKey,
@@ -487,8 +487,8 @@ contract LibRainDeployTest is Test {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) external returns (address deployedAddress, uint256[] memory forkIds) {
-        (deployedAddress, forkIds) = LibRainDeploy.deployAndBroadcast(
+    ) external returns (address, uint256[] memory) {
+        (address deployedAddress, uint256[] memory forkIds) = LibRainDeploy.deployAndBroadcast(
             vm,
             networks,
             deployerPrivateKey,
@@ -498,6 +498,7 @@ contract LibRainDeployTest is Test {
             expectedCodeHash,
             dependencies
         );
+        return (deployedAddress, forkIds);
     }
 
     /// Empty networks array MUST revert with `NoNetworks`.
@@ -626,8 +627,8 @@ contract LibRainDeployTest is Test {
     /// @param dependencies The addresses that must already have code on a
     /// network before this contract can be broadcast there, each paired with
     /// the runtime code that must be at it.
-    /// @return deployedAddress The deployed contract address.
-    /// @return forkIds The fork each network was deployed on.
+    /// @return The deployed contract address.
+    /// @return The fork each network was deployed on.
     function externalDeployToNetworks(
         string[] memory networks,
         address deployer,
@@ -636,25 +637,28 @@ contract LibRainDeployTest is Test {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) external returns (address deployedAddress, uint256[] memory forkIds) {
-        (deployedAddress, forkIds) = LibRainDeploy.deployToNetworks(
+    ) external returns (address, uint256[] memory) {
+        (address deployedAddress, uint256[] memory forkIds) = LibRainDeploy.deployToNetworks(
             vm, networks, deployer, creationCode, contractPath, expectedAddress, expectedCodeHash, dependencies
         );
+        return (deployedAddress, forkIds);
     }
 
     /// External wrapper for `deployZoltu` so that it can be called on a fork.
     /// @param creationCode The creation code to deploy via the Zoltu factory.
-    /// @return deployedAddress The address of the deployed contract.
-    function externalDeployZoltu(bytes memory creationCode) external returns (address deployedAddress) {
-        deployedAddress = LibRainDeploy.deployZoltu(creationCode);
+    /// @return The address of the deployed contract.
+    function externalDeployZoltu(bytes memory creationCode) external returns (address) {
+        address deployedAddress = LibRainDeploy.deployZoltu(creationCode);
+        return deployedAddress;
     }
 
     /// External wrapper for `deployZoltu` that carries value, so that what the
     /// library does with the caller's value is observable.
     /// @param creationCode The creation code to deploy via the Zoltu factory.
-    /// @return deployedAddress The address of the deployed contract.
-    function externalDeployZoltuPayable(bytes memory creationCode) external payable returns (address deployedAddress) {
-        deployedAddress = LibRainDeploy.deployZoltu(creationCode);
+    /// @return The address of the deployed contract.
+    function externalDeployZoltuPayable(bytes memory creationCode) external payable returns (address) {
+        address deployedAddress = LibRainDeploy.deployZoltu(creationCode);
+        return deployedAddress;
     }
 
     /// `deployZoltu` MUST deploy a contract via the Zoltu factory and return
@@ -695,9 +699,10 @@ contract LibRainDeployTest is Test {
     /// External wrapper for `LibRainDeploy.etchAndDeployZoltu` so
     /// `expectRevert` can catch its revert.
     /// @param creationCode The creation code to deploy.
-    /// @return deployedAddress The address of the deployed contract.
-    function externalEtchAndDeployZoltu(bytes memory creationCode) external returns (address deployedAddress) {
-        deployedAddress = LibRainDeploy.etchAndDeployZoltu(vm, creationCode);
+    /// @return The address of the deployed contract.
+    function externalEtchAndDeployZoltu(bytes memory creationCode) external returns (address) {
+        address deployedAddress = LibRainDeploy.etchAndDeployZoltu(vm, creationCode);
+        return deployedAddress;
     }
 
     /// `etchAndDeployZoltu` MUST deploy in an EVM that has no Zoltu factory,
@@ -1307,16 +1312,18 @@ contract LibRainDeployTest is Test {
     /// consumer that resolves `name` once in its constructor.
     /// @param name The name to bind and resolve.
     /// @param account The address to bind it to.
-    /// @return registry The deployed registry.
-    /// @return consumer The deployed consumer holding the resolved address.
+    /// @return The deployed registry.
+    /// @return The deployed consumer holding the resolved address.
     function deployRegistryAndConsumer(bytes32 name, address account)
         internal
-        returns (IAddressRegistryV1 registry, MockResolvedOwner consumer)
+        returns (IAddressRegistryV1, MockResolvedOwner)
     {
-        registry = IAddressRegistryV1(LibRainDeploy.etchAndDeployZoltu(vm, type(AddressRegistry).creationCode));
+        IAddressRegistryV1 registry =
+            IAddressRegistryV1(LibRainDeploy.etchAndDeployZoltu(vm, type(AddressRegistry).creationCode));
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, account);
-        consumer = new MockResolvedOwner(name);
+        MockResolvedOwner consumer = new MockResolvedOwner(name);
+        return (registry, consumer);
     }
 
     /// The calldata for reading `MockResolvedOwner`'s stored address.
