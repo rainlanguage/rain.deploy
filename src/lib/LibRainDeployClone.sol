@@ -80,14 +80,6 @@ struct CloneTarget {
     bytes32 salt;
 }
 
-/// One network's init data, for a clone whose init data differs by network.
-struct CloneNetworkData {
-    /// The chain id of the network this data is for.
-    uint256 chainId;
-    /// The init data on that network. See `CloneTarget.data`.
-    bytes data;
-}
-
 /// One network's clone, as a per-network clone suite records it: the init data
 /// on that network and the address that data puts the clone at.
 struct CloneNetwork {
@@ -130,12 +122,15 @@ struct CloneNetworks {
 /// it: the suite key, the `CloneTarget` fields, and the dependencies.
 ///
 /// The init data is declared one of two ways. A clone initialized with the
-/// same bytes everywhere declares them in `data` and leaves `networkData`
-/// empty; it lands at one address on every network. A clone initialized
-/// differently per network — an admin that is a different account on one
-/// chain — declares one `networkData` entry per network and leaves `data`
-/// empty; it lands at a different address wherever its data differs, and a
-/// network with no entry is refused rather than defaulted.
+/// same bytes everywhere declares them in `data`, leaves `initDataPerNetwork`
+/// false and gives `LibRainDeployClone.noInitDataPerNetwork` as `initData`; it
+/// lands at one address on every network. A clone initialized differently per
+/// network — an admin that is a different account on one chain — sets
+/// `initDataPerNetwork`, leaves `data` empty and gives `initData`, ONE function
+/// from a chain id to that network's init data. It is read for the chain id of
+/// every network in the repo's `supportedNetworks()`, in that order, so the
+/// clone lands at a different address wherever its data differs, and a network
+/// the function has no data for reverts rather than being defaulted.
 ///
 /// `LibRainDeployMechanism.cloneCandidate` turns it into the candidate every
 /// other part of this package reads, so the declaration is this one entry.
@@ -149,11 +144,15 @@ struct CloneDeploy {
     /// See `CloneTarget.implementation`.
     address implementation;
     /// The init data on every network. See `CloneTarget.data`. MUST be empty
-    /// when `networkData` is not.
+    /// when `initDataPerNetwork` is set.
     bytes data;
-    /// The init data per network, keyed by chain id. Empty for a clone whose
-    /// init data is `data` on every network.
-    CloneNetworkData[] networkData;
+    /// Whether the init data is `initData` per network rather than `data` on
+    /// every network.
+    bool initDataPerNetwork;
+    /// The init data on the network with the given chain id. Read for each
+    /// supported network when `initDataPerNetwork` is set, and never read
+    /// otherwise. MUST revert for a chain id it has no init data for.
+    function(uint256) view returns (bytes memory) initData;
     /// See `CloneTarget.salt`.
     bytes32 salt;
     /// What MUST already be on a network, with exactly this code, before the
@@ -240,6 +239,19 @@ library LibRainDeployClone {
     /// @param declared The chain id the init data was resolved for.
     /// @param reported The chain id the network reports.
     error CloneNetworkChainIdMismatch(string network, uint256 declared, uint256 reported);
+
+    /// Thrown by `noInitDataPerNetwork`, the `initData` of a clone whose init
+    /// data is `data` on every network.
+    /// @param chainId The chain id it was asked for.
+    error NoInitDataPerNetwork(uint256 chainId);
+
+    /// The `CloneDeploy.initData` of a clone whose init data is `data` on every
+    /// network. Nothing reads it; it reverts if anything does.
+    /// @param chainId The chain id asked for.
+    /// @return Never returns.
+    function noInitDataPerNetwork(uint256 chainId) internal pure returns (bytes memory) {
+        revert NoInitDataPerNetwork(chainId);
+    }
 
     /// The clone's creation code: the EIP-1167 initcode the factory `CREATE2`s,
     /// from `rain-factory`'s own helper.

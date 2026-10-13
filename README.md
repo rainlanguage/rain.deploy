@@ -135,13 +135,15 @@ contract Deploy is MyCloneDeploys, RainDeployBroadcast {}
 ```
 
 A `CloneDeploy` is the suite key, the factory, the implementation, the init data
-— one `data` for every network, or `networkData` per network (see
+— one `data` for every network, or an `initData` function per network (see
 [Init data per network](#init-data-per-network)) — the salt and the
-dependencies. The dependencies MUST name both the factory and the
-implementation, each paired with its runtime code; a clone missing either is
-refused with `CloneDependencyUndeclared`. The factory's entry pins the code that
-performs the clone, and the implementation's pins the code the clone delegates
-to — the clone's own code hash only says WHICH address it delegates to.
+dependencies. A clone with one `data` sets `initDataPerNetwork: false` and gives
+`LibRainDeployClone.noInitDataPerNetwork` as its `initData`, which nothing
+reads. The dependencies MUST name both the factory and the implementation, each
+paired with its runtime code; a clone missing either is refused with
+`CloneDependencyUndeclared`. The factory's entry pins the code that performs the
+clone, and the implementation's pins the code the clone delegates to — the
+clone's own code hash only says WHICH address it delegates to.
 
 `RainDeployCloneSuitesBase` derives `candidateSuites()` from the clone list with
 `LibRainDeployMechanism.cloneCandidate`, so it is still ONE list. Each candidate
@@ -212,16 +214,43 @@ forever.
 
 A clone's address covers its init data, so a clone initialized differently on
 each network — an admin that is a different Safe on one chain than on the others
-— is at a different address on each. Such a clone declares `networkData`, a
-`CloneNetworkData` (chain id, init data) per network, and leaves `data` empty;
-declaring both is refused with `CloneDataAmbiguous`. A clone whose init data is
-the same everywhere declares `data` and an empty `networkData`, and is the
+— is at a different address on each. Such a clone sets `initDataPerNetwork`,
+leaves `data` empty, and gives ONE function from a chain id to that network's
+init data:
+
+```solidity
+function authoriserInitData(uint256 chainId) pure returns (bytes memory) {
+    return abi.encode(LibSafeInvariants.safeForChainId(chainId));
+}
+
+function cloneDeploys() internal pure override returns (CloneDeploy[] memory clones) {
+    clones = new CloneDeploy[](1);
+    clones[0] = CloneDeploy({
+        suite: "authoriser",
+        factory: FACTORY,
+        implementation: IMPLEMENTATION,
+        data: "",
+        initDataPerNetwork: true,
+        initData: authoriserInitData,
+        salt: SALT,
+        dependencies: dependencies()
+    });
+}
+```
+
+`RainDeployCloneSuitesBase` reads that function once for each network in
+`supportedNetworks()`, in that order, with the chain id the network catalogue
+gives it, so the clone's networks are exactly the repo's and no chain id is
+written twice. A chain id the function reverts on reverts every reader of the
+candidates with that revert; it is never skipped or defaulted. Setting
+`initDataPerNetwork` beside a non-empty `data` is refused with
+`CloneDataAmbiguous`. A clone whose init data is the same everywhere is the
 `Clone` suite described above.
 
-`cloneCandidate` turns a `networkData` declaration into a suite whose
-`mechanism` is `DeployMechanism.ClonePerNetwork` and whose `mechanismData` is
-the `abi.encode`d `CloneNetworks`: the shared factory, implementation and salt,
-and per network its chain id, init data and the address derived from them. Its
+`cloneCandidate` turns a per-network declaration into a suite whose `mechanism`
+is `DeployMechanism.ClonePerNetwork` and whose `mechanismData` is the
+`abi.encode`d `CloneNetworks`: the shared factory, implementation and salt, and
+per network its chain id, init data and the address derived from them. Its
 `storedDeployedAddress` is zero — the addresses live in `CloneNetworks` — and a
 nonzero one is refused with `UnexpectedStoredDeployedAddress`. A `CloneNetworks`
 with no networks is refused with `NoCloneNetworks`, and one naming a chain id

@@ -5,13 +5,19 @@ pragma solidity =0.8.25;
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {PerNetworkCloneDeploys} from "../abstract/PerNetworkCloneDeploys.sol";
+import {ExternalCloneDeploySuites} from "../abstract/ExternalCloneDeploySuites.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 
 /// @title PerNetworkCloneDeploy
 /// A per-network clone deploy repo's whole script: the declaration plus
 /// `RainDeployBroadcast`, with external wrappers so a plain `Test` contract
 /// can drive it.
-contract PerNetworkCloneDeploy is PerNetworkCloneDeploys, ExternalDeploySuites, RainDeployBroadcast {
+contract PerNetworkCloneDeploy is
+    PerNetworkCloneDeploys,
+    ExternalCloneDeploySuites,
+    ExternalDeploySuites,
+    RainDeployBroadcast
+{
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()
         internal

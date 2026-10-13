@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
 import {DeployMechanism, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
-import {CLONE_ARTIFACT_PATH, CloneDeploy, CloneNetworkData} from "../../src/lib/LibRainDeployClone.sol";
+import {CLONE_ARTIFACT_PATH, CloneDeploy, LibRainDeployClone} from "../../src/lib/LibRainDeployClone.sol";
 import {DeployDependency, LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {MockCloneFactory} from "../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../concrete/MockCloneable.sol";
@@ -80,7 +80,8 @@ function exampleCloneRelease() pure returns (CloneDeploy memory) {
         factory: exampleCloneFactory(),
         implementation: exampleCloneImplementation(),
         data: "",
-        networkData: new CloneNetworkData[](0),
+        initDataPerNetwork: false,
+        initData: LibRainDeployClone.noInitDataPerNetwork,
         salt: bytes32(uint256(3)),
         dependencies: exampleCloneDependencies()
     });
@@ -139,7 +140,8 @@ abstract contract ExampleCloneDeploys is RainDeployCloneSuitesBase {
             factory: exampleCloneFactory(),
             implementation: exampleCloneImplementation(),
             data: "",
-            networkData: new CloneNetworkData[](0),
+            initDataPerNetwork: false,
+            initData: LibRainDeployClone.noInitDataPerNetwork,
             salt: bytes32(uint256(1)),
             dependencies: exampleCloneDependencies()
         });
@@ -148,7 +150,8 @@ abstract contract ExampleCloneDeploys is RainDeployCloneSuitesBase {
             factory: exampleCloneFactory(),
             implementation: exampleCloneImplementation(),
             data: hex"abcd",
-            networkData: new CloneNetworkData[](0),
+            initDataPerNetwork: false,
+            initData: LibRainDeployClone.noInitDataPerNetwork,
             salt: bytes32(uint256(2)),
             dependencies: exampleCloneDependencies()
         });

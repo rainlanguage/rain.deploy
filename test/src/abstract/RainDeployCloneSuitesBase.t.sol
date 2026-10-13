@@ -5,9 +5,17 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {DeployCandidate} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {NoCloneDeploys} from "../../../src/abstract/RainDeployCloneSuitesBase.sol";
-import {CLONE_ARTIFACT_PATH, CloneDeploy} from "../../../src/lib/LibRainDeployClone.sol";
-import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
+import {CLONE_ARTIFACT_PATH} from "../../../src/lib/LibRainDeployClone.sol";
+import {CloneNetworks, CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
+import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {ConfigurablePerNetworkCloneDeploy} from "../../concrete/ConfigurablePerNetworkCloneDeploy.sol";
 import {ExampleCloneDeploy} from "../../concrete/ExampleCloneDeploy.sol";
+import {
+    NoPerNetworkCloneAdmin,
+    PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN,
+    PER_NETWORK_CLONE_POLYGON_ADMIN
+} from "../../abstract/PerNetworkCloneDeploys.sol";
+import {exampleCloneFactory, exampleCloneImplementation} from "../../abstract/ExampleCloneDeploys.sol";
 import {NoCloneDeploySuites} from "../../concrete/NoCloneDeploySuites.sol";
 
 /// @title RainDeployCloneSuitesBaseTest
@@ -27,14 +35,14 @@ contract RainDeployCloneSuitesBaseTest is Test {
     function testCandidatesAreTheCloneListDerived() external {
         ExampleCloneDeploy fixtureDeploy = new ExampleCloneDeploy();
 
-        CloneDeploy[] memory clones = fixtureDeploy.externalCheckedCloneDeploys();
+        uint256 clones = fixtureDeploy.externalCheckedCloneDeploysLength();
         DeployCandidate[] memory candidates = fixtureDeploy.externalCheckedCandidateSuites();
 
-        assertEq(candidates.length, clones.length, "one candidate per clone");
-        assertEq(clones.length, 2, "the fixture declares two, so a loop that stops early is visible");
+        assertEq(candidates.length, clones, "one candidate per clone");
+        assertEq(clones, 2, "the fixture declares two, so a loop that stops early is visible");
 
-        for (uint256 i = 0; i < clones.length; i++) {
-            DeployCandidate memory derived = LibRainDeployMechanism.cloneCandidate(clones[i]);
+        for (uint256 i = 0; i < clones; i++) {
+            DeployCandidate memory derived = fixtureDeploy.externalCloneDeployCandidate(i);
             assertEq(candidates[i].snapshot.suite, derived.snapshot.suite);
             assertEq(candidates[i].snapshot.creationCode, derived.snapshot.creationCode);
             assertEq(candidates[i].snapshot.storedDeployedAddress, derived.snapshot.storedDeployedAddress);
@@ -76,7 +84,7 @@ contract RainDeployCloneSuitesBaseTest is Test {
         NoCloneDeploySuites empty = new NoCloneDeploySuites();
 
         vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
-        empty.externalCheckedCloneDeploys();
+        empty.externalCheckedCloneDeploysLength();
 
         vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
         empty.externalCheckedCandidateSuites();
@@ -89,5 +97,82 @@ contract RainDeployCloneSuitesBaseTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
         empty.externalSuiteNames();
+    }
+
+    /// A per-network clone's candidate has one entry per supported network,
+    /// in `supportedNetworks()` order, each with that network's chain id, the
+    /// init data `initData` gives for it and the address that data derives:
+    /// for both orders of the clone's two networks, and for one of them alone.
+    function testPerNetworkCandidateIsBuiltForExactlyTheSupportedNetworksInOrder() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.POLYGON;
+        uint256[] memory chainIds = new uint256[](2);
+        chainIds[0] = 42161;
+        chainIds[1] = 137;
+        checkPerNetworkCandidate(networks, chainIds);
+
+        networks[0] = LibRainDeploy.POLYGON;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+        chainIds[0] = 137;
+        chainIds[1] = 42161;
+        checkPerNetworkCandidate(networks, chainIds);
+
+        networks = new string[](1);
+        networks[0] = LibRainDeploy.POLYGON;
+        chainIds = new uint256[](1);
+        chainIds[0] = 137;
+        checkPerNetworkCandidate(networks, chainIds);
+    }
+
+    /// A supported network the clone's `initData` reverts on reverts every
+    /// reader of the candidates, with `initData`'s own revert: the network is
+    /// neither skipped nor given another network's data.
+    function testSupportedNetworkTheInitDataRevertsOnIsLoud() external {
+        string[] memory networks = new string[](3);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.POLYGON;
+        networks[2] = LibRainDeploy.BASE;
+        ConfigurablePerNetworkCloneDeploy deploy = new ConfigurablePerNetworkCloneDeploy(networks);
+        bytes memory refusal = abi.encodeWithSelector(NoPerNetworkCloneAdmin.selector, uint256(8453));
+
+        vm.expectRevert(refusal);
+        deploy.externalCheckedCandidateSuites();
+        vm.expectRevert(refusal);
+        deploy.externalAllSuites();
+        vm.expectRevert(refusal);
+        deploy.externalCheckCandidatesAnchoredToSource();
+        vm.expectRevert(refusal);
+        deploy.externalCloneDeployCandidate(0);
+    }
+
+    /// Checks the per-network candidate of a declaration supporting `networks`.
+    /// @param networks The supported networks, in order.
+    /// @param chainIds Their chain ids, as facts of the world, in the same order.
+    function checkPerNetworkCandidate(string[] memory networks, uint256[] memory chainIds) internal {
+        ConfigurablePerNetworkCloneDeploy deploy = new ConfigurablePerNetworkCloneDeploy(networks);
+        assertEq(deploy.externalSupportedChainIds(), chainIds);
+        DeployCandidate[] memory candidates = deploy.externalCheckedCandidateSuites();
+        assertEq(candidates.length, 1);
+        CloneNetworks memory clones = abi.decode(candidates[0].snapshot.mechanismData, (CloneNetworks));
+        assertEq(clones.networks.length, chainIds.length, "one entry per supported network");
+        for (uint256 i = 0; i < chainIds.length; i++) {
+            bytes memory data = abi.encode(
+                chainIds[i] == 42161 ? PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN : PER_NETWORK_CLONE_POLYGON_ADMIN
+            );
+            assertEq(clones.networks[i].chainId, chainIds[i]);
+            assertEq(clones.networks[i].data, data);
+            assertEq(
+                clones.networks[i].deployedAddress,
+                LibRainDeployClone.cloneDeployedAddress(
+                    CloneTarget({
+                        factory: exampleCloneFactory(),
+                        implementation: exampleCloneImplementation(),
+                        data: data,
+                        salt: clones.salt
+                    })
+                )
+            );
+        }
     }
 }

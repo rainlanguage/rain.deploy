@@ -9,6 +9,7 @@ import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {
     PER_NETWORK_CLONE_RECORD_CONTRACT,
     PerNetworkCloneDeploys,
+    perNetworkCloneChainIds,
     perNetworkCloneRelease
 } from "../abstract/PerNetworkCloneDeploys.sol";
 
@@ -57,7 +58,7 @@ contract PerNetworkCloneBuildScriptHarness is PerNetworkCloneDeploys, BuildScrip
             recordRoot(),
             LibRainDeploySnapshot.CANDIDATE,
             PER_NETWORK_CLONE_RECORD_CONTRACT,
-            LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease()).snapshot
+            LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease(), perNetworkCloneChainIds()).snapshot
         );
     }
 

@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
 import {DeployMechanism, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
-import {CLONE_ARTIFACT_PATH, CloneDeploy, CloneNetworkData} from "../../src/lib/LibRainDeployClone.sol";
+import {CLONE_ARTIFACT_PATH, CloneDeploy} from "../../src/lib/LibRainDeployClone.sol";
 import {DeployDependency, LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {exampleCloneDependencies, exampleCloneFactory, exampleCloneImplementation} from "./ExampleCloneDeploys.sol";
 import {
@@ -59,19 +59,23 @@ function perNetworkCloneAdmin(uint256 chainId) pure returns (address) {
     revert NoPerNetworkCloneAdmin(chainId);
 }
 
-/// The per-network init data: each network's admin, `abi.encode`d, keyed by
-/// that network's chain id.
-/// @return networkData Arbitrum One's entry, then Polygon's.
-function perNetworkCloneData() pure returns (CloneNetworkData[] memory networkData) {
-    networkData = new CloneNetworkData[](2);
-    networkData[0] = CloneNetworkData({
-        chainId: PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
-        data: abi.encode(perNetworkCloneAdmin(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID))
-    });
-    networkData[1] = CloneNetworkData({
-        chainId: PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
-        data: abi.encode(perNetworkCloneAdmin(PER_NETWORK_CLONE_POLYGON_CHAIN_ID))
-    });
+/// The per-network init data: the admin on the network with the given chain
+/// id, `abi.encode`d — the shape of an issuer authoriser whose init data is
+/// `abi.encode(safeForChainId(chainId))`. Reverts, through
+/// `perNetworkCloneAdmin`, for a chain id with no admin.
+/// @param chainId The network's chain id.
+/// @return The init data on that network.
+function perNetworkCloneInitData(uint256 chainId) pure returns (bytes memory) {
+    return abi.encode(perNetworkCloneAdmin(chainId));
+}
+
+/// The chain ids of `PerNetworkCloneDeploys.supportedNetworks()`, in order, as
+/// literals: what a candidate built outside the declaration is built for.
+/// @return chainIds Arbitrum One's, then Polygon's.
+function perNetworkCloneChainIds() pure returns (uint256[] memory chainIds) {
+    chainIds = new uint256[](2);
+    chainIds[0] = PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID;
+    chainIds[1] = PER_NETWORK_CLONE_POLYGON_CHAIN_ID;
 }
 
 /// A per-network clone declaration over the example factory and
@@ -85,7 +89,8 @@ function perNetworkClone(string memory suite, bytes32 salt) pure returns (CloneD
         factory: exampleCloneFactory(),
         implementation: exampleCloneImplementation(),
         data: "",
-        networkData: perNetworkCloneData(),
+        initDataPerNetwork: true,
+        initData: perNetworkCloneInitData,
         salt: salt,
         dependencies: exampleCloneDependencies()
     });
@@ -108,10 +113,11 @@ function perNetworkCloneRelease() pure returns (CloneDeploy memory) {
 /// Two networks, each with its own admin, so the two addresses differ and a
 /// reader that resolved every network to one entry, or paired an address with
 /// the other network's chain id, reads an address that is not there.
-/// `supportedNetworks()` is exactly those two: every network the repo is
-/// verified on MUST have an entry, and the networks are Arbitrum One and
-/// Polygon because those are the forks the factory and implementation are
-/// deployed onto by the broadcast tests.
+/// `supportedNetworks()` is exactly those two: the candidate's init data is
+/// read for every supported network, and `perNetworkCloneInitData` has an
+/// admin for those two only. They are Arbitrum One and Polygon because those
+/// are the forks the factory and implementation are deployed onto by the
+/// broadcast tests.
 ///
 /// One candidate and one frozen release, read from its committed record under
 /// `PER_NETWORK_CLONE_RECORD_ROOT`, at different salts.

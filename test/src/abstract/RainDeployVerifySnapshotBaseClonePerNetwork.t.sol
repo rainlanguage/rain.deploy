@@ -19,6 +19,7 @@ import {
     PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
     PER_NETWORK_CLONE_RECORD_ROOT,
     PerNetworkCloneDeploys,
+    perNetworkCloneChainIds,
     perNetworkCloneRelease
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 
@@ -78,14 +79,14 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
     /// is the address its declaration derives for that network: otherwise the
     /// inherited consistency test passing says nothing about pairing an address
     /// with its network.
-    function testFrozenPerNetworkReleaseIsAtADifferentAddressPerNetwork() external pure {
+    function testFrozenPerNetworkReleaseIsAtADifferentAddressPerNetwork() external view {
         DeploySuite memory release = releasedSuites()[0];
         address[] memory addresses = LibRainDeployMechanism.deployedAddresses(release);
         assertEq(addresses.length, 2);
         assertNotEq(addresses[0], addresses[1]);
         assertEq(release.storedDeployedAddress, address(0));
 
-        DeploySuite memory declared = LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease()).snapshot;
+        DeploySuite memory declared = LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease(), perNetworkCloneChainIds()).snapshot;
         assertEq(release.mechanismData, declared.mechanismData);
         assertEq(addresses[0], LibRainDeployMechanism.deployedAddress(release, PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID));
         assertEq(addresses[1], LibRainDeployMechanism.deployedAddress(release, PER_NETWORK_CLONE_POLYGON_CHAIN_ID));

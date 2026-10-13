@@ -60,9 +60,9 @@ error UnexpectedMechanismData(string suite);
 /// @param storedDeployedAddress The address it carries.
 error UnexpectedStoredDeployedAddress(string suite, address storedDeployedAddress);
 
-/// Thrown when a clone declaration declares both one init data for every
-/// network and init data per network. Either could be meant, and each puts the
-/// clone at different addresses.
+/// Thrown when a clone declaration sets `initDataPerNetwork` and also declares
+/// `data` for every network. Either could be meant, and each puts the clone at
+/// different addresses.
 /// @param suite The declaration's suite key.
 error CloneDataAmbiguous(string suite);
 
@@ -348,18 +348,26 @@ library LibRainDeployMechanism {
     ///
     /// One init data for every network is a `Clone` suite with the
     /// `CloneTarget` as its data. Init data per network is a `ClonePerNetwork`
-    /// suite with the `CloneNetworks` as its data, each network's address
-    /// derived into it, and no `storedDeployedAddress`. Both at once is
-    /// refused with `CloneDataAmbiguous`.
+    /// suite with the `CloneNetworks` as its data: one entry per chain id in
+    /// `chainIds`, in that order, its data read from `clone.initData` and its
+    /// address derived from that data, and no `storedDeployedAddress`. A chain id
+    /// `initData` reverts on reverts here, with its revert. Per-network init data
+    /// beside a `data` is refused with `CloneDataAmbiguous`.
     /// @param clone The clone being declared.
+    /// @param chainIds The chain id of every network the repo supports, in its
+    /// `supportedNetworks()` order. Not read for a clone whose init data is
+    /// the same on every network.
     /// @return The candidate.
-    function cloneCandidate(CloneDeploy memory clone) internal pure returns (DeployCandidate memory) {
+    function cloneCandidate(CloneDeploy memory clone, uint256[] memory chainIds)
+        internal
+        view
+        returns (DeployCandidate memory) {
         DeployMechanism mechanism;
         bytes memory mechanismData;
         // Zero unless one address serves every network: a `ClonePerNetwork`
         // suite records its addresses in its `mechanismData`.
         address storedDeployedAddress = address(0);
-        if (clone.networkData.length == 0) {
+        if (!clone.initDataPerNetwork) {
             CloneTarget memory target = CloneTarget({
                 factory: clone.factory, implementation: clone.implementation, data: clone.data, salt: clone.salt
             });
@@ -374,12 +382,11 @@ library LibRainDeployMechanism {
                 factory: clone.factory,
                 implementation: clone.implementation,
                 salt: clone.salt,
-                networks: new CloneNetwork[](clone.networkData.length)
+                networks: new CloneNetwork[](chainIds.length)
             });
-            for (uint256 i = 0; i < clone.networkData.length; i++) {
-                clones.networks[i] = CloneNetwork({
-                    chainId: clone.networkData[i].chainId, data: clone.networkData[i].data, deployedAddress: address(0)
-                });
+            for (uint256 i = 0; i < chainIds.length; i++) {
+                clones.networks[i] =
+                    CloneNetwork({chainId: chainIds[i], data: clone.initData(chainIds[i]), deployedAddress: address(0)});
                 clones.networks[i].deployedAddress =
                     LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(clones, i));
             }

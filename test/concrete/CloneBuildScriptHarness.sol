@@ -46,7 +46,7 @@ contract CloneBuildScriptHarness is ExampleCloneDeploys, BuildScript {
             recordRoot(),
             LibRainDeploySnapshot.CANDIDATE,
             EXAMPLE_CLONE_RECORD_CONTRACT,
-            LibRainDeployMechanism.cloneCandidate(exampleCloneRelease()).snapshot
+            LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot
         );
     }
 

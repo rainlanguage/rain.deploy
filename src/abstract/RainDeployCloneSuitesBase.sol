@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {CloneDeploy} from "../lib/LibRainDeployClone.sol";
+import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {DeployCandidate, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 
@@ -21,7 +22,7 @@ error NoCloneDeploys();
 /// implementation, init data, salt and dependencies — so a repo declares those.
 /// `candidateSuites()` is not a hook here; it is
 /// `LibRainDeployMechanism.cloneCandidate` mapped over `cloneDeploys()`, and
-/// each candidate carries `DeployMechanism.Clone` and its `CloneTarget`. From
+/// each candidate carries its clone mechanism and that mechanism's data. From
 /// there it is an ordinary suite: `RainDeployBroadcast` broadcasts it,
 /// `RainDeployVerifySnapshot` and `RainDeployVerifyChain` derive it, and
 /// `LibRainDeploySnapshot.writeSnapshot` records it, all through the same
@@ -61,15 +62,29 @@ abstract contract RainDeployCloneSuitesBase is RainDeploySuitesBase {
         }
     }
 
+    /// The chain id of every network in `supportedNetworks()`, in that order,
+    /// from the network catalogue. The networks a per-network clone's
+    /// `initData` is read for, so its entries are exactly the networks the
+    /// repo deploys to and verifies on, from the one list that says which.
+    /// @return chainIds The chain ids.
+    function supportedChainIds() internal view returns (uint256[] memory chainIds) {
+        SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
+        chainIds = new uint256[](configs.length);
+        for (uint256 i = 0; i < configs.length; i++) {
+            chainIds[i] = configs[i].chainId;
+        }
+    }
+
     /// @inheritdoc RainDeploySuitesBase
     /// @dev `LibRainDeployMechanism.cloneCandidate` over the clone list, in
-    /// order. Not a hook — see this contract's own notes for why there is
-    /// exactly one list here.
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
+    /// order, with `supportedChainIds()`. Not a hook — see this contract's own
+    /// notes for why there is exactly one list here.
+    function candidateSuites() internal view override returns (DeployCandidate[] memory candidates) {
         CloneDeploy[] memory clones = checkedCloneDeploys();
+        uint256[] memory chainIds = supportedChainIds();
         candidates = new DeployCandidate[](clones.length);
         for (uint256 i = 0; i < clones.length; i++) {
-            candidates[i] = LibRainDeployMechanism.cloneCandidate(clones[i]);
+            candidates[i] = LibRainDeployMechanism.cloneCandidate(clones[i], chainIds);
         }
     }
 }

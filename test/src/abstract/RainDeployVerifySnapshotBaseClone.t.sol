@@ -40,13 +40,13 @@ contract RainDeployVerifySnapshotBaseCloneTest is ExampleCloneDeploys, RainDeplo
     /// of its creation code, so a consistency check that derived it as Zoltu
     /// would fail it rather than pass it. Stated, so the inherited test passing
     /// is a statement about the clone derivation.
-    function testFrozenCloneReleaseIsNotAtItsZoltuAddress() external pure {
+    function testFrozenCloneReleaseIsNotAtItsZoltuAddress() external view {
         DeploySuite memory release = releasedSuites()[0];
         assertEq(release.storedDeployedAddress, LibRainDeployMechanism.deployedAddresses(release)[0]);
         assertNotEq(release.storedDeployedAddress, LibRainDeploy.zoltuAddress(release.creationCode));
         assertEq(
             release.storedDeployedAddress,
-            LibRainDeployMechanism.cloneCandidate(exampleCloneRelease()).snapshot.storedDeployedAddress
+            LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot.storedDeployedAddress
         );
     }
 

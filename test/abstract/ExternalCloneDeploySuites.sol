@@ -3,7 +3,8 @@
 pragma solidity ^0.8.25;
 
 import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
-import {CloneDeploy} from "../../src/lib/LibRainDeployClone.sol";
+import {DeployCandidate} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeployMechanism} from "../../src/lib/LibRainDeployMechanism.sol";
 
 /// @title ExternalCloneDeploySuites
 /// @notice The clone declaration's own readers, exposed externally so a plain
@@ -15,9 +16,25 @@ import {CloneDeploy} from "../../src/lib/LibRainDeployClone.sol";
 /// a declaration that is refused has to be refused on ALL of its readers, and a
 /// wrapper a fixture forgot to carry is a reader nothing checks that fixture
 /// through.
+///
+/// A `CloneDeploy` carries an internal function, so it cannot cross an external
+/// call: the declared clones are exposed by count and by the candidate each one
+/// derives.
 abstract contract ExternalCloneDeploySuites is RainDeployCloneSuitesBase {
-    /// @return The declared clones, refusing an empty list.
-    function externalCheckedCloneDeploys() external pure returns (CloneDeploy[] memory) {
-        return checkedCloneDeploys();
+    /// @return How many clones are declared, refusing an empty list.
+    function externalCheckedCloneDeploysLength() external pure returns (uint256) {
+        return checkedCloneDeploys().length;
+    }
+
+    /// @param index The clone's position in the declared list.
+    /// @return The candidate `cloneCandidate` derives from that clone for the
+    /// supported networks' chain ids.
+    function externalCloneDeployCandidate(uint256 index) external view returns (DeployCandidate memory) {
+        return LibRainDeployMechanism.cloneCandidate(checkedCloneDeploys()[index], supportedChainIds());
+    }
+
+    /// @return The chain id of every supported network, in order.
+    function externalSupportedChainIds() external view returns (uint256[] memory) {
+        return supportedChainIds();
     }
 }

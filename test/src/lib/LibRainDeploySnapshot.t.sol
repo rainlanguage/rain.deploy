@@ -36,6 +36,7 @@ import {
     PER_NETWORK_CLONE_RECORD_ROOT,
     PER_NETWORK_CLONE_RELEASE_TAG,
     perNetworkClone,
+    perNetworkCloneChainIds,
     perNetworkCloneRelease
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {CloneNetworks} from "../../../src/lib/LibRainDeployClone.sol";
@@ -3438,7 +3439,7 @@ contract LibRainDeploySnapshotTest is Test {
             CLONE_RECORD_REPRODUCE_ROOT,
             EXAMPLE_CLONE_RELEASE_TAG,
             EXAMPLE_CLONE_RECORD_CONTRACT,
-            LibRainDeployMechanism.cloneCandidate(exampleCloneRelease()).snapshot
+            LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot
         );
         string memory reproduced = vm.readFile(written);
 
@@ -3495,7 +3496,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// dependencies etched for it are left in the caller's state, where they
     /// would stand in for a deploy that never happened.
     function testCloneWriterLeavesNoDeployBehind() external {
-        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(exampleCloneRelease()).snapshot;
+        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot;
         assertEq(suite.storedDeployedAddress.code.length, 0);
         for (uint256 i = 0; i < suite.dependencies.length; i++) {
             assertEq(suite.dependencies[i].deployedAddress.code.length, 0);
@@ -3518,7 +3519,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// are wrong still writes the committed record, whose address and runtime
     /// are read off the local clone.
     function testCloneWriterRecordsTheDeployNotTheSuiteClaims() external {
-        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(exampleCloneRelease()).snapshot;
+        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot;
         suite.storedDeployedAddress = address(uint160(suite.storedDeployedAddress) + 1);
         suite.storedRuntimeCode = hex"00";
 
@@ -3557,7 +3558,7 @@ contract LibRainDeploySnapshotTest is Test {
             PER_NETWORK_RECORD_REPRODUCE_ROOT,
             PER_NETWORK_CLONE_RELEASE_TAG,
             PER_NETWORK_CLONE_RECORD_CONTRACT,
-            LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease()).snapshot
+            LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease(), perNetworkCloneChainIds()).snapshot
         );
         string memory reproduced = vm.readFile(written);
 
@@ -3574,7 +3575,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// rather than zeroed, so a writer that copied the claims through would
     /// record each network at the OTHER network's real address.
     function testPerNetworkCloneWriterRecordsTheDeployNotTheSuiteClaims() external {
-        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease()).snapshot;
+        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease(), perNetworkCloneChainIds()).snapshot;
         CloneNetworks memory clones = abi.decode(suite.mechanismData, (CloneNetworks));
         assertEq(clones.networks.length, 2);
         assertEq(clones.networks[0].chainId, PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
@@ -3636,8 +3637,8 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// The candidate the per-network released lib takes its metadata from.
     /// @return The `per-network-clone` candidate's suite.
-    function perNetworkTemplate() internal pure returns (DeploySuite memory) {
-        return LibRainDeployMechanism.cloneCandidate(perNetworkClone("per-network-clone", bytes32(uint256(4)))).snapshot;
+    function perNetworkTemplate() internal view returns (DeploySuite memory) {
+        return LibRainDeployMechanism.cloneCandidate(perNetworkClone("per-network-clone", bytes32(uint256(4))), perNetworkCloneChainIds()).snapshot;
     }
 
     /// A per-network clone release is imported without `DEPLOYED_ADDRESS` —
@@ -3653,7 +3654,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// A per-network clone release's entry stores no address and is declared
     /// `ClonePerNetwork` with the record's `MECHANISM_DATA`, the shape of
     /// `PerNetworkCloneDeploys.releasedSuites()`.
-    function testReleasedSuiteEntryOfAPerNetworkCloneRelease() external pure {
+    function testReleasedSuiteEntryOfAPerNetworkCloneRelease() external view {
         assertEq(
             LibRainDeploySnapshot.releasedSuiteEntry(vm, 0, perNetworkRecordPaths()[0], perNetworkTemplate()),
             EXPECTED_PER_NETWORK_ENTRY

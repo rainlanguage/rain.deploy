@@ -299,7 +299,7 @@ abstract contract RainDeploySuitesBase {
     /// anchor to — see `NoDeployCandidates` for why an empty list is worse
     /// than it looks.
     /// @return The candidates.
-    function candidateSuites() internal pure virtual returns (DeployCandidate[] memory);
+    function candidateSuites() internal view virtual returns (DeployCandidate[] memory);
 
     /// Every network this repo deals with: what a broadcast targets, the set
     /// every network-scoped assertion is made over, and the set the network
@@ -330,7 +330,7 @@ abstract contract RainDeploySuitesBase {
     /// the reader that got the second spelling wrong is the one that silently
     /// stops asserting.
     /// @return The candidates.
-    function checkedCandidateSuites() internal pure returns (DeployCandidate[] memory) {
+    function checkedCandidateSuites() internal view returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = candidateSuites();
         if (candidates.length == 0) {
             revert NoDeployCandidates();
@@ -480,7 +480,7 @@ abstract contract RainDeploySuitesBase {
     /// unreadable key collides with nothing, and two keys can be spelled
     /// perfectly and still be the same key.
     /// @return Every declared suite.
-    function allSuites() internal pure returns (DeploySuite[] memory) {
+    function allSuites() internal view returns (DeploySuite[] memory) {
         DeploySuite[] memory released = releasedSuites();
         DeployCandidate[] memory candidates = checkedCandidateSuites();
 
@@ -510,7 +510,7 @@ abstract contract RainDeploySuitesBase {
     /// because the alphabet `allSuites` holds them to carries neither of those
     /// two characters anywhere but between two keys.
     /// @return The declared keys.
-    function suiteNames() internal pure returns (string memory) {
+    function suiteNames() internal view returns (string memory) {
         DeploySuite[] memory suites = allSuites();
         string memory names;
         for (uint256 i = 0; i < suites.length; i++) {
@@ -527,7 +527,7 @@ abstract contract RainDeploySuitesBase {
     /// remembered to update.
     /// @param requested The key to select, from `DEPLOYMENT_SUITE`.
     /// @return The selected suite.
-    function suiteByName(string memory requested) internal pure returns (DeploySuite memory) {
+    function suiteByName(string memory requested) internal view returns (DeploySuite memory) {
         DeploySuite[] memory suites = allSuites();
         bytes32 requestedHash = keccak256(bytes(requested));
         for (uint256 i = 0; i < suites.length; i++) {
