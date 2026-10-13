@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {Safe} from "safe-global-safe-smart-account-1.4.1/contracts/Safe.sol";
-import {IProxy} from "safe-global-safe-smart-account-1.4.1/contracts/proxies/SafeProxy.sol";
+import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
+import {IProxy} from "safe-global-safe-smart-account-1.4.1-3/contracts/proxies/SafeProxy.sol";
 
 /// @title LibSafe
 /// @notice The canonical Safe v1.4.1 deployment — addresses, runtime code

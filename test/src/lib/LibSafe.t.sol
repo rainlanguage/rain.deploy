@@ -6,16 +6,11 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {LibSafe} from "../../../src/lib/LibSafe.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {Safe} from "safe-global-safe-smart-account-1.4.1/contracts/Safe.sol";
-import {IProxy} from "safe-global-safe-smart-account-1.4.1/contracts/proxies/SafeProxy.sol";
-import {SafeProxyFactory} from "safe-global-safe-smart-account-1.4.1/contracts/proxies/SafeProxyFactory.sol";
+import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
+import {IProxy} from "safe-global-safe-smart-account-1.4.1-3/contracts/proxies/SafeProxy.sol";
+import {SafeProxyFactory} from "safe-global-safe-smart-account-1.4.1-3/contracts/proxies/SafeProxyFactory.sol";
+import {SafeToL2Setup} from "safe-global-safe-smart-account-1.4.1-3/contracts/libraries/SafeToL2Setup.sol";
 import {AcceptingGuard} from "../../concrete/AcceptingGuard.sol";
-
-/// The `SafeToL2Setup` entry point `setup` delegatecalls. `SafeToL2Setup` is
-/// not in the `safe-global-safe-smart-account` 1.4.1 package.
-interface ISafeToL2Setup {
-    function setupToL2(address l2Singleton) external;
-}
 
 /// @title LibSafeTest
 /// @notice Every assertion in `LibSafe` against Safes created on a fork through
@@ -84,7 +79,7 @@ contract LibSafeTest is Test {
                 owners(),
                 2,
                 LibSafe.SAFE_V1_4_1_TO_L2_SETUP,
-                abi.encodeCall(ISafeToL2Setup.setupToL2, (LibSafe.SAFE_V1_4_1_L2_SINGLETON)),
+                abi.encodeCall(SafeToL2Setup.setupToL2, (LibSafe.SAFE_V1_4_1_L2_SINGLETON)),
                 LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER,
                 address(0),
                 0,
