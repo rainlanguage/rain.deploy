@@ -171,8 +171,8 @@ library LibTimelockOperations {
     ///
     /// Each id appears once however its logs arrived: a `scheduleBatch` logs
     /// its id once per call, and an id cancelled and scheduled again logs the
-    /// same calls again (the id commits to them), so a batch index already
-    /// seen for an id is skipped. A log the chain has marked `removed` is not
+    /// same calls again (the id commits to them), so a batch index seen twice
+    /// is the same call written twice. A log the chain has marked `removed` is not
     /// part of it and is skipped.
     /// @param logs `CallScheduled` logs from `timelock`, in chain order.
     /// @param timelock The timelock.
@@ -246,9 +246,6 @@ library LibTimelockOperations {
                 continue;
             }
             uint256 index = uint256(logs[i].topics[2]);
-            if (filled[index]) {
-                continue;
-            }
             filled[index] = true;
             (address target, uint256 value, bytes memory data, bytes32 predecessor,) =
                 abi.decode(logs[i].data, (address, uint256, bytes, bytes32, uint256));
