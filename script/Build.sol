@@ -110,6 +110,8 @@ contract Build is BuildScript, RegistryDeploySuites {
                 recordRoot(),
                 LibRainDeploySnapshot.CANDIDATE,
                 parts[parts.length - 1],
+                parameterised[i].spdxLicenseIdentifier,
+                parameterised[i].copyrightText,
                 vm.getCode(parameterised[i].artifactPath),
                 parameterised[i].referenceConstructorArgs
             );
