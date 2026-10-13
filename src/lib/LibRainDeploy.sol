@@ -390,6 +390,9 @@ library LibRainDeploy {
         view
         returns (bool holds, bool success, bytes memory actualAnswer)
     {
+        // The consumer supplies the read, so the call is low level by
+        // construction: there is no interface here to call through.
+        // slither-disable-next-line low-level-calls
         (success, actualAnswer) = target.staticcall(readCall);
         holds = success && keccak256(actualAnswer) == keccak256(expectedAnswer);
     }
