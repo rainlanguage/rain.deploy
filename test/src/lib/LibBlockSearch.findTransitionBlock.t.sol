@@ -3,11 +3,14 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {Ownable} from "@openzeppelin-contracts-5.7.0/access/Ownable.sol";
+import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
+import {LibBlockSearch} from "../../../src/lib/LibBlockSearch.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {MockBlockGatedAnswer} from "../../concrete/MockBlockGatedAnswer.sol";
 
-/// @title LibRainDeployFindTransitionBlockTest
-/// Tests for `LibRainDeploy.findTransitionBlock` against a real ownership
+/// @title LibBlockSearchFindTransitionBlockTest
+/// Tests for `LibBlockSearch.findTransitionBlock` against a real ownership
 /// transfer on Base.
 ///
 /// The transition is the st0x orchestrator beacon's `owner()` moving from a
@@ -15,7 +18,7 @@ import {MockBlockGatedAnswer} from "../../concrete/MockBlockGatedAnswer.sol";
 /// `OwnershipTransferred(safe, timelock)` log the beacon emitted there, read
 /// with `eth_getLogs` independently of any search, and the owners either side
 /// of it from `cast call --block` at that block and the one before.
-contract LibRainDeployFindTransitionBlockTest is Test {
+contract LibBlockSearchFindTransitionBlockTest is Test {
     /// An `Ownable` beacon on Base whose owner changed exactly once.
     address constant BEACON = 0xb9DCd744b0413Dff0EDC70A5B229c7aa03734613;
 
@@ -41,13 +44,13 @@ contract LibRainDeployFindTransitionBlockTest is Test {
         bytes memory expectedAnswer,
         uint256 startBlock
     ) external returns (uint256) {
-        return LibRainDeploy.findTransitionBlock(vm, target, readCall, expectedAnswer, startBlock);
+        return LibBlockSearch.findTransitionBlock(vm, target, readCall, expectedAnswer, startBlock);
     }
 
     /// The read the transition is found by.
     /// @return The calldata of `owner()`.
     function ownerCall() internal pure returns (bytes memory) {
-        return abi.encodeWithSignature("owner()");
+        return abi.encodeCall(IERC5313.owner, ());
     }
 
     /// The search MUST answer the exact block the transfer was emitted in, and
@@ -56,7 +59,7 @@ contract LibRainDeployFindTransitionBlockTest is Test {
         vm.createSelectFork(LibRainDeploy.BASE);
         uint256 originalBlock = block.number;
         assertEq(
-            LibRainDeploy.findTransitionBlock(vm, BEACON, ownerCall(), abi.encode(NEW_OWNER), SEARCH_START_BLOCK),
+            LibBlockSearch.findTransitionBlock(vm, BEACON, ownerCall(), abi.encode(NEW_OWNER), SEARCH_START_BLOCK),
             TRANSFER_BLOCK
         );
         assertEq(block.number, originalBlock);
@@ -67,7 +70,7 @@ contract LibRainDeployFindTransitionBlockTest is Test {
     function testTransferBlockPinIsTheTransfer() external {
         vm.createSelectFork(LibRainDeploy.BASE, TRANSFER_BLOCK);
         bytes32[] memory topics = new bytes32[](3);
-        topics[0] = keccak256("OwnershipTransferred(address,address)");
+        topics[0] = Ownable.OwnershipTransferred.selector;
         topics[1] = bytes32(uint256(uint160(PRIOR_OWNER)));
         topics[2] = bytes32(uint256(uint160(NEW_OWNER)));
         assertEq(vm.eth_getLogs(TRANSFER_BLOCK, TRANSFER_BLOCK, BEACON, topics).length, 1);
@@ -99,7 +102,7 @@ contract LibRainDeployFindTransitionBlockTest is Test {
     function testFindTransitionBlockAtTheTransitionBlock() external {
         vm.createSelectFork(LibRainDeploy.BASE, TRANSFER_BLOCK);
         assertEq(
-            LibRainDeploy.findTransitionBlock(vm, BEACON, ownerCall(), abi.encode(NEW_OWNER), SEARCH_START_BLOCK),
+            LibBlockSearch.findTransitionBlock(vm, BEACON, ownerCall(), abi.encode(NEW_OWNER), SEARCH_START_BLOCK),
             TRANSFER_BLOCK
         );
     }
@@ -109,7 +112,7 @@ contract LibRainDeployFindTransitionBlockTest is Test {
     function testFindTransitionBlockStartingOneBlockBefore() external {
         vm.createSelectFork(LibRainDeploy.BASE);
         assertEq(
-            LibRainDeploy.findTransitionBlock(vm, BEACON, ownerCall(), abi.encode(NEW_OWNER), TRANSFER_BLOCK - 1),
+            LibBlockSearch.findTransitionBlock(vm, BEACON, ownerCall(), abi.encode(NEW_OWNER), TRANSFER_BLOCK - 1),
             TRANSFER_BLOCK
         );
     }
@@ -120,7 +123,7 @@ contract LibRainDeployFindTransitionBlockTest is Test {
         vm.createSelectFork(LibRainDeploy.BASE);
         uint256 originalBlock = block.number;
         vm.expectRevert(
-            abi.encodeWithSelector(LibRainDeploy.TransitionBeforeStartBlock.selector, BEACON, TRANSFER_BLOCK)
+            abi.encodeWithSelector(LibBlockSearch.TransitionBeforeStartBlock.selector, BEACON, TRANSFER_BLOCK)
         );
         this.externalFindTransitionBlock(BEACON, ownerCall(), abi.encode(NEW_OWNER), TRANSFER_BLOCK);
         assertEq(block.number, originalBlock);
@@ -133,7 +136,7 @@ contract LibRainDeployFindTransitionBlockTest is Test {
         vm.createSelectFork(LibRainDeploy.BASE, TRANSFER_BLOCK - 1);
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.TransitionNotReached.selector,
+                LibBlockSearch.TransitionNotReached.selector,
                 BEACON,
                 ownerCall(),
                 abi.encode(NEW_OWNER),
@@ -151,7 +154,7 @@ contract LibRainDeployFindTransitionBlockTest is Test {
         bytes memory expected = abi.encodePacked(abi.encode(NEW_OWNER), bytes1(0));
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.TransitionNotReached.selector, BEACON, ownerCall(), expected, true, abi.encode(NEW_OWNER)
+                LibBlockSearch.TransitionNotReached.selector, BEACON, ownerCall(), expected, true, abi.encode(NEW_OWNER)
             )
         );
         this.externalFindTransitionBlock(BEACON, ownerCall(), expected, SEARCH_START_BLOCK);
@@ -163,10 +166,10 @@ contract LibRainDeployFindTransitionBlockTest is Test {
         vm.createSelectFork(LibRainDeploy.BASE, TRANSFER_BLOCK);
         bytes memory answer = abi.encode(NEW_OWNER);
         MockBlockGatedAnswer target = new MockBlockGatedAnswer(block.number + 1, answer);
-        bytes memory readCall = abi.encodeWithSignature("read()");
+        bytes memory readCall = abi.encodeCall(MockBlockGatedAnswer.read, ());
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.TransitionNotReached.selector, address(target), readCall, answer, false, answer
+                LibBlockSearch.TransitionNotReached.selector, address(target), readCall, answer, false, answer
             )
         );
         this.externalFindTransitionBlock(address(target), readCall, answer, SEARCH_START_BLOCK);
@@ -184,8 +187,8 @@ contract LibRainDeployFindTransitionBlockTest is Test {
         MockBlockGatedAnswer target = new MockBlockGatedAnswer(from, answer);
         vm.makePersistent(address(target));
         assertEq(
-            LibRainDeploy.findTransitionBlock(
-                vm, address(target), abi.encodeWithSignature("read()"), answer, SEARCH_START_BLOCK
+            LibBlockSearch.findTransitionBlock(
+                vm, address(target), abi.encodeCall(MockBlockGatedAnswer.read, ()), answer, SEARCH_START_BLOCK
             ),
             from
         );
@@ -194,7 +197,7 @@ contract LibRainDeployFindTransitionBlockTest is Test {
     /// The search MUST refuse an empty expected answer, which a call to an
     /// account with no code meets at every block.
     function testFindTransitionBlockEmptyExpectedAnswer() external {
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoExpectedAnswer.selector, address(0xdead), ownerCall()));
+        vm.expectRevert(abi.encodeWithSelector(LibBlockSearch.NoExpectedAnswer.selector, address(0xdead), ownerCall()));
         this.externalFindTransitionBlock(address(0xdead), ownerCall(), "", 0);
     }
 }
