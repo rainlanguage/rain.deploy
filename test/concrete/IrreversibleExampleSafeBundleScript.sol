@@ -12,6 +12,11 @@ contract IrreversibleExampleSafeBundleScript is ExampleSafeBundleScript {
     /// `assertReversible` refuses.
     error NotReversible();
 
+    /// Read, not a bare revert: the compiler specialises the inherited `run()`
+    /// for this contract and reports every statement after an unconditional
+    /// revert as unreachable, which `forge lint -D warnings` refuses.
+    bool internal sIrreversible = true;
+
     /// @param bundleSafe The Safe the bundle is for.
     /// @param recorder The call target.
     /// @param path Where `run()` writes the artifact.
@@ -20,7 +25,7 @@ contract IrreversibleExampleSafeBundleScript is ExampleSafeBundleScript {
     {}
 
     /// Refuses every bundle.
-    function assertReversible() internal pure override {
-        revert NotReversible();
+    function assertReversible() internal view override {
+        if (sIrreversible) revert NotReversible();
     }
 }
