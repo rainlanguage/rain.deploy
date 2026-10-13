@@ -25,6 +25,10 @@ import {
     RUNTIME_CODE as SAFE_V1_4_1_SAFE_TO_L2_SETUP_RUNTIME_CODE
 } from "../generated/safe_v1_4_1/SafeToL2Setup.sol";
 import {
+    BYTECODE_HASH as SAFE_V1_4_1_MULTI_SEND_BYTECODE_HASH,
+    RUNTIME_CODE as SAFE_V1_4_1_MULTI_SEND_RUNTIME_CODE
+} from "../generated/safe_v1_4_1/MultiSendCallOnly.sol";
+import {
     BYTECODE_HASH as SAFE_V1_4_1_SAFE_PROXY_BYTECODE_HASH,
     RUNTIME_CODE as SAFE_V1_4_1_SAFE_PROXY_RUNTIME_CODE
 } from "../generated/safe_v1_4_1/SafeProxy.sol";
@@ -179,6 +183,15 @@ library LibSafe {
     /// Runtime code of `SAFE_V1_4_1_TO_L2_SETUP`.
     bytes internal constant SAFE_V1_4_1_TO_L2_SETUP_RUNTIME_CODE = SAFE_V1_4_1_SAFE_TO_L2_SETUP_RUNTIME_CODE;
 
+    /// The v1.4.1 `MultiSendCallOnly`: a Safe DELEGATECALLs it to execute a
+    /// batch of CALLs at one nonce, as the Safe Transaction Builder does. A
+    /// DELEGATECALL to an account with no code succeeds and does nothing.
+    address internal constant SAFE_V1_4_1_MULTI_SEND_CALL_ONLY = 0x9641d764fc13c8B624c04430C7356C1C7C8102e2;
+    /// Runtime code hash of `SAFE_V1_4_1_MULTI_SEND_CALL_ONLY`.
+    bytes32 internal constant SAFE_V1_4_1_MULTI_SEND_CALL_ONLY_CODEHASH = SAFE_V1_4_1_MULTI_SEND_BYTECODE_HASH;
+    /// Runtime code of `SAFE_V1_4_1_MULTI_SEND_CALL_ONLY`.
+    bytes internal constant SAFE_V1_4_1_MULTI_SEND_CALL_ONLY_RUNTIME_CODE = SAFE_V1_4_1_MULTI_SEND_RUNTIME_CODE;
+
     /// Runtime code hash of a proxy created by the v1.4.1 `SafeProxyFactory`.
     /// The singleton lives in the proxy's storage, not its code, so every such
     /// proxy has this hash whatever its singleton.
@@ -212,16 +225,20 @@ library LibSafe {
     address internal constant SAFE_MODULES_SENTINEL = address(0x1);
 
     /// Every canonical v1.4.1 contract is on the selected chain with its pinned
-    /// code: the proxy factory, both singletons, `SafeToL2Setup` and the
-    /// compatibility fallback handler. Safe's own `setup` checks neither of the
-    /// last two, so a Safe is created against a chain missing either, and its
-    /// `setupToL2` delegatecall or its fallback calls then reach no code.
+    /// code: the proxy factory, both singletons, `SafeToL2Setup`, the
+    /// compatibility fallback handler and `MultiSendCallOnly`. Safe's own
+    /// `setup` checks neither `SafeToL2Setup` nor the fallback handler, so a
+    /// Safe is created against a chain missing either, and its `setupToL2`
+    /// delegatecall or its fallback calls then reach no code. A batch
+    /// DELEGATECALLed to a missing `MultiSendCallOnly` likewise reaches no code
+    /// and succeeds having done nothing.
     function assertCanonicalContracts() internal view {
         assertCodehash(SAFE_V1_4_1_PROXY_FACTORY, SAFE_V1_4_1_PROXY_FACTORY_CODEHASH);
         assertCodehash(SAFE_V1_4_1_L1_SINGLETON, SAFE_V1_4_1_L1_SINGLETON_CODEHASH);
         assertCodehash(SAFE_V1_4_1_L2_SINGLETON, SAFE_V1_4_1_L2_SINGLETON_CODEHASH);
         assertCodehash(SAFE_V1_4_1_TO_L2_SETUP, SAFE_V1_4_1_TO_L2_SETUP_CODEHASH);
         assertCodehash(SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER, SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER_CODEHASH);
+        assertCodehash(SAFE_V1_4_1_MULTI_SEND_CALL_ONLY, SAFE_V1_4_1_MULTI_SEND_CALL_ONLY_CODEHASH);
     }
 
     /// The code at `account` hashes to `expected`. An account with no code

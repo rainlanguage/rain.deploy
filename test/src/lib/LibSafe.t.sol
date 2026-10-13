@@ -117,6 +117,10 @@ contract LibSafeTest is Test {
             LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER_CODEHASH
         );
         assertEq(keccak256(LibSafe.SAFE_V1_4_1_TO_L2_SETUP_RUNTIME_CODE), LibSafe.SAFE_V1_4_1_TO_L2_SETUP_CODEHASH);
+        assertEq(
+            keccak256(LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY_RUNTIME_CODE),
+            LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY_CODEHASH
+        );
         assertEq(keccak256(LibSafe.SAFE_V1_4_1_PROXY_RUNTIME_CODE), LibSafe.SAFE_V1_4_1_PROXY_CODEHASH);
         assertEq(keccak256(LibSafe.SAFE_V1_3_0_PROXY_RUNTIME_CODE), LibSafe.SAFE_V1_3_0_PROXY_CODEHASH);
     }
@@ -140,27 +144,34 @@ contract LibSafeTest is Test {
                 LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER_RUNTIME_CODE,
                 networks[i]
             );
+            assertEq(
+                LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY.code,
+                LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY_RUNTIME_CODE,
+                networks[i]
+            );
         }
     }
 
     /// Each canonical contract is checked: replacing any one's code, or
     /// removing it, fails on that contract.
     function testCanonicalContractsEachChecked(uint256 which, bool empty) external {
-        address[5] memory accounts = [
+        address[6] memory accounts = [
             LibSafe.SAFE_V1_4_1_PROXY_FACTORY,
             LibSafe.SAFE_V1_4_1_L1_SINGLETON,
             LibSafe.SAFE_V1_4_1_L2_SINGLETON,
             LibSafe.SAFE_V1_4_1_TO_L2_SETUP,
-            LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER
+            LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER,
+            LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY
         ];
-        bytes32[5] memory codehashes = [
+        bytes32[6] memory codehashes = [
             LibSafe.SAFE_V1_4_1_PROXY_FACTORY_CODEHASH,
             LibSafe.SAFE_V1_4_1_L1_SINGLETON_CODEHASH,
             LibSafe.SAFE_V1_4_1_L2_SINGLETON_CODEHASH,
             LibSafe.SAFE_V1_4_1_TO_L2_SETUP_CODEHASH,
-            LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER_CODEHASH
+            LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER_CODEHASH,
+            LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY_CODEHASH
         ];
-        which = bound(which, 0, 4);
+        which = bound(which, 0, 5);
         vm.etch(accounts[which], empty ? bytes("") : bytes(hex"fe"));
         vm.expectRevert(
             abi.encodeWithSelector(

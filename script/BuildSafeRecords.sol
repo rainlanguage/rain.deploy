@@ -40,6 +40,13 @@ contract BuildSafeRecords is Script {
     /// depends on it.
     uint256 constant PROXY_SALT_NONCE = uint256(keccak256("rain.deploy.safe.record.proxy"));
 
+    /// The licence of the Safe contracts whose code the records carry, as
+    /// `safe-smart-account` v1.4.1 declares it.
+    string constant SAFE_SPDX_LICENSE_IDENTIFIER = "LGPL-3.0-only";
+
+    /// The copyright holder of the Safe contracts whose code the records carry.
+    string constant SAFE_COPYRIGHT_TEXT = "Copyright (c) Safe Ecosystem Foundation";
+
     function run() external {
         vm.createSelectFork(LibRainDeploy.BASE);
 
@@ -48,6 +55,7 @@ contract BuildSafeRecords is Script {
         writeRecord(LibSafe.SAFE_V1_4_1_L2_SINGLETON, V1_4_1_TAG, "SafeL2");
         writeRecord(LibSafe.SAFE_V1_4_1_TO_L2_SETUP, V1_4_1_TAG, "SafeToL2Setup");
         writeRecord(LibSafe.SAFE_V1_4_1_COMPATIBILITY_FALLBACK_HANDLER, V1_4_1_TAG, "CompatibilityFallbackHandler");
+        writeRecord(LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY, V1_4_1_TAG, "MultiSendCallOnly");
         writeRecord(createProxy(LibSafe.SAFE_V1_4_1_PROXY_FACTORY), V1_4_1_TAG, "SafeProxy");
         writeRecord(createProxy(LibSafe.SAFE_V1_3_0_PROXY_FACTORY), V1_3_0_TAG, "GnosisSafeProxy");
     }
@@ -74,6 +82,8 @@ contract BuildSafeRecords is Script {
             instance,
             tag,
             contractName,
+            SAFE_SPDX_LICENSE_IDENTIFIER,
+            SAFE_COPYRIGHT_TEXT,
             LibCodeGen.bytesConstantString(
                 vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", instance.code
             )
