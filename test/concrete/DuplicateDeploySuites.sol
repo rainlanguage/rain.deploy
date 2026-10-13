@@ -36,14 +36,16 @@ contract DuplicateDeploySuites is ExternalDeploySuites {
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](1);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = collidingSuite();
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](1);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({snapshot: collidingSuite(), unanchorableReason: ""});
+        return candidates;
     }
 }

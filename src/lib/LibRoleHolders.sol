@@ -76,16 +76,16 @@ library LibRoleHolders {
     /// @param fromBlock The first block fetched, inclusive.
     /// @param toBlock The last block fetched, inclusive.
     /// @param maxRange The most blocks one `eth_getLogs` call spans.
-    /// @return logs The role logs, ascending by `(blockNumber, logIndex)`.
+    /// @return The role logs, ascending by `(blockNumber, logIndex)`.
     function fetchRoleLogs(Vm vm, address acl, uint256 fromBlock, uint256 toBlock, uint256 maxRange)
         internal
         view
-        returns (Vm.EthGetLogs[] memory logs)
+        returns (Vm.EthGetLogs[] memory)
     {
         if (maxRange == 0 || fromBlock > toBlock) {
             revert InvalidLogRange(fromBlock, toBlock, maxRange);
         }
-        logs = new Vm.EthGetLogs[](0);
+        Vm.EthGetLogs[] memory logs = new Vm.EthGetLogs[](0);
         uint256 start = fromBlock;
         while (true) {
             uint256 end = chunkEnd(start, toBlock, maxRange);
@@ -99,6 +99,7 @@ library LibRoleHolders {
             }
             start = end + 1;
         }
+        return logs;
     }
 
     /// @notice The last block of the chunk that starts at `start`: `toBlock`
@@ -136,13 +137,14 @@ library LibRoleHolders {
     /// every log `acl` emitted.
     /// @param acl The `AccessControl` the stream was fetched from.
     /// @param logs The stream, ascending by `(blockNumber, logIndex)`.
-    /// @return pairs Every pair the stream grants or revokes, in the order each
+    /// @return Every pair the stream grants or revokes, in the order each
     /// first appears.
-    /// @return held Whether `pairs[i]` is held after the stream's last log.
+    /// @return Whether each of those pairs, positionally, is held after the
+    /// stream's last log.
     function replayPairs(address acl, Vm.EthGetLogs[] memory logs)
         internal
         pure
-        returns (RoleGrant[] memory pairs, bool[] memory held)
+        returns (RoleGrant[] memory, bool[] memory)
     {
         RoleGrant[] memory seen = new RoleGrant[](logs.length);
         bool[] memory seenHeld = new bool[](logs.length);
@@ -197,23 +199,25 @@ library LibRoleHolders {
             seenHeld[j] = signature == IAccessControl.RoleGranted.selector;
         }
 
-        pairs = new RoleGrant[](seenLength);
-        held = new bool[](seenLength);
+        RoleGrant[] memory pairs = new RoleGrant[](seenLength);
+        bool[] memory held = new bool[](seenLength);
         for (uint256 i = 0; i < seenLength; i++) {
             pairs[i] = seen[i];
             held[i] = seenHeld[i];
         }
+        return (pairs, held);
     }
 
     /// @notice Replay a role log stream into the set of pairs held after its
     /// last log.
     /// @param acl The `AccessControl` the stream was fetched from.
     /// @param logs The stream, ascending by `(blockNumber, logIndex)`.
-    /// @return holders Every pair held after the stream, in the order each
+    /// @return Every pair held after the stream, in the order each
     /// first appears in it.
-    function replay(address acl, Vm.EthGetLogs[] memory logs) internal pure returns (RoleGrant[] memory holders) {
+    function replay(address acl, Vm.EthGetLogs[] memory logs) internal pure returns (RoleGrant[] memory) {
         (RoleGrant[] memory pairs, bool[] memory held) = replayPairs(acl, logs);
-        holders = heldOnly(pairs, held);
+        RoleGrant[] memory holders = heldOnly(pairs, held);
+        return holders;
     }
 
     /// @notice Every `(role, grantee)` pair held on `acl` at the selected
@@ -223,12 +227,12 @@ library LibRoleHolders {
     /// @param acl The `AccessControl` to enumerate.
     /// @param fromBlock A block at or before `acl`'s creation block.
     /// @param maxRange The most blocks one `eth_getLogs` call spans.
-    /// @return holders Every pair held, in the order each first appears in the
+    /// @return Every pair held, in the order each first appears in the
     /// log history.
     function holdersOf(Vm vm, address acl, uint256 fromBlock, uint256 maxRange)
         internal
         view
-        returns (RoleGrant[] memory holders)
+        returns (RoleGrant[] memory)
     {
         (RoleGrant[] memory pairs, bool[] memory held) =
             replayPairs(acl, fetchRoleLogs(vm, acl, fromBlock, block.number, maxRange));
@@ -237,7 +241,8 @@ library LibRoleHolders {
                 revert ReplayDisagreesWithState(acl, pairs[i].role, pairs[i].grantee, held[i]);
             }
         }
-        holders = heldOnly(pairs, held);
+        RoleGrant[] memory holders = heldOnly(pairs, held);
+        return holders;
     }
 
     /// @notice Assert no pair outside `grants` is held on `acl` at the
@@ -273,15 +278,15 @@ library LibRoleHolders {
     /// @notice The pairs whose `held` flag is set, in order.
     /// @param pairs The pairs.
     /// @param held Whether each pair is held.
-    /// @return holders The held pairs.
-    function heldOnly(RoleGrant[] memory pairs, bool[] memory held) internal pure returns (RoleGrant[] memory holders) {
+    /// @return The held pairs.
+    function heldOnly(RoleGrant[] memory pairs, bool[] memory held) internal pure returns (RoleGrant[] memory) {
         uint256 heldCount = 0;
         for (uint256 i = 0; i < pairs.length; i++) {
             if (held[i]) {
                 heldCount++;
             }
         }
-        holders = new RoleGrant[](heldCount);
+        RoleGrant[] memory holders = new RoleGrant[](heldCount);
         uint256 k = 0;
         for (uint256 i = 0; i < pairs.length; i++) {
             if (held[i]) {
@@ -289,19 +294,16 @@ library LibRoleHolders {
                 k++;
             }
         }
+        return holders;
     }
 
     /// @notice Merge two streams that are each ascending by
     /// `(blockNumber, logIndex)` into one that is.
     /// @param a One stream.
     /// @param b The other stream.
-    /// @return merged Both streams, ascending.
-    function merge(Vm.EthGetLogs[] memory a, Vm.EthGetLogs[] memory b)
-        internal
-        pure
-        returns (Vm.EthGetLogs[] memory merged)
-    {
-        merged = new Vm.EthGetLogs[](a.length + b.length);
+    /// @return Both streams, ascending.
+    function merge(Vm.EthGetLogs[] memory a, Vm.EthGetLogs[] memory b) internal pure returns (Vm.EthGetLogs[] memory) {
+        Vm.EthGetLogs[] memory merged = new Vm.EthGetLogs[](a.length + b.length);
         uint256 i = 0;
         uint256 j = 0;
         for (uint256 k = 0; k < merged.length; k++) {
@@ -322,23 +324,21 @@ library LibRoleHolders {
             }
             // slither-disable-end incorrect-equality
         }
+        return merged;
     }
 
     /// @notice `a` followed by `b`.
     /// @param a The leading stream.
     /// @param b The trailing stream.
-    /// @return joined `a` then `b`.
-    function concat(Vm.EthGetLogs[] memory a, Vm.EthGetLogs[] memory b)
-        internal
-        pure
-        returns (Vm.EthGetLogs[] memory joined)
-    {
-        joined = new Vm.EthGetLogs[](a.length + b.length);
+    /// @return `a` then `b`.
+    function concat(Vm.EthGetLogs[] memory a, Vm.EthGetLogs[] memory b) internal pure returns (Vm.EthGetLogs[] memory) {
+        Vm.EthGetLogs[] memory joined = new Vm.EthGetLogs[](a.length + b.length);
         for (uint256 i = 0; i < a.length; i++) {
             joined[i] = a[i];
         }
         for (uint256 i = 0; i < b.length; i++) {
             joined[a.length + i] = b[i];
         }
+        return joined;
     }
 }

@@ -42,12 +42,13 @@ contract LibRoleHoldersForkTest is Test {
         vm.createSelectFork(LibRainDeploy.BASE, FORK_BLOCK);
     }
 
-    function constructorGrants() internal pure returns (RoleGrant[] memory grants) {
-        grants = new RoleGrant[](4);
+    function constructorGrants() internal pure returns (RoleGrant[] memory) {
+        RoleGrant[] memory grants = new RoleGrant[](4);
         grants[0] = RoleGrant(DEFAULT_ADMIN_ROLE, TIMELOCK);
         grants[1] = RoleGrant(PROPOSER_ROLE, PROPOSER);
         grants[2] = RoleGrant(CANCELLER_ROLE, PROPOSER);
         grants[3] = RoleGrant(EXECUTOR_ROLE, address(0));
+        return grants;
     }
 
     function assertGrantsEq(RoleGrant[] memory actual, RoleGrant[] memory expected) internal pure {

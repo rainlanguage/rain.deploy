@@ -39,10 +39,11 @@ contract BuildScriptNarrowNetworksTest is Test {
 
     /// A one-network declaration.
     /// @param network The name to declare.
-    /// @return networks The declaration.
-    function oneNetwork(string memory network) internal pure returns (string[] memory networks) {
-        networks = new string[](1);
+    /// @return The declaration.
+    function oneNetwork(string memory network) internal pure returns (string[] memory) {
+        string[] memory networks = new string[](1);
         networks[0] = network;
+        return networks;
     }
 
     /// A seeded harness over a fresh fixture root, declaring exactly

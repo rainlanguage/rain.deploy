@@ -24,8 +24,9 @@ contract LibRoleHoldersReplayTest is Test {
     function roleLog(bytes32 signature, bytes32 role, address account, uint64 blockNumber, uint256 logIndex)
         internal
         pure
-        returns (Vm.EthGetLogs memory log)
+        returns (Vm.EthGetLogs memory)
     {
+        Vm.EthGetLogs memory log;
         bytes32[] memory topics = new bytes32[](4);
         topics[0] = signature;
         topics[1] = role;
@@ -35,32 +36,32 @@ contract LibRoleHoldersReplayTest is Test {
         log.topics = topics;
         log.blockNumber = blockNumber;
         log.logIndex = logIndex;
+        return log;
     }
 
-    function stream1(Vm.EthGetLogs memory a) internal pure returns (Vm.EthGetLogs[] memory logs) {
-        logs = new Vm.EthGetLogs[](1);
+    function stream1(Vm.EthGetLogs memory a) internal pure returns (Vm.EthGetLogs[] memory) {
+        Vm.EthGetLogs[] memory logs = new Vm.EthGetLogs[](1);
         logs[0] = a;
+        return logs;
     }
 
-    function stream2(Vm.EthGetLogs memory a, Vm.EthGetLogs memory b)
-        internal
-        pure
-        returns (Vm.EthGetLogs[] memory logs)
-    {
-        logs = new Vm.EthGetLogs[](2);
+    function stream2(Vm.EthGetLogs memory a, Vm.EthGetLogs memory b) internal pure returns (Vm.EthGetLogs[] memory) {
+        Vm.EthGetLogs[] memory logs = new Vm.EthGetLogs[](2);
         logs[0] = a;
         logs[1] = b;
+        return logs;
     }
 
     function stream3(Vm.EthGetLogs memory a, Vm.EthGetLogs memory b, Vm.EthGetLogs memory c)
         internal
         pure
-        returns (Vm.EthGetLogs[] memory logs)
+        returns (Vm.EthGetLogs[] memory)
     {
-        logs = new Vm.EthGetLogs[](3);
+        Vm.EthGetLogs[] memory logs = new Vm.EthGetLogs[](3);
         logs[0] = a;
         logs[1] = b;
         logs[2] = c;
+        return logs;
     }
 
     function externalReplay(Vm.EthGetLogs[] memory logs) external pure returns (RoleGrant[] memory) {

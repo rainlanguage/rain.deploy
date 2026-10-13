@@ -29,14 +29,11 @@ contract MigrationRegistryHeadTest is Test {
     /// @param writer The writer the record is under.
     /// @param namespace The line under the writer the record is in.
     /// @param head The head it is applied onto.
-    /// @return prerequisites The one-entry list.
-    function onto(address writer, bytes32 namespace, bytes32 head)
-        internal
-        pure
-        returns (Prerequisite[] memory prerequisites)
-    {
-        prerequisites = new Prerequisite[](1);
+    /// @return The one-entry list.
+    function onto(address writer, bytes32 namespace, bytes32 head) internal pure returns (Prerequisite[] memory) {
+        Prerequisite[] memory prerequisites = new Prerequisite[](1);
         prerequisites[0] = Prerequisite({writer: writer, namespace: namespace, migration: head});
+        return prerequisites;
     }
 
     /// A line that has applied nothing is at genesis, which is an ANSWER
