@@ -30,6 +30,11 @@ struct ParameterisedContract {
     /// Any valid constructor arguments, for the reference deploy the runtime
     /// code is read from.
     bytes referenceConstructorArgs;
+    /// The SPDX licence identifier the snapshot declares: the upstream
+    /// contract's own, not this repo's.
+    string spdxLicenseIdentifier;
+    /// The copyright text the snapshot declares, from the upstream licence.
+    string copyrightText;
 }
 
 /// @title RegistryDeploySuites
@@ -185,7 +190,11 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
             artifactPath: "dependencies/@openzeppelin-contracts-5.7.0/governance/TimelockController.sol:TimelockController",
             // `TimelockController` has no immutables, so any proposer and delay
             // deploy the same runtime code.
-            referenceConstructorArgs: LibTimelockController.timelockConstructorArgs(0, address(1))
+            referenceConstructorArgs: LibTimelockController.timelockConstructorArgs(0, address(1)),
+            // OpenZeppelin's licence: the dependency's SPDX header and the
+            // LICENSE of its v5.7.0 release.
+            spdxLicenseIdentifier: "MIT",
+            copyrightText: "Copyright (c) 2016-2026 Zeppelin Group Ltd"
         });
         return contracts;
     }
