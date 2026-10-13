@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {BuildScript} from "../src/abstract/BuildScript.sol";
 import {DeployCandidate} from "../src/abstract/RainDeploySuitesBase.sol";
-import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
+import {ParameterisedContract, RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../src/lib/LibRainDeploySnapshot.sol";
 
 /// One contract's generated files: the rolling snapshot, the alias lib that
@@ -27,7 +27,9 @@ struct GeneratedContract {
 /// The frozen `<tag>/` directories are what
 /// `RegistryDeploySuites.releasedSuites()` enumerates.
 ///
-/// `generatedContracts()` is the only list, read by every hook below.
+/// `generatedContracts()` is the only list of deploy suites, read by every hook
+/// below. `parameterisedContracts()` adds only rolling snapshots: see its
+/// declaration.
 contract Build is BuildScript, RegistryDeploySuites {
     /// Every contract this repo generates deploy pins for.
     /// @return The generated contracts.
@@ -97,6 +99,19 @@ contract Build is BuildScript, RegistryDeploySuites {
                 contracts[i].contractName,
                 vm.getCode(contracts[i].candidate.snapshot.artifactPath),
                 contracts[i].candidate.snapshot.dependencies
+            );
+        }
+
+        ParameterisedContract[] memory parameterised = parameterisedContracts();
+        for (uint256 i = 0; i < parameterised.length; i++) {
+            string[] memory parts = vm.split(parameterised[i].artifactPath, ":");
+            LibRainDeploySnapshot.writeParameterisedSnapshot(
+                vm,
+                recordRoot(),
+                LibRainDeploySnapshot.CANDIDATE,
+                parts[parts.length - 1],
+                vm.getCode(parameterised[i].artifactPath),
+                parameterised[i].referenceConstructorArgs
             );
         }
     }

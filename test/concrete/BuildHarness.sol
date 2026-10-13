@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {Build, GeneratedContract} from "../../script/Build.sol";
 import {DeployCandidate} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {ParameterisedContract} from "../../src/abstract/RegistryDeploySuites.sol";
 
 /// Thrown when a harness left pointed at `Build`'s own lib directory is asked
 /// to run the lib half of a build. That write lands on the committed libs the
@@ -66,5 +67,19 @@ contract BuildHarness is Build {
     /// @return The declared candidates.
     function externalCandidateSuites() external pure returns (DeployCandidate[] memory) {
         return checkedCandidateSuites();
+    }
+
+    /// The rolling snapshot name of every parameterised contract, which the
+    /// regeneration writes beside the candidates' and a release does not
+    /// freeze.
+    /// @return The parameterised contract names.
+    function externalParameterisedContractNames() external view returns (string[] memory) {
+        ParameterisedContract[] memory parameterised = parameterisedContracts();
+        string[] memory names = new string[](parameterised.length);
+        for (uint256 i = 0; i < parameterised.length; i++) {
+            string[] memory parts = vm.split(parameterised[i].artifactPath, ":");
+            names[i] = parts[parts.length - 1];
+        }
+        return names;
     }
 }

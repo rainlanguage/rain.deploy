@@ -7,9 +7,10 @@ import {TimelockController} from "@openzeppelin-contracts-5.7.0/governance/Timel
 import {IAccessControl} from "@openzeppelin-contracts-5.7.0/access/IAccessControl.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibTimelockController} from "../../../src/lib/LibTimelockController.sol";
+import {BYTECODE_HASH, CREATION_CODE, RUNTIME_CODE} from "../../../src/generated/candidate/TimelockController.sol";
 
 /// @title LibTimelockControllerTest
-/// The frozen creation code against the dependency and production, the address
+/// The snapshot against the dependency and production, the address
 /// derivation against the real Zoltu factory, and the state assertion green on
 /// the role model and red on each way out of it.
 contract LibTimelockControllerTest is Test {
@@ -48,16 +49,16 @@ contract LibTimelockControllerTest is Test {
         return deployZoltu(LibTimelockController.timelockInitCode(MIN_DELAY, PROPOSER));
     }
 
-    /// The frozen creation code and runtime code hash are the dependency as the
-    /// `timelock` compiler profile compiles it.
-    function testFrozenCodeIsTheCompiledDependency() external pure {
-        assertEq(
-            keccak256(LibTimelockController.TIMELOCK_CREATION_CODE), keccak256(type(TimelockController).creationCode)
-        );
-        assertEq(LibTimelockController.TIMELOCK_RUNTIME_CODEHASH, keccak256(type(TimelockController).runtimeCode));
+    /// The snapshot's creation and runtime code are the dependency as the
+    /// `timelock` compiler profile compiles it, and its hash is the runtime
+    /// code's.
+    function testSnapshotIsTheCompiledDependency() external pure {
+        assertEq(keccak256(CREATION_CODE), keccak256(type(TimelockController).creationCode));
+        assertEq(keccak256(RUNTIME_CODE), keccak256(type(TimelockController).runtimeCode));
+        assertEq(BYTECODE_HASH, keccak256(RUNTIME_CODE));
     }
 
-    /// The frozen creation code is the generation production carries: with a
+    /// The snapshot's creation code is the generation production carries: with a
     /// 48 hour delay and the ST0x token-owner Safes as proposer it derives the
     /// ST0x governance timelocks deployed on Base
     /// (https://basescan.org/address/0x48ba1371a78e6cc54157c63721756ab444510db3)
@@ -75,9 +76,13 @@ contract LibTimelockControllerTest is Test {
         );
     }
 
-    /// The runtime code hash pin is what a deploy of the frozen code carries.
-    function testDeployCarriesRuntimeCodehash() external {
-        assertEq(deployTimelock().codehash, LibTimelockController.TIMELOCK_RUNTIME_CODEHASH);
+    /// A deploy with arguments other than the snapshot's reference deploy carries
+    /// the recorded runtime code and hash: the runtime code does not depend on
+    /// the constructor arguments.
+    function testDeployCarriesRecordedRuntimeCode() external {
+        address timelock = deployTimelock();
+        assertEq(timelock.codehash, BYTECODE_HASH);
+        assertEq(keccak256(timelock.code), keccak256(RUNTIME_CODE));
     }
 
     /// The derived address is where the real Zoltu factory deploys.
@@ -181,10 +186,7 @@ contract LibTimelockControllerTest is Test {
         vm.etch(timelock, hex"600160005260206000f3");
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibTimelockController.TimelockCodehashMismatch.selector,
-                timelock,
-                LibTimelockController.TIMELOCK_RUNTIME_CODEHASH,
-                timelock.codehash
+                LibTimelockController.TimelockCodehashMismatch.selector, timelock, BYTECODE_HASH, timelock.codehash
             )
         );
         this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, noCancellers());
@@ -267,11 +269,8 @@ contract LibTimelockControllerTest is Test {
         proposers[0] = PROPOSER;
         address[] memory executors = new address[](1);
         executors[0] = address(0);
-        address timelock = deployZoltu(
-            abi.encodePacked(
-                LibTimelockController.TIMELOCK_CREATION_CODE, abi.encode(MIN_DELAY, proposers, executors, PROPOSER)
-            )
-        );
+        address timelock =
+            deployZoltu(abi.encodePacked(CREATION_CODE, abi.encode(MIN_DELAY, proposers, executors, PROPOSER)));
         bytes32 adminRole = TimelockController(payable(timelock)).DEFAULT_ADMIN_ROLE();
         vm.expectRevert(
             abi.encodeWithSelector(LibTimelockController.TimelockUnexpectedRole.selector, timelock, adminRole, PROPOSER)

@@ -27,7 +27,8 @@ contract BuildRecordRootTest is Test {
         }
     }
 
-    /// PROPERTY: `Build`'s regeneration writes every rolling snapshot under
+    /// PROPERTY: `Build`'s regeneration writes every rolling snapshot — the
+    /// suites' and the parameterised contracts' — under
     /// `recordRoot()`.
     ///
     /// `cutRelease()` freezes each contract from `pathForSnapshot(recordRoot(),
@@ -45,7 +46,12 @@ contract BuildRecordRootTest is Test {
     function testRegenerateSnapshotsWritesUnderTheRecordRoot() external {
         resetFixture(FIXTURE_ROOT);
         BuildRecordRootHarness harness = new BuildRecordRootHarness(FIXTURE_ROOT);
-        string[] memory names = harness.externalSnapshotContractNames();
+        string[] memory suiteNames = harness.externalSnapshotContractNames();
+        string[] memory parameterisedNames = harness.externalParameterisedContractNames();
+        string[] memory names = new string[](suiteNames.length + parameterisedNames.length);
+        for (uint256 i = 0; i < names.length; i++) {
+            names[i] = i < suiteNames.length ? suiteNames[i] : parameterisedNames[i - suiteNames.length];
+        }
 
         harness.externalRegenerateSnapshots();
 
