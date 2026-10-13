@@ -9,6 +9,7 @@ import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 // released lib names, and the struct lives beside `deployToNetworks`, which is
 // what holds a declared pair to a chain.
 import {DeployDependency, LibRainDeploy} from "../lib/LibRainDeploy.sol";
+import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
@@ -316,6 +317,58 @@ abstract contract RainDeploySuitesBase {
     /// @return The network names, as `[rpc_endpoints]` aliases.
     function supportedNetworks() internal view virtual returns (string[] memory) {
         return LibRainDeploy.supportedNetworks();
+    }
+
+    /// A suite as it is broadcast and as it is checked on chain: with an
+    /// address on every network its candidate has one for.
+    ///
+    /// A release records the networks it was cut for. A per-network clone
+    /// release reached by a network added to `supportedNetworks()` later has
+    /// no recorded address there, and its candidate — built for every
+    /// supported network from the declaration's init data — is what knows that
+    /// network's init data. So a suite takes the networks it lacks from the
+    /// candidate its key names, through
+    /// `LibRainDeployMechanism.withUnrecordedNetworks`: the candidate whose
+    /// key is the suite key's name half, which for a release is the candidate
+    /// it was cut from. A suite no candidate is named by, or whose mechanism
+    /// takes nothing from one, is returned as it is, and a network a
+    /// per-network suite still has no entry for is refused wherever it is
+    /// read.
+    ///
+    /// Not applied to what the record group checks: the frozen record holds
+    /// what the release WAS cut for, and that is what it is matched against.
+    /// @param suite The suite.
+    /// @return The suite, with the networks its candidate adds.
+    function onSupportedNetworks(DeploySuite memory suite) internal view returns (DeploySuite memory) {
+        bytes32 name = keccak256(bytes(suiteKeyName(suite.suite)));
+        DeployCandidate[] memory candidates = checkedCandidateSuites();
+        for (uint256 i = 0; i < candidates.length; i++) {
+            if (keccak256(bytes(candidates[i].snapshot.suite)) == name) {
+                return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidates[i].snapshot);
+            }
+        }
+        return suite;
+    }
+
+    /// The name half of a suite key: everything before its at sign, or the whole
+    /// key when it has none. A released key is the key of the candidate it was
+    /// cut from, an at sign and the tag — see `InvalidDeploySuiteKey`.
+    /// @param suite The suite key.
+    /// @return The name half.
+    function suiteKeyName(string memory suite) internal pure returns (string memory) {
+        bytes memory key = bytes(suite);
+        uint256 length = key.length;
+        for (uint256 i = 0; i < key.length; i++) {
+            if (key[i] == "@") {
+                length = i;
+                break;
+            }
+        }
+        bytes memory name = new bytes(length);
+        for (uint256 i = 0; i < length; i++) {
+            name[i] = key[i];
+        }
+        return string(name);
     }
 
     /// The declared candidates, refusing an empty list and an `artifactPath`

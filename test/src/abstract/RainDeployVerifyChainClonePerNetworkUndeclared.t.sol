@@ -5,16 +5,16 @@ pragma solidity =0.8.25;
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
 import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
-import {PerNetworkCloneDeploys} from "../../abstract/PerNetworkCloneDeploys.sol";
+import {NoPerNetworkCloneAdmin, PerNetworkCloneDeploys} from "../../abstract/PerNetworkCloneDeploys.sol";
 
 /// @title RainDeployVerifyChainClonePerNetworkUndeclaredTest
-/// @notice A repo verified on a network its per-network clone declares no init
-/// data for. The matrix refuses it naming that network's chain id, and before
-/// any endpoint is touched: a network the declaration says nothing about has
-/// no address to check, and checking some other network's address there would
-/// be checking a clone nobody declared for it.
+/// @notice A repo verified on a network its per-network clone's `initData` has
+/// no init data for. The release records nothing there, so its address there
+/// is the one the declaration's init data derives, and the declaration's
+/// refusal of that chain id is what the matrix refuses with, before any
+/// endpoint is touched: checking some other network's address there would be
+/// checking a clone nobody declared for it.
 ///
 /// The undeclared network is switched on by the refusal test alone, so the
 /// inherited `testSuitesLiveOnEverySupportedNetwork` runs over the clone's own
@@ -27,9 +27,14 @@ contract RainDeployVerifyChainClonePerNetworkUndeclaredTest is PerNetworkCloneDe
     /// Whether Base, which the clone has no entry for, is a supported network.
     bool internal sIncludeBase;
 
-    /// Puts the released clone at its address for each network, on every fork.
+    /// Puts the release's dependencies, and its clone at its address for each
+    /// network, on every fork.
     function setUp() external {
         DeploySuite memory release = releasedSuites()[0];
+        for (uint256 i = 0; i < release.dependencies.length; i++) {
+            vm.etch(release.dependencies[i].deployedAddress, release.dependencies[i].runtimeCode);
+            vm.makePersistent(release.dependencies[i].deployedAddress);
+        }
         address[] memory addresses = LibRainDeployMechanism.deployedAddresses(release);
         for (uint256 i = 0; i < addresses.length; i++) {
             vm.etch(addresses[i], release.storedRuntimeCode);
@@ -53,11 +58,11 @@ contract RainDeployVerifyChainClonePerNetworkUndeclaredTest is PerNetworkCloneDe
         }
     }
 
-    /// The matrix refuses the undeclared network by chain id, and has forked
-    /// nothing when it does.
+    /// The matrix refuses the network with the declaration's refusal of its
+    /// chain id, and has forked nothing when it does.
     function testUndeclaredNetworkIsRefusedBeforeAnyFork() external {
         sIncludeBase = true;
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneNetworkUndeclared.selector, BASE_CHAIN_ID));
+        vm.expectRevert(abi.encodeWithSelector(NoPerNetworkCloneAdmin.selector, BASE_CHAIN_ID));
         this.testSuitesLiveOnEverySupportedNetwork();
 
         (bool forked,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", uint256(0)));

@@ -46,8 +46,8 @@ error NetworkChainIdMismatch(string network, uint256 declared, uint256 reported)
 /// @notice The only deploy-pin assertions anchored to something outside the
 /// repo: across every network the declaration's `supportedNetworks()` names,
 /// every RELEASED suite's derived address carries code with its derived code
-/// hash, and every chain id `[etherscan]` declares is the one that network's
-/// alias forks.
+/// hash over declared dependencies that carry the code declared for them, and
+/// every chain id `[etherscan]` declares is the one that network's alias forks.
 ///
 /// The declaration's networks, through the same hook
 /// `RainDeployBroadcast.deployNetworks()` defaults to, so a repo deploying to a
@@ -153,6 +153,19 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// different address per network, and refuses a network it declares
     /// nothing for with `LibRainDeployClone.CloneNetworkUndeclared` — before
     /// any endpoint is touched, rather than partway down the list.
+    ///
+    /// Each suite goes through `onSupportedNetworks` first, so a per-network
+    /// clone release is checked on a supported network it was not cut for at
+    /// the address the declaration's init data derives there — where a
+    /// broadcast of it puts it — and on every network it records at the
+    /// address its record derives.
+    ///
+    /// On each network, every suite's declared dependencies are checked before
+    /// its address, by `LibRainDeploy.checkDeclaredDependencies` — the check a
+    /// broadcast makes before deploying there. A suite's code is what it is
+    /// with them: a clone's runtime code says only WHICH implementation it
+    /// delegates to, so a clone at its address over an implementation that is
+    /// missing or changed has the right code hash and does not work.
     /// @param suites The suites to check.
     function checkDeployedOnSupportedNetworks(DeploySuite[] memory suites) internal {
         // Nothing to check is not a reason to touch every RPC endpoint. Forking
@@ -162,6 +175,12 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         if (suites.length == 0) {
             return;
         }
+
+        DeploySuite[] memory onNetworks = new DeploySuite[](suites.length);
+        for (uint256 j = 0; j < suites.length; j++) {
+            onNetworks[j] = onSupportedNetworks(suites[j]);
+        }
+        suites = onNetworks;
 
         DerivedDeploy[] memory derived = deriveDeployments(suites);
         string[] memory networks = supportedNetworks();
@@ -178,13 +197,15 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
             for (uint256 j = 0; j < suites.length; j++) {
+                LibRainDeploy.checkDeclaredDependencies(networks[i], suites[j].dependencies);
                 checkDeployedOnNetwork(networks[i], derived[j].suite, addresses[i][j], derived[j].bytecodeHash);
             }
         }
     }
 
     /// Every RELEASED suite MUST be live, with the code its creation code
-    /// produces, on every supported network.
+    /// produces and its declared dependencies under it, on every supported
+    /// network.
     function testSuitesLiveOnEverySupportedNetwork() external {
         checkDeployedOnSupportedNetworks(releasedSuites());
     }

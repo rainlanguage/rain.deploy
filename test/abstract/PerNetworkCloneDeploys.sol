@@ -4,7 +4,14 @@ pragma solidity ^0.8.25;
 
 import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
 import {DeployMechanism, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
-import {CLONE_ARTIFACT_PATH, CloneDeploy} from "../../src/lib/LibRainDeployClone.sol";
+import {
+    CLONE_ARTIFACT_PATH,
+    CloneDeploy,
+    CloneNetwork,
+    CloneNetworks,
+    CloneTarget,
+    LibRainDeployClone
+} from "../../src/lib/LibRainDeployClone.sol";
 import {DeployDependency, LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {exampleCloneDependencies, exampleCloneFactory, exampleCloneImplementation} from "./ExampleCloneDeploys.sol";
 import {
@@ -103,6 +110,36 @@ function perNetworkClone(string memory suite, bytes32 salt) pure returns (CloneD
 /// @return The release's clone declaration.
 function perNetworkCloneRelease() pure returns (CloneDeploy memory) {
     return perNetworkClone("per-network-clone@0_0_1", bytes32(uint256(5)));
+}
+
+/// A per-network release with only its first recorded network: the release
+/// as it would have been cut had the repo supported only that network then.
+/// @param release The release.
+/// @return The release, recording its first network alone.
+function onlyFirstRecordedNetwork(DeploySuite memory release) pure returns (DeploySuite memory) {
+    CloneNetworks memory clones = abi.decode(release.mechanismData, (CloneNetworks));
+    CloneNetwork memory first = clones.networks[0];
+    clones.networks = new CloneNetwork[](1);
+    clones.networks[0] = first;
+    release.mechanismData = abi.encode(clones);
+    return release;
+}
+
+/// Where the `per-network-clone` release's factory, implementation and salt
+/// put a clone initialized with a network's admin, derived from a
+/// `CloneTarget` built here rather than through any per-network code.
+/// @param chainId The network's chain id.
+/// @return The clone address.
+function perNetworkCloneReleaseAddress(uint256 chainId) pure returns (address) {
+    CloneDeploy memory release = perNetworkCloneRelease();
+    return LibRainDeployClone.cloneDeployedAddress(
+        CloneTarget({
+            factory: release.factory,
+            implementation: release.implementation,
+            data: abi.encode(perNetworkCloneAdmin(chainId)),
+            salt: release.salt
+        })
+    );
 }
 
 /// @title PerNetworkCloneDeploys

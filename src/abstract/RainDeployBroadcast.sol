@@ -127,6 +127,11 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// recorded address against the address its own derivation gives BEFORE it
     /// forks anything, precisely so a stale pin fails instead of silently
     /// deploying somewhere the repo's constants do not describe.
+    ///
+    /// The suite goes through `onSupportedNetworks` first, so a per-network
+    /// clone release is broadcast to a supported network it was not cut for at
+    /// the address the declaration's init data derives there, while every
+    /// network it records keeps its recorded address and that guard.
     /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
     /// @param networks The networks to broadcast to, as `deployNetworks()` gave
     /// them.
@@ -138,6 +143,6 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         internal
         returns (address[] memory deployedAddresses, uint256[] memory forkIds)
     {
-        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, suite);
+        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, onSupportedNetworks(suite));
     }
 }

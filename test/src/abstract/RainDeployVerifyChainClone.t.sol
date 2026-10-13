@@ -17,9 +17,14 @@ import {ExampleCloneDeploys} from "../../abstract/ExampleCloneDeploys.sol";
 /// the Zoltu address of the proxy's creation code, which is empty on every
 /// network, and fail.
 contract RainDeployVerifyChainCloneTest is ExampleCloneDeploys, RainDeployVerifyChain {
-    /// Puts the released clone at its address on every fork.
+    /// Puts the release's dependencies, and its clone at its address, on every
+    /// fork.
     function setUp() external {
         DeploySuite memory release = releasedSuites()[0];
+        for (uint256 i = 0; i < release.dependencies.length; i++) {
+            vm.etch(release.dependencies[i].deployedAddress, release.dependencies[i].runtimeCode);
+            vm.makePersistent(release.dependencies[i].deployedAddress);
+        }
         vm.etch(release.storedDeployedAddress, release.storedRuntimeCode);
         vm.makePersistent(release.storedDeployedAddress);
     }

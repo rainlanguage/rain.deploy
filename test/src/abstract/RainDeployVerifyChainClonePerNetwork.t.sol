@@ -30,9 +30,14 @@ contract RainDeployVerifyChainClonePerNetworkTest is PerNetworkCloneDeploys, Rai
         return PerNetworkCloneDeploys.supportedNetworks();
     }
 
-    /// Puts the released clone at its address for each network, on every fork.
+    /// Puts the release's dependencies, and its clone at its address for each
+    /// network, on every fork.
     function setUp() external {
         DeploySuite memory release = releasedSuites()[0];
+        for (uint256 i = 0; i < release.dependencies.length; i++) {
+            vm.etch(release.dependencies[i].deployedAddress, release.dependencies[i].runtimeCode);
+            vm.makePersistent(release.dependencies[i].deployedAddress);
+        }
         address[] memory addresses = LibRainDeployMechanism.deployedAddresses(release);
         for (uint256 i = 0; i < addresses.length; i++) {
             vm.etch(addresses[i], release.storedRuntimeCode);

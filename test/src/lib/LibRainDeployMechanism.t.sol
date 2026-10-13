@@ -651,4 +651,163 @@ contract LibRainDeployMechanismTest is Test {
         vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.NoInitDataPerNetwork.selector, uint256(42161)));
         this.externalOneDataCloneMarkedPerNetworkCandidate(chainIds);
     }
+
+    /// External wrapper for `LibRainDeployMechanism.withUnrecordedNetworks`.
+    /// @param suite The suite.
+    /// @param candidate The candidate.
+    /// @return The suite with the candidate's networks it lacks.
+    function externalWithUnrecordedNetworks(DeploySuite memory suite, DeploySuite memory candidate)
+        external
+        pure
+        returns (DeploySuite memory)
+    {
+        return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidate);
+    }
+
+    /// The per-network example clone at `salt` as a candidate for `chainIds`.
+    /// @param salt The salt.
+    /// @param chainIds The chain ids to build it for.
+    /// @return The candidate's suite.
+    function perNetworkSuiteAt(bytes32 salt, uint256[] memory chainIds) internal view returns (DeploySuite memory) {
+        return LibRainDeployMechanism.cloneCandidate(perNetworkClone("per-network", salt), chainIds).snapshot;
+    }
+
+    /// One chain id.
+    /// @param chainId The chain id.
+    /// @return chainIds It, alone.
+    function onlyChainId(uint256 chainId) internal pure returns (uint256[] memory chainIds) {
+        chainIds = new uint256[](1);
+        chainIds[0] = chainId;
+    }
+
+    /// A release recorded on Arbitrum One only, with an Arbitrum One admin the
+    /// declaration no longer names, at a salt the candidate does not use:
+    /// Arbitrum One keeps its recorded data and address, and Polygon, which
+    /// the release never reached, is appended with the candidate's Polygon
+    /// data at the address that data derives under the RELEASE's salt.
+    function testUnrecordedNetworkTakesTheCandidatesDataUnderTheReleasesSalt() external view {
+        bytes32 releaseSalt = bytes32(uint256(5));
+        DeploySuite memory release = perNetworkSuiteAt(releaseSalt, onlyChainId(42161));
+        CloneNetworks memory recorded = abi.decode(release.mechanismData, (CloneNetworks));
+        bytes memory recordedData = abi.encode(address(0xc3c3c3c3c3c3c3c3c3C3C3c3C3C3C3c3C3C3c3c3));
+        recorded.networks[0].data = recordedData;
+        recorded.networks[0].deployedAddress = LibRainDeployClone.cloneDeployedAddress(
+            CloneTarget({
+                factory: exampleCloneFactory(),
+                implementation: exampleCloneImplementation(),
+                data: recordedData,
+                salt: releaseSalt
+            })
+        );
+        release.mechanismData = abi.encode(recorded);
+
+        DeploySuite memory candidate = perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds());
+        DeploySuite memory extended = this.externalWithUnrecordedNetworks(release, candidate);
+
+        CloneNetworks memory expected = CloneNetworks({
+            factory: exampleCloneFactory(),
+            implementation: exampleCloneImplementation(),
+            salt: releaseSalt,
+            networks: new CloneNetwork[](2)
+        });
+        expected.networks[0] = recorded.networks[0];
+        bytes memory polygonData = abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN);
+        expected.networks[1] = CloneNetwork({
+            chainId: 137,
+            data: polygonData,
+            deployedAddress: LibRainDeployClone.cloneDeployedAddress(
+                CloneTarget({
+                    factory: exampleCloneFactory(),
+                    implementation: exampleCloneImplementation(),
+                    data: polygonData,
+                    salt: releaseSalt
+                })
+            )
+        });
+        assertEq(extended.mechanismData, abi.encode(expected));
+        assertNotEq(
+            expected.networks[1].deployedAddress,
+            abi.decode(candidate.mechanismData, (CloneNetworks)).networks[1].deployedAddress,
+            "the release's salt must put Polygon somewhere the candidate's does not"
+        );
+
+        assertEq(extended.suite, release.suite);
+        assertEq(extended.creationCode, release.creationCode);
+        assertEq(extended.storedDeployedAddress, address(0));
+        assertEq(extended.storedBytecodeHash, release.storedBytecodeHash);
+        assertEq(extended.storedRuntimeCode, release.storedRuntimeCode);
+        assertEq(extended.artifactPath, release.artifactPath);
+        assertEq(abi.encode(extended.dependencies), abi.encode(release.dependencies));
+        assertEq(uint256(extended.mechanism), uint256(DeployMechanism.ClonePerNetwork));
+        assertEq(this.externalDeployedAddressOn(extended, 42161), recorded.networks[0].deployedAddress);
+        assertEq(this.externalDeployedAddressOn(extended, 137), expected.networks[1].deployedAddress);
+    }
+
+    /// Recorded entries keep their order and come first; the candidate's
+    /// unrecorded ones follow in the candidate's order, each once.
+    function testUnrecordedNetworksFollowTheRecordedOnesInTheCandidatesOrder() external view {
+        DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(137));
+        uint256[] memory candidateChainIds = new uint256[](3);
+        candidateChainIds[0] = 8453;
+        candidateChainIds[1] = 137;
+        candidateChainIds[2] = 42161;
+        DeploySuite memory candidate =
+        LibRainDeployMechanism.cloneCandidate(
+            CloneDeploy({
+                suite: "per-network",
+                factory: exampleCloneFactory(),
+                implementation: exampleCloneImplementation(),
+                data: "",
+                initDataPerNetwork: true,
+                initData: sharingInitData,
+                salt: TEST_SALT,
+                dependencies: exampleCloneDependencies()
+            }),
+            candidateChainIds
+        )
+        .snapshot;
+
+        CloneNetworks memory extended =
+            abi.decode(this.externalWithUnrecordedNetworks(release, candidate).mechanismData, (CloneNetworks));
+        assertEq(extended.networks.length, 3);
+        assertEq(extended.networks[0].chainId, 137);
+        assertEq(extended.networks[1].chainId, 8453);
+        assertEq(extended.networks[2].chainId, 42161);
+        assertEq(extended.networks[1].data, abi.encode(PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN));
+        assertEq(extended.networks[2].data, abi.encode(PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN));
+    }
+
+    /// A release recording every network the candidate has comes back with the
+    /// same mechanism data.
+    function testFullyRecordedReleaseIsUnchanged() external view {
+        DeploySuite memory release = perNetworkSuiteAt(bytes32(uint256(5)), perNetworkCloneChainIds());
+        DeploySuite memory candidate = perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds());
+        assertEq(this.externalWithUnrecordedNetworks(release, candidate).mechanismData, release.mechanismData);
+    }
+
+    /// Nothing is added unless both the suite and the candidate are per
+    /// network: a one-address suite is at its address everywhere, and a
+    /// one-data candidate has no per-network data to give.
+    function testOnlyAPerNetworkSuiteTakesAPerNetworkCandidatesNetworks() external view {
+        DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(137));
+        DeploySuite memory perNetwork = perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds());
+        DeploySuite memory oneData = exampleCloneSuite();
+
+        assertEq(this.externalWithUnrecordedNetworks(release, oneData).mechanismData, release.mechanismData);
+        assertEq(this.externalWithUnrecordedNetworks(oneData, perNetwork).mechanismData, oneData.mechanismData);
+        assertEq(
+            uint256(this.externalWithUnrecordedNetworks(oneData, perNetwork).mechanism), uint256(DeployMechanism.Clone)
+        );
+    }
+
+    /// A per-network suite the readers refuse is refused here too, before
+    /// anything is added to it.
+    function testUnrecordedNetworksRefuseAPerNetworkSuiteCarryingAStoredAddress() external {
+        DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(137));
+        release.storedDeployedAddress = address(0xdead);
+        vm.expectRevert(
+            abi.encodeWithSelector(UnexpectedStoredDeployedAddress.selector, release.suite, address(0xdead))
+        );
+        this.externalWithUnrecordedNetworks(release, perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds()));
+    }
 }

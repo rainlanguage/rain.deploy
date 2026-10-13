@@ -33,10 +33,11 @@ relocated.
   prefix filter would silently exempt a deployable file added there later.
 - **A `vm.createFork` or `vm.createSelectFork` failure is not a missing
   deployment.** It is an unreachable or rate-limited endpoint. Only
-  `NotDeployedOnNetwork`, from a network that forked, says anything about the
-  deployment. The deploy and the chain matrix create every fork before selecting
-  any, so such a failure takes the whole run before any network is checked
-  rather than stopping partway down the list.
+  `NotDeployedOnNetwork`, `MissingDependency` and `DependencyChanged`, from a
+  network that forked, say anything about the deployment. The deploy and the
+  chain matrix create every fork before selecting any, so such a failure takes
+  the whole run before any network is checked rather than stopping partway down
+  the list.
 - **Foundry REFUSES a cheatcode write to the project root's own
   `foundry.toml`.** "access to `foundry.toml` is not allowed", from a guard on
   the path — no `fs_permissions` grant and no spelling of the path gets past it,

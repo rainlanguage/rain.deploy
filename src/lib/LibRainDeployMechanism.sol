@@ -195,6 +195,89 @@ library LibRainDeployMechanism {
         }
     }
 
+    /// A per-network clone suite with an entry for every network its
+    /// candidate has one for: its recorded entries exactly as recorded, in
+    /// their order, followed by each of the candidate's entries for a chain id
+    /// it records nothing for, in the candidate's order, with the candidate's
+    /// init data and the address that data derives under the SUITE's factory,
+    /// implementation and salt. Unchanged unless both are `ClonePerNetwork`
+    /// suites: a Zoltu or `Clone` suite is at one address on every network,
+    /// and a candidate that is not per network has no init data per network to
+    /// give.
+    ///
+    /// What makes a per-network release deployable to a network added after
+    /// it was cut, as a Zoltu or `Clone` release is. The release fixes the
+    /// factory, the implementation, the salt and the address on every network
+    /// it reached; a network it did not reach has no recorded init data, and
+    /// takes the declaration's — which the candidate carries for every
+    /// supported network. A recorded entry is never replaced: its address is
+    /// where the release IS on that network, so it keeps being checked against
+    /// its own recorded data whatever the declaration now says.
+    /// @param suite The suite.
+    /// @param candidate The candidate whose init data the suite's unrecorded
+    /// networks take.
+    /// @return The suite, with the candidate's networks it lacks.
+    function withUnrecordedNetworks(DeploySuite memory suite, DeploySuite memory candidate)
+        internal
+        pure
+        returns (DeploySuite memory)
+    {
+        if (
+            suite.mechanism != DeployMechanism.ClonePerNetwork || candidate.mechanism != DeployMechanism.ClonePerNetwork
+        ) {
+            return suite;
+        }
+        CloneNetworks memory clones = cloneNetworks(suite);
+        CloneNetwork[] memory declared = cloneNetworks(candidate).networks;
+        uint256 recorded = clones.networks.length;
+        CloneNetwork[] memory networks = new CloneNetwork[](recorded + declared.length);
+        for (uint256 i = 0; i < recorded; i++) {
+            networks[i] = clones.networks[i];
+        }
+        uint256 count = recorded;
+        for (uint256 i = 0; i < declared.length; i++) {
+            if (!hasChainId(networks, recorded, declared[i].chainId)) {
+                networks[count] =
+                    CloneNetwork({chainId: declared[i].chainId, data: declared[i].data, deployedAddress: address(0)});
+                count++;
+            }
+        }
+        clones.networks = new CloneNetwork[](count);
+        for (uint256 i = 0; i < count; i++) {
+            clones.networks[i] = networks[i];
+        }
+        for (uint256 i = recorded; i < count; i++) {
+            clones.networks[i].deployedAddress =
+                LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(clones, i));
+        }
+        return DeploySuite({
+            suite: suite.suite,
+            creationCode: suite.creationCode,
+            storedDeployedAddress: suite.storedDeployedAddress,
+            storedBytecodeHash: suite.storedBytecodeHash,
+            storedRuntimeCode: suite.storedRuntimeCode,
+            artifactPath: suite.artifactPath,
+            dependencies: suite.dependencies,
+            mechanism: suite.mechanism,
+            mechanismData: abi.encode(clones)
+        });
+    }
+
+    /// Whether one of the first `count` entries of a list of networks is for a
+    /// chain id.
+    /// @param networks The list.
+    /// @param count How many of its leading entries to look at.
+    /// @param chainId The chain id looked for.
+    /// @return Whether an entry below `count` has that chain id.
+    function hasChainId(CloneNetwork[] memory networks, uint256 count, uint256 chainId) internal pure returns (bool) {
+        for (uint256 i = 0; i < count; i++) {
+            if (networks[i].chainId == chainId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// Runs a suite's mechanism on the local EVM and returns where it landed,
     /// each address cross-checked against the formula's.
     ///

@@ -9,7 +9,9 @@ import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN,
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
     PER_NETWORK_CLONE_POLYGON_ADMIN,
-    PER_NETWORK_CLONE_POLYGON_CHAIN_ID
+    PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
+    onlyFirstRecordedNetwork,
+    perNetworkCloneReleaseAddress
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {ZoltuDeployOrAdopt} from "../../abstract/ZoltuDeployOrAdopt.sol";
 import {PerNetworkCloneDeploy} from "../../concrete/PerNetworkCloneDeploy.sol";
@@ -126,6 +128,73 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         address derived = clones.networks[1].deployedAddress;
         address stale = address(uint160(derived) + 1);
         clones.networks[1].deployedAddress = stale;
+        release.mechanismData = abi.encode(clones);
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
+        deploy.externalBroadcastSuite(release, bothNetworks(), 1);
+        assertFalse(anyForkExists(), "a network was forked before the stale address was refused");
+    }
+
+    /// A release cut when the repo supported Arbitrum One alone, broadcast to
+    /// Arbitrum One and Polygon: Arbitrum One gets the clone at its recorded
+    /// address, and Polygon, which the release records nothing for, gets the
+    /// clone the declaration's Polygon init data derives under the release's
+    /// factory, implementation and salt, initialized with Polygon's admin.
+    function testBroadcastsAnUnrecordedNetworkAtItsInitDataAddress() external {
+        PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
+        vm.makePersistent(address(this));
+        vm.makePersistent(address(deploy));
+
+        DeploySuite memory release = onlyFirstRecordedNetwork(deploy.externalSuiteByName("per-network-clone@0_0_1"));
+        CloneNetworks memory clones = abi.decode(release.mechanismData, (CloneNetworks));
+        assertEq(clones.networks.length, 1);
+        assertEq(clones.networks[0].chainId, PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
+        address arbitrumAddress = clones.networks[0].deployedAddress;
+        address polygonAddress = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        assertEq(arbitrumAddress, perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID));
+        assertNotEq(arbitrumAddress, polygonAddress);
+
+        string[] memory networks = bothNetworks();
+        for (uint256 i = 0; i < networks.length; i++) {
+            vm.createSelectFork(networks[i]);
+            vm.makePersistent(
+                zoltuDeployOrAdopt(type(MockCloneFactory).creationCode, type(MockCloneFactory).runtimeCode)
+            );
+            vm.makePersistent(zoltuDeployOrAdopt(type(MockCloneable).creationCode, type(MockCloneable).runtimeCode));
+            assertEq(arbitrumAddress.code.length, 0, networks[i]);
+            assertEq(polygonAddress.code.length, 0, networks[i]);
+        }
+
+        (address[] memory deployed, uint256[] memory forkIds) = deploy.externalBroadcastSuite(release, networks, 1);
+        assertEq(deployed.length, 2);
+        assertEq(forkIds.length, 2);
+        assertEq(deployed[0], arbitrumAddress);
+        assertEq(deployed[1], polygonAddress);
+
+        vm.selectFork(forkIds[0]);
+        assertEq(block.chainid, PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
+        assertEq(arbitrumAddress.codehash, release.storedBytecodeHash);
+        assertEq(MockCloneable(arbitrumAddress).sInitData(), abi.encode(PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN));
+        assertEq(polygonAddress.code.length, 0);
+
+        vm.selectFork(forkIds[1]);
+        assertEq(block.chainid, PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        assertEq(polygonAddress.codehash, release.storedBytecodeHash);
+        assertEq(MockCloneable(polygonAddress).sInitData(), abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN));
+        assertEq(arbitrumAddress.code.length, 0);
+    }
+
+    /// A release recording Arbitrum One alone, broadcast with Polygon too,
+    /// still has its stale recorded Arbitrum One address refused before any
+    /// network is forked: the network the candidate adds neither replaces nor
+    /// skips the recorded one's check.
+    function testBroadcastRefusesAStaleRecordedAddressBesideAnUnrecordedNetworkBeforeAnyFork() external {
+        PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
+        DeploySuite memory release = onlyFirstRecordedNetwork(deploy.externalSuiteByName("per-network-clone@0_0_1"));
+        CloneNetworks memory clones = abi.decode(release.mechanismData, (CloneNetworks));
+        address derived = clones.networks[0].deployedAddress;
+        address stale = address(uint160(derived) + 1);
+        clones.networks[0].deployedAddress = stale;
         release.mechanismData = abi.encode(clones);
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
