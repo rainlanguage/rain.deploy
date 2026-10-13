@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibSafeTx, SafeTx} from "../../../src/lib/LibSafeTx.sol";
+import {LibSafe} from "../../../src/lib/LibSafe.sol";
 import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
 import {Enum} from "safe-global-safe-smart-account-1.4.1-3/contracts/common/Enum.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
@@ -124,26 +125,26 @@ contract LibSafeTxTest is Test {
         this.externalEncodeMultiSend(txs);
     }
 
-    /// Where `MULTISEND_CALL_ONLY_1_4_1` holds no code, or other code, no
-    /// bundle is built, because a DELEGATECALL there would do nothing.
+    /// Where `LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY` holds no code, or other
+    /// code, no bundle is built, because a DELEGATECALL there would do nothing.
     function testMultiSendTxRejectsWrongCode(bytes memory code) external {
-        vm.assume(keccak256(code) != LibSafeTx.MULTISEND_CALL_ONLY_1_4_1_CODEHASH);
+        vm.assume(keccak256(code) != LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY_CODEHASH);
         vm.assume(code.length == 0 || code[0] != 0xef);
-        bytes32 expected = code.length == 0 ? bytes32(0) : keccak256(code);
-        vm.etch(LibSafeTx.MULTISEND_CALL_ONLY_1_4_1, code);
+        bytes32 actual = code.length == 0 ? bytes32(0) : keccak256(code);
+        vm.etch(LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY, code);
         if (code.length == 0) {
             // An account with no code, balance or nonce has code hash 0.
-            assertEq(LibSafeTx.MULTISEND_CALL_ONLY_1_4_1.codehash, bytes32(0));
+            assertEq(LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY.codehash, bytes32(0));
         }
-        vm.expectRevert(abi.encodeWithSelector(LibSafeTx.MultiSendCallOnlyNotDeployed.selector, expected));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibSafe.SafeCodehashMismatch.selector,
+                LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY,
+                LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY_CODEHASH,
+                actual
+            )
+        );
         this.externalMultiSendTx(new SafeTx[](1));
-    }
-
-    /// The pinned code hash is the code at the pinned address on a chain the
-    /// Safe deployments cover.
-    function testMultiSendCallOnlyCodeHashPin() external {
-        vm.createSelectFork(LibRainDeploy.BASE);
-        assertEq(LibSafeTx.MULTISEND_CALL_ONLY_1_4_1.codehash, LibSafeTx.MULTISEND_CALL_ONLY_1_4_1_CODEHASH);
     }
 
     /// A bundle is one DELEGATECALL of its MultiSend encoding, and its hash is
@@ -154,7 +155,7 @@ contract LibSafeTxTest is Test {
         txs[0] = SafeTx({to: address(0xbeef), value: 1, data: hex"01", operation: Enum.Operation.Call});
         txs[1] = SafeTx({to: address(safe), value: 0, data: hex"0203", operation: Enum.Operation.Call});
         SafeTx memory wrapped = LibSafeTx.multiSendTx(txs);
-        assertEq(wrapped.to, LibSafeTx.MULTISEND_CALL_ONLY_1_4_1);
+        assertEq(wrapped.to, LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY);
         assertEq(wrapped.value, 0);
         assertEq(uint8(wrapped.operation), uint8(Enum.Operation.DelegateCall));
         assertEq(wrapped.data, LibSafeTx.encodeMultiSend(txs));

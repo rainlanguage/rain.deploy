@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
 import {Enum} from "safe-global-safe-smart-account-1.4.1-3/contracts/common/Enum.sol";
 import {MultiSendCallOnly} from "safe-global-safe-smart-account-1.4.1-3/contracts/libraries/MultiSendCallOnly.sol";
+import {LibSafe} from "./LibSafe.sol";
 
 /// One Safe transaction: the fields of `execTransaction` a bundle author
 /// chooses. The gas and refund fields are always zero here, which is what the
@@ -25,17 +26,6 @@ struct SafeTx {
 /// owners sign, the `MultiSendCallOnly` batch a bundle executes as, and the
 /// approved-hash signature blob `execTransaction` accepts.
 library LibSafeTx {
-    /// The canonical Safe v1.4.1 `MultiSendCallOnly`, the contract the Safe
-    /// Transaction Builder DELEGATECALLs to execute a bundle at one nonce. Its
-    /// address is the same on every chain it is deployed to.
-    address internal constant MULTISEND_CALL_ONLY_1_4_1 = 0x9641d764fc13c8B624c04430C7356C1C7C8102e2;
-
-    /// The code hash of `MULTISEND_CALL_ONLY_1_4_1`. A Safe DELEGATECALL to an
-    /// address with no code succeeds and does nothing, so a bundle is only
-    /// encoded against a chain where this code is at that address.
-    bytes32 internal constant MULTISEND_CALL_ONLY_1_4_1_CODEHASH =
-        0xecd5bd14a08c5d2122379900b2f272bdf107a7e92423c10dd5fe3254386c9939;
-
     /// The bytes one approved-hash signature entry occupies: `r || s || v`.
     uint256 internal constant SIGNATURE_LENGTH = 65;
 
@@ -45,11 +35,6 @@ library LibSafeTx {
     /// @param index The entry's index in the bundle.
     /// @param operation The entry's operation.
     error UnsupportedOperation(uint256 index, Enum.Operation operation);
-
-    /// `MULTISEND_CALL_ONLY_1_4_1` does not hold the canonical code on this
-    /// chain.
-    /// @param codeHash The code hash found there.
-    error MultiSendCallOnlyNotDeployed(bytes32 codeHash);
 
     /// Two approved-hash signers are the same address, which
     /// `checkSignatures` rejects.
@@ -92,15 +77,22 @@ library LibSafeTx {
     }
 
     /// The single transaction a Safe executes `txs` as: a DELEGATECALL to
-    /// `MULTISEND_CALL_ONLY_1_4_1`. Reverts `MultiSendCallOnlyNotDeployed`
-    /// on a chain where that address does not hold the canonical code.
+    /// `LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY`, the contract the Safe
+    /// Transaction Builder executes a bundle through at one nonce. A
+    /// DELEGATECALL to an account with no code succeeds and does nothing, so
+    /// this reverts `LibSafe.SafeCodehashMismatch` on a chain where that
+    /// address does not hold the canonical code.
     /// @param txs The bundle. Every entry MUST be a CALL.
     /// @return The wrapping transaction.
     function multiSendTx(SafeTx[] memory txs) internal view returns (SafeTx memory) {
-        bytes32 codeHash = MULTISEND_CALL_ONLY_1_4_1.codehash;
-        if (codeHash != MULTISEND_CALL_ONLY_1_4_1_CODEHASH) revert MultiSendCallOnlyNotDeployed(codeHash);
+        LibSafe.assertCodehash(
+            LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY, LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY_CODEHASH
+        );
         return SafeTx({
-            to: MULTISEND_CALL_ONLY_1_4_1, value: 0, data: encodeMultiSend(txs), operation: Enum.Operation.DelegateCall
+            to: LibSafe.SAFE_V1_4_1_MULTI_SEND_CALL_ONLY,
+            value: 0,
+            data: encodeMultiSend(txs),
+            operation: Enum.Operation.DelegateCall
         });
     }
 
