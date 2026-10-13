@@ -1,0 +1,168 @@
+// SPDX-License-Identifier: LicenseRef-DCL-1.0
+// SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
+pragma solidity =0.8.25;
+
+import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
+
+import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {SafeTx} from "../../../src/lib/LibSafeTx.sol";
+import {LibSafeFork} from "../../../src/lib/LibSafeFork.sol";
+import {LibSafeTxBuilderJson} from "../../../src/lib/LibSafeTxBuilderJson.sol";
+import {ExampleSafeBundleScript} from "../../concrete/ExampleSafeBundleScript.sol";
+import {MockCallRecorder} from "../../concrete/MockCallRecorder.sol";
+import {LibForkSafe} from "../../lib/LibForkSafe.sol";
+
+/// @title SafeBundleScriptTest
+/// The inherited `run()` and `verify()` of `SafeBundleScript`, driven through
+/// `ExampleSafeBundleScript` against a real Safe v1.4.1 created on a Base fork.
+contract SafeBundleScriptTest is Test {
+    /// Every artifact this suite writes lives under its own root.
+    string constant ARTIFACT_ROOT = "fixture-lib/safe-bundle-script";
+
+    Safe internal sSafe;
+    MockCallRecorder internal sRecorder;
+    ExampleSafeBundleScript internal sScript;
+    string internal sPath;
+
+    /// A fork Safe with two owners and a threshold of two, a recorder, and the
+    /// example script writing to `name`'s own artifact path.
+    /// @param name The artifact's file name.
+    function setUpScript(string memory name) internal {
+        vm.createSelectFork(LibRainDeploy.BASE);
+        address[] memory owners = new address[](2);
+        owners[0] = makeAddr("owner0");
+        owners[1] = makeAddr("owner1");
+        sSafe = LibForkSafe.deploy(owners, 2);
+        sRecorder = new MockCallRecorder();
+        vm.createDir(ARTIFACT_ROOT, true);
+        sPath = string.concat(ARTIFACT_ROOT, "/", name, ".json");
+        sScript = new ExampleSafeBundleScript(sSafe, sRecorder, sPath);
+    }
+
+    /// `run()` executes the bundle through the Safe as one MultiSend
+    /// transaction, consuming exactly one nonce, and writes an artifact that
+    /// `verify()` accepts.
+    function testRunExecutesWritesAndVerifies() external {
+        setUpScript("run");
+        uint256 nonce = sSafe.nonce();
+
+        sScript.run();
+
+        assertEq(sRecorder.callCount(), 2);
+        assertEq(sRecorder.calls(0).caller, address(sSafe));
+        assertEq(sRecorder.calls(0).data, bytes("first"));
+        assertEq(sRecorder.calls(1).caller, address(sSafe));
+        assertEq(sRecorder.calls(1).data, bytes("second"));
+        assertEq(sSafe.nonce(), nonce + 1);
+        sScript.verify(sPath);
+    }
+
+    /// A transaction's value reaches its target: the bundle is executed with
+    /// the value the artifact carries, not replayed without it.
+    function testRunCarriesValue() external {
+        setUpScript("value");
+        vm.deal(address(sSafe), 1 ether);
+        sScript.setSecondCallValue(0.25 ether);
+
+        sScript.run();
+
+        assertEq(sRecorder.calls(1).value, 0.25 ether);
+        assertEq(address(sRecorder).balance, 0.25 ether);
+        sScript.verify(sPath);
+    }
+
+    /// `run()` refuses when the bundle cannot be shown reversible, after the
+    /// bundle executed.
+    function testRunRefusesIrreversibleBundle() external {
+        setUpScript("reversible");
+        sScript.setRefuseReversible(true);
+
+        vm.expectRevert(ExampleSafeBundleScript.NotReversible.selector);
+        sScript.run();
+    }
+
+    /// The written artifact is the bundle itself: parsed back and executed by
+    /// the Safe's owners, it makes exactly the calls `run()` executed.
+    function testArtifactExecutesTheAuthoredBundle() external {
+        setUpScript("execute");
+        sScript.run();
+        uint256 simulated = sRecorder.callCount();
+
+        (, address artifactSafe, SafeTx[] memory txs) = LibSafeTxBuilderJson.fromJson(vm, vm.readFile(sPath));
+        assertEq(artifactSafe, address(sSafe));
+        LibSafeFork.executeBundle(vm, sSafe, txs);
+
+        assertEq(sRecorder.callCount(), simulated + 2);
+        assertEq(sRecorder.calls(simulated).data, bytes("first"));
+        assertEq(sRecorder.calls(simulated + 1).data, bytes("second"));
+    }
+
+    /// `run()` authors nothing when `preflight` refuses.
+    function testRunRefusesUnauthorableState() external {
+        setUpScript("preflight-run");
+        sScript.setRefusePreflight(true);
+
+        vm.expectRevert(ExampleSafeBundleScript.NotAuthorable.selector);
+        sScript.run();
+        assertEq(sRecorder.callCount(), 0);
+    }
+
+    /// `run()` refuses when the simulated bundle does not leave the state it
+    /// exists to produce.
+    function testRunRefusesMissingPostState() external {
+        setUpScript("post-state");
+        // A call already recorded means the bundle's two leave three.
+        vm.prank(address(sSafe));
+        (bool ok,) = address(sRecorder).call("earlier");
+        assertTrue(ok);
+
+        vm.expectRevert(abi.encodeWithSelector(ExampleSafeBundleScript.PostStateMissing.selector, uint256(3)));
+        sScript.run();
+    }
+
+    /// `run()` refuses when a transaction reverts: the Safe executing the
+    /// MultiSend refuses the whole bundle with `GS013`, exactly as it would on
+    /// chain.
+    function testRunRefusesRevertingTransaction() external {
+        setUpScript("reverting");
+        sScript.setSecondCallData("revert");
+
+        vm.expectRevert(bytes("GS013"));
+        sScript.run();
+    }
+
+    /// `verify()` refuses an artifact whose transactions differ from the
+    /// bundle re-derived from live state.
+    function testVerifyRefusesChangedBundle() external {
+        setUpScript("changed");
+        sScript.run();
+        sScript.setSecondCallData("other");
+
+        vm.expectRevert(abi.encodeWithSelector(LibSafeTxBuilderJson.ArtifactMismatch.selector, "data"));
+        sScript.verify(sPath);
+    }
+
+    /// `verify()` refuses an artifact authored for another Safe.
+    function testVerifyRefusesOtherSafe() external {
+        setUpScript("other-safe");
+        sScript.run();
+        address[] memory owners = new address[](1);
+        owners[0] = makeAddr("otherOwner");
+        sScript.setSafe(LibForkSafe.deploy(owners, 1));
+
+        vm.expectRevert(abi.encodeWithSelector(LibSafeTxBuilderJson.ArtifactMismatch.selector, "safe"));
+        sScript.verify(sPath);
+    }
+
+    /// `verify()` refuses when `preflight` refuses, before reading the
+    /// artifact.
+    function testVerifyRefusesUnauthorableState() external {
+        setUpScript("preflight-verify");
+        sScript.run();
+        sScript.setRefusePreflight(true);
+
+        vm.expectRevert(ExampleSafeBundleScript.NotAuthorable.selector);
+        sScript.verify(sPath);
+    }
+}
