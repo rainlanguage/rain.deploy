@@ -36,7 +36,7 @@ interface ISafeToL2Setup {
 interface ISafeProxyFactory {
     function createProxyWithNonce(address singleton, bytes memory initializer, uint256 saltNonce)
         external
-        returns (address proxy);
+        returns (address);
     function proxyCreationCode() external pure returns (bytes memory);
 }
 
@@ -95,11 +95,12 @@ contract LibSafeTest is Test {
 
     /// Three owners, in the order `setup` receives them and so the order
     /// `getOwners()` returns them.
-    function owners() internal returns (address[] memory list) {
-        list = new address[](3);
+    function owners() internal returns (address[] memory) {
+        address[] memory list = new address[](3);
         list[0] = makeAddr("owner a");
         list[1] = makeAddr("owner b");
         list[2] = makeAddr("owner c");
+        return list;
     }
 
     /// The `setup` calldata the Safe UI writes: the owners at threshold 2,

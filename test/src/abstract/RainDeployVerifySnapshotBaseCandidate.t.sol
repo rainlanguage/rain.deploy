@@ -44,8 +44,8 @@ contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBa
     /// @dev One candidate, consistent and anchored to its own source, so the
     /// inherited tests are the passing case here exactly as they are in a
     /// consumer.
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](1);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "mock-deployable-candidate",
@@ -58,6 +58,7 @@ contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBa
             }),
             unanchorableReason: ""
         });
+        return candidates;
     }
 
     /// A candidate that no release stands in front of MUST still be checked for

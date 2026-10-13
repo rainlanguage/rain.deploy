@@ -28,13 +28,14 @@ library LibReleasedSuitesAggregate {
     /// library block below the imports never starts a line with `import`.
     /// @param vm The Vm instance for string operations.
     /// @param source An emitted aggregate.
-    /// @return names The contract names, in the order imported.
-    function declaredContractNames(Vm vm, string memory source) internal pure returns (string[] memory names) {
+    /// @return The contract names, in the order imported.
+    function declaredContractNames(Vm vm, string memory source) internal pure returns (string[] memory) {
         string[] memory chunks = vm.split(source, "\nimport {Lib");
 
-        names = new string[](chunks.length - 1);
+        string[] memory names = new string[](chunks.length - 1);
         for (uint256 i = 1; i < chunks.length; i++) {
             names[i - 1] = vm.split(chunks[i], "Released}")[0];
         }
+        return names;
     }
 }

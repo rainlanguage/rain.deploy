@@ -22,12 +22,9 @@ interface ISafe {
     /// @param start The cursor; the modules sentinel `address(0x1)` starts at
     /// the head of the list.
     /// @param pageSize The maximum number of modules to return.
-    /// @return array Up to `pageSize` enabled modules.
-    /// @return next The cursor for the next page.
-    function getModulesPaginated(address start, uint256 pageSize)
-        external
-        view
-        returns (address[] memory array, address next);
+    /// @return Up to `pageSize` enabled modules.
+    /// @return The cursor for the next page.
+    function getModulesPaginated(address start, uint256 pageSize) external view returns (address[] memory, address);
 
     /// @param offset The first storage slot to read.
     /// @param length The number of consecutive slots to read.
