@@ -73,7 +73,7 @@ contract BuildHarness is Build {
     /// regeneration writes beside the candidates' and a release does not
     /// freeze.
     /// @return The parameterised contract names.
-    function externalParameterisedContractNames() external view returns (string[] memory) {
+    function externalParameterisedContractNames() external pure returns (string[] memory) {
         ParameterisedContract[] memory parameterised = parameterisedContracts();
         string[] memory names = new string[](parameterised.length);
         for (uint256 i = 0; i < parameterised.length; i++) {
