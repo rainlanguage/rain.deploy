@@ -10,6 +10,7 @@ import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 // what holds a declared pair to a chain.
 import {DeployDependency, LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
+import {DeployBeacon} from "../lib/LibRainDeployBeacon.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
@@ -301,6 +302,13 @@ abstract contract RainDeploySuitesBase {
     /// than it looks.
     /// @return The candidates.
     function candidateSuites() internal view virtual returns (DeployCandidate[] memory);
+
+    /// The beacons that MUST hold their declared state on the network with
+    /// this chain id. Resolved before anything forks.
+    /// @return The beacons on the network.
+    function beacons(uint256) internal view virtual returns (DeployBeacon[] memory) {
+        return new DeployBeacon[](0);
+    }
 
     /// Every network this repo deals with: what a broadcast targets, the set
     /// every network-scoped assertion is made over, and the set the network
