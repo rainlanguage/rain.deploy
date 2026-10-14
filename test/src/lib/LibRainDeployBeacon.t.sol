@@ -76,7 +76,7 @@ contract LibRainDeployBeaconTest is Test {
     }
 
     function externalAppliedState(DeployBeacon memory beacon) external view returns (uint256) {
-        return LibRainDeployBeacon.appliedState(beacon);
+        return LibRainDeployBeacon.appliedState(NETWORK, beacon);
     }
 
     function externalCheckBeacon(DeployBeacon memory beacon, address implementation, address owner) external view {
@@ -114,6 +114,29 @@ contract LibRainDeployBeaconTest is Test {
         applyMigration(UPGRADE, MIGRATION_HEAD_GENESIS);
         applyMigration(HANDOVER, UPGRADE);
         assertEq(this.externalAppliedState(declared(upgradeThenHandover())), 2);
+    }
+
+    function testTransitionsAppliedInDeclaredOrderAcrossBlocksSelectTheLatest() external {
+        deployRegistry();
+        applyMigration(UPGRADE, MIGRATION_HEAD_GENESIS);
+        vm.warp(block.timestamp + 1);
+        applyMigration(HANDOVER, UPGRADE);
+        assertEq(this.externalAppliedState(declared(upgradeThenHandover())), 2);
+    }
+
+    function testTransitionsAppliedOutOfDeclaredOrderAreRefused() external {
+        deployRegistry();
+        applyMigration(UPGRADE, MIGRATION_HEAD_GENESIS);
+        vm.warp(block.timestamp + 1);
+        applyMigration(HANDOVER, UPGRADE);
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        (transitions[0], transitions[1]) = (transitions[1], transitions[0]);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployBeacon.BeaconTransitionsOutOfOrder.selector, NETWORK, address(sBeacon), 1
+            )
+        );
+        this.externalAppliedState(declared(transitions));
     }
 
     function testLaterAppliedTransitionWinsOverAnEarlierUnappliedOne() external {

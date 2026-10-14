@@ -23,7 +23,7 @@ error BeaconNamedTwice(uint256 chainId, uint256 beaconIndex);
 /// @param beaconIndex The beacon's index in `beacons()`.
 error BeaconUnnamed(uint256 chainId, uint256 beaconIndex);
 
-/// @notice A beacon's chain id MUST be one of the checked networks'.
+/// @notice A beacon's chain id MUST be one of `supportedNetworks()`'.
 /// @param chainId The beacon's chain id.
 /// @param beaconIndex The beacon's index in `beacons()`.
 error BeaconOnUncheckedNetwork(uint256 chainId, uint256 beaconIndex);
@@ -55,8 +55,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         checkDeployedOnNetworks(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
     }
 
-    /// Checks every suite and every beacon against every given network, forking each network once, refusing a
-    /// beacon on any other network before forking.
+    /// Checks every suite and every beacon on the given networks against each, forking each network once, refusing
+    /// a beacon outside `supportedNetworks()` before forking.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
     function checkDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) internal {
@@ -125,7 +125,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         if (bytes(beacon.beaconSuite).length != 0) {
             checkSuiteOnNetwork(network, resolved.suite, resolved.derived, beacon.beacon);
         }
-        uint256 state = LibRainDeployBeacon.appliedState(beacon);
+        uint256 state = LibRainDeployBeacon.appliedState(network, beacon);
         LibRainDeployBeacon.checkBeacon(
             network, beacon, resolved.implementationAddresses[state], LibRainDeployBeacon.stateAt(beacon, state).owner
         );
@@ -137,24 +137,31 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         );
     }
 
-    /// @param networks The networks a beacon MUST be on.
-    /// @return Each of `beacons()`, resolved on its network.
+    /// @param networks The networks whose beacons to resolve.
+    /// @return Each of `beacons()` on one of `networks`, resolved on it, in declaration order.
     function resolveBeacons(SupportedNetwork[] memory networks) internal returns (ResolvedBeacon[] memory) {
         ChainBeacon[] memory chainBeacons = beacons();
-        DeploySuite[] memory released = releasedSuites();
-        DerivedDeploy[] memory derived = new DerivedDeploy[](released.length);
-        ResolvedBeacon[] memory resolved = new ResolvedBeacon[](chainBeacons.length);
+        SupportedNetwork[] memory supported = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
+        uint256 onNetworks = 0;
         for (uint256 beaconIndex = 0; beaconIndex < chainBeacons.length; beaconIndex++) {
             uint256 chainId = chainBeacons[beaconIndex].chainId;
-            bool isChecked = false;
-            for (uint256 i = 0; i < networks.length; i++) {
-                isChecked = isChecked || networks[i].chainId == chainId;
-            }
-            if (!isChecked) {
+            if (!LibRainDeploy.hasChainId(supported, chainId)) {
                 revert BeaconOnUncheckedNetwork(chainId, beaconIndex);
             }
-            resolved[beaconIndex] =
-                resolveBeacon(chainBeacons[beaconIndex].beacon, chainId, beaconIndex, released, derived);
+            if (LibRainDeploy.hasChainId(networks, chainId)) {
+                onNetworks++;
+            }
+        }
+        DeploySuite[] memory released = releasedSuites();
+        DerivedDeploy[] memory derived = new DerivedDeploy[](released.length);
+        ResolvedBeacon[] memory resolved = new ResolvedBeacon[](onNetworks);
+        onNetworks = 0;
+        for (uint256 beaconIndex = 0; beaconIndex < chainBeacons.length; beaconIndex++) {
+            uint256 chainId = chainBeacons[beaconIndex].chainId;
+            if (LibRainDeploy.hasChainId(networks, chainId)) {
+                resolved[onNetworks++] =
+                    resolveBeacon(chainBeacons[beaconIndex].beacon, chainId, beaconIndex, released, derived);
+            }
         }
         return resolved;
     }

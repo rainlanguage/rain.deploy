@@ -29,7 +29,7 @@ struct BeaconTransition {
 /// @param beacon The address of a beacon this repo did not deploy, zero when named by `beaconSuite`.
 /// @param beaconCodeHash The runtime code hash of a beacon this repo did not deploy, zero when named by `beaconSuite`.
 /// @param initial The state before any transition's migration is applied.
-/// @param transitions The states, in migration order.
+/// @param transitions The states, in migration order; one applied before an earlier-declared one is refused.
 struct DeployBeacon {
     string beaconSuite;
     address beacon;
@@ -46,18 +46,35 @@ struct ChainBeacon {
     DeployBeacon beacon;
 }
 
+/// @title LibRainDeployBeacon
+/// @notice The expected state of a declared upgradeable beacon on the selected fork, and the check that it holds.
 library LibRainDeployBeacon {
+    /// @notice A transition MUST NOT be applied before one declared earlier.
+    /// @param network The beacon's network.
+    /// @param beacon The beacon.
+    /// @param transition The index in `transitions` of the one applied before an earlier-declared one.
+    error BeaconTransitionsOutOfOrder(string network, address beacon, uint256 transition);
+
     /// Zero for `initial`, else one past the latest transition the selected fork's registry reports applied.
+    /// @param network The network's name, for the refusal.
     /// @param beacon The beacon.
     /// @return The state index, as `stateAt` takes it.
-    function appliedState(DeployBeacon memory beacon) internal view returns (uint256) {
-        for (uint256 i = beacon.transitions.length; i > 0; i--) {
-            Prerequisite memory migration = beacon.transitions[i - 1].migration;
-            if (LibMigrationRegistry.applied(migration.writer, migration.namespace, migration.migration) != 0) {
-                return i;
+    function appliedState(string memory network, DeployBeacon memory beacon) internal view returns (uint256) {
+        uint256 state = 0;
+        uint256 appliedAt = 0;
+        for (uint256 i = 0; i < beacon.transitions.length; i++) {
+            Prerequisite memory migration = beacon.transitions[i].migration;
+            uint256 at = LibMigrationRegistry.applied(migration.writer, migration.namespace, migration.migration);
+            if (at == 0) {
+                continue;
             }
+            if (at < appliedAt) {
+                revert BeaconTransitionsOutOfOrder(network, beacon.beacon, i);
+            }
+            state = i + 1;
+            appliedAt = at;
         }
-        return 0;
+        return state;
     }
 
     /// @param beacon The beacon.

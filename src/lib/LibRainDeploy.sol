@@ -425,6 +425,18 @@ library LibRainDeploy {
         return names;
     }
 
+    /// @param networks The networks.
+    /// @param chainId The chain id.
+    /// @return Whether one of `networks` has `chainId`.
+    function hasChainId(SupportedNetwork[] memory networks, uint256 chainId) internal pure returns (bool) {
+        for (uint256 i = 0; i < networks.length; i++) {
+            if (networks[i].chainId == chainId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// Requires the currently selected fork to report the chain id a network's catalogue entry
     /// declares.
     /// @param network The catalogue entry of the network the selected fork is meant to be.

@@ -16,7 +16,13 @@ import {
     BeaconUnnamed,
     RainDeployVerifyChain
 } from "../../../src/abstract/RainDeployVerifyChain.sol";
-import {BeaconState, BeaconTransition, ChainBeacon, DeployBeacon} from "../../../src/lib/LibRainDeployBeacon.sol";
+import {
+    BeaconState,
+    BeaconTransition,
+    ChainBeacon,
+    DeployBeacon,
+    LibRainDeployBeacon
+} from "../../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {
@@ -34,6 +40,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     address constant WRITER = address(0x5AFE);
     bytes32 constant NAMESPACE = keccak256("beacons");
     bytes32 constant MIGRATION = keccak256("migration");
+    bytes32 constant ROLLBACK = keccak256("rollback");
     address constant DEPENDENCY = address(0xDE9);
     bytes constant DEPENDENCY_CODE = hex"00";
     address constant BEACON_DEPENDENCY = address(0xBDE9);
@@ -173,9 +180,25 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function applyMigration() internal {
+        applyMigration(MIGRATION, MIGRATION_HEAD_GENESIS);
+    }
+
+    function applyMigration(bytes32 migration, bytes32 head) internal {
         vm.prank(WRITER);
         IMigrationRegistryV2(sRegistry)
-            .applyMigration(NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+            .applyMigration(NAMESPACE, migration, LibMigrationRegistry.onto(WRITER, NAMESPACE, head));
+    }
+
+    function rollingBack() internal view returns (DeployBeacon memory) {
+        DeployBeacon memory beacon = migrating("beacon-upgrade@0_0_1", OWNER);
+        BeaconTransition[] memory transitions = new BeaconTransition[](2);
+        transitions[0] = beacon.transitions[0];
+        transitions[1] = BeaconTransition({
+            migration: Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: ROLLBACK}),
+            state: BeaconState({implementation: "beacon-implementation@0_0_1", owner: OWNER})
+        });
+        beacon.transitions = transitions;
+        return beacon;
     }
 
     function upgradeAndHandOver() internal {
@@ -567,6 +590,51 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         beacon.beacon = address(0);
         declare(42161, beacon);
         vm.expectRevert(abi.encodeWithSelector(BeaconUnnamed.selector, 42161, 0));
+        this.externalCheckDeployedOnNetworks(arbitrum());
+    }
+
+    function testBeaconNamedTwiceBehindAValidBeaconReportsItsIndex() external {
+        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        DeployBeacon memory twice = bySuite("beacon@0_0_1", OWNER);
+        twice.beacon = sSuiteBeacon;
+        declare(42161, twice);
+        vm.expectRevert(abi.encodeWithSelector(BeaconNamedTwice.selector, 42161, 1));
+        this.externalCheckDeployedOnNetworks(arbitrum());
+    }
+
+    function testNarrowedCheckAcceptsABeaconOnAnotherSupportedNetwork() external {
+        supportOnly(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
+        declare(8453, declared("beacon-implementation@0_0_1", NEW_OWNER));
+        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        this.externalCheckDeployedOnNetworks(arbitrum());
+    }
+
+    function testNarrowedCheckResolvesOnlyTheBeaconsOnItsNetworks() external {
+        declare(8453, declared("beacon-upgrade@0_0_1", OWNER));
+        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployable).creationCode, 0);
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployableV2).creationCode, 1);
+        this.externalResolveBeacons(arbitrum());
+    }
+
+    function testTransitionsAppliedInDeclaredOrderExpectTheLatest() external {
+        declare(42161, rollingBack());
+        applyMigration();
+        vm.warp(block.timestamp + 1);
+        applyMigration(ROLLBACK, MIGRATION);
+        this.externalCheckDeployedOnNetworks(arbitrum());
+    }
+
+    function testTransitionsAppliedOutOfDeclaredOrderAreRefusedOnTheNetwork() external {
+        declare(42161, rollingBack());
+        applyMigration(ROLLBACK, MIGRATION_HEAD_GENESIS);
+        vm.warp(block.timestamp + 1);
+        applyMigration(MIGRATION, ROLLBACK);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployBeacon.BeaconTransitionsOutOfOrder.selector, LibRainDeploy.ARBITRUM_ONE, sBeacon, 1
+            )
+        );
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 }
