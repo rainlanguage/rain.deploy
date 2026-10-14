@@ -57,6 +57,10 @@ library LibTimelockController {
     /// @param derived The hash of the code the creation code deploys.
     error TimelockGenerationMismatch(bytes32 bytecodeHash, bytes32 derived);
 
+    /// The local deploy behind `checkTimelockGeneration` could not be reverted.
+    /// @param snapshotId The snapshot that failed to revert.
+    error TimelockGenerationSnapshotRevertFailed(uint256 snapshotId);
+
     /// `getMinDelay()` is not the expected minimum delay.
     /// @param timelock The timelock inspected.
     /// @param expected The expected minimum delay in seconds.
@@ -156,7 +160,9 @@ library LibTimelockController {
         }
         if (local == address(0)) revert LibRainDeploy.DeployFailed(false, local);
         bytes32 derived = local.codehash;
-        vm.revertToState(snapshotId);
+        if (!vm.revertToState(snapshotId)) {
+            revert TimelockGenerationSnapshotRevertFailed(snapshotId);
+        }
         if (derived != bytecodeHash) {
             revert TimelockGenerationMismatch(bytecodeHash, derived);
         }

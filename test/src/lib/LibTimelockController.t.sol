@@ -11,6 +11,7 @@ import {BYTECODE_HASH, CREATION_CODE, RUNTIME_CODE} from "../../../src/generated
 import {CREATION_CODE as CREATION_CODE_0_1_18} from "../../../src/generated/0_1_18/TimelockController.sol";
 import {MockTimelockControllerGeneration} from "../../concrete/MockTimelockControllerGeneration.sol";
 import {MockTimelockControllerImmutableGeneration} from "../../concrete/MockTimelockControllerImmutableGeneration.sol";
+import {MockSnapshotDeletingCreation} from "../../concrete/MockSnapshotDeletingCreation.sol";
 
 /// @title LibTimelockControllerTest
 /// The snapshot against the dependency, the frozen generation against
@@ -199,6 +200,17 @@ contract LibTimelockControllerTest is Test {
     function testCheckTimelockGenerationRefusesCreationCodeThatDoesNotDeploy() external {
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, false, address(0)));
         this.externalCheckTimelockGeneration(hex"60006000fd", BYTECODE_HASH);
+    }
+
+    /// A local deploy that cannot be reverted is refused rather than left in place.
+    function testCheckTimelockGenerationRefusesALocalDeployThatCannotBeReverted() external {
+        uint256 checkSnapshotId = vm.snapshotState() + 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibTimelockController.TimelockGenerationSnapshotRevertFailed.selector, checkSnapshotId
+            )
+        );
+        this.externalCheckTimelockGeneration(type(MockSnapshotDeletingCreation).creationCode, BYTECODE_HASH);
     }
 
     /// A timelock passes against the generation it was deployed from and is
