@@ -11,14 +11,14 @@ import {
     exampleCloneImplementation
 } from "../../abstract/ExampleCloneDeploys.sol";
 
-/// @title LibRainDeployClonePerNetworkTest
-/// Tests for `LibRainDeployClone`'s per-network checks and entry resolution.
+/// @title LibRainDeployClonePerNetworkTest Tests for `LibRainDeployClone`'s per-network checks and
+/// entry resolution.
 contract LibRainDeployClonePerNetworkTest is Test {
     /// A salt with bytes set across the whole word.
     bytes32 constant TEST_SALT = 0x1122334455667788990011223344556677889900112233445566778899001122;
 
-    /// A per-network clone over the given factory and implementation, with one
-    /// entry per chain id, each with its own init data.
+    /// A per-network clone over the given factory and implementation, with one entry per chain id,
+    /// each with its own init data.
     /// @param factory The factory.
     /// @param implementation The implementation.
     /// @param chainIds The chain id of each entry.
@@ -76,7 +76,7 @@ contract LibRainDeployClonePerNetworkTest is Test {
         return LibRainDeployClone.cloneNetworkIndex(clones, chainId);
     }
 
-    /// Whether any fork exists. Fork ids are handed out from zero.
+    /// Whether any fork exists.
     /// @return Whether fork 0 can be selected.
     function anyForkExists() internal returns (bool) {
         (bool forked,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", uint256(0)));
@@ -88,8 +88,7 @@ contract LibRainDeployClonePerNetworkTest is Test {
         this.externalCheckCloneNetworks(exampleCloneNetworks(), exampleCloneDependencies());
     }
 
-    /// A per-network clone naming no network is refused: every check over its
-    /// networks would pass having checked nothing.
+    /// A per-network clone naming no network is refused.
     function testCheckCloneNetworksRefusesNoNetworks() external {
         CloneNetworks memory clones =
             cloneNetworks(exampleCloneFactory(), exampleCloneImplementation(), new uint256[](0));
@@ -97,10 +96,9 @@ contract LibRainDeployClonePerNetworkTest is Test {
         this.externalCheckCloneNetworks(clones, exampleCloneDependencies());
     }
 
-    /// A chain id named twice is refused, naming it — including when the
-    /// repeat is not next to the first, and when it is the LAST entry, so a
-    /// check that compared only neighbours or stopped short of the end passes
-    /// it.
+    /// A chain id named twice is refused, naming it — including when the repeat is not next to the
+    /// first, and when it is the LAST entry, so a check that compared only neighbours or stopped
+    /// short of the end passes it.
     function testCheckCloneNetworksRefusesADuplicateChainId() external {
         uint256[] memory chainIds = new uint256[](3);
         chainIds[0] = 137;
@@ -111,8 +109,7 @@ contract LibRainDeployClonePerNetworkTest is Test {
         this.externalCheckCloneNetworks(clones, exampleCloneDependencies());
     }
 
-    /// The factory and the implementation MUST be declared dependencies, as
-    /// for a uniform clone.
+    /// The factory and the implementation MUST be declared dependencies, as for a uniform clone.
     function testCheckCloneNetworksRefusesAnUndeclaredDependency() external {
         DeployDependency[] memory onlyFactory = new DeployDependency[](1);
         onlyFactory[0] = exampleCloneDependencies()[0];
@@ -122,8 +119,8 @@ contract LibRainDeployClonePerNetworkTest is Test {
         this.externalCheckCloneNetworks(exampleCloneNetworks(), onlyFactory);
     }
 
-    /// Every entry is found by its chain id, not only the first, and a chain id
-    /// with no entry is refused rather than resolved to some entry.
+    /// Every entry is found by its chain id, not only the first, and a chain id with no entry is
+    /// refused rather than resolved to some entry.
     function testCloneNetworkIndexFindsEveryEntryAndRefusesAnUndeclaredOne() external {
         CloneNetworks memory clones = exampleCloneNetworks();
         assertEq(this.externalCloneNetworkIndex(clones, 42161), 0);
@@ -133,9 +130,8 @@ contract LibRainDeployClonePerNetworkTest is Test {
         this.externalCloneNetworkIndex(clones, 8453);
     }
 
-    /// An entry's target is the shared factory, implementation and salt with
-    /// THAT entry's data, and two entries with different data are at
-    /// different addresses.
+    /// An entry's target is the shared factory, implementation and salt with THAT entry's data, and
+    /// two entries with different data are at different addresses.
     function testCloneNetworkTargetIsTheSharedCloneWithTheEntrysData() external pure {
         CloneNetworks memory clones = exampleCloneNetworks();
         for (uint256 i = 0; i < clones.networks.length; i++) {

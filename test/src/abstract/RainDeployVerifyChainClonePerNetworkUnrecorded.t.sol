@@ -15,13 +15,8 @@ import {
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 
 /// @title RainDeployVerifyChainClonePerNetworkUnrecordedTest
-/// @notice The chain matrix over a per-network clone release cut when the repo
-/// supported Arbitrum One alone, in a repo that now supports Polygon too.
-///
-/// The release records nothing for Polygon. The matrix checks it there anyway,
-/// at the address the declaration's Polygon init data derives under the
-/// release's factory, implementation and salt — where a broadcast of the
-/// release puts it — and at the recorded address on Arbitrum One.
+/// @notice The chain matrix over a per-network clone release cut when the repo supported Arbitrum
+/// One alone, in a repo that now supports Polygon too.
 contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDeploys, RainDeployVerifyChain {
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()
@@ -33,8 +28,8 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         return PerNetworkCloneDeploys.supportedNetworks();
     }
 
-    /// Puts the release's dependencies, and its clone at the address for each
-    /// network, on every fork.
+    /// Puts the release's dependencies, and its clone at the address for each network, on every
+    /// fork.
     function setUp() external {
         DeploySuite memory release = releasedSuites()[0];
         for (uint256 i = 0; i < release.dependencies.length; i++) {
@@ -70,10 +65,8 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         return suites;
     }
 
-    /// The release passes with its clone at the Polygon init data's address on
-    /// Polygon, and with that address empty is refused on Polygon naming it:
-    /// the matrix checked Polygon, at that address, though the release records
-    /// nothing there.
+    /// The release passes with its clone at the Polygon init data's address on Polygon, and with
+    /// that address empty is refused on Polygon naming it.
     function testUnrecordedNetworkIsCheckedAtItsInitDataAddress() external {
         DeploySuite[] memory suites = arbitrumOnlyRelease();
         this.externalCheckDeployedOnSupportedNetworks(suites);
@@ -100,8 +93,7 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         this.externalCheckDeployedOnSupportedNetworks(suites);
     }
 
-    /// A release no candidate is named by takes no network from one: the
-    /// network it does not record is refused by chain id, before any fork.
+    /// A release no candidate is named by takes no network from one.
     function testReleaseNoCandidateNamesIsRefusedOnItsUnrecordedNetworkBeforeAnyFork() external {
         DeploySuite[] memory suites = arbitrumOnlyRelease();
         suites[0].suite = "other-clone@0_0_1";

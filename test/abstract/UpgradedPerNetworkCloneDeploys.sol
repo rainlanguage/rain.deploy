@@ -9,23 +9,19 @@ import {MockCloneFactory} from "../concrete/MockCloneFactory.sol";
 import {MockCloneableV2} from "../concrete/MockCloneableV2.sol";
 import {PerNetworkCloneDeploys, perNetworkCloneInitData} from "./PerNetworkCloneDeploys.sol";
 
-/// The factory the upgraded candidate clones through: `MockCloneFactory`'s
-/// code at an address that is not the release's factory, as a second
-/// deployment of one factory is.
+/// The factory the upgraded candidate clones through.
 /// @return The factory address.
 function upgradedCloneFactory() pure returns (address) {
     return address(uint160(uint256(keccak256("rain.deploy.test.upgraded-clone-factory"))));
 }
 
-/// The implementation the upgraded candidate clones: `MockCloneableV2` at its
-/// Zoltu address.
+/// The implementation the upgraded candidate clones.
 /// @return The implementation address.
 function upgradedCloneImplementation() pure returns (address) {
     return LibRainDeploy.zoltuAddress(type(MockCloneableV2).creationCode);
 }
 
-/// The upgraded candidate's dependencies: its factory and its implementation,
-/// each with its code.
+/// The upgraded candidate's dependencies.
 /// @return The dependencies.
 function upgradedCloneDependencies() pure returns (DeployDependency[] memory) {
     DeployDependency[] memory dependencies = new DeployDependency[](2);
@@ -37,8 +33,8 @@ function upgradedCloneDependencies() pure returns (DeployDependency[] memory) {
     return dependencies;
 }
 
-/// The `per-network-clone` candidate after it moved to the upgraded factory and
-/// implementation, with the same per-network init data and its own salt.
+/// The `per-network-clone` candidate after it moved to the upgraded factory and implementation,
+/// with the same per-network init data and its own salt.
 /// @return The candidate's clone declaration.
 function upgradedPerNetworkClone() pure returns (CloneDeploy memory) {
     return CloneDeploy({
@@ -53,8 +49,8 @@ function upgradedPerNetworkClone() pure returns (CloneDeploy memory) {
     });
 }
 
-/// Where the upgraded candidate's factory, implementation and salt put a
-/// clone initialized with a network's init data.
+/// Where the upgraded candidate's factory, implementation and salt put a clone initialized with a
+/// network's init data.
 /// @param chainId The network's chain id.
 /// @return The clone address.
 function upgradedPerNetworkCloneAddress(uint256 chainId) pure returns (address) {
@@ -70,11 +66,8 @@ function upgradedPerNetworkCloneAddress(uint256 chainId) pure returns (address) 
 }
 
 /// @title UpgradedPerNetworkCloneDeploys
-/// @notice `PerNetworkCloneDeploys` with its candidate moved to another factory
-/// and implementation since its `0_0_1` release was cut.
-/// The release's factory, implementation and salt each differ from the
-/// candidate's, so the address a network the release does not record takes
-/// shows which of the two it was derived from.
+/// @notice `PerNetworkCloneDeploys` with its candidate moved to another factory and implementation
+/// since its `0_0_1` release was cut.
 abstract contract UpgradedPerNetworkCloneDeploys is PerNetworkCloneDeploys {
     /// @inheritdoc RainDeployCloneSuitesBase
     function cloneDeploys() internal pure override returns (CloneDeploy[] memory) {

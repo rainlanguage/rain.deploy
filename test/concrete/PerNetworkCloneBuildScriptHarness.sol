@@ -14,10 +14,7 @@ import {
 } from "../abstract/PerNetworkCloneDeploys.sol";
 
 /// @title PerNetworkCloneBuildScriptHarness
-/// @notice A per-network clone deploy repo's build script over a fixture
-/// record root: it regenerates the `per-network-clone` release's rolling
-/// snapshot through the suite writer, and the released-suites lib from the
-/// record with a per-network clone template.
+/// @notice A per-network clone deploy repo's build script over a fixture record root.
 contract PerNetworkCloneBuildScriptHarness is PerNetworkCloneDeploys, BuildScript {
     string internal sRoot;
 

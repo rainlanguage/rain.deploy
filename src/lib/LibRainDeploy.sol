@@ -49,16 +49,14 @@ struct DeployDependency {
     bytes runtimeCode;
 }
 
-/// What `LibRainDeploy.deployStepToNetworks` deploys on each network: three
-/// lists, each positionally paired with the loop's networks.
+/// What `LibRainDeploy.deployStepToNetworks` deploys on each network.
 struct NetworkDeploys {
-    /// Whatever the step needs on each network: the creation code for Zoltu,
-    /// the encoded clone for a clone factory.
+    /// Whatever the step needs on each network.
     bytes[] deployStepData;
     /// The recorded address on each network.
     address[] expectedAddresses;
-    /// The address the mechanism derives on each network from that network's
-    /// step data, which is where the step deploys to there.
+    /// The address the mechanism derives on each network from that network's step data, which is
+    /// where the step deploys to there.
     address[] derivedAddresses;
 }
 
@@ -80,14 +78,9 @@ library LibRainDeploy {
     error MissingDependency(string network, address dependency);
 
     /// Thrown when an address does not match the address the deploy expects.
-    /// Raised by `deployStepToNetworks` at two distinct points, and nothing is
-    /// deployed at the first of them: before any fork, when the address the
-    /// mechanism derives for a network is not the one expected there, and after
-    /// broadcasting, when the address deployed to is not the expected one.
-    /// @param expected The address expected on the network: the recorded
-    /// address, at both sites.
-    /// @param actual The address the mechanism derives, before any fork, or the
-    /// address actually deployed to, after broadcasting.
+    /// @param expected The address expected on the network.
+    /// @param actual The address the mechanism derives, before any fork, or the address actually
+    /// deployed to, after broadcasting.
     error UnexpectedDeployedAddress(address expected, address actual);
 
     /// Thrown when the deployed code hash does not match the expected code hash.
@@ -120,11 +113,8 @@ library LibRainDeploy {
     /// @param forkIdsLength How many fork ids were given.
     error ForkIdsLengthMismatch(uint256 networksLength, uint256 forkIdsLength);
 
-    /// Thrown when the per-network step data, expected addresses or derived
-    /// addresses handed to `deployStepToNetworks` do not pair up with its
-    /// networks. Each is read by position, so an unpaired list deploys one
-    /// network's data, expects one network's address, or compares one
-    /// network's derivation, on another.
+    /// Thrown when the per-network step data, expected addresses or derived addresses handed to
+    /// `deployStepToNetworks` do not pair up with its networks.
     /// @param networksLength How many networks were given.
     /// @param deployStepDataLength How many step data entries were given.
     /// @param expectedAddressesLength How many expected addresses were given.
@@ -150,28 +140,19 @@ library LibRainDeploy {
     /// @param network The declared name with no catalogue entry.
     error NetworkNotInCatalogue(string network);
 
-    /// Thrown when the chain id a network's catalogue entry declares is not the
-    /// chain id the endpoint bound to its `[rpc_endpoints]` alias reports.
-    /// Either the declaration is wrong — and `chain` is what `--verify`
-    /// submits, so the deployment is verified against another chain's explorer
-    /// — or the alias is bound to a different network than the one it names,
-    /// and everything checked or broadcast through it lands somewhere else: a
-    /// deployment whose address or init data depends on the chain id is put
-    /// there with another network's.
+    /// Thrown when the chain id a network's catalogue entry declares is not the chain id the
+    /// endpoint bound to its `[rpc_endpoints]` alias reports.
     /// @param network The network name, as configured in `[rpc_endpoints]`.
     /// @param declared The chain id the catalogue entry states.
     /// @param reported The chain id the endpoint answers with.
     error NetworkChainIdMismatch(string network, uint256 declared, uint256 reported);
 
-    /// Thrown when an address that must hold a deployment has no code on a
-    /// network.
+    /// Thrown when an address that must hold a deployment has no code on a network.
     /// @param network The network name, as configured in `[rpc_endpoints]`.
     /// @param deployedAddress The address that should hold the deployment.
     error NotDeployedOnNetwork(string network, address deployedAddress);
 
-    /// Thrown when an address holds code other than the deployment's on a
-    /// network. A chain-dependent runtime fails here too: that is a defect in
-    /// the contract, not a reason for per-chain hashes.
+    /// Thrown when an address holds code other than the deployment's on a network.
     /// @param network The network name, as configured in `[rpc_endpoints]`.
     /// @param deployedAddress The address checked.
     /// @param expectedCodeHash The deployment's code hash.
@@ -433,8 +414,7 @@ library LibRainDeploy {
         return declared;
     }
 
-    /// The name of each network, in order: the `[rpc_endpoints]` aliases
-    /// `createForks` forks.
+    /// The name of each network, in order.
     /// @param networks The networks.
     /// @return Each network's name, positionally paired with `networks`.
     function networkNames(SupportedNetwork[] memory networks) internal pure returns (string[] memory) {
@@ -445,27 +425,16 @@ library LibRainDeploy {
         return names;
     }
 
-    /// Requires the currently selected fork to report the chain id a network's
-    /// catalogue entry declares.
-    ///
-    /// The one chain id check, run on every network forked to deploy or to
-    /// verify, before anything else is read there. A network is handled by
-    /// name and everything per network that is keyed by chain id — a
-    /// per-network clone's init data and address, `--verify`'s `chain` — was
-    /// resolved from the catalogue's chain id before any fork, so an endpoint
-    /// serving another chain is the one way that resolution is wrong on the
-    /// network itself.
-    /// @param network The catalogue entry of the network the selected fork is
-    /// meant to be.
+    /// Requires the currently selected fork to report the chain id a network's catalogue entry
+    /// declares.
+    /// @param network The catalogue entry of the network the selected fork is meant to be.
     function checkNetworkChainId(SupportedNetwork memory network) internal view {
         if (block.chainid != network.chainId) {
             revert NetworkChainIdMismatch(network.name, network.chainId, block.chainid);
         }
     }
 
-    /// The selected fork MUST hold code at `deployedAddress` hashing to
-    /// `expectedCodeHash`. Presence is checked first: an empty account's
-    /// `codehash` is zero, which would report absence as a mismatch.
+    /// The selected fork MUST hold code at `deployedAddress` hashing to `expectedCodeHash`.
     /// @param network The network name, for the refusal to name.
     /// @param deployedAddress The address that must hold the deployment.
     /// @param expectedCodeHash The deployment's code hash.
@@ -651,16 +620,7 @@ library LibRainDeploy {
         checkResolvedAddressesOnForks(vm, networks, createForks(vm, networks), target, readCalls, expectedAddresses);
     }
 
-    /// What the ZOLTU mechanism needs on a network before it can deploy there:
-    /// the factory, holding the code this library pins for it.
-    ///
-    /// Split out from the declared dependencies because it belongs to the
-    /// mechanism and not to the declaration. `deployStepToNetworks` serves every
-    /// mechanism, and a clone broadcast run through a loop that demanded the
-    /// Zoltu factory would refuse a network over a contract it never calls —
-    /// while the declared dependencies have to hold whichever mechanism puts the
-    /// code there. So the loop checks the list and each step checks its own
-    /// factory.
+    /// What the ZOLTU mechanism needs on a network before it can deploy there.
     /// @param network The network being checked, for the refusal to name.
     function checkZoltuFactory(string memory network) internal view {
         console2.log(" - Zoltu Factory:", ZOLTU_FACTORY);
@@ -672,15 +632,8 @@ library LibRainDeploy {
         }
     }
 
-    /// Every DECLARED dependency that MUST already be on a network before the
-    /// suite declaring it is broadcast there, with the code its declaration
-    /// carries.
-    ///
-    /// Each dependency's presence is checked before its code hash, and not
-    /// folded into one comparison. An account with no code answers `codehash`
-    /// zero, which is a value no declaration can produce — `keccak256` of the
-    /// empty string is not zero — so the hash check alone would report every
-    /// absent dependency as a changed one.
+    /// Every DECLARED dependency that MUST already be on a network before the suite declaring it is
+    /// broadcast there, with the code its declaration carries.
     /// @param network The network being checked, for the refusal to name.
     /// @param dependencies The declared dependencies.
     function checkDeclaredDependencies(string memory network, DeployDependency[] memory dependencies) internal view {
@@ -697,26 +650,11 @@ library LibRainDeploy {
         }
     }
 
-    /// The ZOLTU mechanism as a `deployStepToNetworks` step: the one thing a
-    /// Zoltu deploy does that a clone deploy does not.
-    ///
-    /// Everything around it — the network list, the forks, the skip, the
-    /// address and code hash assertions — is the loop's, and the loop is shared.
-    /// This is the step, and the step is the whole of the difference: Zoltu's
-    /// `CREATE2` over the creation code at a zero salt, versus a clone factory's
-    /// `cloneDeterministicOpenSalt`.
-    ///
-    /// Its own factory check lives here rather than in the loop, because it is
-    /// this mechanism's requirement: a clone broadcast has no business reading
-    /// the Zoltu factory at all, and would be refused a network over it.
-    ///
-    /// `vm.startBroadcast` / `vm.stopBroadcast` are the step's too, so that the
-    /// broadcast window is exactly the one call that puts code on chain. The
-    /// factory read above it is a plain read, taken before the window opens.
+    /// The ZOLTU mechanism as a `deployStepToNetworks` step.
     /// @param vm The Vm instance to broadcast with.
     /// @param network The network being deployed to, for a refusal to name.
     /// @param deployer The deployer address to broadcast as.
-    /// @param creationCode The step data: the creation code to deploy.
+    /// @param creationCode The step data.
     /// @return The address the Zoltu factory deployed to.
     function zoltuDeployStep(Vm vm, string memory network, address deployer, bytes memory creationCode)
         internal
@@ -731,10 +669,7 @@ library LibRainDeploy {
         return zoltuDeployedAddress;
     }
 
-    /// The one per-network loop for every mechanism. Before any fork, each
-    /// network's derived address MUST equal its expected address. On each
-    /// network: chain id, declared dependencies, `deployStep` if the address is
-    /// empty, then `checkDeployedCode`.
+    /// The one per-network loop for every mechanism.
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param networks The networks, as catalogue entries.
     /// @param deployer The address to broadcast as.
@@ -819,8 +754,8 @@ library LibRainDeploy {
         return deploys;
     }
 
-    /// Deploys creation code to each network via the Zoltu factory, then
-    /// prints the verify commands.
+    /// Deploys creation code to each network via the Zoltu factory, then prints the verify
+    /// commands.
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param networks The network names.
     /// @param deployer The address to broadcast as.
@@ -853,9 +788,7 @@ library LibRainDeploy {
         return (expectedAddress, forkIds);
     }
 
-    /// Prints the `verifyCommands` for a compiled source at an address, one
-    /// per network: what a mechanism that deploys a compiled source prints
-    /// once every network has it.
+    /// Prints the `verifyCommands` for a compiled source at an address, one per network.
     /// @param vm The Vm instance to format the address with.
     /// @param networks The networks the source is deployed on.
     /// @param deployedAddress Where it is deployed on every one of them.
@@ -871,14 +804,12 @@ library LibRainDeploy {
         }
     }
 
-    /// The `forge verify-contract` command for a compiled source at an
-    /// address, one per network.
+    /// The `forge verify-contract` command for a compiled source at an address, one per network.
     /// @param vm The Vm instance to format the address with.
     /// @param networks The networks the source is deployed on.
     /// @param deployedAddress Where it is deployed on every one of them.
     /// @param contractPath The contract path the commands name.
-    /// @return The command for each network, positionally paired with
-    /// `networks`.
+    /// @return The command for each network, positionally paired with `networks`.
     function verifyCommands(Vm vm, string[] memory networks, address deployedAddress, string memory contractPath)
         internal
         pure
@@ -935,13 +866,6 @@ library LibRainDeploy {
     }
 
     /// Takes the deploy key up as a wallet and reports the address it derives.
-    ///
-    /// REMEMBERED rather than merely derived: `vm.startBroadcast(deployer)` signs
-    /// as an address forge has a key for, and an address derived without
-    /// remembering is one it cannot sign for. Shared by every mechanism's
-    /// `…AndBroadcast` so there is one spelling of the key handling — the key is
-    /// the one thing a dispatch cannot see the effect of until a chain rejects
-    /// the transactions for gas.
     /// @param vm The Vm instance to remember the key with.
     /// @param deployerPrivateKey The private key to broadcast as.
     /// @return The address the key derives.

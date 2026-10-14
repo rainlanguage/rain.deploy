@@ -395,8 +395,7 @@ contract LibRainDeployTest is Test {
         this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
     }
 
-    /// `deployStepToNetworks` MUST revert with `NoNetworks` on an empty list;
-    /// every entry point's own guard sits above it and cannot show it is there.
+    /// `deployStepToNetworks` MUST revert with `NoNetworks` on an empty list.
     function testDeployStepToNetworksNoNetworksReverts() external {
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalDeployStepToNetworksPerNetwork(
@@ -404,8 +403,7 @@ contract LibRainDeployTest is Test {
         );
     }
 
-    /// External wrapper for `deployStepToNetworks` through the step that
-    /// cannot run.
+    /// External wrapper for `deployStepToNetworks` through the step that cannot run.
     /// @param networks The networks.
     /// @param deploys The per-network lists.
     /// @return The fork of each network.
@@ -435,8 +433,8 @@ contract LibRainDeployTest is Test {
         });
     }
 
-    /// `deployStepToNetworks` MUST refuse any per-network list that does not
-    /// pair one for one with the networks, short or long, before forking.
+    /// `deployStepToNetworks` MUST refuse any per-network list that does not pair one for one with
+    /// the networks, short or long, before forking.
     function testDeployStepToNetworksUnpairedListsRevert() external {
         string[] memory names = new string[](2);
         names[0] = LibRainDeploy.ARBITRUM_ONE;
@@ -465,8 +463,7 @@ contract LibRainDeployTest is Test {
         assertFalse(forked, "the loop forked a network before refusing the lists");
     }
 
-    /// `everyNetwork` MUST repeat its step data, expected and derived address
-    /// once per network.
+    /// `everyNetwork` MUST repeat its step data, expected and derived address once per network.
     /// @param length How many networks.
     /// @param stepData The step data.
     /// @param expectedAddress The expected address.
@@ -525,7 +522,7 @@ contract LibRainDeployTest is Test {
         return networks;
     }
 
-    /// The chain id is checked before dependencies: the missing one would otherwise refuse first.
+    /// The chain id is checked before dependencies.
     function testDeployStepToNetworksRefusesAMisboundEndpointBeforeDependencies() external {
         DeployDependency[] memory dependencies = new DeployDependency[](1);
         dependencies[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: hex"00"});
@@ -545,7 +542,7 @@ contract LibRainDeployTest is Test {
         );
     }
 
-    /// The chain id is checked before the skip: the code already there would otherwise pass.
+    /// The chain id is checked before the skip.
     function testDeployStepToNetworksRefusesAMisboundEndpointBeforeTheSkip() external {
         vm.makePersistent(address(this));
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
@@ -567,7 +564,7 @@ contract LibRainDeployTest is Test {
         );
     }
 
-    /// The chain id is checked before a clone step: the mispredicting factory would otherwise refuse first.
+    /// The chain id is checked before a clone step.
     function testDeployStepToNetworksRefusesAMisboundEndpointBeforeTheCloneStep() external {
         vm.makePersistent(address(this));
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
@@ -632,9 +629,8 @@ contract LibRainDeployTest is Test {
         assertEq(result.codehash, mockDeployableCodeHash());
     }
 
-    /// `verifyCommands` gives, for each network in order, the
-    /// `forge verify-contract` command naming that network, the address and
-    /// the contract path.
+    /// `verifyCommands` gives, for each network in order, the `forge verify-contract` command
+    /// naming that network, the address and the contract path.
     function testVerifyCommandsNameEachNetworkTheAddressAndThePath() external pure {
         string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.BASE;
@@ -732,9 +728,9 @@ contract LibRainDeployTest is Test {
     /// Thrown by `unreachableDeployStep`, so a loop that ran a step says so.
     error DeployStepWasReached();
 
-    /// A deploy step that cannot run without reporting it, for the tests whose
-    /// claim is that the loop refuses its inputs BEFORE it reaches a step.
-    /// @return Never: this always reverts.
+    /// A deploy step that cannot run without reporting it, for the tests whose claim is that the
+    /// loop refuses its inputs BEFORE it reaches a step.
+    /// @return Never.
     function unreachableDeployStep(Vm, string memory, address, bytes memory) internal pure returns (address) {
         revert DeployStepWasReached();
     }

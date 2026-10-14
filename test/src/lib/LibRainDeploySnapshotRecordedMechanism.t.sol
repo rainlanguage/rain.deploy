@@ -31,24 +31,20 @@ import {
 import {LibMockCloneableReleased} from "../../fixture-mechanism-change/lib/LibMockCloneableReleased.sol";
 
 /// @title LibRainDeploySnapshotRecordedMechanismTest
-/// @notice Each release's mechanism is read from its own record: a suite
-/// released as Zoltu, then as a clone, then as a per-network clone, generates
-/// a released lib whose every entry is the mechanism its release was cut with,
-/// whatever the current declaration says.
+/// @notice Each release's mechanism is read from its own record.
 contract LibRainDeploySnapshotRecordedMechanismTest is Test {
-    /// The committed record of `MockCloneable`: `0_0_1` deployed through
-    /// Zoltu, `0_0_2` as an EIP-1167 clone, `0_0_3` as a clone per network.
+    /// The committed record of `MockCloneable`.
     string constant RECORD_ROOT = "test/fixture-mechanism-change/generated";
 
     /// Where the committed released lib for `RECORD_ROOT` is.
     string constant LIB_DIR = "test/fixture-mechanism-change/lib";
 
-    /// Where `testTheCommittedLibIsWhatTheGeneratorEmits` writes its fresh
-    /// generation, removed once read.
+    /// Where `testTheCommittedLibIsWhatTheGeneratorEmits` writes its fresh generation, removed once
+    /// read.
     string constant FRESH_LIB_DIR = "test/fixture-mechanism-change/fresh-lib";
 
-    /// Where the refusal tests write the records they read, one directory per
-    /// test, each removed once read.
+    /// Where the refusal tests write the records they read, one directory per test, each removed
+    /// once read.
     string constant REFUSAL_ROOT = "test/generated-recorded-mechanism";
 
     string constant RECORD_CONTRACT = "MockCloneable";
@@ -56,10 +52,8 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
     /// The released lib's `DeploySuite` import, from `LIB_DIR`.
     string constant SUITES_IMPORT_PATH = "../../../src/abstract/RainDeploySuitesBase.sol";
 
-    /// The current declaration: a per-network clone, so two of the three
-    /// releases were cut with a mechanism it does not declare.
-    /// @return The template the released lib takes its key and artifact path
-    /// from.
+    /// The current declaration.
+    /// @return The template the released lib takes its key and artifact path from.
     function template() internal pure returns (DeploySuite memory) {
         return DeploySuite({
             suite: "mock-cloneable",
@@ -80,16 +74,15 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
         return LibRainDeploySnapshot.pathForSnapshot(RECORD_ROOT, tag, RECORD_CONTRACT);
     }
 
-    /// External wrapper for `recordedMechanism` so `vm.expectRevert` sees its
-    /// refusal at a lower call depth.
+    /// External wrapper for `recordedMechanism` so `vm.expectRevert` sees its refusal at a lower
+    /// call depth.
     /// @param path The record file to read.
     /// @return The mechanism the record was cut with.
     function externalRecordedMechanism(string memory path) external view returns (DeployMechanism) {
         return LibRainDeploySnapshot.recordedMechanism(vm, path);
     }
 
-    /// Each record reads as the mechanism its declarations say it was cut
-    /// with.
+    /// Each record reads as the mechanism its declarations say it was cut with.
     function testRecordedMechanismReadsEachReleaseOnItsOwn() external view {
         assertEq(
             uint256(LibRainDeploySnapshot.recordedMechanism(vm, recordPath("0_0_1"))), uint256(DeployMechanism.Zoltu)
@@ -103,8 +96,8 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
         );
     }
 
-    /// The committed released lib is exactly what `writeReleasedSuitesLib`
-    /// writes from the committed record today.
+    /// The committed released lib is exactly what `writeReleasedSuitesLib` writes from the
+    /// committed record today.
     function testTheCommittedLibIsWhatTheGeneratorEmits() external {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(FRESH_LIB_DIR, true);
@@ -123,11 +116,7 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
         );
     }
 
-    /// Every entry of the committed lib, which compiles, is its release as
-    /// that release was cut: the Zoltu release at the Zoltu address with no
-    /// mechanism data, the clone at its recorded address with its
-    /// `CloneTarget`, and the per-network clone with no stored address and its
-    /// `CloneNetworks`.
+    /// Every entry of the committed lib, which compiles, is its release as that release was cut.
     function testEveryEntryIsItsReleasesOwnMechanism() external pure {
         DeploySuite[] memory suites = LibMockCloneableReleased.releasedSuites();
         assertEq(suites.length, 3);
@@ -155,8 +144,6 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
             assertEq(suites[i].artifactPath, CLONE_ARTIFACT_PATH);
             assertEq(keccak256(suites[i].storedRuntimeCode), suites[i].storedBytecodeHash);
         }
-        // The Zoltu and clone entries derive the address they store through
-        // the mechanism they declare.
         assertEq(LibRainDeployMechanism.deployedAddress(suites[0], 1), suites[0].storedDeployedAddress);
         assertEq(LibRainDeployMechanism.deployedAddress(suites[1], 1), suites[1].storedDeployedAddress);
     }
@@ -194,8 +181,8 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
 
     string constant MECHANISM_DATA_LINE = "bytes constant MECHANISM_DATA = hex\"01\";\n";
 
-    /// Reads `record` and expects `recordedMechanism` to refuse it with
-    /// `selector`, naming the file.
+    /// Reads `record` and expects `recordedMechanism` to refuse it with `selector`, naming the
+    /// file.
     /// @param name The test's directory under `REFUSAL_ROOT`.
     /// @param record The record's contents.
     /// @param selector The refusal expected.
@@ -207,8 +194,7 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
         vm.removeDir(dir, true);
     }
 
-    /// Reads `record` and expects `recordedMechanism` to read it as
-    /// `expected`.
+    /// Reads `record` and expects `recordedMechanism` to read it as `expected`.
     /// @param name The test's directory under `REFUSAL_ROOT`.
     /// @param record The record's contents.
     /// @param expected The mechanism expected.
@@ -220,8 +206,8 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
         assertEq(uint256(read), uint256(expected));
     }
 
-    /// A record with no deployed address is refused as unreadable, with or
-    /// without `MECHANISM_DATA`.
+    /// A record with no deployed address is refused as unreadable, with or without
+    /// `MECHANISM_DATA`.
     function testARecordWithNoDeployedAddressIsUnreadable() external {
         checkRefused("no-address", MECHANISM_DATA_LINE, FrozenSnapshotUnreadable.selector);
         checkRefused(
@@ -229,8 +215,8 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
         );
     }
 
-    /// A record declaring `DEPLOYED_ADDRESS` beside a `DEPLOYED_ADDRESS_<chainId>`
-    /// is refused as ambiguous, with or without `MECHANISM_DATA`.
+    /// A record declaring `DEPLOYED_ADDRESS` beside a `DEPLOYED_ADDRESS_<chainId>` is refused as
+    /// ambiguous, with or without `MECHANISM_DATA`.
     function testARecordDeclaringBothAddressFormsIsAmbiguous() external {
         checkRefused(
             "both-forms",
@@ -244,8 +230,7 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
         );
     }
 
-    /// A record declaring its addresses per network without `MECHANISM_DATA`
-    /// is refused: no mechanism records that.
+    /// A record declaring its addresses per network without `MECHANISM_DATA` is refused.
     function testPerNetworkAddressesWithoutMechanismDataAreRefused() external {
         checkRefused(
             "per-network-no-data",
@@ -254,8 +239,7 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
         );
     }
 
-    /// A record declaring `MECHANISM_DATA` twice is refused, beside either
-    /// address form.
+    /// A record declaring `MECHANISM_DATA` twice is refused, beside either address form.
     function testMechanismDataDeclaredTwiceIsAmbiguous() external {
         checkRefused(
             "data-twice",
@@ -269,9 +253,7 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
         );
     }
 
-    /// `MECHANISM_DATA` counts only as a declaration the compiler reads: one
-    /// inside a block comment, or after `//`, does not make a record a clone,
-    /// and does not make a second declaration.
+    /// `MECHANISM_DATA` counts only as a declaration the compiler reads.
     function testCommentedOutMechanismDataIsNotADeclaration() external {
         checkRead(
             "block-commented",
@@ -290,9 +272,7 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
         );
     }
 
-    /// The three readings, from minimal records: `DEPLOYED_ADDRESS` alone is
-    /// Zoltu, with `MECHANISM_DATA` a clone, and `DEPLOYED_ADDRESS_<chainId>`
-    /// with `MECHANISM_DATA` a per-network clone.
+    /// The three readings, from minimal records.
     function testTheThreeMechanismsReadFromTheirDeclarations() external {
         checkRead("zoltu", everyNetworkLine(address(1)), DeployMechanism.Zoltu);
         checkRead("clone", string.concat(MECHANISM_DATA_LINE, everyNetworkLine(address(1))), DeployMechanism.Clone);

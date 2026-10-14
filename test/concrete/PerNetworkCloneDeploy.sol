@@ -8,10 +8,8 @@ import {PerNetworkCloneDeploys} from "../abstract/PerNetworkCloneDeploys.sol";
 import {ExternalCloneDeploySuites} from "../abstract/ExternalCloneDeploySuites.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 
-/// @title PerNetworkCloneDeploy
-/// A per-network clone deploy repo's whole script: the declaration plus
-/// `RainDeployBroadcast`, with external wrappers so a plain `Test` contract
-/// can drive it.
+/// @title PerNetworkCloneDeploy A per-network clone deploy repo's whole script: the declaration
+/// plus `RainDeployBroadcast`, with external wrappers so a plain `Test` contract can drive it.
 contract PerNetworkCloneDeploy is
     PerNetworkCloneDeploys,
     ExternalCloneDeploySuites,

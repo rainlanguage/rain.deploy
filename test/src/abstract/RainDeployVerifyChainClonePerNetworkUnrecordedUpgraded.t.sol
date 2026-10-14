@@ -20,14 +20,9 @@ import {
 } from "../../abstract/UpgradedPerNetworkCloneDeploys.sol";
 
 /// @title RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest
-/// @notice The chain matrix over a per-network clone release cut when the repo
-/// supported Arbitrum One alone, in a repo that now supports Polygon too and
-/// whose candidate has since moved to another factory, implementation and
-/// salt.
-///
-/// Polygon is checked at the address the RELEASE's factory, implementation and
-/// salt derive with the candidate's Polygon init data, and nothing of the
-/// candidate's is on any fork.
+/// @notice The chain matrix over a per-network clone release cut when the repo supported Arbitrum
+/// One alone, in a repo that now supports Polygon too and whose candidate has since moved to
+/// another factory, implementation and salt.
 contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
     UpgradedPerNetworkCloneDeploys,
     RainDeployVerifyChain
@@ -42,8 +37,8 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
         return PerNetworkCloneDeploys.supportedNetworks();
     }
 
-    /// Puts the release's dependencies, and its clone at the release's address
-    /// for each network, on every fork.
+    /// Puts the release's dependencies, and its clone at the release's address for each network, on
+    /// every fork.
     function setUp() external {
         DeploySuite memory release = releasedSuites()[0];
         for (uint256 i = 0; i < release.dependencies.length; i++) {
@@ -65,11 +60,8 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
         checkDeployedOnSupportedNetworks(suites);
     }
 
-    /// The release passes with its clone at the release-derived Polygon
-    /// address, and with that address empty is refused on Polygon naming it:
-    /// Polygon's address came from the release's factory, implementation and
-    /// salt, each of which the candidate no longer shares, and the release's
-    /// dependencies are what the matrix held Polygon to.
+    /// The release passes with its clone at the release-derived Polygon address, and with that
+    /// address empty is refused on Polygon naming it.
     function testUnrecordedNetworkIsCheckedUnderTheReleasesFactoryAndImplementation() external {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = onlyFirstRecordedNetwork(releasedSuites()[0]);

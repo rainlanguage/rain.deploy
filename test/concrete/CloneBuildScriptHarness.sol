@@ -12,10 +12,7 @@ import {
 } from "../abstract/ExampleCloneDeploys.sol";
 
 /// @title CloneBuildScriptHarness
-/// @notice A clone deploy repo's build script over a fixture record root: it
-/// regenerates the `example-clone` release's rolling snapshot through the
-/// suite writer, and the released-suites lib from the record with a clone
-/// template.
+/// @notice A clone deploy repo's build script over a fixture record root.
 contract CloneBuildScriptHarness is ExampleCloneDeploys, BuildScript {
     string internal sRoot;
 

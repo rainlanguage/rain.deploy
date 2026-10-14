@@ -8,17 +8,13 @@ import {ExampleCloneDeploys} from "../abstract/ExampleCloneDeploys.sol";
 import {ExternalCloneDeploySuites} from "../abstract/ExternalCloneDeploySuites.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 
-/// @title ExampleCloneDeploy
-/// A clone deploy repo's whole script — a clone declaration plus
-/// `RainDeployBroadcast` and nothing else, the same script a Zoltu repo writes.
-/// That it compiles to a working script with no `run()`, no network list, no
-/// fork loop, no override and no assertions of its own is itself the claim being
-/// made: the mechanism is carried on each `DeploySuite`, so the broadcast
-/// dispatches a clone suite through the clone mechanism with nothing chosen per
-/// script.
-///
-/// The external wrappers let a plain `Test` contract drive the internals without
-/// inheriting `Script`, exactly as `ExampleDeploy` does.
+/// @title ExampleCloneDeploy A clone deploy repo's whole script — a clone declaration plus
+/// `RainDeployBroadcast` and nothing else, the same script a Zoltu repo writes. That it compiles to
+/// a working script with no `run()`, no network list, no fork loop, no override and no assertions
+/// of its own is itself the claim being made: the mechanism is carried on each `DeploySuite`, so
+/// the broadcast dispatches a clone suite through the clone mechanism with nothing chosen per
+/// script. The external wrappers let a plain `Test` contract drive the internals without inheriting
+/// `Script`, exactly as `ExampleDeploy` does.
 contract ExampleCloneDeploy is
     ExampleCloneDeploys,
     ExternalCloneDeploySuites,
@@ -30,8 +26,8 @@ contract ExampleCloneDeploy is
         return deployNetworks();
     }
 
-    /// External wrapper for `broadcastSuite`, so a plain `Test` contract can drive
-    /// it and `vm.expectRevert` lands at the right call depth.
+    /// External wrapper for `broadcastSuite`, so a plain `Test` contract can drive it and
+    /// `vm.expectRevert` lands at the right call depth.
     /// @param suite The suite to broadcast.
     /// @param networks The networks to broadcast to.
     /// @param deployerPrivateKey The key to broadcast as.

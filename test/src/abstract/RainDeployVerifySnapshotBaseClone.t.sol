@@ -17,18 +17,7 @@ import {
 } from "../../abstract/ExampleCloneDeploys.sol";
 
 /// @title RainDeployVerifySnapshotBaseCloneTest
-/// @notice The snapshot group over a clone deploy repo: a frozen clone release
-/// and two clone candidates.
-///
-/// `testSnapshotInternallyConsistent` is inherited and runs over all three, so
-/// each clone is derived through its factory and held to the address and code
-/// hash it records.
-///
-/// `RainDeployVerifySnapshotBase` and not `RainDeployVerifySnapshot`: the
-/// latter's `testEveryFrozenSnapshotIsReleased` reads THIS repo's record under
-/// `src/generated`, which this fixture does not declare, so it fails here by
-/// design. The record group is put to the fixture's own committed record root
-/// instead, below.
+/// @notice The snapshot group over a clone deploy repo.
 contract RainDeployVerifySnapshotBaseCloneTest is ExampleCloneDeploys, RainDeployVerifySnapshotBase {
     /// @param paths The frozen record paths.
     /// @param released The released suites.
@@ -36,10 +25,8 @@ contract RainDeployVerifySnapshotBaseCloneTest is ExampleCloneDeploys, RainDeplo
         checkFrozenSnapshotsReleased(paths, released);
     }
 
-    /// The frozen release sits at a clone address and not at the Zoltu address
-    /// of its creation code, so a consistency check that derived it as Zoltu
-    /// would fail it rather than pass it. Stated, so the inherited test passing
-    /// is a statement about the clone derivation.
+    /// The frozen release sits at a clone address and not at the Zoltu address of its creation
+    /// code, so a consistency check that derived it as Zoltu would fail it rather than pass it.
     function testFrozenCloneReleaseIsNotAtItsZoltuAddress() external view {
         DeploySuite memory release = releasedSuites()[0];
         assertEq(release.storedDeployedAddress, LibRainDeployMechanism.deployedAddresses(release)[0]);
@@ -51,19 +38,15 @@ contract RainDeployVerifySnapshotBaseCloneTest is ExampleCloneDeploys, RainDeplo
         );
     }
 
-    /// The committed clone record is accounted for by the clone release
-    /// declared from it: the record's address is the CLONE's, which a release
-    /// derived through the Zoltu formula would never match.
+    /// The committed clone record is accounted for by the clone release declared from it.
     function testFrozenCloneRecordIsReleased() external view {
         string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, EXAMPLE_CLONE_RECORD_ROOT);
         assertEq(paths.length, 1, "the fixture record holds one release");
         checkFrozenSnapshotsReleased(paths, releasedSuites());
     }
 
-    /// A frozen clone record that nothing declares is refused, and so is one
-    /// whose only declarations are the candidates: they are clones of the same
-    /// factory and implementation at other salts, so the record is matched by
-    /// its address and not by what it was cloned from.
+    /// A frozen clone record that nothing declares is refused, and so is one whose only
+    /// declarations are the candidates.
     function testFrozenCloneRecordWithoutItsReleaseIsRefused() external {
         string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, EXAMPLE_CLONE_RECORD_ROOT);
         assertEq(paths.length, 1, "the fixture record holds one release");

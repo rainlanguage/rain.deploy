@@ -113,10 +113,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         checkFrozenSnapshotsReleased(paths, released);
     }
 
-    /// External wrapper for `recordedDeployedAddresses` so `vm.expectRevert`
-    /// works at the correct call depth, for a record declaring ONE
-    /// `DEPLOYED_ADDRESS`: requires the reading to be that one address and no
-    /// chain id.
+    /// External wrapper for `recordedDeployedAddresses` so `vm.expectRevert` works at the correct
+    /// call depth, for a record declaring ONE `DEPLOYED_ADDRESS`.
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
     /// @return The address the record declares.
@@ -128,8 +126,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         return addresses[0];
     }
 
-    /// A one-address list, as `FrozenSnapshotsOutnumberReleases` carries a
-    /// record that declares `DEPLOYED_ADDRESS`.
+    /// A one-address list, as `FrozenSnapshotsOutnumberReleases` carries a record that declares
+    /// `DEPLOYED_ADDRESS`.
     /// @param deployedAddress The address.
     /// @return The list.
     function oneAddress(address deployedAddress) internal pure returns (address[] memory) {
@@ -936,9 +934,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     }
 
     /// A per-network deploy record named as a code record is refused for its
-    /// `DEPLOYED_ADDRESS_<chainId>` addresses. It carries a code hash, creation
-    /// code and runtime code that agree with each other, so the code check
-    /// alone would pass it and a name would move it out of the deploy check.
+    /// `DEPLOYED_ADDRESS_<chainId>` addresses.
     function testFrozenCodeRecordNamingAPerNetworkDeployRecordReverts() external {
         string memory record = vm.readFile(
             LibRainDeploySnapshot.pathForSnapshot(PER_NETWORK_CLONE_RECORD_ROOT, "0_0_1", "PerNetworkClone")

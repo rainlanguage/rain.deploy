@@ -542,23 +542,15 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         );
     }
 
-    /// `broadcastSuite` hands a clone suite to the clone broadcast with the
-    /// clone the KEY selects and the address the suite RECORDS. The recorded
-    /// address is staled by one, so the clone path's pre-fork address check
-    /// refuses it naming both the recorded address and the address derived for
-    /// the selected clone: a hand-over that derived the address itself, read
-    /// another entry, or dispatched the clone as Zoltu would name a different
-    /// pair.
+    /// `broadcastSuite` hands a clone suite to the clone broadcast with the clone the KEY selects
+    /// and the address the suite RECORDS.
     function testBroadcastSuiteHandsOverTheSelectedCloneAndTheRecordedAddress() external {
         ExampleCloneDeploy deploy = new ExampleCloneDeploy();
 
         DeploySuite memory suite = deploy.externalSuiteByName("example-clone-second-salt");
         address derived = LibRainDeployMechanism.deployedAddresses(suite)[0];
 
-        // Stated rather than assumed: the declaration agrees before this test
-        // stales it, so the refusal below is this test's doing.
         assertEq(suite.storedDeployedAddress, derived, "the declaration must agree before it is staled");
-        // The key is load-bearing: the other clone derives a DIFFERENT address.
         assertNotEq(
             derived,
             LibRainDeployMechanism.deployedAddresses(deploy.externalSuiteByName("example-clone"))[0],
@@ -579,10 +571,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         deploy.externalBroadcastSuite(suite, networks, 1);
     }
 
-    /// A frozen clone release is broadcast by its key like any other release:
-    /// selected from `releasedSuites()`, cloned through the factory and
-    /// implementation it declares, and landing at the address its record
-    /// holds, with the code the record holds.
+    /// A frozen clone release is broadcast by its key like any other release.
     function testBroadcastsTheFrozenCloneReleaseByKey() external {
         ExampleCloneDeploy deploy = new ExampleCloneDeploy();
         vm.makePersistent(address(this));
