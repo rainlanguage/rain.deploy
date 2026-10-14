@@ -39,16 +39,18 @@ contract LibAddressRegistryRegisterTest is Test {
     }
 
     /// One-element string list.
-    function list(string memory a) internal pure returns (string[] memory networks) {
-        networks = new string[](1);
+    function list(string memory a) internal pure returns (string[] memory) {
+        string[] memory networks = new string[](1);
         networks[0] = a;
+        return networks;
     }
 
     /// Two-element string list.
-    function list(string memory a, string memory b) internal pure returns (string[] memory networks) {
-        networks = new string[](2);
+    function list(string memory a, string memory b) internal pure returns (string[] memory) {
+        string[] memory networks = new string[](2);
         networks[0] = a;
         networks[1] = b;
+        return networks;
     }
 
     function externalNameHash(string memory name) external pure returns (bytes32) {
@@ -114,7 +116,7 @@ contract LibAddressRegistryRegisterTest is Test {
     /// `keccak256("st0x.token-owner-safe")`.
     function testNameHashIsTheConsumerDerivation() external pure {
         assertEq(LibAddressRegistryRegister.nameHash("st0x.token-owner-safe"), keccak256("st0x.token-owner-safe"));
-        assertEq(LibAddressRegistryRegister.nameHash("a"), keccak256("a"));
+        assertEq(LibAddressRegistryRegister.nameHash("a.b"), keccak256("a.b"));
         assertEq(LibAddressRegistryRegister.nameHash("z9.0-a"), keccak256("z9.0-a"));
         assertEq(LibAddressRegistryRegister.nameHash("az09.za-90"), keccak256("az09.za-90"));
     }
@@ -127,35 +129,39 @@ contract LibAddressRegistryRegisterTest is Test {
 
     /// Every near miss of a canonical name is refused: empty, capitals, a
     /// leading digit (which is every `0x…` hash), a separator at either end or
-    /// twice in a row, whitespace, and the characters either side of each
-    /// accepted range.
+    /// twice in a row, whitespace, the characters either side of each accepted
+    /// range, and a name with no `.` after an `<org>`. Each case other than the
+    /// unqualified ones holds a `.`, so it is refused for its own defect.
     function testNonCanonicalNamesAreRefused() external {
         assertNonCanonical("");
-        assertNonCanonical("A");
+        assertNonCanonical("A.a");
         assertNonCanonical("st0x.Token-owner-safe");
-        assertNonCanonical("1abc");
+        assertNonCanonical("1abc.a");
         assertNonCanonical("0x0b300013cd54a8f1ac40981f80faaa18b8cc1e4c0b300013cd54a8f1ac409810");
         assertNonCanonical(".a");
-        assertNonCanonical("-a");
+        assertNonCanonical("-a.a");
         assertNonCanonical("a.");
-        assertNonCanonical("a-");
+        assertNonCanonical("o.a-");
         assertNonCanonical("a..b");
         assertNonCanonical("a.-b");
-        assertNonCanonical("a--b");
-        assertNonCanonical(" a");
-        assertNonCanonical("a ");
-        assertNonCanonical("a\n");
-        assertNonCanonical("a b");
-        assertNonCanonical("a_b");
-        assertNonCanonical("a/b");
-        assertNonCanonical("a:b");
-        assertNonCanonical("a`b");
-        assertNonCanonical("a{b");
-        assertNonCanonical("a@b");
-        assertNonCanonical("a[b");
-        assertNonCanonical("`a");
-        assertNonCanonical("{a");
-        assertNonCanonical(unicode"é");
+        assertNonCanonical("o.a--b");
+        assertNonCanonical(" a.a");
+        assertNonCanonical("o.a ");
+        assertNonCanonical("o.a\n");
+        assertNonCanonical("o.a b");
+        assertNonCanonical("o.a_b");
+        assertNonCanonical("o.a/b");
+        assertNonCanonical("o.a:b");
+        assertNonCanonical("o.a`b");
+        assertNonCanonical("o.a{b");
+        assertNonCanonical("o.a@b");
+        assertNonCanonical("o.a[b");
+        assertNonCanonical("`a.a");
+        assertNonCanonical("{a.a");
+        assertNonCanonical(unicode"o.é");
+        assertNonCanonical("a");
+        assertNonCanonical("a-b");
+        assertNonCanonical("token-owner-safe");
     }
 
     /// An empty selection is refused.
@@ -222,19 +228,19 @@ contract LibAddressRegistryRegisterTest is Test {
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NonCanonicalName.selector, "A"));
         this.externalRegisterOnNetworks(new string[](0), declared, sender, "A", address(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.ZeroAccount.selector, keccak256("a")));
-        this.externalRegisterOnNetworks(new string[](0), declared, sender, "a", address(0));
+        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.ZeroAccount.selector, keccak256("a.b")));
+        this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", address(0));
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalRegisterOnNetworks(new string[](0), declared, sender, "a", address(1));
+        this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", address(1));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
-        this.externalRegisterOnNetworks(list("nowhere"), declared, sender, "a", address(1));
+        this.externalRegisterOnNetworks(list("nowhere"), declared, sender, "a.b", address(1));
 
         vm.expectRevert(
             abi.encodeWithSelector(LibAddressRegistryRegister.SenderNotRoot.selector, sender, ADDRESS_REGISTRY_ROOT)
         );
-        this.externalRegisterOnNetworks(list("base"), declared, sender, "a", address(1));
+        this.externalRegisterOnNetworks(list("base"), declared, sender, "a.b", address(1));
     }
 
     /// The confirmed check refuses its inputs before anything is forked.
@@ -245,10 +251,10 @@ contract LibAddressRegistryRegisterTest is Test {
         this.externalCheckRegisteredOnNetworks(list("base"), declared, "A", address(1));
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalCheckRegisteredOnNetworks(new string[](0), declared, "a", address(1));
+        this.externalCheckRegisteredOnNetworks(new string[](0), declared, "a.b", address(1));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
-        this.externalCheckRegisteredOnNetworks(list("nowhere"), declared, "a", address(1));
+        this.externalCheckRegisteredOnNetworks(list("nowhere"), declared, "a.b", address(1));
     }
 
     /// The fork check refuses fork ids that do not pair with the networks,
@@ -256,13 +262,13 @@ contract LibAddressRegistryRegisterTest is Test {
     function testCheckRegisteredOnForksRefusesUnpairedForks() external {
         string[] memory declared = LibRainDeploy.supportedNetworks();
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, 2, 1));
-        this.externalCheckRegisteredOnForks(list("base", "arbitrum"), declared, new uint256[](1), "a", address(1));
+        this.externalCheckRegisteredOnForks(list("base", "arbitrum"), declared, new uint256[](1), "a.b", address(1));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NonCanonicalName.selector, "A"));
         this.externalCheckRegisteredOnForks(list("base"), declared, new uint256[](1), "A", address(1));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
-        this.externalCheckRegisteredOnForks(list("nowhere"), declared, new uint256[](1), "a", address(1));
+        this.externalCheckRegisteredOnForks(list("nowhere"), declared, new uint256[](1), "a.b", address(1));
     }
 
     /// A chain that is not the network's is refused before the registry is

@@ -28,10 +28,11 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 ///
 /// The string is held to the alphabet those names are written in: lowercase
 /// letters, digits, and `.` or `-` between non-empty runs of them, starting
-/// with a letter. Everything outside it is a near miss of a real name rather
-/// than a name of its own — a capital, a trailing space or newline from a
-/// paste, an already-hashed `0x…` that would be hashed a second time — and each
-/// hashes to a name nobody resolves, while the bind succeeds.
+/// with a letter, and qualified by its `<org>.`. Everything outside it is a
+/// near miss of a real name rather than a name of its own — a capital, a
+/// trailing space or newline from a paste, an already-hashed `0x…` that would
+/// be hashed a second time, `token-owner-safe` with its `st0x.` dropped — and
+/// each hashes to a name nobody resolves, while the bind succeeds.
 ///
 /// ## The guards
 ///
@@ -103,8 +104,9 @@ library LibAddressRegistryRegister {
     }
 
     /// Reverts `NonCanonicalName` unless `name` is lowercase letters, digits,
-    /// and single `.` or `-` separators between them, starting with a letter
-    /// and not ending with a separator.
+    /// and single `.` or `-` separators between them, starting with a letter,
+    /// not ending with a separator, and holding at least one `.`: the one after
+    /// the `<org>` every consumer's name is qualified by.
     /// @param name The name as given.
     function checkName(string memory name) internal pure {
         bytes memory raw = bytes(name);
@@ -112,6 +114,7 @@ library LibAddressRegistryRegister {
             revert NonCanonicalName(name);
         }
         bool afterSeparator = false;
+        bool qualified = false;
         for (uint256 i = 0; i < raw.length; i++) {
             bytes1 c = raw[i];
             bool letter = c >= "a" && c <= "z";
@@ -123,13 +126,16 @@ library LibAddressRegistryRegister {
                     revert NonCanonicalName(name);
                 }
                 afterSeparator = true;
+                if (c == ".") {
+                    qualified = true;
+                }
             } else if (letter || (c >= "0" && c <= "9")) {
                 afterSeparator = false;
             } else {
                 revert NonCanonicalName(name);
             }
         }
-        if (afterSeparator) {
+        if (afterSeparator || !qualified) {
             revert NonCanonicalName(name);
         }
     }
@@ -322,7 +328,7 @@ library LibAddressRegistryRegister {
     /// @param sender The account that signs. MUST be `ADDRESS_REGISTRY_ROOT`.
     /// @param name The name as a consumer writes it.
     /// @param account The account to bind it to.
-    /// @return forkIds The fork each selected network was simulated on, for
+    /// @return The fork each selected network was simulated on, for
     /// `checkRegisteredOnForks`.
     function registerOnNetworks(
         Vm vm,
@@ -331,7 +337,7 @@ library LibAddressRegistryRegister {
         address sender,
         string memory name,
         address account
-    ) internal returns (uint256[] memory forkIds) {
+    ) internal returns (uint256[] memory) {
         bytes32 hashed = nameHash(name);
         if (account == address(0)) {
             revert IAddressRegistryV1.ZeroAccount(hashed);
@@ -341,11 +347,12 @@ library LibAddressRegistryRegister {
 
         console2.log(describeInputs(vm, name, account, sender));
 
-        forkIds = LibRainDeploy.createForks(vm, selected);
+        uint256[] memory forkIds = LibRainDeploy.createForks(vm, selected);
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
             registerOnSelectedChain(vm, networks[i], sender, hashed, account);
         }
+        return forkIds;
     }
 
     /// Reverts unless every given fork's registry binds `name` to `account`,

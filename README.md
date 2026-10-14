@@ -353,9 +353,10 @@ each signature, and the key never leaves it.
 `keccak256("st0x.token-owner-safe")` — so the script takes that string and
 hashes it itself. There is no `bytes32` input, so there is no other encoding to
 bind under by mistake. The string must be lowercase letters and digits with
-single `.` or `-` separators, starting with a letter; anything else (a capital,
-a stray space or newline, an already-hashed `0x…`) is refused, because it is a
-near miss of a real name that no consumer resolves.
+single `.` or `-` separators, starting with a letter and containing the `.`
+after its `<org>`; anything else (a capital, a stray space or newline, an
+already-hashed `0x…`, a name with its `<org>.` dropped) is refused, because it
+is a near miss of a real name that no consumer resolves.
 
 It binds on every network the registry is deployed to, by default — one binding
 everywhere, as the deployment is the same everywhere — and a network already
