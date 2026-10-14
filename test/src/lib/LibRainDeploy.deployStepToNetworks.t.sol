@@ -110,4 +110,22 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
         this.externalLoop(2, deploys, new DeployDependency[](0));
         assertEq(second.code, hex"00");
     }
+
+    /// An expected address already holding other code MUST be refused, naming the network and both code hashes.
+    function testLoopRefusesTargetHoldingOtherCode() external {
+        address target = address(0xabc);
+        vm.etch(target, hex"01");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.CodeHashMismatchOnNetwork.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                target,
+                keccak256(hex"00"),
+                keccak256(hex"01")
+            )
+        );
+        this.externalLoop(
+            0, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), new DeployDependency[](0)
+        );
+    }
 }
