@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {NotDeployedOnNetwork, RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
+import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {CloneDeploy, CloneNetworks} from "../../../src/lib/LibRainDeployClone.sol";
 import {
@@ -91,9 +91,7 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
 
         vm.etch(polygonAddress, hex"");
         vm.expectRevert(
-            abi.encodeWithSelector(
-                NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, suites[0].suite, polygonAddress
-            )
+            abi.encodeWithSelector(LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, polygonAddress)
         );
         this.externalCheckDeployedOnSupportedNetworks(suites);
     }

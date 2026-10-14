@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {NotDeployedOnNetwork, RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
+import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleCloneDeploys} from "../../abstract/ExampleCloneDeploys.sol";
 
@@ -39,7 +39,7 @@ contract RainDeployVerifyChainCloneTest is ExampleCloneDeploys, RainDeployVerify
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                NotDeployedOnNetwork.selector, supportedNetworks()[0], release.suite, release.storedDeployedAddress
+                LibRainDeploy.NotDeployedOnNetwork.selector, supportedNetworks()[0], release.storedDeployedAddress
             )
         );
         this.testSuitesLiveOnEverySupportedNetwork();

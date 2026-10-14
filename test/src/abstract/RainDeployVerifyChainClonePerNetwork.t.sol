@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {NotDeployedOnNetwork, RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
+import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {PerNetworkCloneDeploys} from "../../abstract/PerNetworkCloneDeploys.sol";
@@ -53,7 +53,7 @@ contract RainDeployVerifyChainClonePerNetworkTest is PerNetworkCloneDeploys, Rai
         vm.etch(polygonAddress, hex"");
 
         vm.expectRevert(
-            abi.encodeWithSelector(NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, release.suite, polygonAddress)
+            abi.encodeWithSelector(LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, polygonAddress)
         );
         this.testSuitesLiveOnEverySupportedNetwork();
     }
@@ -67,7 +67,7 @@ contract RainDeployVerifyChainClonePerNetworkTest is PerNetworkCloneDeploys, Rai
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                NotDeployedOnNetwork.selector, LibRainDeploy.ARBITRUM_ONE, release.suite, arbitrumAddress
+                LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.ARBITRUM_ONE, arbitrumAddress
             )
         );
         this.testSuitesLiveOnEverySupportedNetwork();

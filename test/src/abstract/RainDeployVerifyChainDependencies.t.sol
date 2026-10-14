@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {NotDeployedOnNetwork, RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
+import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {
     PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
@@ -178,9 +178,7 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
         address polygonAddress = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
         vm.etch(polygonAddress, hex"");
         vm.expectRevert(
-            abi.encodeWithSelector(
-                NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, releasedSuites()[0].suite, polygonAddress
-            )
+            abi.encodeWithSelector(LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, polygonAddress)
         );
         this.externalCheckDeployedOnSupportedNetworks(releasedSuites());
     }

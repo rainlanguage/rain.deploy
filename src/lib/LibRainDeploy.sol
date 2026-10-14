@@ -163,6 +163,23 @@ library LibRainDeploy {
     /// @param reported The chain id the endpoint answers with.
     error NetworkChainIdMismatch(string network, uint256 declared, uint256 reported);
 
+    /// Thrown when an address that must hold a deployment has no code on a
+    /// network.
+    /// @param network The network name, as configured in `[rpc_endpoints]`.
+    /// @param deployedAddress The address that should hold the deployment.
+    error NotDeployedOnNetwork(string network, address deployedAddress);
+
+    /// Thrown when an address holds code other than the deployment's on a
+    /// network. A chain-dependent runtime fails here too: that is a defect in
+    /// the contract, not a reason for per-chain hashes.
+    /// @param network The network name, as configured in `[rpc_endpoints]`.
+    /// @param deployedAddress The address checked.
+    /// @param expectedCodeHash The deployment's code hash.
+    /// @param actualCodeHash The code hash at the address on this network.
+    error CodeHashMismatchOnNetwork(
+        string network, address deployedAddress, bytes32 expectedCodeHash, bytes32 actualCodeHash
+    );
+
     /// Thrown when a deployed contract holds an address other than the one the
     /// deployment expects, on a network.
     error UnexpectedResolvedAddress(string network, address target, uint256 index, address expected, address actual);
@@ -446,6 +463,22 @@ library LibRainDeploy {
         }
     }
 
+    /// The selected fork MUST hold code at `deployedAddress` hashing to
+    /// `expectedCodeHash`. Presence is checked first: an empty account's
+    /// `codehash` is zero, which would report absence as a mismatch.
+    /// @param network The network name, for the refusal to name.
+    /// @param deployedAddress The address that must hold the deployment.
+    /// @param expectedCodeHash The deployment's code hash.
+    function checkDeployedCode(string memory network, address deployedAddress, bytes32 expectedCodeHash) internal view {
+        if (deployedAddress.code.length == 0) {
+            revert NotDeployedOnNetwork(network, deployedAddress);
+        }
+        bytes32 actualCodeHash = deployedAddress.codehash;
+        if (actualCodeHash != expectedCodeHash) {
+            revert CodeHashMismatchOnNetwork(network, deployedAddress, expectedCodeHash, actualCodeHash);
+        }
+    }
+
     /// The read-set refusals every resolved-address check makes before it reads
     /// anything, so they are reportable without an RPC round trip.
     ///
@@ -700,15 +733,15 @@ library LibRainDeploy {
 
     /// The one per-network loop for every mechanism. Before any fork, each
     /// network's derived address MUST equal its expected address. On each
-    /// network: chain id, then (if the address is empty) declared dependencies
-    /// and `deployStep`, then the code hash.
+    /// network: chain id, declared dependencies, `deployStep` if the address is
+    /// empty, then `checkDeployedCode`.
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param networks The networks, as catalogue entries.
     /// @param deployer The address to broadcast as.
     /// @param deployStep Puts code at the expected address on the selected fork.
     /// @param deploys The per-network step data, expected and derived addresses.
     /// @param expectedCodeHash The code hash expected on every network.
-    /// @param dependencies Checked before `deployStep` runs.
+    /// @param dependencies Checked on every network, deployed or not.
     /// @return The fork of each network.
     function deployStepToNetworks(
         Vm vm,
@@ -744,10 +777,10 @@ library LibRainDeploy {
             console2.log("Deploying to network:", networks[i].name);
             console2.log("Block number:", block.number);
             checkNetworkChainId(networks[i]);
+            checkDeclaredDependencies(networks[i].name, dependencies);
 
             address expectedAddress = deploys.expectedAddresses[i];
             if (expectedAddress.code.length == 0) {
-                checkDeclaredDependencies(networks[i].name, dependencies);
                 address stepDeployedAddress = deployStep(vm, networks[i].name, deployer, deploys.deployStepData[i]);
                 if (stepDeployedAddress != expectedAddress) {
                     revert UnexpectedDeployedAddress(expectedAddress, stepDeployedAddress);
@@ -756,10 +789,7 @@ library LibRainDeploy {
                 console2.log(" - Code already exists at expected address, skipping deployment");
             }
             console2.log(" - Final Address:", expectedAddress);
-            console2.log(" - Verifying code hash");
-            if (expectedCodeHash != expectedAddress.codehash) {
-                revert UnexpectedDeployedCodeHash(expectedCodeHash, expectedAddress.codehash);
-            }
+            checkDeployedCode(networks[i].name, expectedAddress, expectedCodeHash);
         }
         return forkIds;
     }
