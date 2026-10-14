@@ -4,6 +4,7 @@ pragma solidity ^0.8.25;
 
 import {TimelockController} from "@openzeppelin-contracts-5.7.0/governance/TimelockController.sol";
 import {IAccessControl} from "@openzeppelin-contracts-5.7.0/access/IAccessControl.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 
 /// @title LibTimelockController
@@ -49,6 +50,15 @@ library LibTimelockController {
     /// @param expected The generation's `BYTECODE_HASH`.
     /// @param actual The code hash observed.
     error TimelockCodehashMismatch(address timelock, bytes32 expected, bytes32 actual);
+
+    /// `creationCode` deploys code whose hash is not the given `bytecodeHash`.
+    /// @param bytecodeHash The hash given with the creation code.
+    /// @param derived The hash of the code the creation code deploys.
+    error TimelockGenerationMismatch(bytes32 bytecodeHash, bytes32 derived);
+
+    /// The local deploy behind `checkTimelockGeneration` could not be reverted.
+    /// @param snapshotId The snapshot that failed to revert.
+    error TimelockGenerationSnapshotRevertFailed(uint256 snapshotId);
 
     /// `getMinDelay()` is not the expected minimum delay.
     /// @param timelock The timelock inspected.
@@ -124,6 +134,34 @@ library LibTimelockController {
         returns (address)
     {
         return LibRainDeploy.zoltuAddress(timelockInitCode(creationCode, minDelay, proposer));
+    }
+
+    /// Reverts unless `creationCode`, deployed locally with these constructor arguments, produces code
+    /// hashing to `bytecodeHash`. The local deploy is reverted.
+    /// @param vm The Vm to snapshot and deploy with.
+    /// @param creationCode The generation's `CREATION_CODE`.
+    /// @param bytecodeHash The generation's `BYTECODE_HASH`.
+    /// @param minDelay The minimum delay in seconds.
+    /// @param proposer The sole proposer.
+    function checkTimelockGeneration(
+        Vm vm,
+        bytes memory creationCode,
+        bytes32 bytecodeHash,
+        uint256 minDelay,
+        address proposer
+    ) internal {
+        bytes memory initCode = timelockInitCode(creationCode, minDelay, proposer);
+        address at = LibRainDeploy.zoltuAddress(initCode);
+        uint256 snapshotId = vm.snapshotState();
+        vm.etch(at, hex"");
+        vm.resetNonce(at);
+        bytes32 derived = LibRainDeploy.etchAndDeployZoltu(vm, initCode).codehash;
+        if (!vm.revertToState(snapshotId)) {
+            revert TimelockGenerationSnapshotRevertFailed(snapshotId);
+        }
+        if (derived != bytecodeHash) {
+            revert TimelockGenerationMismatch(bytecodeHash, derived);
+        }
     }
 
     /// Reverts with a typed error unless `timelock` is in the role model's state:

@@ -96,32 +96,40 @@ contract LibTimelockControllerDeployTest is Test {
         assertEq(expected().code.length, 0);
     }
 
-    /// A fresh deploy is refused when the given code hash is not that of the
-    /// code the given creation code deploys.
-    function testFreshDeployIsHeldToTheGivenCodeHash() external {
+    /// A creation code given with another generation's code hash is refused before anything is broadcast.
+    function testMismatchedGenerationIsRefusedBeforeBroadcast() external {
         LibRainDeploy.etchZoltuFactory(vm);
         bytes32 otherHash = keccak256(type(MockTimelockControllerGeneration).runtimeCode);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                LibTimelockController.TimelockCodehashMismatch.selector, expected(), otherHash, BYTECODE_HASH
-            )
+            abi.encodeWithSelector(LibTimelockController.TimelockGenerationMismatch.selector, otherHash, BYTECODE_HASH)
         );
         this.callDeployTimelock(DEPLOYER, CREATION_CODE, otherHash, MIN_DELAY, PROPOSER, expected());
     }
 
-    /// A timelock already at the address is refused, not skipped, when the
-    /// given code hash is not its generation's.
-    function testExistingTimelockIsHeldToTheGivenCodeHash() external {
+    /// A rerun over an already deployed timelock is refused the same way.
+    function testMismatchedGenerationIsRefusedOverAnExistingTimelock() external {
         LibRainDeploy.etchZoltuFactory(vm);
-        address timelock =
-            LibRainDeploy.deployZoltu(LibTimelockController.timelockInitCode(CREATION_CODE, MIN_DELAY, PROPOSER));
+        LibRainDeploy.deployZoltu(LibTimelockController.timelockInitCode(CREATION_CODE, MIN_DELAY, PROPOSER));
         bytes32 otherHash = keccak256(type(MockTimelockControllerGeneration).runtimeCode);
         vm.expectRevert(
-            abi.encodeWithSelector(
-                LibTimelockController.TimelockCodehashMismatch.selector, timelock, otherHash, BYTECODE_HASH
-            )
+            abi.encodeWithSelector(LibTimelockController.TimelockGenerationMismatch.selector, otherHash, BYTECODE_HASH)
         );
         this.callDeployTimelock(DEPLOYER, CREATION_CODE, otherHash, MIN_DELAY, PROPOSER, expected());
+    }
+
+    /// Other code at the timelock's address is refused, not skipped, even with a matching pair.
+    function testOtherCodeAtTheAddressIsRefused() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        vm.etch(expected(), type(MockTimelockControllerGeneration).runtimeCode);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibTimelockController.TimelockCodehashMismatch.selector,
+                expected(),
+                BYTECODE_HASH,
+                keccak256(type(MockTimelockControllerGeneration).runtimeCode)
+            )
+        );
+        this.callDeployTimelock(DEPLOYER, CREATION_CODE, BYTECODE_HASH, MIN_DELAY, PROPOSER, expected());
     }
 
     /// A timelock already at the address that has left the role model is

@@ -140,6 +140,40 @@ contract LibTimelockControllerTest is Test {
         assertNotEq(recorded, otherTimelock);
     }
 
+    function externalCheckTimelockGeneration(bytes memory creationCode, bytes32 bytecodeHash) external {
+        LibTimelockController.checkTimelockGeneration(vm, creationCode, bytecodeHash, MIN_DELAY, PROPOSER);
+    }
+
+    /// Each generation's creation code matches its own hash and no other, and the check leaves nothing deployed.
+    function testCheckTimelockGenerationMatchesOnlyItsOwnHash() external {
+        bytes memory mockCode = type(MockTimelockControllerGeneration).creationCode;
+        bytes32 mockHash = keccak256(type(MockTimelockControllerGeneration).runtimeCode);
+        address at = LibTimelockController.expectedTimelockAddress(CREATION_CODE, MIN_DELAY, PROPOSER);
+
+        this.externalCheckTimelockGeneration(CREATION_CODE, BYTECODE_HASH);
+        this.externalCheckTimelockGeneration(mockCode, mockHash);
+        assertEq(at.code.length, 0);
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibTimelockController.TimelockGenerationMismatch.selector, mockHash, BYTECODE_HASH)
+        );
+        this.externalCheckTimelockGeneration(CREATION_CODE, mockHash);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibTimelockController.TimelockGenerationMismatch.selector, BYTECODE_HASH, mockHash)
+        );
+        this.externalCheckTimelockGeneration(mockCode, BYTECODE_HASH);
+    }
+
+    /// A timelock already at the address does not change what the check derives.
+    function testCheckTimelockGenerationIgnoresCodeAlreadyAtTheAddress() external {
+        address at = LibTimelockController.expectedTimelockAddress(CREATION_CODE, MIN_DELAY, PROPOSER);
+        vm.etch(at, type(MockTimelockControllerGeneration).runtimeCode);
+        this.externalCheckTimelockGeneration(CREATION_CODE, BYTECODE_HASH);
+        assertEq(at.codehash, keccak256(type(MockTimelockControllerGeneration).runtimeCode));
+    }
+
     /// A timelock passes against the generation it was deployed from and is
     /// refused by code hash against any other, whichever generation it is.
     function testAssertHoldsATimelockToItsOwnGeneration() external {

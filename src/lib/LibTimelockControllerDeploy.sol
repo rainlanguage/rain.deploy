@@ -18,8 +18,8 @@ library LibTimelockControllerDeploy {
     /// through the Zoltu factory, broadcasting as `deployer`, or skips the
     /// deploy where the timelock is already there, and holds the timelock
     /// either way to `LibTimelockController.assertTimelockState` with no
-    /// further cancellers. A fresh deploy is refused like a rerun when
-    /// `bytecodeHash` is not the hash of the code `creationCode` deploys.
+    /// further cancellers. A creation code and code hash that do not match are
+    /// refused by `checkTimelockGeneration` before anything is broadcast.
     ///
     /// `expectedTimelock` is the caller's pinned address and is refused, before
     /// anything is read from the chain, unless it is the address the parameters
@@ -56,6 +56,7 @@ library LibTimelockControllerDeploy {
         if (derived != expectedTimelock) {
             revert LibRainDeploy.UnexpectedDeployedAddress(expectedTimelock, derived);
         }
+        LibTimelockController.checkTimelockGeneration(vm, creationCode, bytecodeHash, minDelay, proposer);
 
         bool alreadyDeployed = derived.code.length != 0;
         if (!alreadyDeployed) {
