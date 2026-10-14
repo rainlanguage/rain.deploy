@@ -3,9 +3,13 @@
 pragma solidity =0.8.25;
 
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
+import {NotDeployedOnNetwork, RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {PerNetworkCloneDeploys} from "../../abstract/PerNetworkCloneDeploys.sol";
+import {
+    PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
+    PerNetworkCloneDeploys,
+    perNetworkCloneReleaseAddress
+} from "../../abstract/PerNetworkCloneDeploys.sol";
 import {exampleCloneImplementation} from "../../abstract/ExampleCloneDeploys.sol";
 import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
@@ -146,5 +150,53 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
             )
         );
         this.externalCheckDeployedOnSupportedNetworks(suites);
+    }
+
+    /// With two suites, a dependency only the SECOND declares, absent from
+    /// Arbitrum One, is refused on Arbitrum One naming it. The first suite's
+    /// dependencies are all present on every network, so a matrix that held
+    /// every suite to the first suite's dependencies passes.
+    function testSecondSuitesDependencyAbsentFromOneNetworkIsRefusedNamingThatNetworkAndDependency() external {
+        DeploySuite[] memory suites = new DeploySuite[](2);
+        suites[0] = releasedSuites()[0];
+        suites[1] = releaseDeclaring(
+            DeployDependency({deployedAddress: POLYGON_SYSTEM_CONTRACT, runtimeCode: polygonSystemContractCode()})
+        )[0];
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, POLYGON_SYSTEM_CONTRACT
+            )
+        );
+        this.externalCheckDeployedOnSupportedNetworks(suites);
+    }
+
+    /// With only its clone gone from Polygon, the first network checked,
+    /// the suite is refused as not deployed there: the address refusal that
+    /// `testDependencyRefusalPrecedesTheAddressRefusalOnOneNetwork` shows the
+    /// dependency refusal coming before.
+    function testCloneGoneFromOneNetworkIsRefusedAsNotDeployedThere() external {
+        address polygonAddress = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        vm.etch(polygonAddress, hex"");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, releasedSuites()[0].suite, polygonAddress
+            )
+        );
+        this.externalCheckDeployedOnSupportedNetworks(releasedSuites());
+    }
+
+    /// On a network where the suite's dependency AND its address both fail,
+    /// the dependency is the refusal: with its clone and the implementation
+    /// both gone from Polygon, the suite is refused there as missing the
+    /// implementation.
+    function testDependencyRefusalPrecedesTheAddressRefusalOnOneNetwork() external {
+        vm.etch(perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID), hex"");
+        vm.etch(exampleCloneImplementation(), hex"");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.POLYGON, exampleCloneImplementation()
+            )
+        );
+        this.externalCheckDeployedOnSupportedNetworks(releasedSuites());
     }
 }

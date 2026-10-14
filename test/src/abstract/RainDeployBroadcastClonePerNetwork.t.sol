@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {CloneNetworks, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
+import {CloneDeploy, CloneNetworks, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN,
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
@@ -15,6 +15,11 @@ import {
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {ZoltuDeployOrAdopt} from "../../abstract/ZoltuDeployOrAdopt.sol";
 import {PerNetworkCloneDeploy} from "../../concrete/PerNetworkCloneDeploy.sol";
+import {UpgradedPerNetworkCloneDeploy} from "../../concrete/UpgradedPerNetworkCloneDeploy.sol";
+import {
+    upgradedPerNetworkClone,
+    upgradedPerNetworkCloneAddress
+} from "../../abstract/UpgradedPerNetworkCloneDeploys.sol";
 import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
 
@@ -184,6 +189,56 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         assertEq(polygonAddress.codehash, release.storedBytecodeHash);
         assertEq(MockCloneable(polygonAddress).sInitData(), abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN));
         assertEq(arbitrumAddress.code.length, 0);
+    }
+
+    /// A release recording Arbitrum One alone, broadcast to both networks by a
+    /// repo whose candidate has since moved to another factory, implementation
+    /// and salt, puts Polygon's clone where the RELEASE's factory,
+    /// implementation and salt derive it with the candidate's Polygon init
+    /// data: a clone of the release's implementation, initialized with
+    /// Polygon's admin. Only the release's factory and implementation are on
+    /// the forks, and nothing lands at the candidate's Polygon address.
+    function testBroadcastsAnUnrecordedNetworkUnderTheReleasesFactoryAndImplementation() external {
+        UpgradedPerNetworkCloneDeploy deploy = new UpgradedPerNetworkCloneDeploy();
+        vm.makePersistent(address(this));
+        vm.makePersistent(address(deploy));
+
+        DeploySuite memory release = onlyFirstRecordedNetwork(deploy.externalSuiteByName("per-network-clone@0_0_1"));
+        CloneNetworks memory clones = abi.decode(release.mechanismData, (CloneNetworks));
+        assertEq(clones.networks.length, 1);
+        assertEq(clones.networks[0].chainId, PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
+        CloneDeploy memory candidate = upgradedPerNetworkClone();
+        assertNotEq(candidate.factory, clones.factory);
+        assertNotEq(candidate.implementation, clones.implementation);
+        assertNotEq(candidate.salt, clones.salt);
+
+        address arbitrumAddress = clones.networks[0].deployedAddress;
+        address polygonAddress = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        address candidatePolygonAddress = upgradedPerNetworkCloneAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        assertNotEq(polygonAddress, candidatePolygonAddress);
+
+        string[] memory networks = bothNetworks();
+        for (uint256 i = 0; i < networks.length; i++) {
+            vm.createSelectFork(networks[i]);
+            vm.makePersistent(
+                zoltuDeployOrAdopt(type(MockCloneFactory).creationCode, type(MockCloneFactory).runtimeCode)
+            );
+            vm.makePersistent(zoltuDeployOrAdopt(type(MockCloneable).creationCode, type(MockCloneable).runtimeCode));
+            assertEq(polygonAddress.code.length, 0, networks[i]);
+            assertEq(candidate.factory.code.length, 0, networks[i]);
+            assertEq(candidate.implementation.code.length, 0, networks[i]);
+        }
+
+        (address[] memory deployed, uint256[] memory forkIds) = deploy.externalBroadcastSuite(release, networks, 1);
+        assertEq(deployed.length, 2);
+        assertEq(deployed[0], arbitrumAddress);
+        assertEq(deployed[1], polygonAddress);
+
+        vm.selectFork(forkIds[1]);
+        assertEq(block.chainid, PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        assertEq(polygonAddress.codehash, release.storedBytecodeHash);
+        assertEq(MockCloneable(polygonAddress).sInitData(), abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN));
+        assertEq(candidatePolygonAddress.code.length, 0);
     }
 
     /// A release recording Arbitrum One alone, broadcast with Polygon too,

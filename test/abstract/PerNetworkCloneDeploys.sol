@@ -186,7 +186,7 @@ abstract contract PerNetworkCloneDeploys is RainDeployCloneSuitesBase {
     }
 
     /// @inheritdoc RainDeployCloneSuitesBase
-    function cloneDeploys() internal pure override returns (CloneDeploy[] memory) {
+    function cloneDeploys() internal pure virtual override returns (CloneDeploy[] memory) {
         CloneDeploy[] memory clones = new CloneDeploy[](1);
         clones[0] = perNetworkClone("per-network-clone", bytes32(uint256(4)));
         return clones;
