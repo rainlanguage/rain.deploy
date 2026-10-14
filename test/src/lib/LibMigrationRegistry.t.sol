@@ -29,8 +29,7 @@ contract LibMigrationRegistryTest is Test {
     /// the pinned address.
     /// @return The deployed registry.
     function deployRegistry() internal returns (IMigrationRegistryV2) {
-        LibRainDeploy.etchZoltuFactory(vm);
-        return IMigrationRegistryV2(LibRainDeploy.deployZoltu(type(MigrationRegistry).creationCode));
+        return IMigrationRegistryV2(LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode));
     }
 
     /// Occupant code that is ORDINARY contract code rather than a delegation
@@ -51,10 +50,11 @@ contract LibMigrationRegistryTest is Test {
     /// refusing the clearing form — a delegation to zero leaves the account
     /// empty, which is what the `NoRegistry` cases already cover.
     /// @param delegate The fuzzed delegate.
-    /// @return designator The 23-byte designator.
-    function assumedDesignator(address delegate) internal pure returns (bytes memory designator) {
+    /// @return The 23-byte designator.
+    function assumedDesignator(address delegate) internal pure returns (bytes memory) {
         vm.assume(delegate != address(0));
-        designator = LibAccountCode.delegationDesignator(delegate);
+        bytes memory designator = LibAccountCode.delegationDesignator(delegate);
+        return designator;
     }
 
     /// External wrapper for `applied` so that `vm.expectRevert` works at the
@@ -134,14 +134,11 @@ contract LibMigrationRegistryTest is Test {
     /// @param writer The entry's writer.
     /// @param namespace The entry's namespace.
     /// @param migration The entry's migration.
-    /// @return prerequisites The one-entry list.
-    function one(address writer, bytes32 namespace, bytes32 migration)
-        internal
-        pure
-        returns (Prerequisite[] memory prerequisites)
-    {
-        prerequisites = new Prerequisite[](1);
+    /// @return The one-entry list.
+    function one(address writer, bytes32 namespace, bytes32 migration) internal pure returns (Prerequisite[] memory) {
+        Prerequisite[] memory prerequisites = new Prerequisite[](1);
         prerequisites[0] = Prerequisite({writer: writer, namespace: namespace, migration: migration});
+        return prerequisites;
     }
 
     /// The list a write takes: `writer` in `namespace` at `head`, then
@@ -150,17 +147,18 @@ contract LibMigrationRegistryTest is Test {
     /// @param namespace The line it is writing.
     /// @param head The head it believes it is at.
     /// @param prerequisites The migrations that must already be applied.
-    /// @return list The list.
+    /// @return The list.
     function headThen(address writer, bytes32 namespace, bytes32 head, Prerequisite[] memory prerequisites)
         internal
         pure
-        returns (Prerequisite[] memory list)
+        returns (Prerequisite[] memory)
     {
-        list = new Prerequisite[](prerequisites.length + 1);
+        Prerequisite[] memory list = new Prerequisite[](prerequisites.length + 1);
         list[0] = Prerequisite({writer: writer, namespace: namespace, migration: head});
         for (uint256 i = 0; i < prerequisites.length; i++) {
             list[i + 1] = prerequisites[i];
         }
+        return list;
     }
 
     /// The Zoltu deploy really does land the registry on its pinned address
@@ -1508,5 +1506,82 @@ contract LibMigrationRegistryTest is Test {
         Prerequisite[] memory listB = headThen(address(this), namespace, migrationA, prerequisites);
         LibMigrationRegistry.applyMigrationHistory(namespace, migrationB, block.timestamp, listB);
         assertEq(abi.encode(LibMigrationRegistry.appliedAfter(address(this), namespace, migrationB)), abi.encode(listB));
+    }
+
+    /// `onto` is one entry, and that entry is exactly the writer, the
+    /// namespace and the head it was given, each in its own field. It is
+    /// pure, so it answers the same with no registry deployed.
+    function testOntoIsTheHeadAlone(address writer, bytes32 namespace, bytes32 headMigration) external pure {
+        Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(writer, namespace, headMigration);
+
+        assertEq(prerequisites.length, 1);
+        assertEq(prerequisites[0].writer, writer);
+        assertEq(prerequisites[0].namespace, namespace);
+        assertEq(prerequisites[0].migration, headMigration);
+    }
+
+    /// A line written entirely with `onto` lands on a deployed registry, on
+    /// both writes: the first migration onto genesis, the next onto the
+    /// first. Each record answers the list `onto` built as what it was
+    /// applied after, and the head it named as what it was applied onto.
+    function testOntoRoundTripsThroughApplyMigration(
+        bytes32 namespace,
+        bytes32 migrationA,
+        bytes32 migrationB,
+        uint32 appliedAt
+    ) external {
+        vm.assume(namespace != bytes32(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+        vm.assume(appliedAt != 0);
+        deployRegistry();
+        vm.warp(appliedAt);
+
+        Prerequisite[] memory listA = LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS);
+        LibMigrationRegistry.applyMigration(namespace, migrationA, listA);
+
+        assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationA), appliedAt);
+        assertEq(LibMigrationRegistry.head(address(this), namespace), migrationA);
+        assertEq(LibMigrationRegistry.appliedOnto(address(this), namespace, migrationA), MIGRATION_HEAD_GENESIS);
+        assertEq(abi.encode(LibMigrationRegistry.appliedAfter(address(this), namespace, migrationA)), abi.encode(listA));
+
+        Prerequisite[] memory listB = LibMigrationRegistry.onto(address(this), namespace, migrationA);
+        LibMigrationRegistry.applyMigrationHistory(namespace, migrationB, appliedAt, listB);
+
+        assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationB), appliedAt);
+        assertEq(LibMigrationRegistry.head(address(this), namespace), migrationB);
+        assertEq(LibMigrationRegistry.appliedOnto(address(this), namespace, migrationB), migrationA);
+        assertEq(abi.encode(LibMigrationRegistry.appliedAfter(address(this), namespace, migrationB)), abi.encode(listB));
+    }
+
+    /// `onto` a head the line has moved past is refused, naming the head it
+    /// gave and the head the line is at: the list carries the script's
+    /// belief, and a stale belief fails rather than lands.
+    function testOntoStaleHeadIsRefused(bytes32 namespace, bytes32 migrationA, bytes32 migrationB) external {
+        vm.assume(namespace != bytes32(0));
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(migrationA != migrationB);
+        deployRegistry();
+
+        LibMigrationRegistry.applyMigration(
+            namespace, migrationA, LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS)
+        );
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
+                address(this),
+                namespace,
+                namespace,
+                MIGRATION_HEAD_GENESIS,
+                migrationA
+            )
+        );
+        this.externalApplyMigration(
+            namespace, migrationB, LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS)
+        );
+        assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationB), 0);
     }
 }

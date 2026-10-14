@@ -30,8 +30,8 @@ import {
 /// exist, which is the whole distance between a key and its length.
 contract SameLengthKeyDeploySuites is ExternalDeploySuites {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](1);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = DeploySuite({
             suite: "same-length-aaa",
             creationCode: ADDRESS_REGISTRY_CREATION_CODE,
@@ -43,11 +43,12 @@ contract SameLengthKeyDeploySuites is ExternalDeploySuites {
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](1);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "same-length-zzz",
@@ -62,5 +63,6 @@ contract SameLengthKeyDeploySuites is ExternalDeploySuites {
             }),
             unanchorableReason: ""
         });
+        return candidates;
     }
 }

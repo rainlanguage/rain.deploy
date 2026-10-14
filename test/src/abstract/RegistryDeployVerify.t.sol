@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RainDeployVerify} from "../../../src/abstract/RainDeployVerify.sol";
+import {RainDeployVerifySnapshotBase} from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 
 /// @title RegistryDeployVerifyTest
@@ -11,9 +12,11 @@ import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.s
 /// contract reaches every consumer that has bumped, and one that does not reach
 /// it never shipped.
 ///
-/// Everything is inherited. There is nothing to write here, which is the point:
+/// Everything is inherited but one line, which is the point:
 /// `RegistryDeploySuites` says which registries and which releases exist and
-/// `RainDeployVerify` says what is true of them.
+/// `RainDeployVerify` says what is true of them. The one override names the
+/// code records a release freezes beside the suites' — the parameterised
+/// contracts — so the frozen-record walk reads them as code and not as deploys.
 ///
 /// The chain half is red until every release declared here is live on every
 /// supported network, which is why the deploy is dispatched before the tag is
@@ -29,4 +32,9 @@ import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.s
 /// ignore, `RainDeployVerifyChainEmptyTest` for a set with nothing in it, which
 /// it must not fork for, and `RainDeployVerifySnapshotBaseTest` for the
 /// snapshot groups at every position and every shape of declaration.
-contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {}
+contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
+    /// @inheritdoc RainDeployVerifySnapshotBase
+    function frozenCodeRecordNames() internal pure override returns (string[] memory) {
+        return parameterisedContractNames();
+    }
+}

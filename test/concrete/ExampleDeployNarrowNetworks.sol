@@ -27,9 +27,10 @@ import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 /// base.
 contract ExampleDeployNarrowNetworks is ExampleDeploySuites, ExternalDeploySuites, RainDeployBroadcast {
     /// @inheritdoc RainDeploySuitesBase
-    function supportedNetworks() internal pure override returns (string[] memory networks) {
-        networks = new string[](1);
+    function supportedNetworks() internal pure override returns (string[] memory) {
+        string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.BASE;
+        return networks;
     }
 
     /// @return The networks a broadcast would go to.

@@ -49,8 +49,8 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 /// alone and would otherwise be a loop with one thing in it.
 abstract contract ExampleDeploySuites is RainDeploySuitesBase {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](2);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](2);
         suites[0] = DeploySuite({
             suite: "address-registry@0_0_1",
             creationCode: ADDRESS_REGISTRY_CREATION_CODE,
@@ -73,6 +73,7 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
@@ -82,8 +83,8 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
     /// over every candidate apart from one that stops at the first, and the
     /// source anchor is the only check that catches a snapshot of the wrong
     /// contract — so a loop that stops early is a contract nothing anchors.
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](2);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "address-registry-candidate",
@@ -112,5 +113,6 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
             }),
             unanchorableReason: ""
         });
+        return candidates;
     }
 }

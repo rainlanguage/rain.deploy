@@ -32,13 +32,14 @@ address constant STALE_PIN_ADDRESS = address(0xdead);
 /// it.
 contract StalePinDeploy is RainDeployBroadcast {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](0);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](0);
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](1);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "second-address-candidate",
@@ -53,5 +54,6 @@ contract StalePinDeploy is RainDeployBroadcast {
             }),
             unanchorableReason: ""
         });
+        return candidates;
     }
 }

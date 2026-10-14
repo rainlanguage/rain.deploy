@@ -31,13 +31,14 @@ import {VENDORED_CREATION_CODE} from "./UnanchorableDeploy.sol";
 /// than stopping at it.
 contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](0);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](0);
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](2);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "vendored-candidate",
@@ -67,5 +68,6 @@ contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
             }),
             unanchorableReason: "There is no source file to compile."
         });
+        return candidates;
     }
 }

@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {BuildScript} from "../src/abstract/BuildScript.sol";
 import {DeployCandidate} from "../src/abstract/RainDeploySuitesBase.sol";
-import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
+import {ParameterisedContract, RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../src/lib/LibRainDeploySnapshot.sol";
 
 /// One contract's generated files: the rolling snapshot, the alias lib that
@@ -27,7 +27,9 @@ struct GeneratedContract {
 /// The frozen `<tag>/` directories are what
 /// `RegistryDeploySuites.releasedSuites()` enumerates.
 ///
-/// `generatedContracts()` is the only list, read by every hook below.
+/// `generatedContracts()` is the only list of deploy suites, read by every hook
+/// below. `parameterisedContracts()` adds only rolling snapshots: see its
+/// declaration.
 contract Build is BuildScript, RegistryDeploySuites {
     /// Every contract this repo generates deploy pins for.
     /// @return The generated contracts.
@@ -52,6 +54,22 @@ contract Build is BuildScript, RegistryDeploySuites {
         string[] memory names = new string[](contracts.length);
         for (uint256 i = 0; i < contracts.length; i++) {
             names[i] = contracts[i].contractName;
+        }
+        return names;
+    }
+
+    /// @inheritdoc BuildScript
+    /// @dev The deploy suites, then each parameterised contract's snapshot under
+    /// the name `regenerateSnapshots` writes it as: the artifact's contract name.
+    function releaseRecordNames() internal pure override returns (string[] memory) {
+        string[] memory suites = snapshotContractNames();
+        ParameterisedContract[] memory parameterised = parameterisedContracts();
+        string[] memory names = new string[](suites.length + parameterised.length);
+        for (uint256 i = 0; i < suites.length; i++) {
+            names[i] = suites[i];
+        }
+        for (uint256 i = 0; i < parameterised.length; i++) {
+            names[suites.length + i] = parameterisedContractName(parameterised[i]);
         }
         return names;
     }
@@ -97,6 +115,20 @@ contract Build is BuildScript, RegistryDeploySuites {
                 contracts[i].contractName,
                 vm.getCode(contracts[i].candidate.snapshot.artifactPath),
                 contracts[i].candidate.snapshot.dependencies
+            );
+        }
+
+        ParameterisedContract[] memory parameterised = parameterisedContracts();
+        for (uint256 i = 0; i < parameterised.length; i++) {
+            LibRainDeploySnapshot.writeParameterisedSnapshot(
+                vm,
+                recordRoot(),
+                LibRainDeploySnapshot.CANDIDATE,
+                parameterisedContractName(parameterised[i]),
+                parameterised[i].spdxLicenseIdentifier,
+                parameterised[i].copyrightText,
+                vm.getCode(parameterised[i].artifactPath),
+                parameterised[i].referenceConstructorArgs
             );
         }
     }

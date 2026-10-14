@@ -29,13 +29,14 @@ import {MockDeployableV2} from "./MockDeployableV2.sol";
 /// record happens to agree.
 contract UnanchorableWithStaleArtifactDeploySuites is ExternalDeploySuites {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](0);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](0);
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](1);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "stale-source-candidate",
@@ -51,5 +52,6 @@ contract UnanchorableWithStaleArtifactDeploySuites is ExternalDeploySuites {
             }),
             unanchorableReason: "There is no source file to compile."
         });
+        return candidates;
     }
 }

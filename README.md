@@ -525,7 +525,7 @@ own forks and nowhere else.
   anything.
 
 Only the consumer knows where it stored what it resolved, so the consumer
-supplies the reads (`abi.encodeCall(IOwnable.owner, ())` and the like) and this
+supplies the reads (`abi.encodeCall(IERC5313.owner, ())` and the like) and this
 library supplies the fork loop and the comparison.
 
 ## Migration registry

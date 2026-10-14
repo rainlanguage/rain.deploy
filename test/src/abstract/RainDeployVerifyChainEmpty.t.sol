@@ -49,8 +49,8 @@ contract RainDeployVerifyChainEmptyTest is RainDeployVerifyChain {
     /// `RainDeployVerifyChainCandidateTest`'s subject — so what it is does not
     /// matter here, only that this contract is a declaration a repo could
     /// actually have.
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](1);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "second-address-candidate",
@@ -65,6 +65,7 @@ contract RainDeployVerifyChainEmptyTest is RainDeployVerifyChain {
             }),
             unanchorableReason: ""
         });
+        return candidates;
     }
 
     /// Nothing to check MUST NOT touch an RPC endpoint.

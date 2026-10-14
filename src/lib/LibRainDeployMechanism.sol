@@ -307,8 +307,7 @@ library LibRainDeployMechanism {
         if (suite.mechanism == DeployMechanism.Zoltu) {
             vm.etch(deployed[0], hex"");
             vm.resetNonce(deployed[0]);
-            LibRainDeploy.etchZoltuFactory(vm);
-            address zoltuAddress = LibRainDeploy.deployZoltu(suite.creationCode);
+            address zoltuAddress = LibRainDeploy.etchAndDeployZoltu(vm, suite.creationCode);
             if (zoltuAddress != deployed[0]) {
                 revert ZoltuDerivationMismatch(suite.suite, deployed[0], zoltuAddress);
             }

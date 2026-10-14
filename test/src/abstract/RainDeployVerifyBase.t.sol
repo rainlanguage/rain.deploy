@@ -155,11 +155,12 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
     }
 
     /// The two dependency addresses, in declaration order.
-    /// @return addresses The addresses.
-    function twoDependencies() internal pure returns (address[] memory addresses) {
-        addresses = new address[](2);
+    /// @return The addresses.
+    function twoDependencies() internal pure returns (address[] memory) {
+        address[] memory addresses = new address[](2);
         addresses[0] = FIRST_DEPENDENCY;
         addresses[1] = SECOND_DEPENDENCY;
+        return addresses;
     }
 
     /// External wrapper, so a derivation that cannot run its constructor is a

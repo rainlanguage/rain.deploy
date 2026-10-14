@@ -32,19 +32,21 @@ import {MockDeployableV2} from "./MockDeployableV2.sol";
 /// the reason `StalePinDeploy` gives.
 contract MultiSuiteDeploy is RainDeployBroadcast {
     /// @inheritdoc RainDeployBroadcast
-    function deployNetworks() internal pure override returns (string[] memory networks) {
-        networks = new string[](1);
+    function deployNetworks() internal pure override returns (string[] memory) {
+        string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        return networks;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](0);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](0);
+        return suites;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](2);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "second-address-candidate",
@@ -73,5 +75,6 @@ contract MultiSuiteDeploy is RainDeployBroadcast {
             }),
             unanchorableReason: ""
         });
+        return candidates;
     }
 }
