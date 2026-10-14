@@ -993,21 +993,24 @@ Via [soldeer](https://soldeer.xyz):
 forge soldeer install rain-deploy~<version>
 ```
 
-**You also need `forge-std` 1.17.0 and `rain-sol-codegen` 0.1.39**, remapped as
-`forge-std-1.17.0/` and `rain-sol-codegen-0.1.39/`. The published package ships
-`src/`, `script/` and the licence and README files — no `test/`, no
-`foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no `dependencies/` — so
-a consumer resolves both itself. The requirement is transitive rather than
-incidental: the deployed contract imports nothing outside this package, but
-every abstract a consumer inherits pulls them in — `Script` via
-`RainDeployBroadcast`, `Test` via `RainDeployVerifyBase`, `Vm` via
-`LibRainDeploy` beneath both, and `LibCodeGen`/`LibFs` via
-`LibRainDeploySnapshot`, which `RainDeployVerifySnapshot` imports:
+**You also need `forge-std` 1.17.0, `rain-sol-codegen` 0.1.39 and `rain-factory`
+0.1.30**, remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
+`rain-factory-0.1.30/`. The published package ships `src/`, `script/` and the
+licence and README files — no `test/`, no `foundry.toml`, no `remappings.txt`,
+no `soldeer.lock`, no `dependencies/` — so a consumer resolves all three itself.
+The requirement is transitive rather than incidental: the deployed contract
+imports nothing outside this package, but every abstract a consumer inherits
+pulls them in — `Script` via `RainDeployBroadcast`, `Test` via
+`RainDeployVerifyBase`, `Vm` via `LibRainDeploy` beneath both,
+`ICloneableFactoryV4` via `LibRainDeployMechanism` beneath both, and
+`LibCodeGen`/`LibFs` via `LibRainDeploySnapshot`, which
+`RainDeployVerifySnapshot` imports:
 
 ```toml
 [dependencies]
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
+rain-factory = "0.1.30"
 rain-deploy = "<version>"
 ```
 
@@ -1088,6 +1091,33 @@ catalogue's own facts. Whether a network HAS an Etherscan deployment is one of
 them rather than anything about the repo — Robinhood (4663) is not indexed by
 Etherscan v2, so its entry carries its Blockscout url and the deployment is
 verified through Sourcify.
+
+### Upgrading from 0.1.18
+
+`DeploySuite` gains `mechanism` and `mechanismData`, so a consumer's generated
+`Lib<Contract>Released` stops compiling before its `BuildScript` can regenerate
+it. In order:
+
+1. Add `mechanism: DeployMechanism.Zoltu, mechanismData: ""` to every entry of
+   the generated released libs, and import `DeployMechanism` beside
+   `DeploySuite`.
+2. Add `rain-factory` 0.1.30 and its remapping, as above.
+3. Make `view` every function of yours that calls `checkedCandidateSuites`,
+   `allSuites`, `suiteNames` or `suiteByName`, which are `view` now.
+4. Import the moved errors from where they are now declared:
+   `NetworkChainIdMismatch`, `NotDeployedOnNetwork` (no longer carrying the
+   suite) and `CodeHashMismatchOnNetwork` in `LibRainDeploy`;
+   `ZoltuDerivationMismatch` in `LibRainDeployMechanism`;
+   `FrozenSnapshotUnreadable` and `FrozenSnapshotAmbiguous` in
+   `LibRainDeploySnapshot`. `FrozenSnapshotsOutnumberReleases` carries an
+   `address[]`.
+5. Regenerate: `forge script ./script/Build.sol` followed by
+   `./script/build.sh`.
+
+`LibRainDeploy.deployToNetworks` and every other entry point taking network
+names takes catalogue aliases only (`NetworkNotInCatalogue`), refuses a fork
+reporting another chain id (`NetworkChainIdMismatch`), and checks the declared
+dependencies on every network, including one the suite is already deployed on.
 
 ## Develop
 
