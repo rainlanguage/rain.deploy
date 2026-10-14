@@ -7,6 +7,7 @@ import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
+import {DeployBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
 
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the
@@ -121,15 +122,23 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// `LibRainDeploy.checkDeployedCode`, as a broadcast does. A suite's code
     /// is what it is with them: a clone's runtime code says only WHICH implementation
     /// it delegates to, so a clone at its address over an implementation that
-    /// is missing or changed has the right code hash and does not work.
+    /// is missing or changed has the right code hash and does not work. Last,
+    /// that network's `beacons`, by `LibRainDeployBeacon.checkBeacons`.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
     function checkDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) internal {
+        DeployBeacon[][] memory networkBeacons = new DeployBeacon[][](networks.length);
+        bool anyBeacons = false;
+        for (uint256 i = 0; i < networks.length; i++) {
+            networkBeacons[i] = beacons(networks[i].chainId);
+            anyBeacons = anyBeacons || networkBeacons[i].length > 0;
+        }
+
         // Nothing to check is not a reason to touch every RPC endpoint. Forking
         // to check nothing turns an outage into the failure of an assertion
         // that has no subject, which is the one failure this contract is
         // supposed to be legible against.
-        if (suites.length == 0) {
+        if (suites.length == 0 && !anyBeacons) {
             return;
         }
 
@@ -157,6 +166,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
                 LibRainDeploy.checkDeclaredDependencies(networks[i].name, suites[j].dependencies);
                 LibRainDeploy.checkDeployedCode(networks[i].name, addresses[i][j], derived[j].bytecodeHash);
             }
+            LibRainDeployBeacon.checkBeacons(networks[i].name, networkBeacons[i]);
         }
     }
 
