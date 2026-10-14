@@ -9,6 +9,7 @@ import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 // released lib names, and the struct lives beside `deployToNetworks`, which is
 // what holds a declared pair to a chain.
 import {DeployDependency, LibRainDeploy} from "../lib/LibRainDeploy.sol";
+import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
@@ -119,21 +120,18 @@ error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, byte
 /// @param artifactPath The artifact id that resolved.
 error CandidateSourceCompiles(string suite, string artifactPath);
 
-/// One deployable unit: a named snapshot of one contract.
-///
-/// `creationCode` is the ONLY input. The Zoltu factory is `CREATE2` over its
-/// calldata under a zero salt, so the deploy address is a pure function of it
-/// and identical on every network, and running it once locally yields the
-/// runtime code and its hash. The address, code hash and runtime code recorded
-/// beside it are checked OUTPUTS, which is what the verification abstracts
-/// check them as.
-///
-/// They are recorded rather than derived on purpose. `LibRainDeploy` compares
-/// the recorded address against the creation code before it forks anything, so
-/// a snapshot whose pins have gone stale fails BEFORE broadcasting rather than
-/// deploying to wherever the code happens to land. Deriving them here would
-/// make that comparison derived-against-derived, and a guard that compares a
-/// value to itself is not a guard.
+/// How a suite's code gets to its address.
+enum DeployMechanism {
+    /// `CREATE2` over `creationCode` through the Zoltu factory at a zero salt.
+    Zoltu,
+    /// An EIP-1167 clone through an `ICloneableFactoryV4` at its open salt.
+    Clone,
+    /// An EIP-1167 clone through an `ICloneableFactoryV4` at its open salt, with init data — and
+    /// therefore an address — per network.
+    ClonePerNetwork
+}
+
+/// One deployable unit.
 struct DeploySuite {
     /// The key. Unique across every suite a repo declares, and held to the key
     /// alphabet — see `InvalidDeploySuiteKey`. It is what
@@ -158,7 +156,7 @@ struct DeploySuite {
     /// check that catches a snapshot of the wrong contract comparing source to
     /// itself, green.
     bytes creationCode;
-    /// The deploy address recorded for this suite.
+    /// The deploy address recorded for this suite, on every network.
     address storedDeployedAddress;
     /// The deployed code hash recorded for this suite.
     bytes32 storedBytecodeHash;
@@ -194,6 +192,10 @@ struct DeploySuite {
     /// broadcasts anything. So a wrong declaration is a red deploy run rather
     /// than a wrong hash frozen into a release.
     DeployDependency[] dependencies;
+    /// How this suite's code gets to its address — see `DeployMechanism`.
+    DeployMechanism mechanism;
+    /// What the mechanism needs beyond `creationCode`.
+    bytes mechanismData;
 }
 
 /// The rolling candidate: a snapshot that tracks current source rather than a
@@ -263,7 +265,7 @@ abstract contract RainDeploySuitesBase {
     /// anchor to — see `NoDeployCandidates` for why an empty list is worse
     /// than it looks.
     /// @return The candidates.
-    function candidateSuites() internal pure virtual returns (DeployCandidate[] memory);
+    function candidateSuites() internal view virtual returns (DeployCandidate[] memory);
 
     /// Every network this repo deals with: what a broadcast targets, the set
     /// every network-scoped assertion is made over, and the set the network
@@ -282,6 +284,39 @@ abstract contract RainDeploySuitesBase {
         return LibRainDeploy.supportedNetworks();
     }
 
+    /// A suite as it is broadcast and as it is checked on chain.
+    /// @param suite The suite.
+    /// @return The suite, with the networks its candidate adds.
+    function onSupportedNetworks(DeploySuite memory suite) internal view returns (DeploySuite memory) {
+        bytes32 name = keccak256(bytes(suiteKeyName(suite.suite)));
+        DeployCandidate[] memory candidates = checkedCandidateSuites();
+        for (uint256 i = 0; i < candidates.length; i++) {
+            if (keccak256(bytes(candidates[i].snapshot.suite)) == name) {
+                return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidates[i].snapshot);
+            }
+        }
+        return suite;
+    }
+
+    /// The name half of a suite key.
+    /// @param suite The suite key.
+    /// @return The name half.
+    function suiteKeyName(string memory suite) internal pure returns (string memory) {
+        bytes memory key = bytes(suite);
+        uint256 length = key.length;
+        for (uint256 i = 0; i < key.length; i++) {
+            if (key[i] == "@") {
+                length = i;
+                break;
+            }
+        }
+        bytes memory name = new bytes(length);
+        for (uint256 i = 0; i < length; i++) {
+            name[i] = key[i];
+        }
+        return string(name);
+    }
+
     /// The declared candidates, refusing an empty list and an `artifactPath`
     /// that is not `<path>:<Name>`.
     ///
@@ -294,7 +329,7 @@ abstract contract RainDeploySuitesBase {
     /// the reader that got the second spelling wrong is the one that silently
     /// stops asserting.
     /// @return The candidates.
-    function checkedCandidateSuites() internal pure returns (DeployCandidate[] memory) {
+    function checkedCandidateSuites() internal view returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = candidateSuites();
         if (candidates.length == 0) {
             revert NoDeployCandidates();
@@ -444,7 +479,7 @@ abstract contract RainDeploySuitesBase {
     /// unreadable key collides with nothing, and two keys can be spelled
     /// perfectly and still be the same key.
     /// @return Every declared suite.
-    function allSuites() internal pure returns (DeploySuite[] memory) {
+    function allSuites() internal view returns (DeploySuite[] memory) {
         DeploySuite[] memory released = releasedSuites();
         DeployCandidate[] memory candidates = checkedCandidateSuites();
 
@@ -474,7 +509,7 @@ abstract contract RainDeploySuitesBase {
     /// because the alphabet `allSuites` holds them to carries neither of those
     /// two characters anywhere but between two keys.
     /// @return The declared keys.
-    function suiteNames() internal pure returns (string memory) {
+    function suiteNames() internal view returns (string memory) {
         DeploySuite[] memory suites = allSuites();
         string memory names;
         for (uint256 i = 0; i < suites.length; i++) {
@@ -491,7 +526,7 @@ abstract contract RainDeploySuitesBase {
     /// remembered to update.
     /// @param requested The key to select, from `DEPLOYMENT_SUITE`.
     /// @return The selected suite.
-    function suiteByName(string memory requested) internal pure returns (DeploySuite memory) {
+    function suiteByName(string memory requested) internal view returns (DeploySuite memory) {
         DeploySuite[] memory suites = allSuites();
         bytes32 requestedHash = keccak256(bytes(requested));
         for (uint256 i = 0; i < suites.length; i++) {

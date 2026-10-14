@@ -27,6 +27,7 @@ import {ShortestKeyDeploySuites} from "../../concrete/ShortestKeyDeploySuites.so
 import {UnanchorableDeploy, ASSEMBLED_CREATION_CODE} from "../../concrete/UnanchorableDeploy.sol";
 import {UnanchorableWithArtifactDeploySuites} from "../../concrete/UnanchorableWithArtifactDeploySuites.sol";
 import {UnanchorableWithStaleArtifactDeploySuites} from "../../concrete/UnanchorableWithStaleArtifactDeploySuites.sol";
+import {EmptyArtifactPathDeploySuites} from "../../concrete/EmptyArtifactPathDeploySuites.sol";
 import {UnqualifiedArtifactPathDeploySuites} from "../../concrete/UnqualifiedArtifactPathDeploySuites.sol";
 import {VersionQualifiedArtifactPathDeploySuites} from "../../concrete/VersionQualifiedArtifactPathDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
@@ -311,6 +312,28 @@ contract RainDeploySuitesBaseTest is Test {
         // quietly selectable.
         vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, "MockDeployableV2"));
         unqualified.externalSuiteByName("qualified-candidate");
+    }
+
+    /// The EMPTY artifact path MUST be refused too, on every reader.
+    function testEmptyCandidateArtifactPathReverts() external {
+        EmptyArtifactPathDeploySuites emptyPath = new EmptyArtifactPathDeploySuites();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, ""));
+        emptyPath.externalCheckedCandidateSuites();
+
+        // The reader the BROADCAST runs, and the one check that catches a
+        // snapshot of the wrong contract.
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, ""));
+        emptyPath.externalCheckCandidatesAnchoredToSource();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, ""));
+        emptyPath.externalAllSuites();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, ""));
+        emptyPath.externalSuiteNames();
+
+        vm.expectRevert(abi.encodeWithSelector(UnqualifiedCandidateArtifactPath.selector, 1, ""));
+        emptyPath.externalSuiteByName("qualified-candidate");
     }
 
     /// A colon is not a file. forge reads `Name:0.8.25` as a contract name plus

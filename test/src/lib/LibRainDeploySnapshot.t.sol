@@ -10,7 +10,7 @@ import {
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
-import {DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     EmptyRelease,
     InvalidRecordRoot,
@@ -21,7 +21,25 @@ import {
     UnreleasableVersion
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployMechanism, UnexpectedMechanismData} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
+import {
+    EXAMPLE_CLONE_RECORD_CONTRACT,
+    EXAMPLE_CLONE_RECORD_ROOT,
+    EXAMPLE_CLONE_RELEASE_TAG,
+    exampleCloneRelease
+} from "../../abstract/ExampleCloneDeploys.sol";
+import {
+    PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
+    PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
+    PER_NETWORK_CLONE_RECORD_CONTRACT,
+    PER_NETWORK_CLONE_RECORD_ROOT,
+    PER_NETWORK_CLONE_RELEASE_TAG,
+    perNetworkClone,
+    perNetworkCloneChainIds,
+    perNetworkCloneRelease
+} from "../../abstract/PerNetworkCloneDeploys.sol";
+import {CloneNetworks} from "../../../src/lib/LibRainDeployClone.sol";
 import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
 import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.2.0/src/lib/LibMemoryKV.sol";
 
@@ -198,6 +216,14 @@ contract LibRainDeploySnapshotTest is Test {
         // literal is indistinguishable from a real one to a line scanner.
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeFile(path, string.concat("// SPDX-License", "-Identifier: LicenseRef-DCL-1.0\n"));
+    }
+
+    /// Writes one Zoltu release into the fixture record.
+    /// @param path The file to write, under `FIXTURE_ROOT`.
+    function writeZoltuFixture(string memory path) internal {
+        writeFixture(path);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeLine(path, "address constant DEPLOYED_ADDRESS = address(0x0000000000000000000000000000000000000001);");
     }
 
     /// A release tag is what `tagForVersion` produces and nothing else, so
@@ -1083,22 +1109,9 @@ contract LibRainDeploySnapshotTest is Test {
     /// enumerated through. Read here, never written.
     string constant RELEASED_LIB_PATH = "src/lib/LibAddressRegistryReleased.sol";
 
-    /// Where every lib writer — alias, released-suites and aggregate — is
-    /// pointed when the writer is what is under test.
-    ///
-    /// Outside `src/` and `test/`, which is everything `fs_permissions`
-    /// otherwise grants and both of which are compiled: a generated lib imports
-    /// `../generated/`, `../abstract/` and `./Lib<Contract>Released.sol`, which
-    /// resolve from `src/lib` and nowhere else, so a copy under either root
-    /// fails the build for every suite — including the copy a failing test
-    /// deliberately leaves behind. `foundry.toml` grants this root for exactly
-    /// that, and nothing compiles it.
-    ///
-    /// Each writer test takes a subdirectory of its own, for the reason
-    /// `RELEASED_FIXTURE_ROOT` is not `WALK_FIXTURE_ROOT`: forge runs the tests
-    /// in a contract concurrently, and two of them writing one lib path read
-    /// each other's output.
-    string constant FIXTURE_LIB_ROOT = "fixture-lib";
+    /// Where every lib writer — alias, released-suites and aggregate — is pointed when the writer
+    /// is what is under test.
+    string constant FIXTURE_LIB_ROOT = "fixture-lib/snapshot";
 
     /// `LIB_DIR` is the directory a build points every lib writer at, so the
     /// committed libs MUST be the files that directory holds. A `LIB_DIR`
@@ -1358,9 +1371,14 @@ contract LibRainDeploySnapshotTest is Test {
             storedBytecodeHash: bytes32(0),
             storedRuntimeCode: "",
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-            dependencies: new DeployDependency[](0)
+            dependencies: new DeployDependency[](0),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: ""
         });
     }
+
+    /// A committed record of two Zoltu releases of `EMITTED_CONTRACT`, tagged `0_0_1` and `0_0_2`.
+    string constant ZOLTU_RECORD_ROOT = "test/fixture-zoltu-record";
 
     /// A record of `count` releases, `0_0_1` upwards, as
     /// `frozenSnapshotPaths` spells them.
@@ -1369,9 +1387,7 @@ contract LibRainDeploySnapshotTest is Test {
     function recordOf(uint256 count) internal pure returns (string[] memory) {
         string[] memory paths = new string[](count);
         for (uint256 i = 0; i < count; i++) {
-            paths[i] = string.concat(
-                LibRainDeploySnapshot.LIB_FS_ROOT, "/0_0_", vm.toString(i + 1), "/", EMITTED_CONTRACT, ".sol"
-            );
+            paths[i] = string.concat(ZOLTU_RECORD_ROOT, "/0_0_", vm.toString(i + 1), "/", EMITTED_CONTRACT, ".sol");
         }
         return paths;
     }
@@ -1438,7 +1454,7 @@ contract LibRainDeploySnapshotTest is Test {
             "_RUNTIME_CODE,\n            artifactPath: \"src/concrete/AddressRegistry.sol:AddressRegistry\",\n",
             "            dependencies: abi.decode(AddressRegistry_",
             tag,
-            "_DEPENDENCIES, (DeployDependency[]))\n        });\n"
+            "_DEPENDENCIES, (DeployDependency[])),\n            mechanism: DeployMechanism.Zoltu,\n            mechanismData: \"\"\n        });\n"
         );
     }
 
@@ -1449,16 +1465,16 @@ contract LibRainDeploySnapshotTest is Test {
     /// The four aliased fields are the whole of what a released entry says
     /// about consensus, so an import that goes missing is a field that silently
     /// falls back to whatever else is in scope.
-    function testReleasedImportBlockAliasesEveryRecord() external pure {
+    function testReleasedImportBlockAliasesEveryRecord() external view {
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(0)),
-            "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n"
+            "import {DeployDependency, DeployMechanism, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n"
         );
 
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1)),
             string.concat(
-                "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                "import {DeployDependency, DeployMechanism, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
                 expectedImport("0_0_1")
             )
         );
@@ -1466,7 +1482,7 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2)),
             string.concat(
-                "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                "import {DeployDependency, DeployMechanism, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
                 expectedImport("0_0_1"),
                 expectedImport("0_0_2")
             )
@@ -1484,27 +1500,38 @@ contract LibRainDeploySnapshotTest is Test {
     /// The record imports are asserted alongside it: the suites path MUST NOT
     /// reach the aliases, which are record-relative and already correct for a
     /// consumer.
-    function testReleasedImportBlockTakesTheSuitesImportPath() external pure {
+    function testReleasedImportBlockTakesTheSuitesImportPath() external view {
         string memory consumerPath = "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol";
 
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1), consumerPath),
             string.concat(
-                "import {DeployDependency, DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n",
+                "import {DeployDependency, DeployMechanism, DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n",
                 expectedImport("0_0_1")
             )
         );
     }
 
-    /// Omitting the path MUST be this repo's own `suitesImportPathInThisRepo`, so the
-    /// arity every existing caller spells keeps emitting what it emitted.
-    function testReleasedImportBlockDefaultsToThisRepoSuitesImportPath() external pure {
+    /// Omitting the path MUST be this repo's own `suitesImportPathInThisRepo`, so the arity every
+    /// existing caller spells keeps emitting what it emitted, over a Zoltu record and over a
+    /// per-network clone record alike — the shorter arity still aliases a clone record's
+    /// `MECHANISM_DATA`.
+    function testReleasedImportBlockDefaultsToThisRepoSuitesImportPath() external view {
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2)),
             LibRainDeploySnapshot.releasedImportBlock(
                 vm, recordOf(2), LibRainDeploySnapshot.suitesImportPathInThisRepo()
             )
         );
+
+        string memory clone = LibRainDeploySnapshot.releasedImportBlock(vm, perNetworkRecordPaths());
+        assertEq(
+            clone,
+            LibRainDeploySnapshot.releasedImportBlock(
+                vm, perNetworkRecordPaths(), LibRainDeploySnapshot.suitesImportPathInThisRepo()
+            )
+        );
+        assertTrue(vm.contains(clone, "MECHANISM_DATA as "));
     }
 
     /// The aggregate's `DeploySuite` import MUST be the caller's path too, for
@@ -1604,7 +1631,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// first release, including this one, and it MUST still emit a compiling
     /// library: the declaration is imported by ordinary source, so a repo that
     /// could not emit one before its first release could not build.
-    function testReleasedLibraryBlockDeclaresEveryRecord() external pure {
+    function testReleasedLibraryBlockDeclaresEveryRecord() external view {
         assertEq(
             LibRainDeploySnapshot.releasedLibraryBlock(
                 vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(0), emitterTemplate()
@@ -1647,7 +1674,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// `allSuites` refuses a duplicate key, so a key that did not carry the tag
     /// would make the second release unreachable and the whole declaration
     /// revert.
-    function testReleasedLibraryBlockKeysAreUniquePerRelease() external pure {
+    function testReleasedLibraryBlockKeysAreUniquePerRelease() external view {
         string memory emitted = LibRainDeploySnapshot.releasedLibraryBlock(
             vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), emitterTemplate()
         );
@@ -1661,7 +1688,7 @@ contract LibRainDeploySnapshotTest is Test {
     ///
     /// The template differs from every record in BOTH halves, so an emitter
     /// that still read it would be seen writing them out.
-    function testReleasedEntriesTakeDependenciesFromTheFrozenRecord() external pure {
+    function testReleasedEntriesTakeDependenciesFromTheFrozenRecord() external view {
         DeploySuite memory declared = emitterTemplate();
         declared.dependencies = new DeployDependency[](2);
         declared.dependencies[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: hex"d0d0"});
@@ -1700,7 +1727,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// a released entry's list, so it is stated as invariance rather than as
     /// two examples — two examples is also what a partial re-read passes.
     /// @param dependencies Whatever the candidate declaration now says.
-    function testReleasedEntriesIgnoreTheTemplateDependencies(DeployDependency[] memory dependencies) external pure {
+    function testReleasedEntriesIgnoreTheTemplateDependencies(DeployDependency[] memory dependencies) external view {
         DeploySuite memory declared = emitterTemplate();
         declared.dependencies = dependencies;
 
@@ -2159,8 +2186,8 @@ contract LibRainDeploySnapshotTest is Test {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(libDir, true);
 
-        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol"));
-        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT, ".sol"));
+        writeZoltuFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol"));
+        writeZoltuFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT, ".sol"));
         writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT_SECOND, ".sol"));
         // Not releases: the rolling snapshot, and a scratch directory a test or
         // a human left behind.
@@ -2370,7 +2397,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// fails the whole build until it is deleted by hand. Spelled out rather
     /// than concatenated from `FIXTURE_LIB_ROOT`, because solc refuses
     /// `string.concat` in a constant initialiser.
-    string constant AGGREGATE_PATH_FIXTURE_DIR = "fixture-lib/aggregate-path";
+    string constant AGGREGATE_PATH_FIXTURE_DIR = "fixture-lib/snapshot/aggregate-path";
 
     /// Where `testWriteReleasedSuitesAggregateDefaultsToTheOrgHeader` points
     /// the writer, for the reason `RELEASED_FIXTURE_ROOT` is not
@@ -2378,7 +2405,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// two of them creating, writing, reading and removing one directory see
     /// each other's files and each other's removals. Under `FIXTURE_LIB_ROOT`,
     /// spelled out for the reason `AGGREGATE_PATH_FIXTURE_DIR` gives.
-    string constant AGGREGATE_DEFAULTS_FIXTURE_DIR = "fixture-lib/aggregate-defaults";
+    string constant AGGREGATE_DEFAULTS_FIXTURE_DIR = "fixture-lib/snapshot/aggregate-defaults";
 
     /// The aggregate MUST land at `<libDir>/LibReleasedSuites.sol`, holding
     /// exactly the prefix, imports and library the emitters produce for the
@@ -3384,5 +3411,257 @@ contract LibRainDeploySnapshotTest is Test {
         vm.removeDir(AGGREGATE_DEFAULTS_FIXTURE_DIR, true);
 
         assertEq(defaulted, explicitly);
+    }
+
+    /// The roots the clone writer tests produce into, one per test for the reason `FIXTURE_ROOT`
+    /// gives.
+    string constant CLONE_RECORD_REPRODUCE_ROOT = "test/generated-snapshot/clone-record-reproduce";
+    string constant CLONE_RECORD_ZOLTU_DATA_ROOT = "test/generated-snapshot/clone-record-zoltu-data";
+    string constant CLONE_RECORD_NO_RESIDUE_ROOT = "test/generated-snapshot/clone-record-no-residue";
+    string constant CLONE_RECORD_DEPLOY_NOT_CLAIMS_ROOT = "test/generated-snapshot/clone-record-deploy-not-claims";
+
+    /// The committed release record of `example-clone` is what the clone writer produces for
+    /// `exampleCloneRelease()`, byte for byte.
+    function testCloneWriterReproducesTheCommittedCloneRecord() external {
+        string memory written = LibRainDeploySnapshot.writeSnapshot(
+            vm,
+            CLONE_RECORD_REPRODUCE_ROOT,
+            EXAMPLE_CLONE_RELEASE_TAG,
+            EXAMPLE_CLONE_RECORD_CONTRACT,
+            LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot
+        );
+        string memory reproduced = vm.readFile(written);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CLONE_RECORD_REPRODUCE_ROOT, true);
+
+        assertEq(
+            reproduced,
+            vm.readFile(
+                LibRainDeploySnapshot.pathForSnapshot(
+                    EXAMPLE_CLONE_RECORD_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT
+                )
+            )
+        );
+    }
+
+    /// External wrapper so a refused suite write is a failed call.
+    /// @param suite The suite to write.
+    function externalWriteSuiteSnapshot(DeploySuite memory suite) external returns (string memory) {
+        return LibRainDeploySnapshot.writeSnapshot(
+            vm, CLONE_RECORD_ZOLTU_DATA_ROOT, EXAMPLE_CLONE_RELEASE_TAG, FIXTURE_CONTRACT, suite
+        );
+    }
+
+    /// A Zoltu suite carrying mechanism data is refused by the suite writer before anything is
+    /// written.
+    function testSuiteWriterRefusesAZoltuSuiteCarryingMechanismData() external {
+        DeploySuite memory suite = DeploySuite({
+            suite: "zoltu-with-data",
+            creationCode: type(MockDeployable).creationCode,
+            storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
+            storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
+            storedRuntimeCode: type(MockDeployable).runtimeCode,
+            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
+            dependencies: new DeployDependency[](0),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: hex"00"
+        });
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
+        this.externalWriteSuiteSnapshot(suite);
+        assertFalse(
+            vm.exists(
+                LibRainDeploySnapshot.pathForSnapshot(
+                    CLONE_RECORD_ZOLTU_DATA_ROOT, EXAMPLE_CLONE_RELEASE_TAG, FIXTURE_CONTRACT
+                )
+            )
+        );
+    }
+
+    /// The clone writer deploys locally only to read what it records, inside a state snapshot it
+    /// reverts.
+    function testCloneWriterLeavesNoDeployBehind() external {
+        DeploySuite memory suite =
+        LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot;
+        assertEq(suite.storedDeployedAddress.code.length, 0);
+        for (uint256 i = 0; i < suite.dependencies.length; i++) {
+            assertEq(suite.dependencies[i].deployedAddress.code.length, 0);
+        }
+
+        LibRainDeploySnapshot.writeSnapshot(
+            vm, CLONE_RECORD_NO_RESIDUE_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT, suite
+        );
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CLONE_RECORD_NO_RESIDUE_ROOT, true);
+
+        assertEq(suite.storedDeployedAddress.code.length, 0);
+        for (uint256 i = 0; i < suite.dependencies.length; i++) {
+            assertEq(suite.dependencies[i].deployedAddress.code.length, 0);
+        }
+    }
+
+    /// The clone writer records what the mechanism deployed, not what the suite claims about it.
+    function testCloneWriterRecordsTheDeployNotTheSuiteClaims() external {
+        DeploySuite memory suite =
+        LibRainDeployMechanism.cloneCandidate(exampleCloneRelease(), new uint256[](0)).snapshot;
+        suite.storedDeployedAddress = address(uint160(suite.storedDeployedAddress) + 1);
+        suite.storedRuntimeCode = hex"00";
+
+        string memory written = LibRainDeploySnapshot.writeSnapshot(
+            vm, CLONE_RECORD_DEPLOY_NOT_CLAIMS_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT, suite
+        );
+        string memory reproduced = vm.readFile(written);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CLONE_RECORD_DEPLOY_NOT_CLAIMS_ROOT, true);
+
+        assertEq(
+            reproduced,
+            vm.readFile(
+                LibRainDeploySnapshot.pathForSnapshot(
+                    EXAMPLE_CLONE_RECORD_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT
+                )
+            )
+        );
+    }
+
+    /// The roots the per-network clone writer tests produce into, one per test for the reason
+    /// `FIXTURE_ROOT` gives.
+    string constant PER_NETWORK_RECORD_REPRODUCE_ROOT = "test/generated-snapshot/per-network-record-reproduce";
+    string constant PER_NETWORK_RECORD_DEPLOY_NOT_CLAIMS_ROOT =
+        "test/generated-snapshot/per-network-record-deploy-not-claims";
+
+    /// The committed release record of `per-network-clone` is what the writer produces for
+    /// `perNetworkCloneRelease()`, byte for byte.
+    function testPerNetworkCloneWriterReproducesTheCommittedRecord() external {
+        string memory written = LibRainDeploySnapshot.writeSnapshot(
+            vm,
+            PER_NETWORK_RECORD_REPRODUCE_ROOT,
+            PER_NETWORK_CLONE_RELEASE_TAG,
+            PER_NETWORK_CLONE_RECORD_CONTRACT,
+            LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease(), perNetworkCloneChainIds()).snapshot
+        );
+        string memory reproduced = vm.readFile(written);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(PER_NETWORK_RECORD_REPRODUCE_ROOT, true);
+
+        assertEq(reproduced, vm.readFile(perNetworkRecordPaths()[0]));
+    }
+
+    /// The per-network writer records each network's address from the LOCAL deploy, not from the
+    /// addresses the suite's `CloneNetworks` claims.
+    function testPerNetworkCloneWriterRecordsTheDeployNotTheSuiteClaims() external {
+        DeploySuite memory suite =
+        LibRainDeployMechanism.cloneCandidate(perNetworkCloneRelease(), perNetworkCloneChainIds()).snapshot;
+        CloneNetworks memory clones = abi.decode(suite.mechanismData, (CloneNetworks));
+        assertEq(clones.networks.length, 2);
+        assertEq(clones.networks[0].chainId, PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
+        assertEq(clones.networks[1].chainId, PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        assertTrue(clones.networks[0].deployedAddress != clones.networks[1].deployedAddress);
+        (clones.networks[0].deployedAddress, clones.networks[1].deployedAddress) =
+        (clones.networks[1].deployedAddress, clones.networks[0].deployedAddress);
+        suite.mechanismData = abi.encode(clones);
+        suite.storedRuntimeCode = hex"00";
+
+        string memory written = LibRainDeploySnapshot.writeSnapshot(
+            vm,
+            PER_NETWORK_RECORD_DEPLOY_NOT_CLAIMS_ROOT,
+            PER_NETWORK_CLONE_RELEASE_TAG,
+            PER_NETWORK_CLONE_RECORD_CONTRACT,
+            suite
+        );
+        string memory reproduced = vm.readFile(written);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(PER_NETWORK_RECORD_DEPLOY_NOT_CLAIMS_ROOT, true);
+
+        assertEq(reproduced, vm.readFile(perNetworkRecordPaths()[0]));
+    }
+
+    /// The import a per-network clone release contributes to its released lib.
+    string constant EXPECTED_PER_NETWORK_IMPORT = "import {\n"
+        "    BYTECODE_HASH as PerNetworkClone_0_0_1_BYTECODE_HASH,\n"
+        "    CREATION_CODE as PerNetworkClone_0_0_1_CREATION_CODE,\n"
+        "    RUNTIME_CODE as PerNetworkClone_0_0_1_RUNTIME_CODE,\n"
+        "    DEPENDENCIES as PerNetworkClone_0_0_1_DEPENDENCIES,\n"
+        "    MECHANISM_DATA as PerNetworkClone_0_0_1_MECHANISM_DATA\n"
+        "} from \"../generated/0_0_1/PerNetworkClone.sol\";\n\n";
+
+    /// The entry a per-network clone release contributes.
+    string constant EXPECTED_PER_NETWORK_ENTRY = "        suites[0] = DeploySuite({\n"
+        "            suite: \"per-network-clone@0_0_1\",\n"
+        "            creationCode: PerNetworkClone_0_0_1_CREATION_CODE,\n"
+        "            storedDeployedAddress: address(0),\n"
+        "            storedBytecodeHash: PerNetworkClone_0_0_1_BYTECODE_HASH,\n"
+        "            storedRuntimeCode: PerNetworkClone_0_0_1_RUNTIME_CODE,\n"
+        "            artifactPath: \"rain-factory/EIP1167Clone.sol:EIP1167Clone\",\n"
+        "            dependencies: abi.decode(PerNetworkClone_0_0_1_DEPENDENCIES, (DeployDependency[])),\n"
+        "            mechanism: DeployMechanism.ClonePerNetwork,\n"
+        "            mechanismData: PerNetworkClone_0_0_1_MECHANISM_DATA\n" "        });\n";
+
+    /// The committed `per-network-clone` record's path, as `frozenSnapshotPaths` spells it.
+    /// @return The one record file.
+    function perNetworkRecordPaths() internal pure returns (string[] memory) {
+        string[] memory paths = new string[](1);
+        paths[0] = LibRainDeploySnapshot.pathForSnapshot(
+            PER_NETWORK_CLONE_RECORD_ROOT, PER_NETWORK_CLONE_RELEASE_TAG, PER_NETWORK_CLONE_RECORD_CONTRACT
+        );
+        return paths;
+    }
+
+    /// The candidate the per-network released lib takes its metadata from.
+    /// @return The `per-network-clone` candidate's suite.
+    function perNetworkTemplate() internal view returns (DeploySuite memory) {
+        return LibRainDeployMechanism.cloneCandidate(
+            perNetworkClone("per-network-clone", bytes32(uint256(4))), perNetworkCloneChainIds()
+        )
+        .snapshot;
+    }
+
+    /// A per-network clone release is imported without `DEPLOYED_ADDRESS` — the record declares
+    /// none, so importing it would not compile — and with its `MECHANISM_DATA`.
+    function testReleasedImportOfAPerNetworkCloneRelease() external view {
+        assertEq(LibRainDeploySnapshot.releasedImport(vm, perNetworkRecordPaths()[0]), EXPECTED_PER_NETWORK_IMPORT);
+    }
+
+    /// A per-network clone release's entry stores no address and is declared `ClonePerNetwork` with
+    /// the record's `MECHANISM_DATA`, the shape of `PerNetworkCloneDeploys.releasedSuites()`.
+    function testReleasedSuiteEntryOfAPerNetworkCloneRelease() external view {
+        assertEq(
+            LibRainDeploySnapshot.releasedSuiteEntry(vm, 0, perNetworkRecordPaths()[0], perNetworkTemplate()),
+            EXPECTED_PER_NETWORK_ENTRY
+        );
+    }
+
+    /// The released lib written from the committed per-network record over a `ClonePerNetwork`
+    /// template is the prefix, the per-network import and the per-network entry.
+    function testWriteReleasedSuitesLibOfAPerNetworkCloneRecord() external {
+        string memory libDir = string.concat(FIXTURE_LIB_ROOT, "/released-per-network");
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(libDir, true);
+
+        string memory written = LibRainDeploySnapshot.writeReleasedSuitesLib(
+            vm, libDir, PER_NETWORK_CLONE_RECORD_ROOT, PER_NETWORK_CLONE_RECORD_CONTRACT, perNetworkTemplate()
+        );
+        string memory emitted = vm.readFile(written);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(libDir, true);
+
+        assertEq(
+            emitted,
+            string.concat(
+                generatedFilePrefix(),
+                "import {DeployDependency, DeployMechanism, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                EXPECTED_PER_NETWORK_IMPORT,
+                LibRainDeploySnapshot.releasedLibraryBlock(
+                    vm,
+                    "LibPerNetworkCloneReleased",
+                    PER_NETWORK_CLONE_RECORD_CONTRACT,
+                    perNetworkRecordPaths(),
+                    perNetworkTemplate()
+                )
+            )
+        );
+        assertTrue(vm.contains(emitted, EXPECTED_PER_NETWORK_ENTRY));
+        assertFalse(vm.contains(emitted, "DEPLOYED_ADDRESS"));
     }
 }

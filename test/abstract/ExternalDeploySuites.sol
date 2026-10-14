@@ -20,18 +20,18 @@ import {
 /// through.
 abstract contract ExternalDeploySuites is RainDeploySuitesBase {
     /// @return Every declared suite.
-    function externalAllSuites() external pure returns (DeploySuite[] memory) {
+    function externalAllSuites() external view returns (DeploySuite[] memory) {
         return allSuites();
     }
 
     /// @param requested The suite key to select.
     /// @return The selected suite.
-    function externalSuiteByName(string memory requested) external pure returns (DeploySuite memory) {
+    function externalSuiteByName(string memory requested) external view returns (DeploySuite memory) {
         return suiteByName(requested);
     }
 
     /// @return The declared keys, comma separated.
-    function externalSuiteNames() external pure returns (string memory) {
+    function externalSuiteNames() external view returns (string memory) {
         return suiteNames();
     }
 
@@ -45,7 +45,7 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
     }
 
     /// @return The declared candidates, refusing an empty list.
-    function externalCheckedCandidateSuites() external pure returns (DeployCandidate[] memory) {
+    function externalCheckedCandidateSuites() external view returns (DeployCandidate[] memory) {
         return checkedCandidateSuites();
     }
 

@@ -5,49 +5,10 @@ pragma solidity ^0.8.25;
 import {Script} from "forge-std-1.17.0/src/Script.sol";
 
 import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
-import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
+import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 
 /// @title RainDeployBroadcast
-/// @notice The broadcast, inherited rather than rewritten per repo. Selects one
-/// suite by `DEPLOYMENT_SUITE` and deploys it through the Zoltu factory.
-///
-/// A deploy repo's whole script becomes the declaration plus this:
-///
-/// ```solidity
-/// contract Deploy is MyDeploySuites, RainDeployBroadcast {}
-/// ```
-///
-/// The declaration it inherits is the SAME one its verification contracts
-/// inherit. That is the point of putting it here: a repo that wrote its suites
-/// out twice could broadcast one contract while its tests verified another and
-/// stay green, because nothing would connect the two lists. There is one list.
-///
-/// ## A registry, not a branch
-///
-/// One suite is a degenerate case. `st0x.deploy` broadcasts ten, and its script
-/// is ten `else if` arms of identical shape differing only in their arguments,
-/// with the valid keys restated in a revert string that nothing keeps in step
-/// with the arms. Here the keys and the arms are the same array, so adding a
-/// suite is adding an entry and the failure message follows from the registry
-/// rather than from a string somebody remembered to update.
-///
-/// ## What is NOT derived, and why
-///
-/// The recorded address and code hash are passed to `deployAndBroadcast`, not
-/// derived from the creation code here. They are derivable — that is exactly
-/// what `RainDeployVerifySnapshot` derives them for — but deriving them at
-/// broadcast time would defeat the check that matters most at broadcast time.
-/// `LibRainDeploy.deployToNetworks` compares the recorded address against the
-/// address the creation code derives BEFORE it forks anything, precisely so a
-/// stale pin fails instead of silently deploying somewhere the repo's constants
-/// do not describe. Feeding it a derived value would make that comparison
-/// derived-against-derived, and a guard that compares a value to itself is not
-/// a guard.
-///
-/// The artifact path is declared too. `src/concrete/<Name>.sol:<Name>` holds
-/// only for the flattest repos; `st0x.deploy` groups concretes under
-/// `deploy/` and `authorize/`, so a convention would be wrong for most of its
-/// suites.
+/// @notice The broadcast, inherited rather than rewritten per repo.
 abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// The networks to broadcast to. Every network the declaration supports by
     /// default, which is what a deterministic deployment usually wants: one
@@ -99,15 +60,21 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
 
         uint256 deployerPrivateKey = vm.envUint("DEPLOYMENT_KEY");
 
-        LibRainDeploy.deployAndBroadcast(
-            vm,
-            deployNetworks(),
-            deployerPrivateKey,
-            suite.creationCode,
-            suite.artifactPath,
-            suite.storedDeployedAddress,
-            suite.storedBytecodeHash,
-            suite.dependencies
-        );
+        broadcastSuite(suite, deployNetworks(), deployerPrivateKey);
+    }
+
+    /// Broadcasts the selected suite by ITS mechanism, through `LibRainDeployMechanism` — the same
+    /// dispatch every verification group derives through, so what is broadcast is what was
+    /// verified.
+    /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
+    /// @param networks The networks to broadcast to, as `deployNetworks()` gave them.
+    /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
+    /// @return Where the suite is on each network, positionally paired with `networks`.
+    /// @return The fork each network was deployed on.
+    function broadcastSuite(DeploySuite memory suite, string[] memory networks, uint256 deployerPrivateKey)
+        internal
+        returns (address[] memory, uint256[] memory)
+    {
+        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, onSupportedNetworks(suite));
     }
 }

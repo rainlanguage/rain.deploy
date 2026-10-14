@@ -49,7 +49,7 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     /// something nobody needs is deployed there first, with exactly the right
     /// code — and it fails at dispatch, per network, after the fork, where
     /// nothing in this suite is watching.
-    function testCandidatesDeclareNoDependencies() external pure {
+    function testCandidatesDeclareNoDependencies() external view {
         DeployCandidate[] memory candidates = checkedCandidateSuites();
         for (uint256 i = 0; i < candidates.length; i++) {
             assertEq(

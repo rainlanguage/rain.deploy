@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {
     DeployDependency,
     DeployCandidate,
+    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -46,7 +47,9 @@ contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
                 storedBytecodeHash: keccak256(hex""),
                 storedRuntimeCode: hex"",
                 artifactPath: "test/concrete/VendoredDeployable.sol:VendoredDeployable",
-                dependencies: new DeployDependency[](0)
+                dependencies: new DeployDependency[](0),
+                mechanism: DeployMechanism.Zoltu,
+                mechanismData: ""
             }),
             unanchorableReason: "Vendored third party deployment: the pinned creation code is the source."
         });
@@ -59,7 +62,9 @@ contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 // Resolves, and to the contract every recorded field above is.
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
-                dependencies: new DeployDependency[](0)
+                dependencies: new DeployDependency[](0),
+                mechanism: DeployMechanism.Zoltu,
+                mechanismData: ""
             }),
             unanchorableReason: "There is no source file to compile."
         });

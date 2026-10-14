@@ -7,6 +7,7 @@ import {
     CandidateSourceMismatch,
     DeployCandidate,
     DeployDependency,
+    DeployMechanism,
     DeploySuite
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
@@ -14,18 +15,21 @@ import {
     FrozenCodeRecordDeclaresDeployedAddress,
     FrozenCodeRecordInconsistent,
     FrozenCodeRecordUnreadable,
-    FrozenSnapshotAmbiguous,
     FrozenSnapshotNotReleased,
     FrozenSnapshotsOutnumberReleases,
-    FrozenSnapshotUnreadable,
     RainDeployVerifySnapshotBase,
     StoredAddressMismatch,
     StoredCodeHashMismatch,
     StoredRuntimeCodeHashMismatch
 } from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
-import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {
+    FrozenSnapshotAmbiguous,
+    FrozenSnapshotUnreadable,
+    LibRainDeploySnapshot
+} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
+import {PER_NETWORK_CLONE_RECORD_ROOT} from "../../abstract/PerNetworkCloneDeploys.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
@@ -109,13 +113,27 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         checkFrozenSnapshotsReleased(paths, released);
     }
 
-    /// External wrapper for `recordedDeployedAddress` so `vm.expectRevert`
-    /// works at the correct call depth.
+    /// External wrapper for `recordedDeployedAddresses` so `vm.expectRevert` works at the correct
+    /// call depth, for a record declaring ONE `DEPLOYED_ADDRESS`.
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
     /// @return The address the record declares.
     function externalRecordedDeployedAddress(string memory path, string memory record) external pure returns (address) {
-        return recordedDeployedAddress(path, record);
+        (uint256[] memory chainIds, address[] memory addresses) =
+            LibRainDeploySnapshot.recordedDeployedAddresses(vm, path, record);
+        assertEq(chainIds.length, 0);
+        assertEq(addresses.length, 1);
+        return addresses[0];
+    }
+
+    /// A one-address list, as `FrozenSnapshotsOutnumberReleases` carries a record that declares
+    /// `DEPLOYED_ADDRESS`.
+    /// @param deployedAddress The address.
+    /// @return The list.
+    function oneAddress(address deployedAddress) internal pure returns (address[] memory) {
+        address[] memory addresses = new address[](1);
+        addresses[0] = deployedAddress;
+        return addresses;
     }
 
     /// External wrapper for `checkFrozenCodeRecord` so `vm.expectRevert` works
@@ -205,7 +223,9 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedBytecodeHash: ADDRESS_REGISTRY_0_1_10_BYTECODE_HASH,
             storedRuntimeCode: ADDRESS_REGISTRY_0_1_10_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-            dependencies: new DeployDependency[](0)
+            dependencies: new DeployDependency[](0),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: ""
         });
     }
 
@@ -217,7 +237,9 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedBytecodeHash: ADDRESS_REGISTRY_0_1_11_BYTECODE_HASH,
             storedRuntimeCode: ADDRESS_REGISTRY_0_1_11_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-            dependencies: new DeployDependency[](0)
+            dependencies: new DeployDependency[](0),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: ""
         });
     }
 
@@ -238,7 +260,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             abi.encodeWithSelector(
                 FrozenSnapshotsOutnumberReleases.selector,
                 recordOfTheTwinReleases()[1],
-                ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
+                oneAddress(ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS),
                 uint256(2),
                 uint256(1)
             )
@@ -346,7 +368,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         string memory record = recordCommentingOutADeclaration(address(0xdead), released);
         // The commented-out line really is the declaration text, carrying the
         // released address: only its position makes it a comment.
-        assertTrue(vm.contains(record, string.concat("// ", DEPLOYED_ADDRESS_DECLARATION)));
+        assertTrue(vm.contains(record, string.concat("// ", LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION)));
         assertTrue(vm.contains(record, vm.toString(released)));
 
         assertEq(this.externalRecordedDeployedAddress("record.sol", record), address(0xdead));
@@ -394,7 +416,12 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         // line, carrying the released address: only the block around it makes
         // it a comment.
         assertTrue(
-            vm.contains(record, string.concat("\n", DEPLOYED_ADDRESS_DECLARATION, " address(", vm.toString(released)))
+            vm.contains(
+                record,
+                string.concat(
+                    "\n", LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION, " address(", vm.toString(released)
+                )
+            )
         );
         assertTrue(vm.contains(record, "/*\n"));
 
@@ -433,7 +460,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             vm.toString(address(0xbeef)),
             ");\n"
         );
-        assertTrue(vm.contains(record, DEPLOYED_ADDRESS_DECLARATION));
+        assertTrue(vm.contains(record, LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION));
         assertFalse(vm.contains(record, "*/"));
 
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
@@ -497,8 +524,12 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         string memory wrapped = recordDeclaring(released, address(0xdead));
         // The two records really do differ in the wrapper and nowhere else that
         // matters: one carries it, the other does not.
-        assertTrue(vm.contains(bare, string.concat(DEPLOYED_ADDRESS_DECLARATION, " ", vm.toString(released), ";")));
-        assertTrue(vm.contains(wrapped, string.concat(DEPLOYED_ADDRESS_DECLARATION, " address(")));
+        assertTrue(
+            vm.contains(
+                bare, string.concat(LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION, " ", vm.toString(released), ";")
+            )
+        );
+        assertTrue(vm.contains(wrapped, string.concat(LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION, " address(")));
         assertFalse(vm.contains(bare, "address("));
 
         assertEq(this.externalRecordedDeployedAddress("record.sol", bare), released);
@@ -597,7 +628,9 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
             storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
-            dependencies: new DeployDependency[](0)
+            dependencies: new DeployDependency[](0),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: ""
         });
     }
 
@@ -896,6 +929,16 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     function testFrozenCodeRecordNamingADeployRecordReverts() external {
         string memory record =
             vm.readFile(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry"));
+        vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
+        this.externalCheckFrozenCodeRecord("record.sol", record);
+    }
+
+    /// A per-network deploy record named as a code record is refused for its
+    /// `DEPLOYED_ADDRESS_<chainId>` addresses.
+    function testFrozenCodeRecordNamingAPerNetworkDeployRecordReverts() external {
+        string memory record = vm.readFile(
+            LibRainDeploySnapshot.pathForSnapshot(PER_NETWORK_CLONE_RECORD_ROOT, "0_0_1", "PerNetworkClone")
+        );
         vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
         this.externalCheckFrozenCodeRecord("record.sol", record);
     }
