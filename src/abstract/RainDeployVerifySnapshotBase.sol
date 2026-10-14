@@ -259,7 +259,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
     function checkFrozenCodeRecord(string memory path, string memory record) internal pure {
-        string[] memory lines = vm.split(LibRainDeploySnapshot.withoutBlockComments(vm, record), "\n");
+        string[] memory lines = vm.split(LibRainDeploySnapshot.withoutBlockComments(record), "\n");
         for (uint256 i = 0; i < lines.length; i++) {
             if (
                 vm.indexOf(lines[i], LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION) == 0

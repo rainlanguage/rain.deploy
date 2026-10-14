@@ -260,13 +260,26 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         }
     }
 
-    /// The largest chain id a `uint256` holds reads as itself.
+    /// The largest chain id a `uint256` holds, in the declaration the writer emits for it, reads as itself.
     function testPerNetworkDeclarationWithTheLargestChainIdReads() external view {
+        DeploySuite memory suite = releasedSuites()[0];
+        CloneNetworks memory clones = abi.decode(suite.mechanismData, (CloneNetworks));
+        uint256 secondChainId = clones.networks[1].chainId;
+        clones.networks[0].chainId = type(uint256).max;
+        suite.mechanismData = abi.encode(clones);
+        address[] memory deployed = new address[](clones.networks.length);
+        deployed[0] = address(0xcafe);
+        deployed[1] = address(0xbeef);
+        (string memory constants,) = LibRainDeploySnapshot.perNetworkAddressConstants(vm, deployed, suite);
+        assertTrue(vm.contains(constants, " =\n    address("));
+
         (uint256[] memory chainIds, address[] memory addresses) =
-            this.externalRecordedDeployedAddresses("record.sol", suffixedLine(vm.toString(type(uint256).max)));
-        assertEq(chainIds.length, 1);
+            this.externalRecordedDeployedAddresses("record.sol", constants);
+        assertEq(chainIds.length, 2);
         assertEq(chainIds[0], type(uint256).max);
         assertEq(addresses[0], address(0xcafe));
+        assertEq(chainIds[1], secondChainId);
+        assertEq(addresses[1], address(0xbeef));
     }
 
     /// A declaration whose value is not an address makes the record unreadable, typed and naming

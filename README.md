@@ -160,18 +160,14 @@ Releases follow the normal lifecycle. `BuildScript` regenerates the clone's
 snapshot through `writeSnapshot(DeploySuite)`, which records `MECHANISM_DATA`
 beside the usual constants; `cutRelease()` freezes it under
 `src/generated/<tag>/`; and the generated `Lib<Contract>Released` entry carries
-the mechanism and that `MECHANISM_DATA`. The mechanism DATA comes from the
-record, but the mechanism KIND comes from the CURRENT declaration — the template
-every regeneration reads — not from the declaration the release was cut from. So
-a suite cannot change mechanism in place: a clone template over a record that
-has no `MECHANISM_DATA` does not compile, and a Zoltu template over a clone
-record emits a Zoltu entry that the record group refuses, because its Zoltu
-address is not the clone address the record holds. A mechanism change is a new
-suite. From there the frozen clone is checked like any frozen suite: the record
-group holds it to its released entry at the CLONE address, the chain group
-requires its code at that address, and its declared factory and implementation
-with their declared code, on every supported network, and it is selectable by
-key for broadcast.
+the mechanism and that `MECHANISM_DATA`. Both the mechanism kind and its data
+come from each frozen record: no `MECHANISM_DATA` is Zoltu; with it,
+`DEPLOYED_ADDRESS` is Clone and `DEPLOYED_ADDRESS_<chainId>` is ClonePerNetwork.
+So a suite can change mechanism between releases. From there the frozen clone is
+checked like any frozen suite: the record group holds it to its released entry
+at the CLONE address, the chain group requires its code at that address, and its
+declared factory and implementation with their declared code, on every supported
+network, and it is selectable by key for broadcast.
 
 A clone is **unanchorable** — no compiler produces a proxy assembled from an
 address — so the candidate carries `unanchorableReason` and a constant

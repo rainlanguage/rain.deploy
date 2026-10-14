@@ -3664,4 +3664,17 @@ contract LibRainDeploySnapshotTest is Test {
         assertTrue(vm.contains(emitted, EXPECTED_PER_NETWORK_ENTRY));
         assertFalse(vm.contains(emitted, "DEPLOYED_ADDRESS"));
     }
+
+    /// A block comment ends at its first `*/`, unterminated it runs to the end, and `/*` inside a line comment or a string opens none.
+    function testWithoutBlockCommentsReadsAsTheCompilerDoes() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/* b /* c */d"), "ad");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("left/* comment */middle*/right"), "leftmiddle*/right");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/*/b*/c"), "ac");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/* b"), "a");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a// /* b\nc/* d */e"), "a// /* b\nce");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"/*\"b/* c */d"), "a\"/*\"bd");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a'/*'b/**/c"), "a'/*'bc");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"\\\"/*\"b/**/c"), "a\"\\\"/*\"bc");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"/**/\"'/**/'"), "a\"/**/\"'/**/'");
+    }
 }
