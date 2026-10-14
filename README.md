@@ -313,7 +313,7 @@ function beacons(uint256 chainId) internal view override returns (DeployBeacon[]
     DeployBeacon[] memory onChain = new DeployBeacon[](1);
     onChain[0].beacon = chainId == BASE_CHAIN_ID ? BASE_BEACON : BEACON;
     onChain[0].beaconCodeHash = BEACON_BYTECODE_HASH;
-    onChain[0].initial = BeaconState({implementation: "vault@0_1_1", owner: DEPLOYER});
+    onChain[0].initial = BeaconState({implementation: "vault@0_1_1", owner: timelockOn(chainId)});
     onChain[0].transitions = new BeaconTransition[](1);
     onChain[0].transitions[0] = BeaconTransition({
         migration: Prerequisite({writer: SAFE, namespace: NAMESPACE, migration: UPGRADE_0_2_0}),
@@ -326,7 +326,10 @@ function beacons(uint256 chainId) internal view override returns (DeployBeacon[]
 On each network's fork the chain group expects the state of the latest
 transition the network's registry reports `applied`, else `initial`: the beacon
 at its code hash, `implementation()` at that suite's address on the network,
-`owner()` at that owner, and the suite live there as any suite is.
+`owner()` at that owner, and the suite live there as any suite is. An
+implementation MUST be a released suite, refused otherwise with
+`BeaconImplementationNotReleased`: a candidate's address moves with its source.
+The deploy key is never a declared owner; seat governance from the first state.
 
 ## Deploy verification
 
