@@ -1355,7 +1355,10 @@ library LibRainDeploySnapshot {
             }
             string[] memory tokens = vm.split(lines[i], " ");
             string memory value = tokens[tokens.length - 1];
-            if (keccak256(bytes(value)) == keccak256("=") && i + 1 < lines.length) {
+            if (keccak256(bytes(value)) == keccak256("=")) {
+                if (i + 1 >= lines.length || vm.indexOf(lines[i + 1], "    address(") != 0) {
+                    revert FrozenSnapshotUnreadable(path);
+                }
                 string[] memory wrapped = vm.split(lines[i + 1], " ");
                 value = wrapped[wrapped.length - 1];
             }
