@@ -1530,10 +1530,11 @@ library LibRainDeploySnapshot {
         uint256 end = start;
         uint256 chainId = 0;
         while (end < text.length && text[end] != " ") {
-            if (text[end] < "0" || text[end] > "9") {
+            uint8 character = uint8(text[end]);
+            if (character < 0x30 || character > 0x39) {
                 revert FrozenSnapshotUnreadable(path);
             }
-            uint256 digit = uint8(text[end]) - uint8(bytes1("0"));
+            uint256 digit = character - 0x30;
             if (chainId > (type(uint256).max - digit) / 10) {
                 revert FrozenSnapshotUnreadable(path);
             }
