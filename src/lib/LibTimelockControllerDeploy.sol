@@ -16,11 +16,10 @@ import {LibTimelockController} from "./LibTimelockController.sol";
 library LibTimelockControllerDeploy {
     /// Deploys the timelock for `(minDelay, proposer)` on the selected fork
     /// through the Zoltu factory, broadcasting as `deployer`, or skips the
-    /// deploy where the timelock is already there, after holding it to
-    /// `LibTimelockController.assertTimelockState` with no further cancellers.
-    /// A fresh deploy needs no such check: the address is a function of the
-    /// init code, so the contract landing there was constructed from exactly
-    /// `timelockInitCode(creationCode, minDelay, proposer)` in this transaction.
+    /// deploy where the timelock is already there, and holds the timelock
+    /// either way to `LibTimelockController.assertTimelockState` with no
+    /// further cancellers. A fresh deploy is refused like a rerun when
+    /// `bytecodeHash` is not the hash of the code `creationCode` deploys.
     ///
     /// `expectedTimelock` is the caller's pinned address and is refused, before
     /// anything is read from the chain, unless it is the address the parameters
@@ -58,25 +57,27 @@ library LibTimelockControllerDeploy {
             revert LibRainDeploy.UnexpectedDeployedAddress(expectedTimelock, derived);
         }
 
-        address[] memory noCancellers = new address[](0);
-        if (derived.code.length != 0) {
-            LibTimelockController.assertTimelockState(bytecodeHash, derived, minDelay, proposer, noCancellers);
+        bool alreadyDeployed = derived.code.length != 0;
+        if (!alreadyDeployed) {
+            LibRainDeploy.checkDeployRequirements(network, new DeployDependency[](0));
+
+            vm.startBroadcast(deployer);
+            address timelock = LibRainDeploy.deployZoltu(initCode);
+            vm.stopBroadcast();
+            if (timelock != derived) {
+                revert LibRainDeploy.UnexpectedDeployedAddress(derived, timelock);
+            }
+        }
+
+        LibTimelockController.assertTimelockState(bytecodeHash, derived, minDelay, proposer, new address[](0));
+
+        if (alreadyDeployed) {
             console2.log(" - Timelock already deployed, skipping:", derived);
-            return derived;
+        } else {
+            console2.log(" - Timelock:", derived);
+            console2.log(" - Min delay (seconds):", minDelay);
+            console2.log(" - Proposer:", proposer);
         }
-
-        LibRainDeploy.checkDeployRequirements(network, new DeployDependency[](0));
-
-        vm.startBroadcast(deployer);
-        address timelock = LibRainDeploy.deployZoltu(initCode);
-        vm.stopBroadcast();
-        if (timelock != derived) {
-            revert LibRainDeploy.UnexpectedDeployedAddress(derived, timelock);
-        }
-
-        console2.log(" - Timelock:", timelock);
-        console2.log(" - Min delay (seconds):", minDelay);
-        console2.log(" - Proposer:", proposer);
-        return timelock;
+        return derived;
     }
 }

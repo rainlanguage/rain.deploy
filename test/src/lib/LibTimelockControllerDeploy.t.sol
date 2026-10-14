@@ -96,6 +96,19 @@ contract LibTimelockControllerDeployTest is Test {
         assertEq(expected().code.length, 0);
     }
 
+    /// A fresh deploy is refused when the given code hash is not that of the
+    /// code the given creation code deploys.
+    function testFreshDeployIsHeldToTheGivenCodeHash() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        bytes32 otherHash = keccak256(type(MockTimelockControllerGeneration).runtimeCode);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibTimelockController.TimelockCodehashMismatch.selector, expected(), otherHash, BYTECODE_HASH
+            )
+        );
+        this.callDeployTimelock(DEPLOYER, CREATION_CODE, otherHash, MIN_DELAY, PROPOSER, expected());
+    }
+
     /// A timelock already at the address is refused, not skipped, when the
     /// given code hash is not its generation's.
     function testExistingTimelockIsHeldToTheGivenCodeHash() external {
