@@ -60,6 +60,7 @@ contract LibRainDeployBeaconTest is Test {
 
     function declared(BeaconTransition[] memory transitions) internal view returns (DeployBeacon memory) {
         return DeployBeacon({
+            beaconSuite: "",
             beacon: address(sBeacon),
             beaconCodeHash: address(sBeacon).codehash,
             initial: BeaconState({implementation: "initial", owner: sOwner}),
@@ -140,6 +141,7 @@ contract LibRainDeployBeaconTest is Test {
     function testStateAtIndexesInitialThenTransitions() external pure {
         BeaconTransition[] memory transitions = upgradeThenHandover();
         DeployBeacon memory beacon = DeployBeacon({
+            beaconSuite: "",
             beacon: address(0),
             beaconCodeHash: bytes32(0),
             initial: BeaconState({implementation: "initial", owner: address(0xB0B)}),

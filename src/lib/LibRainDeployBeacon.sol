@@ -25,11 +25,13 @@ struct BeaconTransition {
 }
 
 /// An upgradeable beacon on one network: `initial` until a transition's migration is applied.
-/// @param beacon The beacon's address.
-/// @param beaconCodeHash The beacon's runtime code hash.
+/// @param beaconSuite The key of the released suite deployed as the beacon, empty for a beacon this repo did not deploy.
+/// @param beacon The address of a beacon this repo did not deploy, zero when named by `beaconSuite`.
+/// @param beaconCodeHash The runtime code hash of a beacon this repo did not deploy, zero when named by `beaconSuite`.
 /// @param initial The state before any transition's migration is applied.
 /// @param transitions The states, in migration order.
 struct DeployBeacon {
+    string beaconSuite;
     address beacon;
     bytes32 beaconCodeHash;
     BeaconState initial;
@@ -61,7 +63,7 @@ library LibRainDeployBeacon {
     /// @param network The network's name, for the refusal.
     /// @param beacon The beacon.
     /// @param implementation The address `implementation()` MUST return.
-    /// @param owner The address `owner()` MUST return.
+    /// @param owner The address `owner()` MUST return; no other authority, such as a pending owner or a role, is read.
     function checkBeacon(string memory network, DeployBeacon memory beacon, address implementation, address owner)
         internal
         view

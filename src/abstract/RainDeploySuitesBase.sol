@@ -268,10 +268,9 @@ abstract contract RainDeploySuitesBase {
     /// @return The candidates.
     function candidateSuites() internal view virtual returns (DeployCandidate[] memory);
 
-    /// The beacons that MUST hold their declared state on the network with
-    /// this chain id. Resolved before anything forks.
-    /// @param chainId The network's chain id.
-    /// @return The beacons on the network.
+    /// The beacons that MUST hold their declared state on the network with this chain id.
+    /// @param chainId A catalogue network's chain id; one outside `supportedNetworks()` MUST have none.
+    /// @return The beacons; one with transitions reads `MigrationRegistry`, which MUST be deployed on the network.
     function beacons(uint256 chainId) internal view virtual returns (DeployBeacon[] memory) {
         (chainId);
         return new DeployBeacon[](0);

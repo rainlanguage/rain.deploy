@@ -311,8 +311,7 @@ them through `MigrationRegistry` migrations:
 ```solidity
 function beacons(uint256 chainId) internal view override returns (DeployBeacon[] memory) {
     DeployBeacon[] memory onChain = new DeployBeacon[](1);
-    onChain[0].beacon = chainId == BASE_CHAIN_ID ? BASE_BEACON : BEACON;
-    onChain[0].beaconCodeHash = BEACON_BYTECODE_HASH;
+    onChain[0].beaconSuite = "vault-beacon@0_1_0";
     onChain[0].initial = BeaconState({implementation: "vault@0_1_1", owner: timelockOn(chainId)});
     onChain[0].transitions = new BeaconTransition[](1);
     onChain[0].transitions[0] = BeaconTransition({
@@ -326,10 +325,18 @@ function beacons(uint256 chainId) internal view override returns (DeployBeacon[]
 On each network's fork the chain group expects the state of the latest
 transition the network's registry reports `applied`, else `initial`: the beacon
 at its code hash, `implementation()` at that suite's address on the network,
-`owner()` at that owner, and the suite live there as any suite is. An
-implementation MUST be a released suite, refused otherwise with
-`BeaconImplementationNotReleased`: a candidate's address moves with its source.
-The deploy key is never a declared owner; seat governance from the first state.
+`owner()` at that owner, and each suite it names live there as any suite is. A
+suite a beacon names MUST be released, refused otherwise with
+`BeaconSuiteNotReleased`: a candidate's address moves with its source. Name a
+beacon this repo deploys by its suite key in `beaconSuite`, and one it did not
+deploy by `beacon` and `beaconCodeHash`; naming both or neither is refused with
+`BeaconNamedTwice` or `BeaconUnnamed`. `beacons` is asked about every catalogue
+network, and one outside `supportedNetworks()` with a beacon is refused with
+`BeaconsOnUncheckedNetwork`. A beacon with transitions reads `MigrationRegistry`
+on its network, which MUST be deployed there. The chain group reads `owner()`
+only: assert any other authority a beacon exposes (a pending owner, roles)
+yourself, including that the deploy key holds none of it. The deploy key is
+never a declared owner; seat governance from the first state.
 
 ## Deploy verification
 
