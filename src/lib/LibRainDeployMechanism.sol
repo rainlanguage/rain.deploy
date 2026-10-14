@@ -388,9 +388,10 @@ library LibRainDeployMechanism {
         returns (address[] memory, uint256[] memory)
     {
         if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
-            return LibRainDeployClone.cloneNetworksAndBroadcast(
+            (address[] memory cloneAddresses, uint256[] memory cloneForkIds) = LibRainDeployClone.cloneNetworksAndBroadcast(
                 vm, networks, deployerPrivateKey, cloneNetworks(suite), suite.storedBytecodeHash, suite.dependencies
             );
+            return (cloneAddresses, cloneForkIds);
         }
         address deployed;
         uint256[] memory forkIds;
