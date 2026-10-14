@@ -20,7 +20,7 @@ library LibTimelockControllerDeploy {
     /// `LibTimelockController.assertTimelockState` with no further cancellers.
     /// A fresh deploy needs no such check: the address is a function of the
     /// init code, so the contract landing there was constructed from exactly
-    /// `timelockInitCode(minDelay, proposer)` in this transaction.
+    /// `timelockInitCode(creationCode, minDelay, proposer)` in this transaction.
     ///
     /// `expectedTimelock` is the caller's pinned address and is refused, before
     /// anything is read from the chain, unless it is the address the parameters
@@ -36,6 +36,8 @@ library LibTimelockControllerDeploy {
     /// @param vm The Vm to broadcast with.
     /// @param network The selected fork's network name, for refusals to name.
     /// @param deployer The address the deploy is broadcast from.
+    /// @param creationCode The `CREATION_CODE` of the generation to deploy.
+    /// @param bytecodeHash The `BYTECODE_HASH` of that generation.
     /// @param minDelay The minimum delay in seconds.
     /// @param proposer The sole proposer.
     /// @param expectedTimelock The address the caller expects the timelock at.
@@ -44,11 +46,13 @@ library LibTimelockControllerDeploy {
         Vm vm,
         string memory network,
         address deployer,
+        bytes memory creationCode,
+        bytes32 bytecodeHash,
         uint256 minDelay,
         address proposer,
         address expectedTimelock
     ) internal returns (address) {
-        bytes memory initCode = LibTimelockController.timelockInitCode(minDelay, proposer);
+        bytes memory initCode = LibTimelockController.timelockInitCode(creationCode, minDelay, proposer);
         address derived = LibRainDeploy.zoltuAddress(initCode);
         if (derived != expectedTimelock) {
             revert LibRainDeploy.UnexpectedDeployedAddress(expectedTimelock, derived);
@@ -56,7 +60,7 @@ library LibTimelockControllerDeploy {
 
         address[] memory noCancellers = new address[](0);
         if (derived.code.length != 0) {
-            LibTimelockController.assertTimelockState(derived, minDelay, proposer, noCancellers);
+            LibTimelockController.assertTimelockState(bytecodeHash, derived, minDelay, proposer, noCancellers);
             console2.log(" - Timelock already deployed, skipping:", derived);
             return derived;
         }
