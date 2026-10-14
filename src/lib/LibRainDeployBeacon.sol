@@ -38,6 +38,14 @@ struct DeployBeacon {
     BeaconTransition[] transitions;
 }
 
+/// A beacon and the network it is on.
+/// @param chainId The network's chain id.
+/// @param beacon The beacon.
+struct ChainBeacon {
+    uint256 chainId;
+    DeployBeacon beacon;
+}
+
 library LibRainDeployBeacon {
     /// Zero for `initial`, else one past the latest transition the selected fork's registry reports applied.
     /// @param beacon The beacon.

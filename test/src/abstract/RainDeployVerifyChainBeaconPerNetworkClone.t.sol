@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
-import {BeaconState, DeployBeacon} from "../../../src/lib/LibRainDeployBeacon.sol";
+import {BeaconState, ChainBeacon} from "../../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {PerNetworkCloneDeploys} from "../../abstract/PerNetworkCloneDeploys.sol";
@@ -24,14 +24,13 @@ contract RainDeployVerifyChainBeaconPerNetworkCloneTest is PerNetworkCloneDeploy
         return PerNetworkCloneDeploys.supportedNetworks();
     }
 
-    function beacons(uint256 chainId) internal view override returns (DeployBeacon[] memory) {
-        DeployBeacon[] memory onChain = new DeployBeacon[](chainId == 137 ? 1 : 0);
-        if (onChain.length == 1) {
-            onChain[0].beacon = sBeacon;
-            onChain[0].beaconCodeHash = sBeacon.codehash;
-            onChain[0].initial = BeaconState({implementation: "per-network-clone@0_0_1", owner: OWNER});
-        }
-        return onChain;
+    function beacons() internal view override returns (ChainBeacon[] memory) {
+        ChainBeacon[] memory chainBeacons = new ChainBeacon[](1);
+        chainBeacons[0].chainId = 137;
+        chainBeacons[0].beacon.beacon = sBeacon;
+        chainBeacons[0].beacon.beaconCodeHash = sBeacon.codehash;
+        chainBeacons[0].beacon.initial = BeaconState({implementation: "per-network-clone@0_0_1", owner: OWNER});
+        return chainBeacons;
     }
 
     function setUp() external {

@@ -11,12 +11,12 @@ import {
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     BeaconNamedTwice,
-    BeaconsOnUncheckedNetwork,
+    BeaconOnUncheckedNetwork,
     BeaconSuiteNotReleased,
     BeaconUnnamed,
     RainDeployVerifyChain
 } from "../../../src/abstract/RainDeployVerifyChain.sol";
-import {BeaconState, BeaconTransition, DeployBeacon} from "../../../src/lib/LibRainDeployBeacon.sol";
+import {BeaconState, BeaconTransition, ChainBeacon, DeployBeacon} from "../../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {
@@ -39,7 +39,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     address constant BEACON_DEPENDENCY = address(0xBDE9);
     bytes constant BEACON_DEPENDENCY_CODE = hex"02";
 
-    mapping(uint256 => DeployBeacon[]) internal sBeacons;
+    ChainBeacon[] internal sBeacons;
     address internal sBeacon;
     address internal sImplementation;
     address internal sUpgrade;
@@ -114,8 +114,8 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         );
     }
 
-    function beacons(uint256 chainId) internal view override returns (DeployBeacon[] memory) {
-        return sBeacons[chainId];
+    function beacons() internal view override returns (ChainBeacon[] memory) {
+        return sBeacons;
     }
 
     function supportedNetworks() internal view override returns (string[] memory) {
@@ -160,7 +160,9 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function declare(uint256 chainId, DeployBeacon memory beacon) internal {
-        DeployBeacon storage stored = sBeacons[chainId].push();
+        ChainBeacon storage chainBeacon = sBeacons.push();
+        chainBeacon.chainId = chainId;
+        DeployBeacon storage stored = chainBeacon.beacon;
         stored.beaconSuite = beacon.beaconSuite;
         stored.beacon = beacon.beacon;
         stored.beaconCodeHash = beacon.beaconCodeHash;
@@ -198,6 +200,10 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
 
     function externalCheckDeployedOnNetworks(SupportedNetwork[] memory networks) external {
         checkDeployedOnNetworks(networks, new DeploySuite[](0));
+    }
+
+    function externalResolveBeacons(SupportedNetwork[] memory networks) external {
+        resolveBeacons(networks);
     }
 
     function externalCheckDeployedOnSupportedNetworks() external {
@@ -433,11 +439,34 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         this.externalCheckDeployedOnNetworks(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
     }
 
-    function testBeaconsOnAnUncheckedNetworkAreRefused() external {
+    function testBeaconOnAnUncheckedCatalogueNetworkIsRefused() external {
         supportOnly(LibRainDeploy.ARBITRUM_ONE, "");
+        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         declare(1, declared("beacon-implementation@0_0_1", OWNER));
-        vm.expectRevert(abi.encodeWithSelector(BeaconsOnUncheckedNetwork.selector, 1));
+        vm.expectRevert(abi.encodeWithSelector(BeaconOnUncheckedNetwork.selector, 1, 1));
         this.externalCheckDeployedOnSupportedNetworks();
+    }
+
+    function testBeaconOnAChainIdOutsideTheCatalogueIsRefused() external {
+        declare(42162, declared("beacon-implementation@0_0_1", OWNER));
+        vm.expectRevert(abi.encodeWithSelector(BeaconOnUncheckedNetwork.selector, 42162, 0));
+        this.externalCheckDeployedOnSupportedNetworks();
+    }
+
+    function testBeaconOnAnEarlierCheckedNetworkResolves() external {
+        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        this.externalResolveBeacons(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
+    }
+
+    function testEachReleasedSuiteBeaconsNameIsDerivedOnce() external {
+        declare(42161, migrating("beacon-upgrade@0_0_1", OWNER));
+        declare(8453, declared("beacon-implementation@0_0_1", OWNER));
+        declare(42161, bySuite("beacon@0_0_1", OWNER));
+        declare(8453, declared("beacon-upgrade@0_0_1", OWNER));
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployableV2).creationCode, 1);
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployable).creationCode, 1);
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, beaconCreationCode(), 1);
+        this.externalResolveBeacons(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
     }
 
     function testBeaconsOnEveryCheckedNetworkAreAccepted() external {
@@ -522,6 +551,22 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         unnamed.beaconCodeHash = bytes32(0);
         declare(42161, unnamed);
         vm.expectRevert(abi.encodeWithSelector(BeaconUnnamed.selector, 42161, 1));
+        this.externalCheckDeployedOnNetworks(arbitrum());
+    }
+
+    function testBeaconNamedByAddressAloneIsRefused() external {
+        DeployBeacon memory beacon = declared("beacon-implementation@0_0_1", OWNER);
+        beacon.beaconCodeHash = bytes32(0);
+        declare(42161, beacon);
+        vm.expectRevert(abi.encodeWithSelector(BeaconUnnamed.selector, 42161, 0));
+        this.externalCheckDeployedOnNetworks(arbitrum());
+    }
+
+    function testBeaconNamedByCodeHashAloneIsRefused() external {
+        DeployBeacon memory beacon = declared("beacon-implementation@0_0_1", OWNER);
+        beacon.beacon = address(0);
+        declare(42161, beacon);
+        vm.expectRevert(abi.encodeWithSelector(BeaconUnnamed.selector, 42161, 0));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 }
