@@ -353,7 +353,9 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         StaleCodeHashDeploy staleHash = new StaleCodeHashDeploy();
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.UnexpectedDeployedCodeHash.selector,
+                LibRainDeploy.CodeHashMismatchOnNetwork.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
                 STALE_CODE_HASH,
                 keccak256(type(MockDeployableV2).runtimeCode)
             )

@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {NotDeployedOnNetwork, RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
+import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {CloneNetworks, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
 import {
@@ -82,9 +82,7 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         assertNotEq(polygonAddress, perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID));
         vm.etch(polygonAddress, hex"");
         vm.expectRevert(
-            abi.encodeWithSelector(
-                NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, suites[0].suite, polygonAddress
-            )
+            abi.encodeWithSelector(LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, polygonAddress)
         );
         this.externalCheckDeployedOnSupportedNetworks(suites);
     }
@@ -96,7 +94,7 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         vm.etch(arbitrumAddress, hex"");
         vm.expectRevert(
             abi.encodeWithSelector(
-                NotDeployedOnNetwork.selector, LibRainDeploy.ARBITRUM_ONE, suites[0].suite, arbitrumAddress
+                LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.ARBITRUM_ONE, arbitrumAddress
             )
         );
         this.externalCheckDeployedOnSupportedNetworks(suites);

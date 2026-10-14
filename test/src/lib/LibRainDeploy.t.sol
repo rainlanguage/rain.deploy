@@ -860,9 +860,8 @@ contract LibRainDeployTest is Test {
         );
     }
 
-    /// `deployToNetworks` MUST revert with `UnexpectedDeployedCodeHash` when the
-    /// deployed code hash does not match the expected code hash.
-    function testUnexpectedDeployedCodeHashReverts() external {
+    /// `deployToNetworks` MUST refuse deployed code whose hash is not the expected one.
+    function testDeployToNetworksRefusesAWrongCodeHash() external {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         DeployDependency[] memory dependencies = new DeployDependency[](0);
@@ -870,7 +869,11 @@ contract LibRainDeployTest is Test {
         bytes32 wrongCodeHash = bytes32(uint256(1));
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.UnexpectedDeployedCodeHash.selector, wrongCodeHash, mockDeployableCodeHash()
+                LibRainDeploy.CodeHashMismatchOnNetwork.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                expectedAddress,
+                wrongCodeHash,
+                mockDeployableCodeHash()
             )
         );
         this.externalDeployToNetworks(
@@ -922,13 +925,10 @@ contract LibRainDeployTest is Test {
         assertEq(result, mockDeployableAddress());
     }
 
-    /// `deployToNetworks` MUST skip an already-deployed network WITHOUT checking
-    /// its dependencies. A rerun on a network that no longer needs deployment is
-    /// a clean no-op even when a dependency is now missing, because the
-    /// dependency check only guards the deploy path.
-    function testDeployToNetworksSkipsAlreadyDeployedWithMissingDependency() external {
+    /// Puts `MockDeployable` on Arbitrum persistently, so a deploy there takes the skip branch.
+    /// @return The network list naming Arbitrum.
+    function alreadyDeployedOnArbitrum() internal returns (string[] memory) {
         vm.makePersistent(address(this));
-
         vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
         address deployed = this.externalDeployZoltu(type(MockDeployable).creationCode);
         assertEq(deployed, mockDeployableAddress());
@@ -936,21 +936,54 @@ contract LibRainDeployTest is Test {
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        // A dependency with no code: it would revert MissingDependency on the
-        // deploy path, but the target is already deployed so it is never checked.
+        return networks;
+    }
+
+    function testDeployToNetworksRefusesAnAlreadyDeployedNetworkMissingADependency() external {
+        string[] memory networks = alreadyDeployedOnArbitrum();
         DeployDependency[] memory dependencies = new DeployDependency[](1);
         dependencies[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: ABSENT_RUNTIME_CODE});
 
-        (address result,) = this.externalDeployToNetworks(
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdead)
+            )
+        );
+        this.externalDeployToNetworks(
             networks,
             address(this),
             type(MockDeployable).creationCode,
-            "test/concrete/MockDeployable.sol:MockDeployable",
+            "",
             mockDeployableAddress(),
             mockDeployableCodeHash(),
             dependencies
         );
-        assertEq(result, mockDeployableAddress());
+    }
+
+    function testDeployToNetworksRefusesAnAlreadyDeployedNetworkWithAChangedDependency() external {
+        string[] memory networks = alreadyDeployedOnArbitrum();
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] =
+            DeployDependency({deployedAddress: LibRainDeploy.ZOLTU_FACTORY, runtimeCode: WRONG_RUNTIME_CODE});
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                LibRainDeploy.ZOLTU_FACTORY,
+                keccak256(WRONG_RUNTIME_CODE),
+                LibRainDeploy.ZOLTU_FACTORY_CODEHASH
+            )
+        );
+        this.externalDeployToNetworks(
+            networks,
+            address(this),
+            type(MockDeployable).creationCode,
+            "",
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            dependencies
+        );
     }
 
     /// `deployToNetworks` MUST skip an already-deployed network WITHOUT reading
@@ -2417,7 +2450,11 @@ contract LibRainDeployTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeploy.UnexpectedDeployedCodeHash.selector, mockDeployableCodeHash(), keccak256(hex"00")
+                LibRainDeploy.CodeHashMismatchOnNetwork.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                expectedAddress,
+                mockDeployableCodeHash(),
+                keccak256(hex"00")
             )
         );
         this.externalDeployToNetworks(

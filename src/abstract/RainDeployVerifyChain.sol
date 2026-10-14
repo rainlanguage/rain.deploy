@@ -2,34 +2,11 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
+import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
-
-/// Thrown when a version's derived address has no code on a network. Either it
-/// never deployed there, or it is not there any more.
-/// @param network The network name, as configured in `[rpc_endpoints]`.
-/// @param suite The suite that is missing.
-/// @param deployedAddress The address that should hold it.
-error NotDeployedOnNetwork(string network, string suite, address deployedAddress);
-
-/// Thrown when a version's derived address holds code that is not the code its
-/// creation code produces.
-///
-/// This is also what a chain-dependent runtime code looks like: a constructor
-/// that reads `block.chainid` or similar deploys different code per network,
-/// so one network disagrees while others pass. That is a defect in the
-/// contract, not a shortcoming of a single recorded hash — hence a hard failure
-/// naming the chain and both hashes, rather than a per-chain hash to record.
-/// @param network The network name, as configured in `[rpc_endpoints]`.
-/// @param suite The suite that failed.
-/// @param deployedAddress The address checked.
-/// @param expectedCodeHash The code hash the version's creation code produces.
-/// @param actualCodeHash The code hash actually found on this network.
-error CodeHashMismatchOnNetwork(
-    string network, string suite, address deployedAddress, bytes32 expectedCodeHash, bytes32 actualCodeHash
-);
 
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the
@@ -85,8 +62,8 @@ error CodeHashMismatchOnNetwork(
 /// reverts and the run stops on that network, so a release that reached one
 /// network of nine is enumerated one red run per cell.
 ///
-/// That is the trade, not an oversight. The error names the network, the suite
-/// and the address, so a run that names one cell is actionable on its own;
+/// That is the trade, not an oversight. The error names the network and the
+/// address, and the log the suite, so one cell is actionable on its own;
 /// deploying is idempotent by construction, so a partial release is fixed by
 /// running the deploy again rather than by knowing the whole shape first; and
 /// stopping spends no further RPC on a run whose answer is already red.
@@ -109,27 +86,6 @@ error CodeHashMismatchOnNetwork(
 /// own so that binding the snapshot half alone remains a thing a
 /// credential-free job can do.
 abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
-    /// Checks one suite's address against whichever network is currently
-    /// selected.
-    /// @param network The network name, for the error only.
-    /// @param suite The suite's key, for the error only.
-    /// @param deployedAddress The suite's derived address on this network.
-    /// @param bytecodeHash The suite's derived code hash.
-    function checkDeployedOnNetwork(
-        string memory network,
-        string memory suite,
-        address deployedAddress,
-        bytes32 bytecodeHash
-    ) internal view {
-        if (deployedAddress.code.length == 0) {
-            revert NotDeployedOnNetwork(network, suite, deployedAddress);
-        }
-        bytes32 actualCodeHash = deployedAddress.codehash;
-        if (actualCodeHash != bytecodeHash) {
-            revert CodeHashMismatchOnNetwork(network, suite, deployedAddress, bytecodeHash, actualCodeHash);
-        }
-    }
-
     /// Checks every suite against every supported network: `checkDeployedOnNetworks`
     /// over the catalogue entries `LibRainDeploy.declaredNetworkConfigs` gives
     /// for `supportedNetworks()`.
@@ -161,9 +117,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// entry declares, by `LibRainDeploy.checkNetworkChainId` — the check a
     /// broadcast makes there — since every address checked on it was resolved
     /// from that chain id. Then every suite's declared dependencies are checked
-    /// before its address, by `LibRainDeploy.checkDeclaredDependencies` — the
-    /// check a broadcast makes before deploying there. A suite's code is what
-    /// it is with them: a clone's runtime code says only WHICH implementation
+    /// before its code, by `LibRainDeploy.checkDeclaredDependencies` and
+    /// `LibRainDeploy.checkDeployedCode`, as a broadcast does. A suite's code
+    /// is what it is with them: a clone's runtime code says only WHICH implementation
     /// it delegates to, so a clone at its address over an implementation that
     /// is missing or changed has the right code hash and does not work.
     /// @param networks The catalogue entry of each network to check on.
@@ -197,8 +153,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             vm.selectFork(forkIds[i]);
             LibRainDeploy.checkNetworkChainId(networks[i]);
             for (uint256 j = 0; j < suites.length; j++) {
+                console2.log("Checking suite on network:", derived[j].suite, networks[i].name);
                 LibRainDeploy.checkDeclaredDependencies(networks[i].name, suites[j].dependencies);
-                checkDeployedOnNetwork(networks[i].name, derived[j].suite, addresses[i][j], derived[j].bytecodeHash);
+                LibRainDeploy.checkDeployedCode(networks[i].name, addresses[i][j], derived[j].bytecodeHash);
             }
         }
     }
