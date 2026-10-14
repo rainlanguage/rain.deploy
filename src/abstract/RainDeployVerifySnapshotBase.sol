@@ -41,18 +41,19 @@ error FrozenSnapshotNotReleased(string path);
 /// @param records The record files declaring them, up to and including `path`.
 /// @param released The released suites whose mechanism derives them.
 error FrozenSnapshotsOutnumberReleases(string path, address[] deployedAddresses, uint256 records, uint256 released);
-
-/// Thrown when a file in the frozen record declares no deployed address, or
+/// Thrown when a file in the frozen record declares no deployed address,
 /// declares one as `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in
-/// decimal digits. The record holds generated snapshots and nothing else, and
+/// decimal digits, or declares one whose value does not read as an address.
+/// The record holds generated snapshots and nothing else, and
 /// `DEPLOYED_ADDRESS` is what makes one the record of a deployment rather than
 /// a file that happens to be in a release directory. Distinct from
 /// `FrozenSnapshotNotReleased`, which is a declaration that is missing
 /// something — this is a record that cannot be read at all, and reporting it as
 /// undeclared would send the reader after the wrong thing.
 /// @param path The record file with no `DEPLOYED_ADDRESS` or
-/// `DEPLOYED_ADDRESS_<chainId>` declaration, or with a `DEPLOYED_ADDRESS_<x>`
-/// whose `<x>` is not decimal.
+/// `DEPLOYED_ADDRESS_<chainId>` declaration, with a `DEPLOYED_ADDRESS_<x>`
+/// whose `<x>` is not decimal, or with a declared value that is not an
+/// address.
 error FrozenSnapshotUnreadable(string path);
 
 /// Thrown when a file in the frozen record declares its deployed address more
@@ -242,7 +243,8 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// The whole record is scanned before a match is read, so a record
     /// carrying `DEPLOYED_ADDRESS` twice, one chain id twice, or both forms is
     /// refused rather than resolved by position. A per-network declaration's
-    /// chain id is read by `declaredChainId`.
+    /// chain id is read by `declaredChainId`, and every declaration's address
+    /// by `declaredAddress`.
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
     /// @return The chain id each address is for: empty for a record declaring
@@ -267,9 +269,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
                 revert FrozenSnapshotAmbiguous(path);
             }
             string[] memory tokens = vm.split(lines[i], " ");
-            address declared = vm.parseAddress(
-                vm.replace(vm.replace(vm.replace(tokens[tokens.length - 1], "address(", ""), ")", ""), ";", "")
-            );
+            address declared = declaredAddress(path, tokens[tokens.length - 1]);
             if (isEveryNetwork) {
                 everyNetwork = true;
                 addresses[0] = declared;
@@ -295,6 +295,24 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
             mstore(addresses, addressesLength)
         }
         return (chainIds, addresses);
+    }
+
+    /// The address a declaration line's value names: its last token with the
+    /// `address(` wrapper and the terminator stripped.
+    ///
+    /// A value `vm.parseAddress` cannot read is not one the generator writes,
+    /// and the record is refused as `FrozenSnapshotUnreadable` rather than by
+    /// the cheatcode's untyped revert.
+    /// @param path The record file, for the error only.
+    /// @param value The declaration line's last token.
+    /// @return The address.
+    function declaredAddress(string memory path, string memory value) internal pure returns (address) {
+        string memory bare = vm.replace(vm.replace(vm.replace(value, "address(", ""), ")", ""), ";", "");
+        try vm.parseAddress(bare) returns (address declared) {
+            return declared;
+        } catch {
+            revert FrozenSnapshotUnreadable(path);
+        }
     }
 
     /// The chain id a per-network declaration line names: the characters from

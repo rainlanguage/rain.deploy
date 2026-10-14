@@ -292,4 +292,29 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         assertEq(chainIds[0], type(uint256).max);
         assertEq(addresses[0], address(0xcafe));
     }
+
+    /// A declaration whose value is not an address makes the record
+    /// unreadable, typed and naming the file, in both the every-network and the
+    /// per-network form: no value, a value that is not hexadecimal, one byte
+    /// too many, and one byte too few.
+    function testDeclarationWithAMalformedAddressIsUnreadable() external {
+        string[] memory values = new string[](4);
+        values[0] = "=";
+        values[1] = "address(0xnothex);";
+        values[2] = "address(0x000000000000000000000000000000000000cafe00);";
+        values[3] = "address(0x00000000000000000000000000000000cafe);";
+        for (uint256 i = 0; i < values.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol", string.concat("address constant DEPLOYED_ADDRESS = ", values[i], "\n")
+            );
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol",
+                string.concat(
+                    perNetworkLine(42161, address(0xbeef)), "address constant DEPLOYED_ADDRESS_137 = ", values[i], "\n"
+                )
+            );
+        }
+    }
 }
