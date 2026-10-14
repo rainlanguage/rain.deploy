@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
-import {DeployDependency, LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
+import {DeployDependency, LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
@@ -392,90 +392,96 @@ contract LibRainDeployTest is Test {
         this.externalDeployToNetworks(networks, address(this), hex"", "", address(0), bytes32(0), dependencies);
     }
 
-    /// `deployStepToNetworks` MUST revert with `NoNetworks` when given an empty
-    /// networks array, and it has to be ASKED directly, because nothing above it
-    /// can ask on its behalf.
-    ///
-    /// `deployToNetworks`, `deployAndBroadcast`, `cloneToNetworks` and
-    /// `cloneAndBroadcast` all carry the same guard and all sit above this one, so
-    /// each of their empty-list tests is answered by its own guard and none of
-    /// them can see whether this one is still here. Without it the loop forks
-    /// nothing, iterates nothing and RETURNS — reporting the declared address as
-    /// deployed, to no network at all, which is the one failure the guard exists
-    /// to make impossible.
+    /// `deployStepToNetworks` MUST revert with `NoNetworks` on an empty list;
+    /// every entry point's own guard sits above it and cannot show it is there.
     function testDeployStepToNetworksNoNetworksReverts() external {
-        string[] memory networks = new string[](0);
-        DeployDependency[] memory dependencies = new DeployDependency[](0);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalDeployStepToNetworks(networks, address(this), address(0), bytes32(0), dependencies);
-    }
-
-    /// External wrapper for `deployStepToNetworks` with the per-network lists
-    /// given as they are, through the step that cannot run.
-    /// @param networks The list of network names to deploy to.
-    /// @param stepData The step data per network.
-    /// @param expectedAddresses The expected address per network.
-    /// @return The fork each network was deployed on.
-    function externalDeployStepToNetworksPerNetwork(
-        string[] memory networks,
-        bytes[] memory stepData,
-        address[] memory expectedAddresses
-    ) external returns (uint256[] memory) {
-        uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
-            vm,
-            networks,
-            address(this),
-            unreachableDeployStep,
-            stepData,
-            expectedAddresses,
-            bytes32(0),
-            new DeployDependency[](0)
+        this.externalDeployStepToNetworksPerNetwork(
+            new SupportedNetwork[](0), LibRainDeploy.everyNetwork(0, hex"", address(0), address(0))
         );
-        return forkIds;
     }
 
-    /// `deployStepToNetworks` MUST refuse step data or expected addresses that
-    /// do not pair one for one with the networks, each list on its own and in
-    /// either direction, and MUST do it before forking anything. The lists are
-    /// read by position, so a short one deploys one network's data on another,
-    /// and a long one has entries no network is deployed with.
+    /// External wrapper for `deployStepToNetworks` through the step that
+    /// cannot run.
+    /// @param networks The networks.
+    /// @param deploys The per-network lists.
+    /// @return The fork of each network.
+    function externalDeployStepToNetworksPerNetwork(SupportedNetwork[] memory networks, NetworkDeploys memory deploys)
+        external
+        returns (uint256[] memory)
+    {
+        return LibRainDeploy.deployStepToNetworks(
+            vm, networks, address(this), unreachableDeployStep, deploys, bytes32(0), new DeployDependency[](0)
+        );
+    }
+
+    /// Per-network lists of the given lengths.
+    /// @param stepDataLength Step data count.
+    /// @param expectedLength Expected address count.
+    /// @param derivedLength Derived address count.
+    /// @return The lists.
+    function networkDeploysOfLengths(uint256 stepDataLength, uint256 expectedLength, uint256 derivedLength)
+        internal
+        pure
+        returns (NetworkDeploys memory)
+    {
+        return NetworkDeploys({
+            deployStepData: new bytes[](stepDataLength),
+            expectedAddresses: new address[](expectedLength),
+            derivedAddresses: new address[](derivedLength)
+        });
+    }
+
+    /// `deployStepToNetworks` MUST refuse any per-network list that does not
+    /// pair one for one with the networks, short or long, before forking.
     function testDeployStepToNetworksUnpairedListsRevert() external {
-        string[] memory networks = new string[](2);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        networks[1] = LibRainDeploy.POLYGON;
+        string[] memory names = new string[](2);
+        names[0] = LibRainDeploy.ARBITRUM_ONE;
+        names[1] = LibRainDeploy.POLYGON;
+        SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(names);
 
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 1, 2));
-        this.externalDeployStepToNetworksPerNetwork(networks, new bytes[](1), new address[](2));
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 1, 2, 2));
+        this.externalDeployStepToNetworksPerNetwork(networks, networkDeploysOfLengths(1, 2, 2));
 
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 3, 2));
-        this.externalDeployStepToNetworksPerNetwork(networks, new bytes[](3), new address[](2));
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 3, 2, 2));
+        this.externalDeployStepToNetworksPerNetwork(networks, networkDeploysOfLengths(3, 2, 2));
 
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 2, 1));
-        this.externalDeployStepToNetworksPerNetwork(networks, new bytes[](2), new address[](1));
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 2, 1, 2));
+        this.externalDeployStepToNetworksPerNetwork(networks, networkDeploysOfLengths(2, 1, 2));
 
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 2, 3));
-        this.externalDeployStepToNetworksPerNetwork(networks, new bytes[](2), new address[](3));
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 2, 3, 2));
+        this.externalDeployStepToNetworksPerNetwork(networks, networkDeploysOfLengths(2, 3, 2));
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 2, 2, 1));
+        this.externalDeployStepToNetworksPerNetwork(networks, networkDeploysOfLengths(2, 2, 1));
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployStepNetworksMismatch.selector, 2, 2, 2, 3));
+        this.externalDeployStepToNetworksPerNetwork(networks, networkDeploysOfLengths(2, 2, 3));
 
         (bool forked,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", uint256(0)));
         assertFalse(forked, "the loop forked a network before refusing the lists");
     }
 
-    /// `everyNetwork` MUST hand back the one step data and the one address
+    /// `everyNetwork` MUST repeat its step data, expected and derived address
     /// once per network.
     /// @param length How many networks.
     /// @param stepData The step data.
-    /// @param expectedAddress The address.
-    function testEveryNetworkRepeatsOneEntryPerNetwork(uint8 length, bytes memory stepData, address expectedAddress)
-        external
-        pure
-    {
-        (bytes[] memory everyStepData, address[] memory everyExpectedAddress) =
-            LibRainDeploy.everyNetwork(length, stepData, expectedAddress);
-        assertEq(everyStepData.length, length);
-        assertEq(everyExpectedAddress.length, length);
+    /// @param expectedAddress The expected address.
+    /// @param derivedAddress The derived address.
+    function testEveryNetworkRepeatsOneEntryPerNetwork(
+        uint8 length,
+        bytes memory stepData,
+        address expectedAddress,
+        address derivedAddress
+    ) external pure {
+        NetworkDeploys memory deploys = LibRainDeploy.everyNetwork(length, stepData, expectedAddress, derivedAddress);
+        assertEq(deploys.deployStepData.length, length);
+        assertEq(deploys.expectedAddresses.length, length);
+        assertEq(deploys.derivedAddresses.length, length);
         for (uint256 i = 0; i < length; i++) {
-            assertEq(everyStepData[i], stepData);
-            assertEq(everyExpectedAddress[i], expectedAddress);
+            assertEq(deploys.deployStepData[i], stepData);
+            assertEq(deploys.expectedAddresses[i], expectedAddress);
+            assertEq(deploys.derivedAddresses[i], derivedAddress);
         }
     }
 
@@ -624,36 +630,6 @@ contract LibRainDeployTest is Test {
     /// @return Never: this always reverts.
     function unreachableDeployStep(Vm, string memory, address, bytes memory) internal pure returns (address) {
         revert DeployStepWasReached();
-    }
-
-    /// External wrapper for `deployStepToNetworks` so that `vm.expectRevert` works
-    /// at the correct call depth.
-    ///
-    /// The step is one that cannot run. `deployStepToNetworks` is the shared loop
-    /// and takes its mechanism as a parameter, so a test that reaches a step would
-    /// be testing that step rather than the loop; a step that reports being
-    /// reached makes "the loop refused before running anything" an assertion
-    /// rather than a hope.
-    /// @param networks The list of network names to deploy to.
-    /// @param deployer The deployer address.
-    /// @param expectedAddress The expected deterministic address.
-    /// @param expectedCodeHash The expected code hash of the deployed contract.
-    /// @param dependencies The addresses that must already have code on a
-    /// network, each paired with the runtime code that must be at it.
-    /// @return The fork each network was deployed on.
-    function externalDeployStepToNetworks(
-        string[] memory networks,
-        address deployer,
-        address expectedAddress,
-        bytes32 expectedCodeHash,
-        DeployDependency[] memory dependencies
-    ) external returns (uint256[] memory) {
-        (bytes[] memory stepData, address[] memory expectedAddresses) =
-            LibRainDeploy.everyNetwork(networks.length, hex"", expectedAddress);
-        uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
-            vm, networks, deployer, unreachableDeployStep, stepData, expectedAddresses, expectedCodeHash, dependencies
-        );
-        return forkIds;
     }
 
     /// External wrapper for `deployZoltu` so that it can be called on a fork.

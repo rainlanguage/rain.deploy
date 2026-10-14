@@ -4,15 +4,20 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {CloneNetwork, CloneNetworks, CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
+import {
+    CLONE_ARTIFACT_PATH,
+    CloneNetwork,
+    CloneNetworks,
+    CloneTarget,
+    LibRainDeployClone
+} from "../../../src/lib/LibRainDeployClone.sol";
+import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
+import {DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     exampleCloneDependencies,
     exampleCloneFactory,
     exampleCloneImplementation
 } from "../../abstract/ExampleCloneDeploys.sol";
-import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
-import {MockCloneable} from "../../concrete/MockCloneable.sol";
-import {MockUncloneableMispredictingCloneFactory} from "../../concrete/MockUncloneableMispredictingCloneFactory.sol";
 
 /// @title LibRainDeployClonePerNetworkTest
 /// Tests for `LibRainDeployClone`'s per-network clone: the checks on a
@@ -82,30 +87,8 @@ contract LibRainDeployClonePerNetworkTest is Test {
         return LibRainDeployClone.cloneNetworkIndex(clones, chainId);
     }
 
-    /// @param network The network name.
-    /// @param deployer The address to broadcast as.
-    /// @param stepData The `abi.encode`d chain id and `CloneTarget`.
-    /// @return The address the step deployed to.
-    function externalCloneNetworkDeployStep(string memory network, address deployer, bytes memory stepData)
-        external
-        returns (address)
-    {
-        return LibRainDeployClone.cloneNetworkDeployStep(vm, network, deployer, stepData);
-    }
-
-    /// @param networks The networks to deploy to.
-    /// @param clones The per-network clone.
-    /// @return The clone's address on each network.
-    /// @return The fork each network was deployed on.
-    function externalCloneNetworksToNetworks(string[] memory networks, CloneNetworks memory clones)
-        external
-        returns (address[] memory, uint256[] memory)
-    {
-        return LibRainDeployClone.cloneNetworksToNetworks(
-            vm, networks, address(this), clones, bytes32(0), exampleCloneDependencies()
-        );
-    }
-
+    /// `LibRainDeployMechanism.deployAndBroadcast` over a `ClonePerNetwork`
+    /// suite.
     /// @param networks The networks to deploy to.
     /// @param clones The per-network clone.
     /// @return The clone's address on each network.
@@ -114,9 +97,18 @@ contract LibRainDeployClonePerNetworkTest is Test {
         external
         returns (address[] memory, uint256[] memory)
     {
-        return LibRainDeployClone.cloneNetworksAndBroadcast(
-            vm, networks, 1, clones, bytes32(0), exampleCloneDependencies()
-        );
+        DeploySuite memory suite = DeploySuite({
+            suite: "clone-per-network",
+            creationCode: LibRainDeployClone.cloneCreationCode(clones.implementation),
+            storedDeployedAddress: address(0),
+            storedBytecodeHash: bytes32(0),
+            storedRuntimeCode: "",
+            artifactPath: CLONE_ARTIFACT_PATH,
+            dependencies: exampleCloneDependencies(),
+            mechanism: DeployMechanism.ClonePerNetwork,
+            mechanismData: abi.encode(clones)
+        });
+        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, 1, suite);
     }
 
     /// Whether any fork exists. Fork ids are handed out from zero.
@@ -191,54 +183,12 @@ contract LibRainDeployClonePerNetworkTest is Test {
         assertNotEq(clones.networks[0].deployedAddress, clones.networks[1].deployedAddress);
     }
 
-    /// The per-network step refuses a network reporting another chain id than
-    /// the one its data was resolved for, naming the network and both ids —
-    /// and refuses it before the factory is consulted at all. The factory here
-    /// mispredicts AND cannot clone, so reaching either the prediction or the
-    /// broadcast window would be a different error.
-    function testCloneNetworkDeployStepRefusesAnotherChainBeforeTheFactory() external {
-        MockUncloneableMispredictingCloneFactory factory = new MockUncloneableMispredictingCloneFactory();
-        CloneTarget memory target = CloneTarget({
-            factory: address(factory), implementation: address(new MockCloneable()), data: hex"01", salt: TEST_SALT
-        });
-        vm.chainId(42161);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRainDeployClone.CloneNetworkChainIdMismatch.selector, LibRainDeploy.POLYGON, 137, 42161
-            )
-        );
-        this.externalCloneNetworkDeployStep(LibRainDeploy.POLYGON, address(this), abi.encode(uint256(137), target));
-    }
-
-    /// On the chain its data was resolved for, the per-network step clones
-    /// with that data: the clone is at the address the data derives and was
-    /// initialized with exactly those bytes.
-    function testCloneNetworkDeployStepClonesWithTheResolvedData() external {
-        MockCloneFactory factory = new MockCloneFactory();
-        CloneTarget memory target = CloneTarget({
-            factory: address(factory),
-            implementation: address(new MockCloneable()),
-            data: abi.encode(address(0xA11CE)),
-            salt: TEST_SALT
-        });
-        vm.chainId(137);
-
-        address deployed =
-            this.externalCloneNetworkDeployStep(LibRainDeploy.POLYGON, address(this), abi.encode(uint256(137), target));
-        assertEq(deployed, LibRainDeployClone.cloneDeployedAddress(target));
-        assertEq(MockCloneable(deployed).sInitData(), target.data);
-    }
-
-    /// An empty network list is refused by both entry points, before anything
+    /// An empty network list is refused before anything
     /// is resolved: the clone here also has an entry no network names, and a
     /// stale address, neither of which is what comes back.
     function testCloneNetworksToNetworksNoNetworksReverts() external {
         CloneNetworks memory clones = exampleCloneNetworks();
         clones.networks[0].deployedAddress = address(1);
-
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalCloneNetworksToNetworks(new string[](0), clones);
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalCloneNetworksAndBroadcast(new string[](0), clones);
@@ -254,7 +204,7 @@ contract LibRainDeployClonePerNetworkTest is Test {
         networks[2] = LibRainDeploy.BASE;
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneNetworkUndeclared.selector, 8453));
-        this.externalCloneNetworksToNetworks(networks, exampleCloneNetworks());
+        this.externalCloneNetworksAndBroadcast(networks, exampleCloneNetworks());
         assertFalse(anyForkExists(), "a network was forked before the undeclared one was refused");
     }
 
@@ -273,7 +223,7 @@ contract LibRainDeployClonePerNetworkTest is Test {
         networks[1] = LibRainDeploy.POLYGON;
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
-        this.externalCloneNetworksToNetworks(networks, clones);
+        this.externalCloneNetworksAndBroadcast(networks, clones);
         assertFalse(anyForkExists(), "a network was forked before the stale address was refused");
     }
 
@@ -289,7 +239,7 @@ contract LibRainDeployClonePerNetworkTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.DuplicateCloneNetwork.selector, 42161));
-        this.externalCloneNetworksToNetworks(networks, clones);
+        this.externalCloneNetworksAndBroadcast(networks, clones);
         assertFalse(anyForkExists(), "a network was forked before the clone was checked");
     }
 }

@@ -6,7 +6,7 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
 
 import {DeployCandidate, DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
-import {LibRainDeploy} from "./LibRainDeploy.sol";
+import {LibRainDeploy, NetworkDeploys, SupportedNetwork} from "./LibRainDeploy.sol";
 import {
     CLONE_ARTIFACT_PATH,
     CLONE_UNANCHORABLE_REASON,
@@ -123,6 +123,21 @@ library LibRainDeployMechanism {
         return clones;
     }
 
+    /// The `CloneTarget` a clone suite deploys on one network: its one target
+    /// for a `Clone` suite, and the target of the network's entry for a
+    /// `ClonePerNetwork` suite, which refuses a chain id it has no entry for
+    /// with `LibRainDeployClone.CloneNetworkUndeclared`.
+    /// @param suite A suite whose mechanism is `Clone` or `ClonePerNetwork`.
+    /// @param chainId The network's chain id.
+    /// @return The target on that network.
+    function cloneTargetOn(DeploySuite memory suite, uint256 chainId) internal pure returns (CloneTarget memory) {
+        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
+            CloneNetworks memory clones = cloneNetworks(suite);
+            return LibRainDeployClone.cloneNetworkTarget(clones, LibRainDeployClone.cloneNetworkIndex(clones, chainId));
+        }
+        return cloneTarget(suite);
+    }
+
     /// The address a suite's mechanism puts it at on one network.
     ///
     /// The chain id is read only by a `ClonePerNetwork` suite, which refuses a
@@ -133,17 +148,43 @@ library LibRainDeployMechanism {
     /// @param chainId The network's chain id.
     /// @return The derived address on that network.
     function deployedAddress(DeploySuite memory suite, uint256 chainId) internal pure returns (address) {
-        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
-            CloneNetworks memory clones = cloneNetworks(suite);
-            return LibRainDeployClone.cloneDeployedAddress(
-                LibRainDeployClone.cloneNetworkTarget(clones, LibRainDeployClone.cloneNetworkIndex(clones, chainId))
-            );
+        if (suite.mechanism == DeployMechanism.Zoltu) {
+            checkZoltuMechanismData(suite);
+            return LibRainDeploy.zoltuAddress(suite.creationCode);
         }
-        if (suite.mechanism == DeployMechanism.Clone) {
-            return LibRainDeployClone.cloneDeployedAddress(cloneTarget(suite));
+        return LibRainDeployClone.cloneDeployedAddress(cloneTargetOn(suite, chainId));
+    }
+
+    /// What a suite's mechanism step is handed on one network: the creation
+    /// code for a Zoltu suite, and the `abi.encode`d `CloneTarget` it deploys
+    /// there for a clone suite.
+    /// @param suite The suite.
+    /// @param chainId The network's chain id. Read only by a `ClonePerNetwork`
+    /// suite.
+    /// @return The step data on that network.
+    function deployStepData(DeploySuite memory suite, uint256 chainId) internal pure returns (bytes memory) {
+        if (suite.mechanism == DeployMechanism.Zoltu) {
+            checkZoltuMechanismData(suite);
+            return suite.creationCode;
         }
-        checkZoltuMechanismData(suite);
-        return LibRainDeploy.zoltuAddress(suite.creationCode);
+        return abi.encode(cloneTargetOn(suite, chainId));
+    }
+
+    /// A suite's mechanism as a `LibRainDeploy.deployStepToNetworks` step:
+    /// `LibRainDeploy.zoltuDeployStep` for a Zoltu suite and
+    /// `LibRainDeployClone.cloneDeployStep` for either clone mechanism, whose
+    /// step data is the one network's `CloneTarget` either way.
+    /// @param suite The suite.
+    /// @return The step.
+    function deployStep(DeploySuite memory suite)
+        internal
+        pure
+        returns (function(Vm, string memory, address, bytes memory) internal returns (address))
+    {
+        if (suite.mechanism == DeployMechanism.Zoltu) {
+            return LibRainDeploy.zoltuDeployStep;
+        }
+        return LibRainDeployClone.cloneDeployStep;
     }
 
     /// Every address a suite's mechanism derives for it, in the suite's address
@@ -183,6 +224,22 @@ library LibRainDeployMechanism {
         address[] memory addresses = new address[](1);
         addresses[0] = suite.storedDeployedAddress;
         return addresses;
+    }
+
+    /// The address a suite RECORDS for itself on one network:
+    /// `storedDeployedAddress`, or the recorded address of the network's entry
+    /// for a `ClonePerNetwork` suite, which refuses a chain id it has no entry
+    /// for with `LibRainDeployClone.CloneNetworkUndeclared`.
+    /// @param suite The suite.
+    /// @param chainId The network's chain id. Read only by a `ClonePerNetwork`
+    /// suite.
+    /// @return The recorded address on that network.
+    function recordedAddress(DeploySuite memory suite, uint256 chainId) internal pure returns (address) {
+        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
+            CloneNetworks memory clones = cloneNetworks(suite);
+            return clones.networks[LibRainDeployClone.cloneNetworkIndex(clones, chainId)].deployedAddress;
+        }
+        return suite.storedDeployedAddress;
     }
 
     /// The chain id each of a suite's addresses is for, in the suite's address
@@ -369,12 +426,26 @@ library LibRainDeployMechanism {
         return false;
     }
 
-    /// Broadcasts a suite by its mechanism, to each network, as the given key.
+    /// Broadcasts a suite by its mechanism, to each network, as the given key:
+    /// `LibRainDeploy.deployStepToNetworks` with the mechanism's `deployStep`,
+    /// over the catalogue entries `LibRainDeploy.declaredNetworkConfigs` gives
+    /// for `networks`.
     ///
-    /// The suite's RECORDED addresses and code hash are handed over, never
-    /// derived here: each mechanism compares the recorded address on every
-    /// network against its own derivation before it forks anything, and a
-    /// derived value would make that a comparison of a value with itself.
+    /// Each network's step data, recorded address and derived address are
+    /// resolved by its chain id — `deployStepData`, `recordedAddress` and
+    /// `deployedAddress` — before the key is taken up and before anything is
+    /// forked, so a suite that cannot be resolved for a network is refused
+    /// there: a per-network clone with no entry for the chain id, a clone
+    /// whose factory or implementation is undeclared, a Zoltu suite carrying
+    /// mechanism data. The RECORDED address is the one handed over as
+    /// expected, never a derived one: the loop compares the two on every
+    /// network before it forks anything, and a derived value there would make
+    /// that a comparison of a value with itself.
+    ///
+    /// A Zoltu suite then prints its `forge verify-contract` commands, through
+    /// `LibRainDeploy.logVerifyCommands`. A clone prints none: it is an
+    /// EIP-1167 proxy assembled from the implementation's address, with no
+    /// source of its own, and `CLONE_ARTIFACT_PATH` resolves to no artifact.
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param networks The networks to broadcast to.
     /// @param deployerPrivateKey The key to broadcast as.
@@ -387,42 +458,33 @@ library LibRainDeployMechanism {
         internal
         returns (address[] memory, uint256[] memory)
     {
-        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
-            (address[] memory cloneAddresses, uint256[] memory cloneForkIds) = LibRainDeployClone.cloneNetworksAndBroadcast(
-                vm, networks, deployerPrivateKey, cloneNetworks(suite), suite.storedBytecodeHash, suite.dependencies
-            );
-            return (cloneAddresses, cloneForkIds);
+        if (networks.length == 0) {
+            revert LibRainDeploy.NoNetworks();
         }
-        address deployed;
-        uint256[] memory forkIds;
-        if (suite.mechanism == DeployMechanism.Clone) {
-            (deployed, forkIds) = LibRainDeployClone.cloneAndBroadcast(
-                vm,
-                networks,
-                deployerPrivateKey,
-                cloneTarget(suite),
-                suite.storedDeployedAddress,
-                suite.storedBytecodeHash,
-                suite.dependencies
-            );
-        } else {
-            checkZoltuMechanismData(suite);
-            (deployed, forkIds) = LibRainDeploy.deployAndBroadcast(
-                vm,
-                networks,
-                deployerPrivateKey,
-                suite.creationCode,
-                suite.artifactPath,
-                suite.storedDeployedAddress,
-                suite.storedBytecodeHash,
-                suite.dependencies
-            );
+        SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
+        NetworkDeploys memory deploys = NetworkDeploys({
+            deployStepData: new bytes[](configs.length),
+            expectedAddresses: new address[](configs.length),
+            derivedAddresses: new address[](configs.length)
+        });
+        for (uint256 i = 0; i < configs.length; i++) {
+            deploys.deployStepData[i] = deployStepData(suite, configs[i].chainId);
+            deploys.expectedAddresses[i] = recordedAddress(suite, configs[i].chainId);
+            deploys.derivedAddresses[i] = deployedAddress(suite, configs[i].chainId);
         }
-        address[] memory addresses = new address[](networks.length);
-        for (uint256 i = 0; i < networks.length; i++) {
-            addresses[i] = deployed;
+        uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
+            vm,
+            configs,
+            LibRainDeploy.rememberDeployer(vm, deployerPrivateKey),
+            deployStep(suite),
+            deploys,
+            suite.storedBytecodeHash,
+            suite.dependencies
+        );
+        if (suite.mechanism == DeployMechanism.Zoltu) {
+            LibRainDeploy.logVerifyCommands(vm, networks, deploys.expectedAddresses[0], suite.artifactPath);
         }
-        return (addresses, forkIds);
+        return (deploys.expectedAddresses, forkIds);
     }
 
     /// A clone declaration as the `DeployCandidate` every other part of this

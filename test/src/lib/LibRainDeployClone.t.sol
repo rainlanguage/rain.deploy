@@ -10,6 +10,8 @@ import {
 import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
 import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
+import {DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     CLONE_ARTIFACT_PATH,
     CloneTarget,
@@ -72,32 +74,12 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         return LibRainDeployClone.cloneDeployStep(vm, network, deployer, cloneData);
     }
 
-    /// @param networks The networks to deploy to.
-    /// @param deployer The address to broadcast as.
-    /// @param clone The clone to deploy.
-    /// @param expectedAddress The declared clone address.
-    /// @param expectedCodeHash The declared clone code hash.
-    /// @param dependencies The dependencies declared beside the clone.
-    /// @return The deployed clone address.
-    /// @return The forks each network was deployed on.
-    function externalCloneToNetworks(
-        string[] memory networks,
-        address deployer,
-        CloneTarget memory clone,
-        address expectedAddress,
-        bytes32 expectedCodeHash,
-        DeployDependency[] memory dependencies
-    ) external returns (address, uint256[] memory) {
-        return LibRainDeployClone.cloneToNetworks(
-            vm, networks, deployer, clone, expectedAddress, expectedCodeHash, dependencies
-        );
-    }
-
+    /// `LibRainDeployMechanism.deployAndBroadcast` over a `Clone` suite.
     /// @param networks The networks to deploy to.
     /// @param deployerPrivateKey The key to broadcast as.
     /// @param clone The clone to deploy.
-    /// @param expectedAddress The declared clone address.
-    /// @param expectedCodeHash The declared clone code hash.
+    /// @param expectedAddress The recorded clone address.
+    /// @param expectedCodeHash The recorded clone code hash.
     /// @param dependencies The dependencies declared beside the clone.
     /// @return The deployed clone address.
     /// @return The forks each network was deployed on.
@@ -109,9 +91,20 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
     ) external returns (address, uint256[] memory) {
-        return LibRainDeployClone.cloneAndBroadcast(
-            vm, networks, deployerPrivateKey, clone, expectedAddress, expectedCodeHash, dependencies
-        );
+        DeploySuite memory suite = DeploySuite({
+            suite: "clone",
+            creationCode: LibRainDeployClone.cloneCreationCode(clone.implementation),
+            storedDeployedAddress: expectedAddress,
+            storedBytecodeHash: expectedCodeHash,
+            storedRuntimeCode: "",
+            artifactPath: CLONE_ARTIFACT_PATH,
+            dependencies: dependencies,
+            mechanism: DeployMechanism.Clone,
+            mechanismData: abi.encode(clone)
+        });
+        (address[] memory deployed, uint256[] memory forkIds) =
+            LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, suite);
+        return (deployed.length == 0 ? address(0) : deployed[0], forkIds);
     }
 
     /// `cloneCreationCode` MUST be the EIP-1167 standard's own bytes around the
@@ -460,9 +453,7 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         CloneTarget memory clone = localClone(exampleCloneFactory(), exampleCloneImplementation());
         address stale = address(uint160(LibRainDeployClone.cloneDeployedAddress(clone)) + 1);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalCloneToNetworks(
-            new string[](0), address(this), clone, stale, bytes32(0), exampleCloneDependencies()
-        );
+        this.externalCloneAndBroadcast(new string[](0), 1, clone, stale, bytes32(0), exampleCloneDependencies());
     }
 
     /// `cloneAndBroadcast` MUST make the same refusal, and MUST make it before
@@ -505,7 +496,7 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
-        this.externalCloneToNetworks(networks, address(this), clone, stale, bytes32(0), exampleCloneDependencies());
+        this.externalCloneAndBroadcast(networks, 1, clone, stale, bytes32(0), exampleCloneDependencies());
     }
 
     /// The same guard on `cloneAndBroadcast`, which is the entry point a
@@ -534,8 +525,8 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneDependencyUndeclared.selector, clone.factory));
-        this.externalCloneToNetworks(
-            networks, address(this), clone, LibRainDeployClone.cloneDeployedAddress(clone), bytes32(0), dependencies
+        this.externalCloneAndBroadcast(
+            networks, 1, clone, LibRainDeployClone.cloneDeployedAddress(clone), bytes32(0), dependencies
         );
     }
 
@@ -551,8 +542,8 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeployClone.CloneDependencyUndeclared.selector, clone.implementation)
         );
-        this.externalCloneToNetworks(
-            networks, address(this), clone, LibRainDeployClone.cloneDeployedAddress(clone), bytes32(0), dependencies
+        this.externalCloneAndBroadcast(
+            networks, 1, clone, LibRainDeployClone.cloneDeployedAddress(clone), bytes32(0), dependencies
         );
     }
 
@@ -601,9 +592,9 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
                 factory.codehash
             )
         );
-        this.externalCloneToNetworks(
+        this.externalCloneAndBroadcast(
             networks,
-            address(this),
+            1,
             clone,
             LibRainDeployClone.cloneDeployedAddress(clone),
             LibRainDeployClone.cloneDeployedCodehash(implementation),
@@ -644,9 +635,8 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         // no-op is a no-op.
         assertEq(expected.code.length, 0, "the clone must not already be deployed");
 
-        (address deployed,) = this.externalCloneToNetworks(
-            networks, address(this), clone, expected, expectedCodeHash, exampleCloneDependencies()
-        );
+        (address deployed,) =
+            this.externalCloneAndBroadcast(networks, 1, clone, expected, expectedCodeHash, exampleCloneDependencies());
         assertEq(deployed, expected);
         assertEq(deployed.codehash, expectedCodeHash);
         assertEq(deployed.code, LibRainDeployClone.cloneRuntimeCode(implementation));
@@ -655,9 +645,8 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         // the only reason a second run does not revert `CloneAddressOccupied`
         // out of the factory.
         vm.makePersistent(deployed);
-        (address again,) = this.externalCloneToNetworks(
-            networks, address(this), clone, expected, expectedCodeHash, exampleCloneDependencies()
-        );
+        (address again,) =
+            this.externalCloneAndBroadcast(networks, 1, clone, expected, expectedCodeHash, exampleCloneDependencies());
         assertEq(again, expected);
         assertEq(again.codehash, expectedCodeHash);
     }

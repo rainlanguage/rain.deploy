@@ -6,7 +6,6 @@ import {DerivedDeploy} from "../../../src/abstract/RainDeployVerifyBase.sol";
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     CodeHashMismatchOnNetwork,
-    NetworkChainIdMismatch,
     NotDeployedOnNetwork,
     RainDeployVerifyChain
 } from "../../../src/abstract/RainDeployVerifyChain.sol";
@@ -401,13 +400,12 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         assertFalse(extraFork, "the run opened a fork that is not one of the supported networks");
     }
 
-    /// External wrapper for `checkNetworkChainId` so `vm.expectRevert` works at
-    /// the correct call depth.
-    /// @param network The network name, for the error only.
-    /// @param declared The chain id the roster states.
-    /// @param reported The chain id the endpoint answers with.
-    function externalCheckNetworkChainId(string memory network, uint256 declared, uint256 reported) external pure {
-        checkNetworkChainId(network, declared, reported);
+    /// External wrapper for `LibRainDeploy.checkNetworkChainId` so
+    /// `vm.expectRevert` works at the correct call depth.
+    /// @param network The catalogue entry the selected chain is checked
+    /// against.
+    function externalCheckNetworkChainId(SupportedNetwork memory network) external view {
+        LibRainDeploy.checkNetworkChainId(network);
     }
 
     /// External wrapper for `checkNetworkChainIds` so `vm.expectRevert` works
@@ -424,16 +422,22 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     /// reader whether the declaration is wrong or the alias is bound to a
     /// different network, and those are opposite fixes.
     function testChainIdMismatchReverts() external {
-        vm.expectRevert(abi.encodeWithSelector(NetworkChainIdMismatch.selector, "alpha", 11, 22));
-        this.externalCheckNetworkChainId("alpha", 11, 22);
+        vm.chainId(22);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NetworkChainIdMismatch.selector, "alpha", 11, 22));
+        this.externalCheckNetworkChainId(
+            SupportedNetwork({name: "alpha", chainId: 11, explorerUrl: "", defaultRpcUrl: ""})
+        );
     }
 
     /// PROPERTY: a declared chain id that IS the reported one passes.
     ///
     /// The other half of the discrimination: without it a check that reverted
     /// on every pair would satisfy the case above.
-    function testChainIdMatchPasses() external view {
-        this.externalCheckNetworkChainId("alpha", 11, 11);
+    function testChainIdMatchPasses() external {
+        vm.chainId(11);
+        this.externalCheckNetworkChainId(
+            SupportedNetwork({name: "alpha", chainId: 11, explorerUrl: "", defaultRpcUrl: ""})
+        );
     }
 
     /// PROPERTY: the chain id read is the one the ENDPOINT reports, on a fork
@@ -452,7 +456,9 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         networks[0] =
             SupportedNetwork({name: LibRainDeploy.ETHEREUM, chainId: 987654, explorerUrl: "", defaultRpcUrl: ""});
 
-        vm.expectRevert(abi.encodeWithSelector(NetworkChainIdMismatch.selector, LibRainDeploy.ETHEREUM, 987654, 1));
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.NetworkChainIdMismatch.selector, LibRainDeploy.ETHEREUM, 987654, 1)
+        );
         this.externalCheckNetworkChainIds(networks);
     }
 
@@ -465,7 +471,9 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         networks[0] = SupportedNetwork({name: LibRainDeploy.ETHEREUM, chainId: 1, explorerUrl: "", defaultRpcUrl: ""});
         networks[1] = SupportedNetwork({name: LibRainDeploy.BASE, chainId: 987654, explorerUrl: "", defaultRpcUrl: ""});
 
-        vm.expectRevert(abi.encodeWithSelector(NetworkChainIdMismatch.selector, LibRainDeploy.BASE, 987654, 8453));
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.NetworkChainIdMismatch.selector, LibRainDeploy.BASE, 987654, 8453)
+        );
         this.externalCheckNetworkChainIds(networks);
     }
 

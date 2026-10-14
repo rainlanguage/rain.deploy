@@ -31,17 +31,6 @@ error CodeHashMismatchOnNetwork(
     string network, string suite, address deployedAddress, bytes32 expectedCodeHash, bytes32 actualCodeHash
 );
 
-/// Thrown when the chain id a network's roster entry declares is not the chain
-/// id the endpoint bound to its `[rpc_endpoints]` alias reports. Either the
-/// declaration is wrong — and `chain` is what `--verify` submits, so the
-/// deployment is verified against another chain's explorer — or the alias is
-/// bound to a different network than the one it names, and everything ever
-/// checked through it was checked somewhere else.
-/// @param network The network name, as configured in `[rpc_endpoints]`.
-/// @param declared The chain id the roster states.
-/// @param reported The chain id the endpoint answers with.
-error NetworkChainIdMismatch(string network, uint256 declared, uint256 reported);
-
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the
 /// repo: across every network the declaration's `supportedNetworks()` names,
@@ -141,15 +130,23 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         }
     }
 
-    /// Checks every suite against every supported network, forking each
-    /// network once and checking every suite on it.
+    /// Checks every suite against every supported network: `checkDeployedOnNetworks`
+    /// over the catalogue entries `LibRainDeploy.declaredNetworkConfigs` gives
+    /// for `supportedNetworks()`.
+    /// @param suites The suites to check.
+    function checkDeployedOnSupportedNetworks(DeploySuite[] memory suites) internal {
+        checkDeployedOnNetworks(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
+    }
+
+    /// Checks every suite against every given network, forking each network
+    /// once and checking every suite on it.
     ///
     /// Everything compared is computed before anything forks. The code hashes
     /// are derived first because on a fork the derived address is the very
     /// address the deployment under test occupies, so deriving there would
     /// either collide with it or read it back as its own expectation. Each
     /// suite's address on each network is resolved first too, by that
-    /// network's chain id from the catalogue: a per-network clone has a
+    /// network's chain id from its catalogue entry: a per-network clone has a
     /// different address per network, and refuses a network it declares
     /// nothing for with `LibRainDeployClone.CloneNetworkUndeclared` — before
     /// any endpoint is touched, rather than partway down the list.
@@ -160,14 +157,18 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// broadcast of it puts it — and on every network it records at the
     /// address its record derives.
     ///
-    /// On each network, every suite's declared dependencies are checked before
-    /// its address, by `LibRainDeploy.checkDeclaredDependencies` — the check a
-    /// broadcast makes before deploying there. A suite's code is what it is
-    /// with them: a clone's runtime code says only WHICH implementation it
-    /// delegates to, so a clone at its address over an implementation that is
-    /// missing or changed has the right code hash and does not work.
+    /// On each network, the fork MUST first report the chain id its catalogue
+    /// entry declares, by `LibRainDeploy.checkNetworkChainId` — the check a
+    /// broadcast makes there — since every address checked on it was resolved
+    /// from that chain id. Then every suite's declared dependencies are checked
+    /// before its address, by `LibRainDeploy.checkDeclaredDependencies` — the
+    /// check a broadcast makes before deploying there. A suite's code is what
+    /// it is with them: a clone's runtime code says only WHICH implementation
+    /// it delegates to, so a clone at its address over an implementation that
+    /// is missing or changed has the right code hash and does not work.
+    /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
-    function checkDeployedOnSupportedNetworks(DeploySuite[] memory suites) internal {
+    function checkDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) internal {
         // Nothing to check is not a reason to touch every RPC endpoint. Forking
         // to check nothing turns an outage into the failure of an assertion
         // that has no subject, which is the one failure this contract is
@@ -183,22 +184,21 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         suites = onNetworks;
 
         DerivedDeploy[] memory derived = deriveDeployments(suites);
-        string[] memory networks = supportedNetworks();
-        SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
         address[][] memory addresses = new address[][](networks.length);
         for (uint256 i = 0; i < networks.length; i++) {
             addresses[i] = new address[](suites.length);
             for (uint256 j = 0; j < suites.length; j++) {
-                addresses[i][j] = LibRainDeployMechanism.deployedAddress(suites[j], configs[i].chainId);
+                addresses[i][j] = LibRainDeployMechanism.deployedAddress(suites[j], networks[i].chainId);
             }
         }
 
-        uint256[] memory forkIds = LibRainDeploy.createForks(vm, networks);
+        uint256[] memory forkIds = LibRainDeploy.createForks(vm, LibRainDeploy.networkNames(networks));
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
+            LibRainDeploy.checkNetworkChainId(networks[i]);
             for (uint256 j = 0; j < suites.length; j++) {
-                LibRainDeploy.checkDeclaredDependencies(networks[i], suites[j].dependencies);
-                checkDeployedOnNetwork(networks[i], derived[j].suite, addresses[i][j], derived[j].bytecodeHash);
+                LibRainDeploy.checkDeclaredDependencies(networks[i].name, suites[j].dependencies);
+                checkDeployedOnNetwork(networks[i].name, derived[j].suite, addresses[i][j], derived[j].bytecodeHash);
             }
         }
     }
@@ -210,19 +210,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         checkDeployedOnSupportedNetworks(releasedSuites());
     }
 
-    /// Checks one network's declared chain id against whichever chain id the
-    /// currently selected fork reports.
-    /// @param network The network name, for the error only.
-    /// @param declared The chain id the roster states.
-    /// @param reported The chain id the bound endpoint answers with.
-    function checkNetworkChainId(string memory network, uint256 declared, uint256 reported) internal pure {
-        if (declared != reported) {
-            revert NetworkChainIdMismatch(network, declared, reported);
-        }
-    }
-
     /// Checks every network's declared chain id against the endpoint bound to
-    /// its `[rpc_endpoints]` alias.
+    /// its `[rpc_endpoints]` alias, by `LibRainDeploy.checkNetworkChainId`.
     /// @param networks The roster to check.
     function checkNetworkChainIds(SupportedNetwork[] memory networks) internal {
         // An empty roster is a repo that deploys nowhere, not a repo with
@@ -231,15 +220,10 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             revert LibRainDeploy.NoNetworks();
         }
 
-        string[] memory names = new string[](networks.length);
-        for (uint256 i = 0; i < networks.length; i++) {
-            names[i] = networks[i].name;
-        }
-
-        uint256[] memory forkIds = LibRainDeploy.createForks(vm, names);
+        uint256[] memory forkIds = LibRainDeploy.createForks(vm, LibRainDeploy.networkNames(networks));
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
-            checkNetworkChainId(networks[i].name, networks[i].chainId, block.chainid);
+            LibRainDeploy.checkNetworkChainId(networks[i]);
         }
     }
 
