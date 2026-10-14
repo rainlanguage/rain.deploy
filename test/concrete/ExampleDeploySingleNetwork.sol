@@ -26,8 +26,9 @@ import {ExampleDeploySuites} from "../abstract/ExampleDeploySuites.sol";
 /// override naming polygon would end on polygon either way and assert nothing.
 contract ExampleDeploySingleNetwork is ExampleDeploySuites, RainDeployBroadcast {
     /// @inheritdoc RainDeployBroadcast
-    function deployNetworks() internal pure override returns (string[] memory networks) {
-        networks = new string[](1);
+    function deployNetworks() internal pure override returns (string[] memory) {
+        string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        return networks;
     }
 }

@@ -54,8 +54,9 @@ library LibAccountCode {
     /// code at all rather than 23 bytes of designator, so it is the empty-account
     /// case and not this one. Callers fuzzing a delegate assume it away.
     /// @param delegate The account being delegated to.
-    /// @return designator The 23-byte designator.
-    function delegationDesignator(address delegate) internal pure returns (bytes memory designator) {
-        designator = abi.encodePacked(DELEGATION_PREFIX, bytes1(0), delegate);
+    /// @return The 23-byte designator.
+    function delegationDesignator(address delegate) internal pure returns (bytes memory) {
+        bytes memory designator = abi.encodePacked(DELEGATION_PREFIX, bytes1(0), delegate);
+        return designator;
     }
 }

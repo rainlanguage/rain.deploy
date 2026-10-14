@@ -671,9 +671,7 @@ library LibRainDeploySnapshot {
         bytes memory creationCode,
         DeployDependency[] memory dependencies
     ) internal returns (string memory) {
-        LibRainDeploy.etchZoltuFactory(vm);
-
-        address deployed = LibRainDeploy.deployZoltu(creationCode);
+        address deployed = LibRainDeploy.etchAndDeployZoltu(vm, creationCode);
         string memory constants = snapshotConstants(vm, deployed, creationCode, dependencies);
 
         // The directory is created by the writer, from the same root and tag
@@ -707,6 +705,120 @@ library LibRainDeploySnapshot {
     ) internal returns (string memory) {
         return writeSnapshot(
             vm, root, dir, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, creationCode, dependencies
+        );
+    }
+
+    /// The constants a parameterised snapshot declares below the
+    /// `BYTECODE_HASH` that `LibFs` writes itself: the creation code without
+    /// constructor arguments, then the runtime code, in that order.
+    /// @param vm The Vm instance for string operations.
+    /// @param creationCode The contract's creation code, without constructor
+    /// arguments.
+    /// @param runtimeCode The runtime code a deploy of it carries.
+    /// @return The constants, as Solidity source.
+    function parameterisedSnapshotConstants(Vm vm, bytes memory creationCode, bytes memory runtimeCode)
+        internal
+        pure
+        returns (string memory)
+    {
+        return string.concat(
+            LibCodeGen.bytesConstantString(
+                vm,
+                "/// @dev The creation bytecode of the contract, without constructor\n/// arguments.",
+                "CREATION_CODE",
+                creationCode
+            ),
+            LibCodeGen.bytesConstantString(
+                vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", runtimeCode
+            )
+        );
+    }
+
+    /// Generate one snapshot for a contract whose constructor takes arguments.
+    ///
+    /// Such a contract has no single deploy address: the Zoltu address is a
+    /// function of the creation code WITH its arguments, so each argument set
+    /// is its own deploy. The snapshot therefore records the code and not a
+    /// deploy: `BYTECODE_HASH`, `CREATION_CODE` without arguments and
+    /// `RUNTIME_CODE`. It declares no `DEPLOYED_ADDRESS` and no `DEPENDENCIES`,
+    /// and it is not a deploy suite: the caller that picks the arguments derives
+    /// the address and deploys.
+    ///
+    /// The runtime code is read from a reference deploy of `creationCode` with
+    /// `referenceConstructorArgs` appended, as `writeSnapshot` reads it from
+    /// its deploy. The record states one runtime code for every argument set,
+    /// which holds only for a contract whose runtime code does not depend on
+    /// its constructor arguments — one with no immutables. Recording a contract
+    /// with immutables here records the reference arguments' runtime code.
+    /// @param vm The Vm instance for file operations.
+    /// @param root The record root to generate into — `LIB_FS_ROOT` for a
+    /// repo's real record. MUST be a path of record root segments.
+    /// @param dir The snapshot directory name.
+    /// @param contractName The contract the snapshot describes.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written
+    /// snapshot declares.
+    /// @param copyrightText The copyright text the written snapshot declares.
+    /// @param creationCode That contract's creation code, without constructor
+    /// arguments.
+    /// @param referenceConstructorArgs Any constructor arguments the creation
+    /// code deploys with.
+    /// @return The path written.
+    function writeParameterisedSnapshot(
+        Vm vm,
+        string memory root,
+        string memory dir,
+        string memory contractName,
+        string memory spdxLicenseIdentifier,
+        string memory copyrightText,
+        bytes memory creationCode,
+        bytes memory referenceConstructorArgs
+    ) internal returns (string memory) {
+        // The deploy and the emission are scoped away before the write, for the
+        // reason `writeReleasedSuitesLib` scopes its paths: with every argument
+        // still live, solc 0.8.25 without `--via-ir` refuses the flat form as
+        // stack too deep.
+        address instance;
+        string memory constants;
+        {
+            instance = LibRainDeploy.etchAndDeployZoltu(vm, abi.encodePacked(creationCode, referenceConstructorArgs));
+            constants = parameterisedSnapshotConstants(vm, creationCode, instance.code);
+        }
+        string memory snapshotDir = dirForSnapshot(root, dir);
+        LibFs.buildFileForContract(
+            vm, instance, snapshotDir, contractName, spdxLicenseIdentifier, copyrightText, constants
+        );
+        return pathForSnapshot(root, dir, contractName);
+    }
+
+    /// `writeParameterisedSnapshot` applied to `RAIN_SPDX_LICENSE_IDENTIFIER`
+    /// and `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
+    /// @param vm The Vm instance for file operations.
+    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// MUST be a path of record root segments.
+    /// @param dir The snapshot directory name.
+    /// @param contractName The contract the snapshot describes.
+    /// @param creationCode That contract's creation code, without constructor
+    /// arguments.
+    /// @param referenceConstructorArgs Any constructor arguments the creation
+    /// code deploys with.
+    /// @return The path written.
+    function writeParameterisedSnapshot(
+        Vm vm,
+        string memory root,
+        string memory dir,
+        string memory contractName,
+        bytes memory creationCode,
+        bytes memory referenceConstructorArgs
+    ) internal returns (string memory) {
+        return writeParameterisedSnapshot(
+            vm,
+            root,
+            dir,
+            contractName,
+            RAIN_SPDX_LICENSE_IDENTIFIER,
+            RAIN_COPYRIGHT_TEXT,
+            creationCode,
+            referenceConstructorArgs
         );
     }
 

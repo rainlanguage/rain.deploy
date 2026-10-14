@@ -3,17 +3,18 @@
 pragma solidity =0.8.25;
 
 import {BuildScript} from "../../src/abstract/BuildScript.sol";
+import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {BuildHarness} from "./BuildHarness.sol";
 
 /// @title BuildRecordRootHarness
 /// @notice `Build` with its record root overridden — the one thing
 /// `BuildScript` documents the root as being overridable for — and the
-/// regeneration `cutRelease()` freezes from reachable from a test.
+/// regeneration and freeze `cutRelease()` runs reachable from a test.
 ///
-/// The regeneration alone. `run()` and `cutRelease()` also regenerate the libs,
-/// and those are written into `LIB_DIR`, which no override moves, so either
-/// entry point would rewrite committed libs that other test contracts read
-/// while forge runs them in parallel.
+/// Neither `run()` nor `cutRelease()` is reachable: both also regenerate the
+/// libs, written into `LIB_DIR`, which no override moves, so either entry point
+/// would rewrite committed libs that other test contracts read while forge
+/// runs them in parallel. `externalFreeze` is the freeze without that step.
 contract BuildRecordRootHarness is BuildHarness {
     string internal sRoot;
 
@@ -28,5 +29,11 @@ contract BuildRecordRootHarness is BuildHarness {
 
     function externalRegenerateSnapshots() external {
         regenerateSnapshots();
+    }
+
+    /// The freeze `cutRelease()` runs, without the lib regeneration that would
+    /// write into `LIB_DIR`.
+    function externalFreeze() external {
+        LibRainDeploySnapshot.freeze(vm, recordRoot(), regenerateSnapshots, releaseRecordNames());
     }
 }
