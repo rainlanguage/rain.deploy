@@ -15,21 +15,7 @@ import {
 } from "../../../src/generated/candidate/AddressRegistry.sol";
 
 /// @title RainDeployVerifyBaseTest
-/// @notice What the derivation RETURNS, read directly, which no other group
-/// asks it for.
-///
-/// Every other contract that reaches `deriveDeployment` consumes it and asserts
-/// about the consumption. The snapshot group compares the derivation against
-/// the recorded fields and names the SUITE argument in its errors, never the
-/// derivation's own key; the chain group is the only reader of
-/// `DerivedDeploy.suite` and `DerivedDeploy.deployedAddresses` as such, and every
-/// one of its tests forks. So a derivation that returned the recorded fields
-/// back, or an empty key, is invisible to a run with no RPC credentials — which
-/// is the run the snapshot half exists to be.
-///
-/// The three fields are checked against oracles outside the derivation: the
-/// generated pin for the address, the generated runtime code for the hash, and
-/// the argument for the key.
+/// @notice What the derivation RETURNS, read directly, which no other group asks it for.
 contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
     /// The derivation MUST come from the creation code and the key, and from
     /// nothing else the suite records.

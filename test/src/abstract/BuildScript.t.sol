@@ -65,15 +65,13 @@ contract BuildScriptTest is Test {
     string constant CLONE_CUT_FIXTURE_ROOT = "test/generated-buildscript-clone-cut";
 
     /// Where the clone `cutRelease()` fixture's released-suites lib is written.
-    /// Under `fixture-lib`, which nothing compiles: the lib imports paths that
-    /// resolve only from `src/lib`.
     string constant CLONE_CUT_LIB_DIR = "fixture-lib/buildscript-clone-cut";
 
     /// Where the per-network clone `cutRelease()` fixture's record is built.
     string constant PER_NETWORK_CLONE_CUT_FIXTURE_ROOT = "test/generated-buildscript-per-network-clone-cut";
 
-    /// Where the per-network clone `cutRelease()` fixture's released-suites lib
-    /// is written, under `fixture-lib` for the reason `CLONE_CUT_LIB_DIR` is.
+    /// Where the per-network clone `cutRelease()` fixture's released-suites lib is written, under
+    /// `fixture-lib` for the reason `CLONE_CUT_LIB_DIR` is.
     string constant PER_NETWORK_CLONE_CUT_LIB_DIR = "fixture-lib/buildscript-per-network-clone-cut";
 
     /// Carries its AST because `foundry.toml` sets `ast = true`.
@@ -182,35 +180,10 @@ contract BuildScriptTest is Test {
         assertEq(libs, harness.libsMarker(1, true));
     }
 
-    /// PROPERTY: `run()` stages both `foundry.toml` network blocks and the
-    /// `.env.example` block from the roster, leaving everything outside the
-    /// markers where it was — and leaves the files it read untouched.
-    ///
-    /// This is the wiring, not the emission: what the sections SAY is pinned
-    /// against string literals in `LibRainDeployConfigTest`, over a fixture
-    /// roster no real network is named in. What is asserted here is that the
-    /// entry point CI runs on every push reaches the config at all — without
-    /// it the sections would exist, be correct, and be written nowhere, and
-    /// `Git is clean` would pass a tree whose config had drifted from the
-    /// roster it pins.
-    ///
-    /// The sources staying byte-identical is the half `script/build.sh` then
-    /// depends on: a `run()` that wrote them directly would be refused for
-    /// `foundry.toml` and would make the hook's copy a no-op for the other.
-    /// PROPERTY: a clone deploy repo's release goes through the same
-    /// `cutRelease()` as a Zoltu one. Its regeneration writes the clone record
-    /// through the suite writer, the freeze copies it unchanged, and the
-    /// released-suites lib regenerated from the record declares the release as
-    /// a CLONE carrying the record's own `MECHANISM_DATA` — not as a Zoltu
-    /// release, which would derive it at the Zoltu address of the proxy's
-    /// creation code.
-    ///
-    /// The frozen record is also held to the committed `example-clone` record,
-    /// which was written from the same declaration: a cut of it is that file.
+    /// PROPERTY.
     function testCutReleaseFreezesACloneRecordAndReleasesItAsAClone() external {
         resetFixture(CLONE_CUT_FIXTURE_ROOT);
         resetFixture(CLONE_CUT_LIB_DIR);
-        // The lib writer writes into its directory and does not create it.
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(CLONE_CUT_LIB_DIR, true);
         CloneBuildScriptHarness harness = new CloneBuildScriptHarness(CLONE_CUT_FIXTURE_ROOT, CLONE_CUT_LIB_DIR);
@@ -254,20 +227,10 @@ contract BuildScriptTest is Test {
         );
     }
 
-    /// PROPERTY: a per-network clone deploy repo's release goes through the
-    /// same `cutRelease()` as every other. Its regeneration writes one
-    /// `DEPLOYED_ADDRESS_<chainId>` per network through the suite writer, the
-    /// freeze copies it unchanged, and the released-suites lib regenerated
-    /// from the record declares the release `ClonePerNetwork` with no stored
-    /// address and the record's own `MECHANISM_DATA` — not as a `Clone`, which
-    /// would put it at one address on every network.
-    ///
-    /// The frozen record is also held to the committed `per-network-clone`
-    /// record, which was written from the same declaration.
+    /// PROPERTY.
     function testCutReleaseFreezesAPerNetworkCloneRecordAndReleasesItPerNetwork() external {
         resetFixture(PER_NETWORK_CLONE_CUT_FIXTURE_ROOT);
         resetFixture(PER_NETWORK_CLONE_CUT_LIB_DIR);
-        // The lib writer writes into its directory and does not create it.
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(PER_NETWORK_CLONE_CUT_LIB_DIR, true);
         PerNetworkCloneBuildScriptHarness harness =

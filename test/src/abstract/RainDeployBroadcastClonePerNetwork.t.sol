@@ -24,13 +24,11 @@ import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
 
 /// @title RainDeployBroadcastClonePerNetworkTest
-/// @notice The broadcast of a frozen per-network clone release, selected by
-/// its key, to Arbitrum One and Polygon: each network gets the clone its own
-/// admin derives, at the address the record holds for that network, and
-/// nothing at the other network's address.
+/// @notice The broadcast of a frozen per-network clone release, selected by its key, to Arbitrum
+/// One and Polygon.
 contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
-    /// The release's recorded `CloneNetworks`, its entries asserted to be
-    /// Arbitrum One's then Polygon's.
+    /// The release's recorded `CloneNetworks`, its entries asserted to be Arbitrum One's then
+    /// Polygon's.
     /// @param release The release suite.
     /// @return The decoded per-network clone.
     function releaseNetworks(DeploySuite memory release) internal pure returns (CloneNetworks memory) {
@@ -50,18 +48,16 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         return networks;
     }
 
-    /// Whether any fork exists. Fork ids are handed out from zero.
+    /// Whether any fork exists.
     /// @return Whether fork 0 can be selected.
     function anyForkExists() internal returns (bool) {
         (bool forked,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", uint256(0)));
         return forked;
     }
 
-    /// The release lands at its recorded address on each network, a different
-    /// address on each, initialized with that network's admin, and the other
-    /// network's address stays empty on each fork. Broadcasting one address
-    /// everywhere, or one network's data everywhere, puts a clone where the
-    /// other network's record says nothing is, or the wrong admin in it.
+    /// The release lands at its recorded address on each network, a different address on each,
+    /// initialized with that network's admin, and the other network's address stays empty on each
+    /// fork.
     function testBroadcastsThePerNetworkReleaseToEachNetworkAtItsOwnAddress() external {
         PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
         vm.makePersistent(address(this));
@@ -107,9 +103,8 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         }
     }
 
-    /// A network the release has no entry for is refused by its chain id
-    /// before any network is forked, though the networks before it have
-    /// entries.
+    /// A network the release has no entry for is refused by its chain id before any network is
+    /// forked, though the networks before it have entries.
     function testBroadcastRefusesAnUndeclaredNetworkBeforeAnyFork() external {
         PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
         DeploySuite memory release = deploy.externalSuiteByName("per-network-clone@0_0_1");
@@ -124,10 +119,9 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         assertFalse(anyForkExists(), "a network was forked before the undeclared one was refused");
     }
 
-    /// A release whose recorded address for one network is not the address
-    /// that network's data derives is refused before any network is forked,
-    /// naming that network's recorded and derived addresses. Polygon's is
-    /// staled, so a check of the first entry only passes it.
+    /// A release whose recorded address for one network is not the address that network's data
+    /// derives is refused before any network is forked, naming that network's recorded and derived
+    /// addresses.
     function testBroadcastRefusesAStaleRecordedAddressBeforeAnyFork() external {
         PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
         DeploySuite memory release = deploy.externalSuiteByName("per-network-clone@0_0_1");
@@ -142,11 +136,8 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         assertFalse(anyForkExists(), "a network was forked before the stale address was refused");
     }
 
-    /// A release cut when the repo supported Arbitrum One alone, broadcast to
-    /// Arbitrum One and Polygon: Arbitrum One gets the clone at its recorded
-    /// address, and Polygon, which the release records nothing for, gets the
-    /// clone the declaration's Polygon init data derives under the release's
-    /// factory, implementation and salt, initialized with Polygon's admin.
+    /// A release cut when the repo supported Arbitrum One alone, broadcast to Arbitrum One and
+    /// Polygon.
     function testBroadcastsAnUnrecordedNetworkAtItsInitDataAddress() external {
         PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
         vm.makePersistent(address(this));
@@ -191,13 +182,9 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         assertEq(arbitrumAddress.code.length, 0);
     }
 
-    /// A release recording Arbitrum One alone, broadcast to both networks by a
-    /// repo whose candidate has since moved to another factory, implementation
-    /// and salt, puts Polygon's clone where the RELEASE's factory,
-    /// implementation and salt derive it with the candidate's Polygon init
-    /// data: a clone of the release's implementation, initialized with
-    /// Polygon's admin. Only the release's factory and implementation are on
-    /// the forks, and nothing lands at the candidate's Polygon address.
+    /// A release recording Arbitrum One alone, broadcast to both networks by a repo whose candidate
+    /// has since moved to another factory, implementation and salt, puts Polygon's clone where the
+    /// RELEASE's factory, implementation and salt derive it with the candidate's Polygon init data.
     function testBroadcastsAnUnrecordedNetworkUnderTheReleasesFactoryAndImplementation() external {
         UpgradedPerNetworkCloneDeploy deploy = new UpgradedPerNetworkCloneDeploy();
         vm.makePersistent(address(this));
@@ -241,10 +228,8 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         assertEq(candidatePolygonAddress.code.length, 0);
     }
 
-    /// A release recording Arbitrum One alone, broadcast with Polygon too,
-    /// still has its stale recorded Arbitrum One address refused before any
-    /// network is forked: the network the candidate adds neither replaces nor
-    /// skips the recorded one's check.
+    /// A release recording Arbitrum One alone, broadcast with Polygon too, still has its stale
+    /// recorded Arbitrum One address refused before any network is forked.
     function testBroadcastRefusesAStaleRecordedAddressBesideAnUnrecordedNetworkBeforeAnyFork() external {
         PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
         DeploySuite memory release = onlyFirstRecordedNetwork(deploy.externalSuiteByName("per-network-clone@0_0_1"));

@@ -9,16 +9,8 @@ import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.so
 import {PerNetworkCloneDeploys} from "../../abstract/PerNetworkCloneDeploys.sol";
 
 /// @title RainDeployVerifyChainClonePerNetworkTest
-/// @notice The chain matrix over a per-network clone release, which is at a
-/// different address on each of its two networks.
-///
-/// Both addresses carry the clone's runtime code on every fork, so the
-/// inherited `testSuitesLiveOnEverySupportedNetwork` passing says the matrix
-/// looked at a clone address. Which address it looked at ON WHICH network is
-/// what the two refusals below pin: with one network's clone missing, the
-/// matrix refuses on exactly that network naming exactly that address. A
-/// matrix that checked one address everywhere passes one of them, and one
-/// that swapped the networks' addresses names the other network.
+/// @notice The chain matrix over a per-network clone release, which is at a different address on
+/// each of its two networks.
 contract RainDeployVerifyChainClonePerNetworkTest is PerNetworkCloneDeploys, RainDeployVerifyChain {
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()
@@ -30,8 +22,8 @@ contract RainDeployVerifyChainClonePerNetworkTest is PerNetworkCloneDeploys, Rai
         return PerNetworkCloneDeploys.supportedNetworks();
     }
 
-    /// Puts the release's dependencies, and its clone at its address for each
-    /// network, on every fork.
+    /// Puts the release's dependencies, and its clone at its address for each network, on every
+    /// fork.
     function setUp() external {
         DeploySuite memory release = releasedSuites()[0];
         for (uint256 i = 0; i < release.dependencies.length; i++) {
@@ -45,8 +37,8 @@ contract RainDeployVerifyChainClonePerNetworkTest is PerNetworkCloneDeploys, Rai
         }
     }
 
-    /// Without Polygon's clone, the matrix refuses on Polygon at Polygon's
-    /// address, having passed Arbitrum One at Arbitrum One's.
+    /// Without Polygon's clone, the matrix refuses on Polygon at Polygon's address, having passed
+    /// Arbitrum One at Arbitrum One's.
     function testPerNetworkCloneMissingOnPolygonIsRefusedAtPolygonsAddress() external {
         DeploySuite memory release = releasedSuites()[0];
         address polygonAddress = LibRainDeployMechanism.deployedAddress(release, 137);
@@ -58,8 +50,8 @@ contract RainDeployVerifyChainClonePerNetworkTest is PerNetworkCloneDeploys, Rai
         this.testSuitesLiveOnEverySupportedNetwork();
     }
 
-    /// Without Arbitrum One's clone, the matrix refuses on Arbitrum One at
-    /// Arbitrum One's address, though Polygon's address holds the clone.
+    /// Without Arbitrum One's clone, the matrix refuses on Arbitrum One at Arbitrum One's address,
+    /// though Polygon's address holds the clone.
     function testPerNetworkCloneMissingOnArbitrumIsRefusedAtArbitrumsAddress() external {
         DeploySuite memory release = releasedSuites()[0];
         address arbitrumAddress = LibRainDeployMechanism.deployedAddress(release, 42161);

@@ -265,11 +265,10 @@ networks: one address for Zoltu and `Clone`, one per declared network for
 - **Broadcast.** `RainDeployBroadcast.broadcastSuite` and
   `LibRainDeployMechanism.deployAndBroadcast` return the suite's address on each
   network and the fork each was deployed on, both positionally paired with the
-  networks broadcast to. For a per-network clone, every network's chain id is
-  read from the network catalogue and its entry resolved, and the recorded
-  address held to the derived one, before any fork is created; the deploy step
-  then refuses to run on a fork whose `block.chainid` is not the entry's, with
-  `CloneNetworkChainIdMismatch`.
+  networks broadcast to. Every network's chain id is read from the network
+  catalogue and every recorded address held to the derived one before any fork
+  is created; each fork whose `block.chainid` is not its catalogue entry's is
+  refused with `NetworkChainIdMismatch`, for every mechanism.
 - **Unrecorded networks.** A release records the networks it was cut for. At
   broadcast and in the chain group, a per-network release first takes an entry
   for each network its candidate — the candidate whose key is the release key

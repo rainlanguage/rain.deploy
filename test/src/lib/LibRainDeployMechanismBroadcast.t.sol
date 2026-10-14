@@ -299,7 +299,6 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         assertEq(deployed[0].codehash, expectedCodeHash);
         assertEq(deployed[0].code, LibRainDeployClone.cloneRuntimeCode(implementation));
 
-        // A second clone into an occupied address reverts in the factory, so passing proves the skip.
         vm.makePersistent(deployed[0]);
         (address[] memory again,) = this.externalDeployAndBroadcast(networks, 1, suite);
         assertEq(again[0], expected);

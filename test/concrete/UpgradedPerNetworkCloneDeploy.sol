@@ -9,9 +9,8 @@ import {UpgradedPerNetworkCloneDeploys} from "../abstract/UpgradedPerNetworkClon
 import {ExternalCloneDeploySuites} from "../abstract/ExternalCloneDeploySuites.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 
-/// @title UpgradedPerNetworkCloneDeploy
-/// `UpgradedPerNetworkCloneDeploys` plus `RainDeployBroadcast`, with external
-/// wrappers so a plain `Test` contract can drive it.
+/// @title UpgradedPerNetworkCloneDeploy `UpgradedPerNetworkCloneDeploys` plus
+/// `RainDeployBroadcast`, with external wrappers so a plain `Test` contract can drive it.
 contract UpgradedPerNetworkCloneDeploy is
     UpgradedPerNetworkCloneDeploys,
     ExternalCloneDeploySuites,

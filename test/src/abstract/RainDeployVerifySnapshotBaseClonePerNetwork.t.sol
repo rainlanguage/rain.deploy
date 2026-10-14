@@ -26,16 +26,7 @@ import {
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 
 /// @title RainDeployVerifySnapshotBaseClonePerNetworkTest
-/// @notice The snapshot group over a per-network clone deploy repo: a frozen
-/// per-network release and a per-network candidate, each at a different
-/// address on each of two networks.
-///
-/// `testSnapshotInternallyConsistent` is inherited and runs over both, so each
-/// network's clone is derived through the factory with that network's init
-/// data and held to the address recorded for that network.
-///
-/// `RainDeployVerifySnapshotBase` and not `RainDeployVerifySnapshot`, for the
-/// reason `RainDeployVerifySnapshotBaseCloneTest` gives.
+/// @notice The snapshot group over a per-network clone deploy repo.
 contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeploys, RainDeployVerifySnapshotBase {
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()
@@ -78,10 +69,8 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         return paths;
     }
 
-    /// The release really is at a different address on each network, and each
-    /// is the address its declaration derives for that network: otherwise the
-    /// inherited consistency test passing says nothing about pairing an address
-    /// with its network.
+    /// The release really is at a different address on each network, and each is the address its
+    /// declaration derives for that network.
     function testFrozenPerNetworkReleaseIsAtADifferentAddressPerNetwork() external view {
         DeploySuite memory release = releasedSuites()[0];
         address[] memory addresses = LibRainDeployMechanism.deployedAddresses(release);
@@ -96,10 +85,8 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         assertEq(addresses[1], LibRainDeployMechanism.deployedAddress(release, PER_NETWORK_CLONE_POLYGON_CHAIN_ID));
     }
 
-    /// A recorded address that is not the one its network's init data derives
-    /// is refused, naming that network's recorded and derived addresses. The
-    /// SECOND network's is staled, so a check that compared only the first
-    /// passes it.
+    /// A recorded address that is not the one its network's init data derives is refused, naming
+    /// that network's recorded and derived addresses.
     function testPerNetworkRecordedAddressMismatchIsRefusedPerNetwork() external {
         DeploySuite memory release = releasedSuites()[0];
         address[] memory derived = LibRainDeployMechanism.deployedAddresses(release);
@@ -112,15 +99,12 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         this.externalCheckInternallyConsistent(release);
     }
 
-    /// The committed per-network record is accounted for by the release
-    /// declared from it.
+    /// The committed per-network record is accounted for by the release declared from it.
     function testFrozenPerNetworkRecordIsReleased() external view {
         checkFrozenSnapshotsReleased(recordPaths(), releasedSuites());
     }
 
-    /// The record without its release is refused: with no released suites at
-    /// all, and with the candidate alone, which is the same clone at another
-    /// salt and therefore at other addresses.
+    /// The record without its release is refused.
     function testFrozenPerNetworkRecordWithoutItsReleaseIsRefused() external {
         string[] memory paths = recordPaths();
 
@@ -133,12 +117,8 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         this.externalCheckFrozenSnapshotsReleased(paths, candidates);
     }
 
-    /// A release that derives the record's addresses but labels them with each
-    /// other's chain ids is NOT that record's release. Its addresses are the
-    /// same list in the same order, and it is internally consistent — each
-    /// entry's recorded address is what its init data derives — so only the
-    /// chain id being part of the identity tells them apart: it is a release
-    /// that would put the Arbitrum admin's clone on Polygon.
+    /// A release that derives the record's addresses but labels them with each other's chain ids is
+    /// NOT that record's release.
     function testFrozenPerNetworkRecordRefusesSwappedChainIds() external {
         DeploySuite[] memory released = releasedSuites();
         CloneNetworks memory clones = abi.decode(released[0].mechanismData, (CloneNetworks));
@@ -163,9 +143,8 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         this.externalCheckFrozenSnapshotsReleased(paths, swappedReleased);
     }
 
-    /// Two copies of the per-network record against one release is a record
-    /// outnumbering its declarations, and the refusal carries the record's
-    /// whole address list in file order.
+    /// Two copies of the per-network record against one release is a record outnumbering its
+    /// declarations, and the refusal carries the record's whole address list in file order.
     function testFrozenPerNetworkRecordsOutnumberingReleasesCarryEveryAddress() external {
         string[] memory paths = new string[](2);
         paths[0] = recordPaths()[0];
@@ -200,9 +179,8 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         return string.concat("address constant DEPLOYED_ADDRESS = address(", vm.toString(declared), ");\n");
     }
 
-    /// A per-network record reads as each declaration's chain id and address
-    /// in FILE order, whatever order the chain ids sort in, and a declaration
-    /// in a block comment is not read.
+    /// A per-network record reads as each declaration's chain id and address in FILE order,
+    /// whatever order the chain ids sort in, and a declaration in a block comment is not read.
     function testPerNetworkRecordReadsEveryDeclarationInFileOrder() external view {
         string memory record = string.concat(
             "// THIS FILE IS AUTOGENERATED BY THE BUILD SCRIPT. DO NOT EDIT BY HAND.\n\n",
@@ -222,8 +200,7 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         assertEq(addresses[1], address(0xcafe));
     }
 
-    /// One chain id declared twice is refused: no compiler reads the file, and
-    /// either copy is a value the generator did not write.
+    /// One chain id declared twice is refused.
     function testPerNetworkRecordWithAChainIdTwiceIsAmbiguous() external {
         string memory record = string.concat(
             perNetworkLine(42161, address(0xbeef)),
@@ -234,8 +211,8 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         this.externalRecordedDeployedAddresses("record.sol", record);
     }
 
-    /// `DEPLOYED_ADDRESS` beside any `DEPLOYED_ADDRESS_<chainId>` is refused,
-    /// whichever comes first: two answers to where the release is.
+    /// `DEPLOYED_ADDRESS` beside any `DEPLOYED_ADDRESS_<chainId>` is refused, whichever comes
+    /// first.
     function testRecordMixingBothFormsIsAmbiguous() external {
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotAmbiguous.selector, "record.sol"));
         this.externalRecordedDeployedAddresses(
@@ -248,16 +225,16 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         );
     }
 
-    /// A record whose only per-network declaration is commented out declares
-    /// nothing, and is unreadable rather than an empty list.
+    /// A record whose only per-network declaration is commented out declares nothing, and is
+    /// unreadable rather than an empty list.
     function testPerNetworkRecordWithEveryDeclarationCommentedOutIsUnreadable() external {
         string memory record = string.concat("/*\n", perNetworkLine(137, address(0xcafe)), "*/\n");
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
         this.externalRecordedDeployedAddresses("record.sol", record);
     }
 
-    /// A per-network declaration line whose constant is named
-    /// `DEPLOYED_ADDRESS_<suffix>`, with the suffix as given.
+    /// A per-network declaration line whose constant is named `DEPLOYED_ADDRESS_<suffix>`, with the
+    /// suffix as given.
     /// @param suffix What follows `DEPLOYED_ADDRESS_` in the name.
     /// @return The line.
     function suffixedLine(string memory suffix) internal pure returns (string memory) {
@@ -266,10 +243,8 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         );
     }
 
-    /// A `DEPLOYED_ADDRESS_<x>` whose `<x>` is not a decimal chain id makes the
-    /// record unreadable, typed and naming the file: hexadecimal, letters,
-    /// nothing, the prefix again, and a decimal past `uint256`. Hexadecimal and
-    /// a repeated prefix are refused rather than read as chain 137.
+    /// A `DEPLOYED_ADDRESS_<x>` whose `<x>` is not a decimal chain id makes the record unreadable,
+    /// typed and naming the file.
     function testPerNetworkDeclarationWithANonDecimalChainIdIsUnreadable() external {
         string[] memory suffixes = new string[](5);
         suffixes[0] = "0x89";
@@ -285,8 +260,7 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         }
     }
 
-    /// The largest chain id a `uint256` holds reads as itself: the overflow
-    /// refusal starts one past it.
+    /// The largest chain id a `uint256` holds reads as itself.
     function testPerNetworkDeclarationWithTheLargestChainIdReads() external view {
         (uint256[] memory chainIds, address[] memory addresses) =
             this.externalRecordedDeployedAddresses("record.sol", suffixedLine(vm.toString(type(uint256).max)));
@@ -295,10 +269,8 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         assertEq(addresses[0], address(0xcafe));
     }
 
-    /// A declaration whose value is not an address makes the record
-    /// unreadable, typed and naming the file, in both the every-network and the
-    /// per-network form: no value, a value that is not hexadecimal, one byte
-    /// too many, and one byte too few.
+    /// A declaration whose value is not an address makes the record unreadable, typed and naming
+    /// the file, in both the every-network and the per-network form.
     function testDeclarationWithAMalformedAddressIsUnreadable() external {
         string[] memory values = new string[](4);
         values[0] = "=";

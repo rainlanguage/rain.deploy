@@ -18,20 +18,12 @@ import {
 import {exampleCloneFactory, exampleCloneImplementation} from "../../abstract/ExampleCloneDeploys.sol";
 import {NoCloneDeploySuites} from "../../concrete/NoCloneDeploySuites.sol";
 
-/// @title RainDeployCloneSuitesBaseTest
-/// Tests for `RainDeployCloneSuitesBase`: that the candidates ARE the clone list
-/// rather than a second list beside it, and that an empty clone list is refused
+/// @title RainDeployCloneSuitesBaseTest Tests for `RainDeployCloneSuitesBase`: that the candidates
+/// ARE the clone list rather than a second list beside it, and that an empty clone list is refused
 /// where the consumer wrote it.
 contract RainDeployCloneSuitesBaseTest is Test {
-    /// `candidateSuites()` MUST be `cloneCandidate` mapped over `cloneDeploys()`,
-    /// in order and one for one.
-    ///
-    /// This is the whole claim of the contract. The hazard this package exists to
-    /// close is a repo that broadcasts one thing while its tests verify another,
-    /// and that can only happen where there are two lists to disagree — so the
-    /// test is not "the candidates look right", it is "the candidates are a pure
-    /// function of the clone list", asserted by deriving them again here from the
-    /// clones the fixture declares.
+    /// `candidateSuites()` MUST be `cloneCandidate` mapped over `cloneDeploys()`, in order and one
+    /// for one.
     function testCandidatesAreTheCloneListDerived() external {
         ExampleCloneDeploy fixtureDeploy = new ExampleCloneDeploy();
 
@@ -55,31 +47,17 @@ contract RainDeployCloneSuitesBaseTest is Test {
             assertEq(candidates[i].unanchorableReason, derived.unanchorableReason);
         }
 
-        // The two entries really are at two different addresses, which is what
-        // makes "the loop does not stop at the first" an assertion rather than a
-        // hope.
         assertNotEq(candidates[0].snapshot.storedDeployedAddress, candidates[1].snapshot.storedDeployedAddress);
     }
 
-    /// The derived candidates MUST satisfy `checkedCandidateSuites` — the
-    /// qualifier rule included. A clone declaration that could not be read by the
-    /// package's own reader would be useless, and `CLONE_ARTIFACT_PATH` is the
-    /// reason it can be.
+    /// The derived candidates MUST satisfy `checkedCandidateSuites` — the qualifier rule included.
     function testCloneCandidatesPassTheSourceAnchor() external {
         ExampleCloneDeploy fixtureDeploy = new ExampleCloneDeploy();
-        // Does not revert: the path is qualified, and it resolves to no artifact,
-        // which is what the non-empty `unanchorableReason` declares. A path that
-        // resolved would be refused by `CandidateSourceCompiles`.
         fixtureDeploy.externalCheckCandidatesAnchoredToSource();
     }
 
-    /// An empty clone list MUST be refused with `NoCloneDeploys`, on EVERY reader
-    /// that goes through it.
-    ///
-    /// Every loop over an empty list passes, so a guard on one reader and not
-    /// another is a rule with as many spellings as readers. The refusal names the
-    /// CLONE list because that is the list a consumer wrote — `NoDeployCandidates`
-    /// would send them to `candidateSuites()`, which a clone repo does not write.
+    /// An empty clone list MUST be refused with `NoCloneDeploys`, on EVERY reader that goes through
+    /// it.
     function testNoCloneDeploysReverts() external {
         NoCloneDeploySuites empty = new NoCloneDeploySuites();
 
@@ -99,10 +77,9 @@ contract RainDeployCloneSuitesBaseTest is Test {
         empty.externalSuiteNames();
     }
 
-    /// A per-network clone's candidate has one entry per supported network,
-    /// in `supportedNetworks()` order, each with that network's chain id, the
-    /// init data `initData` gives for it and the address that data derives:
-    /// for both orders of the clone's two networks, and for one of them alone.
+    /// A per-network clone's candidate has one entry per supported network, in
+    /// `supportedNetworks()` order, each with that network's chain id, the init data `initData`
+    /// gives for it and the address that data derives.
     function testPerNetworkCandidateIsBuiltForExactlyTheSupportedNetworksInOrder() external {
         string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
@@ -125,9 +102,8 @@ contract RainDeployCloneSuitesBaseTest is Test {
         checkPerNetworkCandidate(networks, chainIds);
     }
 
-    /// A supported network the clone's `initData` reverts on reverts every
-    /// reader of the candidates, with `initData`'s own revert: the network is
-    /// neither skipped nor given another network's data.
+    /// A supported network the clone's `initData` reverts on reverts every reader of the
+    /// candidates, with `initData`'s own revert.
     function testSupportedNetworkTheInitDataRevertsOnIsLoud() external {
         string[] memory networks = new string[](3);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;

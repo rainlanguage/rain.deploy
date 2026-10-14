@@ -16,23 +16,13 @@ import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
 
 /// @title RainDeployVerifyChainDependenciesTest
-/// @notice The chain matrix holds every released suite's declared dependencies
-/// to the code declared for them on each network, before the suite's own
-/// address: a clone at its address over a missing or changed implementation
-/// has the right code hash and does not work.
-///
-/// Polygon is checked before Arbitrum One here, so a dependency that is on
-/// Polygon and not on Arbitrum One is refused on the SECOND network checked:
-/// Polygon's native token system contract, which Polygon has at
-/// `POLYGON_SYSTEM_CONTRACT` and Arbitrum One does not. Its code is read from
-/// Polygon by the test, so the declaration matches the chain wherever the chain
-/// is.
+/// @notice The chain matrix holds every released suite's declared dependencies to the code declared
+/// for them on each network, before the suite's own address.
 contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDeployVerifyChain {
     /// Polygon's native token system contract.
     address constant POLYGON_SYSTEM_CONTRACT = 0x0000000000000000000000000000000000001010;
 
     /// @inheritdoc RainDeploySuitesBase
-    /// @dev Polygon, then Arbitrum One.
     function supportedNetworks()
         internal
         pure
@@ -45,8 +35,8 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
         return networks;
     }
 
-    /// Puts the release's dependencies, and its clone at its address for each
-    /// network, on every fork.
+    /// Puts the release's dependencies, and its clone at its address for each network, on every
+    /// fork.
     function setUp() external {
         DeploySuite memory release = releasedSuites()[0];
         for (uint256 i = 0; i < release.dependencies.length; i++) {
@@ -90,8 +80,8 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
         return code;
     }
 
-    /// Without the implementation the matrix refuses on the first network,
-    /// naming it as the missing dependency, though the clone is at its address.
+    /// Without the implementation the matrix refuses on the first network, naming it as the missing
+    /// dependency, though the clone is at its address.
     function testMissingImplementationIsRefusedNamingNetworkAndDependency() external {
         vm.etch(exampleCloneImplementation(), hex"");
         vm.expectRevert(
@@ -102,8 +92,8 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
         this.testSuitesLiveOnEverySupportedNetwork();
     }
 
-    /// With other code at the implementation's address the matrix refuses on
-    /// the first network, naming the dependency and both code hashes.
+    /// With other code at the implementation's address the matrix refuses on the first network,
+    /// naming the dependency and both code hashes.
     function testChangedImplementationIsRefusedNamingNetworkAndDependency() external {
         vm.etch(exampleCloneImplementation(), type(MockCloneFactory).runtimeCode);
         vm.expectRevert(
@@ -118,9 +108,8 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
         this.testSuitesLiveOnEverySupportedNetwork();
     }
 
-    /// A dependency on Polygon with the declared code and absent from Arbitrum
-    /// One passes Polygon and is refused on Arbitrum One: every network is
-    /// checked, not the first.
+    /// A dependency on Polygon with the declared code and absent from Arbitrum One passes Polygon
+    /// and is refused on Arbitrum One.
     function testDependencyAbsentFromOneNetworkIsRefusedOnThatNetwork() external {
         DeploySuite[] memory suites = releaseDeclaring(
             DeployDependency({deployedAddress: POLYGON_SYSTEM_CONTRACT, runtimeCode: polygonSystemContractCode()})
@@ -133,8 +122,8 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
         this.externalCheckDeployedOnSupportedNetworks(suites);
     }
 
-    /// A dependency declared with code other than Polygon's is refused on
-    /// Polygon, naming the dependency, the declared hash and Polygon's.
+    /// A dependency declared with code other than Polygon's is refused on Polygon, naming the
+    /// dependency, the declared hash and Polygon's.
     function testDependencyWithOtherCodeOnOneNetworkIsRefusedOnThatNetwork() external {
         bytes memory actual = polygonSystemContractCode();
         DeploySuite[] memory suites = releaseDeclaring(
@@ -152,10 +141,8 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
         this.externalCheckDeployedOnSupportedNetworks(suites);
     }
 
-    /// With two suites, a dependency only the SECOND declares, absent from
-    /// Arbitrum One, is refused on Arbitrum One naming it. The first suite's
-    /// dependencies are all present on every network, so a matrix that held
-    /// every suite to the first suite's dependencies passes.
+    /// With two suites, a dependency only the SECOND declares, absent from Arbitrum One, is refused
+    /// on Arbitrum One naming it.
     function testSecondSuitesDependencyAbsentFromOneNetworkIsRefusedNamingThatNetworkAndDependency() external {
         DeploySuite[] memory suites = new DeploySuite[](2);
         suites[0] = releasedSuites()[0];
@@ -170,10 +157,8 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
         this.externalCheckDeployedOnSupportedNetworks(suites);
     }
 
-    /// With only its clone gone from Polygon, the first network checked,
-    /// the suite is refused as not deployed there: the address refusal that
-    /// `testDependencyRefusalPrecedesTheAddressRefusalOnOneNetwork` shows the
-    /// dependency refusal coming before.
+    /// With only its clone gone from Polygon, the first network checked, the suite is refused as
+    /// not deployed there.
     function testCloneGoneFromOneNetworkIsRefusedAsNotDeployedThere() external {
         address polygonAddress = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
         vm.etch(polygonAddress, hex"");
@@ -183,10 +168,8 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
         this.externalCheckDeployedOnSupportedNetworks(releasedSuites());
     }
 
-    /// On a network where the suite's dependency AND its address both fail,
-    /// the dependency is the refusal: with its clone and the implementation
-    /// both gone from Polygon, the suite is refused there as missing the
-    /// implementation.
+    /// On a network where the suite's dependency AND its address both fail, the dependency is the
+    /// refusal.
     function testDependencyRefusalPrecedesTheAddressRefusalOnOneNetwork() external {
         vm.etch(perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID), hex"");
         vm.etch(exampleCloneImplementation(), hex"");

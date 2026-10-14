@@ -26,34 +26,21 @@ import {
 /// @param chainId The chain id.
 error NoPerNetworkCloneAdmin(uint256 chainId);
 
-/// @dev Arbitrum One's chain id, as a fact of the world rather than a read of
-/// the catalogue the code under test resolves through.
 uint256 constant PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID = 42161;
 
-/// @dev Polygon's chain id, for the reason `PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID`
-/// is a literal.
 uint256 constant PER_NETWORK_CLONE_POLYGON_CHAIN_ID = 137;
 
-/// @dev The admin the per-network clone is initialized with on Arbitrum One.
 address constant PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN = address(0xA1A1a1a1A1A1A1A1A1a1a1a1a1a1A1A1a1A1a1a1);
 
-/// @dev The admin the per-network clone is initialized with on Polygon.
 address constant PER_NETWORK_CLONE_POLYGON_ADMIN = address(0xb2b2b2b2b2B2b2B2B2b2b2B2B2b2B2B2b2b2b2b2);
 
-/// @dev The record root holding the committed `per-network-clone` release
-/// record.
 string constant PER_NETWORK_CLONE_RECORD_ROOT = "test/fixture-clone-per-network-record";
 
-/// @dev The tag of the one `per-network-clone` release.
 string constant PER_NETWORK_CLONE_RELEASE_TAG = "0_0_1";
 
-/// @dev The contract name the `per-network-clone` release record is written
-/// under.
 string constant PER_NETWORK_CLONE_RECORD_CONTRACT = "PerNetworkClone";
 
-/// The admin a network's clone is initialized with: a different account per
-/// chain id, the way an issuer's Safe is a different account on one chain than
-/// on the others.
+/// The admin a network's clone is initialized with.
 /// @param chainId The network's chain id.
 /// @return The admin on that network.
 function perNetworkCloneAdmin(uint256 chainId) pure returns (address) {
@@ -66,18 +53,14 @@ function perNetworkCloneAdmin(uint256 chainId) pure returns (address) {
     revert NoPerNetworkCloneAdmin(chainId);
 }
 
-/// The per-network init data: the admin on the network with the given chain
-/// id, `abi.encode`d — the shape of an issuer authoriser whose init data is
-/// `abi.encode(safeForChainId(chainId))`. Reverts, through
-/// `perNetworkCloneAdmin`, for a chain id with no admin.
+/// The per-network init data.
 /// @param chainId The network's chain id.
 /// @return The init data on that network.
 function perNetworkCloneInitData(uint256 chainId) pure returns (bytes memory) {
     return abi.encode(perNetworkCloneAdmin(chainId));
 }
 
-/// The chain ids of `PerNetworkCloneDeploys.supportedNetworks()`, in order, as
-/// literals: what a candidate built outside the declaration is built for.
+/// The chain ids of `PerNetworkCloneDeploys.supportedNetworks()`, in order, as literals.
 /// @return Arbitrum One's, then Polygon's.
 function perNetworkCloneChainIds() pure returns (uint256[] memory) {
     uint256[] memory chainIds = new uint256[](2);
@@ -86,8 +69,7 @@ function perNetworkCloneChainIds() pure returns (uint256[] memory) {
     return chainIds;
 }
 
-/// A per-network clone declaration over the example factory and
-/// implementation.
+/// A per-network clone declaration over the example factory and implementation.
 /// @param suite The suite key.
 /// @param salt The salt.
 /// @return The clone declaration.
@@ -104,17 +86,13 @@ function perNetworkClone(string memory suite, bytes32 salt) pure returns (CloneD
     });
 }
 
-/// The declaration the committed release record of `per-network-clone` was
-/// written from. Its salt is not the candidate's, so the release sits at
-/// addresses of its own and a check that read the candidate in place of the
-/// release would name the wrong clone.
+/// The declaration the committed release record of `per-network-clone` was written from.
 /// @return The release's clone declaration.
 function perNetworkCloneRelease() pure returns (CloneDeploy memory) {
     return perNetworkClone("per-network-clone@0_0_1", bytes32(uint256(5)));
 }
 
-/// A per-network release with only its first recorded network: the release
-/// as it would have been cut had the repo supported only that network then.
+/// A per-network release with only its first recorded network.
 /// @param release The release.
 /// @return The release, recording its first network alone.
 function onlyFirstRecordedNetwork(DeploySuite memory release) pure returns (DeploySuite memory) {
@@ -126,9 +104,9 @@ function onlyFirstRecordedNetwork(DeploySuite memory release) pure returns (Depl
     return release;
 }
 
-/// Where the `per-network-clone` release's factory, implementation and salt
-/// put a clone initialized with a network's admin, derived from a
-/// `CloneTarget` built here rather than through any per-network code.
+/// Where the `per-network-clone` release's factory, implementation and salt put a clone initialized
+/// with a network's admin, derived from a `CloneTarget` built here rather than through any
+/// per-network code.
 /// @param chainId The network's chain id.
 /// @return The clone address.
 function perNetworkCloneReleaseAddress(uint256 chainId) pure returns (address) {
@@ -144,21 +122,9 @@ function perNetworkCloneReleaseAddress(uint256 chainId) pure returns (address) {
 }
 
 /// @title PerNetworkCloneDeploys
-/// @notice A clone deploy repo whose clone is initialized with a different
-/// admin on each network — an issuer's authoriser whose admin is that chain's
-/// Safe — so the clone lands at a different address on each.
-///
-/// Two networks, each with its own admin, so the two addresses differ and a
-/// reader that resolved every network to one entry, or paired an address with
-/// the other network's chain id, reads an address that is not there.
-/// `supportedNetworks()` is exactly those two: the candidate's init data is
-/// read for every supported network, and `perNetworkCloneInitData` has an
-/// admin for those two only. They are Arbitrum One and Polygon because those
-/// are the forks the factory and implementation are deployed onto by the
-/// broadcast tests.
-///
-/// One candidate and one frozen release, read from its committed record under
-/// `PER_NETWORK_CLONE_RECORD_ROOT`, at different salts.
+/// @notice A clone deploy repo whose clone is initialized with a different admin on each network —
+/// an issuer's authoriser whose admin is that chain's Safe — so the clone lands at a different
+/// address on each.
 abstract contract PerNetworkCloneDeploys is RainDeployCloneSuitesBase {
     /// @inheritdoc RainDeploySuitesBase
     function supportedNetworks() internal view virtual override returns (string[] memory) {

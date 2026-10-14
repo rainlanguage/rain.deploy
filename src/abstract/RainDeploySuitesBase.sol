@@ -121,47 +121,17 @@ error CandidateSourceMismatch(string suite, bytes32 storedCreationCodeHash, byte
 error CandidateSourceCompiles(string suite, string artifactPath);
 
 /// How a suite's code gets to its address.
-///
-/// A field of the suite rather than a choice made by whichever script or test
-/// handles it, so the broadcast, the derivation every verification group
-/// compares against, the frozen record match and the snapshot writer all read
-/// the mechanism from the one entry they were handed. `LibRainDeployMechanism`
-/// is the one place each of those dispatches on it.
 enum DeployMechanism {
     /// `CREATE2` over `creationCode` through the Zoltu factory at a zero salt.
-    /// `mechanismData` is empty.
     Zoltu,
     /// An EIP-1167 clone through an `ICloneableFactoryV4` at its open salt.
-    /// `mechanismData` is the `abi.encode`d `CloneTarget`, and the factory and
-    /// the implementation it names MUST both be declared `dependencies`.
     Clone,
-    /// An EIP-1167 clone through an `ICloneableFactoryV4` at its open salt,
-    /// with init data — and therefore an address — per network.
-    /// `mechanismData` is the `abi.encode`d `CloneNetworks`, which records
-    /// each network's address, so `storedDeployedAddress` MUST be zero; the
-    /// factory and the implementation MUST both be declared `dependencies`.
+    /// An EIP-1167 clone through an `ICloneableFactoryV4` at its open salt, with init data — and
+    /// therefore an address — per network.
     ClonePerNetwork
 }
 
-/// One deployable unit: a named snapshot of one contract.
-///
-/// The inputs are `mechanism`, `creationCode` and `mechanismData`. For a Zoltu
-/// suite `creationCode` is the only one that carries anything: the Zoltu
-/// factory is `CREATE2` over its calldata under a zero salt, so the deploy
-/// address is a pure function of it and identical on every network, and
-/// running it once locally yields the runtime code and its hash. For a clone
-/// the address is the factory's open-salt `CREATE2` over the `CloneTarget` in
-/// `mechanismData`, and running the declared factory locally yields the runtime
-/// code. Either way the address, code hash and runtime code recorded beside
-/// them are checked OUTPUTS, which is what the verification abstracts check
-/// them as.
-///
-/// They are recorded rather than derived on purpose. `LibRainDeploy` compares
-/// the recorded address against the creation code before it forks anything, so
-/// a snapshot whose pins have gone stale fails BEFORE broadcasting rather than
-/// deploying to wherever the code happens to land. Deriving them here would
-/// make that comparison derived-against-derived, and a guard that compares a
-/// value to itself is not a guard.
+/// One deployable unit.
 struct DeploySuite {
     /// The key. Unique across every suite a repo declares, and held to the key
     /// alphabet — see `InvalidDeploySuiteKey`. It is what
@@ -186,9 +156,7 @@ struct DeploySuite {
     /// check that catches a snapshot of the wrong contract comparing source to
     /// itself, green.
     bytes creationCode;
-    /// The deploy address recorded for this suite, on every network. Zero for
-    /// a `ClonePerNetwork` suite, whose `mechanismData` records an address per
-    /// network instead.
+    /// The deploy address recorded for this suite, on every network.
     address storedDeployedAddress;
     /// The deployed code hash recorded for this suite.
     bytes32 storedBytecodeHash;
@@ -226,10 +194,7 @@ struct DeploySuite {
     DeployDependency[] dependencies;
     /// How this suite's code gets to its address — see `DeployMechanism`.
     DeployMechanism mechanism;
-    /// What the mechanism needs beyond `creationCode`: empty for Zoltu, the
-    /// `abi.encode`d `CloneTarget` for a clone. A generated `MECHANISM_DATA`
-    /// constant for a released clone, so a frozen clone is broadcast with the
-    /// factory, implementation, init data and salt its release was cut with.
+    /// What the mechanism needs beyond `creationCode`.
     bytes mechanismData;
 }
 
@@ -319,24 +284,7 @@ abstract contract RainDeploySuitesBase {
         return LibRainDeploy.supportedNetworks();
     }
 
-    /// A suite as it is broadcast and as it is checked on chain: with an
-    /// address on every network its candidate has one for.
-    ///
-    /// A release records the networks it was cut for. A per-network clone
-    /// release reached by a network added to `supportedNetworks()` later has
-    /// no recorded address there, and its candidate — built for every
-    /// supported network from the declaration's init data — is what knows that
-    /// network's init data. So a suite takes the networks it lacks from the
-    /// candidate its key names, through
-    /// `LibRainDeployMechanism.withUnrecordedNetworks`: the candidate whose
-    /// key is the suite key's name half, which for a release is the candidate
-    /// it was cut from. A suite no candidate is named by, or whose mechanism
-    /// takes nothing from one, is returned as it is, and a network a
-    /// per-network suite still has no entry for is refused wherever it is
-    /// read.
-    ///
-    /// Not applied to what the record group checks: the frozen record holds
-    /// what the release WAS cut for, and that is what it is matched against.
+    /// A suite as it is broadcast and as it is checked on chain.
     /// @param suite The suite.
     /// @return The suite, with the networks its candidate adds.
     function onSupportedNetworks(DeploySuite memory suite) internal view returns (DeploySuite memory) {
@@ -350,9 +298,7 @@ abstract contract RainDeploySuitesBase {
         return suite;
     }
 
-    /// The name half of a suite key: everything before its at sign, or the whole
-    /// key when it has none. A released key is the key of the candidate it was
-    /// cut from, an at sign and the tag — see `InvalidDeploySuiteKey`.
+    /// The name half of a suite key.
     /// @param suite The suite key.
     /// @return The name half.
     function suiteKeyName(string memory suite) internal pure returns (string memory) {

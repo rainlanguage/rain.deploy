@@ -82,11 +82,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         vm.makePersistent(secondDeployedAddress());
     }
 
-    /// A version that is not on a network MUST fail, naming the network and
-    /// the address. This is the whole reason the group exists: a
-    /// release that reached some chains and not others, or a chain added after
-    /// a release that therefore never got it, is invisible to every other
-    /// check.
+    /// A version that is not on a network MUST fail, naming the network and the address.
     function testChainNotDeployedReverts() external {
         // Emptied, and left persistent, so every fork carries an empty account
         // here rather than whatever the network holds.
@@ -209,24 +205,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         assertEq(block.chainid, firstChainId);
     }
 
-    /// The early return for an empty set is about having NOTHING to check, not
-    /// about the networks: handed ONE suite, the matrix forks.
-    ///
-    /// The count is the whole point of the case. Every other test here runs the
-    /// matrix over this contract's TWO released suites, so a guard keyed
-    /// anywhere below two — `suites.length < 2` — returns early on every
-    /// subject in the repo and is caught by none of them:
-    /// `RainDeployVerifyChainCandidateTest` is the only other contract that
-    /// reaches the matrix with a subject, at exactly one, and it forks on its own
-    /// before calling, so a matrix that returned without forking is
-    /// indistinguishable there. `RainDeployVerifyChainEmptyTest`'s empty case
-    /// reads as satisfied under that guard, which is what makes one subject the
-    /// length that discriminates.
-    ///
-    /// This contract is where it belongs because it already forks every
-    /// supported network. Asserting it from the empty-set side would hand the
-    /// contract that exists to need no RPC endpoint the whole-roster dependency
-    /// the early return removes from it.
+    /// The early return for an empty set is about having NOTHING to check, not about the networks.
     function testChainWithASingleSubjectDoesFork() external {
         (bool activeBefore,) = address(vm).call(abi.encodeWithSignature("activeFork()"));
         assertFalse(activeBefore, "a fork was selected before the call");
@@ -277,7 +256,8 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         return abi.decode(stepData, (address));
     }
 
-    /// Broadcasts the address registry over the declaration's networks through `codelessDeployStep`.
+    /// Broadcasts the address registry over the declaration's networks through
+    /// `codelessDeployStep`.
     /// @return The fork of each network.
     function externalBroadcastAddressRegistry() external returns (uint256[] memory) {
         SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
@@ -384,10 +364,9 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         assertFalse(extraFork, "the run opened a fork that is not one of the supported networks");
     }
 
-    /// External wrapper for `LibRainDeploy.checkNetworkChainId` so
-    /// `vm.expectRevert` works at the correct call depth.
-    /// @param network The catalogue entry the selected chain is checked
-    /// against.
+    /// External wrapper for `LibRainDeploy.checkNetworkChainId` so `vm.expectRevert` works at the
+    /// correct call depth.
+    /// @param network The catalogue entry the selected chain is checked against.
     function externalCheckNetworkChainId(SupportedNetwork memory network) external view {
         LibRainDeploy.checkNetworkChainId(network);
     }
@@ -406,7 +385,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         checkDeployedOnNetworks(networks, suites);
     }
 
-    /// The chain group checks the chain id before any suite: the emptied registry would otherwise refuse first.
+    /// The chain group checks the chain id before any suite.
     function testChainGroupRefusesAMisboundEndpoint() external {
         vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"");
         string[] memory names = new string[](1);

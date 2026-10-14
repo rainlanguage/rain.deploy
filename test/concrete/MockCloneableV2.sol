@@ -8,12 +8,8 @@ import {ICloneableV2, ICLONEABLE_V2_SUCCESS} from "rain-factory-0.1.30/src/inter
 error MockCloneableV2AlreadyInitialized();
 
 /// @title MockCloneableV2
-/// @notice A clone implementation whose code differs from `MockCloneable`'s,
-/// so the two derive different Zoltu addresses and the clones of each embed a
-/// different implementation address. Stands in for an implementation a
-/// candidate has moved to since a release was cut from the one before it.
-///
-/// It initializes as `MockCloneable` does, and also answers `version()`.
+/// @notice A clone implementation whose code differs from `MockCloneable`'s, so the two derive
+/// different Zoltu addresses and the clones of each embed a different implementation address.
 contract MockCloneableV2 is ICloneableV2 {
     /// The data this clone was initialized with, verbatim.
     bytes public sInitData;

@@ -60,52 +60,30 @@ error NonMonotonicRelease(string tag, string newestFrozenTag);
 /// @param root The rejected root.
 error InvalidRecordRoot(string root);
 
-/// Thrown when the state snapshot taken around a clone snapshot's local deploy
-/// could not be reverted. The deploy etches the declared factory and
-/// implementation and plants the clone; left in place, they would be read by
-/// whatever the calling script does next as if they were real.
+/// Thrown when the state snapshot taken around a clone snapshot's local deploy could not be
+/// reverted.
 /// @param suite The suite whose snapshot was being written.
 /// @param snapshotId The state snapshot that could not be reverted.
 error SnapshotStateRevertFailed(string suite, uint256 snapshotId);
 
-/// Thrown when a file in the frozen record declares no deployed address,
-/// declares one as `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in
-/// decimal digits, or declares one whose value does not read as an address.
-/// The record holds generated snapshots and nothing else, and
-/// `DEPLOYED_ADDRESS` is what makes one the record of a deployment rather than
-/// a file that happens to be in a release directory. Distinct from
-/// `FrozenSnapshotNotReleased`, which is a declaration that is missing
-/// something — this is a record that cannot be read at all, and reporting it as
-/// undeclared would send the reader after the wrong thing.
-/// @param path The record file with no `DEPLOYED_ADDRESS` or
-/// `DEPLOYED_ADDRESS_<chainId>` declaration, with a `DEPLOYED_ADDRESS_<x>`
-/// whose `<x>` is not decimal, or with a declared value that is not an
-/// address.
+/// Thrown when a file in the frozen record declares no deployed address, declares one as
+/// `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in decimal digits, or declares one whose
+/// value does not read as an address.
+/// @param path The record file with no `DEPLOYED_ADDRESS` or `DEPLOYED_ADDRESS_<chainId>`
+/// declaration, with a `DEPLOYED_ADDRESS_<x>` whose `<x>` is not decimal, or with a declared value
+/// that is not an address.
 error FrozenSnapshotUnreadable(string path);
 
-/// Thrown when a file in the frozen record declares its deployed address more
-/// than once: `DEPLOYED_ADDRESS` twice, one `DEPLOYED_ADDRESS_<chainId>` twice,
-/// or `DEPLOYED_ADDRESS` beside any `DEPLOYED_ADDRESS_<chainId>`. Solidity
-/// rejects a second file-scope constant of one name, so no compiler reads the
-/// first two at all, and the third is two answers to where the release is.
-/// Every rule for choosing between them — first, last, either — reads a value
-/// the generator never wrote. A hand edit is what this group exists to catch and a position rule is what it
-/// would aim at, so the reader refuses rather than choosing.
+/// Thrown when a file in the frozen record declares its deployed address more than once.
 /// @param path The record file declaring its deployed address more than once.
 error FrozenSnapshotAmbiguous(string path);
 
-/// Thrown when a file in the frozen record declares `MECHANISM_DATA` more than
-/// once. Solidity rejects a second file-scope constant of one name, so the
-/// record does not compile, and which of the two a released entry carries is
-/// a value the generator never wrote.
+/// Thrown when a file in the frozen record declares `MECHANISM_DATA` more than once.
 /// @param path The record file declaring `MECHANISM_DATA` more than once.
 error FrozenSnapshotMechanismDataAmbiguous(string path);
 
-/// Thrown when a file in the frozen record declares its deployed addresses per
-/// network, as `DEPLOYED_ADDRESS_<chainId>`, and declares no `MECHANISM_DATA`.
-/// Only a per-network clone records an address per network, and its entry
-/// reads them from the `CloneNetworks` its `MECHANISM_DATA` encodes, so the
-/// record is no mechanism's record.
+/// Thrown when a file in the frozen record declares its deployed addresses per network, as
+/// `DEPLOYED_ADDRESS_<chainId>`, and declares no `MECHANISM_DATA`.
 /// @param path The record file.
 error FrozenSnapshotMechanismDataMissing(string path);
 
@@ -759,19 +737,9 @@ library LibRainDeploySnapshot {
         );
     }
 
-    /// The constants a CLONE snapshot declares below `BYTECODE_HASH`: the
-    /// Zoltu snapshot's four, with the deploy address described as the clone's,
-    /// and `MECHANISM_DATA` — the `abi.encode`d `CloneTarget` the release was
-    /// cut with, so a frozen clone is broadcast and derived with the factory,
-    /// implementation, init data and salt it was recorded with.
-    ///
-    /// A per-network clone declares `DEPLOYED_ADDRESS_<chainId>` per network,
-    /// in its address order, in place of the one `DEPLOYED_ADDRESS`, and its
-    /// `MECHANISM_DATA` is its `CloneNetworks` — see
-    /// `perNetworkAddressConstants`.
+    /// The constants a CLONE snapshot declares below `BYTECODE_HASH`.
     /// @param vm The Vm instance for string operations.
-    /// @param deployed Where the local deploy put the clone, in the suite's
-    /// address order.
+    /// @param deployed Where the local deploy put the clone, in the suite's address order.
     /// @param suite The clone suite.
     /// @return The constants, as Solidity source.
     function cloneSnapshotConstants(Vm vm, address[] memory deployed, DeploySuite memory suite)
@@ -819,20 +787,14 @@ library LibRainDeploySnapshot {
         );
     }
 
-    /// A per-network clone's `DEPLOYED_ADDRESS_<chainId>` constants, one per
-    /// network in its address order, and the `CloneNetworks` its record
-    /// carries as `MECHANISM_DATA`.
-    ///
-    /// Both record the LOCAL deploy's addresses, never the suite's: the suite's
-    /// recorded addresses are a claim the record is what checks, so writing
-    /// them back would record a claim as its own evidence.
+    /// A per-network clone's `DEPLOYED_ADDRESS_<chainId>` constants, one per network in its address
+    /// order, and the `CloneNetworks` its record carries as `MECHANISM_DATA`.
     /// @param vm The Vm instance for string operations.
-    /// @param deployed Where the local deploy put the clone on each network, in
-    /// the suite's address order.
+    /// @param deployed Where the local deploy put the clone on each network, in the suite's address
+    /// order.
     /// @param suite The per-network clone suite.
     /// @return The constants, as Solidity source.
-    /// @return The `abi.encode`d `CloneNetworks`, carrying the local deploy's
-    /// addresses.
+    /// @return The `abi.encode`d `CloneNetworks`, carrying the local deploy's addresses.
     function perNetworkAddressConstants(Vm vm, address[] memory deployed, DeploySuite memory suite)
         internal
         pure
@@ -861,23 +823,11 @@ library LibRainDeploySnapshot {
     }
 
     /// Generate one snapshot for one SUITE, by the mechanism it declares.
-    ///
-    /// A Zoltu suite is the `(creationCode, dependencies)` writer above, and its
-    /// output is byte-for-byte that writer's.
-    ///
-    /// A clone suite is deployed through `LibRainDeployMechanism.deployLocally`
-    /// — the same local deploy every verification group derives through, so a
-    /// written record and a derivation of it agree by construction — inside a
-    /// state snapshot that is reverted once the file is written. The file is
-    /// built BEFORE the revert because `LibFs` reads the code hash from the
-    /// deployed instance.
     /// @param vm The Vm instance for file operations.
     /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
-    /// MUST be a path of record root segments.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
-    /// @param spdxLicenseIdentifier The SPDX licence identifier the written
-    /// snapshot declares.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written snapshot declares.
     /// @param copyrightText The copyright text the written snapshot declares.
     /// @param suite The suite to snapshot.
     /// @return The path written.
@@ -914,17 +864,10 @@ library LibRainDeploySnapshot {
     }
 
     /// Deploy a clone suite locally and write its record into `snapshotDir`.
-    /// The caller owns the state snapshot around it: the file is built while
-    /// the clone is still deployed because `LibFs` reads the code hash from
-    /// the deployed instance. Split out of `writeSnapshot` because the deploy,
-    /// the constants and `LibFs`'s seven arguments alongside that function's
-    /// own seven parameters are stack too deep on solc 0.8.25 without
-    /// `--via-ir`.
     /// @param vm The Vm instance for file operations.
     /// @param snapshotDir The checked directory to write into.
     /// @param contractName The contract the snapshot describes.
-    /// @param spdxLicenseIdentifier The SPDX licence identifier the written
-    /// snapshot declares.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written snapshot declares.
     /// @param copyrightText The copyright text the written snapshot declares.
     /// @param suite The clone suite to snapshot.
     function writeCloneSnapshotFile(
@@ -942,11 +885,10 @@ library LibRainDeploySnapshot {
         );
     }
 
-    /// `writeSnapshot` for a suite, applied to `RAIN_SPDX_LICENSE_IDENTIFIER`
-    /// and `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
+    /// `writeSnapshot` for a suite, applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
+    /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
     /// @param vm The Vm instance for file operations.
     /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
-    /// MUST be a path of record root segments.
     /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
     /// @param contractName The contract the snapshot describes.
     /// @param suite The suite to snapshot.
@@ -1380,69 +1322,18 @@ library LibRainDeploySnapshot {
         return string.concat("Lib", contractName, "Released");
     }
 
-    /// @dev The declaration a generated snapshot records its deploy address in.
-    /// Matched whole and from the START of its line, so what is being looked
-    /// for is the DECLARATION: it cannot be satisfied by characters that happen
-    /// to occur inside a hex payload, nor by a line that merely CONTAINS the
-    /// declaration text — a commented-out copy carrying some other address is
-    /// exactly the hand edit this whole group exists to catch, and it is at
-    /// file scope in every generated snapshot, so there is no indentation to
-    /// allow for.
-    ///
-    /// The start of a line is what makes a `//` copy unreachable, because `//`
-    /// has to sit in front of the text it comments out. It does nothing to a
-    /// `/* ... */` copy, whose delimiters are on their own lines and whose
-    /// contents therefore start their lines exactly as the real declaration
-    /// does. Block comments come out of the record before this rule runs, so
-    /// that what it runs on is what the compiler would see.
     string constant DEPLOYED_ADDRESS_DECLARATION = "address constant DEPLOYED_ADDRESS =";
 
-    /// @dev The start of the declaration a per-network snapshot records one
-    /// network's deploy address in: `DEPLOYED_ADDRESS_<chainId> =`. Matched
-    /// from the start of its line for the reasons `DEPLOYED_ADDRESS_DECLARATION`
-    /// is.
     string constant DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX = "address constant DEPLOYED_ADDRESS_";
 
-    /// @dev The declaration a clone snapshot records its `mechanismData` in.
-    /// Matched from the start of its line for the reasons
-    /// `DEPLOYED_ADDRESS_DECLARATION` is.
     string constant MECHANISM_DATA_DECLARATION = "bytes constant MECHANISM_DATA =";
 
-    /// The addresses a frozen record declares as its deploy addresses, and the
-    /// chain id each is for.
-    ///
-    /// A record declares either ONE `DEPLOYED_ADDRESS`, the address on every
-    /// network, or one `DEPLOYED_ADDRESS_<chainId>` per network, which is what
-    /// a per-network clone records. The first reads as one address and no
-    /// chain ids; the second as each declaration's chain id and address, in
-    /// file order — the order the writer emits them, which is the suite's
-    /// address order.
-    ///
-    /// `LibCodeGen` emits an address constant on ONE line — wrapping needs 120
-    /// characters, `DEPLOYED_ADDRESS` occupies 88 and `DEPLOYED_ADDRESS_<chainId>`
-    /// would need a chain id of more than 31 digits — so a declaration is a
-    /// line, and its value is that line's last token with the
-    /// type wrapper and the terminator stripped. `address(0x...);` and a bare
-    /// `0x...;` read the same, so which wrapper the generator chose is not
-    /// something this has to know.
-    ///
-    /// That every generated snapshot HAS this declaration, second, of type
-    /// `address`, is pinned by `GeneratedSnapshotShapeTest` against the
-    /// compiler's own AST. Read from the text here rather than from that AST
-    /// because a record is reached by its PATH, which is what the walk returns,
-    /// while its artifact path is not something a caller can name — foundry
-    /// disambiguates those by whatever else happens to share the basename.
-    ///
-    /// The whole record is scanned before a match is read, so a record
-    /// carrying `DEPLOYED_ADDRESS` twice, one chain id twice, or both forms is
-    /// refused rather than resolved by position. A per-network declaration's
-    /// chain id is read by `declaredChainId`, and every declaration's address
-    /// by `declaredAddress`.
+    /// The addresses a frozen record declares as its deploy addresses, and the chain id each is
+    /// for.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
-    /// @return The chain id each address is for: empty for a record declaring
-    /// `DEPLOYED_ADDRESS`.
+    /// @return The chain id each address is for.
     /// @return The addresses the record declares, in file order.
     function recordedDeployedAddresses(Vm vm, string memory path, string memory record)
         internal
@@ -1491,12 +1382,7 @@ library LibRainDeploySnapshot {
         return (chainIds, addresses);
     }
 
-    /// The address a declaration line's value names: its last token with the
-    /// `address(` wrapper and the terminator stripped.
-    ///
-    /// A value `vm.parseAddress` cannot read is not one the generator writes,
-    /// and the record is refused as `FrozenSnapshotUnreadable` rather than by
-    /// the cheatcode's untyped revert.
+    /// The address a declaration line's value names.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file, for the error only.
     /// @param value The declaration line's last token.
@@ -1510,19 +1396,9 @@ library LibRainDeploySnapshot {
         }
     }
 
-    /// The chain id a per-network declaration line names: the characters from
-    /// the end of `DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX` to the next space,
-    /// read as a decimal number.
-    ///
-    /// Every one of them MUST be a decimal digit, there MUST be at least one,
-    /// and the number MUST fit in a `uint256`. Anything else is not a name the
-    /// generator writes, and the record is refused as
-    /// `FrozenSnapshotUnreadable`. Read here rather than by `vm.parseUint`,
-    /// which reverts untyped on a non-number and reads a `0x` suffix as
-    /// hexadecimal, so `DEPLOYED_ADDRESS_0x89` would read as chain 137.
+    /// The chain id a per-network declaration line names.
     /// @param path The record file, for the error only.
-    /// @param line A line starting with
-    /// `DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX`.
+    /// @param line A line starting with `DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX`.
     /// @return The chain id.
     function declaredChainId(string memory path, string memory line) internal pure returns (uint256) {
         bytes memory text = bytes(line);
@@ -1547,19 +1423,8 @@ library LibRainDeploySnapshot {
         return chainId;
     }
 
-    /// A record's text with every block comment removed, so that a declaration
-    /// found in it is one the compiler would read.
-    ///
-    /// `/*` opens a comment that the first following `*/` closes, and Solidity
-    /// does not nest them, so what survives is the text before the first `/*`
-    /// plus, for each one after it, the text after its `*/`. An unclosed `/*`
-    /// is comment to the end of the file, so nothing after it survives.
-    ///
-    /// A comment is removed rather than blanked, which joins the text either
-    /// side of it into one line exactly as the compiler joins it. A declaration
-    /// the compiler reads on the tail of a `*/` is therefore still found, and
-    /// one interrupted mid-line by a comment is not — that leaves the record
-    /// unreadable, never read as some other address.
+    /// A record's text with every block comment removed, so that a declaration found in it is one
+    /// the compiler would read.
     /// @param vm The Vm instance for string operations.
     /// @param record The record file's contents.
     /// @return The contents with every block comment removed.
@@ -1579,26 +1444,7 @@ library LibRainDeploySnapshot {
         return stripped;
     }
 
-    /// The mechanism a frozen record was cut with, read from the declarations
-    /// the record carries:
-    ///
-    /// - no `MECHANISM_DATA`: `Zoltu`;
-    /// - `MECHANISM_DATA` and `DEPLOYED_ADDRESS`: `Clone`;
-    /// - `MECHANISM_DATA` and `DEPLOYED_ADDRESS_<chainId>`: `ClonePerNetwork`.
-    ///
-    /// Each release is read on its own, so a suite whose mechanism changed
-    /// between releases still has every release read as the mechanism it was
-    /// cut with.
-    ///
-    /// The address declarations are read by `recordedDeployedAddresses`, the
-    /// reader the record check matches releases with, so a record with no
-    /// deployed address is refused as `FrozenSnapshotUnreadable` and one
-    /// declaring both forms as `FrozenSnapshotAmbiguous`, here as there. A
-    /// record declaring `MECHANISM_DATA` more than once is refused as
-    /// `FrozenSnapshotMechanismDataAmbiguous`, and one declaring per-network
-    /// addresses without it as `FrozenSnapshotMechanismDataMissing`.
-    /// `MECHANISM_DATA_DECLARATION` is matched in the text block comments are
-    /// removed from, as the address declarations are.
+    /// The mechanism a frozen record was cut with, read from the declarations the record carries:
     /// @param vm The Vm instance for file and string operations.
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
     /// @return The mechanism the record was cut with.
@@ -1624,19 +1470,7 @@ library LibRainDeploySnapshot {
         return chainIds.length == 0 ? DeployMechanism.Clone : DeployMechanism.ClonePerNetwork;
     }
 
-    /// The aliased import one record file contributes: all four consensus
-    /// fields and the frozen dependency list, under that release's prefix —
-    /// and, for a clone, its `MECHANISM_DATA`. A per-network clone imports no
-    /// `DEPLOYED_ADDRESS`: its record declares one per network, and its entry
-    /// reads them from its `MECHANISM_DATA`.
-    ///
-    /// Which of these the import is comes from the record itself, by
-    /// `recordedMechanism`, so every name imported is one the record declares.
-    ///
-    /// Split per file rather than inlined into the block for the same reason
-    /// `snapshotConstants` is split out of `writeSnapshot`: the aliases and
-    /// the path they come from are more live values than the legacy codegen has
-    /// stack for.
+    /// The aliased import one record file contributes.
     /// @param vm The Vm instance for file and string operations.
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
     /// @return The import statement, and the blank line after it.
@@ -1668,18 +1502,11 @@ library LibRainDeploySnapshot {
     }
 
     /// The import block of a generated released-suites lib.
-    ///
-    /// One aliased import per record file, carrying all four consensus fields
-    /// and the frozen dependency list, plus the `MECHANISM_DATA` of each record
-    /// `recordedMechanism` reads as a clone. A released entry can therefore
-    /// only say what its own frozen snapshot says — there is no path by which a
-    /// released address, code hash, creation code, runtime code, dependency
-    /// list or mechanism is written anywhere but into the immutable record.
     /// @param vm The Vm instance for file and string operations.
     /// @param paths The record's files, in the order they are emitted.
-    /// @param suitesImportPath The path the emitted lib reaches the suite types
-    /// by — `suitesImportPathInThisRepo` for a lib written into this repo's own
-    /// `LIB_DIR`, and the consumer's remapped path otherwise.
+    /// @param suitesImportPath The path the emitted lib reaches the suite types by —
+    /// `suitesImportPathInThisRepo` for a lib written into this repo's own `LIB_DIR`, and the
+    /// consumer's remapped path otherwise.
     /// @return The import block.
     function releasedImportBlock(Vm vm, string[] memory paths, string memory suitesImportPath)
         internal
@@ -1703,15 +1530,11 @@ library LibRainDeploySnapshot {
         return releasedImportBlock(vm, paths, suitesImportPathInThisRepo());
     }
 
-    /// One `suites[i] = DeploySuite({...});` entry of a generated
-    /// released-suites lib. `releasedLibraryBlock` says where each field comes
-    /// from. The mechanism kind is the record's own, by `recordedMechanism`.
-    /// Two `string.concat`s rather than one, to stay inside the stack.
+    /// One `suites[i] = DeploySuite({...});` entry of a generated released-suites lib.
     /// @param vm The Vm instance for file and string operations.
     /// @param i The entry's index.
     /// @param path The record file the entry aliases.
-    /// @param template The candidate declaration the key and the artifact path
-    /// come from.
+    /// @param template The candidate declaration the key and the artifact path come from.
     /// @return The entry.
     function releasedSuiteEntry(Vm vm, uint256 i, string memory path, DeploySuite memory template)
         internal
@@ -1764,36 +1587,6 @@ library LibRainDeploySnapshot {
     }
 
     /// The library block of a generated released-suites lib.
-    ///
-    /// FIVE fields per entry alias the frozen snapshot: the four consensus
-    /// fields and the dependency list. The dependency list is aliased rather
-    /// than rebuilt from `template` because it is a precondition of the
-    /// deployment and not metadata — `RainDeployBroadcast.run` passes it to
-    /// `LibRainDeploy.deployToNetworks`, which refuses to broadcast on a
-    /// network where one of them has no code, or holds code other than the
-    /// `runtimeCode` the entry declares. Broadcasting a
-    /// past release onto a newly supported chain therefore has to check the
-    /// list that release was cut with, so it is read from that release's own
-    /// frozen snapshot.
-    ///
-    /// The key and the artifact path come from `template`, the candidate
-    /// declaration, and are regenerated from it on every build: they are
-    /// explorer and ordering metadata rather than anything a broadcast acts on,
-    /// and preserving what a previous generation wrote would mean parsing
-    /// generated Solidity back in.
-    ///
-    /// The mechanism comes from the record, kind and data both. The kind is
-    /// what `recordedMechanism` reads from each record on its own, so a suite
-    /// whose mechanism changed between releases emits every entry as its
-    /// release was cut, whatever `template` declares now. The data is `""` for
-    /// Zoltu and the release's own `MECHANISM_DATA` for a clone, so a frozen
-    /// clone is broadcast with the `CloneTarget` or `CloneNetworks` it was cut
-    /// with. A per-network clone's entry records `storedDeployedAddress` as
-    /// zero, since its `CloneNetworks` records its address on each network.
-    ///
-    /// The key is the template's with the tag appended, so every entry is
-    /// unique and `allSuites`'s duplicate check is satisfied by construction
-    /// rather than by whoever writes the declaration.
     /// @param vm The Vm instance for file and string operations.
     /// @param libraryName The generated library's name.
     /// @param contractName The contract the released record describes.
@@ -1840,48 +1633,13 @@ library LibRainDeploySnapshot {
         );
     }
 
-    /// Generate the released-suites lib for a repo's frozen record: the
-    /// declaration of what this repo has released, emitted from the record
-    /// itself.
-    ///
-    /// The record and the declaration of it are produced by ONE call, so a
-    /// release that `src/generated/<tag>/` holds is a release `releasedSuites()`
-    /// names. A hand-written declaration is the one thing that can silently
-    /// drop a release out of every check there is — `RainDeployVerifySnapshot`
-    /// checks the declaration against the record precisely because nothing else
-    /// would notice, and generating both here is what makes that check pass by
-    /// construction rather than by remembering.
-    ///
-    /// Named `Lib<Contract>Released`, the same `Lib<Contract>` shape the alias
-    /// lib is named with, into the directory it is handed.
-    ///
-    /// Every field of an entry but two comes from the frozen snapshot, the
-    /// mechanism kind included, which `recordedMechanism` reads from each
-    /// release's own record. The other two come from `template`. Those two — the key and the artifact path — are explorer and
-    /// ordering metadata regenerated from the CURRENT declaration on every
-    /// build, NOT part of the frozen record. Moving a source file retroactively
-    /// updates the artifact path of every entry, including releases cut years
-    /// ago, which is intended: the alternative is parsing the previously
-    /// generated Solidity back in to preserve what it said.
-    ///
-    /// The dependency list is deliberately NOT among them. It is what a
-    /// broadcast checks is already on chain before it deploys anything, so
-    /// regenerating it from current source would mean re-broadcasting a past
-    /// release onto a new chain under today's preconditions rather than the
-    /// ones that release was cut with. It is frozen into the snapshot by
-    /// `writeSnapshot` and aliased back out here.
+    /// Generate the released-suites lib for a repo's frozen record.
     /// @param vm The Vm instance for file operations.
-    /// @param libDir The directory to write the lib into — `LIB_DIR` for a
-    /// repo's real tree. A parameter for the same reason `recordRoot` is one,
-    /// and the directory MUST already exist.
-    /// @param recordRoot The record root to read releases from — `LIB_FS_ROOT`
-    /// for a repo's real record. A parameter for the same reason
-    /// `frozenSnapshotPaths` takes one: a writer that can only be pointed at
-    /// the real record can only be tested against it, and a repo that has cut
-    /// no release has nothing there to test against.
+    /// @param libDir The directory to write the lib into — `LIB_DIR` for a repo's real tree.
+    /// @param recordRoot The record root to read releases from — `LIB_FS_ROOT` for a repo's real
+    /// record.
     /// @param contractName The contract the released record describes.
-    /// @param spdxLicenseIdentifier The SPDX licence identifier the written lib
-    /// declares. The calling repo's, for the reason `writeSnapshot` gives.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written lib declares.
     /// @param copyrightText The copyright text the written lib declares.
     /// @param template The candidate declaration the metadata comes from.
     /// @return The path written.

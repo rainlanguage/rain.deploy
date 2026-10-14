@@ -40,19 +40,18 @@ import {
     perNetworkCloneInitData
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 
-/// Per-network init data in which Arbitrum One and Base share Arbitrum One's
-/// admin and Polygon has its own.
+/// Per-network init data in which Arbitrum One and Base share Arbitrum One's admin and Polygon has
+/// its own.
 /// @param chainId The network's chain id.
 /// @return The init data on that network.
 function sharingInitData(uint256 chainId) pure returns (bytes memory) {
     return perNetworkCloneInitData(chainId == 8453 ? 42161 : chainId);
 }
 
-/// @title LibRainDeployMechanismTest
-/// Tests for `LibRainDeployMechanism`.
+/// @title LibRainDeployMechanismTest Tests for `LibRainDeployMechanism`.
 contract LibRainDeployMechanismTest is Test {
-    /// A salt with bytes set across the whole word, so a derivation that
-    /// truncated it or used only its low bytes would be caught.
+    /// A salt with bytes set across the whole word, so a derivation that truncated it or used only
+    /// its low bytes would be caught.
     bytes32 constant TEST_SALT = 0x1122334455667788990011223344556677889900112233445566778899001122;
 
     /// Init data that is neither empty nor a single word.
@@ -92,9 +91,7 @@ contract LibRainDeployMechanismTest is Test {
             });
     }
 
-    /// The suite key MUST NOT move the address. It names the clone in the
-    /// declaration; it is not part of what gets deployed, and a derivation that
-    /// hashed it in would make a rename a redeploy to a new address.
+    /// The suite key MUST NOT move the address.
     function testCloneAddressIgnoresTheSuiteKey() external view {
         DeployCandidate memory named = LibRainDeployMechanism.cloneCandidate(
             declaredClone(
@@ -112,10 +109,8 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(renamed.snapshot.mechanismData, named.snapshot.mechanismData);
     }
 
-    /// `cloneCandidate` MUST derive every field of the candidate from the clone,
-    /// and MUST carry the standard unanchorable reason. Each field asserted
-    /// against its own derivation, because the point of the builder is that a
-    /// consumer no longer writes these by hand.
+    /// `cloneCandidate` MUST derive every field of the candidate from the clone, and MUST carry the
+    /// standard unanchorable reason.
     function testCloneCandidateDerivesEveryField() external view {
         CloneDeploy memory clone = declaredClone(
             "local-clone", exampleCloneFactory(), exampleCloneImplementation(), exampleCloneDependencies()
@@ -138,15 +133,11 @@ contract LibRainDeployMechanismTest is Test {
         }
         assertEq(candidate.unanchorableReason, CLONE_UNANCHORABLE_REASON);
 
-        // The reason has to be NON-empty: an empty one is what says a candidate
-        // IS anchorable, which would send the source anchor looking for an
-        // artifact that cannot exist.
         assertNotEq(bytes(candidate.unanchorableReason).length, 0);
     }
 
-    /// The recorded code hash MUST be the hash of the recorded runtime code, and
-    /// the recorded address MUST be where the recorded creation code lands. The
-    /// candidate's internal consistency, which the verification abstracts assume.
+    /// The recorded code hash MUST be the hash of the recorded runtime code, and the recorded
+    /// address MUST be where the recorded creation code lands.
     function testCloneCandidateIsInternallyConsistent() external {
         MockCloneFactory factory = new MockCloneFactory();
         MockCloneable implementation = new MockCloneable();
@@ -186,8 +177,7 @@ contract LibRainDeployMechanismTest is Test {
         return forkIds;
     }
 
-    /// The example clone over its declared factory and implementation, as a
-    /// suite.
+    /// The example clone over its declared factory and implementation, as a suite.
     /// @return The clone suite.
     function exampleCloneSuite() internal view returns (DeploySuite memory) {
         return LibRainDeployMechanism.cloneCandidate(
@@ -197,9 +187,8 @@ contract LibRainDeployMechanismTest is Test {
         .snapshot;
     }
 
-    /// A clone suite deploys locally to the address its mechanism derives, and
-    /// what lands there is the proxy. The positive half every refusal below is
-    /// measured against.
+    /// A clone suite deploys locally to the address its mechanism derives, and what lands there is
+    /// the proxy.
     function testCloneSuiteDeploysLocallyToItsDerivedAddress() external {
         DeploySuite memory suite = exampleCloneSuite();
         address deployed = this.externalDeployLocally(suite);
@@ -208,10 +197,9 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(deployed.code, suite.storedRuntimeCode);
     }
 
-    /// A clone's factory and implementation are what its address and code are
-    /// functions of, so a suite that does not declare either is refused before
-    /// an address is derived from it — by the address derivation and the local
-    /// deploy alike.
+    /// A clone's factory and implementation are what its address and code are functions of, so a
+    /// suite that does not declare either is refused before an address is derived from it — by the
+    /// address derivation and the local deploy alike.
     function testCloneSuiteMissingADeclaredDependencyIsRefused() external {
         DeploySuite memory suite = exampleCloneSuite();
         DeployDependency[] memory declared = suite.dependencies;
@@ -238,10 +226,7 @@ contract LibRainDeployMechanismTest is Test {
         this.externalDeployLocally(suite);
     }
 
-    /// A Zoltu suite has no mechanism data. One that carries some is a suite
-    /// declared as one mechanism and filled in as another, so every dispatch
-    /// refuses it rather than deploying the creation code and ignoring the
-    /// rest — the broadcast before any network is forked.
+    /// A Zoltu suite has no mechanism data.
     function testZoltuSuiteCarryingMechanismDataIsRefused() external {
         DeploySuite memory suite = DeploySuite({
             suite: "zoltu-with-data",
@@ -268,9 +253,8 @@ contract LibRainDeployMechanismTest is Test {
         this.externalDeployAndBroadcast(networks, suite);
     }
 
-    /// A factory whose clone lands somewhere other than the address the formula
-    /// derives is refused, naming both: a release recorded at the formula's
-    /// address would otherwise be a release of a clone that is not there.
+    /// A factory whose clone lands somewhere other than the address the formula derives is refused,
+    /// naming both.
     function testCloneFactoryLandingOffTheFormulaIsRefused() external {
         DeploySuite memory suite = exampleCloneSuite();
         address elsewhere = address(uint160(suite.storedDeployedAddress) + 1);
@@ -287,25 +271,20 @@ contract LibRainDeployMechanismTest is Test {
         this.externalDeployLocally(suite);
     }
 
-    /// A clone suite's creation code MUST be the EIP-1167 proxy over its own
-    /// implementation: it is what the record states the clone was made from,
-    /// and the factory never reads it, so nothing else would catch a suite
-    /// carrying the creation code of something else.
+    /// A clone suite's creation code MUST be the EIP-1167 proxy over its own implementation.
     function testCloneCreationCodeThatIsNotTheProxyIsRefused() external {
         DeploySuite memory suite = exampleCloneSuite();
         suite.creationCode = type(MockCloneable).creationCode;
         vm.expectRevert(abi.encodeWithSelector(CloneCreationCodeMismatch.selector, suite.suite));
         this.externalDeployLocally(suite);
 
-        // The proxy over a DIFFERENT implementation is still not this clone's.
         suite.creationCode = LibRainDeployClone.cloneCreationCode(exampleCloneFactory());
         vm.expectRevert(abi.encodeWithSelector(CloneCreationCodeMismatch.selector, suite.suite));
         this.externalDeployLocally(suite);
     }
 
-    /// The per-network example clone at `TEST_SALT`, with `data` beside its
-    /// per-network init data, as a candidate for `chainIds`. A `CloneDeploy`
-    /// carries an internal function, so it is built here rather than passed in.
+    /// The per-network example clone at `TEST_SALT`, with `data` beside its per-network init data,
+    /// as a candidate for `chainIds`.
     /// @param data The one-for-every-network data to declare beside it.
     /// @param chainIds The chain ids to build it for.
     /// @return The candidate.
@@ -319,8 +298,8 @@ contract LibRainDeployMechanismTest is Test {
         return LibRainDeployMechanism.cloneCandidate(clone, chainIds);
     }
 
-    /// The example one-data clone, with `initDataPerNetwork` set on it, as a
-    /// candidate for `chainIds`.
+    /// The example one-data clone, with `initDataPerNetwork` set on it, as a candidate for
+    /// `chainIds`.
     /// @param chainIds The chain ids to build it for.
     /// @return The candidate.
     function externalOneDataCloneMarkedPerNetworkCandidate(uint256[] memory chainIds)
@@ -367,8 +346,7 @@ contract LibRainDeployMechanismTest is Test {
         return LibRainDeployMechanism.deployLocally(vm, suite);
     }
 
-    /// The example per-network clone — Arbitrum One's admin, then Polygon's —
-    /// as a suite.
+    /// The example per-network clone — Arbitrum One's admin, then Polygon's — as a suite.
     /// @return The per-network clone suite.
     function perNetworkSuite() internal view returns (DeploySuite memory) {
         return LibRainDeployMechanism.cloneCandidate(
@@ -377,9 +355,9 @@ contract LibRainDeployMechanismTest is Test {
         .snapshot;
     }
 
-    /// The address the example factory clones the example implementation to
-    /// with the given init data at `TEST_SALT`, derived from a `CloneTarget`
-    /// built here rather than through the per-network code under test.
+    /// The address the example factory clones the example implementation to with the given init
+    /// data at `TEST_SALT`, derived from a `CloneTarget` built here rather than through the
+    /// per-network code under test.
     /// @param data The init data.
     /// @return The clone address.
     function exampleCloneAddress(bytes memory data) internal pure returns (address) {
@@ -393,11 +371,9 @@ contract LibRainDeployMechanismTest is Test {
         );
     }
 
-    /// A per-network declaration becomes a `ClonePerNetwork` candidate whose
-    /// `CloneNetworks` carries each network's chain id, init data and the
-    /// address that data derives, with no `storedDeployedAddress`; every reader
-    /// of its addresses answers in the declaration's network order, and
-    /// `deployedAddress` answers each chain id with that network's address.
+    /// A per-network declaration becomes a `ClonePerNetwork` candidate whose `CloneNetworks`
+    /// carries each network's chain id, init data and the address that data derives, with no
+    /// `storedDeployedAddress`.
     function testPerNetworkCloneCandidateDerivesEveryField() external view {
         CloneDeploy memory clone = perNetworkClone("per-network", TEST_SALT);
         DeployCandidate memory candidate = this.externalPerNetworkCloneCandidate("", perNetworkCloneChainIds());
@@ -442,8 +418,7 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(this.externalDeployedAddressOn(suite, 137), polygonAddress);
     }
 
-    /// A suite at one address on every network has no per-address chain ids:
-    /// Zoltu and `Clone` alike.
+    /// A suite at one address on every network has no per-address chain ids.
     function testAddressChainIdsIsEmptyForAOneAddressSuite() external view {
         assertEq(this.externalAddressChainIds(exampleCloneSuite()).length, 0);
         DeploySuite memory zoltu = DeploySuite({
@@ -460,9 +435,8 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(this.externalAddressChainIds(zoltu).length, 0);
     }
 
-    /// A declaration with one init data for every network AND init data per
-    /// network is refused naming its suite: either could be meant, and each
-    /// puts the clone somewhere else. A single byte is enough to refuse.
+    /// A declaration with one init data for every network AND init data per network is refused
+    /// naming its suite.
     function testCloneCandidateRefusesDataBesidePerNetworkData() external {
         vm.expectRevert(abi.encodeWithSelector(CloneDataAmbiguous.selector, "per-network"));
         this.externalPerNetworkCloneCandidate(TEST_DATA, perNetworkCloneChainIds());
@@ -471,10 +445,8 @@ contract LibRainDeployMechanismTest is Test {
         this.externalPerNetworkCloneCandidate(hex"00", perNetworkCloneChainIds());
     }
 
-    /// A per-network suite that also carries a `storedDeployedAddress` is
-    /// refused by every reader of its addresses and by the broadcast before
-    /// any network is forked: an address beside the per-network record is a
-    /// second record nobody reads.
+    /// A per-network suite that also carries a `storedDeployedAddress` is refused by every reader
+    /// of its addresses and by the broadcast before any network is forked.
     function testPerNetworkSuiteCarryingAStoredAddressIsRefused() external {
         DeploySuite memory suite = perNetworkSuite();
         suite.storedDeployedAddress = address(1);
@@ -496,8 +468,7 @@ contract LibRainDeployMechanismTest is Test {
         this.externalDeployAndBroadcast(networks, suite);
     }
 
-    /// A per-network suite naming no network is refused: it says where the
-    /// clone is on no network at all.
+    /// A per-network suite naming no network is refused.
     function testPerNetworkSuiteWithNoNetworksIsRefused() external {
         DeploySuite memory suite = perNetworkSuite();
         suite.mechanismData = abi.encode(
@@ -520,8 +491,7 @@ contract LibRainDeployMechanismTest is Test {
         this.externalDeployLocallyEvery(suite);
     }
 
-    /// A per-network suite naming a chain id twice is refused naming it: two
-    /// entries for one network are two answers to where the clone is there.
+    /// A per-network suite naming a chain id twice is refused naming it.
     function testPerNetworkSuiteNamingAChainTwiceIsRefused() external {
         DeploySuite memory suite = perNetworkSuite();
         CloneNetworks memory clones = abi.decode(suite.mechanismData, (CloneNetworks));
@@ -537,16 +507,16 @@ contract LibRainDeployMechanismTest is Test {
         this.externalDeployLocallyEvery(suite);
     }
 
-    /// A per-network suite's address on a network it has no entry for is
-    /// refused naming that chain id, never defaulted to another network's.
+    /// A per-network suite's address on a network it has no entry for is refused naming that chain
+    /// id, never defaulted to another network's.
     function testPerNetworkAddressOnAnUndeclaredNetworkIsRefused() external {
         DeploySuite memory suite = perNetworkSuite();
         vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneNetworkUndeclared.selector, 8453));
         this.externalDeployedAddressOn(suite, 8453);
     }
 
-    /// A per-network suite deploys locally to each network's derived address,
-    /// each clone initialized with that network's admin.
+    /// A per-network suite deploys locally to each network's derived address, each clone
+    /// initialized with that network's admin.
     function testPerNetworkSuiteDeploysLocallyToEachNetworksAddress() external {
         DeploySuite memory suite = perNetworkSuite();
         address[] memory deployed = this.externalDeployLocallyEvery(suite);
@@ -558,10 +528,7 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(MockCloneable(deployed[1]).sInitData(), abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN));
     }
 
-    /// Networks sharing init data share an address, and that clone is deployed
-    /// once: re-cloning it would leave the first clone's initialized storage
-    /// for the second `initialize` to refuse. The sharing entries are the
-    /// first and the THIRD, so a check of only the entry before is not enough.
+    /// Networks sharing init data share an address, and that clone is deployed once.
     function testPerNetworkSuiteSharingDataDeploysTheSharedCloneOnce() external {
         CloneDeploy memory clone = perNetworkClone("per-network", TEST_SALT);
         clone.initData = sharingInitData;
@@ -582,8 +549,8 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(MockCloneable(deployed[1]).sInitData(), other);
     }
 
-    /// A per-network candidate has exactly one entry per given chain id, in
-    /// the given order, with `initData`'s answer for that chain id.
+    /// A per-network candidate has exactly one entry per given chain id, in the given order, with
+    /// `initData`'s answer for that chain id.
     function testPerNetworkCloneCandidateIsBuiltForExactlyTheGivenChainIdsInOrder() external view {
         uint256[] memory chainIds = new uint256[](2);
         chainIds[0] = 137;
@@ -607,8 +574,8 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(clones.networks[0].chainId, 137);
     }
 
-    /// A chain id `initData` reverts on reverts the candidate with that revert,
-    /// wherever in the list it is.
+    /// A chain id `initData` reverts on reverts the candidate with that revert, wherever in the
+    /// list it is.
     function testPerNetworkCloneCandidateSurfacesAnInitDataRevert() external {
         uint256[] memory chainIds = new uint256[](3);
         chainIds[0] = 42161;
@@ -618,17 +585,14 @@ contract LibRainDeployMechanismTest is Test {
         this.externalPerNetworkCloneCandidate("", chainIds);
     }
 
-    /// A per-network candidate built for no chain id names no network, and its
-    /// readers refuse it.
+    /// A per-network candidate built for no chain id names no network, and its readers refuse it.
     function testPerNetworkCloneCandidateForNoChainIdIsRefusedByItsReaders() external {
         DeploySuite memory suite = this.externalPerNetworkCloneCandidate("", new uint256[](0)).snapshot;
         vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.NoCloneNetworks.selector));
         this.externalDeployedAddresses(suite);
     }
 
-    /// A one-data clone never reads its `initData`, whatever the chain ids: a
-    /// reverting function and chain ids it reverts on leave it a `Clone`
-    /// candidate.
+    /// A one-data clone never reads its `initData`, whatever the chain ids.
     function testOneDataCloneNeverReadsInitData() external view {
         CloneDeploy memory clone =
             declaredClone("example", exampleCloneFactory(), exampleCloneImplementation(), exampleCloneDependencies());
@@ -644,8 +608,8 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(candidate.snapshot.mechanismData, abi.encode(targetOf(clone)));
     }
 
-    /// A one-data clone's `noInitDataPerNetwork`, read because the declaration
-    /// set `initDataPerNetwork`, refuses naming the chain id it was asked for.
+    /// A one-data clone's `noInitDataPerNetwork`, read because the declaration set
+    /// `initDataPerNetwork`, refuses naming the chain id it was asked for.
     function testNoInitDataPerNetworkRefusesWhenRead() external {
         uint256[] memory chainIds = new uint256[](1);
         chainIds[0] = 42161;
@@ -682,11 +646,8 @@ contract LibRainDeployMechanismTest is Test {
         return chainIds;
     }
 
-    /// A release recorded on Arbitrum One only, with an Arbitrum One admin the
-    /// declaration no longer names, at a salt the candidate does not use:
-    /// Arbitrum One keeps its recorded data and address, and Polygon, which
-    /// the release never reached, is appended with the candidate's Polygon
-    /// data at the address that data derives under the RELEASE's salt.
+    /// A release recorded on Arbitrum One only, with an Arbitrum One admin the declaration no
+    /// longer names, at a salt the candidate does not use.
     function testUnrecordedNetworkTakesTheCandidatesDataUnderTheReleasesSalt() external view {
         bytes32 releaseSalt = bytes32(uint256(5));
         DeploySuite memory release = perNetworkSuiteAt(releaseSalt, onlyChainId(42161));
@@ -745,8 +706,7 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(this.externalDeployedAddressOn(extended, 137), expected.networks[1].deployedAddress);
     }
 
-    /// Recorded entries keep their order and come first; the candidate's
-    /// unrecorded ones follow in the candidate's order, each once.
+    /// Recorded entries keep their order and come first.
     function testUnrecordedNetworksFollowTheRecordedOnesInTheCandidatesOrder() external view {
         DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(137));
         uint256[] memory candidateChainIds = new uint256[](3);
@@ -779,17 +739,14 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(extended.networks[2].data, abi.encode(PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN));
     }
 
-    /// A release recording every network the candidate has comes back with the
-    /// same mechanism data.
+    /// A release recording every network the candidate has comes back with the same mechanism data.
     function testFullyRecordedReleaseIsUnchanged() external view {
         DeploySuite memory release = perNetworkSuiteAt(bytes32(uint256(5)), perNetworkCloneChainIds());
         DeploySuite memory candidate = perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds());
         assertEq(this.externalWithUnrecordedNetworks(release, candidate).mechanismData, release.mechanismData);
     }
 
-    /// Nothing is added unless both the suite and the candidate are per
-    /// network: a one-address suite is at its address everywhere, and a
-    /// one-data candidate has no per-network data to give.
+    /// Nothing is added unless both the suite and the candidate are per network.
     function testOnlyAPerNetworkSuiteTakesAPerNetworkCandidatesNetworks() external view {
         DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(137));
         DeploySuite memory perNetwork = perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds());
@@ -802,8 +759,7 @@ contract LibRainDeployMechanismTest is Test {
         );
     }
 
-    /// A per-network suite the readers refuse is refused here too, before
-    /// anything is added to it.
+    /// A per-network suite the readers refuse is refused here too, before anything is added to it.
     function testUnrecordedNetworksRefuseAPerNetworkSuiteCarryingAStoredAddress() external {
         DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(137));
         release.storedDeployedAddress = address(0xdead);
