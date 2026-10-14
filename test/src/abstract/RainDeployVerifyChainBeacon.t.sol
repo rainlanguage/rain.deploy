@@ -86,7 +86,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         this.externalCheckDeployedOnNetworks(networksNamed(LibRainDeploy.ARBITRUM_ONE, ""));
     }
 
-    function testChainGroupChecksBeaconsWithoutSuites() external {
+    function testChainGroupChecksBeaconsOnAnyNetworkWithoutSuites() external {
         sBeacons[42161].push(declared(address(0xCAFE)));
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -98,7 +98,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
                 OWNER
             )
         );
-        this.externalCheckDeployedOnNetworks(networksNamed(LibRainDeploy.ARBITRUM_ONE, ""));
+        this.externalCheckDeployedOnNetworks(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
     }
 
     function testChainGroupChecksEachNetworksOwnBeacons() external {
