@@ -3677,4 +3677,25 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"\\\"/*\"b/**/c"), "a\"\\\"/*\"bc");
         assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"/**/\"'/**/'"), "a\"/**/\"'/**/'");
     }
+
+    /// A text ending mid-token is read to its last byte without reading past it.
+    function testWithoutBlockCommentsStopsAtTheLastByte() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/"), "a/");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/* b*"), "a");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"\\"), "a\"\\");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("/"), "/");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("/*"), "");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments(""), "");
+    }
+
+    /// A line comment ends at its newline even after a backslash, so a block comment on the next line is still removed.
+    function testWithoutBlockCommentsLineCommentHasNoEscape() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a// x\\\nb/* c */d"), "a// x\\\nbd");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("// \\\n/*\nz\n*/y"), "// \\\n\n\ny");
+    }
+
+    /// A block comment keeps its line breaks, so what follows a multi-line comment starts a line as the compiler reads it.
+    function testWithoutBlockCommentsKeepsLineBreaks() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a; /* c\n*/b"), "a; \nb");
+    }
 }

@@ -111,7 +111,7 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         return deployed;
     }
 
-    /// A clone broadcast formats no verify command, even under a compiled artifact's path: the local fork Vm has no `toString` to format one with.
+    /// A clone broadcast formats no verify command, even under a compiled artifact's path.
     function testCloneBroadcastPrintsNoVerifyCommand() external {
         address factory = LibRainDeploy.etchAndDeployZoltu(vm, type(MockCloneFactory).creationCode);
         address implementation = LibRainDeploy.etchAndDeployZoltu(vm, type(MockCloneable).creationCode);
@@ -124,7 +124,9 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
-        address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(new LocalForkVm())), networks, suite);
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 0);
+        address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
         assertEq(deployed.length, 1);
         assertEq(deployed[0], expected);
         assertEq(deployed[0].code, LibRainDeployClone.cloneRuntimeCode(implementation));
@@ -139,10 +141,27 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
-        address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(new LocalForkVm())), networks, suite);
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 0);
+        address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
         assertEq(deployed.length, 1);
         assertEq(deployed[0], suite.storedDeployedAddress);
         assertEq(deployed[0].code, type(MockCloneable).runtimeCode);
+    }
+
+    /// A Zoltu broadcast under a compiled artifact path formats one verify command per network.
+    function testZoltuBroadcastUnderACompiledArtifactPrintsVerifyCommands() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        DeploySuite memory suite = zoltuSuite(LibRainDeploy.zoltuAddress(type(MockCloneable).creationCode));
+        suite.storedBytecodeHash = keccak256(type(MockCloneable).runtimeCode);
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.POLYGON;
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.expectCall(
+            address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector, suite.storedDeployedAddress), 2
+        );
+        this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
     }
 
     function anyForkExists() internal returns (bool) {

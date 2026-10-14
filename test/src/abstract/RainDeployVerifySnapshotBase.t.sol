@@ -902,6 +902,16 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         this.externalCheckFrozenCodeRecord("record.sol", committedCodeRecord());
     }
 
+    /// A declaration inside a block comment is not one the compiler reads, so it neither marks a code record as a deploy record nor makes its code constants ambiguous.
+    function testFrozenCodeRecordIgnoresBlockCommentedDeclarations() external view {
+        string memory record = string.concat(
+            committedCodeRecord(),
+            "/*\naddress constant DEPLOYED_ADDRESS = address(0x000000000000000000000000000000000000dEaD);\n",
+            "bytes32 constant BYTECODE_HASH = bytes32(0x0000000000000000000000000000000000000000000000000000000000000001);\n*/\n"
+        );
+        this.externalCheckFrozenCodeRecord("record.sol", record);
+    }
+
     /// A code record whose runtime code was edited no longer hashes to its
     /// recorded hash, and is refused naming both hashes.
     function testFrozenCodeRecordRuntimeEditedReverts() external {

@@ -1104,14 +1104,38 @@ it. In order:
 2. Add `rain-factory` 0.1.30 and its remapping, as above.
 3. Make `view` every function of yours that calls `checkedCandidateSuites`,
    `allSuites`, `suiteNames` or `suiteByName`, which are `view` now.
-4. Import the moved errors from where they are now declared:
-   `NetworkChainIdMismatch`, `NotDeployedOnNetwork` (no longer carrying the
-   suite) and `CodeHashMismatchOnNetwork` in `LibRainDeploy`;
-   `ZoltuDerivationMismatch` in `LibRainDeployMechanism`;
-   `FrozenSnapshotUnreadable` and `FrozenSnapshotAmbiguous` in
-   `LibRainDeploySnapshot`. `FrozenSnapshotsOutnumberReleases` carries an
-   `address[]`.
-5. Regenerate: `forge script ./script/Build.sol` followed by
+4. Update the moved errors. `NetworkChainIdMismatch`, `NotDeployedOnNetwork` and
+   `CodeHashMismatchOnNetwork` are members of `LibRainDeploy`: refer to them as
+   `LibRainDeploy.NotDeployedOnNetwork.selector` and so on, and drop their
+   imports. `NotDeployedOnNetwork` and `CodeHashMismatchOnNetwork` no longer
+   carry the suite. Import `ZoltuDerivationMismatch` from
+   `LibRainDeployMechanism`, and `FrozenSnapshotUnreadable` and
+   `FrozenSnapshotAmbiguous` from `LibRainDeploySnapshot`.
+   `FrozenSnapshotsOutnumberReleases` carries an `address[]`.
+5. Replace the removed or re-signed internal functions:
+   - `RainDeployVerifyChain.checkDeployedOnNetwork(string, DerivedDeploy)` is
+     removed: call `LibRainDeploy.checkDeclaredDependencies` and
+     `LibRainDeploy.checkDeployedCode` on the selected fork, or run the whole
+     matrix with `checkDeployedOnNetworks(SupportedNetwork[], DeploySuite[])`.
+   - `RainDeployVerifyChain.checkDeployedOnSupportedNetworks` takes
+     `DeploySuite[]`, not `DerivedDeploy[]`.
+   - `RainDeployVerifyChain.checkNetworkChainId(string, uint256, uint256)` is
+     `LibRainDeploy.checkNetworkChainId(SupportedNetwork)`, which reads the
+     selected fork's chain id.
+   - `RainDeployVerifySnapshotBase.recordedDeployedAddress(string, string)` is
+     `LibRainDeploySnapshot.recordedDeployedAddresses(Vm, string, string)`,
+     returning the chain id and address of every declaration.
+   - `RainDeployVerifySnapshotBase.withoutBlockComments` is
+     `LibRainDeploySnapshot.withoutBlockComments`.
+   - `LibRainDeploy.checkDeployRequirements` is
+     `LibRainDeploy.checkDeclaredDependencies`, with the same parameters.
+   - `LibTimelockController.timelockInitCode` and `expectedTimelockAddress` take
+     the timelock's `bytes creationCode` first, and `assertTimelockState` its
+     `bytes32 bytecodeHash` first. `LibTimelockControllerDeploy.deployTimelock`
+     takes both after `deployer`.
+   - `LibRainDeploySnapshot.releasedImport`, `releasedImportBlock` and
+     `releasedLibraryBlock` are `view`.
+6. Regenerate: `forge script ./script/Build.sol` followed by
    `./script/build.sh`.
 
 `LibRainDeploy.deployToNetworks` and every other entry point taking network

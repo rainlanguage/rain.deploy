@@ -75,4 +75,34 @@ contract RainDeployVerifyChainCloneTest is ExampleCloneDeploys, RainDeployVerify
     function testMatrixPassesLiveSuitesOnLocalForks() external {
         this.externalCheckOnLocalForks(new LocalForkVm());
     }
+
+    /// A clone address holding other code MUST be refused on a local fork.
+    function testMatrixRefusesCloneWithOtherCode() external {
+        DeploySuite memory suite = releasedSuites()[0];
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.etch(suite.storedDeployedAddress, hex"00");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.CodeHashMismatchOnNetwork.selector,
+                supportedNetworks()[0],
+                suite.storedDeployedAddress,
+                suite.storedBytecodeHash,
+                keccak256(hex"00")
+            )
+        );
+        this.externalCheckOnLocalForks(forkVm);
+    }
+
+    /// A clone address with no code MUST be refused on a local fork.
+    function testMatrixRefusesMissingClone() external {
+        DeploySuite memory suite = releasedSuites()[0];
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.etch(suite.storedDeployedAddress, hex"");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.NotDeployedOnNetwork.selector, supportedNetworks()[0], suite.storedDeployedAddress
+            )
+        );
+        this.externalCheckOnLocalForks(forkVm);
+    }
 }

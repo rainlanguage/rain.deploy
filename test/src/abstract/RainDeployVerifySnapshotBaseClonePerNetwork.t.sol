@@ -282,6 +282,18 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         assertEq(addresses[1], address(0xbeef));
     }
 
+    /// A declaration wrapped after `=` with nothing after it is unreadable, typed and naming the record.
+    function testPerNetworkDeclarationWrappedAtTheEndOfTheRecordIsUnreadable() external {
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses("record.sol", "address constant DEPLOYED_ADDRESS_1 =");
+    }
+
+    /// A wrapped declaration whose next line is not an address is unreadable.
+    function testPerNetworkDeclarationWrappedOntoANonAddressIsUnreadable() external {
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses("record.sol", "address constant DEPLOYED_ADDRESS_1 =\n    hex\"00\";\n");
+    }
+
     /// A declaration whose value is not an address makes the record unreadable, typed and naming
     /// the file, in both the every-network and the per-network form.
     function testDeclarationWithAMalformedAddressIsUnreadable() external {

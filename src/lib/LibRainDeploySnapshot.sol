@@ -1428,9 +1428,9 @@ library LibRainDeploySnapshot {
         return chainId;
     }
 
-    /// A record's text with every block comment removed, read left to right as the compiler reads it.
+    /// A record's text with every block comment removed but its line breaks, read left to right as the compiler reads it.
     /// @param record The record file's contents.
-    /// @return The contents with every block comment removed.
+    /// @return The contents with every block comment removed but its line breaks.
     function withoutBlockComments(string memory record) internal pure returns (string memory) {
         bytes memory text = bytes(record);
         bytes memory stripped = new bytes(text.length);
@@ -1443,6 +1443,9 @@ library LibRainDeploySnapshot {
                 if (slashNext && text[i + 1] == "*") {
                     i += 2;
                     while (i < text.length && !(text[i] == "*" && i + 1 < text.length && text[i + 1] == "/")) {
+                        if (text[i] == "\n") {
+                            stripped[length++] = "\n";
+                        }
                         i++;
                     }
                     i += 2;

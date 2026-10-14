@@ -280,6 +280,11 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
             string.concat(everyNetworkLine(address(1)), "// /*\n", MECHANISM_DATA_LINE, "// */\n"),
             DeployMechanism.Clone
         );
+        checkRead(
+            "line-comment-backslash",
+            string.concat(everyNetworkLine(address(1)), "// \\\n/*\n", MECHANISM_DATA_LINE, "*/\n"),
+            DeployMechanism.Zoltu
+        );
     }
 
     /// The three readings, from minimal records.
