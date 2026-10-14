@@ -20,6 +20,8 @@ import {
 import {ZoltuDeployOrAdopt} from "../../abstract/ZoltuDeployOrAdopt.sol";
 import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
+import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
 contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
     bytes32 constant TEST_SALT = 0x1122334455667788990011223344556677889900112233445566778899001122;
@@ -99,6 +101,32 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         returns (address[] memory, uint256[] memory)
     {
         return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, suite);
+    }
+
+    function externalDeployAndBroadcastOn(Vm forkVm, string[] memory networks, DeploySuite memory suite)
+        external
+        returns (address[] memory)
+    {
+        (address[] memory deployed,) = LibRainDeployMechanism.deployAndBroadcast(forkVm, networks, 1, suite);
+        return deployed;
+    }
+
+    /// A clone broadcast formats no verify command: the local fork Vm has no `toString` to format one with.
+    function testCloneBroadcastPrintsNoVerifyCommand() external {
+        address factory = LibRainDeploy.etchAndDeployZoltu(vm, type(MockCloneFactory).creationCode);
+        address implementation = LibRainDeploy.etchAndDeployZoltu(vm, type(MockCloneable).creationCode);
+        CloneTarget memory clone = localClone(factory, implementation);
+        address expected = LibRainDeployClone.cloneDeployedAddress(clone);
+        DeploySuite memory suite = cloneSuite(
+            clone, expected, LibRainDeployClone.cloneDeployedCodehash(implementation), exampleCloneDependencies()
+        );
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(new LocalForkVm())), networks, suite);
+        assertEq(deployed.length, 1);
+        assertEq(deployed[0], expected);
+        assertEq(deployed[0].code, LibRainDeployClone.cloneRuntimeCode(implementation));
     }
 
     function anyForkExists() internal returns (bool) {

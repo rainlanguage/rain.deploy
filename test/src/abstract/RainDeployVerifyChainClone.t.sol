@@ -2,10 +2,13 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
-import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleCloneDeploys} from "../../abstract/ExampleCloneDeploys.sol";
+import {CloneTarget} from "../../../src/lib/LibRainDeployClone.sol";
+import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 
 /// @title RainDeployVerifyChainCloneTest
 /// @notice The chain matrix over a clone deploy repo's frozen release.
@@ -34,5 +37,42 @@ contract RainDeployVerifyChainCloneTest is ExampleCloneDeploys, RainDeployVerify
             )
         );
         this.testSuitesLiveOnEverySupportedNetwork();
+    }
+
+    /// The matrix on local forks.
+    /// @param forkVm The local fork Vm.
+    function externalCheckOnLocalForks(LocalForkVm forkVm) external {
+        checkDeployedOnNetworks(
+            Vm(address(forkVm)), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), releasedSuites()
+        );
+    }
+
+    /// A clone whose proxy code is right MUST still be refused when its implementation is missing.
+    function testMatrixRefusesCloneWithMissingImplementation() external {
+        address implementation = abi.decode(releasedSuites()[0].mechanismData, (CloneTarget)).implementation;
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.etch(implementation, hex"");
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, supportedNetworks()[0], implementation)
+        );
+        this.externalCheckOnLocalForks(forkVm);
+    }
+
+    /// A fork reporting another chain than its catalogue entry MUST be refused, even when every suite is live on it.
+    function testMatrixRefusesForkReportingAnotherChain() external {
+        LocalForkVm forkVm = new LocalForkVm();
+        SupportedNetwork memory network = LibRainDeploy.declaredNetworkConfigs(supportedNetworks())[0];
+        forkVm.setReportedChainId(network.chainId + 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.NetworkChainIdMismatch.selector, network.name, network.chainId, network.chainId + 1
+            )
+        );
+        this.externalCheckOnLocalForks(forkVm);
+    }
+
+    /// Every suite live on local forks passes the matrix.
+    function testMatrixPassesLiveSuitesOnLocalForks() external {
+        this.externalCheckOnLocalForks(new LocalForkVm());
     }
 }

@@ -2529,4 +2529,49 @@ contract LibRainDeployTest is Test {
         assertEq(deployedWord, uint256(uint160(0x7DA611e4146dCf0107407Bb331599acC53E8B62c)));
         assertEq(deployed.codehash, mockDeployableCodeHash());
     }
+
+    /// External wrapper for `checkDeployedCode`.
+    /// @param deployedAddress The address checked.
+    /// @param expectedCodeHash The code hash it must hold.
+    function externalCheckDeployedCode(address deployedAddress, bytes32 expectedCodeHash) external view {
+        LibRainDeploy.checkDeployedCode(LibRainDeploy.ARBITRUM_ONE, deployedAddress, expectedCodeHash);
+    }
+
+    /// Code at the address that hashes to anything but the expected hash MUST be refused.
+    function testCheckDeployedCodeRefusesOtherCode() external {
+        address deployedAddress = address(0xabc);
+        vm.etch(deployedAddress, hex"00");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.CodeHashMismatchOnNetwork.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                deployedAddress,
+                keccak256(hex"01"),
+                keccak256(hex"00")
+            )
+        );
+        this.externalCheckDeployedCode(deployedAddress, keccak256(hex"01"));
+    }
+
+    /// External wrapper for `zoltuDeployStep`.
+    /// @param creationCode The step data.
+    /// @return The address the step reports.
+    function externalZoltuDeployStep(bytes memory creationCode) external returns (address) {
+        return LibRainDeploy.zoltuDeployStep(vm, LibRainDeploy.ARBITRUM_ONE, address(this), creationCode);
+    }
+
+    /// The Zoltu step MUST refuse a factory whose code is not the pinned factory's before calling it.
+    function testZoltuDeployStepRefusesChangedFactory() external {
+        vm.etch(LibRainDeploy.ZOLTU_FACTORY, hex"00");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                LibRainDeploy.ZOLTU_FACTORY,
+                LibRainDeploy.ZOLTU_FACTORY_CODEHASH,
+                keccak256(hex"00")
+            )
+        );
+        this.externalZoltuDeployStep(type(MockDeployable).creationCode);
+    }
 }
