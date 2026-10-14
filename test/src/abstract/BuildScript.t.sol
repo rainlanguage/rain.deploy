@@ -7,6 +7,18 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
+import {CloneBuildScriptHarness} from "../../concrete/CloneBuildScriptHarness.sol";
+import {PerNetworkCloneBuildScriptHarness} from "../../concrete/PerNetworkCloneBuildScriptHarness.sol";
+import {
+    PER_NETWORK_CLONE_RECORD_CONTRACT,
+    PER_NETWORK_CLONE_RECORD_ROOT,
+    PER_NETWORK_CLONE_RELEASE_TAG
+} from "../../abstract/PerNetworkCloneDeploys.sol";
+import {
+    EXAMPLE_CLONE_RECORD_CONTRACT,
+    EXAMPLE_CLONE_RECORD_ROOT,
+    EXAMPLE_CLONE_RELEASE_TAG
+} from "../../abstract/ExampleCloneDeploys.sol";
 
 /// A memory struct so a recursion into a subtree writes what it finds where the
 /// caller can read it: every frame of the walk shares this one accumulator.
@@ -48,6 +60,19 @@ contract BuildScriptTest is Test {
     /// parallel, so a root two of them share is one deleting the tree the other
     /// is midway through reading.
     string constant CUT_CONFIG_FIXTURE_ROOT = "test/generated-buildscript-cut-config";
+
+    /// Where the clone `cutRelease()` fixture's record is built.
+    string constant CLONE_CUT_FIXTURE_ROOT = "test/generated-buildscript-clone-cut";
+
+    /// Where the clone `cutRelease()` fixture's released-suites lib is written.
+    string constant CLONE_CUT_LIB_DIR = "fixture-lib/buildscript-clone-cut";
+
+    /// Where the per-network clone `cutRelease()` fixture's record is built.
+    string constant PER_NETWORK_CLONE_CUT_FIXTURE_ROOT = "test/generated-buildscript-per-network-clone-cut";
+
+    /// Where the per-network clone `cutRelease()` fixture's released-suites lib is written, under
+    /// `fixture-lib` for the reason `CLONE_CUT_LIB_DIR` is.
+    string constant PER_NETWORK_CLONE_CUT_LIB_DIR = "fixture-lib/buildscript-per-network-clone-cut";
 
     /// Carries its AST because `foundry.toml` sets `ast = true`.
     string constant BASE_ARTIFACT = "out/BuildScript.sol/BuildScript.json";
@@ -155,21 +180,106 @@ contract BuildScriptTest is Test {
         assertEq(libs, harness.libsMarker(1, true));
     }
 
-    /// PROPERTY: `run()` stages both `foundry.toml` network blocks and the
-    /// `.env.example` block from the roster, leaving everything outside the
-    /// markers where it was — and leaves the files it read untouched.
-    ///
-    /// This is the wiring, not the emission: what the sections SAY is pinned
-    /// against string literals in `LibRainDeployConfigTest`, over a fixture
-    /// roster no real network is named in. What is asserted here is that the
-    /// entry point CI runs on every push reaches the config at all — without
-    /// it the sections would exist, be correct, and be written nowhere, and
-    /// `Git is clean` would pass a tree whose config had drifted from the
-    /// roster it pins.
-    ///
-    /// The sources staying byte-identical is the half `script/build.sh` then
-    /// depends on: a `run()` that wrote them directly would be refused for
-    /// `foundry.toml` and would make the hook's copy a no-op for the other.
+    /// PROPERTY.
+    function testCutReleaseFreezesACloneRecordAndReleasesItAsAClone() external {
+        resetFixture(CLONE_CUT_FIXTURE_ROOT);
+        resetFixture(CLONE_CUT_LIB_DIR);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(CLONE_CUT_LIB_DIR, true);
+        CloneBuildScriptHarness harness = new CloneBuildScriptHarness(CLONE_CUT_FIXTURE_ROOT, CLONE_CUT_LIB_DIR);
+        harness.cutRelease();
+
+        // Read while the fixture is still there, asserted once it is gone.
+        string memory frozen = vm.readFile(harness.frozenPath());
+        string memory rolling = vm.readFile(harness.rollingPath());
+        string memory lib = vm.readFile(harness.releasedLibPath());
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CLONE_CUT_FIXTURE_ROOT, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(CLONE_CUT_LIB_DIR, true);
+
+        assertEq(frozen, rolling);
+        assertEq(
+            frozen,
+            vm.readFile(
+                LibRainDeploySnapshot.pathForSnapshot(
+                    EXAMPLE_CLONE_RECORD_ROOT, EXAMPLE_CLONE_RELEASE_TAG, EXAMPLE_CLONE_RECORD_CONTRACT
+                )
+            )
+        );
+
+        string memory prefix = string.concat(EXAMPLE_CLONE_RECORD_CONTRACT, "_", LibRainDeploySnapshot.deployTag(vm));
+        assertTrue(
+            vm.contains(lib, string.concat("suite: \"example-clone@", LibRainDeploySnapshot.deployTag(vm), "\"")),
+            "the release is keyed by the template suite and the tag"
+        );
+        assertTrue(vm.contains(lib, "mechanism: DeployMechanism.Clone,\n"), "the release is declared a clone");
+        assertFalse(vm.contains(lib, "DeployMechanism.ClonePerNetwork"), "at one address on every network");
+        assertFalse(vm.contains(lib, "DeployMechanism.Zoltu"), "and not a Zoltu release");
+        assertTrue(
+            vm.contains(lib, string.concat("MECHANISM_DATA as ", prefix, "_MECHANISM_DATA")),
+            "the record's mechanism data is imported"
+        );
+        assertTrue(
+            vm.contains(lib, string.concat("mechanismData: ", prefix, "_MECHANISM_DATA")),
+            "and is the release's mechanism data"
+        );
+    }
+
+    /// PROPERTY.
+    function testCutReleaseFreezesAPerNetworkCloneRecordAndReleasesItPerNetwork() external {
+        resetFixture(PER_NETWORK_CLONE_CUT_FIXTURE_ROOT);
+        resetFixture(PER_NETWORK_CLONE_CUT_LIB_DIR);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(PER_NETWORK_CLONE_CUT_LIB_DIR, true);
+        PerNetworkCloneBuildScriptHarness harness =
+            new PerNetworkCloneBuildScriptHarness(PER_NETWORK_CLONE_CUT_FIXTURE_ROOT, PER_NETWORK_CLONE_CUT_LIB_DIR);
+        harness.cutRelease();
+
+        // Read while the fixture is still there, asserted once it is gone.
+        string memory frozen = vm.readFile(harness.frozenPath());
+        string memory rolling = vm.readFile(harness.rollingPath());
+        string memory lib = vm.readFile(harness.releasedLibPath());
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(PER_NETWORK_CLONE_CUT_FIXTURE_ROOT, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(PER_NETWORK_CLONE_CUT_LIB_DIR, true);
+
+        assertEq(frozen, rolling);
+        assertEq(
+            frozen,
+            vm.readFile(
+                LibRainDeploySnapshot.pathForSnapshot(
+                    PER_NETWORK_CLONE_RECORD_ROOT, PER_NETWORK_CLONE_RELEASE_TAG, PER_NETWORK_CLONE_RECORD_CONTRACT
+                )
+            )
+        );
+
+        string memory prefix =
+            string.concat(PER_NETWORK_CLONE_RECORD_CONTRACT, "_", LibRainDeploySnapshot.deployTag(vm));
+        assertTrue(
+            vm.contains(lib, string.concat("suite: \"per-network-clone@", LibRainDeploySnapshot.deployTag(vm), "\"")),
+            "the release is keyed by the template suite and the tag"
+        );
+        assertTrue(
+            vm.contains(lib, "mechanism: DeployMechanism.ClonePerNetwork"), "the release is declared per network"
+        );
+        assertFalse(vm.contains(lib, "mechanism: DeployMechanism.Clone,"), "and not as one clone everywhere");
+        assertFalse(vm.contains(lib, "DeployMechanism.Zoltu"), "nor as a Zoltu release");
+        assertTrue(vm.contains(lib, "storedDeployedAddress: address(0)"), "it stores no single address");
+        assertFalse(vm.contains(lib, "DEPLOYED_ADDRESS"), "and imports none the record does not declare");
+        assertTrue(
+            vm.contains(lib, string.concat("MECHANISM_DATA as ", prefix, "_MECHANISM_DATA")),
+            "the record's mechanism data is imported"
+        );
+        assertTrue(
+            vm.contains(lib, string.concat("mechanismData: ", prefix, "_MECHANISM_DATA")),
+            "and is the release's mechanism data"
+        );
+    }
+
     function testRunStagesTheNetworkConfig() external {
         resetFixture(RUN_CONFIG_FIXTURE_ROOT);
         BuildScriptHarness harness = new BuildScriptHarness(RUN_CONFIG_FIXTURE_ROOT, FIXTURE_CONTRACT);

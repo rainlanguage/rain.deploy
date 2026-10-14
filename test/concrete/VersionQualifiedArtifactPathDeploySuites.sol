@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {
     DeployDependency,
     DeployCandidate,
+    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -43,7 +44,9 @@ contract VersionQualifiedArtifactPathDeploySuites is ExternalDeploySuites {
                 storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
-                dependencies: new DeployDependency[](0)
+                dependencies: new DeployDependency[](0),
+                mechanism: DeployMechanism.Zoltu,
+                mechanismData: ""
             }),
             unanchorableReason: ""
         });
@@ -55,7 +58,9 @@ contract VersionQualifiedArtifactPathDeploySuites is ExternalDeploySuites {
                 storedBytecodeHash: keccak256(type(MockDeployableV2).runtimeCode),
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "MockDeployableV2:0.8.25",
-                dependencies: new DeployDependency[](0)
+                dependencies: new DeployDependency[](0),
+                mechanism: DeployMechanism.Zoltu,
+                mechanismData: ""
             }),
             unanchorableReason: ""
         });

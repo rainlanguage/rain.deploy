@@ -5,17 +5,7 @@ pragma solidity ^0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
-import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
-
-/// Thrown when the pure `LibRainDeploy.zoltuAddress` formula and an actual
-/// deploy through the etched Zoltu factory bytecode disagree about where a
-/// creation code lands. Both are `LibRainDeploy`'s, so this is a defect in the
-/// library rather than in any snapshot, and it invalidates every derivation
-/// made from it.
-/// @param suite The suite whose creation code was being derived.
-/// @param formulaAddress The address `zoltuAddress` computed.
-/// @param factoryAddress The address the factory bytecode actually deployed to.
-error ZoltuDerivationMismatch(string suite, address formulaAddress, address factoryAddress);
+import {LibRainDeployMechanism, ZoltuDerivationMismatch} from "../lib/LibRainDeployMechanism.sol";
 
 /// Thrown when the state snapshot taken around a derivation could not be
 /// reverted. The derivation plants code at the derived address, clears its
@@ -27,112 +17,31 @@ error ZoltuDerivationMismatch(string suite, address formulaAddress, address fact
 /// @param snapshotId The snapshot that could not be reverted.
 error DerivationSnapshotRevertFailed(string suite, uint256 snapshotId);
 
-/// What a suite's creation code derives, by itself. Computed
-/// once and then compared against whatever claims to hold it, whether that is a
-/// recorded constant or a live chain.
+/// What a suite derives, by itself, through its own mechanism.
 struct DerivedDeploy {
     /// The suite the derivation came from.
     string suite;
-    /// The address the creation code deploys to, on every network.
-    address deployedAddress;
-    /// The code hash the creation code leaves behind at that address.
+    /// The addresses the suite's mechanism deploys it to, in the suite's address order (see
+    /// `LibRainDeployMechanism`).
+    address[] deployedAddresses;
+    /// The code hash the mechanism leaves behind at those addresses.
     bytes32 bytecodeHash;
 }
 
 /// @title RainDeployVerifyBase
-/// @notice The derivation every deploy-verification group shares: from a
-/// suite's creation code to the (address, code hash) it produces, in one place
-/// rather than restated per suite and per chain.
-///
-/// The suites themselves come from `RainDeploySuitesBase`, which is the SAME
-/// declaration `RainDeployBroadcast` deploys from. Verification and deployment
-/// therefore cannot describe different things.
-///
-/// This is not inherited directly. `RainDeployVerifySnapshot` and
-/// `RainDeployVerifyChain` each inherit it and contribute the checks that need
-/// no network and the checks that do, respectively. A repo inherits its
-/// declaration into one of each, so running the snapshot checks never touches
-/// an RPC endpoint — an outage is then a failure of one contract that plainly is
-/// about the chain, and can never be confused with, or take down, the
-/// snapshot assertions.
-///
-/// ## Chain-independent runtime code is a requirement, not a caveat
-///
-/// A single `storedBytecodeHash` per suite can only be true if the runtime
-/// code is the same on every network. A constructor that reads `block.chainid`,
-/// or anything else that varies per chain, produces a different code hash per
-/// chain and cannot be described by these snapshots at all. Deploying through
-/// Zoltu buys address predictability; a constructor that reads chain state
-/// spends it. So a per-chain code hash difference is a DEFECT in the contract,
-/// reported as a hard failure naming the chain and both hashes, and there is
-/// deliberately no per-chain code hash to record.
+/// @notice The derivation every deploy-verification group shares.
 abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
-    /// Derives what a suite's creation code deploys to, from the creation
-    /// code alone.
-    ///
-    /// The address comes from the pure `LibRainDeploy.zoltuAddress` formula and
-    /// the code hash from actually running the creation code through the Zoltu
-    /// factory bytecode locally, because the code hash cannot be known without
-    /// executing the constructor. The two are cross-checked against each other,
-    /// so a formula that drifted from the factory bytecode is caught here
-    /// rather than silently poisoning every downstream comparison.
-    ///
-    /// The whole derivation runs inside a state snapshot that is reverted, and
-    /// clears the derived address first, so that it reads ONLY what the
-    /// creation code produces. Both matter:
-    ///
-    /// - Two suites can legitimately share creation code (a release that
-    ///   changed nothing that compiles), and `CREATE2` to an occupied address
-    ///   fails. Clearing makes the second derivation work, and reverting means
-    ///   the first never occupied it in the first place.
-    /// - The local deploy must not survive into the chain-anchored checks. A
-    ///   locally deployed contract that leaked into a fork would be compared
-    ///   against itself, and every chain would pass whether or not anything is
-    ///   deployed there.
-    ///
-    /// ## The suite's declared dependencies, etched
-    ///
-    /// A constructor that reads a dependency cannot run on an EVM where nothing
-    /// is deployed, which is the EVM a derivation happens on. So the declared
-    /// dependencies are etched here, from the runtime code the declaration
-    /// carries, inside the same snapshot. Nothing resolves an address to an
-    /// owning suite: a dependency need not be a suite of this repo at all.
-    ///
-    /// That makes the derived code hash a function of what the declaration SAYS
-    /// is at each dependency, which is a claim about every network and not an
-    /// input this contract can settle. `LibRainDeploy.deployToNetworks` is what
-    /// settles it, hashing the live code at each address against the same
-    /// declared bytes before it broadcasts, so a wrong declaration is a red
-    /// deploy run rather than a wrong hash frozen into a release.
-    ///
-    /// Etched FIRST, so the declaration cannot reach the two addresses this
-    /// function owns — the subject, which must be deployed rather than etched
-    /// or the derivation hands back the record it came from, and the Zoltu
-    /// factory it deploys through.
+    /// Derives where a suite's mechanism puts it and the code hash it leaves there, from the suite
+    /// alone.
     /// @param suite The suite to derive from.
-    /// @return The address and code hash the creation code produces.
+    /// @return The addresses and code hash the suite's mechanism produces.
     function deriveDeployment(DeploySuite memory suite) internal returns (DerivedDeploy memory) {
-        address formulaAddress = LibRainDeploy.zoltuAddress(suite.creationCode);
-
         uint256 snapshotId = vm.snapshotState();
 
-        for (uint256 i = 0; i < suite.dependencies.length; i++) {
-            vm.etch(suite.dependencies[i].deployedAddress, suite.dependencies[i].runtimeCode);
-        }
-
-        // Whatever is at the derived address is not part of the derivation.
-        // The nonce goes too: `CREATE2` collides on a non-zero nonce as well as
-        // on non-empty code.
-        vm.etch(formulaAddress, hex"");
-        vm.resetNonce(formulaAddress);
-
-        address factoryAddress = LibRainDeploy.etchAndDeployZoltu(vm, suite.creationCode);
-        if (factoryAddress != formulaAddress) {
-            revert ZoltuDerivationMismatch(suite.suite, formulaAddress, factoryAddress);
-        }
-
-        DerivedDeploy memory derived =
-            DerivedDeploy({suite: suite.suite, deployedAddress: formulaAddress, bytecodeHash: factoryAddress.codehash});
+        address[] memory deployedAddresses = LibRainDeployMechanism.deployLocally(vm, suite);
+        DerivedDeploy memory derived = DerivedDeploy({
+            suite: suite.suite, deployedAddresses: deployedAddresses, bytecodeHash: deployedAddresses[0].codehash
+        });
 
         // A failed revert is unrecoverable, not a warning to silence. The etch
         // and the nonce reset would survive into every later derivation, whose

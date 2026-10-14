@@ -117,6 +117,192 @@ it was told nothing.
 Every suite is individually selectable, including a frozen release — which is
 how a snapshot from before a network existed reaches that network.
 
+### Factory clones
+
+A repo whose deployment is an EIP-1167 clone of an audited implementation,
+rather than a contract it compiles itself, declares the clones and its releases,
+and binds the same broadcast as any other repo:
+
+```solidity
+// src/abstract/MyCloneDeploys.sol
+abstract contract MyCloneDeploys is RainDeployCloneSuitesBase {
+    function cloneDeploys() internal pure override returns (CloneDeploy[] memory);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory);
+}
+
+// script/Deploy.sol
+contract Deploy is MyCloneDeploys, RainDeployBroadcast {}
+```
+
+A `CloneDeploy` is the suite key, the factory, the implementation, the init data
+— one `data` for every network, or an `initData` function per network (see
+[Init data per network](#init-data-per-network)) — the salt and the
+dependencies. A clone with one `data` sets `initDataPerNetwork: false` and gives
+`LibRainDeployClone.noInitDataPerNetwork` as its `initData`, which nothing
+reads. The dependencies MUST name both the factory and the implementation, each
+paired with its runtime code; a clone missing either is refused with
+`CloneDependencyUndeclared`. The factory's entry pins the code that performs the
+clone, and the implementation's pins the code the clone delegates to — the
+clone's own code hash only says WHICH address it delegates to.
+
+`RainDeployCloneSuitesBase` derives `candidateSuites()` from the clone list with
+`LibRainDeployMechanism.cloneCandidate`, so it is still ONE list. Each candidate
+is an ordinary `DeploySuite` whose `mechanism` is `DeployMechanism.Clone` and
+whose `mechanismData` is the `abi.encode`d `CloneTarget` (factory,
+implementation, init data, salt). Every consumer — `RainDeployBroadcast`, the
+verification abstracts and `LibRainDeploySnapshot.writeSnapshot` — reads the
+suite through `LibRainDeployMechanism`, which answers the deployed address and
+performs the local and broadcast deploy for whichever mechanism the suite
+declares. A Zoltu suite carries `DeployMechanism.Zoltu` and empty
+`mechanismData`; anything else is refused with `UnexpectedMechanismData`.
+
+Releases follow the normal lifecycle. `BuildScript` regenerates the clone's
+snapshot through `writeSnapshot(DeploySuite)`, which records `MECHANISM_DATA`
+beside the usual constants; `cutRelease()` freezes it under
+`src/generated/<tag>/`; and the generated `Lib<Contract>Released` entry carries
+the mechanism and that `MECHANISM_DATA`. The mechanism DATA comes from the
+record, but the mechanism KIND comes from the CURRENT declaration — the template
+every regeneration reads — not from the declaration the release was cut from. So
+a suite cannot change mechanism in place: a clone template over a record that
+has no `MECHANISM_DATA` does not compile, and a Zoltu template over a clone
+record emits a Zoltu entry that the record group refuses, because its Zoltu
+address is not the clone address the record holds. A mechanism change is a new
+suite. From there the frozen clone is checked like any frozen suite: the record
+group holds it to its released entry at the CLONE address, the chain group
+requires its code at that address, and its declared factory and implementation
+with their declared code, on every supported network, and it is selectable by
+key for broadcast.
+
+A clone is **unanchorable** — no compiler produces a proxy assembled from an
+address — so the candidate carries `unanchorableReason` and a constant
+`artifactPath` that resolves to no artifact in any repo. The empty string is NOT
+that path: the qualifier rule is the shape `<path>.sol:<Name>` and it applies to
+unanchorable candidates too, so `""` is refused with
+`UnqualifiedCandidateArtifactPath`.
+
+The local derivation deploys the clone the way the chain does: the declared
+dependencies are etched first, then the etched factory's
+`cloneDeterministicOpenSalt` runs. A suite whose `creationCode` is not the
+EIP-1167 initcode for its implementation is refused with
+`CloneCreationCodeMismatch`, and a factory that lands the clone anywhere but the
+derived address with `CloneDerivationMismatch`.
+
+The broadcast is `RainDeployBroadcast.run()` and
+`LibRainDeploy.deployStepToNetworks`, shared with the Zoltu path: the suite
+selection, the key handling, the network list, the forks, the dependency checks,
+the idempotent skip and the address and code hash assertions are one loop, and
+the deploy STEP is the parameter — `cloneDeterministicOpenSalt` in place of
+`CREATE2` over creation code.
+
+The clone factory's address is a **parameter** rather than a constant in this
+package, because the deployed factory's address and code hash are pinned in
+`rain-factory-deploy`, which depends on this package; the declared factory
+dependency pins its runtime code on every network before the step runs. Per
+network, before the broadcast window opens, the factory is also asked where it
+would put this exact clone and refused with `CloneFactoryPredictionMismatch` if
+it disagrees with `rain-factory`'s formula — not an `ICloneableFactoryV4`, a
+different open-salt domain tag, a different proxy layout. That check says
+nothing about what `cloneDeterministicOpenSalt` itself does; the factory
+dependency pin covers that.
+
+The **open** salt, not the namespaced one, because the open-salt digest covers
+the implementation and the init data and not the caller — so every account
+reaches the same address on every network. The namespaced derivation bakes the
+deploying account into the address, which a retired key makes unreachable
+forever.
+
+#### Init data per network
+
+A clone's address covers its init data, so a clone initialized differently on
+each network — an admin that is a different Safe on one chain than on the others
+— is at a different address on each. Such a clone sets `initDataPerNetwork`,
+leaves `data` empty, and gives ONE function from a chain id to that network's
+init data:
+
+```solidity
+function authoriserInitData(uint256 chainId) pure returns (bytes memory) {
+    return abi.encode(LibSafeInvariants.safeForChainId(chainId));
+}
+
+function cloneDeploys() internal pure override returns (CloneDeploy[] memory clones) {
+    clones = new CloneDeploy[](1);
+    clones[0] = CloneDeploy({
+        suite: "authoriser",
+        factory: FACTORY,
+        implementation: IMPLEMENTATION,
+        data: "",
+        initDataPerNetwork: true,
+        initData: authoriserInitData,
+        salt: SALT,
+        dependencies: dependencies()
+    });
+}
+```
+
+`RainDeployCloneSuitesBase` reads that function once for each network in
+`supportedNetworks()`, in that order, with the chain id the network catalogue
+gives it, so the clone's networks are exactly the repo's and no chain id is
+written twice. A chain id the function reverts on reverts every reader of the
+candidates with that revert; it is never skipped or defaulted. Setting
+`initDataPerNetwork` beside a non-empty `data` is refused with
+`CloneDataAmbiguous`. A clone whose init data is the same everywhere is the
+`Clone` suite described above.
+
+`cloneCandidate` turns a per-network declaration into a suite whose `mechanism`
+is `DeployMechanism.ClonePerNetwork` and whose `mechanismData` is the
+`abi.encode`d `CloneNetworks`: the shared factory, implementation and salt, and
+per network its chain id, init data and the address derived from them. Its
+`storedDeployedAddress` is zero — the addresses live in `CloneNetworks` — and a
+nonzero one is refused with `UnexpectedStoredDeployedAddress`. A `CloneNetworks`
+with no networks is refused with `NoCloneNetworks`, and one naming a chain id
+twice with `DuplicateCloneNetwork`. Its code hash is one value on every network:
+an EIP-1167 clone's runtime code embeds only the implementation.
+
+A suite's addresses are a list, in the order its `CloneNetworks` names the
+networks: one address for Zoltu and `Clone`, one per declared network for
+`ClonePerNetwork`. Every reader resolves by network:
+
+- **Broadcast.** `RainDeployBroadcast.broadcastSuite` and
+  `LibRainDeployMechanism.deployAndBroadcast` return the suite's address on each
+  network and the fork each was deployed on, both positionally paired with the
+  networks broadcast to. Every network's chain id is read from the network
+  catalogue and every recorded address held to the derived one before any fork
+  is created; each fork whose `block.chainid` is not its catalogue entry's is
+  refused with `NetworkChainIdMismatch`, for every mechanism.
+- **Unrecorded networks.** A release records the networks it was cut for. At
+  broadcast and in the chain group, a per-network release first takes an entry
+  for each network its candidate — the candidate whose key is the release key
+  before its `@` — has and it lacks, through
+  `LibRainDeployMechanism.withUnrecordedNetworks`: that network's init data from
+  the current declaration, and the address it derives under the RELEASE's
+  factory, implementation and salt. So a network added to `supportedNetworks()`
+  after the cut is deployable and checked, as it is for a Zoltu or `Clone`
+  release. Recorded entries are kept exactly as recorded, so a recorded network
+  keeps its recorded address and the refusal of a stale one. The record group
+  does not do this: it matches the record against what the release was cut for.
+- **Undeclared networks.** A network the suite still has no entry for — no
+  candidate is named by its key, or the candidate has no entry either — is
+  refused with `CloneNetworkUndeclared`, before any fork, at broadcast and in
+  the chain group. It is never given another network's init data.
+- **Record.** The snapshot writer deploys the clone locally once per network —
+  networks sharing init data share an address and are deployed once — and
+  records `DEPLOYED_ADDRESS_<chainId>` per network in place of the one
+  `DEPLOYED_ADDRESS`, and the `CloneNetworks` as `MECHANISM_DATA`, both from the
+  local deploy rather than from the addresses the suite claims. The generated
+  `Lib<Contract>Released` entry imports no `DEPLOYED_ADDRESS`, stores
+  `address(0)`, and carries `DeployMechanism.ClonePerNetwork` and that
+  `MECHANISM_DATA`.
+- **Verification.** The record group holds each network's recorded address to
+  its derivation and matches a frozen record to its release by chain id AND
+  address, so a record whose per-network labels were swapped matches no release.
+  The chain group requires the clone's code at each network's own address, and
+  on each network first checks the suite's declared dependencies with
+  `LibRainDeploy.checkDeclaredDependencies` — the check a broadcast makes before
+  deploying there — refusing a missing one with `MissingDependency` and changed
+  code with `DependencyChanged`. A clone's runtime code says only which
+  implementation it delegates to, so the right code hash at its address over a
+  missing or changed implementation does not work.
+
 ## Deploy verification
 
 **The creation code is the only input.** The Zoltu factory is `CREATE2` over its
