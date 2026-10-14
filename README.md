@@ -305,26 +305,28 @@ networks: one address for Zoltu and `Clone`, one per declared network for
 
 ### Upgradeable beacons
 
-Declare each network's beacons at their CURRENT expected state:
+Declare each network's beacons, naming implementations by suite key and moving
+them through `MigrationRegistry` migrations:
 
 ```solidity
 function beacons(uint256 chainId) internal view override returns (DeployBeacon[] memory) {
     DeployBeacon[] memory onChain = new DeployBeacon[](1);
-    onChain[0] = DeployBeacon({
-        beacon: chainId == BASE_CHAIN_ID ? BASE_BEACON : BEACON,
-        beaconCodeHash: BEACON_BYTECODE_HASH,
-        implementation: IMPLEMENTATION_DEPLOYED_ADDRESS,
-        implementationCodeHash: IMPLEMENTATION_BYTECODE_HASH,
-        owner: timelockOn(chainId)
+    onChain[0].beacon = chainId == BASE_CHAIN_ID ? BASE_BEACON : BEACON;
+    onChain[0].beaconCodeHash = BEACON_BYTECODE_HASH;
+    onChain[0].initial = BeaconState({implementation: "vault@0_1_1", owner: DEPLOYER});
+    onChain[0].transitions = new BeaconTransition[](1);
+    onChain[0].transitions[0] = BeaconTransition({
+        migration: Prerequisite({writer: SAFE, namespace: NAMESPACE, migration: UPGRADE_0_2_0}),
+        state: BeaconState({implementation: "vault@0_2_0", owner: timelockOn(chainId)})
     });
     return onChain;
 }
 ```
 
-The chain group checks them on each network's fork. An upgrade or ownership
-migration edits this declaration, so the chain group is red until it is applied
-on every network. Scripts check the same state with
-`LibRainDeployBeacon.checkBeacon`.
+On each network's fork the chain group expects the state of the latest
+transition the network's registry reports `applied`, else `initial`: the beacon
+at its code hash, `implementation()` at that suite's address on the network,
+`owner()` at that owner, and the suite live there as any suite is.
 
 ## Deploy verification
 

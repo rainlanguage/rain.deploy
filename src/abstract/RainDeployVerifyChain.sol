@@ -9,6 +9,13 @@ import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {DeployBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
 
+/// A beacon's implementation suite in each of its states, indexed as `LibRainDeployBeacon.stateAt`.
+struct BeaconImplementations {
+    DeploySuite[] suites;
+    address[] addresses;
+    DerivedDeploy[] derived;
+}
+
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the repo.
 abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
@@ -24,9 +31,14 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// @param suites The suites to check.
     function checkDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) internal {
         DeployBeacon[][] memory networkBeacons = new DeployBeacon[][](networks.length);
+        BeaconImplementations[][] memory implementations = new BeaconImplementations[][](networks.length);
         bool anyBeacons = false;
         for (uint256 i = 0; i < networks.length; i++) {
             networkBeacons[i] = beacons(networks[i].chainId);
+            implementations[i] = new BeaconImplementations[](networkBeacons[i].length);
+            for (uint256 b = 0; b < networkBeacons[i].length; b++) {
+                implementations[i][b] = beaconImplementations(networkBeacons[i][b], networks[i].chainId);
+            }
             anyBeacons = anyBeacons || networkBeacons[i].length > 0;
         }
 
@@ -58,12 +70,56 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             vm.selectFork(forkIds[i]);
             LibRainDeploy.checkNetworkChainId(networks[i]);
             for (uint256 j = 0; j < suites.length; j++) {
-                console2.log("Checking suite on network:", derived[j].suite, networks[i].name);
-                LibRainDeploy.checkDeclaredDependencies(networks[i].name, suites[j].dependencies);
-                LibRainDeploy.checkDeployedCode(networks[i].name, addresses[i][j], derived[j].bytecodeHash);
+                checkSuiteOnNetwork(networks[i].name, suites[j], derived[j], addresses[i][j]);
             }
-            LibRainDeployBeacon.checkBeacons(networks[i].name, networkBeacons[i]);
+            for (uint256 b = 0; b < networkBeacons[i].length; b++) {
+                DeployBeacon memory beacon = networkBeacons[i][b];
+                BeaconImplementations memory implementation = implementations[i][b];
+                uint256 state = LibRainDeployBeacon.appliedState(beacon);
+                LibRainDeployBeacon.checkBeacon(
+                    networks[i].name,
+                    beacon,
+                    implementation.addresses[state],
+                    LibRainDeployBeacon.stateAt(beacon, state).owner
+                );
+                checkSuiteOnNetwork(
+                    networks[i].name,
+                    implementation.suites[state],
+                    implementation.derived[state],
+                    implementation.addresses[state]
+                );
+            }
         }
+    }
+
+    /// The selected fork MUST hold `suite` at `deployedAddress` with its derived code and its declared dependencies.
+    function checkSuiteOnNetwork(
+        string memory network,
+        DeploySuite memory suite,
+        DerivedDeploy memory derived,
+        address deployedAddress
+    ) internal view {
+        console2.log("Checking suite on network:", derived.suite, network);
+        LibRainDeploy.checkDeclaredDependencies(network, suite.dependencies);
+        LibRainDeploy.checkDeployedCode(network, deployedAddress, derived.bytecodeHash);
+    }
+
+    /// The implementation suite of each of `beacon`'s states, resolved on `chainId` before anything forks.
+    function beaconImplementations(DeployBeacon memory beacon, uint256 chainId)
+        internal
+        returns (BeaconImplementations memory)
+    {
+        uint256 states = beacon.transitions.length + 1;
+        DeploySuite[] memory stateSuites = new DeploySuite[](states);
+        address[] memory stateAddresses = new address[](states);
+        for (uint256 state = 0; state < states; state++) {
+            stateSuites[state] =
+                onSupportedNetworks(suiteByName(LibRainDeployBeacon.stateAt(beacon, state).implementation));
+            stateAddresses[state] = LibRainDeployMechanism.deployedAddress(stateSuites[state], chainId);
+        }
+        return BeaconImplementations({
+            suites: stateSuites, addresses: stateAddresses, derived: deriveDeployments(stateSuites)
+        });
     }
 
     /// Every RELEASED suite MUST be live, with the code its creation code produces and its declared
