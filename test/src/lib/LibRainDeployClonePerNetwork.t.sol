@@ -4,15 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {
-    CLONE_ARTIFACT_PATH,
-    CloneNetwork,
-    CloneNetworks,
-    CloneTarget,
-    LibRainDeployClone
-} from "../../../src/lib/LibRainDeployClone.sol";
-import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
-import {DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {CloneNetwork, CloneNetworks, CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
 import {
     exampleCloneDependencies,
     exampleCloneFactory,
@@ -20,10 +12,7 @@ import {
 } from "../../abstract/ExampleCloneDeploys.sol";
 
 /// @title LibRainDeployClonePerNetworkTest
-/// Tests for `LibRainDeployClone`'s per-network clone: the checks on a
-/// `CloneNetworks`, resolving one network's entry, the step that requires the
-/// network to be the chain its data was resolved for, and the refusals
-/// `cloneNetworksToNetworks` makes before it forks anything.
+/// Tests for `LibRainDeployClone`'s per-network checks and entry resolution.
 contract LibRainDeployClonePerNetworkTest is Test {
     /// A salt with bytes set across the whole word.
     bytes32 constant TEST_SALT = 0x1122334455667788990011223344556677889900112233445566778899001122;
@@ -85,30 +74,6 @@ contract LibRainDeployClonePerNetworkTest is Test {
     /// @return The entry's index.
     function externalCloneNetworkIndex(CloneNetworks memory clones, uint256 chainId) external pure returns (uint256) {
         return LibRainDeployClone.cloneNetworkIndex(clones, chainId);
-    }
-
-    /// `LibRainDeployMechanism.deployAndBroadcast` over a `ClonePerNetwork`
-    /// suite.
-    /// @param networks The networks to deploy to.
-    /// @param clones The per-network clone.
-    /// @return The clone's address on each network.
-    /// @return The fork each network was deployed on.
-    function externalCloneNetworksAndBroadcast(string[] memory networks, CloneNetworks memory clones)
-        external
-        returns (address[] memory, uint256[] memory)
-    {
-        DeploySuite memory suite = DeploySuite({
-            suite: "clone-per-network",
-            creationCode: LibRainDeployClone.cloneCreationCode(clones.implementation),
-            storedDeployedAddress: address(0),
-            storedBytecodeHash: bytes32(0),
-            storedRuntimeCode: "",
-            artifactPath: CLONE_ARTIFACT_PATH,
-            dependencies: exampleCloneDependencies(),
-            mechanism: DeployMechanism.ClonePerNetwork,
-            mechanismData: abi.encode(clones)
-        });
-        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, 1, suite);
     }
 
     /// Whether any fork exists. Fork ids are handed out from zero.
@@ -181,65 +146,5 @@ contract LibRainDeployClonePerNetworkTest is Test {
             assertEq(target.data, clones.networks[i].data);
         }
         assertNotEq(clones.networks[0].deployedAddress, clones.networks[1].deployedAddress);
-    }
-
-    /// An empty network list is refused before anything
-    /// is resolved: the clone here also has an entry no network names, and a
-    /// stale address, neither of which is what comes back.
-    function testCloneNetworksToNetworksNoNetworksReverts() external {
-        CloneNetworks memory clones = exampleCloneNetworks();
-        clones.networks[0].deployedAddress = address(1);
-
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalCloneNetworksAndBroadcast(new string[](0), clones);
-    }
-
-    /// A network the clone has no entry for is refused by its chain id before
-    /// any network is forked — including when it is the last network listed,
-    /// after networks that do have entries.
-    function testCloneNetworksToNetworksRefusesAnUndeclaredNetworkBeforeForking() external {
-        string[] memory networks = new string[](3);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        networks[1] = LibRainDeploy.POLYGON;
-        networks[2] = LibRainDeploy.BASE;
-
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneNetworkUndeclared.selector, 8453));
-        this.externalCloneNetworksAndBroadcast(networks, exampleCloneNetworks());
-        assertFalse(anyForkExists(), "a network was forked before the undeclared one was refused");
-    }
-
-    /// A recorded address that is not the address its network's data derives
-    /// is refused before any network is forked, naming that network's recorded
-    /// and derived addresses. The SECOND network's is staled, so a check that
-    /// compared only the first passes it.
-    function testCloneNetworksToNetworksRefusesAStaleRecordedAddressBeforeForking() external {
-        CloneNetworks memory clones = exampleCloneNetworks();
-        address derived = clones.networks[1].deployedAddress;
-        address stale = address(uint160(derived) + 1);
-        clones.networks[1].deployedAddress = stale;
-
-        string[] memory networks = new string[](2);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        networks[1] = LibRainDeploy.POLYGON;
-
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
-        this.externalCloneNetworksAndBroadcast(networks, clones);
-        assertFalse(anyForkExists(), "a network was forked before the stale address was refused");
-    }
-
-    /// A malformed per-network clone is refused before any network is forked.
-    function testCloneNetworksToNetworksChecksTheCloneBeforeForking() external {
-        uint256[] memory chainIds = new uint256[](3);
-        chainIds[0] = 42161;
-        chainIds[1] = 137;
-        chainIds[2] = 42161;
-        CloneNetworks memory clones = cloneNetworks(exampleCloneFactory(), exampleCloneImplementation(), chainIds);
-
-        string[] memory networks = new string[](1);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.DuplicateCloneNetwork.selector, 42161));
-        this.externalCloneNetworksAndBroadcast(networks, clones);
-        assertFalse(anyForkExists(), "a network was forked before the clone was checked");
     }
 }

@@ -15,6 +15,9 @@ import {MockRevertingAnswerOwner} from "../../concrete/MockRevertingAnswerOwner.
 import {MockChainDependentOwner} from "../../concrete/MockChainDependentOwner.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
+import {CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
+import {MockCloneable} from "../../concrete/MockCloneable.sol";
+import {MockUncloneableMispredictingCloneFactory} from "../../concrete/MockUncloneableMispredictingCloneFactory.sol";
 import {MOCK_DEPLOYABLE_OWNER, MockDeployableOwner} from "../../concrete/MockDeployableOwner.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
 
@@ -483,6 +486,110 @@ contract LibRainDeployTest is Test {
             assertEq(deploys.expectedAddresses[i], expectedAddress);
             assertEq(deploys.derivedAddresses[i], derivedAddress);
         }
+    }
+
+    /// External wrapper for `deployStepToNetworks` through a real mechanism's step.
+    /// @param networks The networks.
+    /// @param clone Whether the step is `cloneDeployStep` rather than `zoltuDeployStep`.
+    /// @param stepData The step data on every network.
+    /// @param expectedAddress The expected and derived address on every network.
+    /// @param expectedCodeHash The expected code hash.
+    /// @param dependencies The declared dependencies.
+    /// @return The fork of each network.
+    function externalDeployStepToNetworksThroughStep(
+        SupportedNetwork[] memory networks,
+        bool clone,
+        bytes memory stepData,
+        address expectedAddress,
+        bytes32 expectedCodeHash,
+        DeployDependency[] memory dependencies
+    ) external returns (uint256[] memory) {
+        return LibRainDeploy.deployStepToNetworks(
+            vm,
+            networks,
+            address(this),
+            clone ? LibRainDeployClone.cloneDeployStep : LibRainDeploy.zoltuDeployStep,
+            LibRainDeploy.everyNetwork(networks.length, stepData, expectedAddress, expectedAddress),
+            expectedCodeHash,
+            dependencies
+        );
+    }
+
+    /// Arbitrum's catalogue entry, declared as Polygon's chain id.
+    /// @return The mis-bound network.
+    function misboundArbitrum() internal pure returns (SupportedNetwork[] memory) {
+        string[] memory names = new string[](1);
+        names[0] = LibRainDeploy.ARBITRUM_ONE;
+        SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(names);
+        networks[0].chainId = 137;
+        return networks;
+    }
+
+    /// The chain id is checked before dependencies: the missing one would otherwise refuse first.
+    function testDeployStepToNetworksRefusesAMisboundEndpointBeforeDependencies() external {
+        DeployDependency[] memory dependencies = new DeployDependency[](1);
+        dependencies[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: hex"00"});
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.NetworkChainIdMismatch.selector, LibRainDeploy.ARBITRUM_ONE, 137, 42161
+            )
+        );
+        this.externalDeployStepToNetworksThroughStep(
+            misboundArbitrum(),
+            false,
+            type(MockDeployable).creationCode,
+            mockDeployableAddress(),
+            mockDeployableCodeHash(),
+            dependencies
+        );
+    }
+
+    /// The chain id is checked before the skip: the code already there would otherwise pass.
+    function testDeployStepToNetworksRefusesAMisboundEndpointBeforeTheSkip() external {
+        vm.makePersistent(address(this));
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        vm.etch(mockDeployableAddress(), type(MockDeployable).runtimeCode);
+        vm.makePersistent(mockDeployableAddress());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.NetworkChainIdMismatch.selector, LibRainDeploy.ARBITRUM_ONE, 137, 42161
+            )
+        );
+        this.externalDeployStepToNetworksThroughStep(
+            misboundArbitrum(),
+            false,
+            type(MockDeployable).creationCode,
+            mockDeployableAddress(),
+            keccak256(type(MockDeployable).runtimeCode),
+            new DeployDependency[](0)
+        );
+    }
+
+    /// The chain id is checked before a clone step: the mispredicting factory would otherwise refuse first.
+    function testDeployStepToNetworksRefusesAMisboundEndpointBeforeTheCloneStep() external {
+        vm.makePersistent(address(this));
+        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
+        MockUncloneableMispredictingCloneFactory factory = new MockUncloneableMispredictingCloneFactory();
+        vm.makePersistent(address(factory));
+        CloneTarget memory target = CloneTarget({
+            factory: address(factory), implementation: address(new MockCloneable()), data: hex"01", salt: bytes32(0)
+        });
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.NetworkChainIdMismatch.selector, LibRainDeploy.ARBITRUM_ONE, 137, 42161
+            )
+        );
+        this.externalDeployStepToNetworksThroughStep(
+            misboundArbitrum(),
+            true,
+            abi.encode(target),
+            LibRainDeployClone.cloneDeployedAddress(target),
+            bytes32(0),
+            new DeployDependency[](0)
+        );
     }
 
     /// `deployToNetworks` MUST deploy to every network in the list, forking each
@@ -1243,13 +1350,10 @@ contract LibRainDeployTest is Test {
         assertEq(mockDeployableV2Address().code.length, 0);
     }
 
-    /// `deployToNetworks` MUST check `expectedAddress` against the creation
-    /// code before it forks anything, so the mismatch is reported without any
-    /// network being reachable at all.
+    /// `deployToNetworks` MUST check `expectedAddress` against the creation code before forking.
     function testDeployToNetworksStaleExpectedAddressRevertsBeforeForking() external {
         string[] memory networks = new string[](1);
-        // Not a configured RPC alias, so forking it is itself an error.
-        networks[0] = "unconfigured_network";
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
         DeployDependency[] memory dependencies = new DeployDependency[](0);
 
         vm.expectRevert(
@@ -1260,6 +1364,8 @@ contract LibRainDeployTest is Test {
         this.externalDeployToNetworks(
             networks, address(this), type(MockDeployable).creationCode, "", address(0xdead), bytes32(0), dependencies
         );
+        (bool forked,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", uint256(0)));
+        assertFalse(forked);
     }
 
     /// `deployToNetworks` MUST revert with `UnexpectedDeployedAddress` when the

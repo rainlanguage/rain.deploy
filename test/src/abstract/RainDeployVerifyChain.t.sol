@@ -415,6 +415,29 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         checkNetworkChainIds(networks);
     }
 
+    /// External wrapper for `checkDeployedOnNetworks`.
+    /// @param networks The networks to check on.
+    /// @param suites The suites to check.
+    function externalCheckDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) external {
+        checkDeployedOnNetworks(networks, suites);
+    }
+
+    /// The chain group checks the chain id before any suite: the emptied registry would otherwise refuse first.
+    function testChainGroupRefusesAMisboundEndpoint() external {
+        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"");
+        string[] memory names = new string[](1);
+        names[0] = LibRainDeploy.ARBITRUM_ONE;
+        SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(names);
+        networks[0].chainId = 137;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.NetworkChainIdMismatch.selector, LibRainDeploy.ARBITRUM_ONE, 137, 42161
+            )
+        );
+        this.externalCheckDeployedOnNetworks(networks, releasedSuites());
+    }
+
     /// PROPERTY: a declared chain id that is not the reported one fails hard,
     /// naming the network and BOTH ids.
     ///
