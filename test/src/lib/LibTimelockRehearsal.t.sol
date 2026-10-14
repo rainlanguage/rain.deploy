@@ -7,6 +7,7 @@ import {TimelockController} from "@openzeppelin-contracts-5.7.0/governance/Timel
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibTimelockController} from "../../../src/lib/LibTimelockController.sol";
 import {LibTimelockRehearsal} from "../../../src/lib/LibTimelockRehearsal.sol";
+import {CREATION_CODE} from "../../../src/generated/candidate/TimelockController.sol";
 
 /// @title LibTimelockRehearsalTest
 /// The rehearsal run through a real timelock: schedule, cancel, schedule again,
@@ -19,7 +20,9 @@ contract LibTimelockRehearsalTest is Test {
     function deployTimelock() internal returns (TimelockController) {
         LibRainDeploy.etchZoltuFactory(vm);
         return TimelockController(
-            payable(LibRainDeploy.deployZoltu(LibTimelockController.timelockInitCode(MIN_DELAY, PROPOSER)))
+            payable(LibRainDeploy.deployZoltu(
+                    LibTimelockController.timelockInitCode(CREATION_CODE, MIN_DELAY, PROPOSER)
+                ))
         );
     }
 

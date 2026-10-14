@@ -8,11 +8,15 @@ import {IAccessControl} from "@openzeppelin-contracts-5.7.0/access/IAccessContro
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibTimelockController} from "../../../src/lib/LibTimelockController.sol";
 import {BYTECODE_HASH, CREATION_CODE, RUNTIME_CODE} from "../../../src/generated/candidate/TimelockController.sol";
+import {CREATION_CODE as CREATION_CODE_0_1_18} from "../../../src/generated/0_1_18/TimelockController.sol";
+import {MockTimelockControllerGeneration} from "../../concrete/MockTimelockControllerGeneration.sol";
+import {MockTimelockControllerImmutableGeneration} from "../../concrete/MockTimelockControllerImmutableGeneration.sol";
+import {MockSnapshotDeletingCreation} from "../../concrete/MockSnapshotDeletingCreation.sol";
 
 /// @title LibTimelockControllerTest
-/// The snapshot against the dependency and production, the address
-/// derivation against the real Zoltu factory, and the state assertion green on
-/// the role model and red on each way out of it.
+/// The snapshot against the dependency, the frozen generation against
+/// production, the address derivation against the real Zoltu factory, and the
+/// state assertion green on the role model and red on each way out of it.
 contract LibTimelockControllerTest is Test {
     /// A stand-in proposer. The role model only reads its role membership.
     address constant PROPOSER = address(0x5aFe00000000000000000000000000000000aAaa);
@@ -20,19 +24,30 @@ contract LibTimelockControllerTest is Test {
     /// A minimum delay for the local deploys.
     uint256 constant MIN_DELAY = 2 days;
 
-    function callAssertTimelockState(address timelock, uint256 minDelay, address proposer, address[] memory cancellers)
+    function callAssertTimelockState(
+        bytes32 bytecodeHash,
+        address timelock,
+        uint256 minDelay,
+        address proposer,
+        address[] memory cancellers
+    ) external view {
+        LibTimelockController.assertTimelockState(bytecodeHash, timelock, minDelay, proposer, cancellers);
+    }
+
+    function callTimelockInitCode(bytes memory creationCode, uint256 minDelay, address proposer)
         external
-        view
+        pure
+        returns (bytes memory)
     {
-        LibTimelockController.assertTimelockState(timelock, minDelay, proposer, cancellers);
+        return LibTimelockController.timelockInitCode(creationCode, minDelay, proposer);
     }
 
-    function callTimelockInitCode(uint256 minDelay, address proposer) external pure returns (bytes memory) {
-        return LibTimelockController.timelockInitCode(minDelay, proposer);
-    }
-
-    function callExpectedTimelockAddress(uint256 minDelay, address proposer) external pure returns (address) {
-        return LibTimelockController.expectedTimelockAddress(minDelay, proposer);
+    function callExpectedTimelockAddress(bytes memory creationCode, uint256 minDelay, address proposer)
+        external
+        pure
+        returns (address)
+    {
+        return LibTimelockController.expectedTimelockAddress(creationCode, minDelay, proposer);
     }
 
     function noCancellers() internal pure returns (address[] memory) {
@@ -46,7 +61,7 @@ contract LibTimelockControllerTest is Test {
     }
 
     function deployTimelock() internal returns (address) {
-        return deployZoltu(LibTimelockController.timelockInitCode(MIN_DELAY, PROPOSER));
+        return deployZoltu(LibTimelockController.timelockInitCode(CREATION_CODE, MIN_DELAY, PROPOSER));
     }
 
     /// The snapshot's creation and runtime code are the dependency as the
@@ -58,7 +73,7 @@ contract LibTimelockControllerTest is Test {
         assertEq(BYTECODE_HASH, keccak256(RUNTIME_CODE));
     }
 
-    /// The snapshot's creation code is the generation production carries: with a
+    /// The frozen 0_1_18 generation is the one production carries: with a
     /// 48 hour delay and the ST0x token-owner Safes as proposer it derives the
     /// ST0x governance timelocks deployed on Base
     /// (https://basescan.org/address/0x48ba1371a78e6cc54157c63721756ab444510db3)
@@ -67,11 +82,15 @@ contract LibTimelockControllerTest is Test {
     /// as pinned in S01-Issuer/st0x.deploy `LibTimelockInvariants`.
     function testFrozenCodeDerivesProductionTimelocks() external pure {
         assertEq(
-            LibTimelockController.expectedTimelockAddress(48 hours, 0xe70d821f3462a074e63b42d0AaC6523faAe1d611),
+            LibTimelockController.expectedTimelockAddress(
+                CREATION_CODE_0_1_18, 48 hours, 0xe70d821f3462a074e63b42d0AaC6523faAe1d611
+            ),
             0x48ba1371A78E6cC54157c63721756ab444510DB3
         );
         assertEq(
-            LibTimelockController.expectedTimelockAddress(48 hours, 0x3840aeDaEc8e82f79d8F6a8F6ADCa271E13E0329),
+            LibTimelockController.expectedTimelockAddress(
+                CREATION_CODE_0_1_18, 48 hours, 0x3840aeDaEc8e82f79d8F6a8F6ADCa271E13E0329
+            ),
             0x831E4e1bB2b9a67C00b7d17F252A18a22cd0bD2B
         );
     }
@@ -87,26 +106,153 @@ contract LibTimelockControllerTest is Test {
 
     /// The derived address is where the real Zoltu factory deploys.
     function testExpectedAddressIsWhereZoltuDeploys() external {
-        assertEq(deployTimelock(), LibTimelockController.expectedTimelockAddress(MIN_DELAY, PROPOSER));
+        assertEq(deployTimelock(), LibTimelockController.expectedTimelockAddress(CREATION_CODE, MIN_DELAY, PROPOSER));
     }
 
-    /// Both parameters are constructor arguments, so each moves the address.
+    /// The generation is the init code's prefix and both other parameters are
+    /// constructor arguments, so each moves the address.
     function testExpectedAddressVariesWithEachParameter() external pure {
-        address base = LibTimelockController.expectedTimelockAddress(MIN_DELAY, PROPOSER);
-        assertNotEq(base, LibTimelockController.expectedTimelockAddress(MIN_DELAY + 1, PROPOSER));
-        assertNotEq(base, LibTimelockController.expectedTimelockAddress(MIN_DELAY, address(0xBEEF)));
+        address base = LibTimelockController.expectedTimelockAddress(CREATION_CODE, MIN_DELAY, PROPOSER);
+        assertNotEq(
+            base,
+            LibTimelockController.expectedTimelockAddress(
+                type(MockTimelockControllerGeneration).creationCode, MIN_DELAY, PROPOSER
+            )
+        );
+        assertNotEq(base, LibTimelockController.expectedTimelockAddress(CREATION_CODE, MIN_DELAY + 1, PROPOSER));
+        assertNotEq(base, LibTimelockController.expectedTimelockAddress(CREATION_CODE, MIN_DELAY, address(0xBEEF)));
+    }
+
+    /// Each generation's init code is its own creation code with the same
+    /// constructor arguments appended, and deploys at the address derived from
+    /// it.
+    function testEachGenerationDeploysAtItsOwnAddress() external {
+        bytes memory other = type(MockTimelockControllerGeneration).creationCode;
+        bytes memory args = LibTimelockController.timelockConstructorArgs(MIN_DELAY, PROPOSER);
+        assertEq(
+            LibTimelockController.timelockInitCode(CREATION_CODE, MIN_DELAY, PROPOSER),
+            abi.encodePacked(CREATION_CODE, args)
+        );
+        assertEq(LibTimelockController.timelockInitCode(other, MIN_DELAY, PROPOSER), abi.encodePacked(other, args));
+
+        address recorded = deployTimelock();
+        address otherTimelock = deployZoltu(LibTimelockController.timelockInitCode(other, MIN_DELAY, PROPOSER));
+        assertEq(recorded, LibTimelockController.expectedTimelockAddress(CREATION_CODE, MIN_DELAY, PROPOSER));
+        assertEq(otherTimelock, LibTimelockController.expectedTimelockAddress(other, MIN_DELAY, PROPOSER));
+        assertNotEq(recorded, otherTimelock);
+    }
+
+    function externalCheckTimelockGeneration(bytes memory creationCode, bytes32 bytecodeHash) external {
+        LibTimelockController.checkTimelockGeneration(vm, creationCode, bytecodeHash, MIN_DELAY, PROPOSER);
+    }
+
+    /// Each generation's creation code matches its own hash and no other, and the check leaves nothing deployed.
+    function testCheckTimelockGenerationMatchesOnlyItsOwnHash() external {
+        bytes memory mockCode = type(MockTimelockControllerGeneration).creationCode;
+        bytes32 mockHash = keccak256(type(MockTimelockControllerGeneration).runtimeCode);
+        address at = LibTimelockController.expectedTimelockAddress(CREATION_CODE, MIN_DELAY, PROPOSER);
+        uint64 nonce = vm.getNonce(address(this));
+
+        this.externalCheckTimelockGeneration(CREATION_CODE, BYTECODE_HASH);
+        this.externalCheckTimelockGeneration(mockCode, mockHash);
+        assertEq(at.code.length, 0);
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+        assertEq(vm.getNonce(address(this)), nonce);
+        assertEq(vm.computeCreateAddress(address(this), nonce).code.length, 0);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibTimelockController.TimelockGenerationMismatch.selector, mockHash, BYTECODE_HASH)
+        );
+        this.externalCheckTimelockGeneration(CREATION_CODE, mockHash);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibTimelockController.TimelockGenerationMismatch.selector, BYTECODE_HASH, mockHash)
+        );
+        this.externalCheckTimelockGeneration(mockCode, BYTECODE_HASH);
+    }
+
+    /// A timelock already at the address does not change what the check derives.
+    function testCheckTimelockGenerationIgnoresCodeAlreadyAtTheAddress() external {
+        address at = LibTimelockController.expectedTimelockAddress(CREATION_CODE, MIN_DELAY, PROPOSER);
+        vm.etch(at, type(MockTimelockControllerGeneration).runtimeCode);
+        this.externalCheckTimelockGeneration(CREATION_CODE, BYTECODE_HASH);
+        assertEq(at.codehash, keccak256(type(MockTimelockControllerGeneration).runtimeCode));
+    }
+
+    /// The check derives the hash from the given constructor arguments, which a generation's code can embed.
+    function testCheckTimelockGenerationDeploysWithTheGivenArguments() external {
+        bytes memory code = type(MockTimelockControllerImmutableGeneration).creationCode;
+        bytes32 hashAtMinDelay = deployZoltu(LibTimelockController.timelockInitCode(code, MIN_DELAY, PROPOSER)).codehash;
+        bytes32 hashAtOtherDelay =
+            deployZoltu(LibTimelockController.timelockInitCode(code, MIN_DELAY + 1, PROPOSER)).codehash;
+        assertNotEq(hashAtMinDelay, hashAtOtherDelay);
+
+        this.externalCheckTimelockGeneration(code, hashAtMinDelay);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibTimelockController.TimelockGenerationMismatch.selector, hashAtOtherDelay, hashAtMinDelay
+            )
+        );
+        this.externalCheckTimelockGeneration(code, hashAtOtherDelay);
+    }
+
+    /// A creation code that does not deploy is refused as a failed deploy.
+    function testCheckTimelockGenerationRefusesCreationCodeThatDoesNotDeploy() external {
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, false, address(0)));
+        this.externalCheckTimelockGeneration(hex"60006000fd", BYTECODE_HASH);
+    }
+
+    /// A local deploy that cannot be reverted is refused rather than left in place.
+    function testCheckTimelockGenerationRefusesALocalDeployThatCannotBeReverted() external {
+        uint256 checkSnapshotId = vm.snapshotState() + 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibTimelockController.TimelockGenerationSnapshotRevertFailed.selector, checkSnapshotId
+            )
+        );
+        this.externalCheckTimelockGeneration(type(MockSnapshotDeletingCreation).creationCode, BYTECODE_HASH);
+    }
+
+    /// A timelock passes against the generation it was deployed from and is
+    /// refused by code hash against any other, whichever generation it is.
+    function testAssertHoldsATimelockToItsOwnGeneration() external {
+        bytes32 otherHash = keccak256(type(MockTimelockControllerGeneration).runtimeCode);
+        assertNotEq(otherHash, BYTECODE_HASH);
+        address recorded = deployTimelock();
+        address otherTimelock = deployZoltu(
+            LibTimelockController.timelockInitCode(
+                type(MockTimelockControllerGeneration).creationCode, MIN_DELAY, PROPOSER
+            )
+        );
+        assertEq(otherTimelock.codehash, otherHash);
+
+        this.callAssertTimelockState(BYTECODE_HASH, recorded, MIN_DELAY, PROPOSER, noCancellers());
+        this.callAssertTimelockState(otherHash, otherTimelock, MIN_DELAY, PROPOSER, noCancellers());
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibTimelockController.TimelockCodehashMismatch.selector, recorded, otherHash, BYTECODE_HASH
+            )
+        );
+        this.callAssertTimelockState(otherHash, recorded, MIN_DELAY, PROPOSER, noCancellers());
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibTimelockController.TimelockCodehashMismatch.selector, otherTimelock, BYTECODE_HASH, otherHash
+            )
+        );
+        this.callAssertTimelockState(BYTECODE_HASH, otherTimelock, MIN_DELAY, PROPOSER, noCancellers());
     }
 
     /// A zero proposer is refused: nobody could ever schedule on the timelock.
     function testInitCodeRefusesZeroProposer(uint256 minDelay) external {
         vm.expectRevert(abi.encodeWithSelector(LibTimelockController.TimelockZeroProposer.selector));
-        this.callTimelockInitCode(minDelay, address(0));
+        this.callTimelockInitCode(CREATION_CODE, minDelay, address(0));
     }
 
     /// The address derivation refuses a zero proposer, as the init code does.
     function testExpectedAddressRefusesZeroProposer(uint256 minDelay) external {
         vm.expectRevert(abi.encodeWithSelector(LibTimelockController.TimelockZeroProposer.selector));
-        this.callExpectedTimelockAddress(minDelay, address(0));
+        this.callExpectedTimelockAddress(CREATION_CODE, minDelay, address(0));
     }
 
     /// The init code constructs the role model: the delay, the proposer as
@@ -129,7 +275,7 @@ contract LibTimelockControllerTest is Test {
 
     /// A fresh deploy is in the role model's state.
     function testAssertPassesOnFreshDeploy() external {
-        LibTimelockController.assertTimelockState(deployTimelock(), MIN_DELAY, PROPOSER, noCancellers());
+        LibTimelockController.assertTimelockState(BYTECODE_HASH, deployTimelock(), MIN_DELAY, PROPOSER, noCancellers());
     }
 
     /// Every granted canceller is required to hold the role, and passes once it
@@ -148,11 +294,11 @@ contract LibTimelockControllerTest is Test {
                 LibTimelockController.TimelockMissingRole.selector, timelock, cancellerRole, cancellers[1]
             )
         );
-        this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, cancellers);
+        this.callAssertTimelockState(BYTECODE_HASH, timelock, MIN_DELAY, PROPOSER, cancellers);
 
         vm.prank(timelock);
         IAccessControl(timelock).grantRole(cancellerRole, cancellers[1]);
-        this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, cancellers);
+        this.callAssertTimelockState(BYTECODE_HASH, timelock, MIN_DELAY, PROPOSER, cancellers);
     }
 
     /// The first listed canceller is checked as well as the later ones.
@@ -170,14 +316,14 @@ contract LibTimelockControllerTest is Test {
                 LibTimelockController.TimelockMissingRole.selector, timelock, cancellerRole, cancellers[0]
             )
         );
-        this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, cancellers);
+        this.callAssertTimelockState(BYTECODE_HASH, timelock, MIN_DELAY, PROPOSER, cancellers);
     }
 
     /// An account with no code is refused before anything is called on it.
     function testAssertRefusesNoCode() external {
-        address missing = LibTimelockController.expectedTimelockAddress(MIN_DELAY, PROPOSER);
+        address missing = LibTimelockController.expectedTimelockAddress(CREATION_CODE, MIN_DELAY, PROPOSER);
         vm.expectRevert(abi.encodeWithSelector(LibTimelockController.TimelockNotDeployed.selector, missing));
-        this.callAssertTimelockState(missing, MIN_DELAY, PROPOSER, noCancellers());
+        this.callAssertTimelockState(BYTECODE_HASH, missing, MIN_DELAY, PROPOSER, noCancellers());
     }
 
     /// Other code at the address is refused by the code hash.
@@ -189,7 +335,7 @@ contract LibTimelockControllerTest is Test {
                 LibTimelockController.TimelockCodehashMismatch.selector, timelock, BYTECODE_HASH, timelock.codehash
             )
         );
-        this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, noCancellers());
+        this.callAssertTimelockState(BYTECODE_HASH, timelock, MIN_DELAY, PROPOSER, noCancellers());
     }
 
     /// The delay is storage, not code, so only the delay check sees a timelock
@@ -201,7 +347,7 @@ contract LibTimelockControllerTest is Test {
                 LibTimelockController.TimelockMinDelayMismatch.selector, timelock, MIN_DELAY + 1, MIN_DELAY
             )
         );
-        this.callAssertTimelockState(timelock, MIN_DELAY + 1, PROPOSER, noCancellers());
+        this.callAssertTimelockState(BYTECODE_HASH, timelock, MIN_DELAY + 1, PROPOSER, noCancellers());
     }
 
     /// Each required grant missing is refused with its own `(role, account)`:
@@ -224,10 +370,10 @@ contract LibTimelockControllerTest is Test {
                     LibTimelockController.TimelockMissingRole.selector, timelock, roles[i], holders[i]
                 )
             );
-            this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, noCancellers());
+            this.callAssertTimelockState(BYTECODE_HASH, timelock, MIN_DELAY, PROPOSER, noCancellers());
             vm.prank(timelock);
             IAccessControl(timelock).grantRole(roles[i], holders[i]);
-            this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, noCancellers());
+            this.callAssertTimelockState(BYTECODE_HASH, timelock, MIN_DELAY, PROPOSER, noCancellers());
         }
 
         vm.prank(timelock);
@@ -235,7 +381,7 @@ contract LibTimelockControllerTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(LibTimelockController.TimelockMissingRole.selector, timelock, adminRole, timelock)
         );
-        this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, noCancellers());
+        this.callAssertTimelockState(BYTECODE_HASH, timelock, MIN_DELAY, PROPOSER, noCancellers());
     }
 
     /// Each role that must stay closed is refused when opened to the zero
@@ -255,10 +401,10 @@ contract LibTimelockControllerTest is Test {
                     LibTimelockController.TimelockUnexpectedRole.selector, timelock, roles[i], address(0)
                 )
             );
-            this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, noCancellers());
+            this.callAssertTimelockState(BYTECODE_HASH, timelock, MIN_DELAY, PROPOSER, noCancellers());
             vm.prank(timelock);
             IAccessControl(timelock).revokeRole(roles[i], address(0));
-            this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, noCancellers());
+            this.callAssertTimelockState(BYTECODE_HASH, timelock, MIN_DELAY, PROPOSER, noCancellers());
         }
     }
 
@@ -275,7 +421,7 @@ contract LibTimelockControllerTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(LibTimelockController.TimelockUnexpectedRole.selector, timelock, adminRole, PROPOSER)
         );
-        this.callAssertTimelockState(timelock, MIN_DELAY, PROPOSER, noCancellers());
+        this.callAssertTimelockState(BYTECODE_HASH, timelock, MIN_DELAY, PROPOSER, noCancellers());
     }
 
     /// Open execution end to end: an account holding no role executes a matured
