@@ -303,7 +303,7 @@ contract BuildTest is Test {
                 string.concat(
                     LibCodeGen.filePrefix(),
                     "\n",
-                    LibRainDeploySnapshot.releasedImportBlock(vm, paths, generated[i].candidate.snapshot.mechanism),
+                    LibRainDeploySnapshot.releasedImportBlock(vm, paths),
                     LibRainDeploySnapshot.releasedLibraryBlock(
                         vm, libraryName, generated[i].contractName, paths, generated[i].candidate.snapshot
                     )

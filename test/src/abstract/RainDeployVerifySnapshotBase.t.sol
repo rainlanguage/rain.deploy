@@ -15,16 +15,18 @@ import {
     FrozenCodeRecordDeclaresDeployedAddress,
     FrozenCodeRecordInconsistent,
     FrozenCodeRecordUnreadable,
-    FrozenSnapshotAmbiguous,
     FrozenSnapshotNotReleased,
     FrozenSnapshotsOutnumberReleases,
-    FrozenSnapshotUnreadable,
     RainDeployVerifySnapshotBase,
     StoredAddressMismatch,
     StoredCodeHashMismatch,
     StoredRuntimeCodeHashMismatch
 } from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
-import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {
+    FrozenSnapshotAmbiguous,
+    FrozenSnapshotUnreadable,
+    LibRainDeploySnapshot
+} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {PER_NETWORK_CLONE_RECORD_ROOT} from "../../abstract/PerNetworkCloneDeploys.sol";
@@ -119,7 +121,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// @param record The record file's contents.
     /// @return The address the record declares.
     function externalRecordedDeployedAddress(string memory path, string memory record) external pure returns (address) {
-        (uint256[] memory chainIds, address[] memory addresses) = recordedDeployedAddresses(path, record);
+        (uint256[] memory chainIds, address[] memory addresses) =
+            LibRainDeploySnapshot.recordedDeployedAddresses(vm, path, record);
         assertEq(chainIds.length, 0);
         assertEq(addresses.length, 1);
         return addresses[0];
@@ -367,7 +370,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         string memory record = recordCommentingOutADeclaration(address(0xdead), released);
         // The commented-out line really is the declaration text, carrying the
         // released address: only its position makes it a comment.
-        assertTrue(vm.contains(record, string.concat("// ", DEPLOYED_ADDRESS_DECLARATION)));
+        assertTrue(vm.contains(record, string.concat("// ", LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION)));
         assertTrue(vm.contains(record, vm.toString(released)));
 
         assertEq(this.externalRecordedDeployedAddress("record.sol", record), address(0xdead));
@@ -415,7 +418,12 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         // line, carrying the released address: only the block around it makes
         // it a comment.
         assertTrue(
-            vm.contains(record, string.concat("\n", DEPLOYED_ADDRESS_DECLARATION, " address(", vm.toString(released)))
+            vm.contains(
+                record,
+                string.concat(
+                    "\n", LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION, " address(", vm.toString(released)
+                )
+            )
         );
         assertTrue(vm.contains(record, "/*\n"));
 
@@ -454,7 +462,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             vm.toString(address(0xbeef)),
             ");\n"
         );
-        assertTrue(vm.contains(record, DEPLOYED_ADDRESS_DECLARATION));
+        assertTrue(vm.contains(record, LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION));
         assertFalse(vm.contains(record, "*/"));
 
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
@@ -518,8 +526,12 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         string memory wrapped = recordDeclaring(released, address(0xdead));
         // The two records really do differ in the wrapper and nowhere else that
         // matters: one carries it, the other does not.
-        assertTrue(vm.contains(bare, string.concat(DEPLOYED_ADDRESS_DECLARATION, " ", vm.toString(released), ";")));
-        assertTrue(vm.contains(wrapped, string.concat(DEPLOYED_ADDRESS_DECLARATION, " address(")));
+        assertTrue(
+            vm.contains(
+                bare, string.concat(LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION, " ", vm.toString(released), ";")
+            )
+        );
+        assertTrue(vm.contains(wrapped, string.concat(LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION, " address(")));
         assertFalse(vm.contains(bare, "address("));
 
         assertEq(this.externalRecordedDeployedAddress("record.sol", bare), released);

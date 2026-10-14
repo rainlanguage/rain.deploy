@@ -4,16 +4,18 @@ pragma solidity =0.8.25;
 
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
-    FrozenSnapshotAmbiguous,
     FrozenSnapshotNotReleased,
     FrozenSnapshotsOutnumberReleases,
-    FrozenSnapshotUnreadable,
     RainDeployVerifySnapshotBase,
     StoredAddressMismatch
 } from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {CloneNetworks} from "../../../src/lib/LibRainDeployClone.sol";
 import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
-import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {
+    FrozenSnapshotAmbiguous,
+    FrozenSnapshotUnreadable,
+    LibRainDeploySnapshot
+} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
     PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
@@ -65,7 +67,7 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         pure
         returns (uint256[] memory, address[] memory)
     {
-        return recordedDeployedAddresses(path, record);
+        return LibRainDeploySnapshot.recordedDeployedAddresses(vm, path, record);
     }
 
     /// The committed record's one file.

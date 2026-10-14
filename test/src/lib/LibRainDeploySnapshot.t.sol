@@ -218,6 +218,17 @@ contract LibRainDeploySnapshotTest is Test {
         vm.writeFile(path, string.concat("// SPDX-License", "-Identifier: LicenseRef-DCL-1.0\n"));
     }
 
+    /// Writes one Zoltu release into the fixture record: `writeFixture`'s
+    /// file plus the one declaration `LibRainDeploySnapshot.recordedMechanism`
+    /// reads it as Zoltu by, for a test whose emitter reads the release's
+    /// mechanism from it.
+    /// @param path The file to write, under `FIXTURE_ROOT`.
+    function writeZoltuFixture(string memory path) internal {
+        writeFixture(path);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeLine(path, "address constant DEPLOYED_ADDRESS = address(0x0000000000000000000000000000000000000001);");
+    }
+
     /// A release tag is what `tagForVersion` produces and nothing else, so
     /// exactly the directories a freeze can write are the ones the record
     /// counts. The rolling `candidate/` is excluded by that same rule rather
@@ -1175,7 +1186,7 @@ contract LibRainDeploySnapshotTest is Test {
             vm.readFile(RELEASED_LIB_PATH),
             string.concat(
                 generatedFilePrefix(),
-                LibRainDeploySnapshot.releasedImportBlock(vm, paths, DeployMechanism.Zoltu),
+                LibRainDeploySnapshot.releasedImportBlock(vm, paths),
                 LibRainDeploySnapshot.releasedLibraryBlock(
                     vm, EMITTED_LIBRARY, EMITTED_CONTRACT, paths, emitterTemplate()
                 )
@@ -1387,6 +1398,11 @@ contract LibRainDeploySnapshotTest is Test {
         });
     }
 
+    /// A committed record of two Zoltu releases of `EMITTED_CONTRACT`, tagged
+    /// `0_0_1` and `0_0_2`: the released-lib emitters read each release's
+    /// mechanism from its file, so the record `recordOf` names has to exist.
+    string constant ZOLTU_RECORD_ROOT = "test/fixture-zoltu-record";
+
     /// A record of `count` releases, `0_0_1` upwards, as
     /// `frozenSnapshotPaths` spells them.
     /// @param count How many releases.
@@ -1394,9 +1410,7 @@ contract LibRainDeploySnapshotTest is Test {
     function recordOf(uint256 count) internal pure returns (string[] memory) {
         string[] memory paths = new string[](count);
         for (uint256 i = 0; i < count; i++) {
-            paths[i] = string.concat(
-                LibRainDeploySnapshot.LIB_FS_ROOT, "/0_0_", vm.toString(i + 1), "/", EMITTED_CONTRACT, ".sol"
-            );
+            paths[i] = string.concat(ZOLTU_RECORD_ROOT, "/0_0_", vm.toString(i + 1), "/", EMITTED_CONTRACT, ".sol");
         }
         return paths;
     }
@@ -1474,14 +1488,14 @@ contract LibRainDeploySnapshotTest is Test {
     /// The four aliased fields are the whole of what a released entry says
     /// about consensus, so an import that goes missing is a field that silently
     /// falls back to whatever else is in scope.
-    function testReleasedImportBlockAliasesEveryRecord() external pure {
+    function testReleasedImportBlockAliasesEveryRecord() external view {
         assertEq(
-            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(0), DeployMechanism.Zoltu),
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(0)),
             "import {DeployDependency, DeployMechanism, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n"
         );
 
         assertEq(
-            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1), DeployMechanism.Zoltu),
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1)),
             string.concat(
                 "import {DeployDependency, DeployMechanism, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
                 expectedImport("0_0_1")
@@ -1489,7 +1503,7 @@ contract LibRainDeploySnapshotTest is Test {
         );
 
         assertEq(
-            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2), DeployMechanism.Zoltu),
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2)),
             string.concat(
                 "import {DeployDependency, DeployMechanism, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
                 expectedImport("0_0_1"),
@@ -1509,11 +1523,11 @@ contract LibRainDeploySnapshotTest is Test {
     /// The record imports are asserted alongside it: the suites path MUST NOT
     /// reach the aliases, which are record-relative and already correct for a
     /// consumer.
-    function testReleasedImportBlockTakesTheSuitesImportPath() external pure {
+    function testReleasedImportBlockTakesTheSuitesImportPath() external view {
         string memory consumerPath = "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol";
 
         assertEq(
-            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1), consumerPath, DeployMechanism.Zoltu),
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1), consumerPath),
             string.concat(
                 "import {DeployDependency, DeployMechanism, DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n",
                 expectedImport("0_0_1")
@@ -1522,22 +1536,22 @@ contract LibRainDeploySnapshotTest is Test {
     }
 
     /// Omitting the path MUST be this repo's own `suitesImportPathInThisRepo`, so the
-    /// arity every existing caller spells keeps emitting what it emitted. The
-    /// mechanism MUST pass through unchanged, so a clone block from the
-    /// shorter arity still aliases `MECHANISM_DATA`.
-    function testReleasedImportBlockDefaultsToThisRepoSuitesImportPath() external pure {
+    /// arity every existing caller spells keeps emitting what it emitted, over
+    /// a Zoltu record and over a per-network clone record alike — the
+    /// shorter arity still aliases a clone record's `MECHANISM_DATA`.
+    function testReleasedImportBlockDefaultsToThisRepoSuitesImportPath() external view {
         assertEq(
-            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2), DeployMechanism.Zoltu),
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2)),
             LibRainDeploySnapshot.releasedImportBlock(
-                vm, recordOf(2), LibRainDeploySnapshot.suitesImportPathInThisRepo(), DeployMechanism.Zoltu
+                vm, recordOf(2), LibRainDeploySnapshot.suitesImportPathInThisRepo()
             )
         );
 
-        string memory clone = LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2), DeployMechanism.Clone);
+        string memory clone = LibRainDeploySnapshot.releasedImportBlock(vm, perNetworkRecordPaths());
         assertEq(
             clone,
             LibRainDeploySnapshot.releasedImportBlock(
-                vm, recordOf(2), LibRainDeploySnapshot.suitesImportPathInThisRepo(), DeployMechanism.Clone
+                vm, perNetworkRecordPaths(), LibRainDeploySnapshot.suitesImportPathInThisRepo()
             )
         );
         assertTrue(vm.contains(clone, "MECHANISM_DATA as "));
@@ -1640,7 +1654,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// first release, including this one, and it MUST still emit a compiling
     /// library: the declaration is imported by ordinary source, so a repo that
     /// could not emit one before its first release could not build.
-    function testReleasedLibraryBlockDeclaresEveryRecord() external pure {
+    function testReleasedLibraryBlockDeclaresEveryRecord() external view {
         assertEq(
             LibRainDeploySnapshot.releasedLibraryBlock(
                 vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(0), emitterTemplate()
@@ -1683,7 +1697,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// `allSuites` refuses a duplicate key, so a key that did not carry the tag
     /// would make the second release unreachable and the whole declaration
     /// revert.
-    function testReleasedLibraryBlockKeysAreUniquePerRelease() external pure {
+    function testReleasedLibraryBlockKeysAreUniquePerRelease() external view {
         string memory emitted = LibRainDeploySnapshot.releasedLibraryBlock(
             vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), emitterTemplate()
         );
@@ -1697,7 +1711,7 @@ contract LibRainDeploySnapshotTest is Test {
     ///
     /// The template differs from every record in BOTH halves, so an emitter
     /// that still read it would be seen writing them out.
-    function testReleasedEntriesTakeDependenciesFromTheFrozenRecord() external pure {
+    function testReleasedEntriesTakeDependenciesFromTheFrozenRecord() external view {
         DeploySuite memory declared = emitterTemplate();
         declared.dependencies = new DeployDependency[](2);
         declared.dependencies[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: hex"d0d0"});
@@ -1736,7 +1750,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// a released entry's list, so it is stated as invariance rather than as
     /// two examples — two examples is also what a partial re-read passes.
     /// @param dependencies Whatever the candidate declaration now says.
-    function testReleasedEntriesIgnoreTheTemplateDependencies(DeployDependency[] memory dependencies) external pure {
+    function testReleasedEntriesIgnoreTheTemplateDependencies(DeployDependency[] memory dependencies) external view {
         DeploySuite memory declared = emitterTemplate();
         declared.dependencies = dependencies;
 
@@ -2195,8 +2209,8 @@ contract LibRainDeploySnapshotTest is Test {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(libDir, true);
 
-        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol"));
-        writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT, ".sol"));
+        writeZoltuFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_10_0/", FIXTURE_CONTRACT, ".sol"));
+        writeZoltuFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT, ".sol"));
         writeFixture(string.concat(RELEASED_FIXTURE_ROOT, "/0_9_0/", FIXTURE_CONTRACT_SECOND, ".sol"));
         // Not releases: the rolling snapshot, and a scratch directory a test or
         // a human left behind.
@@ -2226,7 +2240,7 @@ contract LibRainDeploySnapshotTest is Test {
         // Built while the fixture record is still there: both emitters read it.
         string memory expected = string.concat(
             generatedFilePrefix(),
-            LibRainDeploySnapshot.releasedImportBlock(vm, paths, DeployMechanism.Zoltu),
+            LibRainDeploySnapshot.releasedImportBlock(vm, paths),
             LibRainDeploySnapshot.releasedLibraryBlock(vm, libraryName, FIXTURE_CONTRACT, paths, emitterTemplate())
         );
 
@@ -3653,11 +3667,8 @@ contract LibRainDeploySnapshotTest is Test {
     /// A per-network clone release is imported without `DEPLOYED_ADDRESS` —
     /// the record declares none, so importing it would not compile — and with
     /// its `MECHANISM_DATA`.
-    function testReleasedImportOfAPerNetworkCloneRelease() external pure {
-        assertEq(
-            LibRainDeploySnapshot.releasedImport(vm, perNetworkRecordPaths()[0], DeployMechanism.ClonePerNetwork),
-            EXPECTED_PER_NETWORK_IMPORT
-        );
+    function testReleasedImportOfAPerNetworkCloneRelease() external view {
+        assertEq(LibRainDeploySnapshot.releasedImport(vm, perNetworkRecordPaths()[0]), EXPECTED_PER_NETWORK_IMPORT);
     }
 
     /// A per-network clone release's entry stores no address and is declared
@@ -3672,8 +3683,7 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// The released lib written from the committed per-network record over a
     /// `ClonePerNetwork` template is the prefix, the per-network import and the
-    /// per-network entry: the writer hands the template's mechanism to both
-    /// halves.
+    /// per-network entry: both halves read the mechanism from the record.
     function testWriteReleasedSuitesLibOfAPerNetworkCloneRecord() external {
         string memory libDir = string.concat(FIXTURE_LIB_ROOT, "/released-per-network");
         //forge-lint: disable-next-line(unsafe-cheatcode)

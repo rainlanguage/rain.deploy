@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
+import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// Thrown when the deploy address recorded for a version is not the address its
 /// own mechanism derives.
@@ -41,32 +42,6 @@ error FrozenSnapshotNotReleased(string path);
 /// @param records The record files declaring them, up to and including `path`.
 /// @param released The released suites whose mechanism derives them.
 error FrozenSnapshotsOutnumberReleases(string path, address[] deployedAddresses, uint256 records, uint256 released);
-/// Thrown when a file in the frozen record declares no deployed address,
-/// declares one as `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in
-/// decimal digits, or declares one whose value does not read as an address.
-/// The record holds generated snapshots and nothing else, and
-/// `DEPLOYED_ADDRESS` is what makes one the record of a deployment rather than
-/// a file that happens to be in a release directory. Distinct from
-/// `FrozenSnapshotNotReleased`, which is a declaration that is missing
-/// something — this is a record that cannot be read at all, and reporting it as
-/// undeclared would send the reader after the wrong thing.
-/// @param path The record file with no `DEPLOYED_ADDRESS` or
-/// `DEPLOYED_ADDRESS_<chainId>` declaration, with a `DEPLOYED_ADDRESS_<x>`
-/// whose `<x>` is not decimal, or with a declared value that is not an
-/// address.
-error FrozenSnapshotUnreadable(string path);
-
-/// Thrown when a file in the frozen record declares its deployed address more
-/// than once: `DEPLOYED_ADDRESS` twice, one `DEPLOYED_ADDRESS_<chainId>` twice,
-/// or `DEPLOYED_ADDRESS` beside any `DEPLOYED_ADDRESS_<chainId>`. Solidity
-/// rejects a second file-scope constant of one name, so no compiler reads the
-/// first two at all, and the third is two answers to where the release is.
-/// Every rule for choosing between them — first, last, either — reads a value
-/// the generator never wrote. A hand edit is what this group exists to catch and a position rule is what it
-/// would aim at, so the reader refuses rather than choosing.
-/// @param path The record file declaring its deployed address more than once.
-error FrozenSnapshotAmbiguous(string path);
-
 /// Thrown when a frozen code record — a parameterised contract's snapshot,
 /// which records code and no deploy — declares a deployed address, either
 /// `DEPLOYED_ADDRESS` or a per-network `DEPLOYED_ADDRESS_<chainId>`. A code
@@ -186,201 +161,11 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         }
     }
 
-    /// @dev The declaration a generated snapshot records its deploy address in.
-    /// Matched whole and from the START of its line, so what is being looked
-    /// for is the DECLARATION: it cannot be satisfied by characters that happen
-    /// to occur inside a hex payload, nor by a line that merely CONTAINS the
-    /// declaration text — a commented-out copy carrying some other address is
-    /// exactly the hand edit this whole group exists to catch, and it is at
-    /// file scope in every generated snapshot, so there is no indentation to
-    /// allow for.
-    ///
-    /// The start of a line is what makes a `//` copy unreachable, because `//`
-    /// has to sit in front of the text it comments out. It does nothing to a
-    /// `/* ... */` copy, whose delimiters are on their own lines and whose
-    /// contents therefore start their lines exactly as the real declaration
-    /// does. Block comments come out of the record before this rule runs, so
-    /// that what it runs on is what the compiler would see.
-    string constant DEPLOYED_ADDRESS_DECLARATION = "address constant DEPLOYED_ADDRESS =";
-
-    /// @dev The start of the declaration a per-network snapshot records one
-    /// network's deploy address in: `DEPLOYED_ADDRESS_<chainId> =`. Matched
-    /// from the start of its line for the reasons `DEPLOYED_ADDRESS_DECLARATION`
-    /// is.
-    string constant DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX = "address constant DEPLOYED_ADDRESS_";
-
     /// @dev The declarations a code record carries, matched as
-    /// `DEPLOYED_ADDRESS_DECLARATION` is.
+    /// `LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION` is.
     string constant BYTECODE_HASH_DECLARATION = "bytes32 constant BYTECODE_HASH =";
     string constant CREATION_CODE_DECLARATION = "bytes constant CREATION_CODE =";
     string constant RUNTIME_CODE_DECLARATION = "bytes constant RUNTIME_CODE =";
-
-    /// The addresses a frozen record declares as its deploy addresses, and the
-    /// chain id each is for.
-    ///
-    /// A record declares either ONE `DEPLOYED_ADDRESS`, the address on every
-    /// network, or one `DEPLOYED_ADDRESS_<chainId>` per network, which is what
-    /// a per-network clone records. The first reads as one address and no
-    /// chain ids; the second as each declaration's chain id and address, in
-    /// file order — the order the writer emits them, which is the suite's
-    /// address order.
-    ///
-    /// `LibCodeGen` emits an address constant on ONE line — wrapping needs 120
-    /// characters, `DEPLOYED_ADDRESS` occupies 88 and `DEPLOYED_ADDRESS_<chainId>`
-    /// would need a chain id of more than 31 digits — so a declaration is a
-    /// line, and its value is that line's last token with the
-    /// type wrapper and the terminator stripped. `address(0x...);` and a bare
-    /// `0x...;` read the same, so which wrapper the generator chose is not
-    /// something this has to know.
-    ///
-    /// That every generated snapshot HAS this declaration, second, of type
-    /// `address`, is pinned by `GeneratedSnapshotShapeTest` against the
-    /// compiler's own AST. Read from the text here rather than from that AST
-    /// because a record is reached by its PATH, which is what the walk returns,
-    /// while its artifact path is not something a caller can name — foundry
-    /// disambiguates those by whatever else happens to share the basename.
-    ///
-    /// The whole record is scanned before a match is read, so a record
-    /// carrying `DEPLOYED_ADDRESS` twice, one chain id twice, or both forms is
-    /// refused rather than resolved by position. A per-network declaration's
-    /// chain id is read by `declaredChainId`, and every declaration's address
-    /// by `declaredAddress`.
-    /// @param path The record file, for the error only.
-    /// @param record The record file's contents.
-    /// @return The chain id each address is for: empty for a record declaring
-    /// `DEPLOYED_ADDRESS`.
-    /// @return The addresses the record declares, in file order.
-    function recordedDeployedAddresses(string memory path, string memory record)
-        internal
-        pure
-        returns (uint256[] memory, address[] memory)
-    {
-        string[] memory lines = vm.split(withoutBlockComments(record), "\n");
-        uint256[] memory chainIds = new uint256[](lines.length);
-        address[] memory addresses = new address[](lines.length);
-        uint256 perNetwork = 0;
-        bool everyNetwork = false;
-        for (uint256 i = 0; i < lines.length; i++) {
-            bool isEveryNetwork = vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) == 0;
-            if (!isEveryNetwork && vm.indexOf(lines[i], DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX) != 0) {
-                continue;
-            }
-            if (everyNetwork || (isEveryNetwork && perNetwork != 0)) {
-                revert FrozenSnapshotAmbiguous(path);
-            }
-            string[] memory tokens = vm.split(lines[i], " ");
-            address declared = declaredAddress(path, tokens[tokens.length - 1]);
-            if (isEveryNetwork) {
-                everyNetwork = true;
-                addresses[0] = declared;
-                continue;
-            }
-            uint256 chainId = declaredChainId(path, lines[i]);
-            for (uint256 j = 0; j < perNetwork; j++) {
-                if (chainIds[j] == chainId) {
-                    revert FrozenSnapshotAmbiguous(path);
-                }
-            }
-            chainIds[perNetwork] = chainId;
-            addresses[perNetwork] = declared;
-            perNetwork++;
-        }
-        if (!everyNetwork && perNetwork == 0) {
-            revert FrozenSnapshotUnreadable(path);
-        }
-        uint256 chainIdsLength = perNetwork;
-        uint256 addressesLength = everyNetwork ? 1 : perNetwork;
-        assembly ("memory-safe") {
-            mstore(chainIds, chainIdsLength)
-            mstore(addresses, addressesLength)
-        }
-        return (chainIds, addresses);
-    }
-
-    /// The address a declaration line's value names: its last token with the
-    /// `address(` wrapper and the terminator stripped.
-    ///
-    /// A value `vm.parseAddress` cannot read is not one the generator writes,
-    /// and the record is refused as `FrozenSnapshotUnreadable` rather than by
-    /// the cheatcode's untyped revert.
-    /// @param path The record file, for the error only.
-    /// @param value The declaration line's last token.
-    /// @return The address.
-    function declaredAddress(string memory path, string memory value) internal pure returns (address) {
-        string memory bare = vm.replace(vm.replace(vm.replace(value, "address(", ""), ")", ""), ";", "");
-        try vm.parseAddress(bare) returns (address declared) {
-            return declared;
-        } catch {
-            revert FrozenSnapshotUnreadable(path);
-        }
-    }
-
-    /// The chain id a per-network declaration line names: the characters from
-    /// the end of `DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX` to the next space,
-    /// read as a decimal number.
-    ///
-    /// Every one of them MUST be a decimal digit, there MUST be at least one,
-    /// and the number MUST fit in a `uint256`. Anything else is not a name the
-    /// generator writes, and the record is refused as
-    /// `FrozenSnapshotUnreadable`. Read here rather than by `vm.parseUint`,
-    /// which reverts untyped on a non-number and reads a `0x` suffix as
-    /// hexadecimal, so `DEPLOYED_ADDRESS_0x89` would read as chain 137.
-    /// @param path The record file, for the error only.
-    /// @param line A line starting with
-    /// `DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX`.
-    /// @return The chain id.
-    function declaredChainId(string memory path, string memory line) internal pure returns (uint256) {
-        bytes memory text = bytes(line);
-        uint256 start = bytes(DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX).length;
-        uint256 end = start;
-        uint256 chainId = 0;
-        while (end < text.length && text[end] != " ") {
-            if (text[end] < "0" || text[end] > "9") {
-                revert FrozenSnapshotUnreadable(path);
-            }
-            uint256 digit = uint8(text[end]) - uint8(bytes1("0"));
-            if (chainId > (type(uint256).max - digit) / 10) {
-                revert FrozenSnapshotUnreadable(path);
-            }
-            chainId = chainId * 10 + digit;
-            end++;
-        }
-        if (end == start) {
-            revert FrozenSnapshotUnreadable(path);
-        }
-        return chainId;
-    }
-
-    /// A record's text with every block comment removed, so that a declaration
-    /// found in it is one the compiler would read.
-    ///
-    /// `/*` opens a comment that the first following `*/` closes, and Solidity
-    /// does not nest them, so what survives is the text before the first `/*`
-    /// plus, for each one after it, the text after its `*/`. An unclosed `/*`
-    /// is comment to the end of the file, so nothing after it survives.
-    ///
-    /// A comment is removed rather than blanked, which joins the text either
-    /// side of it into one line exactly as the compiler joins it. A declaration
-    /// the compiler reads on the tail of a `*/` is therefore still found, and
-    /// one interrupted mid-line by a comment is not — that leaves the record
-    /// unreadable, never read as some other address.
-    /// @param record The record file's contents.
-    /// @return The contents with every block comment removed.
-    function withoutBlockComments(string memory record) internal pure returns (string memory) {
-        string[] memory opened = vm.split(record, "/*");
-        string memory stripped = opened[0];
-        for (uint256 i = 1; i < opened.length; i++) {
-            string[] memory closed = vm.split(opened[i], "*/");
-            if (closed.length == 1) {
-                break;
-            }
-            stripped = string.concat(stripped, closed[1]);
-            for (uint256 j = 2; j < closed.length; j++) {
-                stripped = string.concat(stripped, "*/", closed[j]);
-            }
-        }
-        return stripped;
-    }
 
     /// Checks the frozen record against the released declaration: every file in
     /// the record is declared by a released suite OF ITS OWN.
@@ -439,7 +224,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         bytes32[] memory recorded = new bytes32[](paths.length);
         for (uint256 i = 0; i < paths.length; i++) {
             (uint256[] memory chainIds, address[] memory addresses) =
-                recordedDeployedAddresses(paths[i], vm.readFile(paths[i]));
+                LibRainDeploySnapshot.recordedDeployedAddresses(vm, paths[i], vm.readFile(paths[i]));
             recorded[i] = keccak256(abi.encode(chainIds, addresses));
 
             uint256 declarations = 0;
@@ -587,8 +372,8 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// code constants once each and no deploy address — neither
     /// `DEPLOYED_ADDRESS` nor any per-network `DEPLOYED_ADDRESS_<chainId>` —
     /// and its runtime code hashes to the code hash recorded beside it. Read
-    /// from the text as `recordedDeployedAddresses` reads, for the reasons it
-    /// gives.
+    /// from the text as `LibRainDeploySnapshot.recordedDeployedAddresses`
+    /// reads, for the reasons it gives.
     ///
     /// The creation code is checked for presence only: with no constructor
     /// arguments recorded it deploys nothing here, and what it should be is a
@@ -597,11 +382,11 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
     function checkFrozenCodeRecord(string memory path, string memory record) internal pure {
-        string[] memory lines = vm.split(withoutBlockComments(record), "\n");
+        string[] memory lines = vm.split(LibRainDeploySnapshot.withoutBlockComments(vm, record), "\n");
         for (uint256 i = 0; i < lines.length; i++) {
             if (
-                vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) == 0
-                    || vm.indexOf(lines[i], DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX) == 0
+                vm.indexOf(lines[i], LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION) == 0
+                    || vm.indexOf(lines[i], LibRainDeploySnapshot.DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX) == 0
             ) {
                 revert FrozenCodeRecordDeclaresDeployedAddress(path);
             }

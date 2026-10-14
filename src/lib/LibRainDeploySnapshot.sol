@@ -68,6 +68,47 @@ error InvalidRecordRoot(string root);
 /// @param snapshotId The state snapshot that could not be reverted.
 error SnapshotStateRevertFailed(string suite, uint256 snapshotId);
 
+/// Thrown when a file in the frozen record declares no deployed address,
+/// declares one as `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in
+/// decimal digits, or declares one whose value does not read as an address.
+/// The record holds generated snapshots and nothing else, and
+/// `DEPLOYED_ADDRESS` is what makes one the record of a deployment rather than
+/// a file that happens to be in a release directory. Distinct from
+/// `FrozenSnapshotNotReleased`, which is a declaration that is missing
+/// something — this is a record that cannot be read at all, and reporting it as
+/// undeclared would send the reader after the wrong thing.
+/// @param path The record file with no `DEPLOYED_ADDRESS` or
+/// `DEPLOYED_ADDRESS_<chainId>` declaration, with a `DEPLOYED_ADDRESS_<x>`
+/// whose `<x>` is not decimal, or with a declared value that is not an
+/// address.
+error FrozenSnapshotUnreadable(string path);
+
+/// Thrown when a file in the frozen record declares its deployed address more
+/// than once: `DEPLOYED_ADDRESS` twice, one `DEPLOYED_ADDRESS_<chainId>` twice,
+/// or `DEPLOYED_ADDRESS` beside any `DEPLOYED_ADDRESS_<chainId>`. Solidity
+/// rejects a second file-scope constant of one name, so no compiler reads the
+/// first two at all, and the third is two answers to where the release is.
+/// Every rule for choosing between them — first, last, either — reads a value
+/// the generator never wrote. A hand edit is what this group exists to catch and a position rule is what it
+/// would aim at, so the reader refuses rather than choosing.
+/// @param path The record file declaring its deployed address more than once.
+error FrozenSnapshotAmbiguous(string path);
+
+/// Thrown when a file in the frozen record declares `MECHANISM_DATA` more than
+/// once. Solidity rejects a second file-scope constant of one name, so the
+/// record does not compile, and which of the two a released entry carries is
+/// a value the generator never wrote.
+/// @param path The record file declaring `MECHANISM_DATA` more than once.
+error FrozenSnapshotMechanismDataAmbiguous(string path);
+
+/// Thrown when a file in the frozen record declares its deployed addresses per
+/// network, as `DEPLOYED_ADDRESS_<chainId>`, and declares no `MECHANISM_DATA`.
+/// Only a per-network clone records an address per network, and its entry
+/// reads them from the `CloneNetworks` its `MECHANISM_DATA` encodes, so the
+/// record is no mechanism's record.
+/// @param path The record file.
+error FrozenSnapshotMechanismDataMissing(string path);
+
 /// @title LibRainDeploySnapshot
 /// @notice Which release is being built, where its record lives, and how it is
 /// frozen. Release machinery, not code generation.
@@ -1339,32 +1380,268 @@ library LibRainDeploySnapshot {
         return string.concat("Lib", contractName, "Released");
     }
 
+    /// @dev The declaration a generated snapshot records its deploy address in.
+    /// Matched whole and from the START of its line, so what is being looked
+    /// for is the DECLARATION: it cannot be satisfied by characters that happen
+    /// to occur inside a hex payload, nor by a line that merely CONTAINS the
+    /// declaration text — a commented-out copy carrying some other address is
+    /// exactly the hand edit this whole group exists to catch, and it is at
+    /// file scope in every generated snapshot, so there is no indentation to
+    /// allow for.
+    ///
+    /// The start of a line is what makes a `//` copy unreachable, because `//`
+    /// has to sit in front of the text it comments out. It does nothing to a
+    /// `/* ... */` copy, whose delimiters are on their own lines and whose
+    /// contents therefore start their lines exactly as the real declaration
+    /// does. Block comments come out of the record before this rule runs, so
+    /// that what it runs on is what the compiler would see.
+    string constant DEPLOYED_ADDRESS_DECLARATION = "address constant DEPLOYED_ADDRESS =";
+
+    /// @dev The start of the declaration a per-network snapshot records one
+    /// network's deploy address in: `DEPLOYED_ADDRESS_<chainId> =`. Matched
+    /// from the start of its line for the reasons `DEPLOYED_ADDRESS_DECLARATION`
+    /// is.
+    string constant DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX = "address constant DEPLOYED_ADDRESS_";
+
+    /// @dev The declaration a clone snapshot records its `mechanismData` in.
+    /// Matched from the start of its line for the reasons
+    /// `DEPLOYED_ADDRESS_DECLARATION` is.
+    string constant MECHANISM_DATA_DECLARATION = "bytes constant MECHANISM_DATA =";
+
+    /// The addresses a frozen record declares as its deploy addresses, and the
+    /// chain id each is for.
+    ///
+    /// A record declares either ONE `DEPLOYED_ADDRESS`, the address on every
+    /// network, or one `DEPLOYED_ADDRESS_<chainId>` per network, which is what
+    /// a per-network clone records. The first reads as one address and no
+    /// chain ids; the second as each declaration's chain id and address, in
+    /// file order — the order the writer emits them, which is the suite's
+    /// address order.
+    ///
+    /// `LibCodeGen` emits an address constant on ONE line — wrapping needs 120
+    /// characters, `DEPLOYED_ADDRESS` occupies 88 and `DEPLOYED_ADDRESS_<chainId>`
+    /// would need a chain id of more than 31 digits — so a declaration is a
+    /// line, and its value is that line's last token with the
+    /// type wrapper and the terminator stripped. `address(0x...);` and a bare
+    /// `0x...;` read the same, so which wrapper the generator chose is not
+    /// something this has to know.
+    ///
+    /// That every generated snapshot HAS this declaration, second, of type
+    /// `address`, is pinned by `GeneratedSnapshotShapeTest` against the
+    /// compiler's own AST. Read from the text here rather than from that AST
+    /// because a record is reached by its PATH, which is what the walk returns,
+    /// while its artifact path is not something a caller can name — foundry
+    /// disambiguates those by whatever else happens to share the basename.
+    ///
+    /// The whole record is scanned before a match is read, so a record
+    /// carrying `DEPLOYED_ADDRESS` twice, one chain id twice, or both forms is
+    /// refused rather than resolved by position. A per-network declaration's
+    /// chain id is read by `declaredChainId`, and every declaration's address
+    /// by `declaredAddress`.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file, for the error only.
+    /// @param record The record file's contents.
+    /// @return The chain id each address is for: empty for a record declaring
+    /// `DEPLOYED_ADDRESS`.
+    /// @return The addresses the record declares, in file order.
+    function recordedDeployedAddresses(Vm vm, string memory path, string memory record)
+        internal
+        pure
+        returns (uint256[] memory, address[] memory)
+    {
+        string[] memory lines = vm.split(withoutBlockComments(vm, record), "\n");
+        uint256[] memory chainIds = new uint256[](lines.length);
+        address[] memory addresses = new address[](lines.length);
+        uint256 perNetwork = 0;
+        bool everyNetwork = false;
+        for (uint256 i = 0; i < lines.length; i++) {
+            bool isEveryNetwork = vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) == 0;
+            if (!isEveryNetwork && vm.indexOf(lines[i], DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX) != 0) {
+                continue;
+            }
+            if (everyNetwork || (isEveryNetwork && perNetwork != 0)) {
+                revert FrozenSnapshotAmbiguous(path);
+            }
+            string[] memory tokens = vm.split(lines[i], " ");
+            address declared = declaredAddress(vm, path, tokens[tokens.length - 1]);
+            if (isEveryNetwork) {
+                everyNetwork = true;
+                addresses[0] = declared;
+                continue;
+            }
+            uint256 chainId = declaredChainId(path, lines[i]);
+            for (uint256 j = 0; j < perNetwork; j++) {
+                if (chainIds[j] == chainId) {
+                    revert FrozenSnapshotAmbiguous(path);
+                }
+            }
+            chainIds[perNetwork] = chainId;
+            addresses[perNetwork] = declared;
+            perNetwork++;
+        }
+        if (!everyNetwork && perNetwork == 0) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        uint256 chainIdsLength = perNetwork;
+        uint256 addressesLength = everyNetwork ? 1 : perNetwork;
+        assembly ("memory-safe") {
+            mstore(chainIds, chainIdsLength)
+            mstore(addresses, addressesLength)
+        }
+        return (chainIds, addresses);
+    }
+
+    /// The address a declaration line's value names: its last token with the
+    /// `address(` wrapper and the terminator stripped.
+    ///
+    /// A value `vm.parseAddress` cannot read is not one the generator writes,
+    /// and the record is refused as `FrozenSnapshotUnreadable` rather than by
+    /// the cheatcode's untyped revert.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file, for the error only.
+    /// @param value The declaration line's last token.
+    /// @return The address.
+    function declaredAddress(Vm vm, string memory path, string memory value) internal pure returns (address) {
+        string memory bare = vm.replace(vm.replace(vm.replace(value, "address(", ""), ")", ""), ";", "");
+        try vm.parseAddress(bare) returns (address declared) {
+            return declared;
+        } catch {
+            revert FrozenSnapshotUnreadable(path);
+        }
+    }
+
+    /// The chain id a per-network declaration line names: the characters from
+    /// the end of `DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX` to the next space,
+    /// read as a decimal number.
+    ///
+    /// Every one of them MUST be a decimal digit, there MUST be at least one,
+    /// and the number MUST fit in a `uint256`. Anything else is not a name the
+    /// generator writes, and the record is refused as
+    /// `FrozenSnapshotUnreadable`. Read here rather than by `vm.parseUint`,
+    /// which reverts untyped on a non-number and reads a `0x` suffix as
+    /// hexadecimal, so `DEPLOYED_ADDRESS_0x89` would read as chain 137.
+    /// @param path The record file, for the error only.
+    /// @param line A line starting with
+    /// `DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX`.
+    /// @return The chain id.
+    function declaredChainId(string memory path, string memory line) internal pure returns (uint256) {
+        bytes memory text = bytes(line);
+        uint256 start = bytes(DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX).length;
+        uint256 end = start;
+        uint256 chainId = 0;
+        while (end < text.length && text[end] != " ") {
+            if (text[end] < "0" || text[end] > "9") {
+                revert FrozenSnapshotUnreadable(path);
+            }
+            uint256 digit = uint8(text[end]) - uint8(bytes1("0"));
+            if (chainId > (type(uint256).max - digit) / 10) {
+                revert FrozenSnapshotUnreadable(path);
+            }
+            chainId = chainId * 10 + digit;
+            end++;
+        }
+        if (end == start) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        return chainId;
+    }
+
+    /// A record's text with every block comment removed, so that a declaration
+    /// found in it is one the compiler would read.
+    ///
+    /// `/*` opens a comment that the first following `*/` closes, and Solidity
+    /// does not nest them, so what survives is the text before the first `/*`
+    /// plus, for each one after it, the text after its `*/`. An unclosed `/*`
+    /// is comment to the end of the file, so nothing after it survives.
+    ///
+    /// A comment is removed rather than blanked, which joins the text either
+    /// side of it into one line exactly as the compiler joins it. A declaration
+    /// the compiler reads on the tail of a `*/` is therefore still found, and
+    /// one interrupted mid-line by a comment is not — that leaves the record
+    /// unreadable, never read as some other address.
+    /// @param vm The Vm instance for string operations.
+    /// @param record The record file's contents.
+    /// @return The contents with every block comment removed.
+    function withoutBlockComments(Vm vm, string memory record) internal pure returns (string memory) {
+        string[] memory opened = vm.split(record, "/*");
+        string memory stripped = opened[0];
+        for (uint256 i = 1; i < opened.length; i++) {
+            string[] memory closed = vm.split(opened[i], "*/");
+            if (closed.length == 1) {
+                break;
+            }
+            stripped = string.concat(stripped, closed[1]);
+            for (uint256 j = 2; j < closed.length; j++) {
+                stripped = string.concat(stripped, "*/", closed[j]);
+            }
+        }
+        return stripped;
+    }
+
+    /// The mechanism a frozen record was cut with, read from the declarations
+    /// the record carries:
+    ///
+    /// - no `MECHANISM_DATA`: `Zoltu`;
+    /// - `MECHANISM_DATA` and `DEPLOYED_ADDRESS`: `Clone`;
+    /// - `MECHANISM_DATA` and `DEPLOYED_ADDRESS_<chainId>`: `ClonePerNetwork`.
+    ///
+    /// Each release is read on its own, so a suite whose mechanism changed
+    /// between releases still has every release read as the mechanism it was
+    /// cut with.
+    ///
+    /// The address declarations are read by `recordedDeployedAddresses`, the
+    /// reader the record check matches releases with, so a record with no
+    /// deployed address is refused as `FrozenSnapshotUnreadable` and one
+    /// declaring both forms as `FrozenSnapshotAmbiguous`, here as there. A
+    /// record declaring `MECHANISM_DATA` more than once is refused as
+    /// `FrozenSnapshotMechanismDataAmbiguous`, and one declaring per-network
+    /// addresses without it as `FrozenSnapshotMechanismDataMissing`.
+    /// `MECHANISM_DATA_DECLARATION` is matched in the text block comments are
+    /// removed from, as the address declarations are.
+    /// @param vm The Vm instance for file and string operations.
+    /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @return The mechanism the record was cut with.
+    function recordedMechanism(Vm vm, string memory path) internal view returns (DeployMechanism) {
+        string memory record = vm.readFile(path);
+        (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, record);
+        string[] memory lines = vm.split(withoutBlockComments(vm, record), "\n");
+        uint256 mechanismData = 0;
+        for (uint256 i = 0; i < lines.length; i++) {
+            if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {
+                mechanismData++;
+            }
+        }
+        if (mechanismData > 1) {
+            revert FrozenSnapshotMechanismDataAmbiguous(path);
+        }
+        if (mechanismData == 0) {
+            if (chainIds.length != 0) {
+                revert FrozenSnapshotMechanismDataMissing(path);
+            }
+            return DeployMechanism.Zoltu;
+        }
+        return chainIds.length == 0 ? DeployMechanism.Clone : DeployMechanism.ClonePerNetwork;
+    }
+
     /// The aliased import one record file contributes: all four consensus
     /// fields and the frozen dependency list, under that release's prefix —
     /// and, for a clone, its `MECHANISM_DATA`. A per-network clone imports no
     /// `DEPLOYED_ADDRESS`: its record declares one per network, and its entry
     /// reads them from its `MECHANISM_DATA`.
     ///
-    /// The mechanism KIND comes from the template, the current declaration,
-    /// and the data from the record. A clone template over a record with no
-    /// `MECHANISM_DATA` imports a name the record does not declare, which is a
-    /// loud compile error in the emitted lib rather than a release silently
-    /// read as Zoltu.
+    /// Which of these the import is comes from the record itself, by
+    /// `recordedMechanism`, so every name imported is one the record declares.
     ///
     /// Split per file rather than inlined into the block for the same reason
     /// `snapshotConstants` is split out of `writeSnapshot`: the aliases and
     /// the path they come from are more live values than the legacy codegen has
     /// stack for.
-    /// @param vm The Vm instance for string operations.
+    /// @param vm The Vm instance for file and string operations.
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
-    /// @param mechanism The mechanism the template declares.
     /// @return The import statement, and the blank line after it.
-    function releasedImport(Vm vm, string memory path, DeployMechanism mechanism)
-        internal
-        pure
-        returns (string memory)
-    {
+    function releasedImport(Vm vm, string memory path) internal view returns (string memory) {
         string memory prefix = releasedConstantPrefix(vm, path);
+        DeployMechanism mechanism = recordedMechanism(vm, path);
         return string.concat(
             mechanism == DeployMechanism.ClonePerNetwork
                 ? string("import {\n    ")
@@ -1392,59 +1669,71 @@ library LibRainDeploySnapshot {
     /// The import block of a generated released-suites lib.
     ///
     /// One aliased import per record file, carrying all four consensus fields
-    /// and the frozen dependency list. A released entry can therefore only say
-    /// what its own frozen snapshot says — there is no path by which a released
-    /// address, code hash, creation code, runtime code or dependency list is
-    /// written anywhere but into the immutable record.
-    /// @param vm The Vm instance for string operations.
+    /// and the frozen dependency list, plus the `MECHANISM_DATA` of each record
+    /// `recordedMechanism` reads as a clone. A released entry can therefore
+    /// only say what its own frozen snapshot says — there is no path by which a
+    /// released address, code hash, creation code, runtime code, dependency
+    /// list or mechanism is written anywhere but into the immutable record.
+    /// @param vm The Vm instance for file and string operations.
     /// @param paths The record's files, in the order they are emitted.
     /// @param suitesImportPath The path the emitted lib reaches the suite types
     /// by — `suitesImportPathInThisRepo` for a lib written into this repo's own
     /// `LIB_DIR`, and the consumer's remapped path otherwise.
-    /// @param mechanism The mechanism the template declares.
     /// @return The import block.
-    function releasedImportBlock(
-        Vm vm,
-        string[] memory paths,
-        string memory suitesImportPath,
-        DeployMechanism mechanism
-    ) internal pure returns (string memory) {
+    function releasedImportBlock(Vm vm, string[] memory paths, string memory suitesImportPath)
+        internal
+        view
+        returns (string memory)
+    {
         string memory imports = string.concat(
             "import {DeployDependency, DeployMechanism, DeploySuite} from \"", suitesImportPath, "\";\n\n"
         );
         for (uint256 i = 0; i < paths.length; i++) {
-            imports = string.concat(imports, releasedImport(vm, paths[i], mechanism));
+            imports = string.concat(imports, releasedImport(vm, paths[i]));
         }
         return imports;
     }
 
     /// `releasedImportBlock` applied to this repo's own `suitesImportPathInThisRepo`.
-    /// @param vm The Vm instance for string operations.
+    /// @param vm The Vm instance for file and string operations.
     /// @param paths The record's files, in the order they are emitted.
-    /// @param mechanism The mechanism the template declares.
     /// @return The import block.
-    function releasedImportBlock(Vm vm, string[] memory paths, DeployMechanism mechanism)
-        internal
-        pure
-        returns (string memory)
-    {
-        return releasedImportBlock(vm, paths, suitesImportPathInThisRepo(), mechanism);
+    function releasedImportBlock(Vm vm, string[] memory paths) internal view returns (string memory) {
+        return releasedImportBlock(vm, paths, suitesImportPathInThisRepo());
     }
 
     /// One `suites[i] = DeploySuite({...});` entry of a generated
     /// released-suites lib. `releasedLibraryBlock` says where each field comes
-    /// from. Two `string.concat`s rather than one, to stay inside the stack.
-    /// @param vm The Vm instance for string operations.
+    /// from. The mechanism kind is the record's own, by `recordedMechanism`.
+    /// Two `string.concat`s rather than one, to stay inside the stack.
+    /// @param vm The Vm instance for file and string operations.
     /// @param i The entry's index.
     /// @param path The record file the entry aliases.
-    /// @param template The candidate declaration the metadata comes from.
+    /// @param template The candidate declaration the key and the artifact path
+    /// come from.
     /// @return The entry.
     function releasedSuiteEntry(Vm vm, uint256 i, string memory path, DeploySuite memory template)
         internal
-        pure
+        view
         returns (string memory)
     {
         string memory prefix = releasedConstantPrefix(vm, path);
+        string memory storedDeployedAddress;
+        string memory mechanism;
+        {
+            DeployMechanism kind = recordedMechanism(vm, path);
+            storedDeployedAddress = kind == DeployMechanism.ClonePerNetwork
+                ? string("address(0)")
+                : string.concat(prefix, "_DEPLOYED_ADDRESS");
+            mechanism = kind == DeployMechanism.Zoltu
+                ? string("DeployMechanism.Zoltu,\n            mechanismData: \"\"")
+                : string.concat(
+                    kind == DeployMechanism.Clone ? "DeployMechanism.Clone" : "DeployMechanism.ClonePerNetwork",
+                    ",\n            mechanismData: ",
+                    prefix,
+                    "_MECHANISM_DATA"
+                );
+        }
         string memory head = string.concat(
             "        suites[",
             vm.toString(i),
@@ -1455,24 +1744,12 @@ library LibRainDeploySnapshot {
             "\",\n            creationCode: ",
             prefix,
             "_CREATION_CODE,\n            storedDeployedAddress: ",
-            template.mechanism == DeployMechanism.ClonePerNetwork
-                ? string("address(0)")
-                : string.concat(prefix, "_DEPLOYED_ADDRESS"),
+            storedDeployedAddress,
             ",\n            storedBytecodeHash: ",
             prefix,
             "_BYTECODE_HASH,\n            storedRuntimeCode: ",
             prefix
         );
-        string memory mechanism = template.mechanism == DeployMechanism.Zoltu
-            ? string("DeployMechanism.Zoltu,\n            mechanismData: \"\"")
-            : string.concat(
-                template.mechanism == DeployMechanism.Clone
-                    ? "DeployMechanism.Clone"
-                    : "DeployMechanism.ClonePerNetwork",
-                ",\n            mechanismData: ",
-                prefix,
-                "_MECHANISM_DATA"
-            );
         return string.concat(
             head,
             "_RUNTIME_CODE,\n            artifactPath: \"",
@@ -1504,18 +1781,19 @@ library LibRainDeploySnapshot {
     /// and preserving what a previous generation wrote would mean parsing
     /// generated Solidity back in.
     ///
-    /// The mechanism KIND comes from `template` too, and the mechanism DATA
-    /// from the record: `""` for Zoltu, the release's own `MECHANISM_DATA` for
-    /// a clone, so a frozen clone is broadcast with the `CloneTarget` or
-    /// `CloneNetworks` it was cut with. A per-network clone's entry records
-    /// `storedDeployedAddress` as zero, since its `CloneNetworks` records its
-    /// address on each network. `releasedImport` says what a kind the record
-    /// cannot back does.
+    /// The mechanism comes from the record, kind and data both. The kind is
+    /// what `recordedMechanism` reads from each record on its own, so a suite
+    /// whose mechanism changed between releases emits every entry as its
+    /// release was cut, whatever `template` declares now. The data is `""` for
+    /// Zoltu and the release's own `MECHANISM_DATA` for a clone, so a frozen
+    /// clone is broadcast with the `CloneTarget` or `CloneNetworks` it was cut
+    /// with. A per-network clone's entry records `storedDeployedAddress` as
+    /// zero, since its `CloneNetworks` records its address on each network.
     ///
     /// The key is the template's with the tag appended, so every entry is
     /// unique and `allSuites`'s duplicate check is satisfied by construction
     /// rather than by whoever writes the declaration.
-    /// @param vm The Vm instance for string operations.
+    /// @param vm The Vm instance for file and string operations.
     /// @param libraryName The generated library's name.
     /// @param contractName The contract the released record describes.
     /// @param paths The record's files, in the order they are emitted.
@@ -1527,7 +1805,7 @@ library LibRainDeploySnapshot {
         string memory contractName,
         string[] memory paths,
         DeploySuite memory template
-    ) internal pure returns (string memory) {
+    ) internal view returns (string memory) {
         string memory entries = "";
         for (uint256 i = 0; i < paths.length; i++) {
             entries = string.concat(entries, releasedSuiteEntry(vm, i, paths[i], template));
@@ -1576,8 +1854,9 @@ library LibRainDeploySnapshot {
     /// Named `Lib<Contract>Released`, the same `Lib<Contract>` shape the alias
     /// lib is named with, into the directory it is handed.
     ///
-    /// Five fields per entry come from the frozen snapshot and two from
-    /// `template`. Those two — the key and the artifact path — are explorer and
+    /// Every field of an entry but two comes from the frozen snapshot, the
+    /// mechanism kind included, which `recordedMechanism` reads from each
+    /// release's own record. The other two come from `template`. Those two — the key and the artifact path — are explorer and
     /// ordering metadata regenerated from the CURRENT declaration on every
     /// build, NOT part of the frozen record. Moving a source file retroactively
     /// updates the artifact path of every entry, including releases cut years
@@ -1626,7 +1905,7 @@ library LibRainDeploySnapshot {
         {
             string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
             body = string.concat(
-                releasedImportBlock(vm, paths, suitesImportPath, template.mechanism),
+                releasedImportBlock(vm, paths, suitesImportPath),
                 releasedLibraryBlock(vm, libraryName, contractName, paths, template)
             );
         }
