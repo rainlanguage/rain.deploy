@@ -701,7 +701,6 @@ library LibRainDeploy {
     /// creation code for Zoltu, the encoded clone for a clone factory. Opaque
     /// here on purpose — the loop asserts about the ADDRESS and the CODE, not
     /// about the recipe. Positionally paired with `networks`.
-    /// @param contractPath The contract path for verification commands.
     /// @param expectedAddresses The deterministic address on each network,
     /// which MUST be the address `deployStep` deploys to there. Positionally
     /// paired with `networks`.
@@ -723,7 +722,6 @@ library LibRainDeploy {
         address deployer,
         function(Vm, string memory, address, bytes memory) internal returns (address) deployStep,
         bytes[] memory deployStepData,
-        string memory contractPath,
         address[] memory expectedAddresses,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
@@ -761,13 +759,6 @@ library LibRainDeploy {
             if (expectedCodeHash != expectedAddress.codehash) {
                 revert UnexpectedDeployedCodeHash(expectedCodeHash, expectedAddress.codehash);
             }
-
-            console2.log("manual verification command:");
-            console2.log(
-                string.concat(
-                    "forge verify-contract --chain ", networks[i], " ", vm.toString(expectedAddress), " ", contractPath
-                )
-            );
         }
         return forkIds;
     }
@@ -804,11 +795,18 @@ library LibRainDeploy {
     /// skipping every network. It is checked here rather than in the loop
     /// because the derivation is the mechanism's: the loop cannot predict where
     /// a step it was handed will deploy to.
+    ///
+    /// Once every network passes, it prints `verifyCommands` for
+    /// `contractPath` at `expectedAddress`. Printed here and
+    /// not by the loop, because the command names a compiled source, and only
+    /// a mechanism that deploys one has a source to name: a clone is an
+    /// EIP-1167 proxy assembled from an address, with no artifact of its own.
     /// @param vm The Vm instance to use for forking and broadcasting.
     /// @param networks The list of network names to deploy to.
     /// @param deployer The deployer address.
     /// @param creationCode The creation code to deploy.
-    /// @param contractPath The contract path for verification commands.
+    /// @param contractPath The contract path the printed verification commands
+    /// name.
     /// @param expectedAddress The expected deterministic address, which MUST be
     /// the address the Zoltu factory derives for `creationCode`.
     /// @param expectedCodeHash The expected code hash of the deployed contract.
@@ -844,17 +842,36 @@ library LibRainDeploy {
         (bytes[] memory stepData, address[] memory expectedAddresses) =
             everyNetwork(networks.length, creationCode, expectedAddress);
         uint256[] memory forkIds = deployStepToNetworks(
-            vm,
-            networks,
-            deployer,
-            zoltuDeployStep,
-            stepData,
-            contractPath,
-            expectedAddresses,
-            expectedCodeHash,
-            dependencies
+            vm, networks, deployer, zoltuDeployStep, stepData, expectedAddresses, expectedCodeHash, dependencies
         );
+        string[] memory commands = verifyCommands(vm, networks, expectedAddress, contractPath);
+        for (uint256 i = 0; i < commands.length; i++) {
+            console2.log("manual verification command:");
+            console2.log(commands[i]);
+        }
         return (expectedAddress, forkIds);
+    }
+
+    /// The `forge verify-contract` command for a compiled source at an
+    /// address, one per network.
+    /// @param vm The Vm instance to format the address with.
+    /// @param networks The networks the source is deployed on.
+    /// @param deployedAddress Where it is deployed on every one of them.
+    /// @param contractPath The contract path the commands name.
+    /// @return The command for each network, positionally paired with
+    /// `networks`.
+    function verifyCommands(Vm vm, string[] memory networks, address deployedAddress, string memory contractPath)
+        internal
+        pure
+        returns (string[] memory)
+    {
+        string[] memory commands = new string[](networks.length);
+        for (uint256 i = 0; i < networks.length; i++) {
+            commands[i] = string.concat(
+                "forge verify-contract --chain ", networks[i], " ", vm.toString(deployedAddress), " ", contractPath
+            );
+        }
+        return commands;
     }
 
     /// Deploys the given creation code via the Zoltu factory to the given

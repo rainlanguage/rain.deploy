@@ -427,7 +427,6 @@ contract LibRainDeployTest is Test {
             address(this),
             unreachableDeployStep,
             stepData,
-            "",
             expectedAddresses,
             bytes32(0),
             new DeployDependency[](0)
@@ -518,6 +517,29 @@ contract LibRainDeployTest is Test {
         vm.selectFork(1);
         assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
         assertEq(result.codehash, mockDeployableCodeHash());
+    }
+
+    /// `verifyCommands` gives, for each network in order, the
+    /// `forge verify-contract` command naming that network, the address and
+    /// the contract path.
+    function testVerifyCommandsNameEachNetworkTheAddressAndThePath() external pure {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+        string[] memory commands =
+            LibRainDeploy.verifyCommands(vm, networks, 0x1234567890AbcdEF1234567890aBcdef12345678, "src/A.sol:A");
+        assertEq(commands.length, 2);
+        assertEq(
+            commands[0], "forge verify-contract --chain base 0x1234567890AbcdEF1234567890aBcdef12345678 src/A.sol:A"
+        );
+        assertEq(
+            commands[1], "forge verify-contract --chain arbitrum 0x1234567890AbcdEF1234567890aBcdef12345678 src/A.sol:A"
+        );
+    }
+
+    /// `verifyCommands` over no networks gives no commands.
+    function testVerifyCommandsOverNoNetworksIsEmpty() external pure {
+        assertEq(LibRainDeploy.verifyCommands(vm, new string[](0), address(0xbeef), "src/A.sol:A").length, 0);
     }
 
     /// A read of a declared dependency BEFORE any fork exists MUST NOT change
@@ -629,15 +651,7 @@ contract LibRainDeployTest is Test {
         (bytes[] memory stepData, address[] memory expectedAddresses) =
             LibRainDeploy.everyNetwork(networks.length, hex"", expectedAddress);
         uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
-            vm,
-            networks,
-            deployer,
-            unreachableDeployStep,
-            stepData,
-            "",
-            expectedAddresses,
-            expectedCodeHash,
-            dependencies
+            vm, networks, deployer, unreachableDeployStep, stepData, expectedAddresses, expectedCodeHash, dependencies
         );
         return forkIds;
     }

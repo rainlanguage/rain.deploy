@@ -457,11 +457,15 @@ library LibRainDeployClone {
     /// Per network, the shared loop then holds every declared dependency —
     /// factory and implementation included — to its declared runtime code
     /// before the step runs.
+    ///
+    /// Unlike the Zoltu path, it prints no `forge verify-contract` command:
+    /// the clone is an EIP-1167 proxy assembled from the implementation's
+    /// address, so there is no source of its own to verify, and
+    /// `CLONE_ARTIFACT_PATH` resolves to no artifact.
     /// @param vm The Vm instance to use for forking and broadcasting.
     /// @param networks The list of network names to deploy to.
     /// @param deployer The deployer address.
     /// @param target The clone to deploy.
-    /// @param contractPath The contract path for verification commands.
     /// @param expectedAddress The recorded clone address, which MUST be the one
     /// `target` derives.
     /// @param expectedCodeHash The recorded code hash of the deployed clone.
@@ -477,7 +481,6 @@ library LibRainDeployClone {
         string[] memory networks,
         address deployer,
         CloneTarget memory target,
-        string memory contractPath,
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
@@ -493,15 +496,7 @@ library LibRainDeployClone {
         (bytes[] memory stepData, address[] memory expectedAddresses) =
             LibRainDeploy.everyNetwork(networks.length, abi.encode(target), expectedAddress);
         uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
-            vm,
-            networks,
-            deployer,
-            cloneDeployStep,
-            stepData,
-            contractPath,
-            expectedAddresses,
-            expectedCodeHash,
-            dependencies
+            vm, networks, deployer, cloneDeployStep, stepData, expectedAddresses, expectedCodeHash, dependencies
         );
         return (expectedAddress, forkIds);
     }
@@ -513,7 +508,6 @@ library LibRainDeployClone {
     /// @param networks The list of network names to deploy to.
     /// @param deployerPrivateKey The private key to use for broadcasting.
     /// @param target The clone to deploy.
-    /// @param contractPath The contract path for verification commands.
     /// @param expectedAddress The recorded clone address.
     /// @param expectedCodeHash The recorded code hash of the deployed clone.
     /// @param dependencies The dependencies to check, each an address and the
@@ -526,7 +520,6 @@ library LibRainDeployClone {
         string[] memory networks,
         uint256 deployerPrivateKey,
         CloneTarget memory target,
-        string memory contractPath,
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
@@ -539,7 +532,6 @@ library LibRainDeployClone {
             networks,
             LibRainDeploy.rememberDeployer(vm, deployerPrivateKey),
             target,
-            contractPath,
             expectedAddress,
             expectedCodeHash,
             dependencies
@@ -556,13 +548,13 @@ library LibRainDeployClone {
     /// network the declaration says nothing about stops the run before
     /// anything is broadcast anywhere — and each entry's recorded address MUST
     /// be the address its init data derives, for the reason `cloneToNetworks`
-    /// requires that of its one address.
+    /// requires that of its one address. Like `cloneToNetworks`, it prints no
+    /// `forge verify-contract` command.
     /// @param vm The Vm instance to use for forking and broadcasting.
     /// @param networks The list of network names to deploy to.
     /// @param deployer The deployer address.
     /// @param clones The per-network clone, with each network's recorded
     /// address.
-    /// @param contractPath The contract path for verification commands.
     /// @param expectedCodeHash The recorded code hash of the deployed clone,
     /// the same on every network.
     /// @param dependencies The addresses that must already have code on a
@@ -577,7 +569,6 @@ library LibRainDeployClone {
         string[] memory networks,
         address deployer,
         CloneNetworks memory clones,
-        string memory contractPath,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
     ) internal returns (address[] memory, uint256[] memory) {
@@ -599,15 +590,7 @@ library LibRainDeployClone {
             deployedAddresses[i] = derivedAddress;
         }
         uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
-            vm,
-            networks,
-            deployer,
-            cloneNetworkDeployStep,
-            stepData,
-            contractPath,
-            deployedAddresses,
-            expectedCodeHash,
-            dependencies
+            vm, networks, deployer, cloneNetworkDeployStep, stepData, deployedAddresses, expectedCodeHash, dependencies
         );
         return (deployedAddresses, forkIds);
     }
@@ -620,7 +603,6 @@ library LibRainDeployClone {
     /// @param deployerPrivateKey The private key to use for broadcasting.
     /// @param clones The per-network clone, with each network's recorded
     /// address.
-    /// @param contractPath The contract path for verification commands.
     /// @param expectedCodeHash The recorded code hash of the deployed clone.
     /// @param dependencies The dependencies to check, each an address and the
     /// runtime code that must be at it. MUST include the factory and the
@@ -632,7 +614,6 @@ library LibRainDeployClone {
         string[] memory networks,
         uint256 deployerPrivateKey,
         CloneNetworks memory clones,
-        string memory contractPath,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
     ) internal returns (address[] memory, uint256[] memory) {
@@ -640,13 +621,7 @@ library LibRainDeployClone {
             revert LibRainDeploy.NoNetworks();
         }
         return cloneNetworksToNetworks(
-            vm,
-            networks,
-            LibRainDeploy.rememberDeployer(vm, deployerPrivateKey),
-            clones,
-            contractPath,
-            expectedCodeHash,
-            dependencies
+            vm, networks, LibRainDeploy.rememberDeployer(vm, deployerPrivateKey), clones, expectedCodeHash, dependencies
         );
     }
 }

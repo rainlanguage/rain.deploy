@@ -389,13 +389,7 @@ library LibRainDeployMechanism {
     {
         if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
             return LibRainDeployClone.cloneNetworksAndBroadcast(
-                vm,
-                networks,
-                deployerPrivateKey,
-                cloneNetworks(suite),
-                suite.artifactPath,
-                suite.storedBytecodeHash,
-                suite.dependencies
+                vm, networks, deployerPrivateKey, cloneNetworks(suite), suite.storedBytecodeHash, suite.dependencies
             );
         }
         address deployed;
@@ -406,7 +400,6 @@ library LibRainDeployMechanism {
                 networks,
                 deployerPrivateKey,
                 cloneTarget(suite),
-                suite.artifactPath,
                 suite.storedDeployedAddress,
                 suite.storedBytecodeHash,
                 suite.dependencies

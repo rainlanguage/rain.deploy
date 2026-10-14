@@ -102,7 +102,7 @@ contract LibRainDeployClonePerNetworkTest is Test {
         returns (address[] memory, uint256[] memory)
     {
         return LibRainDeployClone.cloneNetworksToNetworks(
-            vm, networks, address(this), clones, "", bytes32(0), exampleCloneDependencies()
+            vm, networks, address(this), clones, bytes32(0), exampleCloneDependencies()
         );
     }
 
@@ -115,7 +115,7 @@ contract LibRainDeployClonePerNetworkTest is Test {
         returns (address[] memory, uint256[] memory)
     {
         return LibRainDeployClone.cloneNetworksAndBroadcast(
-            vm, networks, 1, clones, "", bytes32(0), exampleCloneDependencies()
+            vm, networks, 1, clones, bytes32(0), exampleCloneDependencies()
         );
     }
 

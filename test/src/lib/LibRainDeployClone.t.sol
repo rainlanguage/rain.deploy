@@ -89,7 +89,7 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         DeployDependency[] memory dependencies
     ) external returns (address, uint256[] memory) {
         return LibRainDeployClone.cloneToNetworks(
-            vm, networks, deployer, clone, "", expectedAddress, expectedCodeHash, dependencies
+            vm, networks, deployer, clone, expectedAddress, expectedCodeHash, dependencies
         );
     }
 
@@ -110,7 +110,7 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         DeployDependency[] memory dependencies
     ) external returns (address, uint256[] memory) {
         return LibRainDeployClone.cloneAndBroadcast(
-            vm, networks, deployerPrivateKey, clone, "", expectedAddress, expectedCodeHash, dependencies
+            vm, networks, deployerPrivateKey, clone, expectedAddress, expectedCodeHash, dependencies
         );
     }
 
