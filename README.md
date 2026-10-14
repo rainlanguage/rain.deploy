@@ -304,6 +304,36 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   implementation it delegates to, so the right code hash at its address over a
   missing or changed implementation does not work.
 
+### Upgradeable beacons
+
+A beacon this repo deploys is an ordinary suite: a Zoltu beacon concrete, a
+clone, or the suite whose constructor `new`s it. Its code hash only says "a
+beacon of this build", because the implementation and owner are storage. That
+state is declared per network, as the CURRENT expectation:
+
+```solidity
+function beacons(uint256 chainId) internal view override returns (DeployBeacon[] memory) {
+    DeployBeacon[] memory onChain = new DeployBeacon[](1);
+    onChain[0] = DeployBeacon({
+        beacon: chainId == BASE_CHAIN_ID ? BASE_BEACON : BEACON,
+        beaconCodeHash: BEACON_BYTECODE_HASH,
+        implementation: IMPLEMENTATION_DEPLOYED_ADDRESS,
+        implementationCodeHash: IMPLEMENTATION_BYTECODE_HASH,
+        owner: timelockOn(chainId)
+    });
+    return onChain;
+}
+```
+
+The chain group checks each network's beacons on that network's fork, after its
+suites: the beacon's code hash and the implementation's code hash with
+`LibRainDeploy.checkDeployedCode`, and `implementation()` and `owner()` with
+`LibRainDeploy.checkResolvedAddresses`. An upgrade or an ownership migration
+changes the declaration in the same change as the migration, so the chain group
+is red until it is applied on every network. A broadcast does not check beacon
+state: a new beacon holds its constructor state until then. A script can check
+the same state on its own forks with `LibRainDeployBeacon.checkBeacons`.
+
 ## Deploy verification
 
 **The creation code is the only input.** The Zoltu factory is `CREATE2` over its
