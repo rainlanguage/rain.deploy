@@ -270,8 +270,10 @@ abstract contract RainDeploySuitesBase {
 
     /// The beacons that MUST hold their declared state on the network with
     /// this chain id. Resolved before anything forks.
+    /// @param chainId The network's chain id.
     /// @return The beacons on the network.
-    function beacons(uint256) internal view virtual returns (DeployBeacon[] memory) {
+    function beacons(uint256 chainId) internal view virtual returns (DeployBeacon[] memory) {
+        (chainId);
         return new DeployBeacon[](0);
     }
 
@@ -536,12 +538,23 @@ abstract contract RainDeploySuitesBase {
     /// @return The selected suite.
     function suiteByName(string memory requested) internal view returns (DeploySuite memory) {
         DeploySuite[] memory suites = allSuites();
+        uint256 index = suiteIndex(suites, requested);
+        if (index == suites.length) {
+            revert UnknownDeploymentSuite(requested, suiteNames());
+        }
+        return suites[index];
+    }
+
+    /// @param suites The suites to search.
+    /// @param requested The key to select.
+    /// @return The index in `suites` of the suite `requested` selects, `suites.length` if none.
+    function suiteIndex(DeploySuite[] memory suites, string memory requested) internal pure returns (uint256) {
         bytes32 requestedHash = keccak256(bytes(requested));
         for (uint256 i = 0; i < suites.length; i++) {
             if (keccak256(bytes(suites[i].suite)) == requestedHash) {
-                return suites[i];
+                return i;
             }
         }
-        revert UnknownDeploymentSuite(requested, suiteNames());
+        return suites.length;
     }
 }
