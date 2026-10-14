@@ -196,8 +196,8 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// the generation production was deployed from. Not in the released suites,
     /// which record a deploy at one address on every network; a frozen code
     /// record is held to itself by `testEveryFrozenCodeRecordIsConsistent`, and
-    /// the candidate's code to production by deriving the deployed timelocks'
-    /// addresses from it.
+    /// the frozen generation production was deployed from is held to production
+    /// by deriving the deployed timelocks' addresses from it.
     /// @return The parameterised contracts.
     function parameterisedContracts() internal pure returns (ParameterisedContract[] memory) {
         ParameterisedContract[] memory contracts = new ParameterisedContract[](1);

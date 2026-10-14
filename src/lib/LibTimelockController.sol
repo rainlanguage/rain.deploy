@@ -4,26 +4,25 @@ pragma solidity ^0.8.25;
 
 import {TimelockController} from "@openzeppelin-contracts-5.7.0/governance/TimelockController.sol";
 import {IAccessControl} from "@openzeppelin-contracts-5.7.0/access/IAccessControl.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
-import {
-    BYTECODE_HASH as TIMELOCK_RUNTIME_CODEHASH,
-    CREATION_CODE as TIMELOCK_CREATION_CODE
-} from "../generated/candidate/TimelockController.sol";
 
 /// @title LibTimelockController
 /// @notice A governance timelock as one audited artifact: an UNMODIFIED
 /// OpenZeppelin `TimelockController`, deployed through the Zoltu factory from
-/// the creation code recorded in its generated snapshot, constructed into one
-/// role model, and asserted against that model.
+/// the creation code of one code generation, constructed into one role model,
+/// and asserted against that model.
 ///
-/// The snapshot is `src/generated/candidate/TimelockController.sol`, generated
-/// by `script/Build.sol` from the dependency compiled under the `timelock`
-/// profile in `foundry.toml` (solc 0.8.25, optimizer at 2000 runs, `cancun`, no
-/// CBOR metadata). That is the generation deployed in production, so the
-/// snapshot's bytes are what a deploy broadcasts with its constructor arguments
-/// appended. Every derived address is a function of those bytes, so a compiler
-/// or dependency change that regenerates them moves every address; the tests
-/// hold the snapshot to the timelocks already deployed.
+/// A generation is the `CREATION_CODE` and `BYTECODE_HASH` of a
+/// `TimelockController` code record. `script/Build.sol` generates the candidate
+/// record, `src/generated/candidate/TimelockController.sol`, from the dependency
+/// compiled under the `timelock` profile in `foundry.toml`, and every release
+/// freezes it as `src/generated/<tag>/TimelockController.sol`. Every derived
+/// address is a function of the creation code, so a compiler or dependency
+/// change that regenerates the candidate moves every address. Timelocks stay on
+/// the generation they were deployed from, so the caller imports that frozen
+/// `src/generated/<tag>/` record, never the candidate, and passes it to every
+/// function that derives or checks code, whatever rain-deploy version it imports.
 ///
 /// The role model `timelockInitCode` builds and `assertTimelockState` pins:
 /// - The proposer holds `PROPOSER_ROLE` and `CANCELLER_ROLE` (the constructor
@@ -47,11 +46,20 @@ library LibTimelockController {
     /// @param timelock The address inspected.
     error TimelockNotDeployed(address timelock);
 
-    /// The runtime code hash at `timelock` is not the snapshot's `BYTECODE_HASH`.
+    /// The runtime code hash at `timelock` is not the generation's `BYTECODE_HASH`.
     /// @param timelock The address inspected.
-    /// @param expected The snapshot's `BYTECODE_HASH`.
+    /// @param expected The generation's `BYTECODE_HASH`.
     /// @param actual The code hash observed.
     error TimelockCodehashMismatch(address timelock, bytes32 expected, bytes32 actual);
+
+    /// `creationCode` deploys code whose hash is not the given `bytecodeHash`.
+    /// @param bytecodeHash The hash given with the creation code.
+    /// @param derived The hash of the code the creation code deploys.
+    error TimelockGenerationMismatch(bytes32 bytecodeHash, bytes32 derived);
+
+    /// The local deploy behind `checkTimelockGeneration` could not be reverted.
+    /// @param snapshotId The snapshot that failed to revert.
+    error TimelockGenerationSnapshotRevertFailed(uint256 snapshotId);
 
     /// `getMinDelay()` is not the expected minimum delay.
     /// @param timelock The timelock inspected.
@@ -99,29 +107,69 @@ library LibTimelockController {
         return abi.encode(minDelay, proposers, executors, address(0));
     }
 
-    /// The creation code a timelock deploy broadcasts: the snapshot's
-    /// `CREATION_CODE` with `timelockConstructorArgs(minDelay, proposer)`
-    /// appended. Reverts with `TimelockZeroProposer` when `proposer` is
-    /// `address(0)`.
+    /// The creation code a timelock deploy broadcasts: `creationCode` with
+    /// `timelockConstructorArgs(minDelay, proposer)` appended. Reverts with
+    /// `TimelockZeroProposer` when `proposer` is `address(0)`.
+    /// @param creationCode The generation's `CREATION_CODE`.
     /// @param minDelay The minimum delay in seconds between `schedule` and
     /// `execute`.
     /// @param proposer The sole proposer.
     /// @return The creation code including constructor arguments.
-    function timelockInitCode(uint256 minDelay, address proposer) internal pure returns (bytes memory) {
-        return abi.encodePacked(TIMELOCK_CREATION_CODE, timelockConstructorArgs(minDelay, proposer));
+    function timelockInitCode(bytes memory creationCode, uint256 minDelay, address proposer)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return bytes.concat(creationCode, timelockConstructorArgs(minDelay, proposer));
     }
 
-    /// The address the Zoltu factory deploys `timelockInitCode(minDelay,
-    /// proposer)` to, which is the same on every network.
+    /// The address the Zoltu factory deploys `timelockInitCode(creationCode,
+    /// minDelay, proposer)` to, which is the same on every network.
+    /// @param creationCode The generation's `CREATION_CODE`.
     /// @param minDelay The minimum delay in seconds.
     /// @param proposer The sole proposer.
     /// @return The deterministic timelock address.
-    function expectedTimelockAddress(uint256 minDelay, address proposer) internal pure returns (address) {
-        return LibRainDeploy.zoltuAddress(timelockInitCode(minDelay, proposer));
+    function expectedTimelockAddress(bytes memory creationCode, uint256 minDelay, address proposer)
+        internal
+        pure
+        returns (address)
+    {
+        return LibRainDeploy.zoltuAddress(timelockInitCode(creationCode, minDelay, proposer));
+    }
+
+    /// Reverts unless `creationCode`, deployed locally with these constructor arguments, produces code
+    /// hashing to `bytecodeHash`; also reverts on a zero proposer or a creation code that does not deploy.
+    /// The local deploy is reverted, but a broadcast would record it, so never call this inside one.
+    /// @param vm The Vm to snapshot with.
+    /// @param creationCode The generation's `CREATION_CODE`.
+    /// @param bytecodeHash The generation's `BYTECODE_HASH`.
+    /// @param minDelay The minimum delay in seconds.
+    /// @param proposer The sole proposer.
+    function checkTimelockGeneration(
+        Vm vm,
+        bytes memory creationCode,
+        bytes32 bytecodeHash,
+        uint256 minDelay,
+        address proposer
+    ) internal {
+        bytes memory initCode = timelockInitCode(creationCode, minDelay, proposer);
+        uint256 snapshotId = vm.snapshotState();
+        address local;
+        assembly ("memory-safe") {
+            local := create(0, add(initCode, 0x20), mload(initCode))
+        }
+        if (local == address(0)) revert LibRainDeploy.DeployFailed(false, local);
+        bytes32 derived = local.codehash;
+        if (!vm.revertToState(snapshotId)) {
+            revert TimelockGenerationSnapshotRevertFailed(snapshotId);
+        }
+        if (derived != bytecodeHash) {
+            revert TimelockGenerationMismatch(bytecodeHash, derived);
+        }
     }
 
     /// Reverts with a typed error unless `timelock` is in the role model's state:
-    /// code with the snapshot's `BYTECODE_HASH`, `getMinDelay() == minDelay`,
+    /// code with the hash `bytecodeHash`, `getMinDelay() == minDelay`,
     /// `proposer` holding `PROPOSER_ROLE` and `CANCELLER_ROLE` but not
     /// `DEFAULT_ADMIN_ROLE`, every one of `cancellers` holding `CANCELLER_ROLE`,
     /// the timelock holding `DEFAULT_ADMIN_ROLE` on itself, `EXECUTOR_ROLE` open,
@@ -130,19 +178,24 @@ library LibTimelockController {
     /// The forbidden holders are checked by name, not by scan: a plain
     /// `AccessControl` cannot enumerate a role's members, so an account this
     /// does not name may hold a role without it being seen here.
+    /// @param bytecodeHash The `BYTECODE_HASH` of the generation `timelock` was
+    /// deployed from.
     /// @param timelock The timelock to check.
     /// @param minDelay The minimum delay in seconds it must report.
     /// @param proposer The proposer it was constructed with.
     /// @param cancellers The cancellers granted beyond the proposer, each of
     /// which must hold `CANCELLER_ROLE`. Empty when none has been granted.
-    function assertTimelockState(address timelock, uint256 minDelay, address proposer, address[] memory cancellers)
-        internal
-        view
-    {
+    function assertTimelockState(
+        bytes32 bytecodeHash,
+        address timelock,
+        uint256 minDelay,
+        address proposer,
+        address[] memory cancellers
+    ) internal view {
         if (timelock.code.length == 0) revert TimelockNotDeployed(timelock);
         bytes32 actualCodehash = timelock.codehash;
-        if (actualCodehash != TIMELOCK_RUNTIME_CODEHASH) {
-            revert TimelockCodehashMismatch(timelock, TIMELOCK_RUNTIME_CODEHASH, actualCodehash);
+        if (actualCodehash != bytecodeHash) {
+            revert TimelockCodehashMismatch(timelock, bytecodeHash, actualCodehash);
         }
 
         TimelockController controller = TimelockController(payable(timelock));
