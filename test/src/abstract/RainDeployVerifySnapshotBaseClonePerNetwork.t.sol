@@ -58,21 +58,22 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
 
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
-    /// @return chainIds The chain id each address is for.
-    /// @return addresses The addresses the record declares.
+    /// @return The chain id each address is for.
+    /// @return The addresses the record declares.
     function externalRecordedDeployedAddresses(string memory path, string memory record)
         external
         pure
-        returns (uint256[] memory chainIds, address[] memory addresses)
+        returns (uint256[] memory, address[] memory)
     {
         return recordedDeployedAddresses(path, record);
     }
 
     /// The committed record's one file.
-    /// @return paths The record's paths.
-    function recordPaths() internal view returns (string[] memory paths) {
-        paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, PER_NETWORK_CLONE_RECORD_ROOT);
+    /// @return The record's paths.
+    function recordPaths() internal view returns (string[] memory) {
+        string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, PER_NETWORK_CLONE_RECORD_ROOT);
         assertEq(paths.length, 1, "the fixture record holds one release");
+        return paths;
     }
 
     /// The release really is at a different address on each network, and each

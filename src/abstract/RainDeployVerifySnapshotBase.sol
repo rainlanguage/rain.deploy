@@ -242,17 +242,17 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// refused rather than resolved by position.
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
-    /// @return chainIds The chain id each address is for: empty for a record
-    /// declaring `DEPLOYED_ADDRESS`.
-    /// @return addresses The addresses the record declares, in file order.
+    /// @return The chain id each address is for: empty for a record declaring
+    /// `DEPLOYED_ADDRESS`.
+    /// @return The addresses the record declares, in file order.
     function recordedDeployedAddresses(string memory path, string memory record)
         internal
         pure
-        returns (uint256[] memory chainIds, address[] memory addresses)
+        returns (uint256[] memory, address[] memory)
     {
         string[] memory lines = vm.split(withoutBlockComments(record), "\n");
-        chainIds = new uint256[](lines.length);
-        addresses = new address[](lines.length);
+        uint256[] memory chainIds = new uint256[](lines.length);
+        address[] memory addresses = new address[](lines.length);
         uint256 perNetwork = 0;
         bool everyNetwork = false;
         for (uint256 i = 0; i < lines.length; i++) {
@@ -291,6 +291,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
             mstore(chainIds, chainIdsLength)
             mstore(addresses, addressesLength)
         }
+        return (chainIds, addresses);
     }
 
     /// A record's text with every block comment removed, so that a declaration

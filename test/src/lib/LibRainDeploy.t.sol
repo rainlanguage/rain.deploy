@@ -415,13 +415,13 @@ contract LibRainDeployTest is Test {
     /// @param networks The list of network names to deploy to.
     /// @param stepData The step data per network.
     /// @param expectedAddresses The expected address per network.
-    /// @return forkIds The fork each network was deployed on.
+    /// @return The fork each network was deployed on.
     function externalDeployStepToNetworksPerNetwork(
         string[] memory networks,
         bytes[] memory stepData,
         address[] memory expectedAddresses
-    ) external returns (uint256[] memory forkIds) {
-        forkIds = LibRainDeploy.deployStepToNetworks(
+    ) external returns (uint256[] memory) {
+        uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
             vm,
             networks,
             address(this),
@@ -432,6 +432,7 @@ contract LibRainDeployTest is Test {
             bytes32(0),
             new DeployDependency[](0)
         );
+        return forkIds;
     }
 
     /// `deployStepToNetworks` MUST refuse step data or expected addresses that
@@ -617,17 +618,17 @@ contract LibRainDeployTest is Test {
     /// @param expectedCodeHash The expected code hash of the deployed contract.
     /// @param dependencies The addresses that must already have code on a
     /// network, each paired with the runtime code that must be at it.
-    /// @return forkIds The fork each network was deployed on.
+    /// @return The fork each network was deployed on.
     function externalDeployStepToNetworks(
         string[] memory networks,
         address deployer,
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) external returns (uint256[] memory forkIds) {
+    ) external returns (uint256[] memory) {
         (bytes[] memory stepData, address[] memory expectedAddresses) =
             LibRainDeploy.everyNetwork(networks.length, hex"", expectedAddress);
-        forkIds = LibRainDeploy.deployStepToNetworks(
+        uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
             vm,
             networks,
             deployer,
@@ -638,6 +639,7 @@ contract LibRainDeployTest is Test {
             expectedCodeHash,
             dependencies
         );
+        return forkIds;
     }
 
     /// External wrapper for `deployZoltu` so that it can be called on a fork.

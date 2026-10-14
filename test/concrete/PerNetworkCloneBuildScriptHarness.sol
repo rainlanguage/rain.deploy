@@ -46,9 +46,10 @@ contract PerNetworkCloneBuildScriptHarness is PerNetworkCloneDeploys, BuildScrip
     }
 
     /// @inheritdoc BuildScript
-    function snapshotContractNames() internal pure override returns (string[] memory names) {
-        names = new string[](1);
+    function snapshotContractNames() internal pure override returns (string[] memory) {
+        string[] memory names = new string[](1);
         names[0] = PER_NETWORK_CLONE_RECORD_CONTRACT;
+        return names;
     }
 
     /// @inheritdoc BuildScript

@@ -32,11 +32,11 @@ contract PerNetworkCloneDeploy is
     /// @param suite The suite to broadcast.
     /// @param networks The networks to broadcast to.
     /// @param deployerPrivateKey The key to broadcast as.
-    /// @return deployedAddresses Where the suite is on each network.
-    /// @return forkIds The fork each network was deployed on.
+    /// @return Where the suite is on each network.
+    /// @return The fork each network was deployed on.
     function externalBroadcastSuite(DeploySuite memory suite, string[] memory networks, uint256 deployerPrivateKey)
         external
-        returns (address[] memory deployedAddresses, uint256[] memory forkIds)
+        returns (address[] memory, uint256[] memory)
     {
         return broadcastSuite(suite, networks, deployerPrivateKey);
     }

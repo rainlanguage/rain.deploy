@@ -54,37 +54,40 @@ abstract contract RainDeployCloneSuitesBase is RainDeploySuitesBase {
     /// anything reads the candidates: every loop over an empty list passes, so a
     /// guard per reader is a rule with as many spellings as readers and the one
     /// spelled wrong is the reader that silently stops asserting.
-    /// @return clones The clones.
-    function checkedCloneDeploys() internal pure returns (CloneDeploy[] memory clones) {
-        clones = cloneDeploys();
+    /// @return The clones.
+    function checkedCloneDeploys() internal pure returns (CloneDeploy[] memory) {
+        CloneDeploy[] memory clones = cloneDeploys();
         if (clones.length == 0) {
             revert NoCloneDeploys();
         }
+        return clones;
     }
 
     /// The chain id of every network in `supportedNetworks()`, in that order,
     /// from the network catalogue. The networks a per-network clone's
     /// `initData` is read for, so its entries are exactly the networks the
     /// repo deploys to and verifies on, from the one list that says which.
-    /// @return chainIds The chain ids.
-    function supportedChainIds() internal view returns (uint256[] memory chainIds) {
+    /// @return The chain ids.
+    function supportedChainIds() internal view returns (uint256[] memory) {
         SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
-        chainIds = new uint256[](configs.length);
+        uint256[] memory chainIds = new uint256[](configs.length);
         for (uint256 i = 0; i < configs.length; i++) {
             chainIds[i] = configs[i].chainId;
         }
+        return chainIds;
     }
 
     /// @inheritdoc RainDeploySuitesBase
     /// @dev `LibRainDeployMechanism.cloneCandidate` over the clone list, in
     /// order, with `supportedChainIds()`. Not a hook — see this contract's own
     /// notes for why there is exactly one list here.
-    function candidateSuites() internal view override returns (DeployCandidate[] memory candidates) {
+    function candidateSuites() internal view override returns (DeployCandidate[] memory) {
         CloneDeploy[] memory clones = checkedCloneDeploys();
         uint256[] memory chainIds = supportedChainIds();
-        candidates = new DeployCandidate[](clones.length);
+        DeployCandidate[] memory candidates = new DeployCandidate[](clones.length);
         for (uint256 i = 0; i < clones.length; i++) {
             candidates[i] = LibRainDeployMechanism.cloneCandidate(clones[i], chainIds);
         }
+        return candidates;
     }
 }

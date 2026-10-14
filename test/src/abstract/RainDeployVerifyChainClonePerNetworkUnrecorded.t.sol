@@ -57,9 +57,9 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
     }
 
     /// The release, recording Arbitrum One alone.
-    /// @return suites It, as the one suite to check.
-    function arbitrumOnlyRelease() internal pure returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](1);
+    /// @return It, as the one suite to check.
+    function arbitrumOnlyRelease() internal pure returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = onlyFirstRecordedNetwork(releasedSuites()[0]);
         CloneNetworks memory clones = abi.decode(suites[0].mechanismData, (CloneNetworks));
         assertEq(clones.networks.length, 1);
@@ -67,6 +67,7 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         assertEq(
             clones.networks[0].deployedAddress, perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID)
         );
+        return suites;
     }
 
     /// The release passes with its clone at the Polygon init data's address on

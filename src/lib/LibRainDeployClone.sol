@@ -469,9 +469,9 @@ library LibRainDeployClone {
     /// network before the clone can be broadcast there, each paired with the
     /// runtime code that must be at it. MUST include the factory and the
     /// implementation.
-    /// @return deployedAddress The deployed clone address.
-    /// @return forkIds The fork each network was deployed on, as
-    /// `deployStepToNetworks` hands them back.
+    /// @return The deployed clone address.
+    /// @return The fork each network was deployed on, as `deployStepToNetworks`
+    /// hands them back.
     function cloneToNetworks(
         Vm vm,
         string[] memory networks,
@@ -481,7 +481,7 @@ library LibRainDeployClone {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (address deployedAddress, uint256[] memory forkIds) {
+    ) internal returns (address, uint256[] memory) {
         if (networks.length == 0) {
             revert LibRainDeploy.NoNetworks();
         }
@@ -492,7 +492,7 @@ library LibRainDeployClone {
         }
         (bytes[] memory stepData, address[] memory expectedAddresses) =
             LibRainDeploy.everyNetwork(networks.length, abi.encode(target), expectedAddress);
-        forkIds = LibRainDeploy.deployStepToNetworks(
+        uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
             vm,
             networks,
             deployer,
@@ -503,7 +503,7 @@ library LibRainDeployClone {
             expectedCodeHash,
             dependencies
         );
-        deployedAddress = expectedAddress;
+        return (expectedAddress, forkIds);
     }
 
     /// Deploys the clone to each network, broadcasting as the given private key.
@@ -519,8 +519,8 @@ library LibRainDeployClone {
     /// @param dependencies The dependencies to check, each an address and the
     /// runtime code that must be at it. MUST include the factory and the
     /// implementation.
-    /// @return deployedAddress The deployed clone address.
-    /// @return forkIds The fork each network was deployed on.
+    /// @return The deployed clone address.
+    /// @return The fork each network was deployed on.
     function cloneAndBroadcast(
         Vm vm,
         string[] memory networks,
@@ -530,7 +530,7 @@ library LibRainDeployClone {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (address deployedAddress, uint256[] memory forkIds) {
+    ) internal returns (address, uint256[] memory) {
         if (networks.length == 0) {
             revert LibRainDeploy.NoNetworks();
         }
@@ -569,9 +569,9 @@ library LibRainDeployClone {
     /// network before the clone can be broadcast there, each paired with the
     /// runtime code that must be at it. MUST include the factory and the
     /// implementation.
-    /// @return deployedAddresses The clone's address on each network,
-    /// positionally paired with `networks`.
-    /// @return forkIds The fork each network was deployed on.
+    /// @return The clone's address on each network, positionally paired with
+    /// `networks`.
+    /// @return The fork each network was deployed on.
     function cloneNetworksToNetworks(
         Vm vm,
         string[] memory networks,
@@ -580,14 +580,14 @@ library LibRainDeployClone {
         string memory contractPath,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (address[] memory deployedAddresses, uint256[] memory forkIds) {
+    ) internal returns (address[] memory, uint256[] memory) {
         if (networks.length == 0) {
             revert LibRainDeploy.NoNetworks();
         }
         checkCloneNetworks(clones, dependencies);
         SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
         bytes[] memory stepData = new bytes[](networks.length);
-        deployedAddresses = new address[](networks.length);
+        address[] memory deployedAddresses = new address[](networks.length);
         for (uint256 i = 0; i < networks.length; i++) {
             uint256 index = cloneNetworkIndex(clones, configs[i].chainId);
             CloneTarget memory target = cloneNetworkTarget(clones, index);
@@ -598,7 +598,7 @@ library LibRainDeployClone {
             stepData[i] = abi.encode(configs[i].chainId, target);
             deployedAddresses[i] = derivedAddress;
         }
-        forkIds = LibRainDeploy.deployStepToNetworks(
+        uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
             vm,
             networks,
             deployer,
@@ -609,6 +609,7 @@ library LibRainDeployClone {
             expectedCodeHash,
             dependencies
         );
+        return (deployedAddresses, forkIds);
     }
 
     /// Deploys a per-network clone to each network, broadcasting as the given
@@ -624,8 +625,8 @@ library LibRainDeployClone {
     /// @param dependencies The dependencies to check, each an address and the
     /// runtime code that must be at it. MUST include the factory and the
     /// implementation.
-    /// @return deployedAddresses The clone's address on each network.
-    /// @return forkIds The fork each network was deployed on.
+    /// @return The clone's address on each network.
+    /// @return The fork each network was deployed on.
     function cloneNetworksAndBroadcast(
         Vm vm,
         string[] memory networks,
@@ -634,7 +635,7 @@ library LibRainDeployClone {
         string memory contractPath,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (address[] memory deployedAddresses, uint256[] memory forkIds) {
+    ) internal returns (address[] memory, uint256[] memory) {
         if (networks.length == 0) {
             revert LibRainDeploy.NoNetworks();
         }

@@ -39,13 +39,13 @@ import {MockDeployableV2} from "./MockDeployableV2.sol";
 /// only asked whether it reverted.
 contract EmptyArtifactPathDeploySuites is ExternalDeploySuites {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](0);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        return new DeploySuite[](0);
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory candidates) {
-        candidates = new DeployCandidate[](2);
+    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "qualified-candidate",
@@ -78,5 +78,6 @@ contract EmptyArtifactPathDeploySuites is ExternalDeploySuites {
             // PATH is the point of the fixture.
             unanchorableReason: "Derived bytes, with no source to anchor to."
         });
+        return candidates;
     }
 }

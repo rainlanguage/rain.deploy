@@ -713,11 +713,10 @@ library LibRainDeploy {
     /// contract's constructor: an address that merely has SOMETHING at it
     /// satisfies no constructor that calls it, and the derived code hash this
     /// broadcast carries was computed against the declared bytes.
-    /// @return forkIds The fork each network was deployed on, positionally
-    /// paired with `networks`. Handed back rather than dropped because the
-    /// deployment exists ONLY on them until forge submits what this recorded,
-    /// so they are what `checkResolvedAddressesOnForks` verifies a first-time
-    /// deploy on.
+    /// @return The fork each network was deployed on, positionally paired with
+    /// `networks`. Handed back rather than dropped because the deployment
+    /// exists ONLY on them until forge submits what this recorded, so they are
+    /// what `checkResolvedAddressesOnForks` verifies a first-time deploy on.
     function deployStepToNetworks(
         Vm vm,
         string[] memory networks,
@@ -728,14 +727,14 @@ library LibRainDeploy {
         address[] memory expectedAddresses,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) internal returns (uint256[] memory forkIds) {
+    ) internal returns (uint256[] memory) {
         if (networks.length == 0) {
             revert NoNetworks();
         }
         if (deployStepData.length != networks.length || expectedAddresses.length != networks.length) {
             revert DeployStepNetworksMismatch(networks.length, deployStepData.length, expectedAddresses.length);
         }
-        forkIds = createForks(vm, networks);
+        uint256[] memory forkIds = createForks(vm, networks);
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
             console2.log("Deploying to network:", networks[i]);
@@ -770,6 +769,7 @@ library LibRainDeploy {
                 )
             );
         }
+        return forkIds;
     }
 
     /// The same step data and the same expected address for every network:
@@ -778,19 +778,20 @@ library LibRainDeploy {
     /// @param networksLength How many networks the lists pair with.
     /// @param deployStepData The step data every network gets.
     /// @param expectedAddress The address expected on every network.
-    /// @return everyStepData `deployStepData`, once per network.
-    /// @return everyExpectedAddress `expectedAddress`, once per network.
+    /// @return `deployStepData`, once per network.
+    /// @return `expectedAddress`, once per network.
     function everyNetwork(uint256 networksLength, bytes memory deployStepData, address expectedAddress)
         internal
         pure
-        returns (bytes[] memory everyStepData, address[] memory everyExpectedAddress)
+        returns (bytes[] memory, address[] memory)
     {
-        everyStepData = new bytes[](networksLength);
-        everyExpectedAddress = new address[](networksLength);
+        bytes[] memory everyStepData = new bytes[](networksLength);
+        address[] memory everyExpectedAddress = new address[](networksLength);
         for (uint256 i = 0; i < networksLength; i++) {
             everyStepData[i] = deployStepData;
             everyExpectedAddress[i] = expectedAddress;
         }
+        return (everyStepData, everyExpectedAddress);
     }
 
     /// Deploys the given creation code to each network via the Zoltu factory:
@@ -907,9 +908,10 @@ library LibRainDeploy {
     /// the transactions for gas.
     /// @param vm The Vm instance to remember the key with.
     /// @param deployerPrivateKey The private key to broadcast as.
-    /// @return deployer The address the key derives.
-    function rememberDeployer(Vm vm, uint256 deployerPrivateKey) internal returns (address deployer) {
-        deployer = vm.rememberKey(deployerPrivateKey);
+    /// @return The address the key derives.
+    function rememberDeployer(Vm vm, uint256 deployerPrivateKey) internal returns (address) {
+        address deployer = vm.rememberKey(deployerPrivateKey);
         console2.log("Deploying from address:", deployer);
+        return deployer;
     }
 }

@@ -28,13 +28,13 @@ contract LibRainDeployClonePerNetworkTest is Test {
     /// @param factory The factory.
     /// @param implementation The implementation.
     /// @param chainIds The chain id of each entry.
-    /// @return clones The per-network clone, each entry's address derived.
+    /// @return The per-network clone, each entry's address derived.
     function cloneNetworks(address factory, address implementation, uint256[] memory chainIds)
         internal
         pure
-        returns (CloneNetworks memory clones)
+        returns (CloneNetworks memory)
     {
-        clones = CloneNetworks({
+        CloneNetworks memory clones = CloneNetworks({
             factory: factory,
             implementation: implementation,
             salt: TEST_SALT,
@@ -46,16 +46,18 @@ contract LibRainDeployClonePerNetworkTest is Test {
             clones.networks[i].deployedAddress =
                 LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(clones, i));
         }
+        return clones;
     }
 
     /// Two chain ids, as a list.
     /// @param a The first.
     /// @param b The second.
-    /// @return chainIds The list.
-    function twoChainIds(uint256 a, uint256 b) internal pure returns (uint256[] memory chainIds) {
-        chainIds = new uint256[](2);
+    /// @return The list.
+    function twoChainIds(uint256 a, uint256 b) internal pure returns (uint256[] memory) {
+        uint256[] memory chainIds = new uint256[](2);
         chainIds[0] = a;
         chainIds[1] = b;
+        return chainIds;
     }
 
     /// The example clone across Arbitrum One and Polygon.
@@ -93,11 +95,11 @@ contract LibRainDeployClonePerNetworkTest is Test {
 
     /// @param networks The networks to deploy to.
     /// @param clones The per-network clone.
-    /// @return deployedAddresses The clone's address on each network.
-    /// @return forkIds The fork each network was deployed on.
+    /// @return The clone's address on each network.
+    /// @return The fork each network was deployed on.
     function externalCloneNetworksToNetworks(string[] memory networks, CloneNetworks memory clones)
         external
-        returns (address[] memory deployedAddresses, uint256[] memory forkIds)
+        returns (address[] memory, uint256[] memory)
     {
         return LibRainDeployClone.cloneNetworksToNetworks(
             vm, networks, address(this), clones, "", bytes32(0), exampleCloneDependencies()
@@ -106,11 +108,11 @@ contract LibRainDeployClonePerNetworkTest is Test {
 
     /// @param networks The networks to deploy to.
     /// @param clones The per-network clone.
-    /// @return deployedAddresses The clone's address on each network.
-    /// @return forkIds The fork each network was deployed on.
+    /// @return The clone's address on each network.
+    /// @return The fork each network was deployed on.
     function externalCloneNetworksAndBroadcast(string[] memory networks, CloneNetworks memory clones)
         external
-        returns (address[] memory deployedAddresses, uint256[] memory forkIds)
+        returns (address[] memory, uint256[] memory)
     {
         return LibRainDeployClone.cloneNetworksAndBroadcast(
             vm, networks, 1, clones, "", bytes32(0), exampleCloneDependencies()

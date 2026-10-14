@@ -177,12 +177,13 @@ contract LibRainDeployMechanismTest is Test {
 
     /// @param networks The networks to broadcast to.
     /// @param suite The suite to broadcast.
-    /// @return forkIds The fork each network was deployed on.
+    /// @return The fork each network was deployed on.
     function externalDeployAndBroadcast(string[] memory networks, DeploySuite memory suite)
         external
-        returns (uint256[] memory forkIds)
+        returns (uint256[] memory)
     {
-        (, forkIds) = LibRainDeployMechanism.deployAndBroadcast(vm, networks, 1, suite);
+        (, uint256[] memory forkIds) = LibRainDeployMechanism.deployAndBroadcast(vm, networks, 1, suite);
+        return forkIds;
     }
 
     /// The example clone over its declared factory and implementation, as a
@@ -674,10 +675,11 @@ contract LibRainDeployMechanismTest is Test {
 
     /// One chain id.
     /// @param chainId The chain id.
-    /// @return chainIds It, alone.
-    function onlyChainId(uint256 chainId) internal pure returns (uint256[] memory chainIds) {
-        chainIds = new uint256[](1);
+    /// @return It, alone.
+    function onlyChainId(uint256 chainId) internal pure returns (uint256[] memory) {
+        uint256[] memory chainIds = new uint256[](1);
         chainIds[0] = chainId;
+        return chainIds;
     }
 
     /// A release recorded on Arbitrum One only, with an Arbitrum One admin the

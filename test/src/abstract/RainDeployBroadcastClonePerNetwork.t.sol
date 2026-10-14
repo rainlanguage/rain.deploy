@@ -27,20 +27,22 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
     /// The release's recorded `CloneNetworks`, its entries asserted to be
     /// Arbitrum One's then Polygon's.
     /// @param release The release suite.
-    /// @return clones The decoded per-network clone.
-    function releaseNetworks(DeploySuite memory release) internal pure returns (CloneNetworks memory clones) {
-        clones = abi.decode(release.mechanismData, (CloneNetworks));
+    /// @return The decoded per-network clone.
+    function releaseNetworks(DeploySuite memory release) internal pure returns (CloneNetworks memory) {
+        CloneNetworks memory clones = abi.decode(release.mechanismData, (CloneNetworks));
         assertEq(clones.networks.length, 2);
         assertEq(clones.networks[0].chainId, PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
         assertEq(clones.networks[1].chainId, PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        return clones;
     }
 
     /// Arbitrum One then Polygon.
-    /// @return networks The two networks.
-    function bothNetworks() internal pure returns (string[] memory networks) {
-        networks = new string[](2);
+    /// @return The two networks.
+    function bothNetworks() internal pure returns (string[] memory) {
+        string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.POLYGON;
+        return networks;
     }
 
     /// Whether any fork exists. Fork ids are handed out from zero.

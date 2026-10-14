@@ -78,8 +78,8 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
     /// @param expectedAddress The declared clone address.
     /// @param expectedCodeHash The declared clone code hash.
     /// @param dependencies The dependencies declared beside the clone.
-    /// @return deployedAddress The deployed clone address.
-    /// @return forkIds The forks each network was deployed on.
+    /// @return The deployed clone address.
+    /// @return The forks each network was deployed on.
     function externalCloneToNetworks(
         string[] memory networks,
         address deployer,
@@ -87,7 +87,7 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) external returns (address deployedAddress, uint256[] memory forkIds) {
+    ) external returns (address, uint256[] memory) {
         return LibRainDeployClone.cloneToNetworks(
             vm, networks, deployer, clone, "", expectedAddress, expectedCodeHash, dependencies
         );
@@ -99,8 +99,8 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
     /// @param expectedAddress The declared clone address.
     /// @param expectedCodeHash The declared clone code hash.
     /// @param dependencies The dependencies declared beside the clone.
-    /// @return deployedAddress The deployed clone address.
-    /// @return forkIds The forks each network was deployed on.
+    /// @return The deployed clone address.
+    /// @return The forks each network was deployed on.
     function externalCloneAndBroadcast(
         string[] memory networks,
         uint256 deployerPrivateKey,
@@ -108,7 +108,7 @@ contract LibRainDeployCloneTest is ZoltuDeployOrAdopt {
         address expectedAddress,
         bytes32 expectedCodeHash,
         DeployDependency[] memory dependencies
-    ) external returns (address deployedAddress, uint256[] memory forkIds) {
+    ) external returns (address, uint256[] memory) {
         return LibRainDeployClone.cloneAndBroadcast(
             vm, networks, deployerPrivateKey, clone, "", expectedAddress, expectedCodeHash, dependencies
         );

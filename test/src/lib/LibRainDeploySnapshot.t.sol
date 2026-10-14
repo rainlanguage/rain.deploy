@@ -3632,12 +3632,13 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// The committed `per-network-clone` record's path, as
     /// `frozenSnapshotPaths` spells it.
-    /// @return paths The one record file.
-    function perNetworkRecordPaths() internal pure returns (string[] memory paths) {
-        paths = new string[](1);
+    /// @return The one record file.
+    function perNetworkRecordPaths() internal pure returns (string[] memory) {
+        string[] memory paths = new string[](1);
         paths[0] = LibRainDeploySnapshot.pathForSnapshot(
             PER_NETWORK_CLONE_RECORD_ROOT, PER_NETWORK_CLONE_RELEASE_TAG, PER_NETWORK_CLONE_RECORD_CONTRACT
         );
+        return paths;
     }
 
     /// The candidate the per-network released lib takes its metadata from.

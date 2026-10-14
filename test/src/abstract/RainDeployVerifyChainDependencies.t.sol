@@ -33,11 +33,12 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
         internal
         pure
         override(PerNetworkCloneDeploys, RainDeploySuitesBase)
-        returns (string[] memory networks)
+        returns (string[] memory)
     {
-        networks = new string[](2);
+        string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.POLYGON;
         networks[1] = LibRainDeploy.ARBITRUM_ONE;
+        return networks;
     }
 
     /// Puts the release's dependencies, and its clone at its address for each
@@ -63,9 +64,9 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
 
     /// The release with one more declared dependency.
     /// @param dependency The dependency to add.
-    /// @return suites The release, as the one suite to check.
-    function releaseDeclaring(DeployDependency memory dependency) internal pure returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](1);
+    /// @return The release, as the one suite to check.
+    function releaseDeclaring(DeployDependency memory dependency) internal pure returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = releasedSuites()[0];
         DeployDependency[] memory dependencies = new DeployDependency[](suites[0].dependencies.length + 1);
         for (uint256 i = 0; i < suites[0].dependencies.length; i++) {
@@ -73,14 +74,16 @@ contract RainDeployVerifyChainDependenciesTest is PerNetworkCloneDeploys, RainDe
         }
         dependencies[dependencies.length - 1] = dependency;
         suites[0].dependencies = dependencies;
+        return suites;
     }
 
     /// Polygon's system contract code, read from Polygon.
-    /// @return code The code.
-    function polygonSystemContractCode() internal returns (bytes memory code) {
+    /// @return The code.
+    function polygonSystemContractCode() internal returns (bytes memory) {
         vm.createSelectFork(LibRainDeploy.POLYGON);
-        code = POLYGON_SYSTEM_CONTRACT.code;
+        bytes memory code = POLYGON_SYSTEM_CONTRACT.code;
         assertGt(code.length, 0, "Polygon's system contract");
+        return code;
     }
 
     /// Without the implementation the matrix refuses on the first network,

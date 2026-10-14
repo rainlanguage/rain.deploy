@@ -34,9 +34,10 @@ contract CloneBuildScriptHarness is ExampleCloneDeploys, BuildScript {
     }
 
     /// @inheritdoc BuildScript
-    function snapshotContractNames() internal pure override returns (string[] memory names) {
-        names = new string[](1);
+    function snapshotContractNames() internal pure override returns (string[] memory) {
+        string[] memory names = new string[](1);
         names[0] = EXAMPLE_CLONE_RECORD_CONTRACT;
+        return names;
     }
 
     /// @inheritdoc BuildScript

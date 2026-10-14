@@ -51,13 +51,14 @@ function exampleCloneImplementation() pure returns (address) {
 /// as dependencies with the runtime code each MUST hold: the clone mechanism
 /// requires both to be declared, and a network holding anything else at either
 /// address is refused before the clone is broadcast there.
-/// @return dependencies The factory, then the implementation.
-function exampleCloneDependencies() pure returns (DeployDependency[] memory dependencies) {
-    dependencies = new DeployDependency[](2);
+/// @return The factory, then the implementation.
+function exampleCloneDependencies() pure returns (DeployDependency[] memory) {
+    DeployDependency[] memory dependencies = new DeployDependency[](2);
     dependencies[0] =
         DeployDependency({deployedAddress: exampleCloneFactory(), runtimeCode: type(MockCloneFactory).runtimeCode});
     dependencies[1] =
         DeployDependency({deployedAddress: exampleCloneImplementation(), runtimeCode: type(MockCloneable).runtimeCode});
+    return dependencies;
 }
 
 /// @dev The record root holding the committed `example-clone` release record.
@@ -117,8 +118,8 @@ function exampleCloneRelease() pure returns (CloneDeploy memory) {
 /// entry had some.
 abstract contract ExampleCloneDeploys is RainDeployCloneSuitesBase {
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](1);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = DeploySuite({
             suite: "example-clone@0_0_1",
             creationCode: EXAMPLE_CLONE_CREATION_CODE,
@@ -130,11 +131,12 @@ abstract contract ExampleCloneDeploys is RainDeployCloneSuitesBase {
             mechanism: DeployMechanism.Clone,
             mechanismData: EXAMPLE_CLONE_MECHANISM_DATA
         });
+        return suites;
     }
 
     /// @inheritdoc RainDeployCloneSuitesBase
-    function cloneDeploys() internal pure override returns (CloneDeploy[] memory clones) {
-        clones = new CloneDeploy[](2);
+    function cloneDeploys() internal pure override returns (CloneDeploy[] memory) {
+        CloneDeploy[] memory clones = new CloneDeploy[](2);
         clones[0] = CloneDeploy({
             suite: "example-clone",
             factory: exampleCloneFactory(),
@@ -155,5 +157,6 @@ abstract contract ExampleCloneDeploys is RainDeployCloneSuitesBase {
             salt: bytes32(uint256(2)),
             dependencies: exampleCloneDependencies()
         });
+        return clones;
     }
 }

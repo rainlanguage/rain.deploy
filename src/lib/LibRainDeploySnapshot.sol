@@ -789,15 +789,16 @@ library LibRainDeploySnapshot {
     /// @param deployed Where the local deploy put the clone on each network, in
     /// the suite's address order.
     /// @param suite The per-network clone suite.
-    /// @return addressConstants The constants, as Solidity source.
-    /// @return mechanismData The `abi.encode`d `CloneNetworks`, carrying the
-    /// local deploy's addresses.
+    /// @return The constants, as Solidity source.
+    /// @return The `abi.encode`d `CloneNetworks`, carrying the local deploy's
+    /// addresses.
     function perNetworkAddressConstants(Vm vm, address[] memory deployed, DeploySuite memory suite)
         internal
         pure
-        returns (string memory addressConstants, bytes memory mechanismData)
+        returns (string memory, bytes memory)
     {
         CloneNetworks memory clones = LibRainDeployMechanism.cloneNetworks(suite);
+        string memory addressConstants = "";
         for (uint256 i = 0; i < clones.networks.length; i++) {
             clones.networks[i].deployedAddress = deployed[i];
             string memory chainId = vm.toString(clones.networks[i].chainId);
@@ -815,7 +816,7 @@ library LibRainDeploySnapshot {
                 )
             );
         }
-        mechanismData = abi.encode(clones);
+        return (addressConstants, abi.encode(clones));
     }
 
     /// Generate one snapshot for one SUITE, by the mechanism it declares.

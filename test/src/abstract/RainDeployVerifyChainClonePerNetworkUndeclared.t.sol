@@ -48,14 +48,15 @@ contract RainDeployVerifyChainClonePerNetworkUndeclaredTest is PerNetworkCloneDe
         internal
         view
         override(PerNetworkCloneDeploys, RainDeploySuitesBase)
-        returns (string[] memory networks)
+        returns (string[] memory)
     {
-        networks = new string[](sIncludeBase ? 3 : 2);
+        string[] memory networks = new string[](sIncludeBase ? 3 : 2);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.POLYGON;
         if (sIncludeBase) {
             networks[2] = LibRainDeploy.BASE;
         }
+        return networks;
     }
 
     /// The matrix refuses the network with the declaration's refusal of its

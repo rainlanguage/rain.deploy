@@ -136,12 +136,12 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// @param networks The networks to broadcast to, as `deployNetworks()` gave
     /// them.
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
-    /// @return deployedAddresses Where the suite is on each network,
-    /// positionally paired with `networks`.
-    /// @return forkIds The fork each network was deployed on.
+    /// @return Where the suite is on each network, positionally paired with
+    /// `networks`.
+    /// @return The fork each network was deployed on.
     function broadcastSuite(DeploySuite memory suite, string[] memory networks, uint256 deployerPrivateKey)
         internal
-        returns (address[] memory deployedAddresses, uint256[] memory forkIds)
+        returns (address[] memory, uint256[] memory)
     {
         return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, onSupportedNetworks(suite));
     }

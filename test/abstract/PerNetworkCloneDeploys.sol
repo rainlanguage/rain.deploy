@@ -78,11 +78,12 @@ function perNetworkCloneInitData(uint256 chainId) pure returns (bytes memory) {
 
 /// The chain ids of `PerNetworkCloneDeploys.supportedNetworks()`, in order, as
 /// literals: what a candidate built outside the declaration is built for.
-/// @return chainIds Arbitrum One's, then Polygon's.
-function perNetworkCloneChainIds() pure returns (uint256[] memory chainIds) {
-    chainIds = new uint256[](2);
+/// @return Arbitrum One's, then Polygon's.
+function perNetworkCloneChainIds() pure returns (uint256[] memory) {
+    uint256[] memory chainIds = new uint256[](2);
     chainIds[0] = PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID;
     chainIds[1] = PER_NETWORK_CLONE_POLYGON_CHAIN_ID;
+    return chainIds;
 }
 
 /// A per-network clone declaration over the example factory and
@@ -160,15 +161,16 @@ function perNetworkCloneReleaseAddress(uint256 chainId) pure returns (address) {
 /// `PER_NETWORK_CLONE_RECORD_ROOT`, at different salts.
 abstract contract PerNetworkCloneDeploys is RainDeployCloneSuitesBase {
     /// @inheritdoc RainDeploySuitesBase
-    function supportedNetworks() internal view virtual override returns (string[] memory networks) {
-        networks = new string[](2);
+    function supportedNetworks() internal view virtual override returns (string[] memory) {
+        string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.POLYGON;
+        return networks;
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory suites) {
-        suites = new DeploySuite[](1);
+    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+        DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = DeploySuite({
             suite: "per-network-clone@0_0_1",
             creationCode: PER_NETWORK_CLONE_CREATION_CODE,
@@ -180,11 +182,13 @@ abstract contract PerNetworkCloneDeploys is RainDeployCloneSuitesBase {
             mechanism: DeployMechanism.ClonePerNetwork,
             mechanismData: PER_NETWORK_CLONE_MECHANISM_DATA
         });
+        return suites;
     }
 
     /// @inheritdoc RainDeployCloneSuitesBase
-    function cloneDeploys() internal pure override returns (CloneDeploy[] memory clones) {
-        clones = new CloneDeploy[](1);
+    function cloneDeploys() internal pure override returns (CloneDeploy[] memory) {
+        CloneDeploy[] memory clones = new CloneDeploy[](1);
         clones[0] = perNetworkClone("per-network-clone", bytes32(uint256(4)));
+        return clones;
     }
 }
