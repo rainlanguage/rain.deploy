@@ -253,4 +253,43 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
         this.externalRecordedDeployedAddresses("record.sol", record);
     }
+
+    /// A per-network declaration line whose constant is named
+    /// `DEPLOYED_ADDRESS_<suffix>`, with the suffix as given.
+    /// @param suffix What follows `DEPLOYED_ADDRESS_` in the name.
+    /// @return The line.
+    function suffixedLine(string memory suffix) internal pure returns (string memory) {
+        return string.concat(
+            "address constant DEPLOYED_ADDRESS_", suffix, " = address(", vm.toString(address(0xcafe)), ");\n"
+        );
+    }
+
+    /// A `DEPLOYED_ADDRESS_<x>` whose `<x>` is not a decimal chain id makes the
+    /// record unreadable, typed and naming the file: hexadecimal, letters,
+    /// nothing, the prefix again, and a decimal past `uint256`. Hexadecimal and
+    /// a repeated prefix are refused rather than read as chain 137.
+    function testPerNetworkDeclarationWithANonDecimalChainIdIsUnreadable() external {
+        string[] memory suffixes = new string[](5);
+        suffixes[0] = "0x89";
+        suffixes[1] = "polygon";
+        suffixes[2] = "";
+        suffixes[3] = "DEPLOYED_ADDRESS_137";
+        suffixes[4] = "115792089237316195423570985008687907853269984665640564039457584007913129639936";
+        for (uint256 i = 0; i < suffixes.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol", string.concat(perNetworkLine(42161, address(0xbeef)), suffixedLine(suffixes[i]))
+            );
+        }
+    }
+
+    /// The largest chain id a `uint256` holds reads as itself: the overflow
+    /// refusal starts one past it.
+    function testPerNetworkDeclarationWithTheLargestChainIdReads() external view {
+        (uint256[] memory chainIds, address[] memory addresses) =
+            this.externalRecordedDeployedAddresses("record.sol", suffixedLine(vm.toString(type(uint256).max)));
+        assertEq(chainIds.length, 1);
+        assertEq(chainIds[0], type(uint256).max);
+        assertEq(addresses[0], address(0xcafe));
+    }
 }
