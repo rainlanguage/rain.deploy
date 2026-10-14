@@ -10,6 +10,7 @@ import {LibTimelockController} from "../../../src/lib/LibTimelockController.sol"
 import {BYTECODE_HASH, CREATION_CODE, RUNTIME_CODE} from "../../../src/generated/candidate/TimelockController.sol";
 import {CREATION_CODE as CREATION_CODE_0_1_18} from "../../../src/generated/0_1_18/TimelockController.sol";
 import {MockTimelockControllerGeneration} from "../../concrete/MockTimelockControllerGeneration.sol";
+import {MockTimelockControllerImmutableGeneration} from "../../concrete/MockTimelockControllerImmutableGeneration.sol";
 
 /// @title LibTimelockControllerTest
 /// The snapshot against the dependency, the frozen generation against
@@ -149,11 +150,14 @@ contract LibTimelockControllerTest is Test {
         bytes memory mockCode = type(MockTimelockControllerGeneration).creationCode;
         bytes32 mockHash = keccak256(type(MockTimelockControllerGeneration).runtimeCode);
         address at = LibTimelockController.expectedTimelockAddress(CREATION_CODE, MIN_DELAY, PROPOSER);
+        uint64 nonce = vm.getNonce(address(this));
 
         this.externalCheckTimelockGeneration(CREATION_CODE, BYTECODE_HASH);
         this.externalCheckTimelockGeneration(mockCode, mockHash);
         assertEq(at.code.length, 0);
         assertEq(LibRainDeploy.ZOLTU_FACTORY.code.length, 0);
+        assertEq(vm.getNonce(address(this)), nonce);
+        assertEq(vm.computeCreateAddress(address(this), nonce).code.length, 0);
 
         vm.expectRevert(
             abi.encodeWithSelector(LibTimelockController.TimelockGenerationMismatch.selector, mockHash, BYTECODE_HASH)
@@ -172,6 +176,29 @@ contract LibTimelockControllerTest is Test {
         vm.etch(at, type(MockTimelockControllerGeneration).runtimeCode);
         this.externalCheckTimelockGeneration(CREATION_CODE, BYTECODE_HASH);
         assertEq(at.codehash, keccak256(type(MockTimelockControllerGeneration).runtimeCode));
+    }
+
+    /// The check derives the hash from the given constructor arguments, which a generation's code can embed.
+    function testCheckTimelockGenerationDeploysWithTheGivenArguments() external {
+        bytes memory code = type(MockTimelockControllerImmutableGeneration).creationCode;
+        bytes32 hashAtMinDelay = deployZoltu(LibTimelockController.timelockInitCode(code, MIN_DELAY, PROPOSER)).codehash;
+        bytes32 hashAtOtherDelay =
+            deployZoltu(LibTimelockController.timelockInitCode(code, MIN_DELAY + 1, PROPOSER)).codehash;
+        assertNotEq(hashAtMinDelay, hashAtOtherDelay);
+
+        this.externalCheckTimelockGeneration(code, hashAtMinDelay);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibTimelockController.TimelockGenerationMismatch.selector, hashAtOtherDelay, hashAtMinDelay
+            )
+        );
+        this.externalCheckTimelockGeneration(code, hashAtOtherDelay);
+    }
+
+    /// A creation code that does not deploy is refused as a failed deploy.
+    function testCheckTimelockGenerationRefusesCreationCodeThatDoesNotDeploy() external {
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, false, address(0)));
+        this.externalCheckTimelockGeneration(hex"60006000fd", BYTECODE_HASH);
     }
 
     /// A timelock passes against the generation it was deployed from and is

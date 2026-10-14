@@ -20,8 +20,9 @@ import {LibRainDeploy} from "./LibRainDeploy.sol";
 /// freezes it as `src/generated/<tag>/TimelockController.sol`. Every derived
 /// address is a function of the creation code, so a compiler or dependency
 /// change that regenerates the candidate moves every address. Timelocks stay on
-/// the generation they were deployed from, so the caller passes that frozen
-/// generation to every function here, whatever rain-deploy version it imports.
+/// the generation they were deployed from, so the caller imports that frozen
+/// `src/generated/<tag>/` record, never the candidate, and passes it to every
+/// function that derives or checks code, whatever rain-deploy version it imports.
 ///
 /// The role model `timelockInitCode` builds and `assertTimelockState` pins:
 /// - The proposer holds `PROPOSER_ROLE` and `CANCELLER_ROLE` (the constructor
@@ -55,10 +56,6 @@ library LibTimelockController {
     /// @param bytecodeHash The hash given with the creation code.
     /// @param derived The hash of the code the creation code deploys.
     error TimelockGenerationMismatch(bytes32 bytecodeHash, bytes32 derived);
-
-    /// The local deploy behind `checkTimelockGeneration` could not be reverted.
-    /// @param snapshotId The snapshot that failed to revert.
-    error TimelockGenerationSnapshotRevertFailed(uint256 snapshotId);
 
     /// `getMinDelay()` is not the expected minimum delay.
     /// @param timelock The timelock inspected.
@@ -119,7 +116,7 @@ library LibTimelockController {
         pure
         returns (bytes memory)
     {
-        return abi.encodePacked(creationCode, timelockConstructorArgs(minDelay, proposer));
+        return bytes.concat(creationCode, timelockConstructorArgs(minDelay, proposer));
     }
 
     /// The address the Zoltu factory deploys `timelockInitCode(creationCode,
@@ -137,8 +134,9 @@ library LibTimelockController {
     }
 
     /// Reverts unless `creationCode`, deployed locally with these constructor arguments, produces code
-    /// hashing to `bytecodeHash`. The local deploy is reverted.
-    /// @param vm The Vm to snapshot and deploy with.
+    /// hashing to `bytecodeHash`; also reverts on a zero proposer or a creation code that does not deploy.
+    /// The local deploy is reverted, but a broadcast would record it, so never call this inside one.
+    /// @param vm The Vm to snapshot with.
     /// @param creationCode The generation's `CREATION_CODE`.
     /// @param bytecodeHash The generation's `BYTECODE_HASH`.
     /// @param minDelay The minimum delay in seconds.
@@ -151,14 +149,14 @@ library LibTimelockController {
         address proposer
     ) internal {
         bytes memory initCode = timelockInitCode(creationCode, minDelay, proposer);
-        address at = LibRainDeploy.zoltuAddress(initCode);
         uint256 snapshotId = vm.snapshotState();
-        vm.etch(at, hex"");
-        vm.resetNonce(at);
-        bytes32 derived = LibRainDeploy.etchAndDeployZoltu(vm, initCode).codehash;
-        if (!vm.revertToState(snapshotId)) {
-            revert TimelockGenerationSnapshotRevertFailed(snapshotId);
+        address local;
+        assembly ("memory-safe") {
+            local := create(0, add(initCode, 0x20), mload(initCode))
         }
+        if (local == address(0)) revert LibRainDeploy.DeployFailed(false, local);
+        bytes32 derived = local.codehash;
+        vm.revertToState(snapshotId);
         if (derived != bytecodeHash) {
             revert TimelockGenerationMismatch(bytecodeHash, derived);
         }

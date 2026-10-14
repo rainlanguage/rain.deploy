@@ -10,6 +10,7 @@ import {LibTimelockController} from "../../../src/lib/LibTimelockController.sol"
 import {LibTimelockControllerDeploy} from "../../../src/lib/LibTimelockControllerDeploy.sol";
 import {BYTECODE_HASH, CREATION_CODE} from "../../../src/generated/candidate/TimelockController.sol";
 import {MockTimelockControllerGeneration} from "../../concrete/MockTimelockControllerGeneration.sol";
+import {MockTimelockControllerAdminGeneration} from "../../concrete/MockTimelockControllerAdminGeneration.sol";
 
 /// @title LibTimelockControllerDeployTest
 /// The deploy step on a local chain with the real Zoltu factory etched: a fresh
@@ -96,9 +97,8 @@ contract LibTimelockControllerDeployTest is Test {
         assertEq(expected().code.length, 0);
     }
 
-    /// A creation code given with another generation's code hash is refused before anything is broadcast.
+    /// A creation code given with another generation's code hash is refused before the factory is even checked.
     function testMismatchedGenerationIsRefusedBeforeBroadcast() external {
-        LibRainDeploy.etchZoltuFactory(vm);
         bytes32 otherHash = keccak256(type(MockTimelockControllerGeneration).runtimeCode);
         vm.expectRevert(
             abi.encodeWithSelector(LibTimelockController.TimelockGenerationMismatch.selector, otherHash, BYTECODE_HASH)
@@ -146,6 +146,32 @@ contract LibTimelockControllerDeployTest is Test {
                 LibTimelockController.TimelockUnexpectedRole.selector, timelock, proposerRole, address(0)
             )
         );
+        this.callDeployTimelock(DEPLOYER, CREATION_CODE, BYTECODE_HASH, MIN_DELAY, PROPOSER, expected());
+    }
+
+    /// A fresh deploy of a generation whose constructor leaves the role model is refused.
+    function testFreshDeployOutOfStateIsRefused() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        bytes memory creationCode = type(MockTimelockControllerAdminGeneration).creationCode;
+        bytes32 bytecodeHash = keccak256(type(MockTimelockControllerAdminGeneration).runtimeCode);
+        address derived = LibTimelockController.expectedTimelockAddress(creationCode, MIN_DELAY, PROPOSER);
+        vm.expectRevert(
+            abi.encodeWithSelector(LibTimelockController.TimelockUnexpectedRole.selector, derived, bytes32(0), PROPOSER)
+        );
+        this.callDeployTimelock(DEPLOYER, creationCode, bytecodeHash, MIN_DELAY, PROPOSER, derived);
+    }
+
+    /// A factory that reports a deploy landing anywhere but the derived address is refused.
+    function testFactoryLandingElsewhereIsRefused() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        address elsewhere =
+            LibRainDeploy.deployZoltu(LibTimelockController.timelockInitCode(CREATION_CODE, MIN_DELAY + 1, PROPOSER));
+        vm.mockCall(
+            LibRainDeploy.ZOLTU_FACTORY,
+            LibTimelockController.timelockInitCode(CREATION_CODE, MIN_DELAY, PROPOSER),
+            abi.encodePacked(elsewhere)
+        );
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, expected(), elsewhere));
         this.callDeployTimelock(DEPLOYER, CREATION_CODE, BYTECODE_HASH, MIN_DELAY, PROPOSER, expected());
     }
 
