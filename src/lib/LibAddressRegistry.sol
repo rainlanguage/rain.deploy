@@ -56,6 +56,20 @@ library LibAddressRegistry {
     /// @param name The name that was being resolved.
     error ZeroMinAge(bytes32 name);
 
+    /// Reverts unless the registry address holds the code this library was
+    /// compiled against: the check `resolve` makes before every read, for a
+    /// caller that has to know it is talking to the pinned registry before
+    /// doing anything else with it — writing to it, or reading a name that may
+    /// be unbound.
+    function checkCodeHash() internal view {
+        bytes32 actualCodeHash = LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.codehash;
+        if (actualCodeHash != LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH) {
+            revert UnexpectedAddressRegistryCodeHash(
+                LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH, actualCodeHash
+            );
+        }
+    }
+
     /// The address `name` is currently bound to in the registry, and when it was
     /// bound.
     ///
@@ -69,12 +83,7 @@ library LibAddressRegistry {
     /// @return The address bound to `name`.
     /// @return The `block.timestamp` at which `name` was most recently bound.
     function resolve(bytes32 name) internal view returns (address, uint256) {
-        bytes32 actualCodeHash = LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.codehash;
-        if (actualCodeHash != LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH) {
-            revert UnexpectedAddressRegistryCodeHash(
-                LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH, actualCodeHash
-            );
-        }
+        checkCodeHash();
         // Destructured rather than returned straight through, so both halves are
         // visibly used: a passed-through tuple reads to the analysers as a
         // return value nobody looked at.

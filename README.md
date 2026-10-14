@@ -341,6 +341,99 @@ Only the consumer knows where it stored what it resolved, so the consumer
 supplies the reads (`abi.encodeCall(IERC5313.owner, ())` and the like) and this
 library supplies the fork loop and the comparison.
 
+## Managing the address registry
+
+Root binds a name with `script/RegisterAddress.sol`, signed on the Ledger that
+holds `ADDRESS_REGISTRY_ROOT`. It is run by hand on the machine the Ledger is
+plugged into, never in CI: forge's own `--ledger` signer asks the device for
+each signature, and the key never leaves it.
+
+**The name is the string consumers hash.** Consumers derive a name as
+`keccak256("<org>.<name>")` — st0x resolves its token-owner Safe as
+`keccak256("st0x.token-owner-safe")` — so the script takes that string and
+hashes it itself. There is no `bytes32` input, so there is no other encoding to
+bind under by mistake. The string must be lowercase letters and digits with
+single `.` or `-` separators, starting with a letter and containing the `.`
+after its `<org>`; anything else (a capital, a stray space or newline, an
+already-hashed `0x…`, a name with its `<org>.` dropped) is refused, because it
+is a near miss of a real name that no consumer resolves.
+
+It binds on every network the registry is deployed to, by default — one binding
+everywhere, as the deployment is the same everywhere — and a network already
+bound to the same account is skipped, so a run that stopped partway is fixed by
+running it again.
+
+### Before the first run
+
+- The Ledger: unlocked, the **Ethereum** app open, and Ledger Live closed (it
+  holds the USB connection). In the Ethereum app's settings turn on **Blind
+  signing** — `register` is a contract call the app cannot decode, and it
+  refuses to sign one otherwise. Turning on **Debug data** as well makes the
+  device show the raw call, which is what to check against the dry run below.
+- Check the device answers as root (append `--mnemonic-derivation-path "<path>"`
+  if root is not the first Ledger Live account; the same flag goes on every
+  command below):
+
+  ```sh
+  nix develop -c cast wallet address --ledger
+  # must print 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c
+  ```
+
+- Root needs native gas on every network it binds on.
+- `cp .env.example .env` for the network endpoints. They are public and
+  rate-limit; replace any that fail with your own.
+
+### Binding a name
+
+```sh
+export ADDRESS_REGISTRY_NAME=st0x.token-owner-safe
+export ADDRESS_REGISTRY_ACCOUNT=0x...
+# Optional, to bind on fewer networks than all of them:
+# export ADDRESS_REGISTRY_NETWORKS=base,arbitrum
+
+# 1. Dry run. Executes every check and the bind itself on a fork of each
+#    network, and sends nothing.
+nix develop -c forge script script/RegisterAddress.sol:RegisterAddress \
+  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --ledger --legacy
+
+# 2. The same command with --broadcast. The device asks once per network the
+#    dry run marked BIND or REBIND.
+nix develop -c forge script script/RegisterAddress.sol:RegisterAddress \
+  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --ledger --legacy --broadcast
+
+# 3. Once every transaction is mined: reads every network fresh and fails
+#    unless the name resolves to the account on each.
+nix develop -c forge script script/RegisterAddress.sol:RegisterAddress --sig "verify()"
+```
+
+`--legacy` because HyperEVM's RPC rejects the fee-history ranges EIP-1559
+estimation asks for. No `--rpc-url`: the script forks each network's alias
+itself.
+
+Before anything is signed the run refuses, with an error naming what is wrong: a
+non-canonical name, the zero account, a network the repo does not support or one
+named twice, a sender other than root, a network whose endpoint reports another
+chain id than the catalogue states for it, and a registry address that does not
+hold the pinned registry code. A refused run signs nothing.
+
+The dry run prints the name, its hash, the account, the registry address and the
+exact calldata, then for each network its chain id, the current binding
+(`unbound`, or the account and the moment it was bound) and what will happen:
+`BIND`, `REBIND` (old → new) or `SKIP`. That is the record to approve against.
+For each transaction the device shows:
+
+- **To**: the registry address the dry run printed
+  (`LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS`);
+- **Amount**: 0;
+- **Network**: the network's name or chain id, which must be one the dry run
+  marked `BIND` or `REBIND`;
+- with **Debug data** on, the selector `0xd22057a9`
+  (`register(bytes32,address)`) and its two arguments: the name hash, and the
+  account left-padded to 32 bytes — together exactly the calldata the dry run
+  printed.
+
+Reject on the device if any of them differs.
+
 ## Migration registry
 
 `MigrationRegistry` records that a migration has been applied, when, and after
