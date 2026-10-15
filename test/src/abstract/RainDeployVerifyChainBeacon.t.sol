@@ -34,6 +34,8 @@ import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 
+/// @title RainDeployVerifyChainBeaconTest
+/// @notice The chain group's check of each declared beacon against its network, state and implementation suite.
 contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     address constant OWNER = address(0xB0B);
     address constant NEW_OWNER = address(0xCAFE);
