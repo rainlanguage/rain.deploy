@@ -261,6 +261,26 @@ contract LibRainDeployBeaconTest is Test {
         assertFalse(this.externalRecordedBefore(record(THIRD, UPGRADE), record(OTHER, HANDOVER)));
     }
 
+    function testOrderWalkStillReadsEachRecordOnceAfterGrowing() external {
+        deployRegistry();
+        applyMigration(INTERIM, MIGRATION_HEAD_GENESIS);
+        applyMigration(UPGRADE, INTERIM);
+        applyIn(OTHER, ROLLBACK, andAfter(onto(OTHER, MIGRATION_HEAD_GENESIS), NAMESPACE, INTERIM));
+        applyIn(THIRD, UPGRADE, onto(THIRD, MIGRATION_HEAD_GENESIS));
+        applyIn(THIRD, HANDOVER, onto(THIRD, UPGRADE));
+        applyIn(
+            OTHER,
+            HANDOVER,
+            andAfter(andAfter(andAfter(onto(OTHER, ROLLBACK), NAMESPACE, INTERIM), THIRD, UPGRADE), NAMESPACE, UPGRADE)
+        );
+        vm.expectCall(
+            LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
+            abi.encodeCall(IMigrationRegistryV2.appliedAfter, (WRITER, NAMESPACE, INTERIM)),
+            1
+        );
+        assertFalse(this.externalRecordedBefore(record(THIRD, HANDOVER), record(OTHER, HANDOVER)));
+    }
+
     function upgradeHandoverRollback() internal pure returns (BeaconTransition[] memory) {
         BeaconTransition[] memory transitions = new BeaconTransition[](3);
         transitions[0] = transition(UPGRADE, "upgraded", address(0xB0B));
