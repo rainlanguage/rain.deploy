@@ -617,6 +617,29 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         this.externalResolveBeacons(arbitrum());
     }
 
+    function externalResolvedCount(SupportedNetwork[] memory networks) external returns (uint256) {
+        return resolveBeacons(networks).length;
+    }
+
+    function testNarrowedResolveCountsOnlyTheBeaconsOnItsNetworks() external {
+        declare(8453, declared("beacon-implementation@0_0_1", OWNER));
+        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        declare(8453, declared("beacon-upgrade@0_0_1", OWNER));
+        assertEq(this.externalResolvedCount(arbitrum()), 1);
+        assertEq(this.externalResolvedCount(networksNamed(LibRainDeploy.BASE, "")), 2);
+        assertEq(this.externalResolvedCount(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE)), 3);
+    }
+
+    function testNarrowedResolveWithNoBeaconOnItsNetworksIsEmpty() external {
+        declare(8453, declared("beacon-implementation@0_0_1", OWNER));
+        assertEq(this.externalResolvedCount(arbitrum()), 0);
+    }
+
+    function testNoBeaconsResolveWithoutReadingSupportedNetworks() external {
+        supportOnly("not-a-catalogue-network", "");
+        assertEq(this.externalResolvedCount(arbitrum()), 0);
+    }
+
     function testTransitionsAppliedInDeclaredOrderExpectTheLatest() external {
         declare(42161, rollingBack());
         applyMigration();

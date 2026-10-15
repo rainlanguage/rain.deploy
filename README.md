@@ -342,12 +342,15 @@ assert any other authority a beacon exposes (a pending owner, roles) yourself,
 including that the deploy key holds none of it. The deploy key is never a
 declared owner; seat governance from the first state.
 
-Declare transitions in the order their migrations are applied: one the registry
-reports applied before an earlier-declared one is refused with
-`BeaconTransitionsOutOfOrder`. Apply a transition's migration in the same
-transaction as the beacon change it describes (one Safe batch: `upgradeTo` or
-`transferOwnership`, then `applyMigration`). Between two separate transactions
-the chain group refuses the network, as the chain and the registry disagree.
+Declare transitions in the order their migrations are applied: each applied
+transition's record MUST reach the latest earlier-declared applied one through
+`appliedAfter` (its line's head, then its prerequisites), refused otherwise with
+`BeaconTransitionsOutOfOrder`; moments are never compared. A transition written
+in another line names the earlier one, or a record after it, as a prerequisite.
+Apply a transition's migration in the same transaction as the beacon change it
+describes (one Safe batch: `upgradeTo` or `transferOwnership`, then
+`applyMigration`). Between two separate transactions the chain group refuses the
+network, as the chain and the registry disagree.
 
 ## Deploy verification
 

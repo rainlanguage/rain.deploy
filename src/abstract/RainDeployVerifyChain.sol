@@ -23,7 +23,7 @@ error BeaconNamedTwice(uint256 chainId, uint256 beaconIndex);
 /// @param beaconIndex The beacon's index in `beacons()`.
 error BeaconUnnamed(uint256 chainId, uint256 beaconIndex);
 
-/// @notice A beacon's chain id MUST be one of `supportedNetworks()`'.
+/// @notice A beacon's chain id MUST be one of `supportedNetworks()`.
 /// @param chainId The beacon's chain id.
 /// @param beaconIndex The beacon's index in `beacons()`.
 error BeaconOnUncheckedNetwork(uint256 chainId, uint256 beaconIndex);
@@ -141,6 +141,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// @return Each of `beacons()` on one of `networks`, resolved on it, in declaration order.
     function resolveBeacons(SupportedNetwork[] memory networks) internal returns (ResolvedBeacon[] memory) {
         ChainBeacon[] memory chainBeacons = beacons();
+        if (chainBeacons.length == 0) {
+            return new ResolvedBeacon[](0);
+        }
         SupportedNetwork[] memory supported = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
         uint256 onNetworks = 0;
         for (uint256 beaconIndex = 0; beaconIndex < chainBeacons.length; beaconIndex++) {

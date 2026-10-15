@@ -27,6 +27,10 @@ contract LibRainDeployBeaconTest is Test {
     bytes32 constant NAMESPACE = keccak256("beacons");
     bytes32 constant UPGRADE = keccak256("upgrade");
     bytes32 constant HANDOVER = keccak256("handover");
+    bytes32 constant INTERIM = keccak256("interim");
+    bytes32 constant ROLLBACK = keccak256("rollback");
+    bytes32 constant OTHER = keccak256("other beacons");
+    bytes32 constant THIRD = keccak256("third beacons");
 
     UpgradeableBeacon internal sBeacon;
     address internal sImplementation;
@@ -45,6 +49,55 @@ contract LibRainDeployBeaconTest is Test {
         vm.prank(WRITER);
         IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .applyMigration(NAMESPACE, migration, LibMigrationRegistry.onto(WRITER, NAMESPACE, head));
+    }
+
+    function onto(bytes32 namespace, bytes32 head) internal pure returns (Prerequisite[] memory) {
+        return LibMigrationRegistry.onto(WRITER, namespace, head);
+    }
+
+    function andAfter(Prerequisite[] memory list, bytes32 namespace, bytes32 migration)
+        internal
+        pure
+        returns (Prerequisite[] memory)
+    {
+        Prerequisite[] memory longer = new Prerequisite[](list.length + 1);
+        for (uint256 i = 0; i < list.length; i++) {
+            longer[i] = list[i];
+        }
+        longer[list.length] = record(namespace, migration);
+        return longer;
+    }
+
+    function record(bytes32 namespace, bytes32 migration) internal pure returns (Prerequisite memory) {
+        return Prerequisite({writer: WRITER, namespace: namespace, migration: migration});
+    }
+
+    function applyIn(bytes32 namespace, bytes32 migration, Prerequisite[] memory list) internal {
+        vm.prank(WRITER);
+        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .applyMigration(namespace, migration, list);
+    }
+
+    function applyAt(bytes32 namespace, bytes32 migration, uint256 moment, Prerequisite[] memory list) internal {
+        vm.prank(WRITER);
+        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .applyMigrationHistory(namespace, migration, moment, list);
+    }
+
+    function expectOutOfOrder(uint256 index) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployBeacon.BeaconTransitionsOutOfOrder.selector, NETWORK, address(sBeacon), index
+            )
+        );
+    }
+
+    function externalRecordedBefore(Prerequisite memory earlier, Prerequisite memory later)
+        external
+        view
+        returns (bool)
+    {
+        return LibRainDeployBeacon.recordedBefore(earlier, later);
     }
 
     function transition(bytes32 migration, string memory implementation, address owner)
@@ -137,6 +190,71 @@ contract LibRainDeployBeaconTest is Test {
             )
         );
         this.externalAppliedState(declared(transitions));
+    }
+
+    function testTransitionsAppliedOutOfDeclaredOrderInOneBlockAreRefused() external {
+        deployRegistry();
+        applyMigration(UPGRADE, MIGRATION_HEAD_GENESIS);
+        applyMigration(HANDOVER, UPGRADE);
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        (transitions[0], transitions[1]) = (transitions[1], transitions[0]);
+        expectOutOfOrder(1);
+        this.externalAppliedState(declared(transitions));
+    }
+
+    function testHistoryMomentsCannotFakeTransitionOrder() external {
+        deployRegistry();
+        vm.warp(1000);
+        applyAt(OTHER, HANDOVER, 900, onto(OTHER, MIGRATION_HEAD_GENESIS));
+        applyAt(NAMESPACE, UPGRADE, 100, andAfter(onto(NAMESPACE, MIGRATION_HEAD_GENESIS), OTHER, HANDOVER));
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        transitions[1].migration.namespace = OTHER;
+        expectOutOfOrder(1);
+        this.externalAppliedState(declared(transitions));
+    }
+
+    function testTransitionAppliedAfterTheEarlierAsAPrerequisiteIsInOrderWhateverTheMoments() external {
+        deployRegistry();
+        vm.warp(1000);
+        applyAt(NAMESPACE, UPGRADE, 900, onto(NAMESPACE, MIGRATION_HEAD_GENESIS));
+        applyAt(OTHER, HANDOVER, 100, andAfter(onto(OTHER, MIGRATION_HEAD_GENESIS), NAMESPACE, UPGRADE));
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        transitions[1].migration.namespace = OTHER;
+        assertEq(this.externalAppliedState(declared(transitions)), 2);
+    }
+
+    function testTransitionsInUnrelatedLinesAreRefused() external {
+        deployRegistry();
+        applyMigration(UPGRADE, MIGRATION_HEAD_GENESIS);
+        vm.warp(block.timestamp + 1);
+        applyIn(OTHER, HANDOVER, onto(OTHER, MIGRATION_HEAD_GENESIS));
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        transitions[1].migration.namespace = OTHER;
+        expectOutOfOrder(1);
+        this.externalAppliedState(declared(transitions));
+    }
+
+    function testTransitionAppliedAfterAnUndeclaredMigrationIsInOrder() external {
+        deployRegistry();
+        applyMigration(UPGRADE, MIGRATION_HEAD_GENESIS);
+        applyMigration(INTERIM, UPGRADE);
+        applyMigration(HANDOVER, INTERIM);
+        assertEq(this.externalAppliedState(declared(upgradeThenHandover())), 2);
+    }
+
+    function testOrderWalkReadsEachRecordOnce() external {
+        deployRegistry();
+        applyMigration(INTERIM, MIGRATION_HEAD_GENESIS);
+        applyMigration(UPGRADE, INTERIM);
+        applyIn(OTHER, ROLLBACK, andAfter(onto(OTHER, MIGRATION_HEAD_GENESIS), NAMESPACE, INTERIM));
+        applyIn(OTHER, HANDOVER, andAfter(onto(OTHER, ROLLBACK), NAMESPACE, UPGRADE));
+        applyIn(THIRD, UPGRADE, onto(THIRD, MIGRATION_HEAD_GENESIS));
+        vm.expectCall(
+            LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
+            abi.encodeCall(IMigrationRegistryV2.appliedAfter, (WRITER, NAMESPACE, INTERIM)),
+            1
+        );
+        assertFalse(this.externalRecordedBefore(record(THIRD, UPGRADE), record(OTHER, HANDOVER)));
     }
 
     function testLaterAppliedTransitionWinsOverAnEarlierUnappliedOne() external {
