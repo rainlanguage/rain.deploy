@@ -1340,7 +1340,7 @@ library LibRainDeploySnapshot {
         pure
         returns (uint256[] memory, address[] memory)
     {
-        string[] memory lines = vm.split(withoutBlockComments(record), "\n");
+        string[] memory lines = recordLines(vm, path, record);
         uint256[] memory chainIds = new uint256[](lines.length);
         address[] memory addresses = new address[](lines.length);
         uint256 perNetwork = 0;
@@ -1360,7 +1360,12 @@ library LibRainDeploySnapshot {
                     revert FrozenSnapshotUnreadable(path);
                 }
                 string[] memory wrapped = vm.split(lines[i + 1], " ");
+                if (wrapped.length != 5) {
+                    revert FrozenSnapshotUnreadable(path);
+                }
                 value = wrapped[wrapped.length - 1];
+            } else if (tokens.length != 5) {
+                revert FrozenSnapshotUnreadable(path);
             }
             address declared = declaredAddress(vm, path, value);
             if (isEveryNetwork) {
@@ -1431,7 +1436,20 @@ library LibRainDeploySnapshot {
         return chainId;
     }
 
-    /// A record's text with every block comment removed but its line breaks, read left to right as the compiler reads it.
+    /// A record's lines, block comments removed, from a record whose only line break is `\n`.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file, for the error only.
+    /// @param record The record file's contents.
+    /// @return The lines.
+    function recordLines(Vm vm, string memory path, string memory record) internal pure returns (string[] memory) {
+        if (vm.contains(record, "\r") || vm.contains(record, "\x0b") || vm.contains(record, "\x0c")) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        return vm.split(withoutBlockComments(record), "\n");
+    }
+
+    /// A record's text with every block comment removed but its line breaks, read left to right: the first `*/` closes
+    /// a block comment, a `//` comment runs to the next `\n`, and a quoted string runs to its unescaped closing quote.
     /// @param record The record file's contents.
     /// @return The contents with every block comment removed but its line breaks.
     function withoutBlockComments(string memory record) internal pure returns (string memory) {
@@ -1492,7 +1510,7 @@ library LibRainDeploySnapshot {
     function recordedMechanism(Vm vm, string memory path) internal view returns (DeployMechanism) {
         string memory record = vm.readFile(path);
         (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, record);
-        string[] memory lines = vm.split(withoutBlockComments(record), "\n");
+        string[] memory lines = recordLines(vm, path, record);
         uint256 mechanismData = 0;
         for (uint256 i = 0; i < lines.length; i++) {
             if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {

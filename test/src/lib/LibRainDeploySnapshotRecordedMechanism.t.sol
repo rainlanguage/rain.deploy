@@ -285,6 +285,20 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
             string.concat(everyNetworkLine(address(1)), "// \\\n/*\n", MECHANISM_DATA_LINE, "*/\n"),
             DeployMechanism.Zoltu
         );
+        checkRead(
+            "lone-slash",
+            string.concat(everyNetworkLine(address(1)), "// a / b\n/ /*\n", MECHANISM_DATA_LINE, "*/\n"),
+            DeployMechanism.Zoltu
+        );
+    }
+
+    /// A record holding a carriage return is refused before any mechanism is read from it.
+    function testRecordHoldingAnotherLineBreakIsUnreadable() external {
+        checkRefused(
+            "carriage-return",
+            string.concat(everyNetworkLine(address(1)), "// note\r", MECHANISM_DATA_LINE),
+            FrozenSnapshotUnreadable.selector
+        );
     }
 
     /// The three readings, from minimal records.

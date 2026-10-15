@@ -1103,7 +1103,8 @@ it. In order:
    `DeploySuite`.
 2. Add `rain-factory` 0.1.30 and its remapping, as above.
 3. Make `view` every function of yours that calls `checkedCandidateSuites`,
-   `allSuites`, `suiteNames` or `suiteByName`, which are `view` now.
+   `allSuites`, `suiteNames`, `suiteByName` or `candidateSuites`, which are
+   `view` now. A `pure` override of `candidateSuites` still compiles.
 4. Update the moved errors. `NetworkChainIdMismatch`, `NotDeployedOnNetwork` and
    `CodeHashMismatchOnNetwork` are members of `LibRainDeploy`: refer to them as
    `LibRainDeploy.NotDeployedOnNetwork.selector` and so on, and drop their
@@ -1111,8 +1112,15 @@ it. In order:
    carry the suite. Import `ZoltuDerivationMismatch` from
    `LibRainDeployMechanism`, and `FrozenSnapshotUnreadable` and
    `FrozenSnapshotAmbiguous` from `LibRainDeploySnapshot`.
-   `FrozenSnapshotsOutnumberReleases` carries an `address[]`.
-5. Replace the removed or re-signed internal functions:
+   `FrozenSnapshotsOutnumberReleases` carries an `address[]`. A code hash
+   mismatch in `deployToNetworks` reverts `CodeHashMismatchOnNetwork`, or
+   `NotDeployedOnNetwork` when the address holds no code, where it reverted
+   `UnexpectedDeployedCodeHash`.
+5. Replace the removed or re-signed internal functions and members:
+   - `DerivedDeploy.deployedAddress` is `address[] deployedAddresses`, one per
+     address the suite's mechanism deploys to, in the suite's address order.
+   - `RainDeployVerifySnapshotBase.DEPLOYED_ADDRESS_DECLARATION` is
+     `LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION`.
    - `RainDeployVerifyChain.checkDeployedOnNetwork(string, DerivedDeploy)` is
      removed: call `LibRainDeploy.checkDeclaredDependencies` and
      `LibRainDeploy.checkDeployedCode` on the selected fork, or run the whole
@@ -1138,10 +1146,15 @@ it. In order:
 6. Regenerate: `forge script ./script/Build.sol` followed by
    `./script/build.sh`.
 
-`LibRainDeploy.deployToNetworks` and every other entry point taking network
-names takes catalogue aliases only (`NetworkNotInCatalogue`), refuses a fork
-reporting another chain id (`NetworkChainIdMismatch`), and checks the declared
-dependencies on every network, including one the suite is already deployed on.
+`LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,
+`RainDeployBroadcast.broadcastSuite` and the chain matrix
+(`RainDeployVerifyChain.checkDeployedOnNetworks`) take catalogue aliases only
+(`NetworkNotInCatalogue`), refuse a fork reporting another chain id
+(`NetworkChainIdMismatch`), and check the declared dependencies on every
+network, including one the suite is already deployed on.
+`LibRainDeploy.createForks`, `checkResolvedAddressesOnNetworks` and
+`checkResolvedAddressesOnForks` take raw `[rpc_endpoints]` aliases, with no
+catalogue lookup and no chain id check.
 
 ## Develop
 

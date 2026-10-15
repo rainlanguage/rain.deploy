@@ -303,6 +303,69 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         );
     }
 
+    /// A declaration ending in `=` takes no address from a following line in any indentation but the writer's, nor
+    /// from a comment.
+    function testPerNetworkDeclarationWrappedOntoAnotherIndentationIsUnreadable() external {
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol",
+            "address constant DEPLOYED_ADDRESS_1 =\n        address(0x000000000000000000000000000000000000bEEF);\n"
+        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol",
+            "address constant DEPLOYED_ADDRESS_1 =\n    // address(0x000000000000000000000000000000000000bEEF);\n"
+        );
+    }
+
+    /// A declaration followed by a line comment is unreadable rather than read as the comment's last token, in the
+    /// every-network form, the per-network form and the wrapped form.
+    function testDeclarationFollowedByALineCommentIsUnreadable() external {
+        string memory value =
+            "address(0x0000000000000000000000000000000000000001); // address(0x0000000000000000000000000000000000000002);\n";
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", string.concat("address constant DEPLOYED_ADDRESS = ", value)
+        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", string.concat("address constant DEPLOYED_ADDRESS_1 = ", value)
+        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", string.concat("address constant DEPLOYED_ADDRESS_1 =\n    ", value)
+        );
+    }
+
+    /// A record holding a carriage return, vertical tab or form feed, each a line break to the compiler but not to
+    /// the reader, is unreadable wherever the byte sits.
+    function testRecordHoldingAnotherLineBreakIsUnreadable() external {
+        string[] memory breaks = new string[](3);
+        breaks[0] = "\r";
+        breaks[1] = "\x0b";
+        breaks[2] = "\x0c";
+        for (uint256 i = 0; i < breaks.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol",
+                string.concat(
+                    "// note",
+                    breaks[i],
+                    "address constant DEPLOYED_ADDRESS = address(0x000000000000000000000000000000000000bEEF);\n"
+                )
+            );
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol",
+                string.concat(
+                    "address constant DEPLOYED_ADDRESS = address(0x000000000000000000000000000000000000bEEF);",
+                    breaks[i],
+                    "\n"
+                )
+            );
+        }
+    }
+
     /// A declaration whose value is not an address makes the record unreadable, typed and naming
     /// the file, in both the every-network and the per-network form.
     function testDeclarationWithAMalformedAddressIsUnreadable() external {

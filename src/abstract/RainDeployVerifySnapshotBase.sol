@@ -242,7 +242,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     {
         string memory literal = lines[line];
         if (vm.indexOf(literal, "hex\"") == type(uint256).max) {
-            if (line + 1 >= lines.length) {
+            if (line + 1 >= lines.length || vm.indexOf(lines[line + 1], "    hex\"") != 0) {
                 revert FrozenCodeRecordUnreadable(path);
             }
             literal = lines[line + 1];
@@ -259,7 +259,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
     function checkFrozenCodeRecord(string memory path, string memory record) internal pure {
-        string[] memory lines = vm.split(LibRainDeploySnapshot.withoutBlockComments(record), "\n");
+        string[] memory lines = LibRainDeploySnapshot.recordLines(vm, path, record);
         for (uint256 i = 0; i < lines.length; i++) {
             if (
                 vm.indexOf(lines[i], LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION) == 0

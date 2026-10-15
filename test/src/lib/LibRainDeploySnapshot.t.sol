@@ -3676,6 +3676,14 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(LibRainDeploySnapshot.withoutBlockComments("a'/*'b/**/c"), "a'/*'bc");
         assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"\\\"/*\"b/**/c"), "a\"\\\"/*\"bc");
         assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"/**/\"'/**/'"), "a\"/**/\"'/**/'");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/b/* c */d"), "a/bd");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("x = 1 / 2; /*\nz\n*/y"), "x = 1 / 2; \n\ny");
+    }
+
+    /// A `//` comment runs to the next `\n` and no other byte, so what follows a carriage return in one is still
+    /// comment to the scanner.
+    function testWithoutBlockCommentsLineCommentEndsAtNewlineOnly() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("// c\rx/* y */z\n/* w */"), "// c\rx/* y */z\n");
     }
 
     /// A text ending mid-token is read to its last byte without reading past it.

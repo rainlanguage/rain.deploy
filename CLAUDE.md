@@ -33,9 +33,10 @@ relocated.
   prefix filter would silently exempt a deployable file added there later.
 - **A `vm.createFork` or `vm.createSelectFork` failure is not a missing
   deployment.** It is an unreachable or rate-limited endpoint. Any refusal
-  raised after a network forked (`NotDeployedOnNetwork`,
-  `CodeHashMismatchOnNetwork`, `MissingDependency`, `DependencyChanged`, ...)
-  describes the deployment. The deploy and the chain matrix create every fork
+  raised after a network forked, other than `NetworkChainIdMismatch` (which
+  describes the endpoint bound to the alias), describes the deployment
+  (`NotDeployedOnNetwork`, `CodeHashMismatchOnNetwork`, `MissingDependency`,
+  `DependencyChanged`, ...). The deploy and the chain matrix create every fork
   before selecting any, so such a failure takes the whole run before any network
   is checked rather than stopping partway down the list.
 - **Foundry REFUSES a cheatcode write to the project root's own
