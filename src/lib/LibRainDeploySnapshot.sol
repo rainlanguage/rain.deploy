@@ -1353,7 +1353,7 @@ library LibRainDeploySnapshot {
             if (everyNetwork || (isEveryNetwork && perNetwork != 0)) {
                 revert FrozenSnapshotAmbiguous(path);
             }
-            address declared = declaredAddress(vm, path, declaredValue(vm, path, lines, i));
+            address declared = declarationAddress(vm, path, lines, i);
             if (isEveryNetwork) {
                 everyNetwork = true;
                 addresses[0] = declared;
@@ -1381,17 +1381,17 @@ library LibRainDeploySnapshot {
         return (chainIds, addresses);
     }
 
-    /// The value token of the declaration on `lines[line]`, from the next line when the writer wrapped it there, and
-    /// the last of exactly the writer's five space-separated tokens on whichever line carries it.
+    /// The address the declaration on `lines[line]` names: its value from the next line when the writer wrapped it there,
+    /// and the last of exactly the writer's five space-separated tokens on whichever line carries it.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file, for the error only.
     /// @param lines The record's lines, block comments removed.
     /// @param line The declaration's line.
-    /// @return The value token.
-    function declaredValue(Vm vm, string memory path, string[] memory lines, uint256 line)
+    /// @return The address.
+    function declarationAddress(Vm vm, string memory path, string[] memory lines, uint256 line)
         internal
         pure
-        returns (string memory)
+        returns (address)
     {
         string[] memory tokens = vm.split(lines[line], " ");
         if (keccak256(bytes(tokens[tokens.length - 1])) == keccak256("=")) {
@@ -1403,7 +1403,7 @@ library LibRainDeploySnapshot {
         if (tokens.length != 5) {
             revert FrozenSnapshotUnreadable(path);
         }
-        return tokens[4];
+        return declaredAddress(vm, path, tokens[4]);
     }
 
     /// The address a declaration line's value names.
