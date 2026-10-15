@@ -1353,21 +1353,7 @@ library LibRainDeploySnapshot {
             if (everyNetwork || (isEveryNetwork && perNetwork != 0)) {
                 revert FrozenSnapshotAmbiguous(path);
             }
-            string[] memory tokens = vm.split(lines[i], " ");
-            string memory value = tokens[tokens.length - 1];
-            if (keccak256(bytes(value)) == keccak256("=")) {
-                if (i + 1 >= lines.length || vm.indexOf(lines[i + 1], "    address(") != 0) {
-                    revert FrozenSnapshotUnreadable(path);
-                }
-                string[] memory wrapped = vm.split(lines[i + 1], " ");
-                if (wrapped.length != 5) {
-                    revert FrozenSnapshotUnreadable(path);
-                }
-                value = wrapped[wrapped.length - 1];
-            } else if (tokens.length != 5) {
-                revert FrozenSnapshotUnreadable(path);
-            }
-            address declared = declaredAddress(vm, path, value);
+            address declared = declaredAddress(vm, path, declaredValue(vm, path, lines, i));
             if (isEveryNetwork) {
                 everyNetwork = true;
                 addresses[0] = declared;
@@ -1393,6 +1379,31 @@ library LibRainDeploySnapshot {
             mstore(addresses, addressesLength)
         }
         return (chainIds, addresses);
+    }
+
+    /// The value token of the declaration on `lines[line]`, from the next line when the writer wrapped it there, and
+    /// the last of exactly the writer's five space-separated tokens on whichever line carries it.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file, for the error only.
+    /// @param lines The record's lines, block comments removed.
+    /// @param line The declaration's line.
+    /// @return The value token.
+    function declaredValue(Vm vm, string memory path, string[] memory lines, uint256 line)
+        internal
+        pure
+        returns (string memory)
+    {
+        string[] memory tokens = vm.split(lines[line], " ");
+        if (keccak256(bytes(tokens[tokens.length - 1])) == keccak256("=")) {
+            if (line + 1 >= lines.length || vm.indexOf(lines[line + 1], "    address(") != 0) {
+                revert FrozenSnapshotUnreadable(path);
+            }
+            tokens = vm.split(lines[line + 1], " ");
+        }
+        if (tokens.length != 5) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        return tokens[4];
     }
 
     /// The address a declaration line's value names.

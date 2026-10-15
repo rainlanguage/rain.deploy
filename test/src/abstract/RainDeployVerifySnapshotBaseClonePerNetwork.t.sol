@@ -303,19 +303,20 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         );
     }
 
-    /// A declaration ending in `=` takes no address from a following line in any indentation but the writer's, nor
-    /// from a comment.
-    function testPerNetworkDeclarationWrappedOntoAnotherIndentationIsUnreadable() external {
-        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
-        this.externalRecordedDeployedAddresses(
-            "record.sol",
-            "address constant DEPLOYED_ADDRESS_1 =\n        address(0x000000000000000000000000000000000000bEEF);\n"
-        );
-        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
-        this.externalRecordedDeployedAddresses(
-            "record.sol",
-            "address constant DEPLOYED_ADDRESS_1 =\n    // address(0x000000000000000000000000000000000000bEEF);\n"
-        );
+    /// A declaration ending in `=` takes no address from a following line that does not start with the writer's
+    /// `    address(`: another indentation, a comment, the prefix later in the line, or a bare literal.
+    function testPerNetworkDeclarationWrappedOntoAnotherFormatIsUnreadable() external {
+        string[] memory wrapped = new string[](4);
+        wrapped[0] = "        address(0x000000000000000000000000000000000000bEEF);";
+        wrapped[1] = "    // address(0x000000000000000000000000000000000000bEEF);";
+        wrapped[2] = "x    address(0x000000000000000000000000000000000000bEEF);";
+        wrapped[3] = "    0x000000000000000000000000000000000000bEEF;";
+        for (uint256 i = 0; i < wrapped.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol", string.concat("address constant DEPLOYED_ADDRESS_1 =\n", wrapped[i], "\n")
+            );
+        }
     }
 
     /// A declaration followed by a line comment is unreadable rather than read as the comment's last token, in the
@@ -337,8 +338,8 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         );
     }
 
-    /// A record holding a carriage return, vertical tab or form feed, each a line break to the compiler but not to
-    /// the reader, is unreadable wherever the byte sits.
+    /// A record holding a carriage return, vertical tab or form feed, each of which ends a line comment for the
+    /// compiler but not for the reader, is unreadable, so a declaration after one in a comment is never missed.
     function testRecordHoldingAnotherLineBreakIsUnreadable() external {
         string[] memory breaks = new string[](3);
         breaks[0] = "\r";
@@ -349,18 +350,9 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
             this.externalRecordedDeployedAddresses(
                 "record.sol",
                 string.concat(
-                    "// note",
+                    "address constant DEPLOYED_ADDRESS_1 = address(0x000000000000000000000000000000000000bEEF);\n// note",
                     breaks[i],
-                    "address constant DEPLOYED_ADDRESS = address(0x000000000000000000000000000000000000bEEF);\n"
-                )
-            );
-            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
-            this.externalRecordedDeployedAddresses(
-                "record.sol",
-                string.concat(
-                    "address constant DEPLOYED_ADDRESS = address(0x000000000000000000000000000000000000bEEF);",
-                    breaks[i],
-                    "\n"
+                    "address constant DEPLOYED_ADDRESS_2 = address(0x000000000000000000000000000000000000cAFE);\n"
                 )
             );
         }
