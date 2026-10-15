@@ -160,18 +160,14 @@ Releases follow the normal lifecycle. `BuildScript` regenerates the clone's
 snapshot through `writeSnapshot(DeploySuite)`, which records `MECHANISM_DATA`
 beside the usual constants; `cutRelease()` freezes it under
 `src/generated/<tag>/`; and the generated `Lib<Contract>Released` entry carries
-the mechanism and that `MECHANISM_DATA`. The mechanism DATA comes from the
-record, but the mechanism KIND comes from the CURRENT declaration — the template
-every regeneration reads — not from the declaration the release was cut from. So
-a suite cannot change mechanism in place: a clone template over a record that
-has no `MECHANISM_DATA` does not compile, and a Zoltu template over a clone
-record emits a Zoltu entry that the record group refuses, because its Zoltu
-address is not the clone address the record holds. A mechanism change is a new
-suite. From there the frozen clone is checked like any frozen suite: the record
-group holds it to its released entry at the CLONE address, the chain group
-requires its code at that address, and its declared factory and implementation
-with their declared code, on every supported network, and it is selectable by
-key for broadcast.
+the mechanism and that `MECHANISM_DATA`. Both the mechanism kind and its data
+come from each frozen record: no `MECHANISM_DATA` is Zoltu; with it,
+`DEPLOYED_ADDRESS` is Clone and `DEPLOYED_ADDRESS_<chainId>` is ClonePerNetwork.
+So a suite can change mechanism between releases. From there the frozen clone is
+checked like any frozen suite: the record group holds it to its released entry
+at the CLONE address, the chain group requires its code at that address, and its
+declared factory and implementation with their declared code, on every supported
+network, and it is selectable by key for broadcast.
 
 A clone is **unanchorable** — no compiler produces a proxy assembled from an
 address — so the candidate carries `unanchorableReason` and a constant
@@ -997,21 +993,24 @@ Via [soldeer](https://soldeer.xyz):
 forge soldeer install rain-deploy~<version>
 ```
 
-**You also need `forge-std` 1.17.0 and `rain-sol-codegen` 0.1.39**, remapped as
-`forge-std-1.17.0/` and `rain-sol-codegen-0.1.39/`. The published package ships
-`src/`, `script/` and the licence and README files — no `test/`, no
-`foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no `dependencies/` — so
-a consumer resolves both itself. The requirement is transitive rather than
-incidental: the deployed contract imports nothing outside this package, but
-every abstract a consumer inherits pulls them in — `Script` via
-`RainDeployBroadcast`, `Test` via `RainDeployVerifyBase`, `Vm` via
-`LibRainDeploy` beneath both, and `LibCodeGen`/`LibFs` via
-`LibRainDeploySnapshot`, which `RainDeployVerifySnapshot` imports:
+**You also need `forge-std` 1.17.0, `rain-sol-codegen` 0.1.39 and `rain-factory`
+0.1.30**, remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
+`rain-factory-0.1.30/`. The published package ships `src/`, `script/` and the
+licence and README files — no `test/`, no `foundry.toml`, no `remappings.txt`,
+no `soldeer.lock`, no `dependencies/` — so a consumer resolves all three itself.
+The requirement is transitive rather than incidental: the deployed contract
+imports nothing outside this package, but every abstract a consumer inherits
+pulls them in — `Script` via `RainDeployBroadcast`, `Test` via
+`RainDeployVerifyBase`, `Vm` via `LibRainDeploy` beneath both,
+`ICloneableFactoryV4` via `LibRainDeployMechanism` beneath both, and
+`LibCodeGen`/`LibFs` via `LibRainDeploySnapshot`, which
+`RainDeployVerifySnapshot` imports:
 
 ```toml
 [dependencies]
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
+rain-factory = "0.1.30"
 rain-deploy = "<version>"
 ```
 
@@ -1092,6 +1091,70 @@ catalogue's own facts. Whether a network HAS an Etherscan deployment is one of
 them rather than anything about the repo — Robinhood (4663) is not indexed by
 Etherscan v2, so its entry carries its Blockscout url and the deployment is
 verified through Sourcify.
+
+### Upgrading from 0.1.18
+
+`DeploySuite` gains `mechanism` and `mechanismData`, so a consumer's generated
+`Lib<Contract>Released` stops compiling before its `BuildScript` can regenerate
+it. In order:
+
+1. Add `mechanism: DeployMechanism.Zoltu, mechanismData: ""` to every entry of
+   the generated released libs, and import `DeployMechanism` beside
+   `DeploySuite`.
+2. Add `rain-factory` 0.1.30 and its remapping, as above.
+3. Make `view` every function of yours that calls `checkedCandidateSuites`,
+   `allSuites`, `suiteNames`, `suiteByName` or `candidateSuites`, which are
+   `view` now. A `pure` override of `candidateSuites` still compiles.
+4. Update the moved errors. `NetworkChainIdMismatch`, `NotDeployedOnNetwork` and
+   `CodeHashMismatchOnNetwork` are members of `LibRainDeploy`: refer to them as
+   `LibRainDeploy.NotDeployedOnNetwork.selector` and so on, and drop their
+   imports. `NotDeployedOnNetwork` and `CodeHashMismatchOnNetwork` no longer
+   carry the suite. Import `ZoltuDerivationMismatch` from
+   `LibRainDeployMechanism`, and `FrozenSnapshotUnreadable` and
+   `FrozenSnapshotAmbiguous` from `LibRainDeploySnapshot`.
+   `FrozenSnapshotsOutnumberReleases` carries an `address[]`. A code hash
+   mismatch in `deployToNetworks` reverts `CodeHashMismatchOnNetwork`, or
+   `NotDeployedOnNetwork` when the address holds no code, where it reverted
+   `UnexpectedDeployedCodeHash`.
+5. Replace the removed or re-signed internal functions and members:
+   - `DerivedDeploy.deployedAddress` is `address[] deployedAddresses`, one per
+     address the suite's mechanism deploys to, in the suite's address order.
+   - `RainDeployVerifySnapshotBase.DEPLOYED_ADDRESS_DECLARATION` is
+     `LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION`.
+   - `RainDeployVerifyChain.checkDeployedOnNetwork(string, DerivedDeploy)` is
+     removed: call `LibRainDeploy.checkDeclaredDependencies` and
+     `LibRainDeploy.checkDeployedCode` on the selected fork, or run the whole
+     matrix with `checkDeployedOnNetworks(SupportedNetwork[], DeploySuite[])`.
+   - `RainDeployVerifyChain.checkDeployedOnSupportedNetworks` takes
+     `DeploySuite[]`, not `DerivedDeploy[]`.
+   - `RainDeployVerifyChain.checkNetworkChainId(string, uint256, uint256)` is
+     `LibRainDeploy.checkNetworkChainId(SupportedNetwork)`, which reads the
+     selected fork's chain id.
+   - `RainDeployVerifySnapshotBase.recordedDeployedAddress(string, string)` is
+     `LibRainDeploySnapshot.recordedDeployedAddresses(Vm, string, string)`,
+     returning the chain id and address of every declaration.
+   - `RainDeployVerifySnapshotBase.withoutBlockComments` is
+     `LibRainDeploySnapshot.withoutBlockComments`.
+   - `LibRainDeploy.checkDeployRequirements` is
+     `LibRainDeploy.checkDeclaredDependencies`, with the same parameters.
+   - `LibTimelockController.timelockInitCode` and `expectedTimelockAddress` take
+     the timelock's `bytes creationCode` first, and `assertTimelockState` its
+     `bytes32 bytecodeHash` first. `LibTimelockControllerDeploy.deployTimelock`
+     takes both after `deployer`.
+   - `LibRainDeploySnapshot.releasedImport`, `releasedImportBlock` and
+     `releasedLibraryBlock` are `view`.
+6. Regenerate: `forge script ./script/Build.sol` followed by
+   `./script/build.sh`.
+
+`LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,
+`RainDeployBroadcast.broadcastSuite` and the chain matrix
+(`RainDeployVerifyChain.checkDeployedOnNetworks`) take catalogue aliases only
+(`NetworkNotInCatalogue`), refuse a fork reporting another chain id
+(`NetworkChainIdMismatch`), and check the declared dependencies on every
+network, including one the suite is already deployed on.
+`LibRainDeploy.createForks`, `checkResolvedAddressesOnNetworks` and
+`checkResolvedAddressesOnForks` take raw `[rpc_endpoints]` aliases, with no
+catalogue lookup and no chain id check.
 
 ## Develop
 

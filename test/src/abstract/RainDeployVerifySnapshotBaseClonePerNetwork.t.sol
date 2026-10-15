@@ -260,13 +260,102 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         }
     }
 
-    /// The largest chain id a `uint256` holds reads as itself.
+    /// The largest chain id a `uint256` holds, in the declaration the writer emits for it, reads as itself.
     function testPerNetworkDeclarationWithTheLargestChainIdReads() external view {
+        DeploySuite memory suite = releasedSuites()[0];
+        CloneNetworks memory clones = abi.decode(suite.mechanismData, (CloneNetworks));
+        uint256 secondChainId = clones.networks[1].chainId;
+        clones.networks[0].chainId = type(uint256).max;
+        suite.mechanismData = abi.encode(clones);
+        address[] memory deployed = new address[](clones.networks.length);
+        deployed[0] = address(0xcafe);
+        deployed[1] = address(0xbeef);
+        (string memory constants,) = LibRainDeploySnapshot.perNetworkAddressConstants(vm, deployed, suite);
+        assertTrue(vm.contains(constants, " =\n    address("));
+
         (uint256[] memory chainIds, address[] memory addresses) =
-            this.externalRecordedDeployedAddresses("record.sol", suffixedLine(vm.toString(type(uint256).max)));
-        assertEq(chainIds.length, 1);
+            this.externalRecordedDeployedAddresses("record.sol", constants);
+        assertEq(chainIds.length, 2);
         assertEq(chainIds[0], type(uint256).max);
         assertEq(addresses[0], address(0xcafe));
+        assertEq(chainIds[1], secondChainId);
+        assertEq(addresses[1], address(0xbeef));
+    }
+
+    /// A declaration wrapped after `=` with nothing after it is unreadable, typed and naming the record.
+    function testPerNetworkDeclarationWrappedAtTheEndOfTheRecordIsUnreadable() external {
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses("record.sol", "address constant DEPLOYED_ADDRESS_1 =");
+    }
+
+    /// A wrapped declaration whose next line is not an address is unreadable.
+    function testPerNetworkDeclarationWrappedOntoANonAddressIsUnreadable() external {
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses("record.sol", "address constant DEPLOYED_ADDRESS_1 =\n    hex\"00\";\n");
+    }
+
+    /// A declaration ending in `=` takes no address from a following line the writer did not wrap onto, even another declaration's.
+    function testPerNetworkDeclarationWrappedOntoAnotherDeclarationIsUnreadable() external {
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol",
+            "address constant DEPLOYED_ADDRESS_1 =\naddress constant OTHER = address(0x000000000000000000000000000000000000bEEF);\n"
+        );
+    }
+
+    /// A declaration ending in `=` takes no address from a following line that does not start with the writer's
+    /// `    address(`: another indentation, a comment, the prefix later in the line, or a bare literal.
+    function testPerNetworkDeclarationWrappedOntoAnotherFormatIsUnreadable() external {
+        string[] memory wrapped = new string[](4);
+        wrapped[0] = "        address(0x000000000000000000000000000000000000bEEF);";
+        wrapped[1] = "    // address(0x000000000000000000000000000000000000bEEF);";
+        wrapped[2] = "x    address(0x000000000000000000000000000000000000bEEF);";
+        wrapped[3] = "    0x000000000000000000000000000000000000bEEF;";
+        for (uint256 i = 0; i < wrapped.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol", string.concat("address constant DEPLOYED_ADDRESS_1 =\n", wrapped[i], "\n")
+            );
+        }
+    }
+
+    /// A declaration followed by a line comment is unreadable rather than read as the comment's last token, in the
+    /// every-network form, the per-network form and the wrapped form.
+    function testDeclarationFollowedByALineCommentIsUnreadable() external {
+        string memory value =
+            "address(0x0000000000000000000000000000000000000001); // address(0x0000000000000000000000000000000000000002);\n";
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", string.concat("address constant DEPLOYED_ADDRESS = ", value)
+        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", string.concat("address constant DEPLOYED_ADDRESS_1 = ", value)
+        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", string.concat("address constant DEPLOYED_ADDRESS_1 =\n    ", value)
+        );
+    }
+
+    /// A record holding a carriage return, vertical tab or form feed, each of which ends a line comment for the
+    /// compiler but not for the reader, is unreadable, so a declaration after one in a comment is never missed.
+    function testRecordHoldingAnotherLineBreakIsUnreadable() external {
+        string[] memory breaks = new string[](3);
+        breaks[0] = "\r";
+        breaks[1] = "\x0b";
+        breaks[2] = "\x0c";
+        for (uint256 i = 0; i < breaks.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol",
+                string.concat(
+                    "address constant DEPLOYED_ADDRESS_1 = address(0x000000000000000000000000000000000000bEEF);\n// note",
+                    breaks[i],
+                    "address constant DEPLOYED_ADDRESS_2 = address(0x000000000000000000000000000000000000cAFE);\n"
+                )
+            );
+        }
     }
 
     /// A declaration whose value is not an address makes the record unreadable, typed and naming

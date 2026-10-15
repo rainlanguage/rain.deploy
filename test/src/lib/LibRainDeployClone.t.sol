@@ -209,7 +209,7 @@ contract LibRainDeployCloneTest is Test {
         assertTrue(qualified, "CLONE_ARTIFACT_PATH must be `<path>.sol:<Name>`");
 
         try vm.getCode(CLONE_ARTIFACT_PATH) returns (bytes memory) {
-            revert("CLONE_ARTIFACT_PATH must resolve to no artifact");
+            assertTrue(false, "CLONE_ARTIFACT_PATH must resolve to no artifact");
         } catch {}
     }
 

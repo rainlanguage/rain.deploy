@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
 import {DeployCandidate, DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
@@ -24,6 +25,7 @@ import {
     UnexpectedStoredDeployedAddress
 } from "../../../src/lib/LibRainDeployMechanism.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
+import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {
     exampleCloneDependencies,
     exampleCloneFactory,
@@ -166,6 +168,20 @@ contract LibRainDeployMechanismTest is Test {
         return LibRainDeployMechanism.deployLocally(vm, suite)[0];
     }
 
+    /// @param suite The suite whose step data is wanted.
+    /// @return The suite's step data on Arbitrum One.
+    function externalDeployStepData(DeploySuite memory suite) external pure returns (bytes memory) {
+        return LibRainDeployMechanism.deployStepData(suite, 42161);
+    }
+
+    /// @param suite The suite whose step is run.
+    /// @return The address the suite's step reports, on a local fork.
+    function externalDeployStep(DeploySuite memory suite) external returns (address) {
+        return LibRainDeployMechanism.deployStep(
+            suite
+        )(Vm(address(new LocalForkVm())), LibRainDeploy.ARBITRUM_ONE, address(this), this.externalDeployStepData(suite));
+    }
+
     /// @param networks The networks to broadcast to.
     /// @param suite The suite to broadcast.
     /// @return The fork each network was deployed on.
@@ -251,6 +267,35 @@ contract LibRainDeployMechanismTest is Test {
         this.externalDeployLocally(suite);
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
         this.externalDeployAndBroadcast(networks, suite);
+        vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
+        this.externalDeployStepData(suite);
+    }
+
+    /// Each mechanism's step deploys its suite to the suite's derived address.
+    function testDeployStepDeploysEachMechanismToItsDerivedAddress() external {
+        DeploySuite memory zoltu = DeploySuite({
+            suite: "zoltu",
+            creationCode: type(MockDeployable).creationCode,
+            storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
+            storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
+            storedRuntimeCode: type(MockDeployable).runtimeCode,
+            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
+            dependencies: new DeployDependency[](0),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: ""
+        });
+        LibRainDeploy.etchZoltuFactory(vm);
+        address deployed = this.externalDeployStep(zoltu);
+        assertEq(deployed, zoltu.storedDeployedAddress);
+        assertEq(deployed.code, zoltu.storedRuntimeCode);
+
+        DeploySuite memory clone = exampleCloneSuite();
+        for (uint256 i = 0; i < clone.dependencies.length; i++) {
+            vm.etch(clone.dependencies[i].deployedAddress, clone.dependencies[i].runtimeCode);
+        }
+        deployed = this.externalDeployStep(clone);
+        assertEq(deployed, clone.storedDeployedAddress);
+        assertEq(deployed.code, clone.storedRuntimeCode);
     }
 
     /// A factory whose clone lands somewhere other than the address the formula derives is refused,
@@ -528,14 +573,14 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(MockCloneable(deployed[1]).sInitData(), abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN));
     }
 
-    /// Networks sharing init data share an address, and that clone is deployed once.
+    /// Networks sharing init data share an address, and that clone is deployed once without skipping a later network's own clone.
     function testPerNetworkSuiteSharingDataDeploysTheSharedCloneOnce() external {
         CloneDeploy memory clone = perNetworkClone("per-network", TEST_SALT);
         clone.initData = sharingInitData;
         uint256[] memory chainIds = new uint256[](3);
         chainIds[0] = 42161;
-        chainIds[1] = 137;
-        chainIds[2] = 8453;
+        chainIds[1] = 8453;
+        chainIds[2] = 137;
         bytes memory shared = sharingInitData(42161);
         bytes memory other = sharingInitData(137);
         DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(clone, chainIds).snapshot;
@@ -543,10 +588,12 @@ contract LibRainDeployMechanismTest is Test {
         address[] memory deployed = this.externalDeployLocallyEvery(suite);
         assertEq(deployed.length, 3);
         assertEq(deployed[0], exampleCloneAddress(shared));
-        assertEq(deployed[1], exampleCloneAddress(other));
-        assertEq(deployed[2], deployed[0]);
+        assertEq(deployed[1], deployed[0]);
+        assertEq(deployed[2], exampleCloneAddress(other));
+        assertEq(deployed[0].code, suite.storedRuntimeCode);
+        assertEq(deployed[2].code, suite.storedRuntimeCode);
         assertEq(MockCloneable(deployed[0]).sInitData(), shared);
-        assertEq(MockCloneable(deployed[1]).sInitData(), other);
+        assertEq(MockCloneable(deployed[2]).sInitData(), other);
     }
 
     /// A per-network candidate has exactly one entry per given chain id, in the given order, with

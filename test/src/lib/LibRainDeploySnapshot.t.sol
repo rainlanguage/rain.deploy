@@ -3664,4 +3664,46 @@ contract LibRainDeploySnapshotTest is Test {
         assertTrue(vm.contains(emitted, EXPECTED_PER_NETWORK_ENTRY));
         assertFalse(vm.contains(emitted, "DEPLOYED_ADDRESS"));
     }
+
+    /// A block comment ends at its first `*/`, unterminated it runs to the end, and `/*` inside a line comment or a string opens none.
+    function testWithoutBlockCommentsReadsAsTheCompilerDoes() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/* b /* c */d"), "ad");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("left/* comment */middle*/right"), "leftmiddle*/right");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/*/b*/c"), "ac");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/* b"), "a");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a// /* b\nc/* d */e"), "a// /* b\nce");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"/*\"b/* c */d"), "a\"/*\"bd");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a'/*'b/**/c"), "a'/*'bc");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"\\\"/*\"b/**/c"), "a\"\\\"/*\"bc");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"/**/\"'/**/'"), "a\"/**/\"'/**/'");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/b/* c */d"), "a/bd");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("x = 1 / 2; /*\nz\n*/y"), "x = 1 / 2; \n\ny");
+    }
+
+    /// A `//` comment runs to the next `\n` and no other byte, so what follows a carriage return in one is still
+    /// comment to the scanner.
+    function testWithoutBlockCommentsLineCommentEndsAtNewlineOnly() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("// c\rx/* y */z\n/* w */"), "// c\rx/* y */z\n");
+    }
+
+    /// A text ending mid-token is read to its last byte without reading past it.
+    function testWithoutBlockCommentsStopsAtTheLastByte() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/"), "a/");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/* b*"), "a");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"\\"), "a\"\\");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("/"), "/");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("/*"), "");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments(""), "");
+    }
+
+    /// A line comment ends at its newline even after a backslash, so a block comment on the next line is still removed.
+    function testWithoutBlockCommentsLineCommentHasNoEscape() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a// x\\\nb/* c */d"), "a// x\\\nbd");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("// \\\n/*\nz\n*/y"), "// \\\n\n\ny");
+    }
+
+    /// A block comment keeps its line breaks, so what follows a multi-line comment starts a line as the compiler reads it.
+    function testWithoutBlockCommentsKeepsLineBreaks() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a; /* c\n*/b"), "a; \nb");
+    }
 }

@@ -1340,7 +1340,7 @@ library LibRainDeploySnapshot {
         pure
         returns (uint256[] memory, address[] memory)
     {
-        string[] memory lines = vm.split(withoutBlockComments(vm, record), "\n");
+        string[] memory lines = recordLines(vm, path, record);
         uint256[] memory chainIds = new uint256[](lines.length);
         address[] memory addresses = new address[](lines.length);
         uint256 perNetwork = 0;
@@ -1353,8 +1353,7 @@ library LibRainDeploySnapshot {
             if (everyNetwork || (isEveryNetwork && perNetwork != 0)) {
                 revert FrozenSnapshotAmbiguous(path);
             }
-            string[] memory tokens = vm.split(lines[i], " ");
-            address declared = declaredAddress(vm, path, tokens[tokens.length - 1]);
+            address declared = declarationAddress(vm, path, lines, i);
             if (isEveryNetwork) {
                 everyNetwork = true;
                 addresses[0] = declared;
@@ -1382,10 +1381,35 @@ library LibRainDeploySnapshot {
         return (chainIds, addresses);
     }
 
+    /// The address the declaration on `lines[line]` names: its value from the next line when the writer wrapped it there,
+    /// and the last of exactly the writer's five space-separated tokens on whichever line carries it.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file, for the error only.
+    /// @param lines The record's lines, block comments removed.
+    /// @param line The declaration's line.
+    /// @return The address.
+    function declarationAddress(Vm vm, string memory path, string[] memory lines, uint256 line)
+        internal
+        pure
+        returns (address)
+    {
+        string[] memory tokens = vm.split(lines[line], " ");
+        if (keccak256(bytes(tokens[tokens.length - 1])) == keccak256("=")) {
+            if (line + 1 >= lines.length || vm.indexOf(lines[line + 1], "    address(") != 0) {
+                revert FrozenSnapshotUnreadable(path);
+            }
+            tokens = vm.split(lines[line + 1], " ");
+        }
+        if (tokens.length != 5) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        return declaredAddress(vm, path, tokens[4]);
+    }
+
     /// The address a declaration line's value names.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file, for the error only.
-    /// @param value The declaration line's last token.
+    /// @param value The declaration's last token, from the line after it when the writer wrapped it.
     /// @return The address.
     function declaredAddress(Vm vm, string memory path, string memory value) internal pure returns (address) {
         string memory bare = vm.replace(vm.replace(vm.replace(value, "address(", ""), ")", ""), ";", "");
@@ -1423,25 +1447,71 @@ library LibRainDeploySnapshot {
         return chainId;
     }
 
-    /// A record's text with every block comment removed, so that a declaration found in it is one
-    /// the compiler would read.
+    /// A record's lines, block comments removed, from a record whose only line break is `\n`.
     /// @param vm The Vm instance for string operations.
+    /// @param path The record file, for the error only.
     /// @param record The record file's contents.
-    /// @return The contents with every block comment removed.
-    function withoutBlockComments(Vm vm, string memory record) internal pure returns (string memory) {
-        string[] memory opened = vm.split(record, "/*");
-        string memory stripped = opened[0];
-        for (uint256 i = 1; i < opened.length; i++) {
-            string[] memory closed = vm.split(opened[i], "*/");
-            if (closed.length == 1) {
-                break;
-            }
-            stripped = string.concat(stripped, closed[1]);
-            for (uint256 j = 2; j < closed.length; j++) {
-                stripped = string.concat(stripped, "*/", closed[j]);
+    /// @return The lines.
+    function recordLines(Vm vm, string memory path, string memory record) internal pure returns (string[] memory) {
+        if (vm.contains(record, "\r") || vm.contains(record, "\x0b") || vm.contains(record, "\x0c")) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        return vm.split(withoutBlockComments(record), "\n");
+    }
+
+    /// A record's text with every block comment removed but its line breaks, read left to right: the first `*/` closes
+    /// a block comment, a `//` comment runs to the next `\n`, and a quoted string runs to its unescaped closing quote.
+    /// @param record The record file's contents.
+    /// @return The contents with every block comment removed but its line breaks.
+    function withoutBlockComments(string memory record) internal pure returns (string memory) {
+        bytes memory text = bytes(record);
+        bytes memory stripped = new bytes(text.length);
+        uint256 length = 0;
+        uint256 i = 0;
+        unchecked {
+            while (i < text.length) {
+                bytes1 character = text[i];
+                bool slashNext = character == "/" && i + 1 < text.length;
+                if (slashNext && text[i + 1] == "*") {
+                    i += 2;
+                    while (i < text.length && !(text[i] == "*" && i + 1 < text.length && text[i + 1] == "/")) {
+                        if (text[i] == "\n") {
+                            stripped[length++] = "\n";
+                        }
+                        i++;
+                    }
+                    i += 2;
+                    continue;
+                }
+                bytes1 closing = 0;
+                if (slashNext && text[i + 1] == "/") {
+                    closing = "\n";
+                } else if (character == "\"" || character == "'") {
+                    closing = character;
+                }
+                stripped[length++] = character;
+                i++;
+                if (closing == 0) {
+                    continue;
+                }
+                while (i < text.length) {
+                    character = text[i];
+                    stripped[length++] = character;
+                    i++;
+                    if (character == closing) {
+                        break;
+                    }
+                    if (closing != "\n" && character == "\\" && i < text.length) {
+                        stripped[length++] = text[i];
+                        i++;
+                    }
+                }
             }
         }
-        return stripped;
+        assembly ("memory-safe") {
+            mstore(stripped, length)
+        }
+        return string(stripped);
     }
 
     /// The mechanism a frozen record was cut with, read from the declarations the record carries:
@@ -1451,7 +1521,7 @@ library LibRainDeploySnapshot {
     function recordedMechanism(Vm vm, string memory path) internal view returns (DeployMechanism) {
         string memory record = vm.readFile(path);
         (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, record);
-        string[] memory lines = vm.split(withoutBlockComments(vm, record), "\n");
+        string[] memory lines = recordLines(vm, path, record);
         uint256 mechanismData = 0;
         for (uint256 i = 0; i < lines.length; i++) {
             if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {

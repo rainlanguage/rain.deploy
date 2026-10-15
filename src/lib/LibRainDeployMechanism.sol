@@ -197,6 +197,7 @@ library LibRainDeployMechanism {
     }
 
     /// A per-network clone suite with an entry for every network its candidate has one for.
+    /// Precondition: the suite's implementation reads the candidate's init data as the candidate's implementation does.
     /// @param suite The suite.
     /// @param candidate The candidate whose init data the suite's unrecorded networks take.
     /// @return The suite, with the candidate's networks it lacks.
@@ -262,6 +263,7 @@ library LibRainDeployMechanism {
 
     /// Runs a suite's mechanism on the local EVM and returns where it landed, each address
     /// cross-checked against the formula's.
+    /// Precondition: a clone's `initialize` needs no storage or chain state beyond its declared dependencies' code.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy.
     /// @return Where the mechanism deployed it, in the suite's address order — the derived
@@ -360,7 +362,10 @@ library LibRainDeployMechanism {
             suite.storedBytecodeHash,
             suite.dependencies
         );
-        if (suite.mechanism == DeployMechanism.Zoltu) {
+        if (
+            suite.mechanism == DeployMechanism.Zoltu
+                && keccak256(bytes(suite.artifactPath)) != keccak256(bytes(CLONE_ARTIFACT_PATH))
+        ) {
             LibRainDeploy.logVerifyCommands(vm, networks, deploys.expectedAddresses[0], suite.artifactPath);
         }
         return (deploys.expectedAddresses, forkIds);

@@ -20,6 +20,8 @@ import {
 import {ZoltuDeployOrAdopt} from "../../abstract/ZoltuDeployOrAdopt.sol";
 import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
+import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
 contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
     bytes32 constant TEST_SALT = 0x1122334455667788990011223344556677889900112233445566778899001122;
@@ -99,6 +101,67 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         returns (address[] memory, uint256[] memory)
     {
         return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, suite);
+    }
+
+    function externalDeployAndBroadcastOn(Vm forkVm, string[] memory networks, DeploySuite memory suite)
+        external
+        returns (address[] memory)
+    {
+        (address[] memory deployed,) = LibRainDeployMechanism.deployAndBroadcast(forkVm, networks, 1, suite);
+        return deployed;
+    }
+
+    /// A clone broadcast formats no verify command, even under a compiled artifact's path.
+    function testCloneBroadcastPrintsNoVerifyCommand() external {
+        address factory = LibRainDeploy.etchAndDeployZoltu(vm, type(MockCloneFactory).creationCode);
+        address implementation = LibRainDeploy.etchAndDeployZoltu(vm, type(MockCloneable).creationCode);
+        CloneTarget memory clone = localClone(factory, implementation);
+        address expected = LibRainDeployClone.cloneDeployedAddress(clone);
+        DeploySuite memory suite = cloneSuite(
+            clone, expected, LibRainDeployClone.cloneDeployedCodehash(implementation), exampleCloneDependencies()
+        );
+        suite.artifactPath = "test/concrete/MockCloneable.sol:MockCloneable";
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 0);
+        address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
+        assertEq(deployed.length, 1);
+        assertEq(deployed[0], expected);
+        assertEq(deployed[0].code, LibRainDeployClone.cloneRuntimeCode(implementation));
+    }
+
+    /// A Zoltu broadcast under `CLONE_ARTIFACT_PATH` formats no verify command.
+    function testZoltuBroadcastUnderTheCloneArtifactPathPrintsNoVerifyCommand() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        DeploySuite memory suite = zoltuSuite(LibRainDeploy.zoltuAddress(type(MockCloneable).creationCode));
+        suite.storedBytecodeHash = keccak256(type(MockCloneable).runtimeCode);
+        suite.artifactPath = CLONE_ARTIFACT_PATH;
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 0);
+        address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
+        assertEq(deployed.length, 1);
+        assertEq(deployed[0], suite.storedDeployedAddress);
+        assertEq(deployed[0].code, type(MockCloneable).runtimeCode);
+    }
+
+    /// A Zoltu broadcast under a compiled artifact path formats one verify command per network.
+    function testZoltuBroadcastUnderACompiledArtifactPrintsVerifyCommands() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        DeploySuite memory suite = zoltuSuite(LibRainDeploy.zoltuAddress(type(MockCloneable).creationCode));
+        suite.storedBytecodeHash = keccak256(type(MockCloneable).runtimeCode);
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.POLYGON;
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.expectCall(
+            address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector, suite.storedDeployedAddress), 2
+        );
+        this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
     }
 
     function anyForkExists() internal returns (bool) {

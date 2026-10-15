@@ -41,11 +41,11 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
 
     /// Where `testTheCommittedLibIsWhatTheGeneratorEmits` writes its fresh generation, removed once
     /// read.
-    string constant FRESH_LIB_DIR = "test/fixture-mechanism-change/fresh-lib";
+    string constant FRESH_LIB_DIR = "fixture-lib/recorded-mechanism-libs";
 
     /// Where the refusal tests write the records they read, one directory per test, each removed
     /// once read.
-    string constant REFUSAL_ROOT = "test/generated-recorded-mechanism";
+    string constant REFUSAL_ROOT = "fixture-lib/recorded-mechanism";
 
     string constant RECORD_CONTRACT = "MockCloneable";
 
@@ -269,6 +269,35 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
             "block-commented-second",
             string.concat(everyNetworkLine(address(1)), MECHANISM_DATA_LINE, "/*\n", MECHANISM_DATA_LINE, "*/\n"),
             DeployMechanism.Clone
+        );
+        checkRead(
+            "nested-opener",
+            string.concat(everyNetworkLine(address(1)), "/* a /* b */\n", MECHANISM_DATA_LINE),
+            DeployMechanism.Clone
+        );
+        checkRead(
+            "opener-in-line-comment",
+            string.concat(everyNetworkLine(address(1)), "// /*\n", MECHANISM_DATA_LINE, "// */\n"),
+            DeployMechanism.Clone
+        );
+        checkRead(
+            "line-comment-backslash",
+            string.concat(everyNetworkLine(address(1)), "// \\\n/*\n", MECHANISM_DATA_LINE, "*/\n"),
+            DeployMechanism.Zoltu
+        );
+        checkRead(
+            "lone-slash",
+            string.concat(everyNetworkLine(address(1)), "// a / b\n/ /*\n", MECHANISM_DATA_LINE, "*/\n"),
+            DeployMechanism.Zoltu
+        );
+    }
+
+    /// A record holding a carriage return is refused before any mechanism is read from it.
+    function testRecordHoldingAnotherLineBreakIsUnreadable() external {
+        checkRefused(
+            "carriage-return",
+            string.concat(everyNetworkLine(address(1)), "// note\r", MECHANISM_DATA_LINE),
+            FrozenSnapshotUnreadable.selector
         );
     }
 
