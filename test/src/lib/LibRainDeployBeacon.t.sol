@@ -21,6 +21,8 @@ import {
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 
+/// @title LibRainDeployBeaconTest
+/// @notice `LibRainDeployBeacon`'s expected state from the migration registry, and its check of a beacon against it.
 contract LibRainDeployBeaconTest is Test {
     string constant NETWORK = "test-network";
     address constant WRITER = address(0x5AFE);
