@@ -478,7 +478,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
 
     function testBeaconOnAnEarlierCheckedNetworkResolves() external {
         declare(42161, declared("beacon-implementation@0_0_1", OWNER));
-        this.externalResolveBeacons(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
+        assertEq(this.externalResolvedCount(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE)), 1);
     }
 
     function testEachReleasedSuiteBeaconsNameIsDerivedOnce() external {
@@ -659,5 +659,12 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
             )
         );
         this.externalCheckDeployedOnNetworks(arbitrum());
+    }
+
+    function testNarrowedCheckWithNoBeaconOnItsNetworksForksNothing() external {
+        declare(8453, declared("beacon-implementation@0_0_1", OWNER));
+        this.externalCheckDeployedOnNetworks(arbitrum());
+        (bool active,) = address(vm).call(abi.encodeWithSignature("activeFork()"));
+        assertFalse(active, "forked a network with no beacon and no suite to check");
     }
 }

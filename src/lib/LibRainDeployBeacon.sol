@@ -4,6 +4,7 @@ pragma solidity ^0.8.25;
 
 import {IBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/IBeacon.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
+import {Ownable2Step} from "@openzeppelin-contracts-5.7.0/access/Ownable2Step.sol";
 import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../interface/IMigrationRegistryV2.sol";
 import {LibMigrationRegistry} from "./LibMigrationRegistry.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
@@ -29,7 +30,7 @@ struct BeaconTransition {
 /// @param beacon The address of a beacon this repo did not deploy, zero when named by `beaconSuite`.
 /// @param beaconCodeHash The runtime code hash of a beacon this repo did not deploy, zero when named by `beaconSuite`.
 /// @param initial The state before any transition's migration is applied.
-/// @param transitions The states, each migration recorded applied after the earlier-declared applied ones.
+/// @param transitions The states, each a distinct migration recorded applied after the earlier-declared applied ones.
 struct DeployBeacon {
     string beaconSuite;
     address beacon;
@@ -55,11 +56,30 @@ library LibRainDeployBeacon {
     /// @param transition The index in `transitions` of the one the registry does not record after it.
     error BeaconTransitionsOutOfOrder(string network, address beacon, uint256 transition);
 
+    /// @notice Each transition MUST name a distinct migration.
+    /// @param network The beacon's network.
+    /// @param beacon The beacon.
+    /// @param transition The index in `transitions` of the one naming an earlier-declared one's migration.
+    error BeaconTransitionMigrationRepeated(string network, address beacon, uint256 transition);
+
+    /// @notice A beacon that answers `pendingOwner()` MUST answer zero.
+    /// @param network The beacon's network.
+    /// @param beacon The beacon.
+    /// @param pendingOwner The word `pendingOwner()` answered.
+    error BeaconPendingOwner(string network, address beacon, uint256 pendingOwner);
+
     /// Zero for `initial`, else one past the latest transition the selected fork's registry reports applied.
     /// @param network The network's name, for the refusal.
     /// @param beacon The beacon.
     /// @return The state index, as `stateAt` takes it.
     function appliedState(string memory network, DeployBeacon memory beacon) internal view returns (uint256) {
+        bytes32[] memory migrations = new bytes32[](beacon.transitions.length);
+        for (uint256 i = 0; i < migrations.length; i++) {
+            migrations[i] = keccak256(abi.encode(beacon.transitions[i].migration));
+            if (isAmong(migrations, i, migrations[i])) {
+                revert BeaconTransitionMigrationRepeated(network, beacon.beacon, i);
+            }
+        }
         uint256 state = 0;
         for (uint256 i = 0; i < beacon.transitions.length; i++) {
             Prerequisite memory migration = beacon.transitions[i].migration;
@@ -81,31 +101,43 @@ library LibRainDeployBeacon {
     function recordedBefore(Prerequisite memory earlier, Prerequisite memory later) internal view returns (bool) {
         bytes32 target = keccak256(abi.encode(earlier));
         Prerequisite[] memory reached = new Prerequisite[](1);
+        bytes32[] memory keys = new bytes32[](1);
         reached[0] = later;
-        for (uint256 next = 0; next < reached.length; next++) {
+        keys[0] = keccak256(abi.encode(later));
+        uint256 count = 1;
+        for (uint256 next = 0; next < count; next++) {
             Prerequisite[] memory entries = LibMigrationRegistry.appliedAfter(
                 reached[next].writer, reached[next].namespace, reached[next].migration
             );
             for (uint256 i = 0; i < entries.length; i++) {
-                if (entries[i].migration == MIGRATION_HEAD_GENESIS || isReached(reached, entries[i])) {
+                if (entries[i].migration == MIGRATION_HEAD_GENESIS) {
                     continue;
                 }
-                if (keccak256(abi.encode(entries[i])) == target) {
+                bytes32 key = keccak256(abi.encode(entries[i]));
+                if (key == target) {
                     return true;
                 }
-                reached = appended(reached, entries[i]);
+                if (isAmong(keys, count, key)) {
+                    continue;
+                }
+                if (count == keys.length) {
+                    (reached, keys) = doubled(reached, keys);
+                }
+                reached[count] = entries[i];
+                keys[count] = key;
+                count++;
             }
         }
         return false;
     }
 
-    /// @param reached The records reached so far.
-    /// @param entry A record.
-    /// @return True when `entry` is in `reached`.
-    function isReached(Prerequisite[] memory reached, Prerequisite memory entry) private pure returns (bool) {
-        bytes32 key = keccak256(abi.encode(entry));
-        for (uint256 i = 0; i < reached.length; i++) {
-            if (keccak256(abi.encode(reached[i])) == key) {
+    /// @param keys The keys.
+    /// @param count How many of `keys`, from the first, to search.
+    /// @param key A key.
+    /// @return True when `key` is among the first `count` of `keys`.
+    function isAmong(bytes32[] memory keys, uint256 count, bytes32 key) private pure returns (bool) {
+        for (uint256 i = 0; i < count; i++) {
+            if (keys[i] == key) {
                 return true;
             }
         }
@@ -113,19 +145,21 @@ library LibRainDeployBeacon {
     }
 
     /// @param reached The records reached so far.
-    /// @param entry A record not in `reached`.
-    /// @return `reached` followed by `entry`.
-    function appended(Prerequisite[] memory reached, Prerequisite memory entry)
+    /// @param keys Each of `reached`'s key.
+    /// @return `reached` at twice its length.
+    /// @return `keys` at twice its length.
+    function doubled(Prerequisite[] memory reached, bytes32[] memory keys)
         private
         pure
-        returns (Prerequisite[] memory)
+        returns (Prerequisite[] memory, bytes32[] memory)
     {
-        Prerequisite[] memory grown = new Prerequisite[](reached.length + 1);
-        for (uint256 i = 0; i < reached.length; i++) {
-            grown[i] = reached[i];
+        Prerequisite[] memory longerReached = new Prerequisite[](reached.length * 2);
+        bytes32[] memory longerKeys = new bytes32[](keys.length * 2);
+        for (uint256 i = 0; i < keys.length; i++) {
+            longerReached[i] = reached[i];
+            longerKeys[i] = keys[i];
         }
-        grown[reached.length] = entry;
-        return grown;
+        return (longerReached, longerKeys);
     }
 
     /// @param beacon The beacon.
@@ -135,11 +169,11 @@ library LibRainDeployBeacon {
         return state == 0 ? beacon.initial : beacon.transitions[state - 1].state;
     }
 
-    /// The selected fork MUST hold `beacon` at its declared code, `implementation` and `owner`.
+    /// The selected fork MUST hold `beacon` at its declared code, `implementation` and `owner`, and no pending owner.
     /// @param network The network's name, for the refusal.
     /// @param beacon The beacon.
     /// @param implementation The address `implementation()` MUST return.
-    /// @param owner The address `owner()` MUST return; no other authority, such as a pending owner or a role, is read.
+    /// @param owner The address `owner()` MUST return; roles and any other authority are not read.
     function checkBeacon(string memory network, DeployBeacon memory beacon, address implementation, address owner)
         internal
         view
@@ -152,5 +186,13 @@ library LibRainDeployBeacon {
         expected[0] = implementation;
         expected[1] = owner;
         LibRainDeploy.checkResolvedAddresses(network, beacon.beacon, reads, expected);
+        // slither-disable-next-line low-level-calls
+        (bool success, bytes memory pending) = beacon.beacon.staticcall(abi.encodeCall(Ownable2Step.pendingOwner, ()));
+        if (success && pending.length == 0x20) {
+            uint256 pendingOwner = abi.decode(pending, (uint256));
+            if (pendingOwner != 0) {
+                revert BeaconPendingOwner(network, beacon.beacon, pendingOwner);
+            }
+        }
     }
 }

@@ -20,6 +20,7 @@ import {
 } from "../../../src/interface/IMigrationRegistryV2.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
+import {MockOwnable2StepBeacon} from "../../concrete/MockOwnable2StepBeacon.sol";
 
 contract LibRainDeployBeaconTest is Test {
     string constant NETWORK = "test-network";
@@ -375,5 +376,88 @@ contract LibRainDeployBeaconTest is Test {
             abi.encodeWithSelector(LibRainDeploy.ResolvedAddressReadFailed.selector, NETWORK, sImplementation, 0, "")
         );
         this.externalCheckBeacon(beacon, sImplementation, sOwner);
+    }
+
+    function testOutOfOrderTransitionAfterAnUnappliedOneReportsItsOwnIndex() external {
+        deployRegistry();
+        applyMigration(ROLLBACK, MIGRATION_HEAD_GENESIS);
+        applyMigration(UPGRADE, ROLLBACK);
+        expectOutOfOrder(2);
+        this.externalAppliedState(declared(upgradeHandoverRollback()));
+    }
+
+    function expectRepeated(uint256 index) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployBeacon.BeaconTransitionMigrationRepeated.selector, NETWORK, address(sBeacon), index
+            )
+        );
+    }
+
+    function testTransitionsRepeatingAnAppliedMigrationAreRefusedAsRepeated() external {
+        deployRegistry();
+        applyMigration(UPGRADE, MIGRATION_HEAD_GENESIS);
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        transitions[1].migration.migration = UPGRADE;
+        expectRepeated(1);
+        this.externalAppliedState(declared(transitions));
+    }
+
+    function testTransitionsRepeatingAMigrationAreRefusedBeforeReadingTheRegistry() external {
+        BeaconTransition[] memory transitions = upgradeHandoverRollback();
+        transitions[2].migration.migration = HANDOVER;
+        expectRepeated(2);
+        this.externalAppliedState(declared(transitions));
+    }
+
+    function applyInterims(bytes32 head, uint256 count) internal returns (bytes32) {
+        for (uint256 i = 0; i < count; i++) {
+            bytes32 interim = keccak256(abi.encode(INTERIM, i));
+            applyMigration(interim, head);
+            head = interim;
+        }
+        return head;
+    }
+
+    function testOutOfOrderRefusalAfterALongHistoryIsNamed() external {
+        deployRegistry();
+        applyMigration(UPGRADE, applyInterims(MIGRATION_HEAD_GENESIS, 300));
+        applyMigration(HANDOVER, UPGRADE);
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        (transitions[0], transitions[1]) = (transitions[1], transitions[0]);
+        expectOutOfOrder(1);
+        this.externalAppliedState(declared(transitions));
+    }
+
+    function testTransitionsALongHistoryApartAreInOrder() external {
+        deployRegistry();
+        applyMigration(UPGRADE, MIGRATION_HEAD_GENESIS);
+        applyMigration(HANDOVER, applyInterims(UPGRADE, 300));
+        assertEq(this.externalAppliedState(declared(upgradeThenHandover())), 2);
+    }
+
+    function twoStep() internal returns (MockOwnable2StepBeacon, DeployBeacon memory) {
+        MockOwnable2StepBeacon beacon = new MockOwnable2StepBeacon(sImplementation, sOwner);
+        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
+        declaration.beacon = address(beacon);
+        declaration.beaconCodeHash = address(beacon).codehash;
+        return (beacon, declaration);
+    }
+
+    function testTwoStepBeaconWithoutAPendingOwnerPasses() external {
+        (, DeployBeacon memory declaration) = twoStep();
+        this.externalCheckBeacon(declaration, sImplementation, sOwner);
+    }
+
+    function testBeaconWithAPendingOwnerIsRefused() external {
+        (MockOwnable2StepBeacon beacon, DeployBeacon memory declaration) = twoStep();
+        vm.prank(sOwner);
+        beacon.transferOwnership(address(0xDEAD));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployBeacon.BeaconPendingOwner.selector, NETWORK, address(beacon), uint256(uint160(0xDEAD))
+            )
+        );
+        this.externalCheckBeacon(declaration, sImplementation, sOwner);
     }
 }
