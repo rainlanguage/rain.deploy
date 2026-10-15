@@ -303,6 +303,59 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   implementation it delegates to, so the right code hash at its address over a
   missing or changed implementation does not work.
 
+### Upgradeable beacons
+
+Declare every beacon with its network's chain id, naming implementations by
+suite key and moving them through `MigrationRegistry` migrations:
+
+```solidity
+function beacons() internal view override returns (ChainBeacon[] memory) {
+    ChainBeacon[] memory chainBeacons = new ChainBeacon[](1);
+    chainBeacons[0].chainId = ARBITRUM_ONE_CHAIN_ID;
+    DeployBeacon memory beacon = chainBeacons[0].beacon;
+    beacon.beaconSuite = "vault-beacon@0_1_0";
+    beacon.initial = BeaconState({implementation: "vault@0_1_1", owner: ARBITRUM_TIMELOCK});
+    beacon.transitions = new BeaconTransition[](1);
+    beacon.transitions[0] = BeaconTransition({
+        migration: Prerequisite({writer: SAFE, namespace: NAMESPACE, migration: UPGRADE_0_2_0}),
+        state: BeaconState({implementation: "vault@0_2_0", owner: ARBITRUM_TIMELOCK})
+    });
+    return chainBeacons;
+}
+```
+
+On each network's fork the chain group expects the state of the latest
+transition the network's registry reports `applied`, else `initial`: the beacon
+at its code hash, `implementation()` at that suite's address on the network,
+`owner()` at that owner, and the beacon's own suite, when it names one, and that
+state's implementation suite live there as any suite is. A suite a beacon names
+MUST be released, refused otherwise with `BeaconSuiteNotReleased`: a candidate's
+address moves with its source. Name a beacon this repo deploys by its suite key
+in `beaconSuite`, and one it did not deploy by both `beacon` and
+`beaconCodeHash`; naming it both ways is refused with `BeaconNamedTwice`, and
+naming it by neither, or by only one of `beacon` and `beaconCodeHash`, with
+`BeaconUnnamed`. A beacon whose chain id is not one of `supportedNetworks()`, in
+the catalogue or not, is refused with `BeaconOnUncheckedNetwork` before any
+network is forked. A beacon with transitions reads `MigrationRegistry` on its
+network, which MUST be deployed there. The chain group reads `owner()`, and
+refuses a beacon that answers `pendingOwner()` with anything but zero with
+`BeaconPendingOwner`: a two-step handover is red from `transferOwnership` until
+the batch that accepts it applies its migration. Assert any other authority a
+beacon exposes (roles) yourself, including that the deploy key holds none of it.
+The deploy key is never a declared owner; seat governance from the first state.
+
+Declare transitions in the order their migrations are applied: each applied
+transition's record MUST reach the latest earlier-declared applied one through
+`appliedAfter` (its line's head, then its prerequisites), refused otherwise with
+`BeaconTransitionsOutOfOrder`; moments are never compared. Each transition names
+a distinct migration, refused otherwise with `BeaconTransitionMigrationRepeated`
+before the registry is read. A transition written in another line names the
+earlier one, or a record after it, as a prerequisite. Apply a transition's
+migration in the same transaction as the beacon change it describes (one Safe
+batch: `upgradeTo` or `transferOwnership`, then `applyMigration`). Between two
+separate transactions the chain group refuses the network, as the chain and the
+registry disagree.
+
 ## Deploy verification
 
 **The creation code is the only input.** The Zoltu factory is `CREATE2` over its

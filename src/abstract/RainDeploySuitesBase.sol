@@ -10,6 +10,7 @@ import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 // what holds a declared pair to a chain.
 import {DeployDependency, LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
+import {ChainBeacon} from "../lib/LibRainDeployBeacon.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
@@ -266,6 +267,12 @@ abstract contract RainDeploySuitesBase {
     /// than it looks.
     /// @return The candidates.
     function candidateSuites() internal view virtual returns (DeployCandidate[] memory);
+
+    /// The beacons that MUST hold their declared state, each on the one of `supportedNetworks()` with its chain id.
+    /// @return The beacons; one with transitions reads `MigrationRegistry`, which MUST be deployed on its network.
+    function beacons() internal view virtual returns (ChainBeacon[] memory) {
+        return new ChainBeacon[](0);
+    }
 
     /// Every network this repo deals with: what a broadcast targets, the set
     /// every network-scoped assertion is made over, and the set the network
@@ -528,12 +535,23 @@ abstract contract RainDeploySuitesBase {
     /// @return The selected suite.
     function suiteByName(string memory requested) internal view returns (DeploySuite memory) {
         DeploySuite[] memory suites = allSuites();
+        uint256 index = suiteIndex(suites, requested);
+        if (index == suites.length) {
+            revert UnknownDeploymentSuite(requested, suiteNames());
+        }
+        return suites[index];
+    }
+
+    /// @param suites The suites to search.
+    /// @param requested The key to select.
+    /// @return The index in `suites` of the suite `requested` selects, `suites.length` if none.
+    function suiteIndex(DeploySuite[] memory suites, string memory requested) internal pure returns (uint256) {
         bytes32 requestedHash = keccak256(bytes(requested));
         for (uint256 i = 0; i < suites.length; i++) {
             if (keccak256(bytes(suites[i].suite)) == requestedHash) {
-                return suites[i];
+                return i;
             }
         }
-        revert UnknownDeploymentSuite(requested, suiteNames());
+        return suites.length;
     }
 }
