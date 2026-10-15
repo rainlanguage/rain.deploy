@@ -21,6 +21,7 @@ import {
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockOwnable2StepBeacon} from "../../concrete/MockOwnable2StepBeacon.sol";
+import {MockSilentFallbackBeacon} from "../../concrete/MockSilentFallbackBeacon.sol";
 
 /// @title LibRainDeployBeaconTest
 /// @notice `LibRainDeployBeacon`'s expected state from the migration registry, and its check of a beacon against it.
@@ -460,6 +461,14 @@ contract LibRainDeployBeaconTest is Test {
                 LibRainDeployBeacon.BeaconPendingOwner.selector, NETWORK, address(beacon), uint256(uint160(0xDEAD))
             )
         );
+        this.externalCheckBeacon(declaration, sImplementation, sOwner);
+    }
+
+    function testBeaconAnsweringPendingOwnerWithoutAWordPasses() external {
+        MockSilentFallbackBeacon beacon = new MockSilentFallbackBeacon(sImplementation, sOwner);
+        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
+        declaration.beacon = address(beacon);
+        declaration.beaconCodeHash = address(beacon).codehash;
         this.externalCheckBeacon(declaration, sImplementation, sOwner);
     }
 }
