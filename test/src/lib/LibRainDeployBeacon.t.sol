@@ -257,6 +257,30 @@ contract LibRainDeployBeaconTest is Test {
         assertFalse(this.externalRecordedBefore(record(THIRD, UPGRADE), record(OTHER, HANDOVER)));
     }
 
+    function upgradeHandoverRollback() internal pure returns (BeaconTransition[] memory) {
+        BeaconTransition[] memory transitions = new BeaconTransition[](3);
+        transitions[0] = transition(UPGRADE, "upgraded", address(0xB0B));
+        transitions[1] = transition(HANDOVER, "upgraded", address(0xCAFE));
+        transitions[2] = transition(ROLLBACK, "initial", address(0xCAFE));
+        return transitions;
+    }
+
+    function testTransitionIsHeldToTheLatestEarlierAppliedOneNotTheFirst() external {
+        deployRegistry();
+        applyMigration(UPGRADE, MIGRATION_HEAD_GENESIS);
+        applyMigration(ROLLBACK, UPGRADE);
+        applyMigration(HANDOVER, ROLLBACK);
+        expectOutOfOrder(2);
+        this.externalAppliedState(declared(upgradeHandoverRollback()));
+    }
+
+    function testTransitionAfterAnUnappliedOneIsHeldToTheLatestApplied() external {
+        deployRegistry();
+        applyMigration(UPGRADE, MIGRATION_HEAD_GENESIS);
+        applyMigration(ROLLBACK, UPGRADE);
+        assertEq(this.externalAppliedState(declared(upgradeHandoverRollback())), 3);
+    }
+
     function testLaterAppliedTransitionWinsOverAnEarlierUnappliedOne() external {
         deployRegistry();
         applyMigration(HANDOVER, MIGRATION_HEAD_GENESIS);
