@@ -991,7 +991,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         variants[0] =
             "bytes32 constant BYTECODE_HASH = bytes32(0x0000000000000000000000000000000000000000000000000000000000000001); // ";
         variants[1] =
-            "bytes32 constant BYTECODE_HASH =bytes32(0x0000000000000000000000000000000000000000000000000000000000000001); //";
+            "bytes32 constant BYTECODE_HASH =bytes32(0x0000000000000000000000000000000000000000000000000000000000000001);// ";
         for (uint256 i = 0; i < variants.length; i++) {
             vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
             this.externalCheckFrozenCodeRecord("record.sol", string.concat(parts[0], variants[i], parts[1]));

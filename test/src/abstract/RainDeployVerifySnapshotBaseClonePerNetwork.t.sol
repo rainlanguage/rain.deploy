@@ -402,7 +402,7 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
     /// last token, in both forms.
     function testDeclarationWithoutASpacedEqualsIsUnreadable() external {
         string memory value =
-            "=address(0x0000000000000000000000000000000000000001); //address(0x0000000000000000000000000000000000000002);\n";
+            "=address(0x0000000000000000000000000000000000000001);// address(0x0000000000000000000000000000000000000002);\n";
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
         this.externalRecordedDeployedAddresses("record.sol", string.concat("address constant DEPLOYED_ADDRESS ", value));
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
