@@ -81,7 +81,7 @@ contract AddressRegistry is IAddressRegistryV2 {
         // Assigned whole, so a re-bind replaces the moment in the same write
         // that replaces the value.
         sBindings[name] = Binding({value: value, registeredAt: block.timestamp});
-        emit Register(name, value);
+        emit Register(msg.sender, name, value);
     }
 
     /// @inheritdoc IAddressRegistryV2

@@ -239,9 +239,9 @@ contract AddressRegistryRegisterTest is Test {
         assertEq(entries.length, 1);
         assertEq(entries[0].emitter, address(sRegistry));
         assertEq(entries[0].topics.length, 2);
-        assertEq(entries[0].topics[0], keccak256("Register(bytes32,bytes)"));
+        assertEq(entries[0].topics[0], keccak256("Register(address,bytes32,bytes)"));
         assertEq(entries[0].topics[1], name);
-        assertEq(entries[0].data, abi.encode(value));
+        assertEq(entries[0].data, abi.encode(ADDRESS_REGISTRY_ROOT, value));
     }
 
     /// A re-binding emits its own `Register`, so the most recent entry for a
@@ -261,7 +261,7 @@ contract AddressRegistryRegisterTest is Test {
 
         assertEq(entries.length, 1);
         assertEq(entries[0].topics[1], name);
-        assertEq(entries[0].data, abi.encode(value));
+        assertEq(entries[0].data, abi.encode(ADDRESS_REGISTRY_ROOT, value));
     }
 
     /// A rejected `register` emits nothing.

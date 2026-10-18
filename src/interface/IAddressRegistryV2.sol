@@ -93,9 +93,10 @@ interface IAddressRegistryV2 {
     ///
     /// The moment is not a field here, because a log already carries the block
     /// it was emitted in.
+    /// @param sender The account that called, which is always the root.
     /// @param name The name that was bound.
     /// @param value The value `name` was bound to.
-    event Register(bytes32 indexed name, bytes value);
+    event Register(address sender, bytes32 indexed name, bytes value);
 
     /// Binds `name` to `value`, replacing any value it is already bound to.
     ///
