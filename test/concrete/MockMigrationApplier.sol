@@ -13,10 +13,10 @@ import {Prerequisite} from "../../src/interface/IMigrationRegistryV2.sol";
 /// It exists so the writer can be exercised as the property it is. The
 /// library's functions are `internal` and inline into whatever executes them,
 /// so `msg.sender` at the registry is the calling CONTRACT, not whoever
-/// `vm.prank` last named — a test contract calling the library directly writes
-/// as one caller, and only into lines it names itself or was approved for. Two of these are two writers,
-/// which is what makes "a record reaches nobody else" checkable rather than
-/// asserted about a single account.
+/// `vm.prank` last named. A test contract calling the library directly writes
+/// as one caller, into its own lines or those it was approved for. Two of these
+/// are two writers, which is what makes "a record reaches nobody else"
+/// checkable rather than asserted about a single account.
 ///
 /// Two of them are also two sets of heads, which is what makes "one line is
 /// one sequence" checkable across writers at all: nothing about one applier's
@@ -46,6 +46,20 @@ contract MockMigrationApplier {
         Prerequisite[] calldata prerequisites
     ) external {
         LibMigrationRegistry.applyMigrationHistoryV3(address(this), namespace, migration, appliedAt, prerequisites);
+    }
+
+    /// Approves `delegate` for this contract's line in `namespace`.
+    /// @param namespace The line under this contract.
+    /// @param delegate The account to approve.
+    function approveV3(bytes32 namespace, address delegate) external {
+        LibMigrationRegistry.approveV3(namespace, delegate);
+    }
+
+    /// Revokes `delegate` for this contract's line in `namespace`.
+    /// @param namespace The line under this contract.
+    /// @param delegate The account to revoke.
+    function revokeV3(bytes32 namespace, address delegate) external {
+        LibMigrationRegistry.revokeV3(namespace, delegate);
     }
 
     /// When `writer` applied `migration` in `namespace`.

@@ -637,7 +637,8 @@ namespaces, both kept for the releases that shipped them. Each is its own
 registry at its own address, so records written to an earlier one are not
 visible through `IMigrationRegistryV3`; a consumer moving to it records the
 migrations that already ran again, with `applyMigrationHistoryV3` and the
-moments they ran at.
+moments they ran at. `LibMigrationRegistry.replayV2Call` builds those writes for
+one V2 line, oldest first; a line it waited on is replayed before it.
 
 The two writes differ in exactly one thing: where the recorded moment comes
 from. `applyMigrationV3` stamps the block the record lands in, for a script
@@ -838,14 +839,16 @@ between them never moves where its records go. Anyone may write, but only into
 their own lines or ones they were approved for, so a reader asking about the
 lines of an authority it already trusts is reading something only that authority
 or a delegate it approved could have written; every other writer's lines hold
-unforgeable claims nobody asks about. A namespace is not an authority: it is the
-writer's to name, and a record in it is that writer's claim. A root would have
-to be welded into the creation code, the way `ADDRESS_REGISTRY_ROOT` is — and
-the account that applies a migration is a different Safe, deployer or timelock
-for every consumer and every chain, so one root would have to be all of them,
-and baking each consumer's authority in would give each a different address for
-what is meant to be one shared registry. With nothing to configure there is also
-no rollout state in which it is inert.
+unforgeable claims nobody asks about. A line is therefore only as trustworthy as
+every delegate it has ever had, revoked ones included, so each record keeps the
+account that wrote it (`appliedByV3`). A namespace is not an authority: it is
+the writer's to name, and a record in it is that writer's claim. A root would
+have to be welded into the creation code, the way `ADDRESS_REGISTRY_ROOT` is —
+and the account that applies a migration is a different Safe, deployer or
+timelock for every consumer and every chain, so one root would have to be all of
+them, and baking each consumer's authority in would give each a different
+address for what is meant to be one shared registry. With nothing to configure
+there is also no rollout state in which it is inert.
 
 **An index, not proof.** The registry says which invariant applies. It does not
 say the invariant holds — a multisig can act out of band and nothing here moves.
@@ -853,13 +856,13 @@ Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
 `LibMigrationRegistry` is the surface — `appliedV3`, `appliedOntoV3`,
-`appliedAfterV3`, `headV3`, `approvedV3`, `applyMigrationV3` and
-`applyMigrationHistoryV3`, plus the `*Call` builders for a bundle, each
-verifying the registry's code hash before it reads or writes. There is
-deliberately **no broadcast runner**: the dominant real shape is a Safe
-executing a bundle that never broadcasts, and such a script appends
-`applyMigrationV3` to the bundle it is already emitting, which makes the record
-atomic with the migration it describes.
+`appliedAfterV3`, `appliedByV3`, `headV3`, `approvedV3`, `approveV3`,
+`revokeV3`, `applyMigrationV3` and `applyMigrationHistoryV3`, plus the `*Call`
+builders for a bundle and `replayV2Call`, each verifying the registry's code
+hash before it reads or writes. There is deliberately **no broadcast runner**:
+the dominant real shape is a Safe executing a bundle that never broadcasts, and
+such a script appends `applyMigrationV3` to the bundle it is already emitting,
+which makes the record atomic with the migration it describes.
 
 ## Deploying, and then releasing
 

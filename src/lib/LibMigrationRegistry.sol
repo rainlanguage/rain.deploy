@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {Prerequisite} from "../interface/IMigrationRegistryV2.sol";
+import {IMigrationRegistryV2, Prerequisite, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV2.sol";
 import {IMigrationRegistryV3} from "../interface/IMigrationRegistryV3.sol";
 import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 
@@ -19,7 +19,9 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// got to, and it applies one under a writer in a namespace it names, after
 /// the head and the migrations in any other line the caller names, builds the
 /// list for a write that waits on nothing but the head, or builds that write as
-/// a call for another account to send. Which writer a test trusts, which
+/// a call for another account to send. It approves and revokes delegates,
+/// reads which account wrote a record, and builds the writes that replay a V2
+/// line into this registry. Which writer a test trusts, which
 /// namespace a repo writes, which invariant each
 /// answer selects, and how an id is derived are entirely the consumer's
 /// business and none of this library's.
@@ -451,6 +453,90 @@ library LibMigrationRegistry {
         checkCodeHash();
         return IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .approvedV3(writer, namespace, delegate);
+    }
+
+    /// Which account wrote `writer`'s record of `migration` in `namespace`:
+    /// `writer`, a delegate it approved, or zero if never applied. Verifies
+    /// the registry's code hash first, for the reason `appliedV3` does.
+    /// @param writer The line's writer. Never the zero address.
+    /// @param namespace The line under `writer`. Never zero.
+    /// @param migration The migration asked about. Never zero, never
+    /// `MIGRATION_HEAD_GENESIS`.
+    /// @return The account that wrote the record, or zero.
+    function appliedByV3(address writer, bytes32 namespace, bytes32 migration) internal view returns (address) {
+        checkCodeHash();
+        return IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .appliedByV3(writer, namespace, migration);
+    }
+
+    /// Approves `delegate` to write the calling account's line in `namespace`.
+    /// Verifies the registry's code hash first, for the reason
+    /// `applyMigrationV3` does: an approval into other code appears to succeed
+    /// and goes nowhere.
+    /// @param namespace The line under the calling account. Never zero.
+    /// @param delegate The account to approve. Never the zero address.
+    function approveV3(bytes32 namespace, address delegate) internal {
+        checkCodeHash();
+        IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .approveV3(namespace, delegate);
+    }
+
+    /// Revokes `delegate`'s approval for the calling account's line in
+    /// `namespace`. Verifies the registry's code hash first, for the reason
+    /// `approveV3` does.
+    /// @param namespace The line under the calling account. Never zero.
+    /// @param delegate The account to revoke. Never the zero address.
+    function revokeV3(bytes32 namespace, address delegate) internal {
+        checkCodeHash();
+        IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .revokeV3(namespace, delegate);
+    }
+
+    /// The `applyMigrationHistoryV3` calls that replay `writer`'s line in
+    /// `namespace` from `v2` into this registry, oldest first, each with the
+    /// moment and the list `v2` recorded. Sent in order by `writer` or a
+    /// delegate it approved, they reproduce the line's heads, moments and
+    /// lists.
+    ///
+    /// Walks `v2` from `head` back through `appliedOnto` to
+    /// `MIGRATION_HEAD_GENESIS`. A record in another line that this one waited
+    /// on must be replayed first, by its own line's replay, or the registry
+    /// refuses the write naming it. `v2` is read as given: the caller vouches
+    /// for the code at that address. Verifies this registry's code hash, as
+    /// `applyMigrationHistoryV3Call` does.
+    /// @param v2 The V2 registry holding the line.
+    /// @param writer The line's writer. Never the zero address.
+    /// @param namespace The line under `writer`. Never zero.
+    /// @return The registry address.
+    /// @return The calldata of each write, oldest first.
+    function replayV2Call(IMigrationRegistryV2 v2, address writer, bytes32 namespace)
+        internal
+        view
+        returns (address, bytes[] memory)
+    {
+        checkCodeHash();
+        bytes32 headMigration = v2.head(writer, namespace);
+        uint256 length = 0;
+        for (bytes32 m = headMigration; m != MIGRATION_HEAD_GENESIS; m = v2.appliedOnto(writer, namespace, m)) {
+            length++;
+        }
+        bytes[] memory calls = new bytes[](length);
+        bytes32 migration = headMigration;
+        // Filled from the end: the walk runs newest first.
+        for (uint256 i = length; i > 0; i--) {
+            calls[i - 1] = abi.encodeCall(
+                IMigrationRegistryV3.applyMigrationHistoryV3,
+                (
+                    writer,
+                    namespace,
+                    migration,
+                    v2.applied(writer, namespace, migration),
+                    v2.appliedAfter(writer, namespace, migration)
+                )
+            );
+            migration = v2.appliedOnto(writer, namespace, migration);
+        }
+        return (LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, calls);
     }
 
     /// The call that approves `delegate` to write the sending account's line

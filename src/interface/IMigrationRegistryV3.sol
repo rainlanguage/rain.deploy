@@ -25,7 +25,13 @@ import {Prerequisite} from "./IMigrationRegistryV2.sol";
 ///
 /// The writer can always write its own line, approved or not. Revoking stops
 /// later writes and nothing else: records a delegate wrote while approved
-/// stay, as every record does.
+/// stay, as every record does. So a line is only as trustworthy as every
+/// delegate it has ever had, revoked ones included, and each record keeps the
+/// account that wrote it (`appliedByV3`) so a reader can say which of them it
+/// trusts.
+///
+/// `Prerequisite` is V2's. Under V3 its first entry is `writer`, the line being
+/// written, never the caller: a delegate names the writer that approved it.
 interface IMigrationRegistryV3 {
     /// As `IMigrationRegistryV2.ZeroMigration`.
     error ZeroMigration();
@@ -179,6 +185,15 @@ interface IMigrationRegistryV3 {
         external
         view
         returns (Prerequisite[] memory);
+
+    /// The account that wrote `writer`'s record of `migration` in `namespace`:
+    /// `writer`, or a delegate it had approved when the write landed. Refuses
+    /// the inputs `appliedV3` refuses.
+    /// @param writer The line's writer.
+    /// @param namespace The line under the writer.
+    /// @param migration The migration asked about.
+    /// @return The account that wrote the record, zero if never applied.
+    function appliedByV3(address writer, bytes32 namespace, bytes32 migration) external view returns (address);
 
     /// As `IMigrationRegistryV2.head`.
     /// @param writer The line's writer.

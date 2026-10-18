@@ -15,6 +15,9 @@ struct MigrationRecord {
     /// the line, then the prerequisites. Empty only for a migration never
     /// applied.
     Prerequisite[] appliedAfter;
+    /// The account that made the write: the writer or a delegate it approved.
+    /// Zero only for a migration never applied.
+    address writtenBy;
 }
 
 /// @title MigrationRegistry
@@ -23,8 +26,8 @@ struct MigrationRecord {
 /// it names, after one list — the head it believes that line is at, then the
 /// migrations in any line it names — at the moment it says the migration ran,
 /// and anyone reads when a given writer applied a given migration in a given
-/// namespace, what it applied it onto, what it applied it after, or where that
-/// line has got to.
+/// namespace, what it applied it onto, what it applied it after, which account
+/// wrote it, or where that line has got to.
 ///
 /// There is deliberately nothing else. No removal, no upgrade, no pause, and no
 /// authority but each writer's over its own lines — which is the difference
@@ -80,8 +83,9 @@ struct MigrationRecord {
 /// written.
 ///
 /// No storage mapping is `public`. `appliedV3`, `appliedOntoV3`,
-/// `appliedAfterV3` and `headV3` refuse the zero writer and the zero namespace,
-/// `approvedV3` refuses those and the zero delegate, the three record readers
+/// `appliedAfterV3`, `appliedByV3` and `headV3` refuse the zero writer and the
+/// zero namespace, `approvedV3` refuses those and the zero delegate, the four
+/// record readers
 /// refuse the two ids a migration can never be, and a public mapping's
 /// generated getter would answer all of them with zero — which for a record is
 /// "not applied" and for `headV3` is a value no head can ever hold, i.e.
@@ -89,8 +93,8 @@ struct MigrationRecord {
 contract MigrationRegistry is IMigrationRegistryV3 {
     /// Every record, keyed by writer, namespace and migration. A zero
     /// `appliedAt` means never applied. Not `public`: the only readers are
-    /// `appliedV3`, `appliedOntoV3` and `appliedAfterV3`, which refuse the inputs
-    /// that can only be mistakes.
+    /// `appliedV3`, `appliedOntoV3`, `appliedAfterV3` and `appliedByV3`, which
+    /// refuse the inputs that can only be mistakes.
     mapping(address writer => mapping(bytes32 namespace => mapping(bytes32 migration => MigrationRecord record)))
         internal sRecords;
 
@@ -156,12 +160,7 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// @param namespace The line under the writer.
     /// @param delegate The delegate.
     function checkApprovalKey(address writer, bytes32 namespace, address delegate) internal pure {
-        if (writer == address(0)) {
-            revert ZeroWriter();
-        }
-        if (namespace == bytes32(0)) {
-            revert ZeroNamespace();
-        }
+        checkLineKey(writer, namespace);
         if (delegate == address(0)) {
             revert ZeroDelegate();
         }
@@ -382,6 +381,7 @@ contract MigrationRegistry is IMigrationRegistryV3 {
         }
         // slither-disable-end timestamp
         record.appliedAt = appliedAt;
+        record.writtenBy = msg.sender;
         // Pushed one at a time: solc does not copy a calldata array of structs
         // into storage. The record was empty, so this is the whole list.
         for (uint256 i = 0; i < prerequisites.length; i++) {
@@ -428,20 +428,37 @@ contract MigrationRegistry is IMigrationRegistryV3 {
         return sRecords[writer][namespace][migration].appliedAfter;
     }
 
-    /// Refuses the four inputs that can only be a mistake in the caller rather
-    /// than a record to read. One function, so the three readers of a record
-    /// and the check on every entry after the head cannot drift into refusing
-    /// different things.
-    /// @param writer The writer being read.
-    /// @param namespace The line under the writer being read.
-    /// @param migration The migration being asked about.
-    function checkRecordKey(address writer, bytes32 namespace, bytes32 migration) internal pure {
+    /// @inheritdoc IMigrationRegistryV3
+    /// @dev The same four refusals as `appliedV3`: a zero answer here reads as
+    /// "never applied" exactly as a zero moment does.
+    function appliedByV3(address writer, bytes32 namespace, bytes32 migration) external view returns (address) {
+        checkRecordKey(writer, namespace, migration);
+        return sRecords[writer][namespace][migration].writtenBy;
+    }
+
+    /// Refuses the zero writer, then the zero namespace: neither names a line.
+    /// One function, so every key naming a line refuses the same two things in
+    /// the same order.
+    /// @param writer The line's writer.
+    /// @param namespace The line under the writer.
+    function checkLineKey(address writer, bytes32 namespace) internal pure {
         if (writer == address(0)) {
             revert ZeroWriter();
         }
         if (namespace == bytes32(0)) {
             revert ZeroNamespace();
         }
+    }
+
+    /// Refuses the four inputs that can only be a mistake in the caller rather
+    /// than a record to read. One function, so the four readers of a record
+    /// and the check on every entry after the head cannot drift into refusing
+    /// different things.
+    /// @param writer The writer being read.
+    /// @param namespace The line under the writer being read.
+    /// @param migration The migration being asked about.
+    function checkRecordKey(address writer, bytes32 namespace, bytes32 migration) internal pure {
+        checkLineKey(writer, namespace);
         if (migration == bytes32(0)) {
             revert ZeroMigration();
         }
@@ -471,12 +488,7 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// It is one function, so it is one pair of refusals, and the reachable
     /// path is the one they are there for.
     function headV3(address writer, bytes32 namespace) public view returns (bytes32) {
-        if (writer == address(0)) {
-            revert ZeroWriter();
-        }
-        if (namespace == bytes32(0)) {
-            revert ZeroNamespace();
-        }
+        checkLineKey(writer, namespace);
         bytes32 storedHead = sHead[writer][namespace];
         return storedHead == bytes32(0) ? MIGRATION_HEAD_GENESIS : storedHead;
     }

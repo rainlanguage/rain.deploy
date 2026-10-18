@@ -287,8 +287,8 @@ contract MigrationRegistryDelegateTest is Test {
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, prerequisites);
     }
 
-    /// The writer's own V2 writes are unchanged by delegation and land in
-    /// the same line.
+    /// The writer's own writes are unchanged by delegation and land in the
+    /// same line as its delegate's.
     function testTheWritersOwnWritesShareTheLine() external {
         approveDelegate();
         vm.prank(DELEGATE);
@@ -296,5 +296,46 @@ contract MigrationRegistryDelegateTest is Test {
         vm.prank(WRITER);
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, onto(WRITER, NAMESPACE, MIGRATION));
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), SECOND);
+    }
+
+    /// Each record keeps the account that wrote it, through either write:
+    /// the delegate for its writes, the writer for its own, zero for none.
+    function testAppliedByIsTheAccountThatWrote() external {
+        vm.warp(1000);
+        approveDelegate();
+        bytes32 third = keccak256("third");
+        assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), address(0));
+        vm.prank(DELEGATE);
+        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        vm.prank(WRITER);
+        sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, SECOND, 1000, onto(WRITER, NAMESPACE, MIGRATION));
+        vm.prank(DELEGATE);
+        sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, third, 1000, onto(WRITER, NAMESPACE, SECOND));
+        assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), DELEGATE);
+        assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, SECOND), WRITER);
+        assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, third), DELEGATE);
+        assertEq(sRegistry.appliedByV3(DELEGATE, NAMESPACE, MIGRATION), address(0));
+    }
+
+    /// Revoking a delegate leaves the records it wrote naming it.
+    function testAppliedBySurvivesRevocation() external {
+        approveDelegate();
+        vm.prank(DELEGATE);
+        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        vm.prank(WRITER);
+        sRegistry.revokeV3(NAMESPACE, DELEGATE);
+        assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), DELEGATE);
+    }
+
+    /// `appliedByV3` refuses what `appliedV3` refuses, in the same order.
+    function testAppliedByRefusesWhatAppliedRefuses() external {
+        vm.expectRevert(IMigrationRegistryV3.ZeroWriter.selector);
+        sRegistry.appliedByV3(address(0), bytes32(0), bytes32(0));
+        vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
+        sRegistry.appliedByV3(WRITER, bytes32(0), bytes32(0));
+        vm.expectRevert(IMigrationRegistryV3.ZeroMigration.selector);
+        sRegistry.appliedByV3(WRITER, NAMESPACE, bytes32(0));
+        vm.expectRevert(IMigrationRegistryV3.GenesisMigration.selector);
+        sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
     }
 }

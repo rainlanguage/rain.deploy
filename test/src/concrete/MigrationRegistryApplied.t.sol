@@ -262,7 +262,7 @@ contract MigrationRegistryAppliedTest is Test {
         assertEq(sRegistry.headV3(writer, namespace), migration);
     }
 
-    /// `appliedV3`, `appliedOntoV3` and `appliedAfterV3` are the only readers of the
+    /// `appliedV3`, `appliedOntoV3`, `appliedAfterV3` and `appliedByV3` are the only readers of the
     /// records. The records mapping is not `public`, so the getter a `public`
     /// mapping would generate — which answers the zero writer, the zero
     /// namespace and both refused ids with zero, the exact silent wrong-branch
@@ -288,6 +288,7 @@ contract MigrationRegistryAppliedTest is Test {
         vm.assume(selector != IMigrationRegistryV3.appliedV3.selector);
         vm.assume(selector != IMigrationRegistryV3.appliedOntoV3.selector);
         vm.assume(selector != IMigrationRegistryV3.appliedAfterV3.selector);
+        vm.assume(selector != IMigrationRegistryV3.appliedByV3.selector);
         vm.assume(selector != IMigrationRegistryV3.applyMigrationV3.selector);
         vm.assume(selector != IMigrationRegistryV3.applyMigrationHistoryV3.selector);
         vm.assume(selector != IMigrationRegistryV3.headV3.selector);

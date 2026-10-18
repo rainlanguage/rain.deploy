@@ -9,6 +9,7 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {Prerequisite, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {IMigrationRegistryV3} from "../../../src/interface/IMigrationRegistryV3.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
+import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
 
 /// @title LibMigrationRegistryDelegateTest
 /// @notice The delegation builders and read: each targets the pinned
@@ -114,8 +115,7 @@ contract LibMigrationRegistryDelegateTest is Test {
         vm.warp(1_000_000);
         deployRegistry();
         vm.prank(WRITER);
-        IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .approveV3(NAMESPACE, address(this));
+        LibMigrationRegistry.approveV3(NAMESPACE, address(this));
 
         LibMigrationRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, genesis());
         assertEq(LibMigrationRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), block.timestamp);
@@ -137,5 +137,70 @@ contract LibMigrationRegistryDelegateTest is Test {
         this.externalRevokeCall();
         expectNoRegistry();
         this.externalApproved();
+    }
+
+    function expectCodeHash(bytes32 actualCodeHash) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                actualCodeHash
+            )
+        );
+    }
+
+    function externalAppliedBy() external view returns (address) {
+        return LibMigrationRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION);
+    }
+
+    /// The direct approve and revoke, made from a contract, approve and revoke
+    /// for that contract's line.
+    function testDirectApproveAndRevokeLand() external {
+        deployRegistry();
+        MockMigrationApplier applier = new MockMigrationApplier();
+        applier.approveV3(NAMESPACE, DELEGATE);
+        assertTrue(LibMigrationRegistry.approvedV3(address(applier), NAMESPACE, DELEGATE));
+        assertFalse(LibMigrationRegistry.approvedV3(address(this), NAMESPACE, DELEGATE));
+        applier.revokeV3(NAMESPACE, DELEGATE);
+        assertFalse(LibMigrationRegistry.approvedV3(address(applier), NAMESPACE, DELEGATE));
+    }
+
+    /// The direct approve and revoke refuse an address with no registry.
+    function testDirectApproveAndRevokeNoRegistryIsRefused() external {
+        MockMigrationApplier applier = new MockMigrationApplier();
+        expectCodeHash(bytes32(0));
+        applier.approveV3(NAMESPACE, DELEGATE);
+        expectCodeHash(bytes32(0));
+        applier.revokeV3(NAMESPACE, DELEGATE);
+    }
+
+    /// The direct approve and revoke refuse other code at the registry
+    /// address, naming its hash.
+    function testDirectApproveAndRevokeWrongCodeIsRefused(bytes memory code) external {
+        vm.assume(code.length > 0 && code[0] != 0xef);
+        vm.assume(keccak256(code) != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH);
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
+        MockMigrationApplier applier = new MockMigrationApplier();
+        expectCodeHash(keccak256(code));
+        applier.approveV3(NAMESPACE, DELEGATE);
+        expectCodeHash(keccak256(code));
+        applier.revokeV3(NAMESPACE, DELEGATE);
+    }
+
+    /// `appliedByV3` reads the account that wrote the record.
+    function testAppliedByReadsTheDelegate() external {
+        deployRegistry();
+        (address to, bytes memory data) = LibMigrationRegistry.approveV3Call(NAMESPACE, DELEGATE);
+        send(WRITER, to, data);
+        (to, data) = LibMigrationRegistry.applyMigrationV3Call(WRITER, NAMESPACE, MIGRATION, genesis());
+        send(DELEGATE, to, data);
+        assertEq(LibMigrationRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), DELEGATE);
+        assertEq(LibMigrationRegistry.appliedByV3(WRITER, NAMESPACE, SECOND), address(0));
+    }
+
+    /// `appliedByV3` refuses an address with no registry.
+    function testAppliedByNoRegistryIsRefused() external {
+        expectNoRegistry();
+        this.externalAppliedBy();
     }
 }
