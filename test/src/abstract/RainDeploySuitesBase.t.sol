@@ -106,6 +106,15 @@ contract RainDeploySuitesBaseTest is Test {
         sSuites.externalSuiteByName("mock-deployable");
     }
 
+    function testSuiteIndexIsEachKeysPositionAndTheLengthForAnUnknownKey() external view {
+        DeploySuite[] memory suites = sSuites.externalAllSuites();
+        for (uint256 i = 0; i < suites.length; i++) {
+            assertEq(sSuites.externalSuiteIndex(suites[i].suite), i);
+        }
+        assertEq(sSuites.externalSuiteIndex("mock-deployable"), suites.length);
+        assertEq(sSuites.externalSuiteIndex(""), suites.length);
+    }
+
     /// An empty key is just another unknown key, so an unset `DEPLOYMENT_SUITE`
     /// reports the valid set rather than silently taking a default.
     function testEmptySuiteIsUnknown() external {

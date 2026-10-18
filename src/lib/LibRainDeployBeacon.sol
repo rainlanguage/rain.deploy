@@ -65,10 +65,11 @@ library LibRainDeployBeacon {
     /// @notice A beacon that answers `pendingOwner()` MUST answer zero.
     /// @param network The beacon's network.
     /// @param beacon The beacon.
-    /// @param pendingOwner The word `pendingOwner()` answered.
+    /// @param pendingOwner The word `pendingOwner()` answered, raw: a word with dirty upper bits is not an address.
     error BeaconPendingOwner(string network, address beacon, uint256 pendingOwner);
 
     /// Zero for `initial`, else one past the latest transition the selected fork's registry reports applied.
+    /// Reverts `BeaconTransitionMigrationRepeated` before reading the registry, and `BeaconTransitionsOutOfOrder`.
     /// @param network The network's name, for the refusal.
     /// @param beacon The beacon.
     /// @return The state index, as `stateAt` takes it.

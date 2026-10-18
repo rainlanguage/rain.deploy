@@ -2529,4 +2529,15 @@ contract LibRainDeployTest is Test {
         assertEq(deployedWord, uint256(uint160(0x7DA611e4146dCf0107407Bb331599acC53E8B62c)));
         assertEq(deployed.codehash, mockDeployableCodeHash());
     }
+
+    function testHasChainIdFindsEachNetworkAndNoOther() external pure {
+        string[] memory names = new string[](2);
+        names[0] = LibRainDeploy.ARBITRUM_ONE;
+        names[1] = LibRainDeploy.BASE;
+        SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(names);
+        assertTrue(LibRainDeploy.hasChainId(networks, ARBITRUM_ONE_CHAIN_ID));
+        assertTrue(LibRainDeploy.hasChainId(networks, BASE_CHAIN_ID));
+        assertFalse(LibRainDeploy.hasChainId(networks, 1));
+        assertFalse(LibRainDeploy.hasChainId(new SupportedNetwork[](0), BASE_CHAIN_ID));
+    }
 }

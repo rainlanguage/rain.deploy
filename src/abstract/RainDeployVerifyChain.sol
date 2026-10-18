@@ -122,6 +122,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// @param resolved The beacon.
     function checkResolvedBeacon(string memory network, ResolvedBeacon memory resolved) internal view {
         DeployBeacon memory beacon = resolved.beacon;
+        // Deliberately rechecked by `checkBeacon`, which holds a beacon to its code hash on its own.
         if (bytes(beacon.beaconSuite).length != 0) {
             checkSuiteOnNetwork(network, resolved.suite, resolved.derived, beacon.beacon);
         }
@@ -158,30 +159,37 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         DeploySuite[] memory released = releasedSuites();
         DerivedDeploy[] memory derived = new DerivedDeploy[](released.length);
         ResolvedBeacon[] memory resolved = new ResolvedBeacon[](onNetworks);
-        onNetworks = 0;
+        uint256 resolvedIndex = 0;
         for (uint256 beaconIndex = 0; beaconIndex < chainBeacons.length; beaconIndex++) {
             uint256 chainId = chainBeacons[beaconIndex].chainId;
             if (LibRainDeploy.hasChainId(networks, chainId)) {
-                resolved[onNetworks++] =
+                resolved[resolvedIndex++] =
                     resolveBeacon(chainBeacons[beaconIndex].beacon, chainId, beaconIndex, released, derived);
             }
         }
         return resolved;
     }
 
-    /// @param beacon The beacon.
+    /// @param declaration The beacon, left unwritten so one declaration can be resolved on several networks.
     /// @param chainId The beacon's network.
     /// @param beaconIndex The beacon's index in `beacons()`, for the refusal.
     /// @param released `releasedSuites()`, as `resolveReleased` takes it.
     /// @param derived Each released suite's derivation, as `resolveReleased` takes it.
     /// @return The beacon, resolved on `chainId`.
     function resolveBeacon(
-        DeployBeacon memory beacon,
+        DeployBeacon memory declaration,
         uint256 chainId,
         uint256 beaconIndex,
         DeploySuite[] memory released,
         DerivedDeploy[] memory derived
     ) internal returns (ResolvedBeacon memory) {
+        DeployBeacon memory beacon = DeployBeacon({
+            beaconSuite: declaration.beaconSuite,
+            beacon: declaration.beacon,
+            beaconCodeHash: declaration.beaconCodeHash,
+            initial: declaration.initial,
+            transitions: declaration.transitions
+        });
         ResolvedBeacon memory resolved;
         if (bytes(beacon.beaconSuite).length != 0) {
             if (beacon.beacon != address(0) || beacon.beaconCodeHash != bytes32(0)) {

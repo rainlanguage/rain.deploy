@@ -33,6 +33,7 @@ import {
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
+import {DerivedDeploy} from "../../../src/abstract/RainDeployVerifyBase.sol";
 
 /// @title RainDeployVerifyChainBeaconTest
 /// @notice The chain group's check of each declared beacon against its network, state and implementation suite.
@@ -55,6 +56,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     address internal sRegistry;
     address internal sSuiteBeacon;
     string[] internal sSupported;
+    bool internal sShareFirstBeacon;
 
     function suite(string memory key, bytes memory creationCode, bytes memory runtimeCode, string memory artifactPath)
         internal
@@ -124,7 +126,13 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function beacons() internal view override returns (ChainBeacon[] memory) {
-        return sBeacons;
+        ChainBeacon[] memory chainBeacons = sBeacons;
+        if (sShareFirstBeacon) {
+            for (uint256 i = 1; i < chainBeacons.length; i++) {
+                chainBeacons[i].beacon = chainBeacons[0].beacon;
+            }
+        }
+        return chainBeacons;
     }
 
     function supportedNetworks() internal view override returns (string[] memory) {
@@ -470,12 +478,42 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         declare(1, declared("beacon-implementation@0_0_1", OWNER));
         vm.expectRevert(abi.encodeWithSelector(BeaconOnUncheckedNetwork.selector, 1, 1));
         this.externalCheckDeployedOnSupportedNetworks();
+        assertNoFork("forked before refusing a beacon on an unchecked network");
     }
 
     function testBeaconOnAChainIdOutsideTheCatalogueIsRefused() external {
         declare(42162, declared("beacon-implementation@0_0_1", OWNER));
         vm.expectRevert(abi.encodeWithSelector(BeaconOnUncheckedNetwork.selector, 42162, 0));
         this.externalCheckDeployedOnSupportedNetworks();
+        assertNoFork("forked before refusing a beacon outside the catalogue");
+    }
+
+    function assertNoFork(string memory reason) internal view {
+        try vm.activeFork() returns (uint256) {
+            assertTrue(false, reason);
+        } catch {}
+    }
+
+    function testOneDeclarationSharedByTwoChainsResolvesOnEach() external {
+        declare(42161, bySuite("beacon@0_0_1", OWNER));
+        declare(8453, bySuite("beacon@0_0_1", NEW_OWNER));
+        sShareFirstBeacon = true;
+        this.externalCheckDeployedOnNetworks(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
+    }
+
+    function externalResolveBeaconLeavesDeclaration(DeployBeacon memory declaration)
+        external
+        returns (DeployBeacon memory)
+    {
+        DeploySuite[] memory released = releasedSuites();
+        resolveBeacon(declaration, 42161, 0, released, new DerivedDeploy[](released.length));
+        return declaration;
+    }
+
+    function testResolvingABeaconLeavesItsDeclarationUnwritten() external {
+        DeployBeacon memory declaration = this.externalResolveBeaconLeavesDeclaration(bySuite("beacon@0_0_1", OWNER));
+        assertEq(declaration.beacon, address(0));
+        assertEq(declaration.beaconCodeHash, bytes32(0));
     }
 
     function testBeaconOnAnEarlierCheckedNetworkResolves() external {
@@ -666,7 +704,6 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     function testNarrowedCheckWithNoBeaconOnItsNetworksForksNothing() external {
         declare(8453, declared("beacon-implementation@0_0_1", OWNER));
         this.externalCheckDeployedOnNetworks(arbitrum());
-        (bool active,) = address(vm).call(abi.encodeWithSignature("activeFork()"));
-        assertFalse(active, "forked a network with no beacon and no suite to check");
+        assertNoFork("forked a network with no beacon and no suite to check");
     }
 }

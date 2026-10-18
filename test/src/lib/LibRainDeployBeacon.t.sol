@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {Test, stdError} from "forge-std-1.17.0/src/Test.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {
     BeaconState,
@@ -22,6 +22,7 @@ import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockOwnable2StepBeacon} from "../../concrete/MockOwnable2StepBeacon.sol";
 import {MockSilentFallbackBeacon} from "../../concrete/MockSilentFallbackBeacon.sol";
+import {MockTwoWordFallbackBeacon} from "../../concrete/MockTwoWordFallbackBeacon.sol";
 
 /// @title LibRainDeployBeaconTest
 /// @notice `LibRainDeployBeacon`'s expected state from the migration registry, and its check of a beacon against it.
@@ -490,5 +491,28 @@ contract LibRainDeployBeaconTest is Test {
         declaration.beacon = address(beacon);
         declaration.beaconCodeHash = address(beacon).codehash;
         this.externalCheckBeacon(declaration, sImplementation, sOwner);
+    }
+
+    function testBeaconAnsweringPendingOwnerWithTwoWordsPasses() external {
+        MockTwoWordFallbackBeacon beacon = new MockTwoWordFallbackBeacon(sImplementation, sOwner);
+        (bool success, bytes memory answer) = address(beacon).staticcall(abi.encodeWithSignature("pendingOwner()"));
+        assertTrue(success);
+        assertEq(answer.length, 0x40);
+        (uint256 first,) = abi.decode(answer, (uint256, uint256));
+        assertEq(first, 0xDEAD);
+        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
+        declaration.beacon = address(beacon);
+        declaration.beaconCodeHash = address(beacon).codehash;
+        this.externalCheckBeacon(declaration, sImplementation, sOwner);
+    }
+
+    function externalStateAt(DeployBeacon memory beacon, uint256 state) external pure returns (BeaconState memory) {
+        return LibRainDeployBeacon.stateAt(beacon, state);
+    }
+
+    function testStateAtPastTheLastTransitionReverts() external {
+        DeployBeacon memory beacon = declared(upgradeThenHandover());
+        vm.expectRevert(stdError.indexOOBError);
+        this.externalStateAt(beacon, 3);
     }
 }

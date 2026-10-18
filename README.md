@@ -352,9 +352,11 @@ a distinct migration, refused otherwise with `BeaconTransitionMigrationRepeated`
 before the registry is read. A transition written in another line names the
 earlier one, or a record after it, as a prerequisite. Apply a transition's
 migration in the same transaction as the beacon change it describes (one Safe
-batch: `upgradeTo` or `transferOwnership`, then `applyMigration`). Between two
-separate transactions the chain group refuses the network, as the chain and the
-registry disagree.
+batch: `upgradeTo` or `transferOwnership`, then `applyMigration`; for an
+`Ownable2Step` beacon the handover's migration goes in the batch that calls
+`acceptOwnership`, as `owner()` moves only then). Between two separate
+transactions the chain group refuses the network, as the chain and the registry
+disagree.
 
 ## Deploy verification
 
