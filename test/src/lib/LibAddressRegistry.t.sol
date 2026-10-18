@@ -6,7 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibAddressRegistry} from "../../../src/lib/LibAddressRegistry.sol";
 import {LibAddressRegistryDeploy} from "../../../src/lib/LibAddressRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
+import {IAddressRegistryV2} from "../../../src/interface/IAddressRegistryV2.sol";
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
 import {DELEGATION_DESIGNATOR_LENGTH, LibAccountCode} from "../../lib/LibAccountCode.sol";
 import {MockSafeResolvedOwner} from "../../concrete/MockSafeResolvedOwner.sol";
@@ -18,39 +18,72 @@ import {MockSafeResolvedOwner} from "../../concrete/MockSafeResolvedOwner.sol";
 contract LibAddressRegistryTest is Test {
     /// Deploys `AddressRegistry` through the Zoltu factory.
     /// @return The deployed registry.
-    function deployRegistry() internal returns (IAddressRegistryV1) {
-        return IAddressRegistryV1(LibRainDeploy.etchAndDeployZoltu(vm, type(AddressRegistry).creationCode));
+    function deployRegistry() internal returns (IAddressRegistryV2) {
+        return IAddressRegistryV2(LibRainDeploy.etchAndDeployZoltu(vm, type(AddressRegistry).creationCode));
     }
 
     /// External wrapper for `resolve`, for `vm.expectRevert`'s call depth.
     /// @param name The name to resolve.
-    /// @return The address bound to `name`.
-    function externalResolve(bytes32 name) external view returns (address) {
-        (address account,) = LibAddressRegistry.resolve(name);
-        return account;
+    /// @return The value bound to `name`.
+    function externalResolve(bytes32 name) external view returns (bytes memory) {
+        (bytes memory value,) = LibAddressRegistry.resolve(name);
+        return value;
     }
 
-    /// The address half of `resolve`.
+    /// The value half of `resolve`, decoded as the address binding every test
+    /// here makes.
     /// @param name The name to resolve.
     /// @return The address bound to `name`.
     function resolveAddress(bytes32 name) internal view returns (address) {
-        (address account,) = LibAddressRegistry.resolve(name);
-        return account;
+        (bytes memory value,) = LibAddressRegistry.resolve(name);
+        return abi.decode(value, (address));
+    }
+
+    /// `resolve` hands back the bound bytes verbatim, whatever they encode and
+    /// whether or not they are valid ABI for any type: decoding is the caller's
+    /// and the library neither checks nor reshapes the value.
+    function testResolveReturnsValueVerbatim(bytes32 name, bytes memory value, uint96 time) external {
+        vm.assume(value.length > 0);
+        IAddressRegistryV2 registry = deployRegistry();
+
+        time = uint96(bound(time, 1, type(uint96).max));
+        vm.warp(time);
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, value);
+
+        (bytes memory resolved, uint256 registeredAt) = LibAddressRegistry.resolve(name);
+        assertEq(resolved, value);
+        assertEq(registeredAt, time);
+        vm.warp(uint256(time) + 2);
+        assertEq(LibAddressRegistry.resolveSafe(name, 1), value);
+    }
+
+    /// A consumer that decodes a binding of the wrong shape reverts in its
+    /// constructor rather than coming into existence holding a misread value:
+    /// a packed 20-byte address is too short for `abi.decode(value, (address))`.
+    function testConsumerRefusesWrongShape(bytes32 name, address account) external {
+        IAddressRegistryV2 registry = deployRegistry();
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        registry.register(name, abi.encodePacked(account));
+        vm.warp(block.timestamp + 2);
+
+        // Solidity reverts a failed `abi.decode` with no data.
+        vm.expectRevert(bytes(""));
+        new MockSafeResolvedOwner(name, 1);
     }
 
     /// A bound name resolves to the address it is bound to, and to the moment
     /// that address was bound.
     function testResolveRegistered(bytes32 name, address account, uint96 time) external {
-        vm.assume(account != address(0));
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         time = uint96(bound(time, 1, type(uint96).max));
         vm.warp(time);
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
 
-        (address resolved, uint256 registeredAt) = LibAddressRegistry.resolve(name);
-        assertEq(resolved, account);
+        (bytes memory resolved, uint256 registeredAt) = LibAddressRegistry.resolve(name);
+        assertEq(resolved, abi.encode(account));
         assertEq(registeredAt, time);
     }
 
@@ -59,25 +92,23 @@ contract LibAddressRegistryTest is Test {
     function testResolveFollowsRebinding(bytes32 name, address bound, address account, uint96 first, uint96 second)
         external
     {
-        vm.assume(bound != address(0));
-        vm.assume(account != address(0));
         vm.assume(bound != account);
         // `vm.assume` rather than `bound` because this test's `bound` parameter
         // shadows forge-std's helper of that name.
         vm.assume(first > 0);
         vm.assume(second > first);
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.warp(first);
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, bound);
+        registry.register(name, abi.encode(bound));
         assertEq(resolveAddress(name), bound);
 
         vm.warp(second);
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
-        (address resolved, uint256 registeredAt) = LibAddressRegistry.resolve(name);
-        assertEq(resolved, account);
+        registry.register(name, abi.encode(account));
+        (bytes memory resolved, uint256 registeredAt) = LibAddressRegistry.resolve(name);
+        assertEq(resolved, abi.encode(account));
         assertEq(registeredAt, second);
     }
 
@@ -85,7 +116,7 @@ contract LibAddressRegistryTest is Test {
     function testResolveUnregistered(bytes32 name) external {
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name));
+        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV2.NameNotRegistered.selector, name));
         this.externalResolve(name);
     }
 
@@ -169,34 +200,32 @@ contract LibAddressRegistryTest is Test {
     /// @param name The name to resolve.
     /// @param minAge The least time the binding must have stood.
     /// @return The address bound to `name`.
-    function externalResolveSafe(bytes32 name, uint256 minAge) external view returns (address) {
+    function externalResolveSafe(bytes32 name, uint256 minAge) external view returns (bytes memory) {
         return LibAddressRegistry.resolveSafe(name, minAge);
     }
 
     /// A binding that has stood longer than the caller's minimum resolves to its
     /// address.
     function testResolveSafeOldEnough(bytes32 name, address account, uint64 minAge, uint64 extra) external {
-        vm.assume(account != address(0));
         vm.assume(minAge > 0);
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
 
         extra = uint64(bound(extra, 1, type(uint64).max));
         vm.warp(block.timestamp + uint256(minAge) + uint256(extra));
-        assertEq(LibAddressRegistry.resolveSafe(name, minAge), account);
+        assertEq(LibAddressRegistry.resolveSafe(name, minAge), abi.encode(account));
     }
 
     /// A binding exactly `minAge` old is REFUSED: the binding must have stood
     /// for strictly longer.
     function testResolveSafeRefusesExactlyMinAge(bytes32 name, address account, uint64 minAge) external {
-        vm.assume(account != address(0));
         vm.assume(minAge > 0);
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
 
         vm.warp(block.timestamp + uint256(minAge));
         vm.expectRevert(
@@ -207,26 +236,24 @@ contract LibAddressRegistryTest is Test {
 
     /// One second past `minAge` is accepted.
     function testResolveSafeAcceptsOneSecondPastMinAge(bytes32 name, address account, uint64 minAge) external {
-        vm.assume(account != address(0));
         vm.assume(minAge > 0);
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
 
         vm.warp(block.timestamp + uint256(minAge) + 1);
-        assertEq(LibAddressRegistry.resolveSafe(name, minAge), account);
+        assertEq(LibAddressRegistry.resolveSafe(name, minAge), abi.encode(account));
     }
 
     /// A binding younger than the minimum is refused, and the revert carries the
     /// age it had and the age it needed.
     function testResolveSafeTooFresh(bytes32 name, address account, uint64 age, uint64 minAge) external {
-        vm.assume(account != address(0));
         vm.assume(age < minAge);
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
 
         vm.warp(block.timestamp + uint256(age));
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.BindingTooFresh.selector, name, age, minAge));
@@ -235,12 +262,11 @@ contract LibAddressRegistryTest is Test {
 
     /// A binding made in the block being read is refused by any nonzero minimum.
     function testResolveSafeSameBlockRefused(bytes32 name, address account, uint64 minAge) external {
-        vm.assume(account != address(0));
         vm.assume(minAge > 0);
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.BindingTooFresh.selector, name, 0, minAge));
         this.externalResolveSafe(name, minAge);
@@ -249,11 +275,10 @@ contract LibAddressRegistryTest is Test {
     /// A minimum of zero is refused rather than honoured, even for a binding
     /// that would pass any real threshold.
     function testResolveSafeZeroMinAgeRefused(bytes32 name, address account, uint64 aged) external {
-        vm.assume(account != address(0));
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
         vm.warp(block.timestamp + uint256(aged));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.ZeroMinAge.selector, name));
@@ -283,21 +308,19 @@ contract LibAddressRegistryTest is Test {
     function testResolveSafeRebindResetsAge(bytes32 name, address boundTo, address account, uint64 minAge, uint64 aged)
         external
     {
-        vm.assume(boundTo != address(0));
-        vm.assume(account != address(0));
         vm.assume(minAge > 0);
         vm.assume(minAge < type(uint64).max);
         aged = uint64(bound(aged, uint256(minAge) + 1, type(uint64).max));
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, boundTo);
+        registry.register(name, abi.encode(boundTo));
 
         vm.warp(block.timestamp + uint256(aged));
-        assertEq(LibAddressRegistry.resolveSafe(name, minAge), boundTo);
+        assertEq(LibAddressRegistry.resolveSafe(name, minAge), abi.encode(boundTo));
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.BindingTooFresh.selector, name, 0, minAge));
         this.externalResolveSafe(name, minAge);
@@ -307,14 +330,13 @@ contract LibAddressRegistryTest is Test {
     /// rather than reverting on an underflow of `block.timestamp -
     /// registeredAt`.
     function testResolveSafeStampedInFuture(bytes32 name, address account, uint64 ahead, uint64 minAge) external {
-        vm.assume(account != address(0));
         vm.assume(ahead > 0);
         vm.assume(minAge > 0);
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.warp(uint256(ahead) + 1);
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
 
         // The clock goes backwards, leaving the binding stamped ahead of it.
         vm.warp(1);
@@ -328,13 +350,12 @@ contract LibAddressRegistryTest is Test {
 
     /// A future stamp is refused however large the caller's minimum.
     function testResolveSafeStampedInFutureRefusedAtAnyMinAge(bytes32 name, address account, uint64 ahead) external {
-        vm.assume(account != address(0));
         vm.assume(ahead > 0);
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.warp(uint256(ahead) + 1);
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
         vm.warp(1);
 
         uint256[3] memory minAges = [uint256(1), uint256(type(uint64).max), type(uint256).max];
@@ -351,12 +372,11 @@ contract LibAddressRegistryTest is Test {
     /// A binding stamped at exactly the clock is NOT in the future — it is the
     /// too-fresh case, which is the boundary between the two errors.
     function testResolveSafeSameTimestampIsFreshNotFuture(bytes32 name, address account, uint64 minAge) external {
-        vm.assume(account != address(0));
         vm.assume(minAge > 0);
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.BindingTooFresh.selector, name, 0, minAge));
         this.externalResolveSafe(name, minAge);
@@ -368,7 +388,7 @@ contract LibAddressRegistryTest is Test {
         vm.assume(minAge > 0);
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name));
+        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV2.NameNotRegistered.selector, name));
         this.externalResolveSafe(name, minAge);
     }
 
@@ -390,12 +410,11 @@ contract LibAddressRegistryTest is Test {
     /// A consumer resolving once, in its constructor, under its own threshold
     /// comes into existence holding the vetted address.
     function testResolveSafeFromConstructor(bytes32 name, address account, uint64 minAge, uint64 extra) external {
-        vm.assume(account != address(0));
         vm.assume(minAge > 0);
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
         extra = uint64(bound(extra, 1, type(uint64).max));
         vm.warp(block.timestamp + uint256(minAge) + uint256(extra));
 
@@ -408,12 +427,11 @@ contract LibAddressRegistryTest is Test {
     function testResolveSafeFromConstructorRefusesFreshBinding(bytes32 name, address account, uint64 minAge, uint64 age)
         external
     {
-        vm.assume(account != address(0));
         vm.assume(age < minAge);
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
 
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
         vm.warp(block.timestamp + uint256(age));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistry.BindingTooFresh.selector, name, age, minAge));

@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
-import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
+import {IAddressRegistryV2} from "../../../src/interface/IAddressRegistryV2.sol";
 import {LibAddressRegistry} from "../../../src/lib/LibAddressRegistry.sol";
 import {LibAddressRegistryDeploy} from "../../../src/lib/LibAddressRegistryDeploy.sol";
 import {LibAddressRegistryRegister} from "../../../src/lib/LibAddressRegistryRegister.sol";
@@ -30,12 +30,12 @@ contract LibAddressRegistryRegisterTest is Test {
     /// Deploys the real registry at its pinned address and sets the chain id to
     /// Base's.
     /// @return The registry.
-    function deployRegistry() internal returns (IAddressRegistryV1) {
+    function deployRegistry() internal returns (IAddressRegistryV2) {
         vm.chainId(base().chainId);
         LibRainDeploy.etchZoltuFactory(vm);
         address registry = LibRainDeploy.deployZoltu(type(AddressRegistry).creationCode);
         assertEq(registry, LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
-        return IAddressRegistryV1(registry);
+        return IAddressRegistryV2(registry);
     }
 
     /// One-element string list.
@@ -69,7 +69,7 @@ contract LibAddressRegistryRegisterTest is Test {
         LibAddressRegistryRegister.checkSender(sender);
     }
 
-    function externalCurrentBinding(bytes32 name) external view returns (address, uint256) {
+    function externalCurrentBinding(bytes32 name) external view returns (bytes memory, uint256) {
         return LibAddressRegistryRegister.currentBinding(name);
     }
 
@@ -77,9 +77,9 @@ contract LibAddressRegistryRegisterTest is Test {
         SupportedNetwork memory network,
         address sender,
         bytes32 name,
-        address account
+        bytes memory value
     ) external returns (bool) {
-        return LibAddressRegistryRegister.registerOnSelectedChain(vm, network, sender, name, account);
+        return LibAddressRegistryRegister.registerOnSelectedChain(vm, network, sender, name, value);
     }
 
     function externalRegisterOnNetworks(
@@ -87,9 +87,9 @@ contract LibAddressRegistryRegisterTest is Test {
         string[] memory declared,
         address sender,
         string memory name,
-        address account
+        bytes memory value
     ) external returns (uint256[] memory) {
-        return LibAddressRegistryRegister.registerOnNetworks(vm, selected, declared, sender, name, account);
+        return LibAddressRegistryRegister.registerOnNetworks(vm, selected, declared, sender, name, value);
     }
 
     function externalCheckRegisteredOnForks(
@@ -97,18 +97,18 @@ contract LibAddressRegistryRegisterTest is Test {
         string[] memory declared,
         uint256[] memory forkIds,
         string memory name,
-        address account
+        bytes memory value
     ) external {
-        LibAddressRegistryRegister.checkRegisteredOnForks(vm, selected, declared, forkIds, name, account);
+        LibAddressRegistryRegister.checkRegisteredOnForks(vm, selected, declared, forkIds, name, value);
     }
 
     function externalCheckRegisteredOnNetworks(
         string[] memory selected,
         string[] memory declared,
         string memory name,
-        address account
+        bytes memory value
     ) external {
-        LibAddressRegistryRegister.checkRegisteredOnNetworks(vm, selected, declared, name, account);
+        LibAddressRegistryRegister.checkRegisteredOnNetworks(vm, selected, declared, name, value);
     }
 
     /// The name is the `keccak256` of its string, the derivation consumers
@@ -219,28 +219,28 @@ contract LibAddressRegistryRegisterTest is Test {
     }
 
     /// The input refusals come before anything is forked, in order: name,
-    /// account, networks, sender. Every case here would otherwise reach a fork
+    /// value, networks, sender. Every case here would otherwise reach a fork
     /// of a network this test supplies no endpoint for.
     function testRegisterOnNetworksRefusesInputsInOrder(address sender) external {
         vm.assume(sender != ADDRESS_REGISTRY_ROOT);
         string[] memory declared = LibRainDeploy.supportedNetworks();
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NonCanonicalName.selector, "A"));
-        this.externalRegisterOnNetworks(new string[](0), declared, sender, "A", address(0));
+        this.externalRegisterOnNetworks(new string[](0), declared, sender, "A", "");
 
-        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.ZeroAccount.selector, keccak256("a.b")));
-        this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", address(0));
+        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV2.EmptyValue.selector, keccak256("a.b")));
+        this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", "");
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", address(1));
+        this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", abi.encode(address(1)));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
-        this.externalRegisterOnNetworks(list("nowhere"), declared, sender, "a.b", address(1));
+        this.externalRegisterOnNetworks(list("nowhere"), declared, sender, "a.b", abi.encode(address(1)));
 
         vm.expectRevert(
             abi.encodeWithSelector(LibAddressRegistryRegister.SenderNotRoot.selector, sender, ADDRESS_REGISTRY_ROOT)
         );
-        this.externalRegisterOnNetworks(list("base"), declared, sender, "a.b", address(1));
+        this.externalRegisterOnNetworks(list("base"), declared, sender, "a.b", abi.encode(address(1)));
     }
 
     /// The confirmed check refuses its inputs before anything is forked.
@@ -248,13 +248,13 @@ contract LibAddressRegistryRegisterTest is Test {
         string[] memory declared = LibRainDeploy.supportedNetworks();
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NonCanonicalName.selector, "A"));
-        this.externalCheckRegisteredOnNetworks(list("base"), declared, "A", address(1));
+        this.externalCheckRegisteredOnNetworks(list("base"), declared, "A", abi.encode(address(1)));
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalCheckRegisteredOnNetworks(new string[](0), declared, "a.b", address(1));
+        this.externalCheckRegisteredOnNetworks(new string[](0), declared, "a.b", abi.encode(address(1)));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
-        this.externalCheckRegisteredOnNetworks(list("nowhere"), declared, "a.b", address(1));
+        this.externalCheckRegisteredOnNetworks(list("nowhere"), declared, "a.b", abi.encode(address(1)));
     }
 
     /// The fork check refuses fork ids that do not pair with the networks,
@@ -262,13 +262,13 @@ contract LibAddressRegistryRegisterTest is Test {
     function testCheckRegisteredOnForksRefusesUnpairedForks() external {
         string[] memory declared = LibRainDeploy.supportedNetworks();
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, 2, 1));
-        this.externalCheckRegisteredOnForks(list("base", "arbitrum"), declared, new uint256[](1), "a.b", address(1));
+        this.externalCheckRegisteredOnForks(list("base", "arbitrum"), declared, new uint256[](1), "a.b", abi.encode(address(1)));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NonCanonicalName.selector, "A"));
-        this.externalCheckRegisteredOnForks(list("base"), declared, new uint256[](1), "A", address(1));
+        this.externalCheckRegisteredOnForks(list("base"), declared, new uint256[](1), "A", abi.encode(address(1)));
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
-        this.externalCheckRegisteredOnForks(list("nowhere"), declared, new uint256[](1), "a.b", address(1));
+        this.externalCheckRegisteredOnForks(list("nowhere"), declared, new uint256[](1), "a.b", abi.encode(address(1)));
     }
 
     /// A chain that is not the network's is refused before the registry is
@@ -282,7 +282,7 @@ contract LibAddressRegistryRegisterTest is Test {
                 LibAddressRegistryRegister.UnexpectedChainId.selector, "base", base().chainId, uint256(chainId)
             )
         );
-        this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, keccak256("a"), address(1));
+        this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, keccak256("a"), abi.encode(address(1)));
     }
 
     /// A registry address without the pinned code is refused.
@@ -295,7 +295,7 @@ contract LibAddressRegistryRegisterTest is Test {
                 bytes32(0)
             )
         );
-        this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, keccak256("a"), address(1));
+        this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, keccak256("a"), abi.encode(address(1)));
     }
 
     /// Something else at the registry address is refused.
@@ -313,19 +313,19 @@ contract LibAddressRegistryRegisterTest is Test {
                 LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.codehash
             )
         );
-        this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, keccak256("a"), address(1));
+        this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, keccak256("a"), abi.encode(address(1)));
     }
 
     /// An unbound name is bound, from the sender.
-    function testRegisterUnbound(bytes32 name, address account, uint96 time) external {
-        vm.assume(account != address(0));
+    function testRegisterUnbound(bytes32 name, bytes memory value, uint96 time) external {
+        vm.assume(value.length > 0);
         time = uint96(bound(time, 1, type(uint96).max));
-        IAddressRegistryV1 registry = deployRegistry();
+        IAddressRegistryV2 registry = deployRegistry();
         vm.warp(time);
 
-        assertTrue(this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, name, account));
-        (address bound_, uint256 registeredAt) = registry.get(name);
-        assertEq(bound_, account);
+        assertTrue(this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, name, value));
+        (bytes memory bound_, uint256 registeredAt) = registry.get(name);
+        assertEq(bound_, value);
         assertEq(registeredAt, time);
     }
 
@@ -335,61 +335,82 @@ contract LibAddressRegistryRegisterTest is Test {
         vm.assume(sender != ADDRESS_REGISTRY_ROOT);
         deployRegistry();
         vm.warp(1);
-        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NotRoot.selector, sender));
-        this.externalRegisterOnSelectedChain(base(), sender, keccak256("a"), address(1));
+        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV2.NotRoot.selector, sender));
+        this.externalRegisterOnSelectedChain(base(), sender, keccak256("a"), abi.encode(address(1)));
     }
 
-    /// A name bound to another account is re-bound.
-    function testRegisterRebinds(bytes32 name, address previous, address account) external {
-        vm.assume(previous != address(0));
-        vm.assume(account != address(0));
-        vm.assume(previous != account);
-        IAddressRegistryV1 registry = deployRegistry();
+    /// A name bound to another value is re-bound.
+    function testRegisterRebinds(bytes32 name, bytes memory previous, bytes memory value) external {
+        vm.assume(previous.length > 0);
+        vm.assume(value.length > 0);
+        vm.assume(keccak256(previous) != keccak256(value));
+        IAddressRegistryV2 registry = deployRegistry();
         vm.warp(1);
         vm.prank(ADDRESS_REGISTRY_ROOT);
         registry.register(name, previous);
         vm.warp(2);
 
-        assertTrue(this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, name, account));
-        (address bound_, uint256 registeredAt) = registry.get(name);
-        assertEq(bound_, account);
+        assertTrue(this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, name, value));
+        (bytes memory bound_, uint256 registeredAt) = registry.get(name);
+        assertEq(bound_, value);
         assertEq(registeredAt, 2);
     }
 
-    /// A name already bound to the account is skipped: nothing is broadcast,
-    /// so the moment stays the original bind's.
-    function testRegisterSkipsSameBinding(bytes32 name, address account) external {
-        vm.assume(account != address(0));
-        IAddressRegistryV1 registry = deployRegistry();
+    /// A value that differs from the bound one only past its first word, or
+    /// only in length, is a different value and is re-bound: the comparison is
+    /// of the whole value.
+    function testRegisterRebindsNearMisses() external {
+        bytes32 name = keccak256("a.b");
+        IAddressRegistryV2 registry = deployRegistry();
+        bytes memory previous = abi.encode(uint256(1), uint256(2));
+        bytes[3] memory nearMisses =
+            [abi.encode(uint256(1), uint256(3)), abi.encode(uint256(1)), abi.encode(uint256(1), uint256(2), uint256(0))];
+        for (uint256 i = 0; i < nearMisses.length; i++) {
+            vm.warp(2 * i + 1);
+            vm.prank(ADDRESS_REGISTRY_ROOT);
+            registry.register(name, previous);
+            vm.warp(2 * i + 2);
+
+            assertTrue(this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, name, nearMisses[i]));
+            (bytes memory bound_,) = registry.get(name);
+            assertEq(bound_, nearMisses[i]);
+        }
+    }
+
+    /// A name already bound to the value is skipped: nothing is broadcast, so
+    /// the moment stays the original bind's.
+    function testRegisterSkipsSameBinding(bytes32 name, bytes memory value) external {
+        vm.assume(value.length > 0);
+        IAddressRegistryV2 registry = deployRegistry();
         vm.warp(1);
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, value);
         vm.warp(2);
 
-        assertFalse(this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, name, account));
-        (address bound_, uint256 registeredAt) = registry.get(name);
-        assertEq(bound_, account);
+        assertFalse(this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, name, value));
+        (bytes memory bound_, uint256 registeredAt) = registry.get(name);
+        assertEq(bound_, value);
         assertEq(registeredAt, 1);
     }
 
-    /// An unbound name reads as the zero address and moment; a bound one as its
-    /// binding.
-    function testCurrentBinding(bytes32 name, bytes32 other, address account) external {
-        vm.assume(account != address(0));
+    /// An unbound name reads as an empty value and a zero moment; a bound one
+    /// as its binding.
+    function testCurrentBinding(bytes32 name, bytes32 other, bytes memory value) external {
+        vm.assume(value.length > 0);
         vm.assume(name != other);
-        IAddressRegistryV1 registry = deployRegistry();
-        (address bound_, uint256 registeredAt) = LibAddressRegistryRegister.currentBinding(name);
-        assertEq(bound_, address(0));
+        IAddressRegistryV2 registry = deployRegistry();
+        (bytes memory bound_, uint256 registeredAt) = LibAddressRegistryRegister.currentBinding(name);
+        assertEq(bound_, "");
         assertEq(registeredAt, 0);
 
         vm.warp(7);
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, value);
         (bound_, registeredAt) = LibAddressRegistryRegister.currentBinding(name);
-        assertEq(bound_, account);
+        assertEq(bound_, value);
         assertEq(registeredAt, 7);
         (bound_, registeredAt) = LibAddressRegistryRegister.currentBinding(other);
-        assertEq(bound_, address(0));
+        assertEq(bound_, "");
         assertEq(registeredAt, 0);
     }
 
@@ -398,7 +419,7 @@ contract LibAddressRegistryRegisterTest is Test {
     /// as it was.
     function testCurrentBindingReraisesOtherReverts(bytes32 name, bytes32 other) external {
         vm.assume(name != other);
-        bytes memory otherName = abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, other);
+        bytes memory otherName = abi.encodeWithSelector(IAddressRegistryV2.NameNotRegistered.selector, other);
         deployCodeTo(
             "MockRevertingRegistry.sol",
             abi.encode(otherName),
@@ -424,46 +445,57 @@ contract LibAddressRegistryRegisterTest is Test {
         vm.expectRevert(bytes(""));
         this.externalCurrentBinding(name);
 
-        bytes memory thisName = abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name);
+        bytes memory thisName = abi.encodeWithSelector(IAddressRegistryV2.NameNotRegistered.selector, name);
         deployCodeTo(
             "MockRevertingRegistry.sol",
             abi.encode(thisName),
             LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS
         );
-        (address bound_, uint256 registeredAt) = this.externalCurrentBinding(name);
-        assertEq(bound_, address(0));
+        (bytes memory bound_, uint256 registeredAt) = this.externalCurrentBinding(name);
+        assertEq(bound_, "");
         assertEq(registeredAt, 0);
     }
 
-    /// The bind's calldata is `register(bytes32,address)` — selector
-    /// `0xd22057a9`, from `cast sig` — over the name hash and the account
-    /// left-padded to a word, and it is exactly the call the bind makes.
-    function testRegisterCalldataIsTheCallSent(bytes32 name, address account) external {
-        vm.assume(account != address(0));
-        bytes memory expected = abi.encodePacked(bytes4(0xd22057a9), name, uint256(uint160(account)));
-        assertEq(LibAddressRegistryRegister.registerCalldata(name, account), expected);
+    /// The bind's calldata is `register(bytes32,bytes)` — selector
+    /// `0x2a28e5a3`, from `cast sig` — over the name hash and the value as a
+    /// dynamic argument: its offset, its length and its bytes right-padded to
+    /// a word. It is exactly the call the bind makes.
+    function testRegisterCalldataIsTheCallSent(bytes32 name, bytes memory value) external {
+        vm.assume(value.length > 0);
+        bytes memory expected = abi.encodePacked(
+            bytes4(0x2a28e5a3),
+            name,
+            uint256(0x40),
+            uint256(value.length),
+            value,
+            new bytes((32 - value.length % 32) % 32)
+        );
+        assertEq(LibAddressRegistryRegister.registerCalldata(name, value), expected);
 
         deployRegistry();
         vm.warp(1);
         vm.expectCall(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS, expected, 1);
-        this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, name, account);
+        this.externalRegisterOnSelectedChain(base(), ADDRESS_REGISTRY_ROOT, name, value);
     }
 
-    /// The inputs record, field for field, for st0x's token-owner Safe. The
-    /// hash and calldata are `cast keccak st0x.token-owner-safe` and
-    /// `cast calldata "register(bytes32,address)" <hash> 0x…dEaD`.
+    /// The inputs record, field for field, for st0x's token-owner Safe bound to
+    /// `0x…dEaD`. The hash, value and calldata are `cast keccak
+    /// st0x.token-owner-safe`, `cast abi-encode "f(address)" 0x…dEaD` and
+    /// `cast calldata "register(bytes32,bytes)" <hash> <value>`.
     function testDescribeInputs() external pure {
         assertEq(
             LibAddressRegistryRegister.describeInputs(
-                vm, "st0x.token-owner-safe", address(0xdEaD), ADDRESS_REGISTRY_ROOT
+                vm, "st0x.token-owner-safe", abi.encode(address(0xdEaD)), ADDRESS_REGISTRY_ROOT
             ),
             string.concat(
                 "Name: st0x.token-owner-safe\n",
                 "Name hash (keccak256 of the name): 0xba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8\n",
-                "Account: 0x000000000000000000000000000000000000dEaD\n",
+                "Value: 0x000000000000000000000000000000000000000000000000000000000000dead\n",
                 "Sender (root): 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c\n",
-                "Registry: 0xe2B4C27224DdeFFf7D2B3b0e66E3955ab4e2466A\n",
-                "Calldata: 0xd22057a9ba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
+                "Registry: REGISTRY_ADDRESS_PLACEHOLDER\n",
+                "Calldata: 0x2a28e5a3ba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
+                "0000000000000000000000000000000000000000000000000000000000000040",
+                "0000000000000000000000000000000000000000000000000000000000000020",
                 "000000000000000000000000000000000000000000000000000000000000dead"
             )
         );
@@ -476,14 +508,14 @@ contract LibAddressRegistryRegisterTest is Test {
     }
 
     function externalDescribeInputs(string memory name) external pure returns (string memory) {
-        return LibAddressRegistryRegister.describeInputs(vm, name, address(0xdEaD), ADDRESS_REGISTRY_ROOT);
+        return LibAddressRegistryRegister.describeInputs(vm, name, abi.encode(address(0xdEaD)), ADDRESS_REGISTRY_ROOT);
     }
 
     /// An unbound name is a BIND.
     function testDescribeNetworkUnbound() external pure {
         assertEq(
-            LibAddressRegistryRegister.describeNetwork(vm, "base", 8453, address(0), 0, address(0xdEaD)),
-            "Network: base\n  chain id: 8453\n  current: unbound\n  BIND: -> 0x000000000000000000000000000000000000dEaD"
+            LibAddressRegistryRegister.describeNetwork(vm, "base", 8453, "", 0, hex"dead"),
+            "Network: base\n  chain id: 8453\n  current: unbound\n  BIND: -> 0xdead"
         );
     }
 
@@ -491,25 +523,30 @@ contract LibAddressRegistryRegisterTest is Test {
     /// was made.
     function testDescribeNetworkRebind() external pure {
         assertEq(
-            LibAddressRegistryRegister.describeNetwork(
-                vm, "arbitrum", 42161, ADDRESS_REGISTRY_ROOT, 7, address(0xdEaD)
-            ),
+            LibAddressRegistryRegister.describeNetwork(vm, "arbitrum", 42161, hex"0b30", 7, hex"dead"),
             string.concat(
-                "Network: arbitrum\n  chain id: 42161\n",
-                "  current: 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c (bound at 7)\n",
-                "  REBIND: -> 0x000000000000000000000000000000000000dEaD"
+                "Network: arbitrum\n  chain id: 42161\n", "  current: 0x0b30 (bound at 7)\n", "  REBIND: -> 0xdead"
             )
         );
     }
 
-    /// A name bound to the account already is a SKIP.
+    /// A name bound to the value already is a SKIP.
     function testDescribeNetworkSkip() external pure {
         assertEq(
-            LibAddressRegistryRegister.describeNetwork(vm, "flare", 14, address(0xdEaD), 7, address(0xdEaD)),
+            LibAddressRegistryRegister.describeNetwork(vm, "flare", 14, hex"dead", 7, hex"dead"),
             string.concat(
-                "Network: flare\n  chain id: 14\n",
-                "  current: 0x000000000000000000000000000000000000dEaD (bound at 7)\n",
-                "  SKIP: already bound to 0x000000000000000000000000000000000000dEaD"
+                "Network: flare\n  chain id: 14\n", "  current: 0xdead (bound at 7)\n", "  SKIP: already bound to 0xdead"
+            )
+        );
+    }
+
+    /// A bound value that differs from the one to bind only in length is a
+    /// REBIND, not a SKIP.
+    function testDescribeNetworkLengthMismatchIsRebind() external pure {
+        assertEq(
+            LibAddressRegistryRegister.describeNetwork(vm, "flare", 14, hex"dead00", 7, hex"dead"),
+            string.concat(
+                "Network: flare\n  chain id: 14\n", "  current: 0xdead00 (bound at 7)\n", "  REBIND: -> 0xdead"
             )
         );
     }

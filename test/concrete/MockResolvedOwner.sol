@@ -6,10 +6,11 @@ import {LibAddressRegistry} from "../../src/lib/LibAddressRegistry.sol";
 
 /// @title MockResolvedOwner
 /// @notice A consumer in the shape the address registry is designed for: it
-/// resolves a name exactly once, in its constructor, and stores the answer in an
-/// immutable. It never reads the registry again, so a later re-binding of that
-/// name cannot move what this contract holds — which is the property that makes
-/// verifying a deployment after deploying it meaningful.
+/// resolves a name exactly once, in its constructor, decodes the value as the
+/// type it expects, and stores the answer in an immutable. It never reads the
+/// registry again, so a later re-binding of that name cannot move what this
+/// contract holds — which is the property that makes verifying a deployment
+/// after deploying it meaningful.
 contract MockResolvedOwner {
     /// The address the registry answered with at construction, and forever.
     address public immutable iOwner;
@@ -17,9 +18,9 @@ contract MockResolvedOwner {
     /// @param name The name to resolve, once.
     constructor(bytes32 name) {
         // The moment the name was bound is discarded: this mock exists to show
-        // that the ADDRESS cannot move afterwards, and a consumer that wanted
-        // to refuse a freshly bound answer would read it here instead.
-        (address owner,) = LibAddressRegistry.resolve(name);
-        iOwner = owner;
+        // that the VALUE cannot move afterwards, and a consumer that wanted to
+        // refuse a freshly bound answer would read it here instead.
+        (bytes memory value,) = LibAddressRegistry.resolve(name);
+        iOwner = abi.decode(value, (address));
     }
 }

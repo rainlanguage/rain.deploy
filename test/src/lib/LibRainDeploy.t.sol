@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeployDependency, LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
-import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
+import {IAddressRegistryV2} from "../../../src/interface/IAddressRegistryV2.sol";
 import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
@@ -1439,12 +1439,12 @@ contract LibRainDeployTest is Test {
     /// @return The deployed consumer holding the resolved address.
     function deployRegistryAndConsumer(bytes32 name, address account)
         internal
-        returns (IAddressRegistryV1, MockResolvedOwner)
+        returns (IAddressRegistryV2, MockResolvedOwner)
     {
-        IAddressRegistryV1 registry =
-            IAddressRegistryV1(LibRainDeploy.etchAndDeployZoltu(vm, type(AddressRegistry).creationCode));
+        IAddressRegistryV2 registry =
+            IAddressRegistryV2(LibRainDeploy.etchAndDeployZoltu(vm, type(AddressRegistry).creationCode));
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, account);
+        registry.register(name, abi.encode(account));
         MockResolvedOwner consumer = new MockResolvedOwner(name);
         return (registry, consumer);
     }
@@ -1522,14 +1522,14 @@ contract LibRainDeployTest is Test {
         vm.assume(account != address(0));
         vm.assume(rebound != address(0));
         vm.assume(rebound != account);
-        (IAddressRegistryV1 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+        (IAddressRegistryV2 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
         // A re-bind needs a later block: a name's moment strictly increases.
         vm.warp(block.timestamp + 1);
         vm.prank(ADDRESS_REGISTRY_ROOT);
-        registry.register(name, rebound);
-        (address nowBound,) = registry.get(name);
-        assertEq(nowBound, rebound);
+        registry.register(name, abi.encode(rebound));
+        (bytes memory nowBound,) = registry.get(name);
+        assertEq(nowBound, abi.encode(rebound));
 
         assertEq(consumer.iOwner(), account);
         LibRainDeploy.checkResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(account));

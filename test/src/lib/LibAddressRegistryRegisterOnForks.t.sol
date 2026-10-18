@@ -5,89 +5,151 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
-import {IAddressRegistryV1} from "../../../src/interface/IAddressRegistryV1.sol";
+import {IAddressRegistryV2} from "../../../src/interface/IAddressRegistryV2.sol";
 import {LibAddressRegistryDeploy} from "../../../src/lib/LibAddressRegistryDeploy.sol";
 import {LibAddressRegistryRegister} from "../../../src/lib/LibAddressRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
+import {LibAddressRegistryFork} from "../../lib/LibAddressRegistryFork.sol";
 
 /// @title LibAddressRegistryRegisterOnForksTest
 /// The fork loops of `LibAddressRegistryRegister`, against every supported
-/// network's live registry: a bind simulated on each network's fork, the
-/// simulation check on those forks, and the confirmed check on fresh forks —
-/// which have not seen the simulated bind and so must refuse it.
+/// network: a bind simulated on each network's fork, the simulation check on
+/// those forks, and the confirmed check on fresh forks — which have not seen
+/// the simulated bind and so must refuse it.
+///
+/// The candidate registry is live only once a release carrying it has been
+/// deployed. The simulated binds run on forks the candidate is deployed onto
+/// where it is absent, which is the state that deploy leaves; the entry point
+/// that forks for itself is run against the chains as they are, and the
+/// refusals expected on fresh forks are read off those chains.
 ///
 /// The name is fresh per run, so no live binding can satisfy or contradict
 /// anything here.
 contract LibAddressRegistryRegisterOnForksTest is Test {
+    function externalRegisterOnNetworks(string[] memory networks, string memory name, bytes memory value)
+        external
+        returns (uint256[] memory)
+    {
+        return LibAddressRegistryRegister.registerOnNetworks(vm, networks, networks, ADDRESS_REGISTRY_ROOT, name, value);
+    }
+
     function externalCheckRegisteredOnForks(
         string[] memory networks,
         uint256[] memory forkIds,
         string memory name,
-        address account
+        bytes memory value
     ) external {
-        LibAddressRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, account);
+        LibAddressRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);
     }
 
-    function externalCheckRegisteredOnNetworks(string[] memory networks, string memory name, address account) external {
-        LibAddressRegistryRegister.checkRegisteredOnNetworks(vm, networks, networks, name, account);
+    function externalCheckRegisteredOnNetworks(string[] memory networks, string memory name, bytes memory value)
+        external
+    {
+        LibAddressRegistryRegister.checkRegisteredOnNetworks(vm, networks, networks, name, value);
+    }
+
+    /// A fresh name, its hash, and a fresh address value.
+    function fresh() internal returns (string memory, bytes32, bytes memory) {
+        string memory name = string.concat("rain.deploy.register-test.", vm.toString(vm.randomUint()));
+        return (name, keccak256(bytes(name)), abi.encode(vm.randomAddress()));
+    }
+
+    /// One fork per network, each holding the candidate registry.
+    function forksWithRegistry(string[] memory networks) internal returns (uint256[] memory) {
+        uint256[] memory forkIds = LibRainDeploy.createForks(vm, networks);
+        for (uint256 i = 0; i < forkIds.length; i++) {
+            vm.selectFork(forkIds[i]);
+            LibAddressRegistryFork.ensureDeployed(vm);
+        }
+        return forkIds;
     }
 
     /// Binds a fresh name on every supported network's fork from root, reads
     /// it back on each, and shows the confirmed check reads the chains rather
     /// than the simulation.
     function testRegisterOnEveryNetwork() external {
-        string memory name = string.concat("rain.deploy.register-test.", vm.toString(vm.randomUint()));
-        bytes32 hashed = keccak256(bytes(name));
-        address account = vm.randomAddress();
-        vm.assume(account != address(0));
+        (string memory name, bytes32 hashed, bytes memory value) = fresh();
         string[] memory networks = LibRainDeploy.supportedNetworks();
         SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
 
-        uint256[] memory forkIds =
-            LibAddressRegistryRegister.registerOnNetworks(vm, networks, networks, ADDRESS_REGISTRY_ROOT, name, account);
-        assertEq(forkIds.length, networks.length);
+        uint256[] memory forkIds = forksWithRegistry(networks);
+        for (uint256 i = 0; i < forkIds.length; i++) {
+            vm.selectFork(forkIds[i]);
+            assertTrue(
+                LibAddressRegistryRegister.registerOnSelectedChain(vm, configs[i], ADDRESS_REGISTRY_ROOT, hashed, value)
+            );
+        }
 
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
             assertEq(block.chainid, configs[i].chainId, networks[i]);
-            (address bound,) =
-                IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(hashed);
-            assertEq(bound, account, networks[i]);
+            (bytes memory bound,) =
+                IAddressRegistryV2(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(hashed);
+            assertEq(bound, value, networks[i]);
         }
 
-        LibAddressRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, account);
+        LibAddressRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);
 
-        address other = address(uint160(account) ^ 1);
+        bytes memory other = abi.encodePacked(value, bytes1(0));
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibAddressRegistryRegister.UnexpectedBinding.selector, networks[0], hashed, other, account
+                LibAddressRegistryRegister.UnexpectedBinding.selector, networks[0], hashed, other, value
             )
         );
         this.externalCheckRegisteredOnForks(networks, forkIds, name, other);
 
-        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, hashed));
-        this.externalCheckRegisteredOnNetworks(networks, name, account);
+        vm.selectFork(vm.createFork(networks[0]));
+        vm.expectRevert(LibAddressRegistryFork.unboundResolveRevert(hashed));
+        this.externalCheckRegisteredOnNetworks(networks, name, value);
+    }
+
+    /// `registerOnNetworks`, which forks for itself, against the chains as they
+    /// are: it binds on every network when the candidate is deployed on every
+    /// one, and otherwise refuses on the code hash at the first network it is
+    /// missing from, having bound nothing anyone could read.
+    function testRegisterOnNetworksAgainstLiveChains() external {
+        (string memory name, bytes32 hashed, bytes memory value) = fresh();
+        string[] memory networks = LibRainDeploy.supportedNetworks();
+
+        uint256[] memory probes = LibRainDeploy.createForks(vm, networks);
+        bytes memory refusal = "";
+        for (uint256 i = 0; i < probes.length; i++) {
+            vm.selectFork(probes[i]);
+            if (!LibAddressRegistryFork.isDeployed()) {
+                refusal = LibAddressRegistryFork.unboundResolveRevert(hashed);
+                break;
+            }
+        }
+
+        if (refusal.length > 0) {
+            vm.expectRevert(refusal);
+            this.externalRegisterOnNetworks(networks, name, value);
+            return;
+        }
+        uint256[] memory forkIds = this.externalRegisterOnNetworks(networks, name, value);
+        assertEq(forkIds.length, networks.length);
+        LibAddressRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);
     }
 
     /// A subset binds on exactly the networks selected, in selection order.
     function testRegisterOnSubset() external {
-        string memory name = string.concat("rain.deploy.register-test.", vm.toString(vm.randomUint()));
-        bytes32 hashed = keccak256(bytes(name));
-        address account = vm.randomAddress();
-        vm.assume(account != address(0));
+        (string memory name, bytes32 hashed, bytes memory value) = fresh();
         string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.BASE;
         networks[1] = LibRainDeploy.ARBITRUM_ONE;
+        SupportedNetwork[] memory configs =
+            LibAddressRegistryRegister.selectNetworks(networks, LibRainDeploy.supportedNetworks());
 
-        uint256[] memory forkIds = LibAddressRegistryRegister.registerOnNetworks(
-            vm, networks, LibRainDeploy.supportedNetworks(), ADDRESS_REGISTRY_ROOT, name, account
-        );
-        assertEq(forkIds.length, 2);
+        uint256[] memory forkIds = forksWithRegistry(networks);
+        for (uint256 i = 0; i < forkIds.length; i++) {
+            vm.selectFork(forkIds[i]);
+            LibAddressRegistryRegister.registerOnSelectedChain(vm, configs[i], ADDRESS_REGISTRY_ROOT, hashed, value);
+        }
         vm.selectFork(forkIds[0]);
         assertEq(block.chainid, 8453);
         vm.selectFork(forkIds[1]);
         assertEq(block.chainid, 42161);
-        LibAddressRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, account);
+        LibAddressRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);
 
         // Forks paired with the wrong networks are refused on the chain id,
         // even though both registries hold the binding.
@@ -97,8 +159,8 @@ contract LibAddressRegistryRegisterOnForksTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(LibAddressRegistryRegister.UnexpectedChainId.selector, "base", 8453, 42161)
         );
-        this.externalCheckRegisteredOnForks(networks, swapped, name, account);
-        (address bound,) = IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(hashed);
-        assertEq(bound, account);
+        this.externalCheckRegisteredOnForks(networks, swapped, name, value);
+        (bytes memory bound,) = IAddressRegistryV2(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(hashed);
+        assertEq(bound, value);
     }
 }

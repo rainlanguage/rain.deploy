@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IAddressRegistryV1} from "../interface/IAddressRegistryV1.sol";
+import {IAddressRegistryV2} from "../interface/IAddressRegistryV2.sol";
 import {LibAddressRegistryDeploy} from "./LibAddressRegistryDeploy.sol";
 
 /// @title LibAddressRegistry
@@ -13,10 +13,13 @@ import {LibAddressRegistryDeploy} from "./LibAddressRegistryDeploy.sol";
 /// audited; the address plus the code hash says the caller is talking to the
 /// registry it compiled against.
 ///
-/// That is the whole library. It resolves a name to an address and the moment
-/// that address was bound, and will refuse a binding younger than the caller
-/// says it will accept. What a consumer resolves a name for, and when, is
-/// entirely the consumer's business and none of this library's.
+/// That is the whole library. It resolves a name to the ABI-encoded value bound
+/// to it and the moment that value was bound, and will refuse a binding younger
+/// than the caller says it will accept. It never decodes the value: only the
+/// caller knows the type it expects, so the caller decodes, as
+/// `abi.decode(value, (address))` for an address binding. What a consumer
+/// resolves a name for, and when, is entirely the consumer's business and none
+/// of this library's.
 ///
 /// Bindings are mutable, so `resolve` answers with whatever root has bound most
 /// recently. A caller that needs an answer that cannot move afterwards resolves
@@ -70,30 +73,34 @@ library LibAddressRegistry {
         }
     }
 
-    /// The address `name` is currently bound to in the registry, and when it was
+    /// The value `name` is currently bound to in the registry, and when it was
     /// bound.
     ///
     /// Verifies the registry's code hash before reading, so a chain where the
     /// registry is absent, or where something else occupies its address, is a
     /// loud revert rather than a call into unknown code. The registry itself
-    /// reverts on an unbound name, so a returned address is always a real
-    /// binding and is never the zero address.
+    /// reverts on an unbound name, so a returned value is always a real
+    /// binding and is never empty.
+    ///
+    /// The value is returned exactly as root bound it. The caller decodes it
+    /// with the type it expects, and `abi.decode` reverting on a value too short
+    /// for that type is the caller's guard against a binding of the wrong shape.
     /// @param name The name to resolve. Opaque; the registry constrains nothing
     /// about how it was derived.
-    /// @return The address bound to `name`.
+    /// @return The ABI-encoded value bound to `name`.
     /// @return The `block.timestamp` at which `name` was most recently bound.
-    function resolve(bytes32 name) internal view returns (address, uint256) {
+    function resolve(bytes32 name) internal view returns (bytes memory, uint256) {
         checkCodeHash();
         // Destructured rather than returned straight through, so both halves are
         // visibly used: a passed-through tuple reads to the analysers as a
         // return value nobody looked at.
-        (address account, uint256 registeredAt) =
-            IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name);
-        return (account, registeredAt);
+        (bytes memory value, uint256 registeredAt) =
+            IAddressRegistryV2(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name);
+        return (value, registeredAt);
     }
 
     /// `resolve`, refusing a binding that has not stood for longer than
-    /// `minAge`, and returning the address alone.
+    /// `minAge`, and returning the value alone.
     ///
     /// This is the check the registry leaves to consumers: a rebind timed to
     /// land immediately before a resolve is how a dormant root compromise
@@ -110,14 +117,15 @@ library LibAddressRegistry {
     /// @param name The name to resolve. Opaque, as in `resolve`.
     /// @param minAge The time, in seconds, the binding must have stood for.
     /// Never zero.
-    /// @return The address bound to `name`.
-    function resolveSafe(bytes32 name, uint256 minAge) internal view returns (address) {
+    /// @return The ABI-encoded value bound to `name`, for the caller to decode
+    /// as in `resolve`.
+    function resolveSafe(bytes32 name, uint256 minAge) internal view returns (bytes memory) {
         // First, so a caller that asked for no threshold is told so whatever the
         // registry would have said.
         if (minAge == 0) {
             revert ZeroMinAge(name);
         }
-        (address account, uint256 registeredAt) = resolve(name);
+        (bytes memory value, uint256 registeredAt) = resolve(name);
         // Checked before the subtraction, so a future stamp is reported as what
         // it is rather than underflowing. These comparisons really are about a
         // moment; a validator's seconds of slack cannot matter to a `minAge`
@@ -132,6 +140,6 @@ library LibAddressRegistry {
             revert BindingTooFresh(name, age, minAge);
         }
         // slither-disable-end timestamp
-        return account;
+        return value;
     }
 }

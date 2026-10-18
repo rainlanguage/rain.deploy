@@ -8,7 +8,7 @@ import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibAddressRegistryRegister} from "../src/lib/LibAddressRegistryRegister.sol";
 
 /// @title RegisterAddress
-/// @notice Binds `ADDRESS_REGISTRY_NAME` to `ADDRESS_REGISTRY_ACCOUNT` in the
+/// @notice Binds `ADDRESS_REGISTRY_NAME` to `ADDRESS_REGISTRY_VALUE` in the
 /// `AddressRegistry` on every network the declaration supports, or on the
 /// comma-separated subset `ADDRESS_REGISTRY_NETWORKS` names, signed by
 /// `ADDRESS_REGISTRY_ROOT` on a Ledger.
@@ -27,8 +27,10 @@ contract RegisterAddress is RegistryDeploySuites, Script {
     /// before hashing.
     string constant NAME_VAR = "ADDRESS_REGISTRY_NAME";
 
-    /// The environment variable holding the account to bind the name to.
-    string constant ACCOUNT_VAR = "ADDRESS_REGISTRY_ACCOUNT";
+    /// The environment variable holding the value to bind the name to, as
+    /// `0x`-prefixed hex of its ABI encoding: an address is
+    /// `cast abi-encode "f(address)" <account>`.
+    string constant VALUE_VAR = "ADDRESS_REGISTRY_VALUE";
 
     /// The environment variable narrowing the networks, comma separated.
     string constant NETWORKS_VAR = "ADDRESS_REGISTRY_NETWORKS";
@@ -42,19 +44,19 @@ contract RegisterAddress is RegistryDeploySuites, Script {
     }
 
     /// Binds the name on every selected network where it is not already bound
-    /// to the account.
+    /// to the value.
     /// @return The fork each selected network was simulated on.
     function run() external returns (uint256[] memory) {
         return LibAddressRegistryRegister.registerOnNetworks(
-            vm, selectedNetworks(), supportedNetworks(), msg.sender, vm.envString(NAME_VAR), vm.envAddress(ACCOUNT_VAR)
+            vm, selectedNetworks(), supportedNetworks(), msg.sender, vm.envString(NAME_VAR), vm.envBytes(VALUE_VAR)
         );
     }
 
     /// Reads every selected network fresh and reverts unless the name resolves
-    /// to the account on each.
+    /// to the value on each.
     function verify() external {
         LibAddressRegistryRegister.checkRegisteredOnNetworks(
-            vm, selectedNetworks(), supportedNetworks(), vm.envString(NAME_VAR), vm.envAddress(ACCOUNT_VAR)
+            vm, selectedNetworks(), supportedNetworks(), vm.envString(NAME_VAR), vm.envBytes(VALUE_VAR)
         );
     }
 }

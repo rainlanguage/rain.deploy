@@ -15,6 +15,6 @@ contract MockSafeResolvedOwner {
     /// @param minAge The least time the binding must have stood for this
     /// contract to accept it.
     constructor(bytes32 name, uint256 minAge) {
-        iOwner = LibAddressRegistry.resolveSafe(name, minAge);
+        iOwner = abi.decode(LibAddressRegistry.resolveSafe(name, minAge), (address));
     }
 }
