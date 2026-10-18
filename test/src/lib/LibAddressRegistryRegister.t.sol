@@ -495,7 +495,7 @@ contract LibAddressRegistryRegisterTest is Test {
                 "Name hash (keccak256 of the name): 0xba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8\n",
                 "Value: 0x000000000000000000000000000000000000000000000000000000000000dead\n",
                 "Sender (root): 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c\n",
-                "Registry: 0xBcd5d458a5ED06d3541E50fEb19ca4A0b8C17A42\n",
+                "Registry: 0x8Dca3056e0eB97b32E6e5aE83F87d158d78d4c7A\n",
                 "Calldata: 0x2a28e5a3ba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
                 "0000000000000000000000000000000000000000000000000000000000000040",
                 "0000000000000000000000000000000000000000000000000000000000000020",

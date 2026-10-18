@@ -2,10 +2,26 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {TimelockController} from "@openzeppelin-contracts-5.7.0/governance/TimelockController.sol";
 import {IAccessControl} from "@openzeppelin-contracts-5.7.0/access/IAccessControl.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
+
+/// @dev The reads `assertTimelockState` makes of an OpenZeppelin
+/// `TimelockController`, declared here rather than imported so that importing
+/// this library does not pull the dependency into the importer's compilation
+/// unit: `foundry.toml` restricts that source to the `timelock` profile, and
+/// every source sharing a unit with it is compiled under that profile too.
+interface ITimelockControllerState {
+    function getMinDelay() external view returns (uint256);
+    // forge-lint: disable-next-line(mixed-case-function)
+    function PROPOSER_ROLE() external view returns (bytes32);
+    // forge-lint: disable-next-line(mixed-case-function)
+    function EXECUTOR_ROLE() external view returns (bytes32);
+    // forge-lint: disable-next-line(mixed-case-function)
+    function CANCELLER_ROLE() external view returns (bytes32);
+    // forge-lint: disable-next-line(mixed-case-function)
+    function DEFAULT_ADMIN_ROLE() external view returns (bytes32);
+}
 
 /// @title LibTimelockController
 /// @notice A governance timelock as one audited artifact: an UNMODIFIED
@@ -198,7 +214,7 @@ library LibTimelockController {
             revert TimelockCodehashMismatch(timelock, bytecodeHash, actualCodehash);
         }
 
-        TimelockController controller = TimelockController(payable(timelock));
+        ITimelockControllerState controller = ITimelockControllerState(timelock);
         uint256 actualMinDelay = controller.getMinDelay();
         if (actualMinDelay != minDelay) {
             revert TimelockMinDelayMismatch(timelock, minDelay, actualMinDelay);
