@@ -132,21 +132,46 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         assertEq(deployed[0].code, LibRainDeployClone.cloneRuntimeCode(implementation));
     }
 
-    /// A Zoltu broadcast under `CLONE_ARTIFACT_PATH` formats no verify command.
-    function testZoltuBroadcastUnderTheCloneArtifactPathPrintsNoVerifyCommand() external {
+    /// A Zoltu broadcast under `CLONE_ARTIFACT_PATH` formats no verify command, and instead one notice naming the
+    /// deployed address once, whose source needs verifying by hand on each network.
+    function testZoltuBroadcastUnderTheCloneArtifactPathPrintsAManualVerificationNotice() external {
         LibRainDeploy.etchZoltuFactory(vm);
         DeploySuite memory suite = zoltuSuite(LibRainDeploy.zoltuAddress(type(MockCloneable).creationCode));
         suite.storedBytecodeHash = keccak256(type(MockCloneable).runtimeCode);
         suite.artifactPath = CLONE_ARTIFACT_PATH;
-        string[] memory networks = new string[](1);
+        string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.POLYGON;
 
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 1);
+        vm.expectCall(
+            address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector, suite.storedDeployedAddress), 1
+        );
+        address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
+        assertEq(deployed.length, 2);
+        assertEq(deployed[0], suite.storedDeployedAddress);
+        assertEq(deployed[1], suite.storedDeployedAddress);
+        assertEq(deployed[0].code, type(MockCloneable).runtimeCode);
+    }
+
+    /// A per-network clone broadcast formats no verify command and no notice, even under a compiled artifact's path.
+    function testPerNetworkBroadcastUnderACompiledArtifactPrintsNoVerifyCommand() external {
+        LibRainDeploy.etchAndDeployZoltu(vm, type(MockCloneFactory).creationCode);
+        address implementation = LibRainDeploy.etchAndDeployZoltu(vm, type(MockCloneable).creationCode);
+        CloneNetworks memory clones = exampleCloneNetworks();
+        DeploySuite memory suite = perNetworkSuite(clones);
+        suite.storedBytecodeHash = LibRainDeployClone.cloneDeployedCodehash(implementation);
+        suite.artifactPath = "test/concrete/MockCloneable.sol:MockCloneable";
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.POLYGON;
         LocalForkVm forkVm = new LocalForkVm();
         vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 0);
         address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
-        assertEq(deployed.length, 1);
-        assertEq(deployed[0], suite.storedDeployedAddress);
-        assertEq(deployed[0].code, type(MockCloneable).runtimeCode);
+        assertEq(deployed.length, 2);
+        assertEq(deployed[0], clones.networks[0].deployedAddress);
+        assertEq(deployed[1], clones.networks[1].deployedAddress);
     }
 
     /// A Zoltu broadcast under a compiled artifact path formats one verify command per network.

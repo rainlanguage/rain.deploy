@@ -228,9 +228,35 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         return index;
     }
 
-    /// The value of a `bytes` constant a code record declares: the `hex"..."`
-    /// literal on the declaration's line, or on the line after it when the
-    /// generator wrapped the declaration.
+    /// The value a code record's declaration on `lines[line]` gives: the last of exactly the writer's five
+    /// space-separated tokens, on the declaration's own line with `=` fourth, or on the line after it when the
+    /// generator wrapped the declaration after its `=`.
+    /// @param path The record file, for the error only.
+    /// @param line The declaration's line, which starts with its `<type> constant <NAME> =`.
+    /// @param line The declaration's line.
+    /// @return The value's token.
+    function declaredValue(string memory path, string[] memory lines, uint256 line)
+        internal
+        pure
+        returns (string memory)
+    {
+        string[] memory tokens = vm.split(lines[line], " ");
+        if (keccak256(bytes(tokens[3])) != keccak256("=")) {
+            revert FrozenCodeRecordUnreadable(path);
+        }
+        if (tokens.length == 4) {
+            if (line + 1 >= lines.length || vm.indexOf(lines[line + 1], "    ") != 0) {
+                revert FrozenCodeRecordUnreadable(path);
+            }
+            tokens = vm.split(lines[line + 1], " ");
+        }
+        if (tokens.length != 5) {
+            revert FrozenCodeRecordUnreadable(path);
+        }
+        return tokens[4];
+    }
+
+    /// The value of a `bytes` constant a code record declares: its `hex"..."` literal, read by `declaredValue`.
     /// @param path The record file, for the error only.
     /// @param lines The record's lines, block comments removed.
     /// @param line The declaration's line.
@@ -240,15 +266,8 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         pure
         returns (bytes memory)
     {
-        string memory literal = lines[line];
-        if (vm.indexOf(literal, "hex\"") == type(uint256).max) {
-            if (line + 1 >= lines.length || vm.indexOf(lines[line + 1], "    hex\"") != 0) {
-                revert FrozenCodeRecordUnreadable(path);
-            }
-            literal = lines[line + 1];
-        }
-        string[] memory opened = vm.split(literal, "hex\"");
-        if (opened.length != 2) {
+        string[] memory opened = vm.split(declaredValue(path, lines, line), "hex\"");
+        if (opened.length != 2 || bytes(opened[0]).length != 0) {
             revert FrozenCodeRecordUnreadable(path);
         }
         string[] memory closed = vm.split(opened[1], "\"");
@@ -259,6 +278,9 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
     function checkFrozenCodeRecord(string memory path, string memory record) internal pure {
+        if (LibRainDeploySnapshot.hasForeignLineBreak(vm, record)) {
+            revert FrozenCodeRecordUnreadable(path);
+        }
         string[] memory lines = LibRainDeploySnapshot.recordLines(vm, path, record);
         for (uint256 i = 0; i < lines.length; i++) {
             if (
@@ -272,8 +294,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         declarationLine(path, lines, CREATION_CODE_DECLARATION);
         uint256 runtimeLine = declarationLine(path, lines, RUNTIME_CODE_DECLARATION);
 
-        string[] memory tokens = vm.split(lines[hashLine], " ");
-        string memory literal = tokens[tokens.length - 1];
+        string memory literal = declaredValue(path, lines, hashLine);
         bytes32 storedBytecodeHash =
             vm.parseBytes32(vm.replace(vm.replace(vm.replace(literal, "bytes32(", ""), ")", ""), ";", ""));
         bytes32 runtimeCodeHash = keccak256(declaredBytes(path, lines, runtimeLine));

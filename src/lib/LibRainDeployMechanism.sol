@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
 
 import {DeployCandidate, DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
@@ -362,13 +363,36 @@ library LibRainDeployMechanism {
             suite.storedBytecodeHash,
             suite.dependencies
         );
-        if (
-            suite.mechanism == DeployMechanism.Zoltu
-                && keccak256(bytes(suite.artifactPath)) != keccak256(bytes(CLONE_ARTIFACT_PATH))
-        ) {
-            LibRainDeploy.logVerifyCommands(vm, networks, deploys.expectedAddresses[0], suite.artifactPath);
+        if (suite.mechanism == DeployMechanism.Zoltu) {
+            if (keccak256(bytes(suite.artifactPath)) != keccak256(bytes(CLONE_ARTIFACT_PATH))) {
+                LibRainDeploy.logVerifyCommands(vm, networks, deploys.expectedAddresses[0], suite.artifactPath);
+            } else {
+                console2.log(unverifiableSourceNotice(vm, networks, deploys.expectedAddresses[0]));
+            }
         }
         return (deploys.expectedAddresses, forkIds);
+    }
+
+    /// The notice that a Zoltu entry under `CLONE_ARTIFACT_PATH` names no compiled source to verify, so its source
+    /// needs verifying by hand on each network.
+    /// @param vm The Vm instance to format the address with.
+    /// @param networks The networks the entry is deployed on.
+    /// @param deployedAddress Where it is deployed on every one of them.
+    /// @return The notice.
+    function unverifiableSourceNotice(Vm vm, string[] memory networks, address deployedAddress)
+        internal
+        pure
+        returns (string memory)
+    {
+        string memory notice = string.concat(
+            "no verify command: the Zoltu entry carries the clone artifact path; verify the source at ",
+            vm.toString(deployedAddress),
+            " by hand on"
+        );
+        for (uint256 i = 0; i < networks.length; i++) {
+            notice = string.concat(notice, " ", networks[i]);
+        }
+        return notice;
     }
 
     /// A clone declaration as the `DeployCandidate` every other part of this package reads.

@@ -1382,7 +1382,8 @@ library LibRainDeploySnapshot {
     }
 
     /// The address the declaration on `lines[line]` names: its value from the next line when the writer wrapped it there,
-    /// and the last of exactly the writer's five space-separated tokens on whichever line carries it.
+    /// and the last of exactly the writer's five space-separated tokens on whichever line carries it, the fourth of an
+    /// unwrapped declaration being `=`.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file, for the error only.
     /// @param lines The record's lines, block comments removed.
@@ -1394,7 +1395,10 @@ library LibRainDeploySnapshot {
         returns (address)
     {
         string[] memory tokens = vm.split(lines[line], " ");
-        if (keccak256(bytes(tokens[tokens.length - 1])) == keccak256("=")) {
+        if (tokens.length < 4 || keccak256(bytes(tokens[3])) != keccak256("=")) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        if (tokens.length == 4) {
             if (line + 1 >= lines.length || vm.indexOf(lines[line + 1], "    address(") != 0) {
                 revert FrozenSnapshotUnreadable(path);
             }
@@ -1453,10 +1457,18 @@ library LibRainDeploySnapshot {
     /// @param record The record file's contents.
     /// @return The lines.
     function recordLines(Vm vm, string memory path, string memory record) internal pure returns (string[] memory) {
-        if (vm.contains(record, "\r") || vm.contains(record, "\x0b") || vm.contains(record, "\x0c")) {
+        if (hasForeignLineBreak(vm, record)) {
             revert FrozenSnapshotUnreadable(path);
         }
         return vm.split(withoutBlockComments(record), "\n");
+    }
+
+    /// Whether a record holds a line break other than `\n`: `\r`, `\x0b` or `\x0c`.
+    /// @param vm The Vm instance for string operations.
+    /// @param record The record file's contents.
+    /// @return Whether it holds one.
+    function hasForeignLineBreak(Vm vm, string memory record) internal pure returns (bool) {
+        return vm.contains(record, "\r") || vm.contains(record, "\x0b") || vm.contains(record, "\x0c");
     }
 
     /// A record's text with every block comment removed but its line breaks, read left to right: the first `*/` closes

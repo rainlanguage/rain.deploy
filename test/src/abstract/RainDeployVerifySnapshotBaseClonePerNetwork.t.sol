@@ -380,4 +380,34 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
             );
         }
     }
+
+    /// A declaration line with fewer than the writer's five tokens is unreadable, in both forms and with the per-network
+    /// form's `=` joined to the name.
+    function testDeclarationOfFewerThanFiveTokensIsUnreadable() external {
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", "address constant DEPLOYED_ADDRESS_1= address(0x0000000000000000000000000000000000000001);\n"
+        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", "address constant DEPLOYED_ADDRESS =address(0x0000000000000000000000000000000000000001);\n"
+        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", "address constant DEPLOYED_ADDRESS_1=address(0x0000000000000000000000000000000000000001);\n"
+        );
+    }
+
+    /// A declaration of five tokens whose fourth is not `=` is unreadable rather than read as a trailing comment's
+    /// last token, in both forms.
+    function testDeclarationWithoutASpacedEqualsIsUnreadable() external {
+        string memory value =
+            "=address(0x0000000000000000000000000000000000000001); //address(0x0000000000000000000000000000000000000002);\n";
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses("record.sol", string.concat("address constant DEPLOYED_ADDRESS ", value));
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", string.concat("address constant DEPLOYED_ADDRESS_1 ", value)
+        );
+    }
 }
