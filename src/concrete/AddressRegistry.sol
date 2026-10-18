@@ -90,12 +90,14 @@ contract AddressRegistry is IAddressRegistryV2 {
     function get(bytes32 name) external view returns (bytes memory, uint256) {
         Binding memory binding = sBindings[name];
         // Slither reaches this because `value` shares a struct with a value
-        // written from `block.timestamp`. There is no time in it.
-        // slither-disable-start timestamp
+        // written from `block.timestamp`. There is no time in it, and the
+        // strict equality is the definition of unbound: `register` refuses an
+        // empty value.
+        // slither-disable-start timestamp,incorrect-equality
         if (binding.value.length == 0) {
             revert NameNotRegistered(name);
         }
-        // slither-disable-end timestamp
+        // slither-disable-end timestamp,incorrect-equality
         return (binding.value, binding.registeredAt);
     }
 }

@@ -14,12 +14,16 @@ import {LibRainDeploy} from "./LibRainDeploy.sol";
 interface ITimelockControllerState {
     function getMinDelay() external view returns (uint256);
     // forge-lint: disable-next-line(mixed-case-function)
+    // slither-disable-next-line naming-convention
     function PROPOSER_ROLE() external view returns (bytes32);
     // forge-lint: disable-next-line(mixed-case-function)
+    // slither-disable-next-line naming-convention
     function EXECUTOR_ROLE() external view returns (bytes32);
     // forge-lint: disable-next-line(mixed-case-function)
+    // slither-disable-next-line naming-convention
     function CANCELLER_ROLE() external view returns (bytes32);
     // forge-lint: disable-next-line(mixed-case-function)
+    // slither-disable-next-line naming-convention
     function DEFAULT_ADMIN_ROLE() external view returns (bytes32);
 }
 
