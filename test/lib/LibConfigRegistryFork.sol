@@ -35,7 +35,7 @@ library LibConfigRegistryFork {
             return abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name);
         }
         return abi.encodeWithSelector(
-            LibConfigRegistry.UnexpectedAddressRegistryCodeHash.selector,
+            LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
             LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
             LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS.codehash
         );

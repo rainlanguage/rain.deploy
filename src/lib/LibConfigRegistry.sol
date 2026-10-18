@@ -34,7 +34,7 @@ library LibConfigRegistry {
     /// is the expected value.
     /// @param expectedCodeHash The code hash of the pinned registry.
     /// @param actualCodeHash The code hash actually found at the address.
-    error UnexpectedAddressRegistryCodeHash(bytes32 expectedCodeHash, bytes32 actualCodeHash);
+    error UnexpectedConfigRegistryCodeHash(bytes32 expectedCodeHash, bytes32 actualCodeHash);
 
     /// Thrown by `resolveSafe` when the binding has not stood for long enough.
     /// @param name The name that resolved to too fresh a binding.
@@ -67,7 +67,7 @@ library LibConfigRegistry {
     function checkCodeHash() internal view {
         bytes32 actualCodeHash = LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS.codehash;
         if (actualCodeHash != LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH) {
-            revert UnexpectedAddressRegistryCodeHash(
+            revert UnexpectedConfigRegistryCodeHash(
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH, actualCodeHash
             );
         }

@@ -11,11 +11,11 @@ import {ConfigRegistry, CONFIG_REGISTRY_ROOT} from "../../../src/concrete/Config
 import {DELEGATION_DESIGNATOR_LENGTH, LibAccountCode} from "../../lib/LibAccountCode.sol";
 import {MockSafeResolvedOwner} from "../../concrete/MockSafeResolvedOwner.sol";
 
-/// @title LibAddressRegistryTest
+/// @title LibConfigRegistryTest
 /// Tests for `LibConfigRegistry`. The registry is not mocked: the real
 /// `ConfigRegistry` is deployed through the Zoltu factory, which lands it at
 /// the pinned address with the pinned code hash.
-contract LibAddressRegistryTest is Test {
+contract LibConfigRegistryTest is Test {
     /// Deploys `ConfigRegistry` through the Zoltu factory.
     /// @return The deployed registry.
     function deployRegistry() internal returns (IConfigRegistryV1) {
@@ -127,7 +127,7 @@ contract LibAddressRegistryTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistry.UnexpectedAddressRegistryCodeHash.selector,
+                LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
                 bytes32(0)
             )
@@ -146,7 +146,7 @@ contract LibAddressRegistryTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistry.UnexpectedAddressRegistryCodeHash.selector,
+                LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
                 keccak256("")
             )
@@ -164,7 +164,7 @@ contract LibAddressRegistryTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistry.UnexpectedAddressRegistryCodeHash.selector,
+                LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
                 keccak256(code)
             )
@@ -188,7 +188,7 @@ contract LibAddressRegistryTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistry.UnexpectedAddressRegistryCodeHash.selector,
+                LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
                 keccak256(designator)
             )
@@ -399,7 +399,7 @@ contract LibAddressRegistryTest is Test {
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistry.UnexpectedAddressRegistryCodeHash.selector,
+                LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
                 bytes32(0)
             )

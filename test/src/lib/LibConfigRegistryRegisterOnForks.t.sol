@@ -11,7 +11,7 @@ import {LibConfigRegistryRegister} from "../../../src/lib/LibConfigRegistryRegis
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {LibConfigRegistryFork} from "../../lib/LibConfigRegistryFork.sol";
 
-/// @title LibAddressRegistryRegisterOnForksTest
+/// @title LibConfigRegistryRegisterOnForksTest
 /// The fork loops of `LibConfigRegistryRegister`, against every supported
 /// network: a bind simulated on each network's fork, the simulation check on
 /// those forks, and the confirmed check on fresh forks — which have not seen
@@ -25,7 +25,7 @@ import {LibConfigRegistryFork} from "../../lib/LibConfigRegistryFork.sol";
 ///
 /// The name is fresh per run, so no live binding can satisfy or contradict
 /// anything here.
-contract LibAddressRegistryRegisterOnForksTest is Test {
+contract LibConfigRegistryRegisterOnForksTest is Test {
     function externalRegisterOnNetworks(string[] memory networks, string memory name, bytes memory value)
         external
         returns (uint256[] memory)

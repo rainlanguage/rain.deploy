@@ -161,7 +161,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "",
-                "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
+                "config-registry@0_0_1, second-address, config-registry-candidate, second-address-candidate"
             )
         );
         sDeploy.run();
@@ -172,7 +172,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "address-registry",
-                "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
+                "config-registry@0_0_1, second-address, config-registry-candidate, second-address-candidate"
             )
         );
         sDeploy.run();
@@ -533,11 +533,11 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
     /// make that comparison derived-against-derived.
     function testSelectedSuiteCarriesTheRecordedPins() external view {
         assertEq(
-            sDeploy.externalSuiteByName("address-registry@0_0_1").storedDeployedAddress,
-            LibRainDeploy.zoltuAddress(sDeploy.externalSuiteByName("address-registry@0_0_1").creationCode)
+            sDeploy.externalSuiteByName("config-registry@0_0_1").storedDeployedAddress,
+            LibRainDeploy.zoltuAddress(sDeploy.externalSuiteByName("config-registry@0_0_1").creationCode)
         );
         assertEq(
-            sDeploy.externalSuiteByName("address-registry@0_0_1").artifactPath,
+            sDeploy.externalSuiteByName("config-registry@0_0_1").artifactPath,
             "src/concrete/ConfigRegistry.sol:ConfigRegistry"
         );
     }

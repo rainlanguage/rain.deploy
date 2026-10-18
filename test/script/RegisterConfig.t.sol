@@ -7,6 +7,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {CONFIG_REGISTRY_ROOT} from "../../src/concrete/ConfigRegistry.sol";
 import {IConfigRegistryV1} from "../../src/interface/IConfigRegistryV1.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibConfigRegistryDeploy} from "../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibConfigRegistryRegister} from "../../src/lib/LibConfigRegistryRegister.sol";
 import {RegisterConfig} from "../../script/RegisterConfig.sol";
 import {LibConfigRegistryFork} from "../lib/LibConfigRegistryFork.sol";
@@ -63,6 +64,29 @@ contract RegisterConfigTest is Test {
 
         vm.setEnv("CONFIG_REGISTRY_NAME", "Not.Canonical");
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
+        script.verify();
+
+        // With the name bound, the confirmed check passes on exactly the value
+        // given and refuses any other. The registry is persistent so the fresh
+        // fork `verify` creates carries the binding made here.
+        string memory network = LibRainDeploy.supportedNetworks()[0];
+        bytes memory value = abi.encode(address(1));
+        LibConfigRegistryFork.ensureDeployed(vm);
+        vm.prank(CONFIG_REGISTRY_ROOT);
+        IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
+            .register(keccak256(bytes(name)), value);
+        vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+        vm.setEnv("CONFIG_REGISTRY_NETWORKS", network);
+        vm.setEnv("CONFIG_REGISTRY_NAME", name);
+        script.verify();
+
+        bytes memory other = abi.encode(address(2));
+        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(other));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.UnexpectedBinding.selector, network, keccak256(bytes(name)), other, value
+            )
+        );
         script.verify();
     }
 }

@@ -8,8 +8,8 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
-    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-    RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
+    DEPLOYED_ADDRESS as CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE
 } from "../../../src/generated/candidate/ConfigRegistry.sol";
 
 /// @title RainDeployVerifyChainNarrowNetworksTest
@@ -51,8 +51,8 @@ contract RainDeployVerifyChainNarrowNetworksTest is ExampleDeploySuites, RainDep
     /// is about the networks it walked rather than about what is on them.
     /// Persistent, for the reason `RainDeployVerifyChainTest.setUp` gives.
     function setUp() external {
-        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, ADDRESS_REGISTRY_RUNTIME_CODE);
-        vm.makePersistent(ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
+        vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, CONFIG_REGISTRY_RUNTIME_CODE);
+        vm.makePersistent(CONFIG_REGISTRY_DEPLOYED_ADDRESS);
         vm.etch(secondDeployedAddress(), type(MockDeployableV2).runtimeCode);
         vm.makePersistent(secondDeployedAddress());
     }

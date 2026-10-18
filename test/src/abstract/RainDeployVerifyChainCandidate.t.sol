@@ -13,10 +13,10 @@ import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
-    BYTECODE_HASH as ADDRESS_REGISTRY_BYTECODE_HASH,
-    CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE,
-    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-    RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
+    BYTECODE_HASH as CONFIG_REGISTRY_BYTECODE_HASH,
+    CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE,
+    DEPLOYED_ADDRESS as CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE
 } from "../../../src/generated/candidate/ConfigRegistry.sol";
 
 /// @title RainDeployVerifyChainCandidateTest
@@ -46,11 +46,11 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = DeploySuite({
-            suite: "address-registry@0_0_1",
-            creationCode: ADDRESS_REGISTRY_CREATION_CODE,
-            storedDeployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-            storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
-            storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
+            suite: "config-registry@0_0_1",
+            creationCode: CONFIG_REGISTRY_CREATION_CODE,
+            storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+            storedBytecodeHash: CONFIG_REGISTRY_BYTECODE_HASH,
+            storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
@@ -91,8 +91,8 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
     /// that address, and this contract would then assert nothing while still
     /// passing right up until they did.
     function setUp() external {
-        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, ADDRESS_REGISTRY_RUNTIME_CODE);
-        vm.makePersistent(ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
+        vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, CONFIG_REGISTRY_RUNTIME_CODE);
+        vm.makePersistent(CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
         address candidateAddress = LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
         vm.etch(candidateAddress, hex"");
@@ -107,14 +107,14 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
     /// than quietly hand the matrix a live network.
     function testChainIgnoresAnUndeployedCandidate() external {
         address candidateAddress = LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
-        assertNotEq(candidateAddress, ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
+        assertNotEq(candidateAddress, CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
         string[] memory networks = LibRainDeploy.supportedNetworks();
         for (uint256 i = 0; i < networks.length; i++) {
             uint256 forkId = vm.createSelectFork(networks[i]);
             (forkId);
             assertEq(candidateAddress.code.length, 0);
-            assertEq(ADDRESS_REGISTRY_DEPLOYED_ADDRESS.code, ADDRESS_REGISTRY_RUNTIME_CODE);
+            assertEq(CONFIG_REGISTRY_DEPLOYED_ADDRESS.code, CONFIG_REGISTRY_RUNTIME_CODE);
         }
 
         this.testSuitesLiveOnEverySupportedNetwork();

@@ -239,7 +239,7 @@ contract BuildTest is Test {
     /// what the generator emits for it today.
     ///
     /// `LibRainDeploySnapshotTest.testTheCommittedAliasLibIsWhatTheGeneratorEmits`
-    /// asserts this of `AddressRegistry` by name, so every other contract's
+    /// asserts this of `ConfigRegistry` by name, so every other contract's
     /// alias lib is pinned by nothing at all: its two constants are the deploy
     /// address and code hash every consumer resolves against, and a hand edit
     /// to either, or a generator nobody re-ran after the snapshot moved, is a
@@ -275,7 +275,7 @@ contract BuildTest is Test {
     /// today.
     ///
     /// `LibRainDeploySnapshotTest.testTheCommittedReleasedLibIsWhatTheGeneratorEmits`
-    /// asserts this of `AddressRegistry` by name, so every other contract's
+    /// asserts this of `ConfigRegistry` by name, so every other contract's
     /// released lib is pinned only by what the record check can reach through
     /// it. That check walks record -> declaration by DERIVED ADDRESS, so it
     /// sees a release dropped from the declaration and nothing else: the order

@@ -12,13 +12,13 @@ import {LibConfigRegistryRegister} from "../../../src/lib/LibConfigRegistryRegis
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {MockRevertingRegistry} from "../../concrete/MockRevertingRegistry.sol";
 
-/// @title LibAddressRegistryRegisterTest
+/// @title LibConfigRegistryRegisterTest
 /// Every guard `LibConfigRegistryRegister` makes before a bind, and the bind
 /// itself, on the local chain: the real `ConfigRegistry` deployed through the
 /// Zoltu factory at the pinned address, and the chain id set to the network's.
 /// Nothing here forks; `LibAddressRegistryRegisterForkTest` drives the fork
 /// loops.
-contract LibAddressRegistryRegisterTest is Test {
+contract LibConfigRegistryRegisterTest is Test {
     /// The catalogue entry the local chain is dressed up as.
     /// @return Base's catalogue entry.
     function base() internal pure returns (SupportedNetwork memory) {
@@ -292,7 +292,7 @@ contract LibAddressRegistryRegisterTest is Test {
         vm.chainId(base().chainId);
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistry.UnexpectedAddressRegistryCodeHash.selector,
+                LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
                 bytes32(0)
             )
@@ -308,7 +308,7 @@ contract LibAddressRegistryRegisterTest is Test {
         );
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistry.UnexpectedAddressRegistryCodeHash.selector,
+                LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS.codehash
             )

@@ -106,7 +106,10 @@ contract Build is BuildScript, RegistryDeploySuites {
 
     /// Contracts this repo no longer builds whose frozen releases stay
     /// declared. Their released-suites libs are generated from a record that
-    /// can no longer grow, so they are never rewritten.
+    /// can no longer grow, so they are never rewritten, and the artifact paths
+    /// they declare name sources this repo no longer has: a frozen release is
+    /// checked against its recorded bytecode, and its source is verified from
+    /// the tag it was cut at.
     /// @return The retired contract names.
     function retiredContractNames() internal pure returns (string[] memory) {
         string[] memory names = new string[](1);

@@ -9,10 +9,10 @@ pragma solidity ^0.8.25;
 /// bound. There is no removal, no upgrade and no authority beyond root, and an
 /// implementation MUST NOT add any.
 ///
-/// V1 binds a name to an `address` and nothing else, so every other piece of
+/// `IAddressRegistryV1` binds a name to an `address` and nothing else, so every other piece of
 /// deploy-time configuration — a role id, a threshold, a delay, a list of
 /// accounts, a code hash — still has to be compiled into creation code, where
-/// changing it moves the deterministic address. V2 binds a name to `bytes`,
+/// changing it moves the deterministic address. This binds a name to `bytes`,
 /// which the registry holds and returns verbatim. What they encode is agreed
 /// between whoever binds the name and whoever reads it: an address binding is
 /// `abi.encode(account)`, and its reader decodes it with

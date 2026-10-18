@@ -1101,7 +1101,7 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(vm.split(source, "\nbytes constant ").length, 4, "an unexpected bytes constant");
     }
 
-    /// The committed alias lib this repo's `AddressRegistry` snapshot is
+    /// The committed alias lib this repo's `ConfigRegistry` snapshot is
     /// re-exported through. Read here, never written.
     string constant ALIAS_LIB_PATH = "src/lib/LibConfigRegistryDeploy.sol";
 
@@ -1127,7 +1127,7 @@ contract LibRainDeploySnapshotTest is Test {
     }
 
     /// The COMMITTED alias lib MUST be exactly what the emitters produce for
-    /// this repo's `AddressRegistry` today. That is what makes an alias lib
+    /// this repo's `ConfigRegistry` today. That is what makes an alias lib
     /// whose text has drifted from the generator a failure rather than a diff
     /// nobody looks at — the alias emitter is otherwise the one generator path
     /// in this repo that nothing anywhere executes, because only
