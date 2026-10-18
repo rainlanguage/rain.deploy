@@ -10,7 +10,7 @@ import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
 /// @title MigrationRegistryHeadTest
-/// @notice A test suite for `MigrationRegistry.head`: where a line is, what
+/// @notice A test suite for `MigrationRegistry.headV3`: where a line is, what
 /// an empty one answers, that the answer is never a value that is not a head,
 /// and that it is the same answer a write checks against.
 contract MigrationRegistryHeadTest is Test {
@@ -21,7 +21,7 @@ contract MigrationRegistryHeadTest is Test {
         sRegistry = new MigrationRegistry();
     }
 
-    /// The list a write under `writer` in `namespace` onto `head` after
+    /// The list a write under `writer` in `namespace` onto `headV3` after
     /// nothing else passes.
     /// @param writer The writer the record is under.
     /// @param namespace The line under the writer the record is in.
@@ -41,7 +41,7 @@ contract MigrationRegistryHeadTest is Test {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
 
-        assertEq(sRegistry.head(writer, namespace), MIGRATION_HEAD_GENESIS);
+        assertEq(sRegistry.headV3(writer, namespace), MIGRATION_HEAD_GENESIS);
     }
 
     /// Genesis is deliberately not zero, so an uninitialised predecessor
@@ -65,7 +65,7 @@ contract MigrationRegistryHeadTest is Test {
         vm.assume(namespace != bytes32(0));
 
         assertEq(MIGRATION_HEAD_GENESIS, keccak256("rain.migration-registry.head.genesis"));
-        assertEq(sRegistry.head(writer, namespace), keccak256("rain.migration-registry.head.genesis"));
+        assertEq(sRegistry.headV3(writer, namespace), keccak256("rain.migration-registry.head.genesis"));
     }
 
     /// The head is the migration applied most recently, and it moves with each
@@ -81,11 +81,11 @@ contract MigrationRegistryHeadTest is Test {
 
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migrationA, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
-        assertEq(sRegistry.head(writer, namespace), migrationA);
+        assertEq(sRegistry.headV3(writer, namespace), migrationA);
 
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migrationB, onto(writer, namespace, migrationA));
-        assertEq(sRegistry.head(writer, namespace), migrationB);
+        assertEq(sRegistry.headV3(writer, namespace), migrationB);
     }
 
     /// Every writer has its own head, and one writer's records leave every
@@ -100,11 +100,11 @@ contract MigrationRegistryHeadTest is Test {
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
-        assertEq(sRegistry.head(writer, namespace), migration);
-        assertEq(sRegistry.head(other, namespace), MIGRATION_HEAD_GENESIS);
+        assertEq(sRegistry.headV3(writer, namespace), migration);
+        assertEq(sRegistry.headV3(other, namespace), MIGRATION_HEAD_GENESIS);
     }
 
-    /// The head `head` reports is exactly the head a write demands: whatever
+    /// The head `headV3` reports is exactly the head a write demands: whatever
     /// this answers is accepted, and it is the only value that is. The
     /// two go through one translation of an empty line, so they cannot
     /// disagree about where one is.
@@ -122,17 +122,17 @@ contract MigrationRegistryHeadTest is Test {
 
         // Hoisted, because `vm.prank` applies to the next call and reading the
         // head is a call.
-        bytes32 headBeforeA = sRegistry.head(writer, namespace);
+        bytes32 headBeforeA = sRegistry.headV3(writer, namespace);
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migrationA, onto(writer, namespace, headBeforeA));
 
-        bytes32 headBeforeB = sRegistry.head(writer, namespace);
+        bytes32 headBeforeB = sRegistry.headV3(writer, namespace);
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migrationB, onto(writer, namespace, headBeforeB));
 
-        assertEq(sRegistry.head(writer, namespace), migrationB);
-        assertEq(sRegistry.applied(writer, namespace, migrationA), block.timestamp);
-        assertEq(sRegistry.applied(writer, namespace, migrationB), block.timestamp);
+        assertEq(sRegistry.headV3(writer, namespace), migrationB);
+        assertEq(sRegistry.appliedV3(writer, namespace, migrationA), block.timestamp);
+        assertEq(sRegistry.appliedV3(writer, namespace, migrationB), block.timestamp);
     }
 
     /// The zero writer is refused rather than answered genesis. Every line
@@ -143,7 +143,7 @@ contract MigrationRegistryHeadTest is Test {
         vm.assume(namespace != bytes32(0));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroWriter.selector));
-        sRegistry.head(address(0), namespace);
+        sRegistry.headV3(address(0), namespace);
     }
 
     /// The zero namespace is refused for the same reason: it is what an
@@ -152,14 +152,14 @@ contract MigrationRegistryHeadTest is Test {
         vm.assume(writer != address(0));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroNamespace.selector));
-        sRegistry.head(writer, bytes32(0));
+        sRegistry.headV3(writer, bytes32(0));
     }
 
     /// The writer is checked before the namespace, so a caller that has zeroed
     /// both gets one stable answer.
     function testHeadZeroWriterCheckedBeforeZeroNamespace() external {
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroWriter.selector));
-        sRegistry.head(address(0), bytes32(0));
+        sRegistry.headV3(address(0), bytes32(0));
     }
 
     /// Refused on a registry holding records exactly as on an empty one, and
@@ -175,9 +175,9 @@ contract MigrationRegistryHeadTest is Test {
         sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroWriter.selector));
-        sRegistry.head(address(0), namespace);
+        sRegistry.headV3(address(0), namespace);
 
-        assertEq(sRegistry.head(writer, namespace), migration);
+        assertEq(sRegistry.headV3(writer, namespace), migration);
     }
 
     /// The zero namespace is refused under a writer that holds records exactly
@@ -193,9 +193,9 @@ contract MigrationRegistryHeadTest is Test {
         sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroNamespace.selector));
-        sRegistry.head(writer, bytes32(0));
+        sRegistry.headV3(writer, bytes32(0));
 
-        assertEq(sRegistry.head(writer, namespace), migration);
+        assertEq(sRegistry.headV3(writer, namespace), migration);
     }
 
     /// A head is never zero, in any line state, which is what lets a
@@ -206,12 +206,12 @@ contract MigrationRegistryHeadTest is Test {
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
 
-        assertTrue(sRegistry.head(writer, namespace) != bytes32(0));
+        assertTrue(sRegistry.headV3(writer, namespace) != bytes32(0));
 
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
-        assertTrue(sRegistry.head(writer, namespace) != bytes32(0));
+        assertTrue(sRegistry.headV3(writer, namespace) != bytes32(0));
     }
 
     /// A refused apply leaves the head where it was. The head moves only for a
@@ -242,7 +242,7 @@ contract MigrationRegistryHeadTest is Test {
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, wrongHead));
 
-        assertEq(sRegistry.head(writer, namespace), MIGRATION_HEAD_GENESIS);
+        assertEq(sRegistry.headV3(writer, namespace), MIGRATION_HEAD_GENESIS);
     }
 
     /// A first entry in another of the caller's own namespaces is not this
@@ -272,8 +272,8 @@ contract MigrationRegistryHeadTest is Test {
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, otherNamespace, MIGRATION_HEAD_GENESIS));
 
-        assertEq(sRegistry.head(writer, namespace), MIGRATION_HEAD_GENESIS);
-        assertEq(sRegistry.head(writer, otherNamespace), MIGRATION_HEAD_GENESIS);
+        assertEq(sRegistry.headV3(writer, namespace), MIGRATION_HEAD_GENESIS);
+        assertEq(sRegistry.headV3(writer, otherNamespace), MIGRATION_HEAD_GENESIS);
     }
 
     /// An empty list names no head at all, so it is refused as a zero head on
@@ -297,7 +297,7 @@ contract MigrationRegistryHeadTest is Test {
         );
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migration, new Prerequisite[](0));
-        assertEq(sRegistry.head(writer, namespace), MIGRATION_HEAD_GENESIS);
+        assertEq(sRegistry.headV3(writer, namespace), MIGRATION_HEAD_GENESIS);
 
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
@@ -314,6 +314,6 @@ contract MigrationRegistryHeadTest is Test {
         );
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, next, new Prerequisite[](0));
-        assertEq(sRegistry.head(writer, namespace), migration);
+        assertEq(sRegistry.headV3(writer, namespace), migration);
     }
 }

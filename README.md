@@ -627,10 +627,10 @@ what: a write names its writer and a namespace, and applies one migration in
 that line after one list — the migration it believes ran last in that line, then
 the migrations in any other line it waits on (`applyMigrationV3`, or
 `applyMigrationHistoryV3` for one that already ran), anyone reads when a given
-writer applied a given one in a given namespace (`applied`), what it applied it
-onto (`appliedOnto`), what it applied it after (`appliedAfter`), and where a
-given writer's line in a given namespace has got to (`head`). There is no
-removal and no upgrade. The interface is `IMigrationRegistryV3`.
+writer applied a given one in a given namespace (`appliedV3`), what it applied
+it onto (`appliedOntoV3`), what it applied it after (`appliedAfterV3`), and
+where a given writer's line in a given namespace has got to (`headV3`). There is
+no removal and no upgrade. The interface is `IMigrationRegistryV3`.
 `IMigrationRegistryV2` is the same registry with the writer fixed to
 `msg.sender`, and `IMigrationRegistryV1` is it before prerequisites and
 namespaces, both kept for the releases that shipped them.
@@ -653,18 +653,18 @@ rather than on a fact. What you actually want is "**exactly** the value implied
 by the migrations that have run", which needs the chain to hold which ones have:
 
 ```solidity
-if (LibMigrationRegistry.applied(SAFE, NAMESPACE, MIGRATION_V2) != 0) {
+if (LibMigrationRegistry.appliedV3(SAFE, NAMESPACE, MIGRATION_V2) != 0) {
     assertEq(vault.owner(), NEW_OWNER);
 } else {
     assertEq(vault.owner(), OLD_OWNER);
 }
 ```
 
-Both branches assert exactly. Neither skips, and `applied` answering zero is an
-ordinary expected answer rather than a revert — it is the state of every
+Both branches assert exactly. Neither skips, and `appliedV3` answering zero is
+an ordinary expected answer rather than a revert — it is the state of every
 migration before it runs, and of every migration on a chain that never got it.
 
-**`applied` is a timestamp, not a flag.** "Which invariant applies" is
+**`appliedV3` is a timestamp, not a flag.** "Which invariant applies" is
 frequently "which invariant applies _yet_": a cliff that starts at the
 migration, a rate that changes a week after it. A flag sends a consumer that
 needs the moment back to a hardcoded date, which is the thing this registry
@@ -689,8 +689,8 @@ free to invent the fact. What a reader gives up is precisely that `appliedAt` is
 the block the record landed in. Everything else is kept, by three refusals:
 
 - **Never zero** (`ZeroTimestamp`), or the record would read back through
-  `applied` as no record while the head had moved and the migration could never
-  be applied again.
+  `appliedV3` as no record while the head had moved and the migration could
+  never be applied again.
 - **Never after the block it is written in** (`FutureTimestamp`). A migration
   that has run has run, so a moment still to come is not a late record of
   anything, and a consumer measuring an interval since the migration — a cliff,
@@ -707,7 +707,7 @@ block it is written in, and two records may carry the same moment: two
 migrations applied in one transaction share a block, and two backfilled to the
 same day share a moment, so forcing them apart would demand a precision the
 moments do not have. Which of them ran first is the chain, not the moments —
-total order comes from `appliedOnto`, and the bound above only stops a record
+total order comes from `appliedOntoV3`, and the bound above only stops a record
 claiming to predate the one it is chained onto.
 
 Both writes get all three, `block.timestamp` included: a block whose timestamp
@@ -747,8 +747,8 @@ after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration:
 LibMigrationRegistry.applyMigrationHistoryV3(address(this), NAMESPACE, MIGRATION_V3, 1750000000, after);
 ```
 
-Each record keeps that first entry, which `appliedOnto` reads back, so a line is
-a chain in storage rather than a set of moments to sort: from `head`, each
+Each record keeps that first entry, which `appliedOntoV3` reads back, so a line
+is a chain in storage rather than a set of moments to sort: from `headV3`, each
 answer names the record before it, down to `MIGRATION_HEAD_GENESIS`. That chain
 is the order the migrations ran in whatever moments the records carry.
 
@@ -799,27 +799,27 @@ after[1] = Prerequisite({writer: FLEET_SAFE, namespace: FLEET_NAMESPACE, migrati
 LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V3, after);
 ```
 
-The list is the record, and `appliedAfter` reads it back exactly as the write
+The list is the record, and `appliedAfterV3` reads it back exactly as the write
 gave it: the head under the writer's own line first, then the prerequisites as
 listed, duplicates included. A root's answer starts with
 `MIGRATION_HEAD_GENESIS`, the one entry that is a head and not a record. Empty
-only for a migration never applied. Within a line `appliedOnto` walks the chain
-back to genesis; `appliedAfter` walks from a record to every record it waited
-on, its predecessor included, so the cross-line order is on chain and not only
-in the log. `Migrated` says nothing about the list: it is in the record, not
-beside it. A prerequisite is an index check, not proof: it says the other writer
-recorded its migration, not that the state it produced holds, and consumers keep
-their pins. It bounds no moment either — a backfilled record may carry an
-earlier moment than its prerequisite, because what is checked is that the record
-existed when this write landed, which is chain order, and the moments in another
-line are that writer's data.
+only for a migration never applied. Within a line `appliedOntoV3` walks the
+chain back to genesis; `appliedAfterV3` walks from a record to every record it
+waited on, its predecessor included, so the cross-line order is on chain and not
+only in the log. `Migrated` says nothing about the list: it is in the record,
+not beside it. A prerequisite is an index check, not proof: it says the other
+writer recorded its migration, not that the state it produced holds, and
+consumers keep their pins. It bounds no moment either — a backfilled record may
+carry an earlier moment than its prerequisite, because what is checked is that
+the record existed when this write landed, which is chain order, and the moments
+in another line are that writer's data.
 
 The refusals sit in this order: the caller first (`ZeroWriter`, `NotApproved`);
 then its arguments (`ZeroNamespace`, `ZeroMigration`, `GenesisMigration`,
 `ZeroTimestamp`); then the list in the order it is written —
 `UnexpectedMigrationHead` over the first entry, then every entry after it as a
 record key in another line (`ZeroWriter`, `ZeroNamespace`, `ZeroMigration`,
-`GenesisMigration` exactly as `applied` refuses them, then `OwnPrerequisite`)
+`GenesisMigration` exactly as `appliedV3` refuses them, then `OwnPrerequisite`)
 before any is read, then `PrerequisiteNotApplied` for the first unapplied one;
 then the writer's own record (`MigrationAlreadyApplied`, `TimestampBeforeHead`,
 `FutureTimestamp`). Duplicates are ordinary index checks.
@@ -827,28 +827,29 @@ then the writer's own record (`MigrationAlreadyApplied`, `TimestampBeforeHead`,
 **The writer decides who writes its lines, and that is the whole access
 control.** A write names its writer, and the registry refuses it with
 `NotApproved` unless the caller is that writer or an account the writer approved
-for that namespace (`approve`, `revoke`, `approved`). An approval names one
-namespace under the approving writer and nothing else, so a Safe and a timelock
-can both write one line without either owning it, and moving a role between them
-never moves where its records go. Anyone may write, but only into their own
-lines or ones they were approved for, so a reader asking about the lines of an
-authority it already trusts is reading something only that authority could have
-written; every other writer's lines hold unforgeable claims nobody asks about. A
-namespace is not an authority: it is the writer's to name, and a record in it is
-that writer's claim. A root would have to be welded into the creation code, the
-way `ADDRESS_REGISTRY_ROOT` is — and the account that applies a migration is a
-different Safe, deployer or timelock for every consumer and every chain, so one
-root would have to be all of them, and baking each consumer's authority in would
-give each a different address for what is meant to be one shared registry. With
-nothing to configure there is also no rollout state in which it is inert.
+for that namespace (`approveV3`, `revokeV3`, `approvedV3`). An approval names
+one namespace under the approving writer and nothing else, so a Safe and a
+timelock can both write one line without either owning it, and moving a role
+between them never moves where its records go. Anyone may write, but only into
+their own lines or ones they were approved for, so a reader asking about the
+lines of an authority it already trusts is reading something only that authority
+could have written; every other writer's lines hold unforgeable claims nobody
+asks about. A namespace is not an authority: it is the writer's to name, and a
+record in it is that writer's claim. A root would have to be welded into the
+creation code, the way `ADDRESS_REGISTRY_ROOT` is — and the account that applies
+a migration is a different Safe, deployer or timelock for every consumer and
+every chain, so one root would have to be all of them, and baking each
+consumer's authority in would give each a different address for what is meant to
+be one shared registry. With nothing to configure there is also no rollout state
+in which it is inert.
 
 **An index, not proof.** The registry says which invariant applies. It does not
 say the invariant holds — a multisig can act out of band and nothing here moves.
 Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
-`LibMigrationRegistry` is the surface — `applied`, `appliedOnto`,
-`appliedAfter`, `head`, `approved`, `applyMigrationV3` and
+`LibMigrationRegistry` is the surface — `appliedV3`, `appliedOntoV3`,
+`appliedAfterV3`, `headV3`, `approvedV3`, `applyMigrationV3` and
 `applyMigrationHistoryV3`, plus the `*Call` builders for a bundle, each
 verifying the registry's code hash before it reads or writes. There is
 deliberately **no broadcast runner**: the dominant real shape is a Safe

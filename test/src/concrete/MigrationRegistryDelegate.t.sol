@@ -34,13 +34,13 @@ contract MigrationRegistryDelegateTest is Test {
 
     function approveDelegate() internal {
         vm.prank(WRITER);
-        sRegistry.approve(NAMESPACE, DELEGATE);
+        sRegistry.approveV3(NAMESPACE, DELEGATE);
     }
 
     /// Nothing is approved until the writer approves it.
     function testApprovedIsFalseUntilApproved(address writer, bytes32 namespace, address delegate) external view {
         vm.assume(writer != address(0) && namespace != bytes32(0) && delegate != address(0));
-        assertFalse(sRegistry.approved(writer, namespace, delegate));
+        assertFalse(sRegistry.approvedV3(writer, namespace, delegate));
     }
 
     /// An approval is the caller's, for one namespace, and is emitted.
@@ -50,9 +50,9 @@ contract MigrationRegistryDelegateTest is Test {
         vm.expectEmit(address(sRegistry));
         emit IMigrationRegistryV3.Approved(WRITER, NAMESPACE, DELEGATE);
         approveDelegate();
-        assertTrue(sRegistry.approved(WRITER, NAMESPACE, DELEGATE));
-        assertFalse(sRegistry.approved(WRITER, otherNamespace, DELEGATE));
-        assertFalse(sRegistry.approved(otherWriter, NAMESPACE, DELEGATE));
+        assertTrue(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
+        assertFalse(sRegistry.approvedV3(WRITER, otherNamespace, DELEGATE));
+        assertFalse(sRegistry.approvedV3(otherWriter, NAMESPACE, DELEGATE));
     }
 
     /// Approving twice leaves it approved; revoking removes it and is emitted;
@@ -60,39 +60,39 @@ contract MigrationRegistryDelegateTest is Test {
     function testRevokeRemovesTheApproval() external {
         approveDelegate();
         approveDelegate();
-        assertTrue(sRegistry.approved(WRITER, NAMESPACE, DELEGATE));
+        assertTrue(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
         vm.expectEmit(address(sRegistry));
         emit IMigrationRegistryV3.Revoked(WRITER, NAMESPACE, DELEGATE);
         vm.prank(WRITER);
-        sRegistry.revoke(NAMESPACE, DELEGATE);
-        assertFalse(sRegistry.approved(WRITER, NAMESPACE, DELEGATE));
+        sRegistry.revokeV3(NAMESPACE, DELEGATE);
+        assertFalse(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
         vm.prank(WRITER);
-        sRegistry.revoke(NAMESPACE, DELEGATE);
-        assertFalse(sRegistry.approved(WRITER, NAMESPACE, DELEGATE));
+        sRegistry.revokeV3(NAMESPACE, DELEGATE);
+        assertFalse(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
     }
 
     /// The zero namespace and the zero delegate name no approval.
     function testApproveAndRevokeRefuseZeroes() external {
         vm.startPrank(WRITER);
         vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
-        sRegistry.approve(bytes32(0), DELEGATE);
+        sRegistry.approveV3(bytes32(0), DELEGATE);
         vm.expectRevert(IMigrationRegistryV3.ZeroDelegate.selector);
-        sRegistry.approve(NAMESPACE, address(0));
+        sRegistry.approveV3(NAMESPACE, address(0));
         vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
-        sRegistry.revoke(bytes32(0), DELEGATE);
+        sRegistry.revokeV3(bytes32(0), DELEGATE);
         vm.expectRevert(IMigrationRegistryV3.ZeroDelegate.selector);
-        sRegistry.revoke(NAMESPACE, address(0));
+        sRegistry.revokeV3(NAMESPACE, address(0));
         vm.stopPrank();
     }
 
-    /// `approved` refuses the zero writer, namespace and delegate.
+    /// `approvedV3` refuses the zero writer, namespace and delegate.
     function testApprovedRefusesZeroes() external {
         vm.expectRevert(IMigrationRegistryV3.ZeroWriter.selector);
-        sRegistry.approved(address(0), NAMESPACE, DELEGATE);
+        sRegistry.approvedV3(address(0), NAMESPACE, DELEGATE);
         vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
-        sRegistry.approved(WRITER, bytes32(0), DELEGATE);
+        sRegistry.approvedV3(WRITER, bytes32(0), DELEGATE);
         vm.expectRevert(IMigrationRegistryV3.ZeroDelegate.selector);
-        sRegistry.approved(WRITER, NAMESPACE, address(0));
+        sRegistry.approvedV3(WRITER, NAMESPACE, address(0));
     }
 
     /// An approved delegate writes the writer's line: the record and the head
@@ -105,9 +105,9 @@ contract MigrationRegistryDelegateTest is Test {
         emit IMigrationRegistryV3.Migrated(WRITER, NAMESPACE, MIGRATION, moment);
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
-        assertEq(sRegistry.applied(WRITER, NAMESPACE, MIGRATION), moment);
-        assertEq(sRegistry.head(WRITER, NAMESPACE), MIGRATION);
-        assertEq(sRegistry.applied(DELEGATE, NAMESPACE, MIGRATION), 0);
+        assertEq(sRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), moment);
+        assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION);
+        assertEq(sRegistry.appliedV3(DELEGATE, NAMESPACE, MIGRATION), 0);
     }
 
     /// The history write takes its moment, into the writer's line.
@@ -120,8 +120,8 @@ contract MigrationRegistryDelegateTest is Test {
         sRegistry.applyMigrationHistoryV3(
             WRITER, NAMESPACE, MIGRATION, appliedAt, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
         );
-        assertEq(sRegistry.applied(WRITER, NAMESPACE, MIGRATION), appliedAt);
-        assertEq(sRegistry.head(WRITER, NAMESPACE), MIGRATION);
+        assertEq(sRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), appliedAt);
+        assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION);
     }
 
     /// Two delegates share one line, each onto the other's record.
@@ -129,13 +129,13 @@ contract MigrationRegistryDelegateTest is Test {
         vm.assume(other != address(0) && other != DELEGATE && other != WRITER);
         approveDelegate();
         vm.prank(WRITER);
-        sRegistry.approve(NAMESPACE, other);
+        sRegistry.approveV3(NAMESPACE, other);
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
         vm.prank(other);
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, onto(WRITER, NAMESPACE, MIGRATION));
-        assertEq(sRegistry.head(WRITER, NAMESPACE), SECOND);
-        assertEq(sRegistry.appliedOnto(WRITER, NAMESPACE, SECOND), MIGRATION);
+        assertEq(sRegistry.headV3(WRITER, NAMESPACE), SECOND);
+        assertEq(sRegistry.appliedOntoV3(WRITER, NAMESPACE, SECOND), MIGRATION);
     }
 
     /// The writer writes its own line through the delegated entry points
@@ -147,7 +147,7 @@ contract MigrationRegistryDelegateTest is Test {
             WRITER, NAMESPACE, SECOND, block.timestamp, onto(WRITER, NAMESPACE, MIGRATION)
         );
         vm.stopPrank();
-        assertEq(sRegistry.head(WRITER, NAMESPACE), SECOND);
+        assertEq(sRegistry.headV3(WRITER, NAMESPACE), SECOND);
     }
 
     /// An unapproved caller is refused on both writes, naming the line and
@@ -182,11 +182,11 @@ contract MigrationRegistryDelegateTest is Test {
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
         vm.prank(WRITER);
-        sRegistry.revoke(NAMESPACE, DELEGATE);
+        sRegistry.revokeV3(NAMESPACE, DELEGATE);
         vm.prank(DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, onto(WRITER, NAMESPACE, MIGRATION));
-        assertTrue(sRegistry.applied(WRITER, NAMESPACE, MIGRATION) != 0);
+        assertTrue(sRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION) != 0);
     }
 
     /// A delegated write is refused on the zero writer before any approval
@@ -237,6 +237,6 @@ contract MigrationRegistryDelegateTest is Test {
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
         vm.prank(WRITER);
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, onto(WRITER, NAMESPACE, MIGRATION));
-        assertEq(sRegistry.head(WRITER, NAMESPACE), SECOND);
+        assertEq(sRegistry.headV3(WRITER, NAMESPACE), SECOND);
     }
 }

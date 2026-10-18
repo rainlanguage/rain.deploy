@@ -125,15 +125,17 @@ contract LibMigrationRegistryWriteCallTest is Test {
             LibMigrationRegistry.applyMigrationV3Call(sender, namespace, migration, prerequisites);
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         // Building writes nothing.
-        assertEq(LibMigrationRegistry.applied(sender, namespace, migration), 0);
+        assertEq(LibMigrationRegistry.appliedV3(sender, namespace, migration), 0);
 
         send(sender, to, data);
 
-        assertEq(LibMigrationRegistry.applied(sender, namespace, migration), landedAt);
-        assertEq(LibMigrationRegistry.head(sender, namespace), migration);
-        assertEq(LibMigrationRegistry.appliedOnto(sender, namespace, migration), MIGRATION_HEAD_GENESIS);
-        assertEq(abi.encode(LibMigrationRegistry.appliedAfter(sender, namespace, migration)), abi.encode(prerequisites));
-        assertEq(LibMigrationRegistry.applied(address(this), namespace, migration), 0);
+        assertEq(LibMigrationRegistry.appliedV3(sender, namespace, migration), landedAt);
+        assertEq(LibMigrationRegistry.headV3(sender, namespace), migration);
+        assertEq(LibMigrationRegistry.appliedOntoV3(sender, namespace, migration), MIGRATION_HEAD_GENESIS);
+        assertEq(
+            abi.encode(LibMigrationRegistry.appliedAfterV3(sender, namespace, migration)), abi.encode(prerequisites)
+        );
+        assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migration), 0);
     }
 
     /// The history call records the moment it was GIVEN, not the block it
@@ -174,12 +176,12 @@ contract LibMigrationRegistryWriteCallTest is Test {
         send(sender, toA, dataA);
         send(sender, toB, dataB);
 
-        assertEq(LibMigrationRegistry.applied(sender, namespace, migrationA), appliedAt);
-        assertEq(LibMigrationRegistry.applied(sender, namespace, migrationB), appliedAt);
-        assertEq(LibMigrationRegistry.head(sender, namespace), migrationB);
-        assertEq(LibMigrationRegistry.appliedOnto(sender, namespace, migrationB), migrationA);
-        assertEq(abi.encode(LibMigrationRegistry.appliedAfter(sender, namespace, migrationB)), abi.encode(ontoA));
-        assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationA), 0);
+        assertEq(LibMigrationRegistry.appliedV3(sender, namespace, migrationA), appliedAt);
+        assertEq(LibMigrationRegistry.appliedV3(sender, namespace, migrationB), appliedAt);
+        assertEq(LibMigrationRegistry.headV3(sender, namespace), migrationB);
+        assertEq(LibMigrationRegistry.appliedOntoV3(sender, namespace, migrationB), migrationA);
+        assertEq(abi.encode(LibMigrationRegistry.appliedAfterV3(sender, namespace, migrationB)), abi.encode(ontoA));
+        assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migrationA), 0);
     }
 
     /// A call that names the account that BUILT it as the writer, sent by
@@ -207,8 +209,8 @@ contract LibMigrationRegistryWriteCallTest is Test {
             returnData,
             abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, address(this), namespace, sender)
         );
-        assertEq(LibMigrationRegistry.applied(sender, namespace, migration), 0);
-        assertEq(LibMigrationRegistry.applied(address(this), namespace, migration), 0);
+        assertEq(LibMigrationRegistry.appliedV3(sender, namespace, migration), 0);
+        assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migration), 0);
     }
 
     /// The hazard the build-time check exists for: a low-level call into an

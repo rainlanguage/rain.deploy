@@ -53,8 +53,8 @@ contract MockMigrationApplier {
     /// @param namespace The line under `writer` to read.
     /// @param migration The migration to ask about.
     /// @return The moment it was applied at, or zero.
-    function applied(address writer, bytes32 namespace, bytes32 migration) external view returns (uint256) {
-        return LibMigrationRegistry.applied(writer, namespace, migration);
+    function appliedV3(address writer, bytes32 namespace, bytes32 migration) external view returns (uint256) {
+        return LibMigrationRegistry.appliedV3(writer, namespace, migration);
     }
 
     /// What `writer` applied `migration` onto in `namespace`.
@@ -62,8 +62,8 @@ contract MockMigrationApplier {
     /// @param namespace The line under `writer` to read.
     /// @param migration The migration to ask about.
     /// @return The head it was applied onto, or zero.
-    function appliedOnto(address writer, bytes32 namespace, bytes32 migration) external view returns (bytes32) {
-        return LibMigrationRegistry.appliedOnto(writer, namespace, migration);
+    function appliedOntoV3(address writer, bytes32 namespace, bytes32 migration) external view returns (bytes32) {
+        return LibMigrationRegistry.appliedOntoV3(writer, namespace, migration);
     }
 
     /// What `writer` applied `migration` after in `namespace`.
@@ -71,19 +71,19 @@ contract MockMigrationApplier {
     /// @param namespace The line under `writer` to read.
     /// @param migration The migration to ask about.
     /// @return The list the write gave, or empty.
-    function appliedAfter(address writer, bytes32 namespace, bytes32 migration)
+    function appliedAfterV3(address writer, bytes32 namespace, bytes32 migration)
         external
         view
         returns (Prerequisite[] memory)
     {
-        return LibMigrationRegistry.appliedAfter(writer, namespace, migration);
+        return LibMigrationRegistry.appliedAfterV3(writer, namespace, migration);
     }
 
     /// The head of `writer`'s line in `namespace`.
     /// @param writer The writer to read.
     /// @param namespace The line under `writer` to read.
     /// @return The head.
-    function head(address writer, bytes32 namespace) external view returns (bytes32) {
-        return LibMigrationRegistry.head(writer, namespace);
+    function headV3(address writer, bytes32 namespace) external view returns (bytes32) {
+        return LibMigrationRegistry.headV3(writer, namespace);
     }
 }

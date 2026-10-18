@@ -46,45 +46,45 @@ contract LibMigrationRegistryDelegateTest is Test {
     }
 
     function externalApproveCall() external view returns (address, bytes memory) {
-        return LibMigrationRegistry.approveCall(NAMESPACE, DELEGATE);
+        return LibMigrationRegistry.approveV3Call(NAMESPACE, DELEGATE);
     }
 
     function externalRevokeCall() external view returns (address, bytes memory) {
-        return LibMigrationRegistry.revokeCall(NAMESPACE, DELEGATE);
+        return LibMigrationRegistry.revokeV3Call(NAMESPACE, DELEGATE);
     }
 
     function externalApproved() external view returns (bool) {
-        return LibMigrationRegistry.approved(WRITER, NAMESPACE, DELEGATE);
+        return LibMigrationRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE);
     }
 
-    /// Approve then revoke, built and sent by the writer, are what `approved`
+    /// Approve then revoke, built and sent by the writer, are what `approvedV3`
     /// answers.
     function testApproveAndRevokeCallsLand() external {
         deployRegistry();
-        (address to, bytes memory data) = LibMigrationRegistry.approveCall(NAMESPACE, DELEGATE);
+        (address to, bytes memory data) = LibMigrationRegistry.approveV3Call(NAMESPACE, DELEGATE);
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
-        assertEq(data, abi.encodeCall(IMigrationRegistryV3.approve, (NAMESPACE, DELEGATE)));
+        assertEq(data, abi.encodeCall(IMigrationRegistryV3.approveV3, (NAMESPACE, DELEGATE)));
         send(WRITER, to, data);
-        assertTrue(LibMigrationRegistry.approved(WRITER, NAMESPACE, DELEGATE));
+        assertTrue(LibMigrationRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
 
-        (to, data) = LibMigrationRegistry.revokeCall(NAMESPACE, DELEGATE);
+        (to, data) = LibMigrationRegistry.revokeV3Call(NAMESPACE, DELEGATE);
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
-        assertEq(data, abi.encodeCall(IMigrationRegistryV3.revoke, (NAMESPACE, DELEGATE)));
+        assertEq(data, abi.encodeCall(IMigrationRegistryV3.revokeV3, (NAMESPACE, DELEGATE)));
         send(WRITER, to, data);
-        assertFalse(LibMigrationRegistry.approved(WRITER, NAMESPACE, DELEGATE));
+        assertFalse(LibMigrationRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
     }
 
     /// A delegated write, built and sent by an approved delegate, lands in the
     /// writer's line.
     function testApplyMigrationCallDelegatedLands() external {
         deployRegistry();
-        (address to, bytes memory data) = LibMigrationRegistry.approveCall(NAMESPACE, DELEGATE);
+        (address to, bytes memory data) = LibMigrationRegistry.approveV3Call(NAMESPACE, DELEGATE);
         send(WRITER, to, data);
         (to, data) = LibMigrationRegistry.applyMigrationV3Call(WRITER, NAMESPACE, MIGRATION, genesis());
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         assertEq(data, abi.encodeCall(IMigrationRegistryV3.applyMigrationV3, (WRITER, NAMESPACE, MIGRATION, genesis())));
         send(DELEGATE, to, data);
-        assertEq(LibMigrationRegistry.applied(WRITER, NAMESPACE, MIGRATION), block.timestamp);
+        assertEq(LibMigrationRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), block.timestamp);
     }
 
     /// A delegated history write carries its moment into the writer's line.
@@ -92,7 +92,7 @@ contract LibMigrationRegistryDelegateTest is Test {
         vm.warp(1_000_000);
         appliedAt = bound(appliedAt, 1, block.timestamp);
         deployRegistry();
-        (address to, bytes memory data) = LibMigrationRegistry.approveCall(NAMESPACE, DELEGATE);
+        (address to, bytes memory data) = LibMigrationRegistry.approveV3Call(NAMESPACE, DELEGATE);
         send(WRITER, to, data);
         (to, data) =
             LibMigrationRegistry.applyMigrationHistoryV3Call(WRITER, NAMESPACE, MIGRATION, appliedAt, genesis());
@@ -104,7 +104,7 @@ contract LibMigrationRegistryDelegateTest is Test {
             )
         );
         send(DELEGATE, to, data);
-        assertEq(LibMigrationRegistry.applied(WRITER, NAMESPACE, MIGRATION), appliedAt);
+        assertEq(LibMigrationRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), appliedAt);
     }
 
     /// The approval builders and the read refuse a chain with no registry.

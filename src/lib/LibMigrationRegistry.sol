@@ -46,7 +46,7 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// A test asserts EXACTLY the value implied by the migrations that have run:
 ///
 /// ```solidity
-/// if (LibMigrationRegistry.applied(SAFE, NAMESPACE, MIGRATION_V2) != 0) {
+/// if (LibMigrationRegistry.appliedV3(SAFE, NAMESPACE, MIGRATION_V2) != 0) {
 ///     assertEq(vault.owner(), NEW_OWNER);
 /// } else {
 ///     assertEq(vault.owner(), OLD_OWNER);
@@ -55,7 +55,7 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 ///
 /// Both branches assert. Neither reads the clock, neither skips, and the branch
 /// is selected by what happened on chain rather than by a deadline somebody
-/// guessed. `applied` answering zero is an ordinary, expected answer — it is
+/// guessed. `appliedV3` answering zero is an ordinary, expected answer — it is
 /// the state of every migration before it runs and of every migration on a
 /// chain that never got it — which is why the registry answers it rather than
 /// reverting.
@@ -87,15 +87,15 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// A migration that waits on nothing else passes the head alone, which is
 /// the list `onto` builds.
 ///
-/// `head` reads that value back, which is how an author finds what a new script
+/// `headV3` reads that value back, which is how an author finds what a new script
 /// must name and how an operator sees which migration a chain is at. It is not
 /// how a script tests that its predecessor ran: a head says what was LAST, and
-/// `applied` is what says whether a particular migration ever ran at all.
+/// `appliedV3` is what says whether a particular migration ever ran at all.
 ///
-/// `appliedOnto` reads back the head a record was applied onto, so a line
-/// walked from `head` back is the order its migrations ran in — which is a
+/// `appliedOntoV3` reads back the head a record was applied onto, so a line
+/// walked from `headV3` back is the order its migrations ran in — which is a
 /// stronger statement than the moments make, because a moment is whatever the
-/// writer supplied and the chain is what the registry enforced. `appliedAfter`
+/// writer supplied and the chain is what the registry enforced. `appliedAfterV3`
 /// reads back the list the write gave, exactly as given, so the same walk
 /// crosses lines.
 ///
@@ -116,9 +116,9 @@ library LibMigrationRegistry {
     /// Reverts unless the pinned registry address holds the pinned code.
     ///
     /// Every entry point checks, and they check the same way, because each is
-    /// worse than useless against unknown code: `applied` would branch a test on
-    /// whatever timestamp that code returned, `appliedOnto`, `appliedAfter`
-    /// and `head` would hand back values that are not records, either write
+    /// worse than useless against unknown code: `appliedV3` would branch a test on
+    /// whatever timestamp that code returned, `appliedOntoV3`, `appliedAfterV3`
+    /// and `headV3` would hand back values that are not records, either write
     /// would record a migration somewhere nothing will ever read it, and either
     /// call builder would hand a signer a write that goes the same way. The
     /// check is one function so they cannot drift into checking different
@@ -156,20 +156,20 @@ library LibMigrationRegistry {
     /// `MIGRATION_HEAD_GENESIS`.
     /// @return The block timestamp `writer` applied `migration` at in
     /// `namespace`, or zero if it has not.
-    function applied(address writer, bytes32 namespace, bytes32 migration) internal view returns (uint256) {
+    function appliedV3(address writer, bytes32 namespace, bytes32 migration) internal view returns (uint256) {
         checkCodeHash();
         return IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applied(writer, namespace, migration);
+            .appliedV3(writer, namespace, migration);
     }
 
     /// What `writer` applied `migration` onto in `namespace`, or zero if it
     /// never applied it there.
     ///
     /// Verifies the registry's code hash before reading, for the same reason
-    /// `applied` does: occupying code is free to answer zero to every migration,
+    /// `appliedV3` does: occupying code is free to answer zero to every migration,
     /// which here reads as "never applied" exactly as a zero moment does.
     ///
-    /// This is the step that walks a line. From `head`, each answer names
+    /// This is the step that walks a line. From `headV3`, each answer names
     /// the record before it, ending at `MIGRATION_HEAD_GENESIS`.
     /// @param writer The writer to read. Never the zero address.
     /// @param namespace The line under `writer` to read. Never zero.
@@ -177,10 +177,10 @@ library LibMigrationRegistry {
     /// `MIGRATION_HEAD_GENESIS`.
     /// @return The head `writer` applied `migration` onto in `namespace`, or
     /// zero if it has not applied it there.
-    function appliedOnto(address writer, bytes32 namespace, bytes32 migration) internal view returns (bytes32) {
+    function appliedOntoV3(address writer, bytes32 namespace, bytes32 migration) internal view returns (bytes32) {
         checkCodeHash();
         return IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .appliedOnto(writer, namespace, migration);
+            .appliedOntoV3(writer, namespace, migration);
     }
 
     /// What `writer` applied `migration` after in `namespace`: the list the
@@ -189,7 +189,7 @@ library LibMigrationRegistry {
     /// `migration` there.
     ///
     /// Verifies the registry's code hash before reading, for the same reason
-    /// `applied` does: occupying code is free to answer an empty list for
+    /// `appliedV3` does: occupying code is free to answer an empty list for
     /// every record, which reads as "never applied".
     ///
     /// This is the step that walks from a record to everything it waited on,
@@ -203,20 +203,20 @@ library LibMigrationRegistry {
     /// `MIGRATION_HEAD_GENESIS`.
     /// @return The list `writer` applied `migration` after in `namespace`, as
     /// the write gave it.
-    function appliedAfter(address writer, bytes32 namespace, bytes32 migration)
+    function appliedAfterV3(address writer, bytes32 namespace, bytes32 migration)
         internal
         view
         returns (Prerequisite[] memory)
     {
         checkCodeHash();
         return IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .appliedAfter(writer, namespace, migration);
+            .appliedAfterV3(writer, namespace, migration);
     }
 
     /// The migration `writer` applied most recently in `namespace`, or
     /// `MIGRATION_HEAD_GENESIS` if it has never applied one there.
     ///
-    /// Verifies the registry's code hash first for the same reason `applied`
+    /// Verifies the registry's code hash first for the same reason `appliedV3`
     /// does, and more sharply: occupying code is free to answer any head it
     /// likes, including the zero no head can ever hold, so an unverified read
     /// can hand back something that is not a head at all. An empty address is
@@ -225,10 +225,11 @@ library LibMigrationRegistry {
     /// @param writer The writer to read. Never the zero address.
     /// @param namespace The line under `writer` to read. Never zero.
     /// @return The head of `writer`'s line in `namespace`. Never zero.
-    function head(address writer, bytes32 namespace) internal view returns (bytes32) {
+    function headV3(address writer, bytes32 namespace) internal view returns (bytes32) {
         checkCodeHash();
         return
-            IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS).head(writer, namespace);
+            IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+                .headV3(writer, namespace);
     }
 
     /// The list a write applied onto `headMigration` in `writer`'s line in
@@ -241,7 +242,7 @@ library LibMigrationRegistry {
     /// line's actual head — and refuses it if any is not.
     ///
     /// `headMigration` is the migration the script believes the line is at,
-    /// fixed when the script is written. Passing what `head` answers in the
+    /// fixed when the script is written. Passing what `headV3` answers in the
     /// same transaction instead names whatever the line is at when the write
     /// lands, so a chain that never got the predecessor, or a sibling that
     /// landed first, is applied onto rather than refused.
@@ -251,7 +252,7 @@ library LibMigrationRegistry {
     /// @param headMigration The migration `writer` applied last in
     /// `namespace`, or `MIGRATION_HEAD_GENESIS` for the first in the line.
     /// @return The one-entry list, in the shape `applyMigrationV3`
-    /// and `applyMigrationHistoryV3` take and `appliedAfter` answers.
+    /// and `applyMigrationHistoryV3` take and `appliedAfterV3` answers.
     function onto(address writer, bytes32 namespace, bytes32 headMigration)
         internal
         pure
@@ -292,7 +293,7 @@ library LibMigrationRegistry {
     /// actual head — which between them make a re-dispatched, a skipped and
     /// an out-of-order migration all fail rather than land. It refuses a later
     /// entry that is not a record key — the zero writer, the zero namespace,
-    /// the zero id, `MIGRATION_HEAD_GENESIS` — exactly as `applied` refuses
+    /// the zero id, `MIGRATION_HEAD_GENESIS` — exactly as `appliedV3` refuses
     /// the same key, refuses one in `writer`'s own line, and refuses the
     /// write with `PrerequisiteNotApplied`, naming the first entry whose
     /// migration has not been applied in its line, so a Safe bundle that
@@ -304,7 +305,7 @@ library LibMigrationRegistry {
     /// @param migration The migration to apply. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
     /// @param prerequisites What `migration` is applied after, as
-    /// `appliedAfter` will answer it: first `writer` in `namespace` at the
+    /// `appliedAfterV3` will answer it: first `writer` in `namespace` at the
     /// migration the caller believes it applied last there, or
     /// `MIGRATION_HEAD_GENESIS` for the first in the line; then the
     /// migrations, each under its writer in its namespace, that must already
@@ -440,15 +441,15 @@ library LibMigrationRegistry {
 
     /// Whether `writer` has approved `delegate` to write its line in
     /// `namespace`. Verifies the registry's code hash first, for the reason
-    /// `applied` does: occupying code could answer anything.
+    /// `appliedV3` does: occupying code could answer anything.
     /// @param writer The line's writer. Never the zero address.
     /// @param namespace The line under `writer`. Never zero.
     /// @param delegate The account asked about. Never the zero address.
     /// @return True when approved.
-    function approved(address writer, bytes32 namespace, address delegate) internal view returns (bool) {
+    function approvedV3(address writer, bytes32 namespace, address delegate) internal view returns (bool) {
         checkCodeHash();
         return IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .approved(writer, namespace, delegate);
+            .approvedV3(writer, namespace, delegate);
     }
 
     /// The call that approves `delegate` to write the sending account's line
@@ -457,12 +458,12 @@ library LibMigrationRegistry {
     /// @param namespace The line under the sending account. Never zero.
     /// @param delegate The account to approve. Never the zero address.
     /// @return The registry address.
-    /// @return The `IMigrationRegistryV3.approve` calldata.
-    function approveCall(bytes32 namespace, address delegate) internal view returns (address, bytes memory) {
+    /// @return The `IMigrationRegistryV3.approveV3` calldata.
+    function approveV3Call(bytes32 namespace, address delegate) internal view returns (address, bytes memory) {
         checkCodeHash();
         return (
             LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
-            abi.encodeCall(IMigrationRegistryV3.approve, (namespace, delegate))
+            abi.encodeCall(IMigrationRegistryV3.approveV3, (namespace, delegate))
         );
     }
 
@@ -472,12 +473,12 @@ library LibMigrationRegistry {
     /// @param namespace The line under the sending account. Never zero.
     /// @param delegate The account to revoke. Never the zero address.
     /// @return The registry address.
-    /// @return The `IMigrationRegistryV3.revoke` calldata.
-    function revokeCall(bytes32 namespace, address delegate) internal view returns (address, bytes memory) {
+    /// @return The `IMigrationRegistryV3.revokeV3` calldata.
+    function revokeV3Call(bytes32 namespace, address delegate) internal view returns (address, bytes memory) {
         checkCodeHash();
         return (
             LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
-            abi.encodeCall(IMigrationRegistryV3.revoke, (namespace, delegate))
+            abi.encodeCall(IMigrationRegistryV3.revokeV3, (namespace, delegate))
         );
     }
 }

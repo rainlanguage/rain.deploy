@@ -34,11 +34,11 @@ interface IMigrationRegistryV3 {
     error GenesisMigration();
 
     /// As `IMigrationRegistryV2.ZeroWriter`, and thrown by a write naming the
-    /// zero writer and by `approved` when asked about it.
+    /// zero writer and by `approvedV3` when asked about it.
     error ZeroWriter();
 
-    /// As `IMigrationRegistryV2.ZeroNamespace`, and thrown by `approve`,
-    /// `revoke` and `approved` when given it.
+    /// As `IMigrationRegistryV2.ZeroNamespace`, and thrown by `approveV3`,
+    /// `revokeV3` and `approvedV3` when given it.
     error ZeroNamespace();
 
     /// As `IMigrationRegistryV2.MigrationAlreadyApplied`.
@@ -65,7 +65,7 @@ interface IMigrationRegistryV3 {
     /// `writer`'s.
     error OwnPrerequisite(bytes32 migration);
 
-    /// Thrown when `approve`, `revoke` or `approved` is given the zero
+    /// Thrown when `approveV3`, `revokeV3` or `approvedV3` is given the zero
     /// delegate, which nothing can call from and which is what an
     /// uninitialised `address` reads as.
     error ZeroDelegate();
@@ -131,13 +131,13 @@ interface IMigrationRegistryV3 {
     /// Approving an approved delegate leaves it approved.
     /// @param namespace The line under the caller. MUST NOT be zero.
     /// @param delegate The account to approve. MUST NOT be zero.
-    function approve(bytes32 namespace, address delegate) external;
+    function approveV3(bytes32 namespace, address delegate) external;
 
     /// Revokes `delegate`'s approval for the caller's line in `namespace`.
     /// Revoking an unapproved delegate leaves it unapproved.
     /// @param namespace The line under the caller. MUST NOT be zero.
     /// @param delegate The account to revoke. MUST NOT be zero.
-    function revoke(bytes32 namespace, address delegate) external;
+    function revokeV3(bytes32 namespace, address delegate) external;
 
     /// Whether `writer` has approved `delegate` for its line in `namespace`.
     /// Refuses the zero writer, namespace and delegate rather than answering
@@ -146,28 +146,28 @@ interface IMigrationRegistryV3 {
     /// @param namespace The line under the writer.
     /// @param delegate The account asked about.
     /// @return True when approved.
-    function approved(address writer, bytes32 namespace, address delegate) external view returns (bool);
+    function approvedV3(address writer, bytes32 namespace, address delegate) external view returns (bool);
 
     /// As `IMigrationRegistryV2.applied`.
     /// @param writer The line's writer.
     /// @param namespace The line under the writer.
     /// @param migration The migration asked about.
     /// @return The moment it was applied, zero if never.
-    function applied(address writer, bytes32 namespace, bytes32 migration) external view returns (uint256);
+    function appliedV3(address writer, bytes32 namespace, bytes32 migration) external view returns (uint256);
 
     /// As `IMigrationRegistryV2.appliedOnto`.
     /// @param writer The line's writer.
     /// @param namespace The line under the writer.
     /// @param migration The migration asked about.
     /// @return The head it was applied onto.
-    function appliedOnto(address writer, bytes32 namespace, bytes32 migration) external view returns (bytes32);
+    function appliedOntoV3(address writer, bytes32 namespace, bytes32 migration) external view returns (bytes32);
 
     /// As `IMigrationRegistryV2.appliedAfter`.
     /// @param writer The line's writer.
     /// @param namespace The line under the writer.
     /// @param migration The migration asked about.
     /// @return The prerequisites it was applied after.
-    function appliedAfter(address writer, bytes32 namespace, bytes32 migration)
+    function appliedAfterV3(address writer, bytes32 namespace, bytes32 migration)
         external
         view
         returns (Prerequisite[] memory);
@@ -176,5 +176,5 @@ interface IMigrationRegistryV3 {
     /// @param writer The line's writer.
     /// @param namespace The line under the writer.
     /// @return The line's head.
-    function head(address writer, bytes32 namespace) external view returns (bytes32);
+    function headV3(address writer, bytes32 namespace) external view returns (bytes32);
 }
