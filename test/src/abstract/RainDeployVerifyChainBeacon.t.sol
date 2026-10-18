@@ -305,6 +305,13 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
+    function testABeaconBeforeAValidOneOnItsNetworkIsChecked() external {
+        declare(42161, declared("beacon-implementation@0_0_1", NEW_OWNER));
+        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        expectUnexpected(1, NEW_OWNER, OWNER);
+        this.externalCheckDeployedOnNetworks(arbitrum());
+    }
+
     function testEachBeaconOnANetworkIsCheckedAtItsOwnImplementation() external {
         address second = address(new UpgradeableBeacon(sUpgrade, OWNER));
         vm.makePersistent(second);

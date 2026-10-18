@@ -23,6 +23,7 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockOwnable2StepBeacon} from "../../concrete/MockOwnable2StepBeacon.sol";
 import {MockSilentFallbackBeacon} from "../../concrete/MockSilentFallbackBeacon.sol";
 import {MockTwoWordFallbackBeacon} from "../../concrete/MockTwoWordFallbackBeacon.sol";
+import {MockRevertingWordFallbackBeacon} from "../../concrete/MockRevertingWordFallbackBeacon.sol";
 
 /// @title LibRainDeployBeaconTest
 /// @notice `LibRainDeployBeacon`'s expected state from the migration registry, and its check of a beacon against it.
@@ -514,5 +515,17 @@ contract LibRainDeployBeaconTest is Test {
         DeployBeacon memory beacon = declared(upgradeThenHandover());
         vm.expectRevert(stdError.indexOOBError);
         this.externalStateAt(beacon, 3);
+    }
+
+    function testBeaconRevertingPendingOwnerWithAWordPasses() external {
+        MockRevertingWordFallbackBeacon beacon = new MockRevertingWordFallbackBeacon(sImplementation, sOwner);
+        (bool success, bytes memory answer) = address(beacon).staticcall(abi.encodeWithSignature("pendingOwner()"));
+        assertFalse(success);
+        assertEq(answer.length, 0x20);
+        assertEq(abi.decode(answer, (uint256)), 0xDEAD);
+        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
+        declaration.beacon = address(beacon);
+        declaration.beaconCodeHash = address(beacon).codehash;
+        this.externalCheckBeacon(declaration, sImplementation, sOwner);
     }
 }
