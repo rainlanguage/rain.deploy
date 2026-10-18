@@ -4,11 +4,8 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
-import {
-    IMigrationRegistryV2,
-    Prerequisite,
-    MIGRATION_HEAD_GENESIS
-} from "../../../src/interface/IMigrationRegistryV2.sol";
+import {Prerequisite, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV2.sol";
+import {IMigrationRegistryV3} from "../../../src/interface/IMigrationRegistryV3.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
@@ -74,7 +71,7 @@ contract MigrationRegistryAppliedTest is Test {
         vm.warp(writtenAt);
         vm.prank(writer);
         sRegistry.applyMigrationHistory(
-            namespace, migration, appliedAt, onto(writer, namespace, MIGRATION_HEAD_GENESIS)
+            writer, namespace, migration, appliedAt, onto(writer, namespace, MIGRATION_HEAD_GENESIS)
         );
 
         vm.warp(readAt);
@@ -103,7 +100,7 @@ contract MigrationRegistryAppliedTest is Test {
         vm.warp(writtenAt);
         vm.prank(writer);
         sRegistry.applyMigrationHistory(
-            namespace, migration, appliedAt, onto(writer, namespace, MIGRATION_HEAD_GENESIS)
+            writer, namespace, migration, appliedAt, onto(writer, namespace, MIGRATION_HEAD_GENESIS)
         );
 
         vm.warp(readAt);
@@ -118,7 +115,7 @@ contract MigrationRegistryAppliedTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.applyMigration(namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigration(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
         assertEq(sRegistry.applied(writer, namespace, migration), block.timestamp);
         assertEq(sRegistry.applied(writer, namespace, migration), block.timestamp);
@@ -144,7 +141,7 @@ contract MigrationRegistryAppliedTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.applyMigration(namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigration(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
         assertEq(sRegistry.applied(writer, namespace, migration), block.timestamp);
         assertEq(sRegistry.applied(writer, otherNamespace, migration), 0);
@@ -161,7 +158,7 @@ contract MigrationRegistryAppliedTest is Test {
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroWriter.selector));
         sRegistry.applied(address(0), namespace, migration);
     }
 
@@ -175,13 +172,13 @@ contract MigrationRegistryAppliedTest is Test {
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroNamespace.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroNamespace.selector));
         sRegistry.applied(writer, bytes32(0), migration);
 
         vm.prank(writer);
-        sRegistry.applyMigration(namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigration(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroNamespace.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroNamespace.selector));
         sRegistry.applied(writer, bytes32(0), migration);
 
         assertEq(sRegistry.applied(writer, namespace, migration), block.timestamp);
@@ -193,7 +190,7 @@ contract MigrationRegistryAppliedTest is Test {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroMigration.selector));
         sRegistry.applied(writer, namespace, bytes32(0));
     }
 
@@ -205,7 +202,7 @@ contract MigrationRegistryAppliedTest is Test {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.GenesisMigration.selector));
         sRegistry.applied(writer, namespace, MIGRATION_HEAD_GENESIS);
     }
 
@@ -214,10 +211,10 @@ contract MigrationRegistryAppliedTest is Test {
     /// gets one stable answer rather than one that depends on which check
     /// happens to run.
     function testAppliedZeroWriterCheckedFirst() external {
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroWriter.selector));
         sRegistry.applied(address(0), bytes32(0), bytes32(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroWriter.selector));
         sRegistry.applied(address(0), bytes32(0), MIGRATION_HEAD_GENESIS);
     }
 
@@ -228,13 +225,13 @@ contract MigrationRegistryAppliedTest is Test {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroWriter.selector));
         sRegistry.applied(address(0), bytes32(0), migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroNamespace.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroNamespace.selector));
         sRegistry.applied(writer, bytes32(0), bytes32(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroNamespace.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroNamespace.selector));
         sRegistry.applied(writer, bytes32(0), MIGRATION_HEAD_GENESIS);
     }
 
@@ -247,18 +244,18 @@ contract MigrationRegistryAppliedTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.applyMigration(namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigration(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroWriter.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroWriter.selector));
         sRegistry.applied(address(0), namespace, migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroNamespace.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroNamespace.selector));
         sRegistry.applied(writer, bytes32(0), migration);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.ZeroMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroMigration.selector));
         sRegistry.applied(writer, namespace, bytes32(0));
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.GenesisMigration.selector));
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.GenesisMigration.selector));
         sRegistry.applied(writer, namespace, MIGRATION_HEAD_GENESIS);
 
         assertEq(sRegistry.applied(writer, namespace, migration), block.timestamp);
@@ -285,15 +282,18 @@ contract MigrationRegistryAppliedTest is Test {
     }
 
     /// There is no other entry point at all: no fallback, no receive, and
-    /// nothing beyond the `IMigrationRegistryV2` functions, so an unknown
+    /// nothing beyond the `IMigrationRegistryV3` functions, so an unknown
     /// selector reverts instead of being silently absorbed.
     function testAppliedNoOtherEntryPoint(bytes4 selector, bytes32 namespace, bytes32 migration) external {
-        vm.assume(selector != IMigrationRegistryV2.applied.selector);
-        vm.assume(selector != IMigrationRegistryV2.appliedOnto.selector);
-        vm.assume(selector != IMigrationRegistryV2.appliedAfter.selector);
-        vm.assume(selector != IMigrationRegistryV2.applyMigration.selector);
-        vm.assume(selector != IMigrationRegistryV2.applyMigrationHistory.selector);
-        vm.assume(selector != IMigrationRegistryV2.head.selector);
+        vm.assume(selector != IMigrationRegistryV3.applied.selector);
+        vm.assume(selector != IMigrationRegistryV3.appliedOnto.selector);
+        vm.assume(selector != IMigrationRegistryV3.appliedAfter.selector);
+        vm.assume(selector != IMigrationRegistryV3.applyMigration.selector);
+        vm.assume(selector != IMigrationRegistryV3.applyMigrationHistory.selector);
+        vm.assume(selector != IMigrationRegistryV3.head.selector);
+        vm.assume(selector != IMigrationRegistryV3.approve.selector);
+        vm.assume(selector != IMigrationRegistryV3.revoke.selector);
+        vm.assume(selector != IMigrationRegistryV3.approved.selector);
 
         (bool success,) = address(sRegistry).call(abi.encodeWithSelector(selector, address(this), namespace, migration));
         assertFalse(success);

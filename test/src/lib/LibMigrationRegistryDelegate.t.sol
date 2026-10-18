@@ -57,14 +57,6 @@ contract LibMigrationRegistryDelegateTest is Test {
         return LibMigrationRegistry.approved(WRITER, NAMESPACE, DELEGATE);
     }
 
-    function externalApplyMigrationForCall() external view returns (address, bytes memory) {
-        return LibMigrationRegistry.applyMigrationForCall(WRITER, NAMESPACE, MIGRATION, genesis());
-    }
-
-    function externalApplyMigrationHistoryForCall() external view returns (address, bytes memory) {
-        return LibMigrationRegistry.applyMigrationHistoryForCall(WRITER, NAMESPACE, MIGRATION, 1, genesis());
-    }
-
     /// Approve then revoke, built and sent by the writer, are what `approved`
     /// answers.
     function testApproveAndRevokeCallsLand() external {
@@ -84,40 +76,37 @@ contract LibMigrationRegistryDelegateTest is Test {
 
     /// A delegated write, built and sent by an approved delegate, lands in the
     /// writer's line.
-    function testApplyMigrationForCallLands() external {
+    function testApplyMigrationCallDelegatedLands() external {
         deployRegistry();
         (address to, bytes memory data) = LibMigrationRegistry.approveCall(NAMESPACE, DELEGATE);
         send(WRITER, to, data);
-        (to, data) = LibMigrationRegistry.applyMigrationForCall(WRITER, NAMESPACE, MIGRATION, genesis());
+        (to, data) = LibMigrationRegistry.applyMigrationCall(WRITER, NAMESPACE, MIGRATION, genesis());
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
-        assertEq(
-            data, abi.encodeCall(IMigrationRegistryV3.applyMigrationFor, (WRITER, NAMESPACE, MIGRATION, genesis()))
-        );
+        assertEq(data, abi.encodeCall(IMigrationRegistryV3.applyMigration, (WRITER, NAMESPACE, MIGRATION, genesis())));
         send(DELEGATE, to, data);
         assertEq(LibMigrationRegistry.applied(WRITER, NAMESPACE, MIGRATION), block.timestamp);
     }
 
     /// A delegated history write carries its moment into the writer's line.
-    function testApplyMigrationHistoryForCallLands(uint256 appliedAt) external {
+    function testApplyMigrationHistoryCallDelegatedLands(uint256 appliedAt) external {
         vm.warp(1_000_000);
         appliedAt = bound(appliedAt, 1, block.timestamp);
         deployRegistry();
         (address to, bytes memory data) = LibMigrationRegistry.approveCall(NAMESPACE, DELEGATE);
         send(WRITER, to, data);
-        (to, data) =
-            LibMigrationRegistry.applyMigrationHistoryForCall(WRITER, NAMESPACE, MIGRATION, appliedAt, genesis());
+        (to, data) = LibMigrationRegistry.applyMigrationHistoryCall(WRITER, NAMESPACE, MIGRATION, appliedAt, genesis());
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         assertEq(
             data,
             abi.encodeCall(
-                IMigrationRegistryV3.applyMigrationHistoryFor, (WRITER, NAMESPACE, MIGRATION, appliedAt, genesis())
+                IMigrationRegistryV3.applyMigrationHistory, (WRITER, NAMESPACE, MIGRATION, appliedAt, genesis())
             )
         );
         send(DELEGATE, to, data);
         assertEq(LibMigrationRegistry.applied(WRITER, NAMESPACE, MIGRATION), appliedAt);
     }
 
-    /// Every builder and the read refuse a chain with no registry.
+    /// The approval builders and the read refuse a chain with no registry.
     function testNoRegistryIsRefused() external {
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
         expectNoRegistry();
@@ -126,9 +115,5 @@ contract LibMigrationRegistryDelegateTest is Test {
         this.externalRevokeCall();
         expectNoRegistry();
         this.externalApproved();
-        expectNoRegistry();
-        this.externalApplyMigrationForCall();
-        expectNoRegistry();
-        this.externalApplyMigrationHistoryForCall();
     }
 }
