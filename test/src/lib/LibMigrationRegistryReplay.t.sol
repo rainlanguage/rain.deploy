@@ -14,7 +14,8 @@ import {
 import {IMigrationRegistryV3} from "../../../src/interface/IMigrationRegistryV3.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {
-    CREATION_CODE as MIGRATION_REGISTRY_V2_CREATION_CODE
+    CREATION_CODE as MIGRATION_REGISTRY_V2_CREATION_CODE,
+    BYTECODE_HASH as MIGRATION_REGISTRY_V2_CODEHASH
 } from "../../../src/generated/0_1_18/MigrationRegistry.sol";
 
 /// @title LibMigrationRegistryReplayTest
@@ -22,6 +23,7 @@ import {
 /// sent in order, reproduce each V2 record in the V3 registry.
 contract LibMigrationRegistryReplayTest is Test {
     address internal constant WRITER = address(0x1111);
+    address internal constant DELEGATE = address(0x2222);
     address internal constant OTHER = address(0x3333);
     bytes32 internal constant NAMESPACE = keccak256("namespace");
     bytes32 internal constant OTHER_NAMESPACE = keccak256("other namespace");
@@ -157,5 +159,206 @@ contract LibMigrationRegistryReplayTest is Test {
             )
         );
         this.externalReplay(WRITER, NAMESPACE);
+    }
+
+    function externalCheckV2Replayed(address writer, bytes32 namespace) external view {
+        LibMigrationRegistry.checkV2Replayed(sV2, writer, namespace);
+    }
+
+    /// Code other than the released V2 registry at `v2` is refused before
+    /// anything is read from it.
+    function testReplayRefusesOtherCodeAtV2() external {
+        LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode);
+        writeV2Lines();
+        bytes memory other = hex"00";
+        vm.etch(address(sV2), other);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                MIGRATION_REGISTRY_V2_CODEHASH,
+                keccak256(other)
+            )
+        );
+        this.externalReplay(WRITER, NAMESPACE);
+    }
+
+    /// An address with no code at `v2` is refused by its code hash.
+    function testReplayRefusesNoCodeAtV2() external {
+        LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode);
+        vm.etch(address(sV2), "");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                MIGRATION_REGISTRY_V2_CODEHASH,
+                address(sV2).codehash
+            )
+        );
+        this.externalReplay(WRITER, NAMESPACE);
+    }
+
+    /// Sends call `index` of `writer`'s replay from `writer`, returning whether
+    /// it landed and what it returned.
+    function sendReplayCall(address writer, bytes32 namespace, uint256 index) internal returns (bool, bytes memory) {
+        (address to, bytes[] memory calls) = LibMigrationRegistry.replayV2Call(sV2, writer, namespace);
+        vm.prank(writer);
+        return to.call(calls[index]);
+    }
+
+    /// Writes two V2 lines that wait on each other: A1 and B1 at genesis, A2
+    /// after B1, B2 after A1.
+    function writeMutualV2Lines() internal {
+        vm.prank(WRITER);
+        sV2.applyMigrationHistory(NAMESPACE, FIRST, 100, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        vm.prank(OTHER);
+        sV2.applyMigrationHistory(OTHER_NAMESPACE, FIRST, 100, onto(OTHER, OTHER_NAMESPACE, MIGRATION_HEAD_GENESIS));
+        Prerequisite[] memory afterB1 = new Prerequisite[](2);
+        afterB1[0] = Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: FIRST});
+        afterB1[1] = Prerequisite({writer: OTHER, namespace: OTHER_NAMESPACE, migration: FIRST});
+        vm.prank(WRITER);
+        sV2.applyMigrationHistory(NAMESPACE, SECOND, 200, afterB1);
+        Prerequisite[] memory afterA1 = new Prerequisite[](2);
+        afterA1[0] = Prerequisite({writer: OTHER, namespace: OTHER_NAMESPACE, migration: FIRST});
+        afterA1[1] = Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: FIRST});
+        vm.prank(OTHER);
+        sV2.applyMigrationHistory(OTHER_NAMESPACE, SECOND, 200, afterA1);
+    }
+
+    /// Two lines that wait on each other cannot be replayed line by line in
+    /// either order: each stops at its second record, naming the other
+    /// line's first. Interleaved, record by record, both land at their V2
+    /// heads.
+    function testReplayMutuallyWaitingLinesInterleaved() external {
+        IMigrationRegistryV3 v3 =
+            IMigrationRegistryV3(LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode));
+        writeMutualV2Lines();
+        uint256 fresh = vm.snapshotState();
+
+        (bool success, bytes memory result) = sendReplayCall(WRITER, NAMESPACE, 0);
+        assertTrue(success);
+        (success, result) = sendReplayCall(WRITER, NAMESPACE, 1);
+        assertFalse(success);
+        assertEq(
+            result,
+            abi.encodeWithSelector(IMigrationRegistryV3.PrerequisiteNotApplied.selector, OTHER, OTHER_NAMESPACE, FIRST)
+        );
+
+        vm.revertToState(fresh);
+        (success, result) = sendReplayCall(OTHER, OTHER_NAMESPACE, 0);
+        assertTrue(success);
+        (success, result) = sendReplayCall(OTHER, OTHER_NAMESPACE, 1);
+        assertFalse(success);
+        assertEq(
+            result,
+            abi.encodeWithSelector(IMigrationRegistryV3.PrerequisiteNotApplied.selector, WRITER, NAMESPACE, FIRST)
+        );
+
+        vm.revertToState(fresh);
+        (success,) = sendReplayCall(WRITER, NAMESPACE, 0);
+        assertTrue(success);
+        (success,) = sendReplayCall(OTHER, OTHER_NAMESPACE, 0);
+        assertTrue(success);
+        (success,) = sendReplayCall(WRITER, NAMESPACE, 1);
+        assertTrue(success);
+        (success,) = sendReplayCall(OTHER, OTHER_NAMESPACE, 1);
+        assertTrue(success);
+        assertEq(v3.headV3(WRITER, NAMESPACE), SECOND);
+        assertEq(v3.headV3(OTHER, OTHER_NAMESPACE), SECOND);
+        assertRecordReplayed(v3, WRITER, NAMESPACE, FIRST);
+        assertRecordReplayed(v3, WRITER, NAMESPACE, SECOND);
+        assertRecordReplayed(v3, OTHER, OTHER_NAMESPACE, FIRST);
+        assertRecordReplayed(v3, OTHER, OTHER_NAMESPACE, SECOND);
+    }
+
+    /// A replay sent by a delegate records the delegate as each record's
+    /// author, and one sent by the writer records the writer.
+    function testReplayAuthorIsTheSender() external {
+        IMigrationRegistryV3 v3 =
+            IMigrationRegistryV3(LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode));
+        writeV2Lines();
+        replay(OTHER, OTHER_NAMESPACE, 1);
+        assertEq(v3.appliedByV3(OTHER, OTHER_NAMESPACE, OTHER_MIGRATION), OTHER);
+
+        vm.prank(WRITER);
+        v3.approveV3(NAMESPACE, DELEGATE);
+        (address to, bytes[] memory calls) = LibMigrationRegistry.replayV2Call(sV2, WRITER, NAMESPACE);
+        for (uint256 i = 0; i < calls.length; i++) {
+            vm.prank(DELEGATE);
+            (bool success,) = to.call(calls[i]);
+            assertTrue(success);
+        }
+        assertEq(v3.appliedByV3(WRITER, NAMESPACE, FIRST), DELEGATE);
+        assertEq(v3.appliedByV3(WRITER, NAMESPACE, SECOND), DELEGATE);
+        assertEq(v3.appliedByV3(WRITER, NAMESPACE, THIRD), DELEGATE);
+    }
+
+    /// `checkV2Replayed` refuses a line whose V3 head is behind its V2 head,
+    /// naming both heads, until the last record is replayed.
+    function testCheckV2ReplayedRefusesUntilTheHeadsMatch() external {
+        LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode);
+        writeV2Lines();
+        replay(OTHER, OTHER_NAMESPACE, 1);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.V2LineNotReplayed.selector, WRITER, NAMESPACE, THIRD, MIGRATION_HEAD_GENESIS
+            )
+        );
+        this.externalCheckV2Replayed(WRITER, NAMESPACE);
+
+        (address to, bytes[] memory calls) = LibMigrationRegistry.replayV2Call(sV2, WRITER, NAMESPACE);
+        for (uint256 i = 0; i < 2; i++) {
+            vm.prank(WRITER);
+            (bool success,) = to.call(calls[i]);
+            assertTrue(success);
+        }
+        vm.expectRevert(
+            abi.encodeWithSelector(LibMigrationRegistry.V2LineNotReplayed.selector, WRITER, NAMESPACE, THIRD, SECOND)
+        );
+        this.externalCheckV2Replayed(WRITER, NAMESPACE);
+
+        vm.prank(WRITER);
+        (bool landed,) = to.call(calls[2]);
+        assertTrue(landed);
+        this.externalCheckV2Replayed(WRITER, NAMESPACE);
+        this.externalCheckV2Replayed(OTHER, OTHER_NAMESPACE);
+    }
+
+    /// A V3 line ahead of an empty V2 line is not a replay of it.
+    function testCheckV2ReplayedRefusesALineAheadOfV2() external {
+        IMigrationRegistryV3 v3 =
+            IMigrationRegistryV3(LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode));
+        this.externalCheckV2Replayed(WRITER, NAMESPACE);
+        vm.prank(WRITER);
+        v3.applyMigrationV3(WRITER, NAMESPACE, FIRST, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.V2LineNotReplayed.selector, WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS, FIRST
+            )
+        );
+        this.externalCheckV2Replayed(WRITER, NAMESPACE);
+    }
+
+    /// `checkV2Replayed` refuses other code at `v2`, and a chain without the
+    /// V3 registry.
+    function testCheckV2ReplayedRefusesUnknownCode() external {
+        bytes memory other = hex"00";
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
+                bytes32(0)
+            )
+        );
+        this.externalCheckV2Replayed(WRITER, NAMESPACE);
+
+        LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode);
+        vm.etch(address(sV2), other);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                MIGRATION_REGISTRY_V2_CODEHASH,
+                keccak256(other)
+            )
+        );
+        this.externalCheckV2Replayed(WRITER, NAMESPACE);
     }
 }

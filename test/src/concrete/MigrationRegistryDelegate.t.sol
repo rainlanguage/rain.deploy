@@ -95,6 +95,23 @@ contract MigrationRegistryDelegateTest is Test {
         sRegistry.approvedV3(WRITER, NAMESPACE, address(0));
     }
 
+    /// Every approval key refuses the zero writer, then the zero namespace,
+    /// then the zero delegate, whichever of them are zero together.
+    function testApprovalKeyRefusalOrder() external {
+        vm.expectRevert(IMigrationRegistryV3.ZeroWriter.selector);
+        sRegistry.approvedV3(address(0), bytes32(0), address(0));
+        vm.expectRevert(IMigrationRegistryV3.ZeroWriter.selector);
+        sRegistry.approvedV3(address(0), NAMESPACE, address(0));
+        vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
+        sRegistry.approvedV3(WRITER, bytes32(0), address(0));
+        vm.startPrank(WRITER);
+        vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
+        sRegistry.approveV3(bytes32(0), address(0));
+        vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
+        sRegistry.revokeV3(bytes32(0), address(0));
+        vm.stopPrank();
+    }
+
     /// An approved delegate writes the writer's line: the record and the head
     /// are the writer's, stamped with the block, and none is the delegate's.
     function testApprovedDelegateWritesTheWritersLine(uint256 moment) external {

@@ -30,6 +30,12 @@ import {Prerequisite} from "./IMigrationRegistryV2.sol";
 /// account that wrote it (`appliedByV3`) so a reader can say which of them it
 /// trusts.
 ///
+/// An approved delegate can also move the line's head onto any id, which no
+/// write can undo, so a compromised delegate can stop every script queued
+/// against the line, leaving a new namespace as the only way out. Approve only
+/// accounts held to the writer's own custody, and revoke before rotating one
+/// out.
+///
 /// `Prerequisite` is V2's. Under V3 its first entry is `writer`, the line being
 /// written, never the caller: a delegate names the writer that approved it.
 interface IMigrationRegistryV3 {

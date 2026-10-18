@@ -638,7 +638,13 @@ registry at its own address, so records written to an earlier one are not
 visible through `IMigrationRegistryV3`; a consumer moving to it records the
 migrations that already ran again, with `applyMigrationHistoryV3` and the
 moments they ran at. `LibMigrationRegistry.replayV2Call` builds those writes for
-one V2 line, oldest first; a line it waited on is replayed before it.
+one V2 line, oldest first, refusing any `v2` whose code is not the released V2
+registry. Each call must be sent after every record its list names, so lines
+that wait on each other are replayed record by record, interleaved, not line by
+line. A replayed record's `appliedByV3` names the account that sent the replay,
+so `writer` should send its own. `LibMigrationRegistry.checkV2Replayed` reverts
+unless a line's V3 head is its V2 head: call it in the cutover test before any
+reader moves to `appliedV3`, which answers zero for every unreplayed record.
 
 The two writes differ in exactly one thing: where the recorded moment comes
 from. `applyMigrationV3` stamps the block the record lands in, for a script
@@ -841,14 +847,18 @@ lines of an authority it already trusts is reading something only that authority
 or a delegate it approved could have written; every other writer's lines hold
 unforgeable claims nobody asks about. A line is therefore only as trustworthy as
 every delegate it has ever had, revoked ones included, so each record keeps the
-account that wrote it (`appliedByV3`). A namespace is not an authority: it is
-the writer's to name, and a record in it is that writer's claim. A root would
-have to be welded into the creation code, the way `ADDRESS_REGISTRY_ROOT` is —
-and the account that applies a migration is a different Safe, deployer or
-timelock for every consumer and every chain, so one root would have to be all of
-them, and baking each consumer's authority in would give each a different
-address for what is meant to be one shared registry. With nothing to configure
-there is also no rollout state in which it is inert.
+account that wrote it (`appliedByV3`). An approved delegate can also move the
+line's head onto any id, which no write can undo, so a compromised delegate can
+stop every script queued against the line, leaving a new namespace as the only
+way out. Approve only accounts held to the writer's own custody, and revoke
+before rotating one out. A namespace is not an authority: it is the writer's to
+name, and a record in it is that writer's claim. A root would have to be welded
+into the creation code, the way `ADDRESS_REGISTRY_ROOT` is — and the account
+that applies a migration is a different Safe, deployer or timelock for every
+consumer and every chain, so one root would have to be all of them, and baking
+each consumer's authority in would give each a different address for what is
+meant to be one shared registry. With nothing to configure there is also no
+rollout state in which it is inert.
 
 **An index, not proof.** The registry says which invariant applies. It does not
 say the invariant holds — a multisig can act out of band and nothing here moves.
@@ -858,11 +868,12 @@ pins with it trades a clock-guess for a bookkeeping-guess.
 `LibMigrationRegistry` is the surface — `appliedV3`, `appliedOntoV3`,
 `appliedAfterV3`, `appliedByV3`, `headV3`, `approvedV3`, `approveV3`,
 `revokeV3`, `applyMigrationV3` and `applyMigrationHistoryV3`, plus the `*Call`
-builders for a bundle and `replayV2Call`, each verifying the registry's code
-hash before it reads or writes. There is deliberately **no broadcast runner**:
-the dominant real shape is a Safe executing a bundle that never broadcasts, and
-such a script appends `applyMigrationV3` to the bundle it is already emitting,
-which makes the record atomic with the migration it describes.
+builders for a bundle, `replayV2Call` and `checkV2Replayed`, each verifying the
+registry's code hash before it reads or writes. There is deliberately **no
+broadcast runner**: the dominant real shape is a Safe executing a bundle that
+never broadcasts, and such a script appends `applyMigrationV3` to the bundle it
+is already emitting, which makes the record atomic with the migration it
+describes.
 
 ## Deploying, and then releasing
 

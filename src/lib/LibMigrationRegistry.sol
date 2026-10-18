@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import {IMigrationRegistryV2, Prerequisite, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV2.sol";
 import {IMigrationRegistryV3} from "../interface/IMigrationRegistryV3.sol";
 import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
+import {BYTECODE_HASH as MIGRATION_REGISTRY_V2_CODEHASH} from "../generated/0_1_18/MigrationRegistry.sol";
 
 /// @title LibMigrationRegistry
 /// @notice Reads and writes the `MigrationRegistry` deployed at a single
@@ -20,8 +21,8 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// the head and the migrations in any other line the caller names, builds the
 /// list for a write that waits on nothing but the head, or builds that write as
 /// a call for another account to send. It approves and revokes delegates,
-/// reads which account wrote a record, and builds the writes that replay a V2
-/// line into this registry. Which writer a test trusts, which
+/// reads which account wrote a record, builds the writes that replay a V2
+/// line into this registry, and checks that the replay landed. Which writer a test trusts, which
 /// namespace a repo writes, which invariant each
 /// answer selects, and how an id is derived are entirely the consumer's
 /// business and none of this library's.
@@ -114,6 +115,14 @@ library LibMigrationRegistry {
     /// @param expectedCodeHash The code hash of the pinned registry.
     /// @param actualCodeHash The code hash actually found at the address.
     error UnexpectedMigrationRegistryCodeHash(bytes32 expectedCodeHash, bytes32 actualCodeHash);
+
+    /// Thrown by `checkV2Replayed` when a line's head in this registry is not
+    /// its head in the V2 registry.
+    /// @param writer The line's writer.
+    /// @param namespace The line under `writer`.
+    /// @param v2Head The line's head in the V2 registry.
+    /// @param v3Head The line's head in this registry.
+    error V2LineNotReplayed(address writer, bytes32 namespace, bytes32 v2Head, bytes32 v3Head);
 
     /// Reverts unless the pinned registry address holds the pinned code.
     ///
@@ -496,14 +505,16 @@ library LibMigrationRegistry {
     /// `namespace` from `v2` into this registry, oldest first, each with the
     /// moment and the list `v2` recorded. Sent in order by `writer` or a
     /// delegate it approved, they reproduce the line's heads, moments and
-    /// lists.
+    /// lists. `appliedByV3` on each replayed record then names the account
+    /// that sent it, so `writer` should send its own replay for authorship to
+    /// carry over unchanged.
     ///
     /// Walks `v2` from `head` back through `appliedOnto` to
-    /// `MIGRATION_HEAD_GENESIS`. A record in another line that this one waited
-    /// on must be replayed first, by its own line's replay, or the registry
-    /// refuses the write naming it. `v2` is read as given: the caller vouches
-    /// for the code at that address. Verifies this registry's code hash, as
-    /// `applyMigrationHistoryV3Call` does.
+    /// `MIGRATION_HEAD_GENESIS`. Each call must be sent after every record its
+    /// list names, or the registry refuses it naming that record, so lines
+    /// that wait on each other are replayed record by record, interleaved, not
+    /// line by line. Verifies the released V2 code hash at `v2`, then this
+    /// registry's, as `applyMigrationHistoryV3Call` does.
     /// @param v2 The V2 registry holding the line.
     /// @param writer The line's writer. Never the zero address.
     /// @param namespace The line under `writer`. Never zero.
@@ -514,6 +525,7 @@ library LibMigrationRegistry {
         view
         returns (address, bytes[] memory)
     {
+        checkV2CodeHash(v2);
         checkCodeHash();
         bytes32 headMigration = v2.head(writer, namespace);
         uint256 length = 0;
@@ -537,6 +549,34 @@ library LibMigrationRegistry {
             migration = v2.appliedOnto(writer, namespace, migration);
         }
         return (LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, calls);
+    }
+
+    /// Reverts unless `v2` holds the released V2 registry, which every V2
+    /// release shares. A replay read from other code would hand a signer
+    /// invented records that no write can remove.
+    /// @param v2 The V2 registry.
+    function checkV2CodeHash(IMigrationRegistryV2 v2) internal view {
+        bytes32 actualCodeHash = address(v2).codehash;
+        if (actualCodeHash != MIGRATION_REGISTRY_V2_CODEHASH) {
+            revert UnexpectedMigrationRegistryCodeHash(MIGRATION_REGISTRY_V2_CODEHASH, actualCodeHash);
+        }
+    }
+
+    /// Reverts `V2LineNotReplayed` unless `writer`'s line in `namespace` is at
+    /// the same head here as in `v2`. Until it is, `appliedV3` answers zero for
+    /// every record not yet replayed, so a consumer calls this in its cutover
+    /// test before any reader moves to this registry. Verifies both code
+    /// hashes, as `replayV2Call` does.
+    /// @param v2 The V2 registry holding the line.
+    /// @param writer The line's writer. Never the zero address.
+    /// @param namespace The line under `writer`. Never zero.
+    function checkV2Replayed(IMigrationRegistryV2 v2, address writer, bytes32 namespace) internal view {
+        checkV2CodeHash(v2);
+        bytes32 v2Head = v2.head(writer, namespace);
+        bytes32 v3Head = headV3(writer, namespace);
+        if (v2Head != v3Head) {
+            revert V2LineNotReplayed(writer, namespace, v2Head, v3Head);
+        }
     }
 
     /// The call that approves `delegate` to write the sending account's line

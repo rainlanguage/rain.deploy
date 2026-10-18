@@ -172,9 +172,7 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// @param writer The line's writer.
     /// @param namespace The line under the writer.
     function checkDelegate(address writer, bytes32 namespace) internal view {
-        if (writer == address(0)) {
-            revert ZeroWriter();
-        }
+        checkWriter(writer);
         if (msg.sender != writer && !sApproved[writer][namespace][msg.sender]) {
             revert NotApproved(writer, namespace, msg.sender);
         }
@@ -436,15 +434,23 @@ contract MigrationRegistry is IMigrationRegistryV3 {
         return sRecords[writer][namespace][migration].writtenBy;
     }
 
+    /// Refuses the zero writer. The one copy of that refusal, reached by
+    /// `checkLineKey` and by `checkDelegate`, which must refuse it before
+    /// `NotApproved` and before the namespace.
+    /// @param writer The line's writer.
+    function checkWriter(address writer) internal pure {
+        if (writer == address(0)) {
+            revert ZeroWriter();
+        }
+    }
+
     /// Refuses the zero writer, then the zero namespace: neither names a line.
     /// One function, so every key naming a line refuses the same two things in
     /// the same order.
     /// @param writer The line's writer.
     /// @param namespace The line under the writer.
     function checkLineKey(address writer, bytes32 namespace) internal pure {
-        if (writer == address(0)) {
-            revert ZeroWriter();
-        }
+        checkWriter(writer);
         if (namespace == bytes32(0)) {
             revert ZeroNamespace();
         }
