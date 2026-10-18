@@ -24,6 +24,7 @@ contract MigrationRegistryDelegateTest is Test {
     address internal constant DELEGATE = address(0x2222);
     bytes32 internal constant NAMESPACE = keccak256("namespace");
     bytes32 internal constant MIGRATION = keccak256("migration");
+    bytes32 internal constant SECOND = keccak256("second");
 
     function setUp() external {
         sRegistry = new MigrationRegistry();
@@ -136,9 +137,9 @@ contract MigrationRegistryDelegateTest is Test {
         vm.prank(DELEGATE);
         sRegistry.applyMigrationFor(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
         vm.prank(other);
-        sRegistry.applyMigrationFor(WRITER, NAMESPACE, "second", onto(WRITER, NAMESPACE, MIGRATION));
-        assertEq(sRegistry.head(WRITER, NAMESPACE), bytes32("second"));
-        assertEq(sRegistry.appliedOnto(WRITER, NAMESPACE, "second"), MIGRATION);
+        sRegistry.applyMigrationFor(WRITER, NAMESPACE, SECOND, onto(WRITER, NAMESPACE, MIGRATION));
+        assertEq(sRegistry.head(WRITER, NAMESPACE), SECOND);
+        assertEq(sRegistry.appliedOnto(WRITER, NAMESPACE, SECOND), MIGRATION);
     }
 
     /// The writer writes its own line through the delegated entry points
@@ -147,10 +148,10 @@ contract MigrationRegistryDelegateTest is Test {
         vm.startPrank(WRITER);
         sRegistry.applyMigrationFor(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
         sRegistry.applyMigrationHistoryFor(
-            WRITER, NAMESPACE, "second", block.timestamp, onto(WRITER, NAMESPACE, MIGRATION)
+            WRITER, NAMESPACE, SECOND, block.timestamp, onto(WRITER, NAMESPACE, MIGRATION)
         );
         vm.stopPrank();
-        assertEq(sRegistry.head(WRITER, NAMESPACE), bytes32("second"));
+        assertEq(sRegistry.head(WRITER, NAMESPACE), SECOND);
     }
 
     /// An unapproved caller is refused on both writes, naming the line and
@@ -188,7 +189,7 @@ contract MigrationRegistryDelegateTest is Test {
         sRegistry.revoke(NAMESPACE, DELEGATE);
         vm.prank(DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
-        sRegistry.applyMigrationFor(WRITER, NAMESPACE, "second", onto(WRITER, NAMESPACE, MIGRATION));
+        sRegistry.applyMigrationFor(WRITER, NAMESPACE, SECOND, onto(WRITER, NAMESPACE, MIGRATION));
         assertTrue(sRegistry.applied(WRITER, NAMESPACE, MIGRATION) != 0);
     }
 
@@ -229,7 +230,7 @@ contract MigrationRegistryDelegateTest is Test {
         prerequisites[1] = Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: MIGRATION});
         vm.prank(DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV2.OwnPrerequisite.selector, MIGRATION));
-        sRegistry.applyMigrationFor(WRITER, NAMESPACE, "second", prerequisites);
+        sRegistry.applyMigrationFor(WRITER, NAMESPACE, SECOND, prerequisites);
     }
 
     /// The writer's own V2 writes are unchanged by delegation and land in
@@ -239,7 +240,7 @@ contract MigrationRegistryDelegateTest is Test {
         vm.prank(DELEGATE);
         sRegistry.applyMigrationFor(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
         vm.prank(WRITER);
-        sRegistry.applyMigration(NAMESPACE, "second", onto(WRITER, NAMESPACE, MIGRATION));
-        assertEq(sRegistry.head(WRITER, NAMESPACE), bytes32("second"));
+        sRegistry.applyMigration(NAMESPACE, SECOND, onto(WRITER, NAMESPACE, MIGRATION));
+        assertEq(sRegistry.head(WRITER, NAMESPACE), SECOND);
     }
 }
