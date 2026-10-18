@@ -529,9 +529,9 @@ library supplies the fork loop and the comparison.
 
 ## Managing the address registry
 
-Root binds a name with `script/RegisterAddress.sol`, signed on the Ledger that
-holds `ADDRESS_REGISTRY_ROOT`. It is run by hand on the machine the Ledger is
-plugged into, never in CI: forge's own `--ledger` signer asks the device for
+Root binds a name with `script/RegisterAddress.sol`, signed on the Trezor that
+holds `ADDRESS_REGISTRY_ROOT`. It is run by hand on the machine the Trezor is
+plugged into, never in CI: forge's own `--trezor` signer asks the device for
 each signature, and the key never leaves it.
 
 **The name is the string consumers hash.** Consumers derive a name as
@@ -551,17 +551,15 @@ running it again.
 
 ### Before the first run
 
-- The Ledger: unlocked, the **Ethereum** app open, and Ledger Live closed (it
-  holds the USB connection). In the Ethereum app's settings turn on **Blind
-  signing** — `register` is a contract call the app cannot decode, and it
-  refuses to sign one otherwise. Turning on **Debug data** as well makes the
-  device show the raw call, which is what to check against the dry run below.
+- The Trezor: unlocked, with the passphrase of root's wallet if it has one, and
+  Trezor Suite closed (it holds the USB connection).
 - Check the device answers as root (append `--mnemonic-derivation-path "<path>"`
-  if root is not the first Ledger Live account; the same flag goes on every
-  command below):
+  if root is not the first Ethereum account in Trezor Suite, and the same path
+  as `--mnemonic-derivation-paths "<path>"` on the `forge script` commands
+  below):
 
   ```sh
-  nix develop -c cast wallet address --ledger
+  nix develop -c cast wallet address --trezor
   # must print 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c
   ```
 
@@ -580,12 +578,12 @@ export ADDRESS_REGISTRY_ACCOUNT=0x...
 # 1. Dry run. Executes every check and the bind itself on a fork of each
 #    network, and sends nothing.
 nix develop -c forge script script/RegisterAddress.sol:RegisterAddress \
-  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --ledger --legacy
+  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy
 
 # 2. The same command with --broadcast. The device asks once per network the
 #    dry run marked BIND or REBIND.
 nix develop -c forge script script/RegisterAddress.sol:RegisterAddress \
-  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --ledger --legacy --broadcast
+  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy --broadcast
 
 # 3. Once every transaction is mined: reads every network fresh and fails
 #    unless the name resolves to the account on each.
@@ -608,17 +606,20 @@ exact calldata, then for each network its chain id, the current binding
 `BIND`, `REBIND` (old → new) or `SKIP`. That is the record to approve against.
 For each transaction the device shows:
 
-- **To**: the registry address the dry run printed
+- **Recipient**: the registry address the dry run printed
   (`LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS`);
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
-- with **Debug data** on, the selector `0xd22057a9`
-  (`register(bytes32,address)`) and its two arguments: the name hash, and the
-  account left-padded to 32 bytes — together exactly the calldata the dry run
-  printed.
+- **Data**: the selector `0xd22057a9` (`register(bytes32,address)`) and its two
+  arguments: the name hash, and the account left-padded to 32 bytes — together
+  exactly the calldata the dry run printed. `register` is a call the device
+  cannot decode, so it shows the raw bytes; open the full data on the device to
+  compare them.
 
-Reject on the device if any of them differs.
+Labels vary by firmware; whatever they are called, the recipient, amount, chain
+and raw calldata must each match the dry run. Reject on the device if any of
+them differs.
 
 ## Migration registry
 
