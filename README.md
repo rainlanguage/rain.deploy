@@ -617,7 +617,9 @@ For each transaction the device shows:
   cannot decode, so it shows the raw bytes; open the full data on the device to
   compare them.
 
-Reject on the device if any of them differs.
+Labels vary by firmware; whatever they are called, the recipient, amount, chain
+and raw calldata must each match the dry run. Reject on the device if any of
+them differs.
 
 ## Migration registry
 
