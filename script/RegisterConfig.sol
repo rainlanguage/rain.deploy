@@ -11,7 +11,7 @@ import {LibConfigRegistryRegister} from "../src/lib/LibConfigRegistryRegister.so
 /// @notice Binds `CONFIG_REGISTRY_NAME` to `CONFIG_REGISTRY_VALUE` in the
 /// `ConfigRegistry` on every network the declaration supports, or on the
 /// comma-separated subset `CONFIG_REGISTRY_NETWORKS` names, signed by
-/// `CONFIG_REGISTRY_ROOT` on a Ledger.
+/// `CONFIG_REGISTRY_ROOT` on a Trezor.
 ///
 /// Local only. Root is a hardware wallet, so nothing in CI can sign this, and
 /// nothing in CI runs it. The README's "Managing the config registry" section
@@ -20,7 +20,7 @@ import {LibConfigRegistryRegister} from "../src/lib/LibConfigRegistryRegister.so
 /// `run()` binds, and is a dry run on forks unless forge is given
 /// `--broadcast`. `verify()` is the confirmed check, a run of its own once the
 /// binds are mined. The signer is forge's `--sender`, which is what a script's
-/// `msg.sender` is; `--ledger` is what makes the device that account's wallet.
+/// `msg.sender` is; `--trezor` is what makes the device that account's wallet.
 /// `LibConfigRegistryRegister` carries every guard.
 contract RegisterConfig is RegistryDeploySuites, Script {
     /// The environment variable holding the name, as a consumer writes it
