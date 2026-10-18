@@ -13,8 +13,8 @@ import {LibAccountCode} from "../../lib/LibAccountCode.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
 /// @title LibMigrationRegistryWriteCallTest
-/// Tests for `LibMigrationRegistry.recordMigrationCall` and
-/// `recordMigrationHistoryCall`: the `(to, data)` a Safe bundle or a timelock
+/// Tests for `LibMigrationRegistry.applyMigrationV3Call` and
+/// `applyMigrationHistoryV3Call`: the `(to, data)` a Safe bundle or a timelock
 /// batch sends to write a record under the account that executes it.
 ///
 /// The oracle is the real `MigrationRegistry`, deployed through the Zoltu
@@ -51,7 +51,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assertTrue(success);
     }
 
-    /// External wrapper for `recordMigrationCall` so that `vm.expectRevert`
+    /// External wrapper for `applyMigrationV3Call` so that `vm.expectRevert`
     /// works at the correct call depth.
     /// @param namespace The line to apply in.
     /// @param migration The migration to apply.
@@ -63,10 +63,10 @@ contract LibMigrationRegistryWriteCallTest is Test {
         view
         returns (address, bytes memory)
     {
-        return LibMigrationRegistry.recordMigrationCall(address(this), namespace, migration, prerequisites);
+        return LibMigrationRegistry.applyMigrationV3Call(address(this), namespace, migration, prerequisites);
     }
 
-    /// External wrapper for `recordMigrationHistoryCall` so that
+    /// External wrapper for `applyMigrationHistoryV3Call` so that
     /// `vm.expectRevert` works at the correct call depth.
     /// @param namespace The line to apply in.
     /// @param migration The migration to apply.
@@ -80,7 +80,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
         uint256 appliedAt,
         Prerequisite[] memory prerequisites
     ) external view returns (address, bytes memory) {
-        return LibMigrationRegistry.recordMigrationHistoryCall(
+        return LibMigrationRegistry.applyMigrationHistoryV3Call(
             address(this), namespace, migration, appliedAt, prerequisites
         );
     }
@@ -110,7 +110,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
         vm.warp(landedAt);
         vm.prank(upstream);
         IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .recordMigration(
+            .applyMigrationV3(
                 upstream,
                 upstreamNamespace,
                 prerequisite,
@@ -122,7 +122,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
         prerequisites[1] = Prerequisite({writer: upstream, namespace: upstreamNamespace, migration: prerequisite});
 
         (address to, bytes memory data) =
-            LibMigrationRegistry.recordMigrationCall(sender, namespace, migration, prerequisites);
+            LibMigrationRegistry.applyMigrationV3Call(sender, namespace, migration, prerequisites);
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         // Building writes nothing.
         assertEq(LibMigrationRegistry.applied(sender, namespace, migration), 0);
@@ -163,10 +163,10 @@ contract LibMigrationRegistryWriteCallTest is Test {
 
         Prerequisite[] memory ontoGenesis = LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS);
         (address toA, bytes memory dataA) =
-            LibMigrationRegistry.recordMigrationHistoryCall(sender, namespace, migrationA, appliedAt, ontoGenesis);
+            LibMigrationRegistry.applyMigrationHistoryV3Call(sender, namespace, migrationA, appliedAt, ontoGenesis);
         Prerequisite[] memory ontoA = LibMigrationRegistry.onto(sender, namespace, migrationA);
         (address toB, bytes memory dataB) =
-            LibMigrationRegistry.recordMigrationHistoryCall(sender, namespace, migrationB, appliedAt, ontoA);
+            LibMigrationRegistry.applyMigrationHistoryV3Call(sender, namespace, migrationB, appliedAt, ontoA);
         assertEq(toA, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         assertEq(toB, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
 
@@ -193,7 +193,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        (address to, bytes memory data) = LibMigrationRegistry.recordMigrationCall(
+        (address to, bytes memory data) = LibMigrationRegistry.applyMigrationV3Call(
             address(this),
             namespace,
             migration,
@@ -219,7 +219,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assumeSender(sender);
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
         bytes memory data = abi.encodeCall(
-            IMigrationRegistryV3.recordMigration,
+            IMigrationRegistryV3.applyMigrationV3,
             (sender, namespace, migration, LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS))
         );
         send(sender, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, data);

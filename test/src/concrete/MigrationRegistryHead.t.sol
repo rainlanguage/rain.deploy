@@ -80,11 +80,11 @@ contract MigrationRegistryHeadTest is Test {
         vm.assume(migrationA != migrationB);
 
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, migrationA, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(writer, namespace, migrationA, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
         assertEq(sRegistry.head(writer, namespace), migrationA);
 
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, migrationB, onto(writer, namespace, migrationA));
+        sRegistry.applyMigrationV3(writer, namespace, migrationB, onto(writer, namespace, migrationA));
         assertEq(sRegistry.head(writer, namespace), migrationB);
     }
 
@@ -98,7 +98,7 @@ contract MigrationRegistryHeadTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
         assertEq(sRegistry.head(writer, namespace), migration);
         assertEq(sRegistry.head(other, namespace), MIGRATION_HEAD_GENESIS);
@@ -124,11 +124,11 @@ contract MigrationRegistryHeadTest is Test {
         // head is a call.
         bytes32 headBeforeA = sRegistry.head(writer, namespace);
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, migrationA, onto(writer, namespace, headBeforeA));
+        sRegistry.applyMigrationV3(writer, namespace, migrationA, onto(writer, namespace, headBeforeA));
 
         bytes32 headBeforeB = sRegistry.head(writer, namespace);
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, migrationB, onto(writer, namespace, headBeforeB));
+        sRegistry.applyMigrationV3(writer, namespace, migrationB, onto(writer, namespace, headBeforeB));
 
         assertEq(sRegistry.head(writer, namespace), migrationB);
         assertEq(sRegistry.applied(writer, namespace, migrationA), block.timestamp);
@@ -172,7 +172,7 @@ contract MigrationRegistryHeadTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroWriter.selector));
         sRegistry.head(address(0), namespace);
@@ -190,7 +190,7 @@ contract MigrationRegistryHeadTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroNamespace.selector));
         sRegistry.head(writer, bytes32(0));
@@ -209,7 +209,7 @@ contract MigrationRegistryHeadTest is Test {
         assertTrue(sRegistry.head(writer, namespace) != bytes32(0));
 
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
         assertTrue(sRegistry.head(writer, namespace) != bytes32(0));
     }
@@ -240,7 +240,7 @@ contract MigrationRegistryHeadTest is Test {
             )
         );
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, migration, onto(writer, namespace, wrongHead));
+        sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, wrongHead));
 
         assertEq(sRegistry.head(writer, namespace), MIGRATION_HEAD_GENESIS);
     }
@@ -270,7 +270,7 @@ contract MigrationRegistryHeadTest is Test {
             )
         );
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, migration, onto(writer, otherNamespace, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, otherNamespace, MIGRATION_HEAD_GENESIS));
 
         assertEq(sRegistry.head(writer, namespace), MIGRATION_HEAD_GENESIS);
         assertEq(sRegistry.head(writer, otherNamespace), MIGRATION_HEAD_GENESIS);
@@ -296,11 +296,11 @@ contract MigrationRegistryHeadTest is Test {
             )
         );
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, migration, new Prerequisite[](0));
+        sRegistry.applyMigrationV3(writer, namespace, migration, new Prerequisite[](0));
         assertEq(sRegistry.head(writer, namespace), MIGRATION_HEAD_GENESIS);
 
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS));
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -313,7 +313,7 @@ contract MigrationRegistryHeadTest is Test {
             )
         );
         vm.prank(writer);
-        sRegistry.recordMigration(writer, namespace, next, new Prerequisite[](0));
+        sRegistry.applyMigrationV3(writer, namespace, next, new Prerequisite[](0));
         assertEq(sRegistry.head(writer, namespace), migration);
     }
 }

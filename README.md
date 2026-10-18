@@ -625,8 +625,8 @@ Reject on the device if any of them differs.
 `MigrationRegistry` records that a migration has been applied, when, and after
 what: a write names its writer and a namespace, and applies one migration in
 that line after one list — the migration it believes ran last in that line, then
-the migrations in any other line it waits on (`recordMigration`, or
-`recordMigrationHistory` for one that already ran), anyone reads when a given
+the migrations in any other line it waits on (`applyMigrationV3`, or
+`applyMigrationHistoryV3` for one that already ran), anyone reads when a given
 writer applied a given one in a given namespace (`applied`), what it applied it
 onto (`appliedOnto`), what it applied it after (`appliedAfter`), and where a
 given writer's line in a given namespace has got to (`head`). There is no
@@ -636,9 +636,9 @@ removal and no upgrade. The interface is `IMigrationRegistryV3`.
 namespaces, both kept for the releases that shipped them.
 
 The two writes differ in exactly one thing: where the recorded moment comes
-from. `recordMigration` stamps the block the record lands in, for a script
+from. `applyMigrationV3` stamps the block the record lands in, for a script
 applying its own migration in the same atomic unit as the migration itself.
-`recordMigrationHistory` takes the moment as an argument, so a migration that
+`applyMigrationHistoryV3` takes the moment as an argument, so a migration that
 ran before the registry reached the chain is recordable with the time it
 actually ran. They write the same record, into the same line, and make the same
 refusals.
@@ -711,8 +711,8 @@ total order comes from `appliedOnto`, and the bound above only stops a record
 claiming to predate the one it is chained onto.
 
 Both writes get all three, `block.timestamp` included: a block whose timestamp
-is zero is `ZeroTimestamp` on `recordMigration`, which a test that warps to zero
-and a chain configured from a zero genesis both reach.
+is zero is `ZeroTimestamp` on `applyMigrationV3`, which a test that warps to
+zero and a chain configured from a zero genesis both reach.
 
 **A set of applied migrations, not a high-water mark.** A mark needs a total
 order consumers do not have: two migrations authored on one day collide, and one
@@ -738,13 +738,13 @@ everything about that line, so every later entry names a record in another line.
 Prerequisite[] memory after = new Prerequisite[](1);
 // The first migration in a line, applied in this transaction.
 after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
-LibMigrationRegistry.recordMigration(address(this), NAMESPACE, MIGRATION_V1, after);
+LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V1, after);
 // Every later one names its predecessor.
 after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V1});
-LibMigrationRegistry.recordMigration(address(this), NAMESPACE, MIGRATION_V2, after);
+LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V2, after);
 // One that ran before the registry reached this chain names the moment it ran.
 after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
-LibMigrationRegistry.recordMigrationHistory(address(this), NAMESPACE, MIGRATION_V3, 1750000000, after);
+LibMigrationRegistry.applyMigrationHistoryV3(address(this), NAMESPACE, MIGRATION_V3, 1750000000, after);
 ```
 
 Each record keeps that first entry, which `appliedOnto` reads back, so a line is
@@ -796,7 +796,7 @@ and the head still orders its own line exactly as before.
 Prerequisite[] memory after = new Prerequisite[](2);
 after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
 after[1] = Prerequisite({writer: FLEET_SAFE, namespace: FLEET_NAMESPACE, migration: FLEET_UPGRADE});
-LibMigrationRegistry.recordMigration(address(this), NAMESPACE, MIGRATION_V3, after);
+LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V3, after);
 ```
 
 The list is the record, and `appliedAfter` reads it back exactly as the write
@@ -848,13 +848,13 @@ Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
 `LibMigrationRegistry` is the surface — `applied`, `appliedOnto`,
-`appliedAfter`, `head`, `approved`, `recordMigration` and
-`recordMigrationHistory`, plus the `*Call` builders for a bundle, each verifying
-the registry's code hash before it reads or writes. There is deliberately **no
-broadcast runner**: the dominant real shape is a Safe executing a bundle that
-never broadcasts, and such a script appends `recordMigration` to the bundle it
-is already emitting, which makes the record atomic with the migration it
-describes.
+`appliedAfter`, `head`, `approved`, `applyMigrationV3` and
+`applyMigrationHistoryV3`, plus the `*Call` builders for a bundle, each
+verifying the registry's code hash before it reads or writes. There is
+deliberately **no broadcast runner**: the dominant real shape is a Safe
+executing a bundle that never broadcasts, and such a script appends
+`applyMigrationV3` to the bundle it is already emitting, which makes the record
+atomic with the migration it describes.
 
 ## Deploying, and then releasing
 
