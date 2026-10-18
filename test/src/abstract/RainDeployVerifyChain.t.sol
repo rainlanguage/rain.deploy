@@ -41,10 +41,11 @@ import {
 /// "nothing is deployed at this address" from something the fixture arranged
 /// into a claim about the world. That claim is false here: the exemplar's
 /// addresses come from `src/generated/candidate/`, which is exactly what
-/// `Manual sol artifacts` broadcasts, and `AddressRegistry` is already live on
-/// supported networks. A negative case resting on it asserts nothing and
-/// reports `next call did not revert as expected` — a fixture that only worked
-/// while the repo had not yet done the thing it exists to do.
+/// `Manual sol artifacts` broadcasts, and the Zoltu factory lets anyone deploy
+/// the `ConfigRegistry` candidate there. A negative case resting on its absence
+/// asserts nothing once it lands and reports `next call did not revert as
+/// expected` — a fixture that only worked while the repo had not yet done the
+/// thing it exists to do.
 ///
 /// Pointing the fixture at a mock nobody deploys would move that dependency
 /// rather than remove it: the Zoltu factory is permissionless, so no address is
@@ -256,10 +257,10 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         return abi.decode(stepData, (address));
     }
 
-    /// Broadcasts the address registry over the declaration's networks through
+    /// Broadcasts the config registry over the declaration's networks through
     /// `codelessDeployStep`.
     /// @return The fork of each network.
-    function externalBroadcastAddressRegistry() external returns (uint256[] memory) {
+    function externalBroadcastConfigRegistry() external returns (uint256[] memory) {
         SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
         return LibRainDeploy.deployStepToNetworks(
             vm,
@@ -287,7 +288,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         this.testSuitesLiveOnEverySupportedNetwork();
 
         vm.expectRevert(refusal);
-        this.externalBroadcastAddressRegistry();
+        this.externalBroadcastConfigRegistry();
     }
 
     function testChainGroupAndBroadcastRefuseAWrongHashAlike() external {
@@ -304,7 +305,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         this.testSuitesLiveOnEverySupportedNetwork();
 
         vm.expectRevert(refusal);
-        this.externalBroadcastAddressRegistry();
+        this.externalBroadcastConfigRegistry();
     }
 
     /// Deriving MUST leave the derived address exactly as it found it. The

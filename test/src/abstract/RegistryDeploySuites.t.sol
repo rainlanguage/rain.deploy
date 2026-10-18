@@ -36,7 +36,7 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     ///
     /// A dependency is an address that MUST already have code on a network
     /// before the suite is broadcast there, and both of these contracts are
-    /// declared to have none: `AddressRegistry` reads nothing and calls nothing
+    /// declared to have none: `ConfigRegistry` reads nothing and calls nothing
     /// at construction, and `MigrationRegistry` takes no constructor argument
     /// and resolves its namespace from `msg.sender` at call time. Neither can
     /// therefore be broken by what is or is not on chain when it lands, which
@@ -284,5 +284,30 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
             imported = imported || ids[i] == id;
         }
         assertTrue(imported, string.concat("candidate does not read the rolling snapshot for ", field));
+    }
+
+    /// The manual deploy workflow, whose `suite` input lists what can be
+    /// dispatched.
+    string constant MANUAL_DEPLOY_WORKFLOW = ".github/workflows/manual-sol-artifacts.yaml";
+
+    /// PROPERTY: the candidate suite keys are `config-registry` then
+    /// `migration-registry`, and the manual deploy offers exactly those, in
+    /// that order.
+    ///
+    /// A key is what `DEPLOYMENT_SUITE` selects, and the dispatch is a choice,
+    /// so an option no candidate declares reverts `UnknownDeploymentSuite` and
+    /// a candidate missing from the options cannot be deployed at all. Nothing
+    /// else reads either list against the other.
+    function testCandidateKeysAreTheDispatchOptions() external view {
+        DeployCandidate[] memory candidates = candidateSuites();
+        assertEq(candidates.length, 2);
+        assertEq(candidates[0].snapshot.suite, "config-registry");
+        assertEq(candidates[1].snapshot.suite, "migration-registry");
+
+        string memory options = "        options:\n";
+        for (uint256 i = 0; i < candidates.length; i++) {
+            options = string.concat(options, "          - ", candidates[i].snapshot.suite, "\n");
+        }
+        assertTrue(vm.contains(vm.readFile(MANUAL_DEPLOY_WORKFLOW), string.concat(options, "jobs:\n")));
     }
 }

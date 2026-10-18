@@ -1430,7 +1430,7 @@ contract LibRainDeployTest is Test {
         );
     }
 
-    /// Deploys `AddressRegistry` through the Zoltu factory (which lands it at
+    /// Deploys `ConfigRegistry` through the Zoltu factory (which lands it at
     /// its pinned address), binds `name` to `account` as root, then deploys a
     /// consumer that resolves `name` once in its constructor.
     /// @param name The name to bind and resolve.

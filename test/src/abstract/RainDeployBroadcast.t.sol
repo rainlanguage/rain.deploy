@@ -234,11 +234,10 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         // rather than some other entry of the registry, and it says it because
         // of which entry it is. `MockDeployableV2` is a mock that exists on no
         // supported chain, so this address has code only because this run put
-        // it there. The other address the declaration carries is
-        // `AddressRegistry`, which this repo really has deployed, so a `run()`
-        // that ignored the selection and broadcast that instead would take the
-        // already-deployed skip branch and SUCCEED — leaving this assertion the
-        // only thing between the two outcomes.
+        // it there. The other address the declaration carries is the
+        // `ConfigRegistry` candidate, so a `run()` that ignored the selection
+        // and broadcast that instead would also SUCCEED — leaving this
+        // assertion the only thing between the two outcomes.
         assertGt(expectedAddress.code.length, 0);
         assertEq(expectedAddress.codehash, expectedCodeHash);
 

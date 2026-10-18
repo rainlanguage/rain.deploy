@@ -16,7 +16,7 @@ import {MockRevertingRegistry} from "../../concrete/MockRevertingRegistry.sol";
 /// Every guard `LibConfigRegistryRegister` makes before a bind, and the bind
 /// itself, on the local chain: the real `ConfigRegistry` deployed through the
 /// Zoltu factory at the pinned address, and the chain id set to the network's.
-/// Nothing here forks; `LibAddressRegistryRegisterForkTest` drives the fork
+/// Nothing here forks; `LibConfigRegistryRegisterOnForksTest` drives the fork
 /// loops.
 contract LibConfigRegistryRegisterTest is Test {
     /// The catalogue entry the local chain is dressed up as.
@@ -231,6 +231,10 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, keccak256("a.b")));
         this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", "");
 
+        bytes memory bare = abi.encodePacked(address(0xdEaD));
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, bare));
+        this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", bare);
+
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", abi.encode(address(1)));
 
@@ -241,6 +245,42 @@ contract LibConfigRegistryRegisterTest is Test {
             abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotRoot.selector, sender, CONFIG_REGISTRY_ROOT)
         );
         this.externalRegisterOnNetworks(list("base"), declared, sender, "a.b", abi.encode(address(1)));
+    }
+
+    /// A non-empty value is refused exactly when its length is not a multiple
+    /// of 32; a whole number of words passes the value check and reaches the
+    /// networks.
+    function testRegisterOnNetworksValueIsWholeWords(uint16 length) external {
+        vm.assume(length > 0);
+        bytes memory value = new bytes(length);
+        if (length % 32 == 0) {
+            vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        } else {
+            vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, value));
+        }
+        this.externalRegisterOnNetworks(
+            new string[](0), LibRainDeploy.supportedNetworks(), CONFIG_REGISTRY_ROOT, "a.b", value
+        );
+    }
+
+    /// Fixed lengths on and either side of the first three word boundaries,
+    /// which a uniform fuzz of the length rarely lands on.
+    function testRegisterOnNetworksValueLengthBoundaries() external {
+        uint256[8] memory refused = [uint256(1), 20, 31, 33, 63, 65, 95, 97];
+        for (uint256 i = 0; i < refused.length; i++) {
+            bytes memory value = new bytes(refused[i]);
+            vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, value));
+            this.externalRegisterOnNetworks(
+                new string[](0), LibRainDeploy.supportedNetworks(), CONFIG_REGISTRY_ROOT, "a.b", value
+            );
+        }
+        uint256[3] memory passed = [uint256(32), 64, 96];
+        for (uint256 i = 0; i < passed.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+            this.externalRegisterOnNetworks(
+                new string[](0), LibRainDeploy.supportedNetworks(), CONFIG_REGISTRY_ROOT, "a.b", new bytes(passed[i])
+            );
+        }
     }
 
     /// The confirmed check refuses its inputs before anything is forked.

@@ -37,7 +37,7 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 /// that stops at the first entry is invisible against a single candidate and
 /// silently stops anchoring the moment a repo declares two — and a repo with
 /// several contracts is precisely where a snapshot of the wrong one comes from.
-/// The first is the real `AddressRegistry` this repo compiles, so nothing fails
+/// The first is the real `ConfigRegistry` this repo compiles, so nothing fails
 /// before the loop has to advance, and the failure has to name the SECOND key
 /// rather than a fixed one or the first.
 ///

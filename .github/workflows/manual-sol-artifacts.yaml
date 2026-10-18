@@ -25,7 +25,7 @@ on:
           script still refuses one, naming the valid keys, if this list falls
           behind the declaration.
         options:
-          - address-registry
+          - config-registry
           - migration-registry
 jobs:
   deploy:

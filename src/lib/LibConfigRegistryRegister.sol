@@ -68,6 +68,13 @@ library LibConfigRegistryRegister {
     /// @param name The name as given.
     error NonCanonicalName(string name);
 
+    /// Thrown when a value is not a whole number of 32-byte words, which every
+    /// `abi.encode` output is: a bare 20-byte address pasted in place of its
+    /// ABI encoding, most likely. The registry binds any non-empty value; this
+    /// refuses it before a device is asked to sign one no consumer can decode.
+    /// @param value The value as given.
+    error NonCanonicalValue(bytes value);
+
     /// Thrown when the account that would sign is not `CONFIG_REGISTRY_ROOT`.
     /// The registry would refuse it with `NotRoot`; this says so before a
     /// device is asked to sign something that can only revert.
@@ -349,6 +356,9 @@ library LibConfigRegistryRegister {
         bytes32 hashed = nameHash(name);
         if (value.length == 0) {
             revert IConfigRegistryV1.EmptyValue(hashed);
+        }
+        if (value.length % 32 != 0) {
+            revert NonCanonicalValue(value);
         }
         SupportedNetwork[] memory networks = selectNetworks(selected, declared);
         checkSender(sender);

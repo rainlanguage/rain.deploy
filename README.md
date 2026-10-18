@@ -602,10 +602,12 @@ estimation asks for. No `--rpc-url`: the script forks each network's alias
 itself.
 
 Before anything is signed the run refuses, with an error naming what is wrong: a
-non-canonical name, an empty value, a network the repo does not support or one
-named twice, a sender other than root, a network whose endpoint reports another
-chain id than the catalogue states for it, and a registry address that does not
-hold the pinned registry code. A refused run signs nothing.
+non-canonical name, an empty value, a value that is not a whole number of
+32-byte words (a bare 20-byte address, say, rather than its ABI encoding), a
+network the repo does not support or one named twice, a sender other than root,
+a network whose endpoint reports another chain id than the catalogue states for
+it, and a registry address that does not hold the pinned registry code. A
+refused run signs nothing.
 
 The dry run prints the name, its hash, the value, the registry address and the
 exact calldata, then for each network its chain id, the current binding
@@ -624,6 +626,26 @@ For each transaction the device shows:
   dry run printed.
 
 Reject on the device if any of them differs.
+
+### The deployed `AddressRegistry`
+
+`ConfigRegistry` is a different contract at a different address, so a binding
+made with `RegisterConfig` never reaches the `AddressRegistry` the earlier
+releases ship. A consumer built on `LibAddressRegistry` keeps resolving from
+that registry until it moves to `LibConfigRegistry`, and a name it reads is
+rotated there, not here.
+
+`script/RegisterAddress.sol` binds names in the `AddressRegistry` at
+`0xe2B4C27224DdeFFf7D2B3b0e66E3955ab4e2466A`. It is gone from the current
+source, so run it from `b99ad4d`, the last `main` commit that has it, following
+that commit's README: the same Ledger, root and flow as above, with
+`ADDRESS_REGISTRY_NAME`, `ADDRESS_REGISTRY_ACCOUNT` (a plain address) and
+`ADDRESS_REGISTRY_NETWORKS`. The frozen records under `src/generated/` say which
+release pins which registry address.
+
+```sh
+git worktree add ../rain-deploy-address-registry b99ad4d
+```
 
 ## Migration registry
 
