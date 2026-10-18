@@ -2,20 +2,20 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IAddressRegistryV2} from "../interface/IAddressRegistryV2.sol";
+import {IConfigRegistryV1} from "../interface/IConfigRegistryV1.sol";
 
 /// @dev The only account that may bind a name. A compile-time constant rather
 /// than storage, so it can never be rotated, and part of the creation code, so
 /// changing it changes the deterministic deploy address and code hash of
-/// `AddressRegistry` on every network.
+/// `ConfigRegistry` on every network.
 ///
 /// Rotating it is an ordinary source change that moves the creation code, and
 /// therefore the deploy address, the code hash, the snapshot `script/Build.sol`
 /// generates and the release that carries them.
-address constant ADDRESS_REGISTRY_ROOT = 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c;
+address constant CONFIG_REGISTRY_ROOT = 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c;
 
-/// @title AddressRegistry
-/// @notice The whole of `IAddressRegistryV2`: an immutable root authority binds
+/// @title ConfigRegistry
+/// @notice The whole of `IConfigRegistryV1`: an immutable root authority binds
 /// a `bytes32` name to an ABI-encoded value, anyone reads a bound name and gets
 /// back the value with the moment it was bound, and a read of an unbound name
 /// reverts.
@@ -38,7 +38,7 @@ address constant ADDRESS_REGISTRY_ROOT = 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1
 /// The moment is reported and nothing more; this contract holds nothing
 /// pending. A name's moment strictly increases, so an age derived from it never
 /// overstates the time that passed.
-contract AddressRegistry is IAddressRegistryV2 {
+contract ConfigRegistry is IConfigRegistryV1 {
     /// @dev One binding. Declared in the contract because it is storage layout
     /// and no part of anybody's ABI — `get` returns two flat values.
     ///
@@ -58,9 +58,9 @@ contract AddressRegistry is IAddressRegistryV2 {
     /// unbound name rather than answering empty.
     mapping(bytes32 name => Binding binding) internal sBindings;
 
-    /// @inheritdoc IAddressRegistryV2
+    /// @inheritdoc IConfigRegistryV1
     function register(bytes32 name, bytes calldata value) external {
-        if (msg.sender != ADDRESS_REGISTRY_ROOT) {
+        if (msg.sender != CONFIG_REGISTRY_ROOT) {
             revert NotRoot(msg.sender);
         }
         // Rejected so that a name can never be both bound and unreadable.
@@ -84,7 +84,7 @@ contract AddressRegistry is IAddressRegistryV2 {
         emit Register(msg.sender, name, value);
     }
 
-    /// @inheritdoc IAddressRegistryV2
+    /// @inheritdoc IConfigRegistryV1
     /// @dev Bound-ness is read off `value`, not the moment: the value is the
     /// binding and the moment is metadata about when it was written.
     function get(bytes32 name) external view returns (bytes memory, uint256) {

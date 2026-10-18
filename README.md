@@ -36,10 +36,10 @@ Approach:
   and against the chain after: silent failures fail loudly.
 - Bytecode integrity checks post-deploy: `codehash` is compared against the
   recorded pin on every network by `RainDeployVerifyChain`, and before every
-  registry access by `LibAddressRegistry` and `LibMigrationRegistry`.
-- An address registry binding names to ABI-encoded values, read at run time
-  rather than compiled into creation code, and a post-deploy check that every
-  target network's deployment took the address it was supposed to.
+  registry access by `LibConfigRegistry` and `LibMigrationRegistry`.
+- A config registry binding names to ABI-encoded values, read at run time rather
+  than compiled into creation code, and a post-deploy check that every target
+  network's deployment took the address it was supposed to.
 - A migration registry, so operational scripts record what they applied and when
   it ran, each onto the head it is applying to, and tests assert the state that
   implies rather than branching on a deadline.
@@ -471,17 +471,17 @@ the text, and it is what `--verify` submits, so it sits in the chain group:
 passes everything that reads the file, and verifies a deployment against the
 wrong explorer.
 
-## Address registry
+## Config registry
 
-`AddressRegistry` binds an opaque `bytes32` name to ABI-encoded `bytes`: an
+`ConfigRegistry` binds an opaque `bytes32` name to ABI-encoded `bytes`: an
 address, a role id, a threshold, a list of accounts, anything a deployment would
 otherwise compile in. An immutable root authority binds a name, anyone reads a
 bound name, and reading an unbound name reverts rather than answering empty. The
-interface is `IAddressRegistryV2`; `IAddressRegistryV1` is the address-only
+interface is `IConfigRegistryV1`; `IAddressRegistryV1` is the address-only
 registry, kept for the releases that shipped it. There is no removal, no upgrade
 and no authority besides root.
 
-`ADDRESS_REGISTRY_ROOT` in `src/concrete/AddressRegistry.sol` is the one place
+`CONFIG_REGISTRY_ROOT` in `src/concrete/ConfigRegistry.sol` is the one place
 root lives. It is welded into the creation code, so rotating it moves the deploy
 address, the code hash and the snapshot with it.
 
@@ -498,7 +498,7 @@ re-binding a name changes what the _next_ deployment resolves and nothing else,
 which makes a rotation a deliberate migration rather than a silent change to
 live contracts.
 
-`LibAddressRegistry.resolve` is the read, verifying the registry's code hash
+`LibConfigRegistry.resolve` is the read, verifying the registry's code hash
 first, the same way `LibRainDeploy` verifies the Zoltu factory's. It resolves a
 name to the bound bytes and never decodes them: only the consumer knows the type
 it expects, so the consumer decodes, as `abi.decode(value, (address))` for an
@@ -531,10 +531,10 @@ Only the consumer knows where it stored what it resolved, so the consumer
 supplies the reads (`abi.encodeCall(IERC5313.owner, ())` and the like) and this
 library supplies the fork loop and the comparison.
 
-## Managing the address registry
+## Managing the config registry
 
-Root binds a name with `script/RegisterAddress.sol`, signed on the Ledger that
-holds `ADDRESS_REGISTRY_ROOT`. It is run by hand on the machine the Ledger is
+Root binds a name with `script/RegisterConfig.sol`, signed on the Ledger that
+holds `CONFIG_REGISTRY_ROOT`. It is run by hand on the machine the Ledger is
 plugged into, never in CI: forge's own `--ledger` signer asks the device for
 each signature, and the key never leaves it.
 
@@ -576,25 +576,25 @@ running it again.
 ### Binding a name
 
 ```sh
-export ADDRESS_REGISTRY_NAME=st0x.token-owner-safe
+export CONFIG_REGISTRY_NAME=st0x.token-owner-safe
 # The value, as 0x hex of its ABI encoding. For an address:
-export ADDRESS_REGISTRY_VALUE=$(nix develop -c cast abi-encode "f(address)" 0x...)
+export CONFIG_REGISTRY_VALUE=$(nix develop -c cast abi-encode "f(address)" 0x...)
 # Optional, to bind on fewer networks than all of them:
-# export ADDRESS_REGISTRY_NETWORKS=base,arbitrum
+# export CONFIG_REGISTRY_NETWORKS=base,arbitrum
 
 # 1. Dry run. Executes every check and the bind itself on a fork of each
 #    network, and sends nothing.
-nix develop -c forge script script/RegisterAddress.sol:RegisterAddress \
+nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
   --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --ledger --legacy
 
 # 2. The same command with --broadcast. The device asks once per network the
 #    dry run marked BIND or REBIND.
-nix develop -c forge script script/RegisterAddress.sol:RegisterAddress \
+nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
   --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --ledger --legacy --broadcast
 
 # 3. Once every transaction is mined: reads every network fresh and fails
 #    unless the name resolves to the value on each.
-nix develop -c forge script script/RegisterAddress.sol:RegisterAddress --sig "verify()"
+nix develop -c forge script script/RegisterConfig.sol:RegisterConfig --sig "verify()"
 ```
 
 `--legacy` because HyperEVM's RPC rejects the fee-history ranges EIP-1559
@@ -614,7 +614,7 @@ exact calldata, then for each network its chain id, the current binding
 For each transaction the device shows:
 
 - **To**: the registry address the dry run printed
-  (`LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS`);
+  (`LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS`);
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
@@ -832,7 +832,7 @@ authority it already trusts is reading something only that authority could have
 written; every other writer's lines hold unforgeable claims nobody asks about. A
 namespace is not an authority: it is the writer's to name, and a record in it is
 that writer's claim. A root would have to be welded into the creation code, the
-way `ADDRESS_REGISTRY_ROOT` is — and the account that applies a migration is a
+way `CONFIG_REGISTRY_ROOT` is — and the account that applies a migration is a
 different Safe, deployer or timelock for every consumer and every chain, so one
 root would have to be all of them, and baking each consumer's authority in would
 give each a different address for what is meant to be one shared registry. With

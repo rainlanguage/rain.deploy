@@ -10,14 +10,14 @@ import {
     RainDeploySuitesBase
 } from "./RainDeploySuitesBase.sol";
 import {
-    CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE_CANDIDATE,
-    RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE_CANDIDATE
-} from "../generated/candidate/AddressRegistry.sol";
+    CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE_CANDIDATE,
+    RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE_CANDIDATE
+} from "../generated/candidate/ConfigRegistry.sol";
 import {
     CREATION_CODE as MIGRATION_REGISTRY_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as MIGRATION_REGISTRY_RUNTIME_CODE_CANDIDATE
 } from "../generated/candidate/MigrationRegistry.sol";
-import {LibAddressRegistryDeploy} from "../lib/LibAddressRegistryDeploy.sol";
+import {LibConfigRegistryDeploy} from "../lib/LibConfigRegistryDeploy.sol";
 import {LibMigrationRegistryDeploy} from "../lib/LibMigrationRegistryDeploy.sol";
 import {LibReleasedSuites} from "../lib/LibReleasedSuites.sol";
 import {LibTimelockController} from "../lib/LibTimelockController.sol";
@@ -110,14 +110,14 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// list.
     function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
-        candidates[0] = addressRegistryCandidate();
+        candidates[0] = configRegistryCandidate();
         candidates[1] = migrationRegistryCandidate();
         return candidates;
     }
 
-    /// This repo's rolling `AddressRegistry` candidate.
+    /// This repo's rolling `ConfigRegistry` candidate.
     ///
-    /// The pins in `LibAddressRegistryDeploy` are aliased from the generated
+    /// The pins in `LibConfigRegistryDeploy` are aliased from the generated
     /// snapshot, and they are what the internal group checks the derivation
     /// against and what the broadcast asserts against before it forks anything.
     ///
@@ -127,7 +127,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// whatever the `artifactPath` below currently compiles to, so editing the
     /// contract without re-running `script/Build.sol` fails.
     ///
-    /// `AddressRegistry` reads nothing and calls nothing at construction, so it
+    /// `ConfigRegistry` reads nothing and calls nothing at construction, so it
     /// has no dependency that must already be on chain.
     ///
     /// Named rather than reached by index into `candidateSuites`, because
@@ -137,15 +137,15 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// keeps the suite key, the artifact path and the dependency list spelled
     /// once: `Build.sol` inherits this rather than restating them.
     /// @return The candidate.
-    function addressRegistryCandidate() internal pure returns (DeployCandidate memory) {
+    function configRegistryCandidate() internal pure returns (DeployCandidate memory) {
         return DeployCandidate({
             snapshot: DeploySuite({
-                suite: "address-registry",
-                creationCode: ADDRESS_REGISTRY_CREATION_CODE_CANDIDATE,
-                storedDeployedAddress: LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-                storedBytecodeHash: LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH,
-                storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE_CANDIDATE,
-                artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+                suite: "config-registry",
+                creationCode: CONFIG_REGISTRY_CREATION_CODE_CANDIDATE,
+                storedDeployedAddress: LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+                storedBytecodeHash: LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
+                storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE_CANDIDATE,
+                artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
@@ -156,7 +156,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
 
     /// This repo's rolling `MigrationRegistry` candidate.
     ///
-    /// Everything said about the `AddressRegistry` candidate holds here
+    /// Everything said about the `ConfigRegistry` candidate holds here
     /// unchanged: the pins are aliased from the generated snapshot, the
     /// creation and runtime code are recorded rather than derived, and the
     /// source anchor is what says the record describes THIS contract.

@@ -8,6 +8,8 @@ import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 
 import {LibAddressRegistryReleased} from "./LibAddressRegistryReleased.sol";
 
+import {LibConfigRegistryReleased} from "./LibConfigRegistryReleased.sol";
+
 import {LibMigrationRegistryReleased} from "./LibMigrationRegistryReleased.sol";
 
 /// @title LibReleasedSuites
@@ -27,9 +29,10 @@ library LibReleasedSuites {
     /// Every released suite, in declaration order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[][] memory released = new DeploySuite[][](2);
+        DeploySuite[][] memory released = new DeploySuite[][](3);
         released[0] = LibAddressRegistryReleased.releasedSuites();
-        released[1] = LibMigrationRegistryReleased.releasedSuites();
+        released[1] = LibConfigRegistryReleased.releasedSuites();
+        released[2] = LibMigrationRegistryReleased.releasedSuites();
 
         uint256 total = 0;
         for (uint256 i = 0; i < released.length; i++) {

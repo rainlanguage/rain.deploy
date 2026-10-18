@@ -13,7 +13,7 @@ import {
     BYTECODE_HASH as ADDRESS_REGISTRY_BYTECODE_HASH,
     DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
-} from "../../../src/generated/candidate/AddressRegistry.sol";
+} from "../../../src/generated/candidate/ConfigRegistry.sol";
 
 /// @title RainDeployVerifyChainTest
 /// @notice `RainDeployVerifyChain` inherited by a exemplar repo whose versions

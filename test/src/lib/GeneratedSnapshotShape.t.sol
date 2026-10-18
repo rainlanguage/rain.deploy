@@ -266,7 +266,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     ///
     /// `vm.isFile` on the path half AS WELL, because `vm.getCode` resolves an
     /// artifact id by path SUFFIX while the printed command is run from the
-    /// repo root. `concrete/AddressRegistry.sol:AddressRegistry` resolves for
+    /// repo root. `concrete/ConfigRegistry.sol:ConfigRegistry` resolves for
     /// `vm.getCode` — uniquely, and to the right contract — and still names no
     /// file anybody can point `forge verify-contract` at. That is the one shape
     /// of wrong path nothing else in this repo goes red on.
@@ -330,12 +330,6 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
             vm, vm.readFile(LibRainDeploySnapshot.pathForLib(LibRainDeploySnapshot.RELEASED_SUITES_LIBRARY))
         );
 
-        assertEq(
-            declared.length,
-            snapshots.length,
-            "a rolling snapshot is missing from the released aggregate, or the aggregate names a contract with none"
-        );
-
         MemoryKV snapshotSet = MemoryKV.wrap(0);
         for (uint256 i = 0; i < snapshots.length; i++) {
             snapshotSet = snapshotSet.set(MemoryKVKey.wrap(keccak256(bytes(snapshots[i]))), MemoryKVVal.wrap(0));
@@ -353,12 +347,25 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
             );
         }
 
+        // A declared contract with no rolling snapshot is a retired one, which
+        // only a frozen record can justify.
+        uint256 retired = 0;
         for (uint256 i = 0; i < declared.length; i++) {
-            assertTrue(
-                snapshotSet.has(MemoryKVKey.wrap(keccak256(bytes(declared[i])))),
-                string.concat("released aggregate names a contract with no rolling snapshot: ", declared[i])
-            );
+            if (!snapshotSet.has(MemoryKVKey.wrap(keccak256(bytes(declared[i]))))) {
+                assertGt(
+                    LibRainDeploySnapshot.recordPathsForContract(vm, LibRainDeploySnapshot.LIB_FS_ROOT, declared[i])
+                    .length,
+                    0,
+                    string.concat("released aggregate names a contract with no snapshot and no record: ", declared[i])
+                );
+                retired++;
+            }
         }
+        assertEq(
+            declared.length,
+            snapshots.length + retired,
+            "a rolling snapshot is missing from the released aggregate, or the aggregate names one twice"
+        );
     }
 
     /// PROPERTY: every deploy snapshot declares exactly the five constants a deploy

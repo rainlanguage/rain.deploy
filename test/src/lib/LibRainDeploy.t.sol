@@ -5,8 +5,8 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeployDependency, LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
-import {IAddressRegistryV2} from "../../../src/interface/IAddressRegistryV2.sol";
-import {AddressRegistry, ADDRESS_REGISTRY_ROOT} from "../../../src/concrete/AddressRegistry.sol";
+import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
+import {ConfigRegistry, CONFIG_REGISTRY_ROOT} from "../../../src/concrete/ConfigRegistry.sol";
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
 import {MockDirtyWordOwner} from "../../concrete/MockDirtyWordOwner.sol";
@@ -1439,11 +1439,11 @@ contract LibRainDeployTest is Test {
     /// @return The deployed consumer holding the resolved address.
     function deployRegistryAndConsumer(bytes32 name, address account)
         internal
-        returns (IAddressRegistryV2, MockResolvedOwner)
+        returns (IConfigRegistryV1, MockResolvedOwner)
     {
-        IAddressRegistryV2 registry =
-            IAddressRegistryV2(LibRainDeploy.etchAndDeployZoltu(vm, type(AddressRegistry).creationCode));
-        vm.prank(ADDRESS_REGISTRY_ROOT);
+        IConfigRegistryV1 registry =
+            IConfigRegistryV1(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
+        vm.prank(CONFIG_REGISTRY_ROOT);
         registry.register(name, abi.encode(account));
         MockResolvedOwner consumer = new MockResolvedOwner(name);
         return (registry, consumer);
@@ -1522,11 +1522,11 @@ contract LibRainDeployTest is Test {
         vm.assume(account != address(0));
         vm.assume(rebound != address(0));
         vm.assume(rebound != account);
-        (IAddressRegistryV2 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+        (IConfigRegistryV1 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
         // A re-bind needs a later block: a name's moment strictly increases.
         vm.warp(block.timestamp + 1);
-        vm.prank(ADDRESS_REGISTRY_ROOT);
+        vm.prank(CONFIG_REGISTRY_ROOT);
         registry.register(name, abi.encode(rebound));
         (bytes memory nowBound,) = registry.get(name);
         assertEq(nowBound, abi.encode(rebound));

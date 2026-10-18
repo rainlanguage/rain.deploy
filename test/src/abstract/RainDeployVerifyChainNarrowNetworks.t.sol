@@ -10,7 +10,7 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
     DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
-} from "../../../src/generated/candidate/AddressRegistry.sol";
+} from "../../../src/generated/candidate/ConfigRegistry.sol";
 
 /// @title RainDeployVerifyChainNarrowNetworksTest
 /// @notice The chain group is made over the networks the declaration names and

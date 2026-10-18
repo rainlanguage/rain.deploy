@@ -25,13 +25,13 @@ struct MigrationRecord {
 /// applied it after, or where that line has got to.
 ///
 /// There is deliberately nothing else. No removal, no upgrade, no pause, and no
-/// authority at all — which is the difference from `AddressRegistry`, and the
+/// authority at all — which is the difference from `ConfigRegistry`, and the
 /// reason nothing here is CONFIGURED at compile time. `MIGRATION_HEAD_GENESIS`
 /// is a compile-time constant, but it is the same value for every consumer on
 /// every chain and names nobody, so it is part of what this contract IS rather
 /// than a choice welded into it.
 ///
-/// `AddressRegistry` has a root, and a root has to be welded into the creation
+/// `ConfigRegistry` has a root, and a root has to be welded into the creation
 /// code so it cannot be rotated, which puts it in the deterministic address.
 /// That is workable there because there is one registry of names for the whole
 /// organisation. It is not workable here: the account that applies a migration

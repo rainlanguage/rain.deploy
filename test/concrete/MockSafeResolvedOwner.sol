@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {LibAddressRegistry} from "../../src/lib/LibAddressRegistry.sol";
+import {LibConfigRegistry} from "../../src/lib/LibConfigRegistry.sol";
 
 /// @title MockSafeResolvedOwner
 /// @notice Resolves a name exactly once, in its constructor, and reverts the
@@ -15,6 +15,6 @@ contract MockSafeResolvedOwner {
     /// @param minAge The least time the binding must have stood for this
     /// contract to accept it.
     constructor(bytes32 name, uint256 minAge) {
-        iOwner = abi.decode(LibAddressRegistry.resolveSafe(name, minAge), (address));
+        iOwner = abi.decode(LibConfigRegistry.resolveSafe(name, minAge), (address));
     }
 }

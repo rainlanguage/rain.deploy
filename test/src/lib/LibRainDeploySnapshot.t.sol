@@ -343,7 +343,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// only directory in `src/generated/` today, and a walk that returned it
     /// would make the candidate a release that has to be declared and deployed.
     function testFrozenSnapshotPathsExcludesTheRollingSnapshot() external view {
-        assertTrue(vm.exists(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry")));
+        assertTrue(vm.exists(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "ConfigRegistry")));
 
         string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, LibRainDeploySnapshot.LIB_FS_ROOT);
         MemoryKV pathSet = MemoryKV.wrap(0);
@@ -355,7 +355,7 @@ contract LibRainDeploySnapshotTest is Test {
             pathSet.has(
                 MemoryKVKey.wrap(
                     keccak256(
-                        bytes(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry"))
+                        bytes(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "ConfigRegistry"))
                     )
                 )
             )
@@ -1103,7 +1103,7 @@ contract LibRainDeploySnapshotTest is Test {
 
     /// The committed alias lib this repo's `AddressRegistry` snapshot is
     /// re-exported through. Read here, never written.
-    string constant ALIAS_LIB_PATH = "src/lib/LibAddressRegistryDeploy.sol";
+    string constant ALIAS_LIB_PATH = "src/lib/LibConfigRegistryDeploy.sol";
 
     /// The committed released lib this repo's `AddressRegistry` record is
     /// enumerated through. Read here, never written.
@@ -1122,7 +1122,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// pinned by `testTheCommittedAggregateIsWhatTheGeneratorEmits`, which
     /// reads it through `pathForLib` and asserts the path it gets.
     function testTheCommittedLibsAreInTheLibDir() external pure {
-        assertEq(string.concat(LibRainDeploySnapshot.LIB_DIR, "/LibAddressRegistryDeploy.sol"), ALIAS_LIB_PATH);
+        assertEq(string.concat(LibRainDeploySnapshot.LIB_DIR, "/LibConfigRegistryDeploy.sol"), ALIAS_LIB_PATH);
         assertEq(string.concat(LibRainDeploySnapshot.LIB_DIR, "/LibAddressRegistryReleased.sol"), RELEASED_LIB_PATH);
     }
 
@@ -1142,11 +1142,9 @@ contract LibRainDeploySnapshotTest is Test {
             string.concat(
                 generatedFilePrefix(),
                 LibRainDeploySnapshot.aliasImportBlock(
-                    EMITTED_CONTRACT, "ADDRESS_REGISTRY", LibRainDeploySnapshot.CANDIDATE
+                    "ConfigRegistry", "CONFIG_REGISTRY", LibRainDeploySnapshot.CANDIDATE
                 ),
-                LibRainDeploySnapshot.aliasLibraryBlock(
-                    EMITTED_CONTRACT, "ADDRESS_REGISTRY", "LibAddressRegistryDeploy"
-                )
+                LibRainDeploySnapshot.aliasLibraryBlock("ConfigRegistry", "CONFIG_REGISTRY", "LibConfigRegistryDeploy")
             )
         );
     }

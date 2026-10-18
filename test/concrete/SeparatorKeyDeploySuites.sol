@@ -17,7 +17,7 @@ import {
     CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE,
     DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
-} from "../../src/generated/candidate/AddressRegistry.sol";
+} from "../../src/generated/candidate/ConfigRegistry.sol";
 
 contract SeparatorKeyDeploySuites is ExternalDeploySuites {
     /// @inheritdoc RainDeploySuitesBase
@@ -29,7 +29,7 @@ contract SeparatorKeyDeploySuites is ExternalDeploySuites {
             storedDeployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
             storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
             storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
-            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""

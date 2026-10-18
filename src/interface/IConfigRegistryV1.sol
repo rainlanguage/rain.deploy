@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-/// @title IAddressRegistryV2
+/// @title IConfigRegistryV1
 /// @notice A registry of `bytes32` names to ABI-encoded values with exactly two
 /// operations: an immutable root authority binds a name (`register`), and
 /// anyone reads a bound name (`get`). Root may re-bind a name it has already
@@ -51,7 +51,7 @@ pragma solidity ^0.8.25;
 /// imposes nothing on it: a fresh binding is live at once, and an
 /// implementation MUST NOT withhold one. What counts as too fresh belongs to
 /// the caller.
-interface IAddressRegistryV2 {
+interface IConfigRegistryV1 {
     /// Thrown when an account that is not the root authority calls `register`.
     /// @param sender The `msg.sender` that was not root.
     error NotRoot(address sender);

@@ -4,24 +4,24 @@ pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
-import {AddressRegistry} from "../../src/concrete/AddressRegistry.sol";
-import {IAddressRegistryV2} from "../../src/interface/IAddressRegistryV2.sol";
-import {LibAddressRegistry} from "../../src/lib/LibAddressRegistry.sol";
-import {LibAddressRegistryDeploy} from "../../src/lib/LibAddressRegistryDeploy.sol";
+import {ConfigRegistry} from "../../src/concrete/ConfigRegistry.sol";
+import {IConfigRegistryV1} from "../../src/interface/IConfigRegistryV1.sol";
+import {LibConfigRegistry} from "../../src/lib/LibConfigRegistry.sol";
+import {LibConfigRegistryDeploy} from "../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 
-/// @title LibAddressRegistryFork
+/// @title LibConfigRegistryFork
 /// @notice What the fork tests need to say about the candidate registry on a
 /// live chain, where it is deployed only once a release carrying it has been
 /// deployed. Between a candidate change and that deploy the pinned address is
 /// empty on every network, and the register loops refuse it on the code hash
 /// before reading anything.
-library LibAddressRegistryFork {
+library LibConfigRegistryFork {
     /// Whether the selected chain holds the pinned registry.
     /// @return True when the code at the pinned address hashes to the pin.
     function isDeployed() internal view returns (bool) {
-        return LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.codehash
-            == LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH;
+        return LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS.codehash
+            == LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH;
     }
 
     /// The revert a resolve of `name` gives on the selected chain when `name` is
@@ -32,12 +32,12 @@ library LibAddressRegistryFork {
     /// @return The revert data.
     function unboundResolveRevert(bytes32 name) internal view returns (bytes memory) {
         if (isDeployed()) {
-            return abi.encodeWithSelector(IAddressRegistryV2.NameNotRegistered.selector, name);
+            return abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name);
         }
         return abi.encodeWithSelector(
-            LibAddressRegistry.UnexpectedAddressRegistryCodeHash.selector,
-            LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH,
-            LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.codehash
+            LibConfigRegistry.UnexpectedAddressRegistryCodeHash.selector,
+            LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
+            LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS.codehash
         );
     }
 
@@ -46,7 +46,7 @@ library LibAddressRegistryFork {
     /// @param vm The Vm instance to etch the factory with.
     function ensureDeployed(Vm vm) internal {
         if (!isDeployed()) {
-            LibRainDeploy.etchAndDeployZoltu(vm, type(AddressRegistry).creationCode);
+            LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode);
         }
     }
 }

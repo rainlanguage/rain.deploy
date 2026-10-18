@@ -184,7 +184,7 @@ contract RainDeploySuitesBaseTest is Test {
         assertEq(shortest.externalSuiteNames(), "a, z");
 
         DeploySuite memory released = shortest.externalSuiteByName("a");
-        assertEq(released.artifactPath, "src/concrete/AddressRegistry.sol:AddressRegistry");
+        assertEq(released.artifactPath, "src/concrete/ConfigRegistry.sol:ConfigRegistry");
 
         DeploySuite memory candidate = shortest.externalSuiteByName("z");
         assertEq(candidate.artifactPath, "test/concrete/MockDeployableV2.sol:MockDeployableV2");

@@ -5,16 +5,16 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 
-import {ADDRESS_REGISTRY_ROOT} from "../concrete/AddressRegistry.sol";
-import {IAddressRegistryV2} from "../interface/IAddressRegistryV2.sol";
-import {LibAddressRegistry} from "./LibAddressRegistry.sol";
-import {LibAddressRegistryDeploy} from "./LibAddressRegistryDeploy.sol";
+import {CONFIG_REGISTRY_ROOT} from "../concrete/ConfigRegistry.sol";
+import {IConfigRegistryV1} from "../interface/IConfigRegistryV1.sol";
+import {LibConfigRegistry} from "./LibConfigRegistry.sol";
+import {LibConfigRegistryDeploy} from "./LibConfigRegistryDeploy.sol";
 import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 
-/// @title LibAddressRegistryRegister
-/// @notice Root's side of `AddressRegistry`: binds one name to one ABI-encoded
-/// value on every network it is given, from `ADDRESS_REGISTRY_ROOT`, and reads
-/// the binding back. `script/RegisterAddress.sol` is the entry point and says
+/// @title LibConfigRegistryRegister
+/// @notice Root's side of `ConfigRegistry`: binds one name to one ABI-encoded
+/// value on every network it is given, from `CONFIG_REGISTRY_ROOT`, and reads
+/// the binding back. `script/RegisterConfig.sol` is the entry point and says
 /// how it is run; everything with behaviour is here.
 ///
 /// ## The value
@@ -48,7 +48,7 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// signs what a script recorded only once the script has returned. Per network,
 /// the chain id is the one the catalogue states for the alias, and the
 /// registry at the pinned address holds the pinned code hash — the check
-/// `LibAddressRegistry.resolve` makes before every read, so the binding written
+/// `LibConfigRegistry.resolve` makes before every read, so the binding written
 /// is in the registry consumers read. The inputs are checked once, before any
 /// fork: the name is canonical, the value is not empty, the networks are a
 /// non-empty, duplicate-free subset of the declared ones, and the sender is
@@ -63,12 +63,12 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// nowhere else. `checkRegisteredOnNetworks` forks every network fresh, as a
 /// run of its own once the transactions have been mined, and is the check that
 /// the binding is on chain.
-library LibAddressRegistryRegister {
+library LibConfigRegistryRegister {
     /// Thrown when a name is outside the alphabet consumers write names in.
     /// @param name The name as given.
     error NonCanonicalName(string name);
 
-    /// Thrown when the account that would sign is not `ADDRESS_REGISTRY_ROOT`.
+    /// Thrown when the account that would sign is not `CONFIG_REGISTRY_ROOT`.
     /// The registry would refuse it with `NotRoot`; this says so before a
     /// device is asked to sign something that can only revert.
     /// @param sender The account that would sign.
@@ -182,11 +182,11 @@ library LibAddressRegistryRegister {
         return LibRainDeploy.declaredNetworkConfigs(selected);
     }
 
-    /// Reverts `SenderNotRoot` unless `sender` is `ADDRESS_REGISTRY_ROOT`.
+    /// Reverts `SenderNotRoot` unless `sender` is `CONFIG_REGISTRY_ROOT`.
     /// @param sender The account that would sign.
     function checkSender(address sender) internal pure {
-        if (sender != ADDRESS_REGISTRY_ROOT) {
-            revert SenderNotRoot(sender, ADDRESS_REGISTRY_ROOT);
+        if (sender != CONFIG_REGISTRY_ROOT) {
+            revert SenderNotRoot(sender, CONFIG_REGISTRY_ROOT);
         }
     }
 
@@ -197,7 +197,7 @@ library LibAddressRegistryRegister {
         if (block.chainid != network.chainId) {
             revert UnexpectedChainId(network.name, network.chainId, block.chainid);
         }
-        LibAddressRegistry.checkCodeHash();
+        LibConfigRegistry.checkCodeHash();
     }
 
     /// The selected chain's current binding of `name`, an empty value and a
@@ -208,14 +208,14 @@ library LibAddressRegistryRegister {
     /// @return The bound value, or empty.
     /// @return The moment it was bound, or zero.
     function currentBinding(bytes32 name) internal view returns (bytes memory, uint256) {
-        try IAddressRegistryV2(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name) returns (
+        try IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).get(name) returns (
             bytes memory value, uint256 registeredAt
         ) {
             return (value, registeredAt);
         } catch (bytes memory reason) {
             if (
                 keccak256(reason)
-                    == keccak256(abi.encodeWithSelector(IAddressRegistryV2.NameNotRegistered.selector, name))
+                    == keccak256(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name))
             ) {
                 return ("", 0);
             }
@@ -231,7 +231,7 @@ library LibAddressRegistryRegister {
     /// @param value The ABI-encoded value to bind it to.
     /// @return The `register` calldata.
     function registerCalldata(bytes32 name, bytes memory value) internal pure returns (bytes memory) {
-        return abi.encodeCall(IAddressRegistryV2.register, (name, value));
+        return abi.encodeCall(IConfigRegistryV1.register, (name, value));
     }
 
     /// The record of a run's inputs, printed before any network: everything the
@@ -257,7 +257,7 @@ library LibAddressRegistryRegister {
             "\nSender (root): ",
             vm.toString(sender),
             "\nRegistry: ",
-            vm.toString(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS),
+            vm.toString(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
             "\nCalldata: ",
             vm.toString(registerCalldata(hashed, value))
         );
@@ -320,7 +320,7 @@ library LibAddressRegistryRegister {
         }
 
         vm.startBroadcast(sender);
-        IAddressRegistryV2(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).register(name, value);
+        IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).register(name, value);
         vm.stopBroadcast();
         return true;
     }
@@ -333,7 +333,7 @@ library LibAddressRegistryRegister {
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param selected The networks to bind on.
     /// @param declared The networks the declaration supports.
-    /// @param sender The account that signs. MUST be `ADDRESS_REGISTRY_ROOT`.
+    /// @param sender The account that signs. MUST be `CONFIG_REGISTRY_ROOT`.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
     /// @return The fork each selected network was simulated on, for
@@ -348,7 +348,7 @@ library LibAddressRegistryRegister {
     ) internal returns (uint256[] memory) {
         bytes32 hashed = nameHash(name);
         if (value.length == 0) {
-            revert IAddressRegistryV2.EmptyValue(hashed);
+            revert IConfigRegistryV1.EmptyValue(hashed);
         }
         SupportedNetwork[] memory networks = selectNetworks(selected, declared);
         checkSender(sender);
@@ -364,7 +364,7 @@ library LibAddressRegistryRegister {
     }
 
     /// Reverts unless every given fork's registry binds `name` to `value`, read
-    /// through `LibAddressRegistry.resolve` exactly as a consumer reads it,
+    /// through `LibConfigRegistry.resolve` exactly as a consumer reads it,
     /// logging the moment each was bound.
     /// @param vm The Vm instance to select forks with.
     /// @param selected The networks the forks are of.
@@ -388,7 +388,7 @@ library LibAddressRegistryRegister {
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
             checkChain(networks[i]);
-            (bytes memory actual, uint256 registeredAt) = LibAddressRegistry.resolve(hashed);
+            (bytes memory actual, uint256 registeredAt) = LibConfigRegistry.resolve(hashed);
             if (keccak256(actual) != keccak256(value)) {
                 revert UnexpectedBinding(networks[i].name, hashed, value, actual);
             }

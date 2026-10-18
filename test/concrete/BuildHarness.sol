@@ -56,6 +56,12 @@ contract BuildHarness is Build {
         return generatedContracts();
     }
 
+    /// The names the released aggregate is emitted from.
+    /// @return The retired contract names, then the generated ones.
+    function externalReleasedContractNames() external pure returns (string[] memory) {
+        return releasedContractNames();
+    }
+
     /// The names a release cut from this script freezes.
     /// @return The snapshot contract names.
     function externalSnapshotContractNames() external pure returns (string[] memory) {

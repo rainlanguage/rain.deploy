@@ -13,7 +13,7 @@ struct GeneratedContract {
     /// Places the snapshot inside `src/generated/<dir>/` and names both
     /// generated libs.
     string contractName;
-    /// Prefix for the constants the alias lib exports, e.g. `ADDRESS_REGISTRY`.
+    /// Prefix for the constants the alias lib exports, e.g. `CONFIG_REGISTRY`.
     string constantPrefix;
     DeployCandidate candidate;
 }
@@ -22,7 +22,7 @@ struct GeneratedContract {
 /// @notice Generates the deterministic-deploy pins for every contract this repo
 /// deploys. `run()` and `cutRelease()` are inherited from `BuildScript`.
 ///
-/// Alias libs always point at `candidate`, so `LibAddressRegistry` and
+/// Alias libs always point at `candidate`, so `LibConfigRegistry` and
 /// `LibMigrationRegistry` resolve against what this repo currently compiles.
 /// The frozen `<tag>/` directories are what
 /// `RegistryDeploySuites.releasedSuites()` enumerates.
@@ -36,7 +36,7 @@ contract Build is BuildScript, RegistryDeploySuites {
     function generatedContracts() internal pure returns (GeneratedContract[] memory) {
         GeneratedContract[] memory contracts = new GeneratedContract[](2);
         contracts[0] = GeneratedContract({
-            contractName: "AddressRegistry", constantPrefix: "ADDRESS_REGISTRY", candidate: addressRegistryCandidate()
+            contractName: "ConfigRegistry", constantPrefix: "CONFIG_REGISTRY", candidate: configRegistryCandidate()
         });
         contracts[1] = GeneratedContract({
             contractName: "MigrationRegistry",
@@ -101,7 +101,33 @@ contract Build is BuildScript, RegistryDeploySuites {
                 vm, dir, recordRoot(), contracts[i].contractName, contracts[i].candidate.snapshot
             );
         }
-        LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, dir, snapshotContractNames());
+        LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, dir, releasedContractNames());
+    }
+
+    /// Contracts this repo no longer builds whose frozen releases stay
+    /// declared. Their released-suites libs are generated from a record that
+    /// can no longer grow, so they are never rewritten.
+    /// @return The retired contract names.
+    function retiredContractNames() internal pure returns (string[] memory) {
+        string[] memory names = new string[](1);
+        names[0] = "AddressRegistry";
+        return names;
+    }
+
+    /// Every contract with a released-suites lib: the retired ones first, in
+    /// the order they were released, then the ones this repo builds.
+    /// @return The contract names.
+    function releasedContractNames() internal pure returns (string[] memory) {
+        string[] memory retired = retiredContractNames();
+        string[] memory current = snapshotContractNames();
+        string[] memory names = new string[](retired.length + current.length);
+        for (uint256 i = 0; i < retired.length; i++) {
+            names[i] = retired[i];
+        }
+        for (uint256 i = 0; i < current.length; i++) {
+            names[retired.length + i] = current[i];
+        }
+        return names;
     }
 
     /// @inheritdoc BuildScript

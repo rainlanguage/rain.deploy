@@ -198,23 +198,19 @@ contract BuildTest is Test {
     /// Positional, because the SET is already matched by the two tests this
     /// names and the order is the whole of what is left.
     function testTheCommittedAggregateIsInDeclarationOrder() external view {
-        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
+        string[] memory released = sBuild.externalReleasedContractNames();
         string[] memory imported = LibReleasedSuitesAggregate.declaredContractNames(
             vm, vm.readFile(LibRainDeploySnapshot.pathForLib(LibRainDeploySnapshot.RELEASED_SUITES_LIBRARY))
         );
 
         assertEq(
             imported.length,
-            generated.length,
+            released.length,
             "the committed aggregate imports a different number of contracts than the generator names"
         );
 
-        for (uint256 i = 0; i < generated.length; i++) {
-            assertEq(
-                imported[i],
-                generated[i].contractName,
-                "the committed aggregate is not in the generator's declaration order"
-            );
+        for (uint256 i = 0; i < released.length; i++) {
+            assertEq(imported[i], released[i], "the committed aggregate is not in the generator's declaration order");
         }
     }
 

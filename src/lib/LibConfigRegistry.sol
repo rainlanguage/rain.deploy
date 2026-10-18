@@ -2,11 +2,11 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IAddressRegistryV2} from "../interface/IAddressRegistryV2.sol";
-import {LibAddressRegistryDeploy} from "./LibAddressRegistryDeploy.sol";
+import {IConfigRegistryV1} from "../interface/IConfigRegistryV1.sol";
+import {LibConfigRegistryDeploy} from "./LibConfigRegistryDeploy.sol";
 
-/// @title LibAddressRegistry
-/// @notice Reads the `AddressRegistry` deployed at a single deterministic
+/// @title LibConfigRegistry
+/// @notice Reads the `ConfigRegistry` deployed at a single deterministic
 /// address on every network, verifying the registry's code hash first, exactly
 /// as `LibRainDeploy` verifies `ZOLTU_FACTORY_CODEHASH` before using the Zoltu
 /// factory. An address alone says nothing on a chain the caller has not
@@ -26,7 +26,7 @@ import {LibAddressRegistryDeploy} from "./LibAddressRegistryDeploy.sol";
 /// once, in its constructor, and stores the result; it must not re-read at the
 /// point of use. That single read at construction is what makes a deployment
 /// verifiable after the fact.
-library LibAddressRegistry {
+library LibConfigRegistry {
     /// Thrown when the code at the registry address is not the registry this
     /// library was compiled against. An address with no code hits this too: a
     /// codeless account hashes to zero while it does not exist, and to the hash
@@ -65,10 +65,10 @@ library LibAddressRegistry {
     /// doing anything else with it — writing to it, or reading a name that may
     /// be unbound.
     function checkCodeHash() internal view {
-        bytes32 actualCodeHash = LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS.codehash;
-        if (actualCodeHash != LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH) {
+        bytes32 actualCodeHash = LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS.codehash;
+        if (actualCodeHash != LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH) {
             revert UnexpectedAddressRegistryCodeHash(
-                LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_CODEHASH, actualCodeHash
+                LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH, actualCodeHash
             );
         }
     }
@@ -95,7 +95,7 @@ library LibAddressRegistry {
         // visibly used: a passed-through tuple reads to the analysers as a
         // return value nobody looked at.
         (bytes memory value, uint256 registeredAt) =
-            IAddressRegistryV2(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name);
+            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).get(name);
         return (value, registeredAt);
     }
 

@@ -21,7 +21,7 @@ import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.s
 /// The chain half is red until every release declared here is live on every
 /// supported network, which is why the deploy is dispatched before the tag is
 /// pushed. That is the check working: "nothing is deployed at the address
-/// `LibAddressRegistry` reads" is the single most important fact about these
+/// `LibConfigRegistry` reads" is the single most important fact about these
 /// pins, and no snapshot assertion can discover it — a perfectly consistent set
 /// of pins for a contract that exists nowhere passes every one of them.
 ///

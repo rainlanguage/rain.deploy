@@ -38,7 +38,7 @@ import {
     CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE,
     DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
-} from "../../../src/generated/candidate/AddressRegistry.sol";
+} from "../../../src/generated/candidate/ConfigRegistry.sol";
 import {
     BYTECODE_HASH as ADDRESS_REGISTRY_0_1_10_BYTECODE_HASH,
     CREATION_CODE as ADDRESS_REGISTRY_0_1_10_CREATION_CODE,
@@ -164,7 +164,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// @return The one-file record.
     function recordOfTheGeneratedSnapshot() internal pure returns (string[] memory) {
         string[] memory paths = new string[](1);
-        paths[0] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry");
+        paths[0] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "ConfigRegistry");
         return paths;
     }
 
@@ -175,7 +175,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// @return The two-file record.
     function recordOfBothGeneratedSnapshots() internal pure returns (string[] memory) {
         string[] memory paths = new string[](2);
-        paths[0] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry");
+        paths[0] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "ConfigRegistry");
         paths[1] = LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "MigrationRegistry");
         return paths;
     }
@@ -222,7 +222,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedDeployedAddress: ADDRESS_REGISTRY_0_1_10_DEPLOYED_ADDRESS,
             storedBytecodeHash: ADDRESS_REGISTRY_0_1_10_BYTECODE_HASH,
             storedRuntimeCode: ADDRESS_REGISTRY_0_1_10_RUNTIME_CODE,
-            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
@@ -236,7 +236,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedDeployedAddress: ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
             storedBytecodeHash: ADDRESS_REGISTRY_0_1_11_BYTECODE_HASH,
             storedRuntimeCode: ADDRESS_REGISTRY_0_1_11_RUNTIME_CODE,
-            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
@@ -545,7 +545,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// snapshot.
     function testFrozenSnapshotWithoutADeployedAddressReverts() external {
         string[] memory paths = new string[](1);
-        paths[0] = "src/concrete/AddressRegistry.sol";
+        paths[0] = "src/concrete/ConfigRegistry.sol";
 
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, paths[0]));
         this.externalCheckFrozenSnapshotsReleased(paths, releasedSuites());
@@ -577,7 +577,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         // Declared and readable, so nothing fails before the loop has to
         // advance.
         paths[0] = recordOfTheGeneratedSnapshot()[0];
-        paths[1] = "src/concrete/AddressRegistry.sol";
+        paths[1] = "src/concrete/ConfigRegistry.sol";
 
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, paths[1]));
         this.externalCheckFrozenSnapshotsReleased(paths, releasedSuites());
@@ -627,7 +627,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedDeployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
             storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
             storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
-            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
@@ -928,7 +928,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// name cannot move a deploy record out of the deploy check.
     function testFrozenCodeRecordNamingADeployRecordReverts() external {
         string memory record =
-            vm.readFile(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "AddressRegistry"));
+            vm.readFile(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "ConfigRegistry"));
         vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
         this.externalCheckFrozenCodeRecord("record.sol", record);
     }

@@ -12,7 +12,7 @@ import {
     CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE,
     DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
     RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
-} from "../../../src/generated/candidate/AddressRegistry.sol";
+} from "../../../src/generated/candidate/ConfigRegistry.sol";
 
 /// @title RainDeployVerifyBaseTest
 /// @notice What the derivation RETURNS, read directly, which no other group asks it for.
@@ -32,7 +32,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
             storedDeployedAddress: address(0xdead),
             storedBytecodeHash: bytes32(uint256(1)),
             storedRuntimeCode: hex"00",
-            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""

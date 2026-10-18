@@ -538,7 +538,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         );
         assertEq(
             sDeploy.externalSuiteByName("address-registry@0_0_1").artifactPath,
-            "src/concrete/AddressRegistry.sol:AddressRegistry"
+            "src/concrete/ConfigRegistry.sol:ConfigRegistry"
         );
     }
 
