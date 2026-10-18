@@ -18,19 +18,20 @@ struct MigrationRecord {
 }
 
 /// @title MigrationRegistry
-/// @notice The whole of `IMigrationRegistryV3`: a write applies one migration into
-/// `writer`'s line, by `writer` or a delegate it approved, in a namespace it names, after one list — the head it believes
-/// that line is at, then the migrations in any line it names — at the moment
-/// it says the migration ran, and anyone reads when a given writer applied a
-/// given migration in a given namespace, what it applied it onto, what it
-/// applied it after, or where that line has got to.
+/// @notice The whole of `IMigrationRegistryV3`: a write applies one migration
+/// into `writer`'s line, by `writer` or a delegate it approved, in a namespace
+/// it names, after one list — the head it believes that line is at, then the
+/// migrations in any line it names — at the moment it says the migration ran,
+/// and anyone reads when a given writer applied a given migration in a given
+/// namespace, what it applied it onto, what it applied it after, or where that
+/// line has got to.
 ///
 /// There is deliberately nothing else. No removal, no upgrade, no pause, and no
-/// authority but each writer's over its own lines — which is the difference from `AddressRegistry`, and the
-/// reason nothing here is CONFIGURED at compile time. `MIGRATION_HEAD_GENESIS`
-/// is a compile-time constant, but it is the same value for every consumer on
-/// every chain and names nobody, so it is part of what this contract IS rather
-/// than a choice welded into it.
+/// authority but each writer's over its own lines — which is the difference
+/// from `AddressRegistry`, and the reason nothing here is CONFIGURED at
+/// compile time. `MIGRATION_HEAD_GENESIS` is a compile-time constant, but it is
+/// the same value for every consumer on every chain and names nobody, so it is
+/// part of what this contract IS rather than a choice welded into it.
 ///
 /// `AddressRegistry` has a root, and a root has to be welded into the creation
 /// code so it cannot be rotated, which puts it in the deterministic address.
@@ -42,13 +43,14 @@ struct MigrationRecord {
 /// address for what is meant to be one shared registry.
 ///
 /// Keying by the writer removes the authority instead of choosing one. Anyone
-/// may write, but only under themselves or a writer that approved them, so a reader asking about the lines
-/// of an authority it already trusts is reading something only that authority
-/// or its delegates could have written. Every other writer's lines hold unforgeable claims that
-/// no reader asks about. The namespace under the writer is the writer's to
-/// name: one key writes for several repos, and each keeps its own line. With
-/// nothing to configure there is also no rollout state in which this contract
-/// is inert: it does its whole job the moment it exists on a chain.
+/// may write, but only under themselves or a writer that approved them, so a
+/// reader asking about the lines of an authority it already trusts is reading
+/// something only that authority or its delegates could have written. Every
+/// other writer's lines hold unforgeable claims that no reader asks about.
+/// The namespace under the writer is the writer's to name: one key writes for
+/// several repos, and each keeps its own line. With nothing to configure there
+/// is also no rollout state in which this contract is inert: it does its whole
+/// job the moment it exists on a chain.
 ///
 /// A writer may approve delegates to write one of its lines
 /// (`approveV3`), so several executors share one line. The line is
@@ -77,13 +79,13 @@ struct MigrationRecord {
 /// so everything a record was applied after is read back exactly as it was
 /// written.
 ///
-/// Neither storage mapping is `public`. `appliedV3`, `appliedOntoV3`,
+/// No storage mapping is `public`. `appliedV3`, `appliedOntoV3`,
 /// `appliedAfterV3` and `headV3` refuse the zero writer and the zero namespace,
-/// the three record readers refuse the two ids a migration can never be, and
-/// a public mapping's generated getter would answer all of them with zero —
-/// which for a record is "not applied" and for `headV3` is a value no head can
-/// ever hold, i.e. exactly the silent wrong-branch this contract reverts to
-/// prevent.
+/// `approvedV3` refuses those and the zero delegate, the three record readers
+/// refuse the two ids a migration can never be, and a public mapping's
+/// generated getter would answer all of them with zero — which for a record is
+/// "not applied" and for `headV3` is a value no head can ever hold, i.e.
+/// exactly the silent wrong-branch this contract reverts to prevent.
 contract MigrationRegistry is IMigrationRegistryV3 {
     /// Every record, keyed by writer, namespace and migration. A zero
     /// `appliedAt` means never applied. Not `public`: the only readers are
@@ -463,8 +465,9 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// applied nothing is.
     ///
     /// A write reaches it as `headV3(writer, namespace)`, whose writer is never
-    /// the zero address (`checkDelegate` refuses it) and whose namespace `checkMigrationArguments` has
-    /// already refused as zero, so both refusals are redundant on that path.
+    /// the zero address (`checkDelegate` refuses it) and whose namespace
+    /// `checkMigrationArguments` has already refused as zero, so both refusals
+    /// are redundant on that path.
     /// It is one function, so it is one pair of refusals, and the reachable
     /// path is the one they are there for.
     function headV3(address writer, bytes32 namespace) public view returns (bytes32) {

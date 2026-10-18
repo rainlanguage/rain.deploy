@@ -89,14 +89,14 @@ interface IMigrationRegistryV3 {
         address sender, address indexed writer, bytes32 indexed namespace, bytes32 indexed migration, uint256 appliedAt
     );
 
-    /// Emitted when `writer` approves `delegate` to write its line in
+    /// Emitted when `sender` approves `delegate` to write its line in
     /// `namespace`.
     /// @param sender The approving writer, which is the account that called.
     /// @param namespace The line under the writer.
     /// @param delegate The approved account.
     event Approved(address indexed sender, bytes32 indexed namespace, address indexed delegate);
 
-    /// Emitted when `writer` revokes `delegate`'s approval for its line in
+    /// Emitted when `sender` revokes `delegate`'s approval for its line in
     /// `namespace`.
     /// @param sender The revoking writer, which is the account that called.
     /// @param namespace The line under the writer.

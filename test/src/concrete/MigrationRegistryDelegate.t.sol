@@ -193,6 +193,34 @@ contract MigrationRegistryDelegateTest is Test {
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION_HEAD_GENESIS);
     }
 
+    /// A delegate re-applying a migration in the writer's line is refused,
+    /// naming the writer's line.
+    function testDelegateReapplyIsRefusedNamingTheWriter() external {
+        vm.warp(100);
+        approveDelegate();
+        vm.prank(DELEGATE);
+        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        Prerequisite[] memory ontoMigration = onto(WRITER, NAMESPACE, MIGRATION);
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV3.MigrationAlreadyApplied.selector, WRITER, NAMESPACE, MIGRATION)
+        );
+        vm.prank(DELEGATE);
+        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, ontoMigration);
+    }
+
+    /// A delegate's history write is bounded by the moment recorded at the
+    /// writer's head, not by anything in the delegate's own line.
+    function testDelegateHistoryBeforeTheWritersHeadIsRefused() external {
+        vm.warp(1000);
+        approveDelegate();
+        vm.prank(WRITER);
+        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        Prerequisite[] memory ontoMigration = onto(WRITER, NAMESPACE, MIGRATION);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.TimestampBeforeHead.selector, 999, 1000));
+        vm.prank(DELEGATE);
+        sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, SECOND, 999, ontoMigration);
+    }
+
     /// An approval for one namespace writes no other.
     function testApprovalWritesNoOtherNamespace(bytes32 otherNamespace) external {
         vm.assume(otherNamespace != NAMESPACE && otherNamespace != bytes32(0));
