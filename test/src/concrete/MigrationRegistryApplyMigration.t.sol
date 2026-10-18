@@ -128,12 +128,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigrationV3(writer, namespace, migration, onto(writer, namespace, head));
     }
 
-    /// Anyone may apply, and the record lands under the caller. There is no
-    /// authority to be refused by, which is the whole access-control design:
-    /// the writer IS the caller.
-    function testApplyMigrationAnyCallerAppliesUnderItself(address writer, bytes32 namespace, bytes32 migration)
-        external
-    {
+    /// Any account may apply into its own line, approved by nobody, and the
+    /// record lands under it.
+    function testApplyMigrationWriterAppliesUnderItself(address writer, bytes32 namespace, bytes32 migration) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);

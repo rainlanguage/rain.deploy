@@ -177,6 +177,22 @@ contract MigrationRegistryDelegateTest is Test {
         vm.stopPrank();
     }
 
+    /// An approval from one writer writes no other writer's line, even in the
+    /// same namespace.
+    function testApprovalWritesNoOtherWriter(address other) external {
+        vm.assume(other != WRITER && other != DELEGATE && other != address(0));
+        vm.prank(other);
+        sRegistry.approveV3(NAMESPACE, DELEGATE);
+        Prerequisite[] memory prerequisites = onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
+        vm.startPrank(DELEGATE);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
+        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, prerequisites);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
+        sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, MIGRATION, 1, prerequisites);
+        vm.stopPrank();
+        assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION_HEAD_GENESIS);
+    }
+
     /// An approval for one namespace writes no other.
     function testApprovalWritesNoOtherNamespace(bytes32 otherNamespace) external {
         vm.assume(otherNamespace != NAMESPACE && otherNamespace != bytes32(0));

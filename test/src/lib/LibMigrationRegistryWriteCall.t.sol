@@ -15,7 +15,8 @@ import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 /// @title LibMigrationRegistryWriteCallTest
 /// Tests for `LibMigrationRegistry.applyMigrationV3Call` and
 /// `applyMigrationHistoryV3Call`: the `(to, data)` a Safe bundle or a timelock
-/// batch sends to write a record under the account that executes it.
+/// batch sends to write a record into the writer it names, by the account
+/// that executes it.
 ///
 /// The oracle is the real `MigrationRegistry`, deployed through the Zoltu
 /// factory at its pinned address. A built call is sent from a pranked account

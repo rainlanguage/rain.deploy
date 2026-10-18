@@ -633,7 +633,11 @@ where a given writer's line in a given namespace has got to (`headV3`). There is
 no removal and no upgrade. The interface is `IMigrationRegistryV3`.
 `IMigrationRegistryV2` is the same registry with the writer fixed to
 `msg.sender`, and `IMigrationRegistryV1` is it before prerequisites and
-namespaces, both kept for the releases that shipped them.
+namespaces, both kept for the releases that shipped them. Each is its own
+registry at its own address, so records written to an earlier one are not
+visible through `IMigrationRegistryV3`; a consumer moving to it records the
+migrations that already ran again, with `applyMigrationHistoryV3` and the
+moments they ran at.
 
 The two writes differ in exactly one thing: where the recorded moment comes
 from. `applyMigrationV3` stamps the block the record lands in, for a script
@@ -833,15 +837,15 @@ timelock can both write one line without either owning it, and moving a role
 between them never moves where its records go. Anyone may write, but only into
 their own lines or ones they were approved for, so a reader asking about the
 lines of an authority it already trusts is reading something only that authority
-could have written; every other writer's lines hold unforgeable claims nobody
-asks about. A namespace is not an authority: it is the writer's to name, and a
-record in it is that writer's claim. A root would have to be welded into the
-creation code, the way `ADDRESS_REGISTRY_ROOT` is — and the account that applies
-a migration is a different Safe, deployer or timelock for every consumer and
-every chain, so one root would have to be all of them, and baking each
-consumer's authority in would give each a different address for what is meant to
-be one shared registry. With nothing to configure there is also no rollout state
-in which it is inert.
+or a delegate it approved could have written; every other writer's lines hold
+unforgeable claims nobody asks about. A namespace is not an authority: it is the
+writer's to name, and a record in it is that writer's claim. A root would have
+to be welded into the creation code, the way `ADDRESS_REGISTRY_ROOT` is — and
+the account that applies a migration is a different Safe, deployer or timelock
+for every consumer and every chain, so one root would have to be all of them,
+and baking each consumer's authority in would give each a different address for
+what is meant to be one shared registry. With nothing to configure there is also
+no rollout state in which it is inert.
 
 **An index, not proof.** The registry says which invariant applies. It does not
 say the invariant holds — a multisig can act out of band and nothing here moves.

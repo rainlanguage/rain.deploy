@@ -247,7 +247,8 @@ library LibMigrationRegistry {
     /// lands, so a chain that never got the predecessor, or a sibling that
     /// landed first, is applied onto rather than refused.
     /// @param writer The writer the write lands under: the account the
-    /// transaction is sent from. Never the zero address.
+    /// transaction is sent from, or a writer that approved it. Never the zero
+    /// address.
     /// @param namespace The line under `writer` the write names. Never zero.
     /// @param headMigration The migration `writer` applied last in
     /// `namespace`, or `MIGRATION_HEAD_GENESIS` for the first in the line.

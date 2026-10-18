@@ -13,8 +13,8 @@ import {Prerequisite} from "../../src/interface/IMigrationRegistryV2.sol";
 /// It exists so the writer can be exercised as the property it is. The
 /// library's functions are `internal` and inline into whatever executes them,
 /// so `msg.sender` at the registry is the calling CONTRACT, not whoever
-/// `vm.prank` last named — a test contract calling the library directly can
-/// therefore only ever write under one writer. Two of these are two writers,
+/// `vm.prank` last named — a test contract calling the library directly writes
+/// as one caller, and only into lines it names itself or was approved for. Two of these are two writers,
 /// which is what makes "a record reaches nobody else" checkable rather than
 /// asserted about a single account.
 ///

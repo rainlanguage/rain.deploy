@@ -18,8 +18,8 @@ struct MigrationRecord {
 }
 
 /// @title MigrationRegistry
-/// @notice The whole of `IMigrationRegistryV3`: a writer applies one of its own
-/// migrations in a namespace it names, after one list — the head it believes
+/// @notice The whole of `IMigrationRegistryV3`: a write applies one migration into
+/// `writer`'s line, by `writer` or a delegate it approved, in a namespace it names, after one list — the head it believes
 /// that line is at, then the migrations in any line it names — at the moment
 /// it says the migration ran, and anyone reads when a given writer applied a
 /// given migration in a given namespace, what it applied it onto, what it
@@ -256,10 +256,10 @@ contract MigrationRegistry is IMigrationRegistryV3 {
 
     /// The refusals that describe the call alone: the zero namespace, the two
     /// ids a migration can never be, and the one moment a record can never
-    /// carry. Reached first by every write, so a malformed argument is
-    /// reported before anything is read — before a prerequisite, before the
-    /// line.
-    /// @param namespace The line under the caller to apply in.
+    /// carry. Reached by every write straight after the caller is checked,
+    /// so a malformed argument is reported before a prerequisite or the line
+    /// is read.
+    /// @param namespace The line under `writer` to apply in.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment to record against it.
     function checkMigrationArguments(bytes32 namespace, bytes32 migration, uint256 appliedAt) internal pure {
@@ -317,10 +317,11 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// that describes the record at its head, to the one that describes the
     /// block — which is the order in which a caller can do something about
     /// them.
-    /// @param namespace The line under the caller to apply in.
+    /// @param writer The line's writer, which `checkDelegate` has already refused as zero.
+    /// @param namespace The line under `writer` to apply in.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment to record against it.
-    /// @param prerequisites The head the caller believes its line is at, then
+    /// @param prerequisites The head the caller believes `writer`'s line is at, then
     /// the records it was applied after, every one of which
     /// `checkPrerequisites` has found to exist.
     function writeMigrationRecord(
@@ -462,7 +463,7 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// applied nothing is.
     ///
     /// A write reaches it as `headV3(writer, namespace)`, whose writer is never
-    /// the zero address (see `writeMigrationRecord`) and whose namespace `checkMigrationArguments` has
+    /// the zero address (`checkDelegate` refuses it) and whose namespace `checkMigrationArguments` has
     /// already refused as zero, so both refusals are redundant on that path.
     /// It is one function, so it is one pair of refusals, and the reachable
     /// path is the one they are there for.

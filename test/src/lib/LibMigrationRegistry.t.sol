@@ -342,9 +342,9 @@ contract LibMigrationRegistryTest is Test {
 
     /// The writer is the CONTRACT that executes the library call. The
     /// library's functions are `internal`, so they inline into their caller and
-    /// the registry sees that caller as `msg.sender` — which means a consumer
-    /// chooses its writer by choosing what sends the transaction, and cannot
-    /// write anybody else's. The prerequisite is read from whichever line it
+    /// the registry sees that caller as `msg.sender` — so naming the calling
+    /// contract as `writer` writes its own line, and any other writer's line
+    /// needs that writer's approval. The prerequisite is read from whichever line it
     /// names — here another consumer's — and that line is untouched.
     function testApplyMigrationLandsUnderTheCallingContract(bytes32 namespace, bytes32 migration, bytes32 prerequisite)
         external
@@ -1113,9 +1113,9 @@ contract LibMigrationRegistryTest is Test {
         this.externalApplyMigrationHistory(namespace, migrationB, 1999, one(address(this), namespace, migrationA));
     }
 
-    /// The writer of `applyMigrationHistoryV3` is the calling CONTRACT too, so
-    /// a consumer backfilling its history writes its own line and nobody
-    /// else's, and the prerequisite is read from the line it names.
+    /// Naming the calling CONTRACT as the writer of `applyMigrationHistoryV3`
+    /// writes its own line, so a consumer backfilling its history writes it
+    /// without anyone's approval, and the prerequisite is read from the line it names.
     function testApplyMigrationHistoryLandsUnderTheCallingContract(
         bytes32 namespace,
         bytes32 migration,
