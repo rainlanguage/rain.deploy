@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {IMigrationRegistryV2, Prerequisite} from "../interface/IMigrationRegistryV2.sol";
+import {IMigrationRegistryV3} from "../interface/IMigrationRegistryV3.sol";
 import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 
 /// @title LibMigrationRegistry
@@ -425,5 +426,99 @@ library LibMigrationRegistry {
             IMigrationRegistryV2.applyMigrationHistory, (namespace, migration, appliedAt, prerequisites)
         );
         return (to, data);
+    }
+
+    /// Whether `writer` has approved `delegate` to write its line in
+    /// `namespace`. Verifies the registry's code hash first, for the reason
+    /// `applied` does: occupying code could answer anything.
+    /// @param writer The line's writer. Never the zero address.
+    /// @param namespace The line under `writer`. Never zero.
+    /// @param delegate The account asked about. Never the zero address.
+    /// @return True when approved.
+    function approved(address writer, bytes32 namespace, address delegate) internal view returns (bool) {
+        checkCodeHash();
+        return IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .approved(writer, namespace, delegate);
+    }
+
+    /// The call that approves `delegate` to write the sending account's line
+    /// in `namespace`, for another account to send. Verifies the registry's
+    /// code hash first, for the reason `applyMigrationCall` does.
+    /// @param namespace The line under the sending account. Never zero.
+    /// @param delegate The account to approve. Never the zero address.
+    /// @return The registry address.
+    /// @return The `IMigrationRegistryV3.approve` calldata.
+    function approveCall(bytes32 namespace, address delegate) internal view returns (address, bytes memory) {
+        checkCodeHash();
+        return (
+            LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
+            abi.encodeCall(IMigrationRegistryV3.approve, (namespace, delegate))
+        );
+    }
+
+    /// The call that revokes `delegate`'s approval for the sending account's
+    /// line in `namespace`, for another account to send. Verifies the
+    /// registry's code hash first, for the reason `applyMigrationCall` does.
+    /// @param namespace The line under the sending account. Never zero.
+    /// @param delegate The account to revoke. Never the zero address.
+    /// @return The registry address.
+    /// @return The `IMigrationRegistryV3.revoke` calldata.
+    function revokeCall(bytes32 namespace, address delegate) internal view returns (address, bytes memory) {
+        checkCodeHash();
+        return (
+            LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
+            abi.encodeCall(IMigrationRegistryV3.revoke, (namespace, delegate))
+        );
+    }
+
+    /// `applyMigrationCall` into `writer`'s line, for `writer` or a delegate
+    /// it has approved for `namespace` to send.
+    /// @param writer The line's writer. Never the zero address.
+    /// @param namespace The line under `writer`. Never zero.
+    /// @param migration The migration to apply. Never zero, never
+    /// `MIGRATION_HEAD_GENESIS`.
+    /// @param prerequisites What `migration` is applied after, its head entry
+    /// naming `writer`.
+    /// @return The registry address.
+    /// @return The `IMigrationRegistryV3.applyMigrationFor` calldata.
+    function applyMigrationForCall(
+        address writer,
+        bytes32 namespace,
+        bytes32 migration,
+        Prerequisite[] memory prerequisites
+    ) internal view returns (address, bytes memory) {
+        checkCodeHash();
+        return (
+            LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
+            abi.encodeCall(IMigrationRegistryV3.applyMigrationFor, (writer, namespace, migration, prerequisites))
+        );
+    }
+
+    /// `applyMigrationHistoryCall` into `writer`'s line, for `writer` or a
+    /// delegate it has approved for `namespace` to send.
+    /// @param writer The line's writer. Never the zero address.
+    /// @param namespace The line under `writer`. Never zero.
+    /// @param migration The migration to apply. Never zero, never
+    /// `MIGRATION_HEAD_GENESIS`.
+    /// @param appliedAt The moment `migration` was applied. Never zero, never
+    /// after the block the write lands in.
+    /// @param prerequisites What `migration` is applied after, its head entry
+    /// naming `writer`.
+    /// @return The registry address.
+    /// @return The `IMigrationRegistryV3.applyMigrationHistoryFor` calldata.
+    function applyMigrationHistoryForCall(
+        address writer,
+        bytes32 namespace,
+        bytes32 migration,
+        uint256 appliedAt,
+        Prerequisite[] memory prerequisites
+    ) internal view returns (address, bytes memory) {
+        checkCodeHash();
+        return (
+            LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
+            abi.encodeCall(
+                IMigrationRegistryV3.applyMigrationHistoryFor, (writer, namespace, migration, appliedAt, prerequisites)
+            )
+        );
     }
 }

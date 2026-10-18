@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {IMigrationRegistryV2, Prerequisite, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV2.sol";
+import {IMigrationRegistryV3} from "../interface/IMigrationRegistryV3.sol";
 
 /// @dev One line's record of one migration. Written in one call, so a record
 /// can never hold one half of itself.
@@ -17,7 +18,7 @@ struct MigrationRecord {
 }
 
 /// @title MigrationRegistry
-/// @notice The whole of `IMigrationRegistryV2`: a writer applies one of its own
+/// @notice The whole of `IMigrationRegistryV3`: a writer applies one of its own
 /// migrations in a namespace it names, after one list — the head it believes
 /// that line is at, then the migrations in any line it names — at the moment
 /// it says the migration ran, and anyone reads when a given writer applied a
@@ -25,7 +26,7 @@ struct MigrationRecord {
 /// applied it after, or where that line has got to.
 ///
 /// There is deliberately nothing else. No removal, no upgrade, no pause, and no
-/// authority at all — which is the difference from `AddressRegistry`, and the
+/// authority but each writer's over its own lines — which is the difference from `AddressRegistry`, and the
 /// reason nothing here is CONFIGURED at compile time. `MIGRATION_HEAD_GENESIS`
 /// is a compile-time constant, but it is the same value for every consumer on
 /// every chain and names nobody, so it is part of what this contract IS rather
@@ -40,14 +41,18 @@ struct MigrationRecord {
 /// consumer's authority into the creation code would give each a different
 /// address for what is meant to be one shared registry.
 ///
-/// Keying by `msg.sender` removes the authority instead of choosing one. Anyone
-/// may write, but only under themselves, so a reader asking about the lines
+/// Keying by the writer removes the authority instead of choosing one. Anyone
+/// may write, but only under themselves or a writer that approved them, so a reader asking about the lines
 /// of an authority it already trusts is reading something only that authority
-/// could have written. Every other writer's lines hold unforgeable claims that
+/// or its delegates could have written. Every other writer's lines hold unforgeable claims that
 /// no reader asks about. The namespace under the writer is the writer's to
 /// name: one key writes for several repos, and each keeps its own line. With
 /// nothing to configure there is also no rollout state in which this contract
 /// is inert: it does its whole job the moment it exists on a chain.
+///
+/// A writer may approve delegates to write one of its lines
+/// (`applyMigrationFor`), so several executors share one line. The line is
+/// still the writer's: only it approves, and a delegate writes nothing else.
 ///
 /// A record is append-only per line, and a head only ever moves forward onto
 /// something new. Both writes refuse a migration the caller has already applied
@@ -79,7 +84,7 @@ struct MigrationRecord {
 /// which for a record is "not applied" and for `head` is a value no head can
 /// ever hold, i.e. exactly the silent wrong-branch this contract reverts to
 /// prevent.
-contract MigrationRegistry is IMigrationRegistryV2 {
+contract MigrationRegistry is IMigrationRegistryV3 {
     /// Every record, keyed by writer, namespace and migration. A zero
     /// `appliedAt` means never applied. Not `public`: the only readers are
     /// `applied`, `appliedOnto` and `appliedAfter`, which refuse the inputs
@@ -94,13 +99,17 @@ contract MigrationRegistry is IMigrationRegistryV2 {
     /// reason as the records: the untranslated zero is not a head.
     mapping(address writer => mapping(bytes32 namespace => bytes32 head)) internal sHead;
 
+    /// The delegates each writer has approved for each of its lines. Not
+    /// `public`: the only reader is `approved`, which refuses the zero inputs.
+    mapping(address writer => mapping(bytes32 namespace => mapping(address delegate => bool))) internal sApproved;
+
     /// @inheritdoc IMigrationRegistryV2
     /// @dev The block is the moment, so a caller that has nothing to say about
     /// when its migration ran does not have to say it.
     // slither-disable-next-line timestamp
     // forge-lint: disable-next-line(block-timestamp)
     function applyMigration(bytes32 namespace, bytes32 migration, Prerequisite[] calldata prerequisites) external {
-        applyMigrationRecord(namespace, migration, block.timestamp, prerequisites);
+        applyMigrationRecord(msg.sender, namespace, migration, block.timestamp, prerequisites);
     }
 
     /// @inheritdoc IMigrationRegistryV2
@@ -110,26 +119,105 @@ contract MigrationRegistry is IMigrationRegistryV2 {
         uint256 appliedAt,
         Prerequisite[] calldata prerequisites
     ) external {
-        applyMigrationRecord(namespace, migration, appliedAt, prerequisites);
+        applyMigrationRecord(msg.sender, namespace, migration, appliedAt, prerequisites);
     }
 
-    /// Reached by both writes, so there is one order whichever of them
-    /// supplied the moment: the caller's own arguments, then the list in
-    /// order, then the record.
-    /// @param namespace The line under the caller to apply in.
+    /// @inheritdoc IMigrationRegistryV3
+    // slither-disable-next-line timestamp
+    // forge-lint: disable-next-line(block-timestamp)
+    function applyMigrationFor(
+        address writer,
+        bytes32 namespace,
+        bytes32 migration,
+        Prerequisite[] calldata prerequisites
+    ) external {
+        checkDelegate(writer, namespace);
+        applyMigrationRecord(writer, namespace, migration, block.timestamp, prerequisites);
+    }
+
+    /// @inheritdoc IMigrationRegistryV3
+    function applyMigrationHistoryFor(
+        address writer,
+        bytes32 namespace,
+        bytes32 migration,
+        uint256 appliedAt,
+        Prerequisite[] calldata prerequisites
+    ) external {
+        checkDelegate(writer, namespace);
+        applyMigrationRecord(writer, namespace, migration, appliedAt, prerequisites);
+    }
+
+    /// @inheritdoc IMigrationRegistryV3
+    function approve(bytes32 namespace, address delegate) external {
+        checkApprovalKey(msg.sender, namespace, delegate);
+        sApproved[msg.sender][namespace][delegate] = true;
+        emit Approved(msg.sender, namespace, delegate);
+    }
+
+    /// @inheritdoc IMigrationRegistryV3
+    function revoke(bytes32 namespace, address delegate) external {
+        checkApprovalKey(msg.sender, namespace, delegate);
+        sApproved[msg.sender][namespace][delegate] = false;
+        emit Revoked(msg.sender, namespace, delegate);
+    }
+
+    /// @inheritdoc IMigrationRegistryV3
+    function approved(address writer, bytes32 namespace, address delegate) external view returns (bool) {
+        checkApprovalKey(writer, namespace, delegate);
+        return sApproved[writer][namespace][delegate];
+    }
+
+    /// Refuses the zero writer, namespace and delegate: none names an approval
+    /// anybody can hold.
+    /// @param writer The approving writer.
+    /// @param namespace The line under the writer.
+    /// @param delegate The delegate.
+    function checkApprovalKey(address writer, bytes32 namespace, address delegate) internal pure {
+        if (writer == address(0)) {
+            revert ZeroWriter();
+        }
+        if (namespace == bytes32(0)) {
+            revert ZeroNamespace();
+        }
+        if (delegate == address(0)) {
+            revert ZeroDelegate();
+        }
+    }
+
+    /// Refuses a delegated write whose caller is neither `writer` nor approved
+    /// by it for `namespace`. The zero writer is refused first: nothing can
+    /// call as it or be approved by it.
+    /// @param writer The line's writer.
+    /// @param namespace The line under the writer.
+    function checkDelegate(address writer, bytes32 namespace) internal view {
+        if (writer == address(0)) {
+            revert ZeroWriter();
+        }
+        if (msg.sender != writer && !sApproved[writer][namespace][msg.sender]) {
+            revert NotApproved(writer, namespace, msg.sender);
+        }
+    }
+
+    /// Reached by every write, so there is one order whichever of them
+    /// supplied the moment and the writer: the caller's own arguments, then
+    /// the list in order, then the record.
+    /// @param writer The line's writer: the caller, or the writer that
+    /// approved it.
+    /// @param namespace The line under the writer to apply in.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment to record against it.
     /// @param prerequisites The head, then the records that must exist for it
     /// to be written.
     function applyMigrationRecord(
+        address writer,
         bytes32 namespace,
         bytes32 migration,
         uint256 appliedAt,
         Prerequisite[] calldata prerequisites
     ) internal {
         checkMigrationArguments(namespace, migration, appliedAt);
-        checkPrerequisites(namespace, prerequisites);
-        writeMigrationRecord(namespace, migration, appliedAt, prerequisites);
+        checkPrerequisites(writer, namespace, prerequisites);
+        writeMigrationRecord(writer, namespace, migration, appliedAt, prerequisites);
     }
 
     /// The whole list, in order. The first entry is the caller's head, which
@@ -140,19 +228,22 @@ contract MigrationRegistry is IMigrationRegistryV2 {
     /// if nobody has written it.
     /// @param namespace The line under the caller being written.
     /// @param prerequisites The head, then the records that must exist.
-    function checkPrerequisites(bytes32 namespace, Prerequisite[] calldata prerequisites) internal view {
+    function checkPrerequisites(address writer, bytes32 namespace, Prerequisite[] calldata prerequisites)
+        internal
+        view
+    {
         // The first entry is the caller at the head it believes it is at. An
         // empty list names no head at all, so it is refused as a zero head,
         // which no line can be at; a first entry under anyone but the caller,
         // or in any namespace but the one being written, is not this line's
         // head whatever migration it names.
-        bytes32 actualHead = head(msg.sender, namespace);
+        bytes32 actualHead = head(writer, namespace);
         if (
-            prerequisites.length == 0 || prerequisites[0].writer != msg.sender
-                || prerequisites[0].namespace != namespace || prerequisites[0].migration != actualHead
+            prerequisites.length == 0 || prerequisites[0].writer != writer || prerequisites[0].namespace != namespace
+                || prerequisites[0].migration != actualHead
         ) {
             revert UnexpectedMigrationHead(
-                msg.sender,
+                writer,
                 namespace,
                 prerequisites.length == 0 ? bytes32(0) : prerequisites[0].namespace,
                 prerequisites.length == 0 ? bytes32(0) : prerequisites[0].migration,
@@ -161,7 +252,7 @@ contract MigrationRegistry is IMigrationRegistryV2 {
         }
         for (uint256 i = 1; i < prerequisites.length; i++) {
             checkRecordKey(prerequisites[i].writer, prerequisites[i].namespace, prerequisites[i].migration);
-            if (prerequisites[i].writer == msg.sender && prerequisites[i].namespace == namespace) {
+            if (prerequisites[i].writer == writer && prerequisites[i].namespace == namespace) {
                 revert OwnPrerequisite(prerequisites[i].migration);
             }
         }
@@ -251,23 +342,24 @@ contract MigrationRegistry is IMigrationRegistryV2 {
     /// the records it was applied after, every one of which
     /// `checkPrerequisites` has found to exist.
     function writeMigrationRecord(
+        address writer,
         bytes32 namespace,
         bytes32 migration,
         uint256 appliedAt,
         Prerequisite[] calldata prerequisites
     ) internal {
-        // There is deliberately no zero-writer case here. `msg.sender` cannot
-        // be the zero address, so no line under it is reachable for writes
-        // and a guard on it would be unreachable code pretending to be a check.
+        // There is deliberately no zero-writer case here. The writer is
+        // `msg.sender`, which cannot be the zero address, or a delegated
+        // write's `writer`, which `checkDelegate` has refused as zero.
         // Nor is there a zero-head case: a head is either genesis or an applied
         // id, both nonzero, so a zero in the first entry can never match and is
         // already refused below, by an error that names the zero it was handed.
 
         // A migration that has already run has already run whatever the list
         // says, and the record it would overwrite is the original.
-        MigrationRecord storage record = sRecords[msg.sender][namespace][migration];
+        MigrationRecord storage record = sRecords[writer][namespace][migration];
         if (record.appliedAt != 0) {
-            revert MigrationAlreadyApplied(msg.sender, namespace, migration);
+            revert MigrationAlreadyApplied(writer, namespace, migration);
         }
         bytes32 actualHead = prerequisites[0].migration;
         // Reads the record at the head the list named first, which
@@ -278,7 +370,7 @@ contract MigrationRegistry is IMigrationRegistryV2 {
         // this comparison against zero can only pass — which is the same
         // statement a genesis branch would make, made by the value itself.
         //
-        uint256 headAppliedAt = sRecords[msg.sender][namespace][actualHead].appliedAt;
+        uint256 headAppliedAt = sRecords[writer][namespace][actualHead].appliedAt;
         if (appliedAt < headAppliedAt) {
             revert TimestampBeforeHead(appliedAt, headAppliedAt);
         }
@@ -311,8 +403,8 @@ contract MigrationRegistry is IMigrationRegistryV2 {
         for (uint256 i = 0; i < prerequisites.length; i++) {
             record.appliedAfter.push(prerequisites[i]);
         }
-        sHead[msg.sender][namespace] = migration;
-        emit Migrated(msg.sender, namespace, migration, appliedAt);
+        sHead[writer][namespace] = migration;
+        emit Migrated(writer, namespace, migration, appliedAt);
     }
 
     /// @inheritdoc IMigrationRegistryV2
@@ -388,8 +480,8 @@ contract MigrationRegistry is IMigrationRegistryV2 {
     /// the two cannot drift into different ideas of where a line that has
     /// applied nothing is.
     ///
-    /// A write reaches it as `head(msg.sender, namespace)`, which can never be
-    /// the zero address and whose namespace `checkMigrationArguments` has
+    /// A write reaches it as `head(writer, namespace)`, whose writer is never
+    /// the zero address (see `writeMigrationRecord`) and whose namespace `checkMigrationArguments` has
     /// already refused as zero, so both refusals are redundant on that path.
     /// It is one function, so it is one pair of refusals, and the reachable
     /// path is the one they are there for.
