@@ -34,10 +34,10 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// migration it describes — a property no runner in this library could offer,
 /// and one a runner would quietly compete with.
 ///
-/// So `applyMigration` is an ordinary call. A broadcasting EOA script wraps it
+/// So `recordMigration` is an ordinary call. A broadcasting EOA script wraps it
 /// in its own `vm.startBroadcast` and a test calls it directly. A Safe bundle
-/// or a timelock batch appends the `(to, data)` pair `applyMigrationCall` or
-/// `applyMigrationHistoryCall` builds instead, because the script building
+/// or a timelock batch appends the `(to, data)` pair `recordMigrationCall` or
+/// `recordMigrationHistoryCall` builds instead, because the script building
 /// the bundle is not the account the record must land under. None of those is
 /// privileged over the others here.
 ///
@@ -67,7 +67,7 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 ///
 /// ## Writing names what it is applied after, the head first
 ///
-/// `applyMigration` and `applyMigrationHistory` both take a writer, a namespace and
+/// `recordMigration` and `recordMigrationHistory` both take a writer, a namespace and
 /// one list, whose first entry is that writer in that namespace at the
 /// migration the caller believes ran last in that line, so a chain that never got that predecessor
 /// refuses the write instead of silently skipping a step, and two migrations
@@ -250,8 +250,8 @@ library LibMigrationRegistry {
     /// @param namespace The line under `writer` the write names. Never zero.
     /// @param headMigration The migration `writer` applied last in
     /// `namespace`, or `MIGRATION_HEAD_GENESIS` for the first in the line.
-    /// @return The one-entry list, in the shape `applyMigration`
-    /// and `applyMigrationHistory` take and `appliedAfter` answers.
+    /// @return The one-entry list, in the shape `recordMigration`
+    /// and `recordMigrationHistory` take and `appliedAfter` answers.
     function onto(address writer, bytes32 namespace, bytes32 headMigration)
         internal
         pure
@@ -310,12 +310,12 @@ library LibMigrationRegistry {
     /// migrations, each under its writer in its namespace, that must already
     /// be applied, every one a record key in another line. The head alone for
     /// a migration that waits on nothing else.
-    function applyMigration(address writer, bytes32 namespace, bytes32 migration, Prerequisite[] memory prerequisites)
+    function recordMigration(address writer, bytes32 namespace, bytes32 migration, Prerequisite[] memory prerequisites)
         internal
     {
         checkCodeHash();
         IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigration(writer, namespace, migration, prerequisites);
+            .recordMigration(writer, namespace, migration, prerequisites);
     }
 
     /// Applies `migration` under `writer` in `namespace`, after
@@ -326,7 +326,7 @@ library LibMigrationRegistry {
     /// all — so the record carries the moment it ran rather than the moment it
     /// was written down.
     ///
-    /// Everything `applyMigration` says about the writer, the namespace, the
+    /// Everything `recordMigration` says about the writer, the namespace, the
     /// code-hash check, the list and the registry's refusals holds here
     /// unchanged. The registry refuses the three moments a record cannot carry
     /// as well: zero, one after the block this lands in, and one before the
@@ -340,8 +340,8 @@ library LibMigrationRegistry {
     /// @param appliedAt The moment `migration` was applied. Never zero, never
     /// after the block this lands in.
     /// @param prerequisites What `migration` is applied after, in the shape
-    /// `applyMigration` takes.
-    function applyMigrationHistory(
+    /// `recordMigration` takes.
+    function recordMigrationHistory(
         address writer,
         bytes32 namespace,
         bytes32 migration,
@@ -350,14 +350,14 @@ library LibMigrationRegistry {
     ) internal {
         checkCodeHash();
         IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigrationHistory(writer, namespace, migration, appliedAt, prerequisites);
+            .recordMigrationHistory(writer, namespace, migration, appliedAt, prerequisites);
     }
 
     /// The call that applies `migration` under `writer` in `namespace`, after
     /// `prerequisites`, for another account to SEND: the `to` and `data`
     /// of one entry in a Safe bundle or one call in a timelock `scheduleBatch`.
     ///
-    /// `applyMigration` cannot serve those. It calls the registry from the code
+    /// `recordMigration` cannot serve those. It calls the registry from the code
     /// running it, and the script building a bundle is not the account that
     /// must make the write. This returns the write instead of making it, so it
     /// is made by the account that executes it: the Safe, for an entry in its
@@ -370,7 +370,7 @@ library LibMigrationRegistry {
     /// record a record of that batch rather than a claim about it.
     ///
     /// Verifies the registry's code hash on the chain this runs against before
-    /// building, for the reason `applyMigration` does and more sharply. A Safe
+    /// building, for the reason `recordMigration` does and more sharply. A Safe
     /// or a timelock executes a call as a low-level call, which SUCCEEDS into
     /// an empty account where solc's high-level call reverts, so on a chain
     /// with no registry the bundle would execute, record nothing and say
@@ -378,7 +378,7 @@ library LibMigrationRegistry {
     /// anyone signs. The check is of the chain as it is when this runs; a batch
     /// executed later executes against whatever is at the address then.
     ///
-    /// Everything `applyMigration` says about the writer, the namespace, the
+    /// Everything `recordMigration` says about the writer, the namespace, the
     /// list and the registry's refusals holds for the write this builds,
     /// checked when the write lands rather than here.
     /// @param writer The line's writer.
@@ -386,10 +386,10 @@ library LibMigrationRegistry {
     /// @param migration The migration to apply. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
     /// @param prerequisites What `migration` is applied after, in the shape
-    /// `applyMigration` takes, its head entry naming `writer`.
+    /// `recordMigration` takes, its head entry naming `writer`.
     /// @return The registry address.
-    /// @return The `IMigrationRegistryV3.applyMigration` calldata.
-    function applyMigrationCall(
+    /// @return The `IMigrationRegistryV3.recordMigration` calldata.
+    function recordMigrationCall(
         address writer,
         bytes32 namespace,
         bytes32 migration,
@@ -398,7 +398,7 @@ library LibMigrationRegistry {
         checkCodeHash();
         address to = LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS;
         bytes memory data =
-            abi.encodeCall(IMigrationRegistryV3.applyMigration, (writer, namespace, migration, prerequisites));
+            abi.encodeCall(IMigrationRegistryV3.recordMigration, (writer, namespace, migration, prerequisites));
         return (to, data);
     }
 
@@ -406,11 +406,11 @@ library LibMigrationRegistry {
     /// `prerequisites`, as having been applied at `appliedAt`, for another
     /// account to send.
     ///
-    /// This is `applyMigrationHistory` built for another account to send,
-    /// exactly as `applyMigrationCall` is `applyMigration`: what
-    /// `applyMigrationCall` says about the writer, the last call of a
+    /// This is `recordMigrationHistory` built for another account to send,
+    /// exactly as `recordMigrationCall` is `recordMigration`: what
+    /// `recordMigrationCall` says about the writer, the last call of a
     /// batch and the code-hash check holds here unchanged, and what
-    /// `applyMigrationHistory` says about the moment holds for the write this
+    /// `recordMigrationHistory` says about the moment holds for the write this
     /// builds. The registry bounds the moment by the block the write LANDS in,
     /// not the block this ran in.
     /// @param writer The line's writer.
@@ -420,10 +420,10 @@ library LibMigrationRegistry {
     /// @param appliedAt The moment `migration` was applied. Never zero, never
     /// after the block the write lands in.
     /// @param prerequisites What `migration` is applied after, in the shape
-    /// `applyMigration` takes, its head entry naming `writer`.
+    /// `recordMigration` takes, its head entry naming `writer`.
     /// @return The registry address.
-    /// @return The `IMigrationRegistryV3.applyMigrationHistory` calldata.
-    function applyMigrationHistoryCall(
+    /// @return The `IMigrationRegistryV3.recordMigrationHistory` calldata.
+    function recordMigrationHistoryCall(
         address writer,
         bytes32 namespace,
         bytes32 migration,
@@ -433,7 +433,7 @@ library LibMigrationRegistry {
         checkCodeHash();
         address to = LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS;
         bytes memory data = abi.encodeCall(
-            IMigrationRegistryV3.applyMigrationHistory, (writer, namespace, migration, appliedAt, prerequisites)
+            IMigrationRegistryV3.recordMigrationHistory, (writer, namespace, migration, appliedAt, prerequisites)
         );
         return (to, data);
     }
@@ -453,7 +453,7 @@ library LibMigrationRegistry {
 
     /// The call that approves `delegate` to write the sending account's line
     /// in `namespace`, for another account to send. Verifies the registry's
-    /// code hash first, for the reason `applyMigrationCall` does.
+    /// code hash first, for the reason `recordMigrationCall` does.
     /// @param namespace The line under the sending account. Never zero.
     /// @param delegate The account to approve. Never the zero address.
     /// @return The registry address.
@@ -468,7 +468,7 @@ library LibMigrationRegistry {
 
     /// The call that revokes `delegate`'s approval for the sending account's
     /// line in `namespace`, for another account to send. Verifies the
-    /// registry's code hash first, for the reason `applyMigrationCall` does.
+    /// registry's code hash first, for the reason `recordMigrationCall` does.
     /// @param namespace The line under the sending account. Never zero.
     /// @param delegate The account to revoke. Never the zero address.
     /// @return The registry address.

@@ -63,7 +63,7 @@ struct MigrationRecord {
 /// record describes something that happened, and nothing that happened stops
 /// having happened.
 ///
-/// The moment is the CALLER's on `applyMigrationHistory`, so a migration that
+/// The moment is the CALLER's on `recordMigrationHistory`, so a migration that
 /// ran before this contract reached the chain is recordable with the time it
 /// actually ran. The order is not the caller's: each record keeps the head it
 /// was applied onto, so a line's records are a chain from `head` back to
@@ -108,14 +108,17 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// when its migration ran does not have to say it.
     // slither-disable-next-line timestamp
     // forge-lint: disable-next-line(block-timestamp)
-    function applyMigration(address writer, bytes32 namespace, bytes32 migration, Prerequisite[] calldata prerequisites)
-        external
-    {
+    function recordMigration(
+        address writer,
+        bytes32 namespace,
+        bytes32 migration,
+        Prerequisite[] calldata prerequisites
+    ) external {
         applyMigrationRecord(writer, namespace, migration, block.timestamp, prerequisites);
     }
 
     /// @inheritdoc IMigrationRegistryV3
-    function applyMigrationHistory(
+    function recordMigrationHistory(
         address writer,
         bytes32 namespace,
         bytes32 migration,
@@ -283,12 +286,12 @@ contract MigrationRegistry is IMigrationRegistryV3 {
         // line it arrives at and whatever block it lands in. Zero is the
         // one moment a record cannot carry — `applied` would answer it as
         // "never applied" while the head had moved and the migration could
-        // never be applied again. Reached by `applyMigration` as well, in a
+        // never be applied again. Reached by `recordMigration` as well, in a
         // block whose timestamp is zero: a test can warp to zero and a chain
         // can be configured from a zero genesis.
         //
         // Slither flags a strict equality on anything reaching it from
-        // `block.timestamp`, which `applyMigration` does. Zero is the only
+        // `block.timestamp`, which `recordMigration` does. Zero is the only
         // value this refuses and the only one it can refuse, so there is no
         // window for a validator to nudge the clock across. Suppressed on this
         // comparison rather than turned off for the repo. The timestamp detector

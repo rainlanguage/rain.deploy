@@ -80,9 +80,9 @@ contract LibMigrationRegistryDelegateTest is Test {
         deployRegistry();
         (address to, bytes memory data) = LibMigrationRegistry.approveCall(NAMESPACE, DELEGATE);
         send(WRITER, to, data);
-        (to, data) = LibMigrationRegistry.applyMigrationCall(WRITER, NAMESPACE, MIGRATION, genesis());
+        (to, data) = LibMigrationRegistry.recordMigrationCall(WRITER, NAMESPACE, MIGRATION, genesis());
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
-        assertEq(data, abi.encodeCall(IMigrationRegistryV3.applyMigration, (WRITER, NAMESPACE, MIGRATION, genesis())));
+        assertEq(data, abi.encodeCall(IMigrationRegistryV3.recordMigration, (WRITER, NAMESPACE, MIGRATION, genesis())));
         send(DELEGATE, to, data);
         assertEq(LibMigrationRegistry.applied(WRITER, NAMESPACE, MIGRATION), block.timestamp);
     }
@@ -94,12 +94,12 @@ contract LibMigrationRegistryDelegateTest is Test {
         deployRegistry();
         (address to, bytes memory data) = LibMigrationRegistry.approveCall(NAMESPACE, DELEGATE);
         send(WRITER, to, data);
-        (to, data) = LibMigrationRegistry.applyMigrationHistoryCall(WRITER, NAMESPACE, MIGRATION, appliedAt, genesis());
+        (to, data) = LibMigrationRegistry.recordMigrationHistoryCall(WRITER, NAMESPACE, MIGRATION, appliedAt, genesis());
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         assertEq(
             data,
             abi.encodeCall(
-                IMigrationRegistryV3.applyMigrationHistory, (WRITER, NAMESPACE, MIGRATION, appliedAt, genesis())
+                IMigrationRegistryV3.recordMigrationHistory, (WRITER, NAMESPACE, MIGRATION, appliedAt, genesis())
             )
         );
         send(DELEGATE, to, data);

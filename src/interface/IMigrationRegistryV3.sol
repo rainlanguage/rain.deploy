@@ -103,19 +103,23 @@ interface IMigrationRegistryV3 {
     /// @param migration The migration to apply.
     /// @param prerequisites `writer`'s head in `namespace`, then the records
     /// that must exist.
-    function applyMigration(address writer, bytes32 namespace, bytes32 migration, Prerequisite[] calldata prerequisites)
-        external;
+    function recordMigration(
+        address writer,
+        bytes32 namespace,
+        bytes32 migration,
+        Prerequisite[] calldata prerequisites
+    ) external;
 
     /// `IMigrationRegistryV2.applyMigrationHistory` into `writer`'s line, by
     /// `writer` or a delegate it has approved for `namespace`, with the
-    /// refusals `applyMigration` makes first.
+    /// refusals `recordMigration` makes first.
     /// @param writer The line's writer. Never zero.
     /// @param namespace The line under the writer.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment it was applied.
     /// @param prerequisites `writer`'s head in `namespace`, then the records
     /// that must exist.
-    function applyMigrationHistory(
+    function recordMigrationHistory(
         address writer,
         bytes32 namespace,
         bytes32 migration,

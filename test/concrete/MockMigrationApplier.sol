@@ -28,8 +28,8 @@ contract MockMigrationApplier {
     /// @param migration The migration to apply.
     /// @param prerequisites This contract in `namespace` at the head it
     /// believes it is at, then the migrations that must already be applied.
-    function applyMigration(bytes32 namespace, bytes32 migration, Prerequisite[] calldata prerequisites) external {
-        LibMigrationRegistry.applyMigration(address(this), namespace, migration, prerequisites);
+    function recordMigration(bytes32 namespace, bytes32 migration, Prerequisite[] calldata prerequisites) external {
+        LibMigrationRegistry.recordMigration(address(this), namespace, migration, prerequisites);
     }
 
     /// Applies `migration` under this contract in `namespace`, at `appliedAt`,
@@ -39,13 +39,13 @@ contract MockMigrationApplier {
     /// @param appliedAt The moment the migration was applied.
     /// @param prerequisites This contract in `namespace` at the head it
     /// believes it is at, then the migrations that must already be applied.
-    function applyMigrationHistory(
+    function recordMigrationHistory(
         bytes32 namespace,
         bytes32 migration,
         uint256 appliedAt,
         Prerequisite[] calldata prerequisites
     ) external {
-        LibMigrationRegistry.applyMigrationHistory(address(this), namespace, migration, appliedAt, prerequisites);
+        LibMigrationRegistry.recordMigrationHistory(address(this), namespace, migration, appliedAt, prerequisites);
     }
 
     /// When `writer` applied `migration` in `namespace`.

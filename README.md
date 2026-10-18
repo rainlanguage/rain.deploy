@@ -623,22 +623,25 @@ Reject on the device if any of them differs.
 ## Migration registry
 
 `MigrationRegistry` records that a migration has been applied, when, and after
-what: a writer applies one of its own, in a namespace it names, after one list —
-the migration it believes ran last in that line, then the migrations in any
-other line it waits on (`applyMigration`, or `applyMigrationHistory` for one
-that already ran), anyone reads when a given writer applied a given one in a
-given namespace (`applied`), what it applied it onto (`appliedOnto`), what it
-applied it after (`appliedAfter`), and where a given writer's line in a given
-namespace has got to (`head`). There is no removal and no upgrade. The interface
-is `IMigrationRegistryV2`; `IMigrationRegistryV1` is the same registry before
-prerequisites and namespaces, kept for the releases that shipped it.
+what: a write names its writer and a namespace, and applies one migration in
+that line after one list — the migration it believes ran last in that line, then
+the migrations in any other line it waits on (`recordMigration`, or
+`recordMigrationHistory` for one that already ran), anyone reads when a given
+writer applied a given one in a given namespace (`applied`), what it applied it
+onto (`appliedOnto`), what it applied it after (`appliedAfter`), and where a
+given writer's line in a given namespace has got to (`head`). There is no
+removal and no upgrade. The interface is `IMigrationRegistryV3`.
+`IMigrationRegistryV2` is the same registry with the writer fixed to
+`msg.sender`, and `IMigrationRegistryV1` is it before prerequisites and
+namespaces, both kept for the releases that shipped them.
 
 The two writes differ in exactly one thing: where the recorded moment comes
-from. `applyMigration` stamps the block the record lands in, for a script
+from. `recordMigration` stamps the block the record lands in, for a script
 applying its own migration in the same atomic unit as the migration itself.
-`applyMigrationHistory` takes the moment as an argument, so a migration that ran
-before the registry reached the chain is recordable with the time it actually
-ran. They write the same record, into the same line, and make the same refusals.
+`recordMigrationHistory` takes the moment as an argument, so a migration that
+ran before the registry reached the chain is recordable with the time it
+actually ran. They write the same record, into the same line, and make the same
+refusals.
 
 It exists because prod-state tests otherwise decide what to assert by reading
 the **clock**. The pattern that emerges without it is a dual-state invariant —
@@ -708,7 +711,7 @@ total order comes from `appliedOnto`, and the bound above only stops a record
 claiming to predate the one it is chained onto.
 
 Both writes get all three, `block.timestamp` included: a block whose timestamp
-is zero is `ZeroTimestamp` on `applyMigration`, which a test that warps to zero
+is zero is `ZeroTimestamp` on `recordMigration`, which a test that warps to zero
 and a chain configured from a zero genesis both reach.
 
 **A set of applied migrations, not a high-water mark.** A mark needs a total
@@ -722,26 +725,26 @@ dependency actually lives.
 **A head, so a step cannot be skipped or repeated.** A line — one writer's
 records in one namespace — has a head: the migration it applied most recently,
 or `MIGRATION_HEAD_GENESIS` if it has applied none. Both writes name the head
-they are applying onto as the first entry of their list, under the caller in the
+they are applying onto as the first entry of their list, under the writer in the
 namespace being written, so a chain that never got the predecessor fails at the
 moment of applying rather than diverging silently, and two migrations dispatched
 at once cannot land in the wrong order. An empty list, a first entry under
-anyone but the caller or in any namespace but the one being written, or one
+anyone but the writer or in any namespace but the one being written, or one
 naming anything but the head is `UnexpectedMigrationHead`. An entry after the
-first in the caller's own line is `OwnPrerequisite`: the head already says
+first in the writer's own line is `OwnPrerequisite`: the head already says
 everything about that line, so every later entry names a record in another line.
 
 ```solidity
 Prerequisite[] memory after = new Prerequisite[](1);
 // The first migration in a line, applied in this transaction.
 after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
-LibMigrationRegistry.applyMigration(NAMESPACE, MIGRATION_V1, after);
+LibMigrationRegistry.recordMigration(address(this), NAMESPACE, MIGRATION_V1, after);
 // Every later one names its predecessor.
 after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V1});
-LibMigrationRegistry.applyMigration(NAMESPACE, MIGRATION_V2, after);
+LibMigrationRegistry.recordMigration(address(this), NAMESPACE, MIGRATION_V2, after);
 // One that ran before the registry reached this chain names the moment it ran.
 after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
-LibMigrationRegistry.applyMigrationHistory(NAMESPACE, MIGRATION_V3, 1750000000, after);
+LibMigrationRegistry.recordMigrationHistory(address(this), NAMESPACE, MIGRATION_V3, 1750000000, after);
 ```
 
 Each record keeps that first entry, which `appliedOnto` reads back, so a line is
@@ -774,7 +777,7 @@ and the same key keeps one line per repo. A namespace is an opaque `bytes32` the
 repo declares beside its migration ids, one named constant per repo; the
 registry refuses only zero (`ZeroNamespace`), on every write and every read, for
 the same reason it refuses the zero writer. There is no plain line outside the
-namespaces: every write names one, and the caller's other namespaces are other
+namespaces: every write names one, and the writer's other namespaces are other
 lines, which a write may wait on exactly as it waits on another writer's.
 
 **A migration may wait on migrations in other lines.** Every entry after the
@@ -793,7 +796,7 @@ and the head still orders its own line exactly as before.
 Prerequisite[] memory after = new Prerequisite[](2);
 after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
 after[1] = Prerequisite({writer: FLEET_SAFE, namespace: FLEET_NAMESPACE, migration: FLEET_UPGRADE});
-LibMigrationRegistry.applyMigration(NAMESPACE, MIGRATION_V3, after);
+LibMigrationRegistry.recordMigration(address(this), NAMESPACE, MIGRATION_V3, after);
 ```
 
 The list is the record, and `appliedAfter` reads it back exactly as the write
@@ -811,18 +814,24 @@ earlier moment than its prerequisite, because what is checked is that the record
 existed when this write landed, which is chain order, and the moments in another
 line are that writer's data.
 
-The refusals sit in this order: the caller's own arguments first
-(`ZeroNamespace`, `ZeroMigration`, `GenesisMigration`, `ZeroTimestamp`); then
-the list in the order it is written — `UnexpectedMigrationHead` over the first
-entry, then every entry after it as a record key in another line (`ZeroWriter`,
-`ZeroNamespace`, `ZeroMigration`, `GenesisMigration` exactly as `applied`
-refuses them, then `OwnPrerequisite`) before any is read, then
-`PrerequisiteNotApplied` for the first unapplied one; then the caller's own
-record (`MigrationAlreadyApplied`, `TimestampBeforeHead`, `FutureTimestamp`).
-Duplicates are ordinary index checks.
+The refusals sit in this order: the caller first (`ZeroWriter`, `NotApproved`);
+then its arguments (`ZeroNamespace`, `ZeroMigration`, `GenesisMigration`,
+`ZeroTimestamp`); then the list in the order it is written —
+`UnexpectedMigrationHead` over the first entry, then every entry after it as a
+record key in another line (`ZeroWriter`, `ZeroNamespace`, `ZeroMigration`,
+`GenesisMigration` exactly as `applied` refuses them, then `OwnPrerequisite`)
+before any is read, then `PrerequisiteNotApplied` for the first unapplied one;
+then the writer's own record (`MigrationAlreadyApplied`, `TimestampBeforeHead`,
+`FutureTimestamp`). Duplicates are ordinary index checks.
 
-**The writer is `msg.sender`, and that is the whole access control.** Anyone may
-write, but only under themselves, so a reader asking about the lines of an
+**The writer decides who writes its lines, and that is the whole access
+control.** A write names its writer, and the registry refuses it with
+`NotApproved` unless the caller is that writer or an account the writer approved
+for that namespace (`approve`, `revoke`, `approved`). An approval names one
+namespace under the approving writer and nothing else, so a Safe and a timelock
+can both write one line without either owning it, and moving a role between them
+never moves where its records go. Anyone may write, but only into their own
+lines or ones they were approved for, so a reader asking about the lines of an
 authority it already trusts is reading something only that authority could have
 written; every other writer's lines hold unforgeable claims nobody asks about. A
 namespace is not an authority: it is the writer's to name, and a record in it is
@@ -839,12 +848,13 @@ Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
 `LibMigrationRegistry` is the surface — `applied`, `appliedOnto`,
-`appliedAfter`, `head`, `applyMigration` and `applyMigrationHistory`, each
-verifying the registry's code hash before it reads or writes. There is
-deliberately **no broadcast runner**: the dominant real shape is a Safe
-executing a bundle that never broadcasts, and such a script appends
-`applyMigration` to the bundle it is already emitting, which makes the record
-atomic with the migration it describes.
+`appliedAfter`, `head`, `approved`, `recordMigration` and
+`recordMigrationHistory`, plus the `*Call` builders for a bundle, each verifying
+the registry's code hash before it reads or writes. There is deliberately **no
+broadcast runner**: the dominant real shape is a Safe executing a bundle that
+never broadcasts, and such a script appends `recordMigration` to the bundle it
+is already emitting, which makes the record atomic with the migration it
+describes.
 
 ## Deploying, and then releasing
 

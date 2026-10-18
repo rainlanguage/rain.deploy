@@ -98,7 +98,7 @@ contract LibMigrationRegistryTest is Test {
         return LibMigrationRegistry.head(writer, namespace);
     }
 
-    /// External wrapper for `applyMigration` so that `vm.expectRevert` works at
+    /// External wrapper for `recordMigration` so that `vm.expectRevert` works at
     /// the correct call depth.
     /// @param namespace The line to apply in.
     /// @param migration The migration to apply.
@@ -107,10 +107,10 @@ contract LibMigrationRegistryTest is Test {
     function externalApplyMigration(bytes32 namespace, bytes32 migration, Prerequisite[] memory prerequisites)
         external
     {
-        LibMigrationRegistry.applyMigration(address(this), namespace, migration, prerequisites);
+        LibMigrationRegistry.recordMigration(address(this), namespace, migration, prerequisites);
     }
 
-    /// External wrapper for `applyMigrationHistory` so that `vm.expectRevert`
+    /// External wrapper for `recordMigrationHistory` so that `vm.expectRevert`
     /// works at the correct call depth.
     /// @param namespace The line to apply in.
     /// @param migration The migration to apply.
@@ -123,7 +123,7 @@ contract LibMigrationRegistryTest is Test {
         uint256 appliedAt,
         Prerequisite[] memory prerequisites
     ) external {
-        LibMigrationRegistry.applyMigrationHistory(address(this), namespace, migration, appliedAt, prerequisites);
+        LibMigrationRegistry.recordMigrationHistory(address(this), namespace, migration, appliedAt, prerequisites);
     }
 
     /// One entry, as a list. As the whole list it is a writer at its head in
@@ -185,7 +185,7 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// An applied migration answers the moment it was applied — read back
-    /// through the library, so what `applyMigration` writes is what `applied`
+    /// through the library, so what `recordMigration` writes is what `applied`
     /// finds. The head alone is a migration that waits on nothing else, and
     /// reads back as given. The moment is a whole `uint256` timestamp, so a chain
     /// whose clock is past any narrower bound reads back exactly what it
@@ -197,7 +197,7 @@ contract LibMigrationRegistryTest is Test {
         deployRegistry();
         vm.warp(appliedAt);
 
-        LibMigrationRegistry.applyMigration(
+        LibMigrationRegistry.recordMigration(
             address(this), namespace, migration, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
         );
 
@@ -220,12 +220,12 @@ contract LibMigrationRegistryTest is Test {
 
         assertEq(LibMigrationRegistry.head(address(this), namespace), MIGRATION_HEAD_GENESIS);
 
-        LibMigrationRegistry.applyMigration(
+        LibMigrationRegistry.recordMigration(
             address(this), namespace, migrationA, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
         );
         assertEq(LibMigrationRegistry.head(address(this), namespace), migrationA);
 
-        LibMigrationRegistry.applyMigration(
+        LibMigrationRegistry.recordMigration(
             address(this), namespace, migrationB, one(address(this), namespace, migrationA)
         );
         assertEq(LibMigrationRegistry.head(address(this), namespace), migrationB);
@@ -244,19 +244,19 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(migrationA != migrationB);
         deployRegistry();
 
-        LibMigrationRegistry.applyMigration(
+        LibMigrationRegistry.recordMigration(
             address(this), namespace, migrationA, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
         );
         assertEq(LibMigrationRegistry.head(address(this), namespace), migrationA);
         assertEq(LibMigrationRegistry.head(address(this), otherNamespace), MIGRATION_HEAD_GENESIS);
 
-        LibMigrationRegistry.applyMigration(
+        LibMigrationRegistry.recordMigration(
             address(this), otherNamespace, migrationB, one(address(this), otherNamespace, MIGRATION_HEAD_GENESIS)
         );
         assertEq(LibMigrationRegistry.head(address(this), namespace), migrationA);
         assertEq(LibMigrationRegistry.head(address(this), otherNamespace), migrationB);
 
-        LibMigrationRegistry.applyMigration(
+        LibMigrationRegistry.recordMigration(
             address(this), namespace, migrationB, one(address(this), namespace, migrationA)
         );
         assertEq(LibMigrationRegistry.head(address(this), namespace), migrationB);
@@ -359,9 +359,9 @@ contract LibMigrationRegistryTest is Test {
         deployRegistry();
         MockMigrationApplier upstream = new MockMigrationApplier();
         MockMigrationApplier applier = new MockMigrationApplier();
-        upstream.applyMigration(namespace, prerequisite, one(address(upstream), namespace, MIGRATION_HEAD_GENESIS));
+        upstream.recordMigration(namespace, prerequisite, one(address(upstream), namespace, MIGRATION_HEAD_GENESIS));
 
-        applier.applyMigration(
+        applier.recordMigration(
             namespace,
             migration,
             headThen(
@@ -387,7 +387,7 @@ contract LibMigrationRegistryTest is Test {
         MockMigrationApplier applier = new MockMigrationApplier();
         MockMigrationApplier other = new MockMigrationApplier();
 
-        applier.applyMigration(namespace, migration, one(address(applier), namespace, MIGRATION_HEAD_GENESIS));
+        applier.recordMigration(namespace, migration, one(address(applier), namespace, MIGRATION_HEAD_GENESIS));
 
         assertEq(other.applied(address(applier), namespace, migration), block.timestamp);
         assertEq(other.applied(address(other), namespace, migration), 0);
@@ -404,7 +404,7 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        LibMigrationRegistry.applyMigration(
+        LibMigrationRegistry.recordMigration(
             address(this), namespace, migration, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
         );
 
@@ -417,7 +417,7 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// The registry's zero-id refusal arrives unmodified through
-    /// `applyMigration`.
+    /// `recordMigration`.
     function testApplyMigrationZeroMigrationReverts(bytes32 namespace) external {
         vm.assume(namespace != bytes32(0));
         deployRegistry();
@@ -427,7 +427,7 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// The registry's genesis-id refusal arrives unmodified through
-    /// `applyMigration`.
+    /// `recordMigration`.
     function testApplyMigrationGenesisMigrationReverts(bytes32 namespace) external {
         vm.assume(namespace != bytes32(0));
         deployRegistry();
@@ -439,7 +439,7 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// The registry's zero-namespace refusal arrives unmodified through
-    /// `applyMigration`, and nothing is recorded in any line.
+    /// `recordMigration`, and nothing is recorded in any line.
     function testApplyMigrationZeroNamespaceReverts(bytes32 namespace, bytes32 migration) external {
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
@@ -456,7 +456,7 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// The registry's zero-namespace refusal arrives unmodified through
-    /// `applyMigrationHistory`, and nothing is recorded in any line.
+    /// `recordMigrationHistory`, and nothing is recorded in any line.
     function testApplyMigrationHistoryZeroNamespaceReverts(bytes32 namespace, bytes32 migration, uint32 appliedAt)
         external
     {
@@ -480,7 +480,7 @@ contract LibMigrationRegistryTest is Test {
         assertEq(LibMigrationRegistry.head(address(this), namespace), MIGRATION_HEAD_GENESIS);
     }
 
-    /// `applyMigration` through the library lands the record once its
+    /// `recordMigration` through the library lands the record once its
     /// prerequisite is applied, `applied` reads it back as the block the write
     /// landed in, and `appliedAfter` reads the list back as given.
     function testApplyMigrationWithPrerequisiteThenApplied(
@@ -499,11 +499,11 @@ contract LibMigrationRegistryTest is Test {
         vm.warp(now_);
         IMigrationRegistryV3 registry = deployRegistry();
         vm.prank(other);
-        registry.applyMigration(other, namespace, prerequisite, one(other, namespace, MIGRATION_HEAD_GENESIS));
+        registry.recordMigration(other, namespace, prerequisite, one(other, namespace, MIGRATION_HEAD_GENESIS));
 
         Prerequisite[] memory list =
             headThen(address(this), namespace, MIGRATION_HEAD_GENESIS, one(other, namespace, prerequisite));
-        LibMigrationRegistry.applyMigration(address(this), namespace, migration, list);
+        LibMigrationRegistry.recordMigration(address(this), namespace, migration, list);
 
         assertEq(LibMigrationRegistry.applied(address(this), namespace, migration), now_);
         assertEq(LibMigrationRegistry.appliedOnto(address(this), namespace, migration), MIGRATION_HEAD_GENESIS);
@@ -538,10 +538,10 @@ contract LibMigrationRegistryTest is Test {
         this.externalApplyMigration(namespace, migrationB, list);
         assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationB), 0);
 
-        LibMigrationRegistry.applyMigration(
+        LibMigrationRegistry.recordMigration(
             address(this), otherNamespace, migrationA, one(address(this), otherNamespace, MIGRATION_HEAD_GENESIS)
         );
-        LibMigrationRegistry.applyMigration(address(this), namespace, migrationB, list);
+        LibMigrationRegistry.recordMigration(address(this), namespace, migrationB, list);
 
         assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationB), block.timestamp);
         assertEq(LibMigrationRegistry.head(address(this), namespace), migrationB);
@@ -775,7 +775,7 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// Writing to a chain with no registry is refused by the code hash rather
-    /// than by solc's own existence check, which an `applyMigration` into an
+    /// than by solc's own existence check, which an `recordMigration` into an
     /// empty account hits regardless — no return data is expected, so the
     /// callee is checked to exist and the write reverts unnamed. A migration
     /// that reports itself applied and is not is what a write into occupying
@@ -953,7 +953,7 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// A migration recorded with a supplied moment reads back as that moment
-    /// through the library, so what `applyMigrationHistory` writes is what
+    /// through the library, so what `recordMigrationHistory` writes is what
     /// `applied` finds — and it is not the block the write landed in.
     function testApplyMigrationHistoryThenApplied(
         bytes32 namespace,
@@ -968,7 +968,7 @@ contract LibMigrationRegistryTest is Test {
         deployRegistry();
         vm.warp(writtenAt);
 
-        LibMigrationRegistry.applyMigrationHistory(
+        LibMigrationRegistry.recordMigrationHistory(
             address(this), namespace, migration, appliedAt, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
         );
 
@@ -979,7 +979,7 @@ contract LibMigrationRegistryTest is Test {
         );
     }
 
-    /// `applyMigrationHistory` through the library records the supplied moment
+    /// `recordMigrationHistory` through the library records the supplied moment
     /// once its prerequisite is applied, and reads the list back as given.
     function testApplyMigrationHistoryWithPrerequisiteThenApplied(
         address other,
@@ -999,11 +999,11 @@ contract LibMigrationRegistryTest is Test {
         vm.warp(now_);
         IMigrationRegistryV3 registry = deployRegistry();
         vm.prank(other);
-        registry.applyMigration(other, namespace, prerequisite, one(other, namespace, MIGRATION_HEAD_GENESIS));
+        registry.recordMigration(other, namespace, prerequisite, one(other, namespace, MIGRATION_HEAD_GENESIS));
 
         Prerequisite[] memory list =
             headThen(address(this), namespace, MIGRATION_HEAD_GENESIS, one(other, namespace, prerequisite));
-        LibMigrationRegistry.applyMigrationHistory(address(this), namespace, migration, appliedAt, list);
+        LibMigrationRegistry.recordMigrationHistory(address(this), namespace, migration, appliedAt, list);
 
         assertEq(LibMigrationRegistry.applied(address(this), namespace, migration), appliedAt);
         assertEq(LibMigrationRegistry.head(address(this), namespace), migration);
@@ -1031,13 +1031,13 @@ contract LibMigrationRegistryTest is Test {
         deployRegistry();
         vm.warp(9000);
 
-        LibMigrationRegistry.applyMigrationHistory(
+        LibMigrationRegistry.recordMigrationHistory(
             address(this), namespace, migrationA, 1000, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
         );
-        LibMigrationRegistry.applyMigrationHistory(
+        LibMigrationRegistry.recordMigrationHistory(
             address(this), namespace, migrationB, 2000, one(address(this), namespace, migrationA)
         );
-        LibMigrationRegistry.applyMigrationHistory(
+        LibMigrationRegistry.recordMigrationHistory(
             address(this), namespace, migrationC, 3000, one(address(this), namespace, migrationB)
         );
 
@@ -1056,7 +1056,7 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// The registry's zero-moment refusal arrives unmodified through
-    /// `applyMigrationHistory`, so a consumer that left its `appliedAt`
+    /// `recordMigrationHistory`, so a consumer that left its `appliedAt`
     /// uninitialised is told so rather than writing a record that reads back as
     /// none.
     function testApplyMigrationHistoryZeroTimestampReverts(bytes32 namespace, bytes32 migration) external {
@@ -1071,7 +1071,7 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// The registry's future-moment refusal arrives unmodified through
-    /// `applyMigrationHistory`.
+    /// `recordMigrationHistory`.
     function testApplyMigrationHistoryFutureTimestampReverts(bytes32 namespace, bytes32 migration, uint32 now_)
         external
     {
@@ -1089,7 +1089,7 @@ contract LibMigrationRegistryTest is Test {
     }
 
     /// The registry's before-the-head refusal arrives unmodified through
-    /// `applyMigrationHistory`, so a consumer backfilling its history out of
+    /// `recordMigrationHistory`, so a consumer backfilling its history out of
     /// order is told which moment it contradicted.
     function testApplyMigrationHistoryTimestampBeforeHeadReverts(
         bytes32 namespace,
@@ -1103,7 +1103,7 @@ contract LibMigrationRegistryTest is Test {
         deployRegistry();
         vm.warp(9000);
 
-        LibMigrationRegistry.applyMigrationHistory(
+        LibMigrationRegistry.recordMigrationHistory(
             address(this), namespace, migrationA, 2000, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
         );
 
@@ -1111,7 +1111,7 @@ contract LibMigrationRegistryTest is Test {
         this.externalApplyMigrationHistory(namespace, migrationB, 1999, one(address(this), namespace, migrationA));
     }
 
-    /// The writer of `applyMigrationHistory` is the calling CONTRACT too, so
+    /// The writer of `recordMigrationHistory` is the calling CONTRACT too, so
     /// a consumer backfilling its history writes its own line and nobody
     /// else's, and the prerequisite is read from the line it names.
     function testApplyMigrationHistoryLandsUnderTheCallingContract(
@@ -1132,12 +1132,12 @@ contract LibMigrationRegistryTest is Test {
         vm.warp(appliedAt);
         MockMigrationApplier upstream = new MockMigrationApplier();
         MockMigrationApplier applier = new MockMigrationApplier();
-        upstream.applyMigration(namespace, prerequisite, one(address(upstream), namespace, MIGRATION_HEAD_GENESIS));
+        upstream.recordMigration(namespace, prerequisite, one(address(upstream), namespace, MIGRATION_HEAD_GENESIS));
 
         Prerequisite[] memory prerequisites = headThen(
             address(applier), namespace, MIGRATION_HEAD_GENESIS, one(address(upstream), namespace, prerequisite)
         );
-        applier.applyMigrationHistory(namespace, migration, appliedAt, prerequisites);
+        applier.recordMigrationHistory(namespace, migration, appliedAt, prerequisites);
 
         assertEq(LibMigrationRegistry.applied(address(applier), namespace, migration), appliedAt);
         assertEq(LibMigrationRegistry.appliedOnto(address(applier), namespace, migration), MIGRATION_HEAD_GENESIS);
@@ -1367,7 +1367,7 @@ contract LibMigrationRegistryTest is Test {
         this.externalAppliedAfter(writer, namespace, migration);
     }
 
-    /// `applyMigrationHistory` checks the code hash too, so a backfill is never
+    /// `recordMigrationHistory` checks the code hash too, so a backfill is never
     /// written to a chain with no registry.
     function testApplyMigrationHistoryNoRegistry(
         bytes32 namespace,
@@ -1501,15 +1501,15 @@ contract LibMigrationRegistryTest is Test {
             }
             bytes32 head = registry.head(writer, seedNamespace);
             vm.prank(writer);
-            registry.applyMigration(writer, seedNamespace, migration, one(writer, seedNamespace, head));
+            registry.recordMigration(writer, seedNamespace, migration, one(writer, seedNamespace, head));
         }
 
         Prerequisite[] memory listA = headThen(address(this), namespace, MIGRATION_HEAD_GENESIS, prerequisites);
-        LibMigrationRegistry.applyMigration(address(this), namespace, migrationA, listA);
+        LibMigrationRegistry.recordMigration(address(this), namespace, migrationA, listA);
         assertEq(abi.encode(LibMigrationRegistry.appliedAfter(address(this), namespace, migrationA)), abi.encode(listA));
 
         Prerequisite[] memory listB = headThen(address(this), namespace, migrationA, prerequisites);
-        LibMigrationRegistry.applyMigrationHistory(address(this), namespace, migrationB, block.timestamp, listB);
+        LibMigrationRegistry.recordMigrationHistory(address(this), namespace, migrationB, block.timestamp, listB);
         assertEq(abi.encode(LibMigrationRegistry.appliedAfter(address(this), namespace, migrationB)), abi.encode(listB));
     }
 
@@ -1544,7 +1544,7 @@ contract LibMigrationRegistryTest is Test {
         vm.warp(appliedAt);
 
         Prerequisite[] memory listA = LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS);
-        LibMigrationRegistry.applyMigration(address(this), namespace, migrationA, listA);
+        LibMigrationRegistry.recordMigration(address(this), namespace, migrationA, listA);
 
         assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationA), appliedAt);
         assertEq(LibMigrationRegistry.head(address(this), namespace), migrationA);
@@ -1552,7 +1552,7 @@ contract LibMigrationRegistryTest is Test {
         assertEq(abi.encode(LibMigrationRegistry.appliedAfter(address(this), namespace, migrationA)), abi.encode(listA));
 
         Prerequisite[] memory listB = LibMigrationRegistry.onto(address(this), namespace, migrationA);
-        LibMigrationRegistry.applyMigrationHistory(address(this), namespace, migrationB, appliedAt, listB);
+        LibMigrationRegistry.recordMigrationHistory(address(this), namespace, migrationB, appliedAt, listB);
 
         assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationB), appliedAt);
         assertEq(LibMigrationRegistry.head(address(this), namespace), migrationB);
@@ -1570,7 +1570,7 @@ contract LibMigrationRegistryTest is Test {
         vm.assume(migrationA != migrationB);
         deployRegistry();
 
-        LibMigrationRegistry.applyMigration(
+        LibMigrationRegistry.recordMigration(
             address(this),
             namespace,
             migrationA,
