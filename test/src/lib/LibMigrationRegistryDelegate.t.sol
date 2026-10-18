@@ -19,6 +19,7 @@ contract LibMigrationRegistryDelegateTest is Test {
     address internal constant DELEGATE = address(0x2222);
     bytes32 internal constant NAMESPACE = keccak256("namespace");
     bytes32 internal constant MIGRATION = keccak256("migration");
+    bytes32 internal constant SECOND = keccak256("second");
 
     function deployRegistry() internal {
         LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode);
@@ -105,6 +106,26 @@ contract LibMigrationRegistryDelegateTest is Test {
         );
         send(DELEGATE, to, data);
         assertEq(LibMigrationRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), appliedAt);
+    }
+
+    /// The direct writes, made from a contract the writer approved, land in
+    /// the writer's line and not the contract's.
+    function testDirectWritesLandUnderTheNamedWriter() external {
+        vm.warp(1_000_000);
+        deployRegistry();
+        vm.prank(WRITER);
+        IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .approveV3(NAMESPACE, address(this));
+
+        LibMigrationRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, genesis());
+        assertEq(LibMigrationRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), block.timestamp);
+
+        Prerequisite[] memory ontoMigration = new Prerequisite[](1);
+        ontoMigration[0] = Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: MIGRATION});
+        LibMigrationRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, SECOND, block.timestamp, ontoMigration);
+        assertEq(LibMigrationRegistry.appliedV3(WRITER, NAMESPACE, SECOND), block.timestamp);
+        assertEq(LibMigrationRegistry.headV3(WRITER, NAMESPACE), SECOND);
+        assertEq(LibMigrationRegistry.headV3(address(this), NAMESPACE), MIGRATION_HEAD_GENESIS);
     }
 
     /// The approval builders and the read refuse a chain with no registry.

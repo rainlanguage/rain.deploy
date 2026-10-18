@@ -163,6 +163,20 @@ contract MigrationRegistryDelegateTest is Test {
         vm.stopPrank();
     }
 
+    /// The caller is refused before anything it passed is read: an unapproved
+    /// caller with a zero migration, a zero moment and no head is
+    /// `NotApproved`, not any argument refusal.
+    function testUnapprovedCallerIsRefusedBeforeItsArguments(address caller) external {
+        vm.assume(caller != WRITER);
+        Prerequisite[] memory none = new Prerequisite[](0);
+        vm.startPrank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, caller));
+        sRegistry.applyMigrationV3(WRITER, NAMESPACE, bytes32(0), none);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, caller));
+        sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, bytes32(0), 0, none);
+        vm.stopPrank();
+    }
+
     /// An approval for one namespace writes no other.
     function testApprovalWritesNoOtherNamespace(bytes32 otherNamespace) external {
         vm.assume(otherNamespace != NAMESPACE && otherNamespace != bytes32(0));
