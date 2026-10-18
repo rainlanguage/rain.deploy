@@ -37,9 +37,9 @@ Approach:
 - Bytecode integrity checks post-deploy: `codehash` is compared against the
   recorded pin on every network by `RainDeployVerifyChain`, and before every
   registry access by `LibAddressRegistry` and `LibMigrationRegistry`.
-- An address registry, read at run time rather than compiled into creation code,
-  and a post-deploy check that every target network's deployment took the
-  address it was supposed to.
+- An address registry binding names to ABI-encoded values, read at run time
+  rather than compiled into creation code, and a post-deploy check that every
+  target network's deployment took the address it was supposed to.
 - A migration registry, so operational scripts record what they applied and when
   it ran, each onto the head it is applying to, and tests assert the state that
   implies rather than branching on a deadline.
@@ -473,18 +473,21 @@ wrong explorer.
 
 ## Address registry
 
-`AddressRegistry` binds an opaque `bytes32` name to an address. An immutable
-root authority binds a name, anyone reads a bound name, and reading an unbound
-name reverts rather than answering with the zero address. There is no removal,
-no upgrade and no authority besides root.
+`AddressRegistry` binds an opaque `bytes32` name to ABI-encoded `bytes`: an
+address, a role id, a threshold, a list of accounts, anything a deployment would
+otherwise compile in. An immutable root authority binds a name, anyone reads a
+bound name, and reading an unbound name reverts rather than answering empty. The
+interface is `IAddressRegistryV2`; `IAddressRegistryV1` is the address-only
+registry, kept for the releases that shipped it. There is no removal, no upgrade
+and no authority besides root.
 
 `ADDRESS_REGISTRY_ROOT` in `src/concrete/AddressRegistry.sol` is the one place
 root lives. It is welded into the creation code, so rotating it moves the deploy
 address, the code hash and the snapshot with it.
 
-Bindings are **mutable**, because the addresses they name are. Rotating an
+Bindings are **mutable**, because the configuration they name is. Rotating an
 owning multisig is ordinary business and has to be expressible without moving
-anybody's deterministic address — which a binding welded to one address forever
+anybody's deterministic address — which a binding welded to one value forever
 would make impossible, because the name is in the consumer's creation code, so a
 new name means new creation code and a new address. That is the problem the
 registry exists to remove, not a property worth keeping.
@@ -497,8 +500,9 @@ live contracts.
 
 `LibAddressRegistry.resolve` is the read, verifying the registry's code hash
 first, the same way `LibRainDeploy` verifies the Zoltu factory's. It resolves a
-name to an address and stops there — what a consumer does with the address, and
-when, is the consumer's business.
+name to the bound bytes and never decodes them: only the consumer knows the type
+it expects, so the consumer decodes, as `abi.decode(value, (address))` for an
+address. What it does with the value, and when, is the consumer's business.
 
 `LibRainDeploy` carries the **post-deploy** verification: on every target
 network, the deployed contract must hold the address the deployment expected. It
@@ -546,7 +550,7 @@ is a near miss of a real name that no consumer resolves.
 
 It binds on every network the registry is deployed to, by default — one binding
 everywhere, as the deployment is the same everywhere — and a network already
-bound to the same account is skipped, so a run that stopped partway is fixed by
+bound to the same value is skipped, so a run that stopped partway is fixed by
 running it again.
 
 ### Before the first run
@@ -573,7 +577,8 @@ running it again.
 
 ```sh
 export ADDRESS_REGISTRY_NAME=st0x.token-owner-safe
-export ADDRESS_REGISTRY_ACCOUNT=0x...
+# The value, as 0x hex of its ABI encoding. For an address:
+export ADDRESS_REGISTRY_VALUE=$(nix develop -c cast abi-encode "f(address)" 0x...)
 # Optional, to bind on fewer networks than all of them:
 # export ADDRESS_REGISTRY_NETWORKS=base,arbitrum
 
@@ -588,7 +593,7 @@ nix develop -c forge script script/RegisterAddress.sol:RegisterAddress \
   --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --ledger --legacy --broadcast
 
 # 3. Once every transaction is mined: reads every network fresh and fails
-#    unless the name resolves to the account on each.
+#    unless the name resolves to the value on each.
 nix develop -c forge script script/RegisterAddress.sol:RegisterAddress --sig "verify()"
 ```
 
@@ -597,14 +602,14 @@ estimation asks for. No `--rpc-url`: the script forks each network's alias
 itself.
 
 Before anything is signed the run refuses, with an error naming what is wrong: a
-non-canonical name, the zero account, a network the repo does not support or one
+non-canonical name, an empty value, a network the repo does not support or one
 named twice, a sender other than root, a network whose endpoint reports another
 chain id than the catalogue states for it, and a registry address that does not
 hold the pinned registry code. A refused run signs nothing.
 
-The dry run prints the name, its hash, the account, the registry address and the
+The dry run prints the name, its hash, the value, the registry address and the
 exact calldata, then for each network its chain id, the current binding
-(`unbound`, or the account and the moment it was bound) and what will happen:
+(`unbound`, or the value and the moment it was bound) and what will happen:
 `BIND`, `REBIND` (old → new) or `SKIP`. That is the record to approve against.
 For each transaction the device shows:
 
@@ -613,10 +618,10 @@ For each transaction the device shows:
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
-- with **Debug data** on, the selector `0xd22057a9`
-  (`register(bytes32,address)`) and its two arguments: the name hash, and the
-  account left-padded to 32 bytes — together exactly the calldata the dry run
-  printed.
+- with **Debug data** on, the selector `0x2a28e5a3` (`register(bytes32,bytes)`)
+  and its arguments: the name hash, the offset `0x40`, the value's length, and
+  the value padded to a multiple of 32 bytes — together exactly the calldata the
+  dry run printed.
 
 Reject on the device if any of them differs.
 

@@ -49,7 +49,7 @@ contract LibAddressRegistryRegisterOnForksTest is Test {
     }
 
     /// A fresh name, its hash, and a fresh address value.
-    function fresh() internal returns (string memory, bytes32, bytes memory) {
+    function fresh() internal view returns (string memory, bytes32, bytes memory) {
         string memory name = string.concat("rain.deploy.register-test.", vm.toString(vm.randomUint()));
         return (name, keccak256(bytes(name)), abi.encode(vm.randomAddress()));
     }
@@ -160,7 +160,8 @@ contract LibAddressRegistryRegisterOnForksTest is Test {
             abi.encodeWithSelector(LibAddressRegistryRegister.UnexpectedChainId.selector, "base", 8453, 42161)
         );
         this.externalCheckRegisteredOnForks(networks, swapped, name, value);
-        (bytes memory bound,) = IAddressRegistryV2(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(hashed);
+        (bytes memory bound,) =
+            IAddressRegistryV2(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(hashed);
         assertEq(bound, value);
     }
 }

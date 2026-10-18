@@ -59,10 +59,7 @@ contract AddressRegistryGetTest is Test {
     function testGetReturnsEveryLength() external {
         uint256[7] memory lengths = [uint256(1), 30, 31, 32, 33, 64, 65];
         for (uint256 i = 0; i < lengths.length; i++) {
-            bytes memory value = new bytes(lengths[i]);
-            for (uint256 j = 0; j < value.length; j++) {
-                value[j] = bytes1(uint8(j + 1));
-            }
+            bytes memory value = vm.randomBytes(lengths[i]);
             bytes32 name = bytes32(i);
             vm.prank(ADDRESS_REGISTRY_ROOT);
             sRegistry.register(name, value);
@@ -183,9 +180,7 @@ contract AddressRegistryGetTest is Test {
 
     /// The moment does not drift as the chain advances: it reads back unchanged
     /// however long afterwards, so an age against `block.timestamp` grows.
-    function testGetMomentStableAsTimePasses(bytes32 name, bytes memory value, uint256 time, uint256 elapsed)
-        external
-    {
+    function testGetMomentStableAsTimePasses(bytes32 name, bytes memory value, uint256 time, uint256 elapsed) external {
         vm.assume(value.length > 0);
         elapsed = bound(elapsed, 0, type(uint256).max - 1);
         time = bound(time, 1, type(uint256).max - elapsed);

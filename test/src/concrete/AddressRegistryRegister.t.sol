@@ -348,7 +348,9 @@ contract AddressRegistryRegisterTest is Test {
         sRegistry.register(name, bound_);
 
         vm.warp(second);
-        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV2.TimestampNotAfterBinding.selector, name, second, first));
+        vm.expectRevert(
+            abi.encodeWithSelector(IAddressRegistryV2.TimestampNotAfterBinding.selector, name, second, first)
+        );
         vm.prank(ADDRESS_REGISTRY_ROOT);
         sRegistry.register(name, value);
 

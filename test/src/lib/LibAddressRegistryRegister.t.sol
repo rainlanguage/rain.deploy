@@ -262,7 +262,9 @@ contract LibAddressRegistryRegisterTest is Test {
     function testCheckRegisteredOnForksRefusesUnpairedForks() external {
         string[] memory declared = LibRainDeploy.supportedNetworks();
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, 2, 1));
-        this.externalCheckRegisteredOnForks(list("base", "arbitrum"), declared, new uint256[](1), "a.b", abi.encode(address(1)));
+        this.externalCheckRegisteredOnForks(
+            list("base", "arbitrum"), declared, new uint256[](1), "a.b", abi.encode(address(1))
+        );
 
         vm.expectRevert(abi.encodeWithSelector(LibAddressRegistryRegister.NonCanonicalName.selector, "A"));
         this.externalCheckRegisteredOnForks(list("base"), declared, new uint256[](1), "A", abi.encode(address(1)));
@@ -363,8 +365,9 @@ contract LibAddressRegistryRegisterTest is Test {
         bytes32 name = keccak256("a.b");
         IAddressRegistryV2 registry = deployRegistry();
         bytes memory previous = abi.encode(uint256(1), uint256(2));
-        bytes[3] memory nearMisses =
-            [abi.encode(uint256(1), uint256(3)), abi.encode(uint256(1)), abi.encode(uint256(1), uint256(2), uint256(0))];
+        bytes[3] memory nearMisses = [
+            abi.encode(uint256(1), uint256(3)), abi.encode(uint256(1)), abi.encode(uint256(1), uint256(2), uint256(0))
+        ];
         for (uint256 i = 0; i < nearMisses.length; i++) {
             vm.warp(2 * i + 1);
             vm.prank(ADDRESS_REGISTRY_ROOT);
@@ -492,7 +495,7 @@ contract LibAddressRegistryRegisterTest is Test {
                 "Name hash (keccak256 of the name): 0xba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8\n",
                 "Value: 0x000000000000000000000000000000000000000000000000000000000000dead\n",
                 "Sender (root): 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c\n",
-                "Registry: REGISTRY_ADDRESS_PLACEHOLDER\n",
+                "Registry: 0xBcd5d458a5ED06d3541E50fEb19ca4A0b8C17A42\n",
                 "Calldata: 0x2a28e5a3ba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
                 "0000000000000000000000000000000000000000000000000000000000000040",
                 "0000000000000000000000000000000000000000000000000000000000000020",
@@ -535,7 +538,9 @@ contract LibAddressRegistryRegisterTest is Test {
         assertEq(
             LibAddressRegistryRegister.describeNetwork(vm, "flare", 14, hex"dead", 7, hex"dead"),
             string.concat(
-                "Network: flare\n  chain id: 14\n", "  current: 0xdead (bound at 7)\n", "  SKIP: already bound to 0xdead"
+                "Network: flare\n  chain id: 14\n",
+                "  current: 0xdead (bound at 7)\n",
+                "  SKIP: already bound to 0xdead"
             )
         );
     }
