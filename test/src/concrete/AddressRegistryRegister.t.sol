@@ -145,6 +145,41 @@ contract AddressRegistryRegisterTest is Test {
         getValue(sRegistry, name);
     }
 
+    /// The empty tuple is the only ABI encoding that is empty, so it is the
+    /// only one refused.
+    function testRegisterEmptyTupleIsTheEmptyValue(bytes32 name) external {
+        assertEq(abi.encode().length, 0);
+        vm.expectRevert(abi.encodeWithSelector(IAddressRegistryV2.EmptyValue.selector, name));
+        vm.prank(ADDRESS_REGISTRY_ROOT);
+        sRegistry.register(name, abi.encode());
+    }
+
+    /// The zero value of every kind of type Solidity can encode is at least one
+    /// word, so it binds and reads back exactly: a static zero, a zero in a
+    /// fixed array or struct-shaped tuple, and an empty dynamic value. Solidity
+    /// has no empty struct and no zero-length fixed array to encode.
+    function testRegisterZeroValuesOfEveryKindBind(bytes32 name) external {
+        bytes[] memory values = new bytes[](11);
+        values[0] = abi.encode(false);
+        values[1] = abi.encode(address(0));
+        values[2] = abi.encode(uint8(0));
+        values[3] = abi.encode(int256(0));
+        values[4] = abi.encode(bytes1(0));
+        values[5] = abi.encode(bytes32(0));
+        values[6] = abi.encode([uint256(0)]);
+        values[7] = abi.encode(uint256(0), address(0));
+        values[8] = abi.encode("");
+        values[9] = abi.encode(bytes(""));
+        values[10] = abi.encode(new uint256[](0));
+        for (uint256 i = 0; i < values.length; i++) {
+            assertGe(values[i].length, 32);
+            vm.warp(block.timestamp + 1);
+            vm.prank(ADDRESS_REGISTRY_ROOT);
+            sRegistry.register(name, values[i]);
+            assertEq(getValue(sRegistry, name), values[i]);
+        }
+    }
+
     /// A single byte is the shortest value accepted: the refusal is of empty,
     /// not of short.
     function testRegisterOneByteValue(bytes32 name, bytes1 b) external {
