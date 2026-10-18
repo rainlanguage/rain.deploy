@@ -813,11 +813,11 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(entries.length, 1);
         assertEq(entries[0].emitter, address(sRegistry));
         assertEq(entries[0].topics.length, 4);
-        assertEq(entries[0].topics[0], keccak256("Migrated(address,bytes32,bytes32,uint256)"));
+        assertEq(entries[0].topics[0], keccak256("Migrated(address,address,bytes32,bytes32,uint256)"));
         assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
         assertEq(entries[0].topics[2], namespace);
         assertEq(entries[0].topics[3], migration);
-        assertEq(entries[0].data, abi.encode(uint256(appliedAt)));
+        assertEq(entries[0].data, abi.encode(writer, uint256(appliedAt)));
     }
 
     /// A refused write emits nothing, so a failed apply can never be
@@ -1973,11 +1973,11 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(entries.length, 1);
         assertEq(entries[0].emitter, address(sRegistry));
         assertEq(entries[0].topics.length, 4);
-        assertEq(entries[0].topics[0], keccak256("Migrated(address,bytes32,bytes32,uint256)"));
+        assertEq(entries[0].topics[0], keccak256("Migrated(address,address,bytes32,bytes32,uint256)"));
         assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
         assertEq(entries[0].topics[2], namespace);
         assertEq(entries[0].topics[3], migration);
-        assertEq(entries[0].data, abi.encode(uint256(now_)));
+        assertEq(entries[0].data, abi.encode(writer, uint256(now_)));
     }
 
     /// With its one prerequisite applied, a write naming it records exactly
@@ -3299,11 +3299,11 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(entries.length, 1);
         assertEq(entries[0].emitter, address(sRegistry));
         assertEq(entries[0].topics.length, 4);
-        assertEq(entries[0].topics[0], keccak256("Migrated(address,bytes32,bytes32,uint256)"));
+        assertEq(entries[0].topics[0], keccak256("Migrated(address,address,bytes32,bytes32,uint256)"));
         assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
         assertEq(entries[0].topics[2], namespace);
         assertEq(entries[0].topics[3], migration);
-        assertEq(entries[0].data, abi.encode(uint256(now_)));
+        assertEq(entries[0].data, abi.encode(writer, uint256(now_)));
     }
 
     /// The same one entry from `applyMigrationHistoryV3`, with the caller's
@@ -3345,11 +3345,11 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(entries.length, 1);
         assertEq(entries[0].emitter, address(sRegistry));
         assertEq(entries[0].topics.length, 4);
-        assertEq(entries[0].topics[0], keccak256("Migrated(address,bytes32,bytes32,uint256)"));
+        assertEq(entries[0].topics[0], keccak256("Migrated(address,address,bytes32,bytes32,uint256)"));
         assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
         assertEq(entries[0].topics[2], namespace);
         assertEq(entries[0].topics[3], migration);
-        assertEq(entries[0].data, abi.encode(uint256(appliedAt)));
+        assertEq(entries[0].data, abi.encode(writer, uint256(appliedAt)));
     }
 
     /// A write after the head alone and a write with a list emit one entry each,
@@ -3383,11 +3383,11 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         assertEq(entries.length, 2);
         assertEq(entries[0].topics.length, 4);
-        assertEq(entries[0].topics[0], keccak256("Migrated(address,bytes32,bytes32,uint256)"));
+        assertEq(entries[0].topics[0], keccak256("Migrated(address,address,bytes32,bytes32,uint256)"));
         assertEq(entries[0].topics[2], namespace);
         assertEq(entries[0].topics[3], migrationA);
         assertEq(entries[1].topics.length, 4);
-        assertEq(entries[1].topics[0], keccak256("Migrated(address,bytes32,bytes32,uint256)"));
+        assertEq(entries[1].topics[0], keccak256("Migrated(address,address,bytes32,bytes32,uint256)"));
         assertEq(entries[1].topics[2], namespace);
         assertEq(entries[1].topics[3], migrationB);
     }

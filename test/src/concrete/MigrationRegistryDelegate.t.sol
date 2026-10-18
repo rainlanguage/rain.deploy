@@ -102,7 +102,7 @@ contract MigrationRegistryDelegateTest is Test {
         vm.warp(moment);
         approveDelegate();
         vm.expectEmit(address(sRegistry));
-        emit IMigrationRegistryV3.Migrated(WRITER, NAMESPACE, MIGRATION, moment);
+        emit IMigrationRegistryV3.Migrated(DELEGATE, WRITER, NAMESPACE, MIGRATION, moment);
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
         assertEq(sRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), moment);

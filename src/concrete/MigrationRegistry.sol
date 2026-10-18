@@ -385,7 +385,7 @@ contract MigrationRegistry is IMigrationRegistryV3 {
             record.appliedAfter.push(prerequisites[i]);
         }
         sHead[writer][namespace] = migration;
-        emit Migrated(writer, namespace, migration, appliedAt);
+        emit Migrated(msg.sender, writer, namespace, migration, appliedAt);
     }
 
     /// @inheritdoc IMigrationRegistryV3

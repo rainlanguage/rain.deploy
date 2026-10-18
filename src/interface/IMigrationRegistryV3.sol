@@ -77,23 +77,31 @@ interface IMigrationRegistryV3 {
     /// @param caller The account that called.
     error NotApproved(address writer, bytes32 namespace, address caller);
 
-    /// As `IMigrationRegistryV2.Migrated`, `writer` being the line's writer,
-    /// whoever called.
-    event Migrated(address indexed writer, bytes32 indexed namespace, bytes32 indexed migration, uint256 appliedAt);
+    /// As `IMigrationRegistryV2.Migrated`, led by the account that called,
+    /// which is `writer` or a delegate it approved.
+    /// @param sender The account that called: `writer` or a delegate it
+    /// approved for `namespace`.
+    /// @param writer The line's writer.
+    /// @param namespace The line under the writer.
+    /// @param migration The migration applied.
+    /// @param appliedAt The moment recorded.
+    event Migrated(
+        address sender, address indexed writer, bytes32 indexed namespace, bytes32 indexed migration, uint256 appliedAt
+    );
 
     /// Emitted when `writer` approves `delegate` to write its line in
     /// `namespace`.
-    /// @param writer The approving writer.
+    /// @param sender The approving writer, which is the account that called.
     /// @param namespace The line under the writer.
     /// @param delegate The approved account.
-    event Approved(address indexed writer, bytes32 indexed namespace, address indexed delegate);
+    event Approved(address indexed sender, bytes32 indexed namespace, address indexed delegate);
 
     /// Emitted when `writer` revokes `delegate`'s approval for its line in
     /// `namespace`.
-    /// @param writer The revoking writer.
+    /// @param sender The revoking writer, which is the account that called.
     /// @param namespace The line under the writer.
     /// @param delegate The revoked account.
-    event Revoked(address indexed writer, bytes32 indexed namespace, address indexed delegate);
+    event Revoked(address indexed sender, bytes32 indexed namespace, address indexed delegate);
 
     /// `IMigrationRegistryV2.applyMigration` into `writer`'s line, by `writer`
     /// or a delegate it has approved for `namespace`. Refuses the zero writer,
