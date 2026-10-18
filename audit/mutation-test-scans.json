@@ -275,5 +275,39 @@
       "Gaps filled (each baseline PASS and mutant FAIL proven on the tests tree): C13 testCloneDeployStepReturnsWhereTheFactoryCloned, C14 testCloneDeployStepBroadcastsAsTheDeployer, P01 testSuiteWriterRefusesAZoltuSuiteCarryingMechanismData, P02 testCloneWriterLeavesNoDeployBehind, P04 and P05 testCloneWriterRecordsTheDeployNotTheSuiteClaims (stored address and runtime code staled, record must still match the committed fixture), P11 testReleasedImportBlockDefaultsToThisRepoSuitesImportPath strengthened in place to pass a clone mechanism through the short arity.",
       "P03 (writer ignores a failed revertToState) is an unkillable defensive guard: revertToState returns false only for an invalid snapshot id, which the writer's own snapshotState never produces, and cheatcodes cannot be mocked to force it."
     ]
+  },
+  {
+    "timestamp": "2026-10-18T20:18:20Z",
+    "commit": "e31110332d7fe98a85bc08b738612d7b859c564f",
+    "testsAfterCommit": "cfb6209c86697b7976585a678db09247492cc251",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 88,
+    "scope": "PR #308 (#274), upgradeable beacons: src/abstract/RainDeployVerifyChain.sol checkDeployedOnNetworks/checkResolvedBeacon/resolveBeacons/resolveBeacon/resolveReleased (V), src/lib/LibRainDeployBeacon.sol (B), src/lib/LibRainDeploy.sol hasChainId (H), src/abstract/RainDeploySuitesBase.sol beacons/suiteByName/suiteIndex (S)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 64,
+      "behavioursProbed": 64,
+      "killedByExistingTests": 60,
+      "gapsFilled": 2,
+      "equivalentMutants": 2,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "64 mutants (V 34, B 22, H 2, S 6) probed with mutation-probe against the suite at the scanned commit, which already carries this round's audit-finding tests (shared declaration across two chains, declaration left unwritten, two-word pendingOwner, no fork after the unchecked-network refusals, hasChainId, suiteIndex not found, stateAt out of range). Those tests are counted as existing: V01 (declaration not copied) is killed by testOneDeclarationSharedByTwoChainsResolvesOnEach and testResolvingABeaconLeavesItsDeclarationUnwritten, B18 (pending guard length >= 0x20) by testBeaconAnsweringPendingOwnerWithTwoWordsPasses.",
+      "Harness: a transport-aware wrapper around forge test (a red tally of only transport failures is retried after 60s and withheld after three attempts, scoring NO-RUN). Narrow suite: contracts matching Beacon|RainDeploySuitesBaseTest plus LibRainDeployTest testHasChainId, baseline 119. Wide suite, used for the narrow survivors: adds RainDeployVerifyChain*, RainDeployVerify*, RegistryDeployVerify*, baseline 257 then 259. Killers the fail-pattern could not name (V04, V20, V23, V24, B18) were read from the retained run logs: testBeaconNamedBySuiteAndAddressIsRefused, testBeaconNamedTwiceBehindAValidBeaconReportsItsIndex, testBeaconNamedByAddressAloneIsRefused, testUnnamedBeaconIsRefused, testBeaconAnsweringPendingOwnerWithTwoWordsPasses.",
+      "Narrow-suite survivors killed by the wide pre-existing suite: V06 (empty return ignoring suites) by testUndeclaredNetworkIsRefusedBeforeAnyFork; S06 (default beacons() non-empty) by testChainMatrixForksOnlyTheDeclaredNetworks.",
+      "Gaps filled at cfb6209, each passing at baseline and failing under its mutant (read from the run logs): V16 (resolveBeacons write index not advanced, every beacon resolved into slot 0, so only the last beacon was checked) by testABeaconBeforeAValidOneOnItsNetworkIsChecked; B19 (pendingOwner guard dropping success) by testBeaconRevertingPendingOwnerWithAWordPasses, a beacon whose pendingOwner() reverts with one nonzero word.",
+      "Equivalent mutant S05: suiteIndex returning the last match instead of the first changes nothing while keys are unique, and they are: allSuites() refuses a duplicate with DuplicateDeploySuite, suiteByName searches allSuites() itself, and the released suites resolveReleased searches are among those testSnapshotInternallyConsistent holds to allSuites().",
+      "Equivalent mutant B14: doubled copying from index 1 instead of 0. Index 0 is always later, read before anything else is reached. A record names only records that exist when it is written (PrerequisiteNotApplied) and is never rewritten (MigrationAlreadyApplied), so no walk reaches later again and dropping its record and key changes nothing.",
+      "Adversarial pass: no candidate bugs. The resolveBeacon copy shares initial and transitions with the declaration, which nothing writes; a reverting or non-one-word pendingOwner answer is treated as no pending owner, per the NatSpec."
+    ]
   }
 ]
