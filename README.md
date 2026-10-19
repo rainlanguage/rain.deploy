@@ -624,14 +624,17 @@ them differs.
 ## Migration registry
 
 `MigrationRegistry` records that a migration has been applied, when, and after
-what: a write names its writer and a namespace, and applies one migration in
-that line after one list — the migration it believes ran last in that line, then
-the migrations in any other line it waits on (`applyMigrationV3`, or
-`applyMigrationHistoryV3` for one that already ran), anyone reads when a given
-writer's line in a given namespace applied a given one (`appliedV3`), what it
-applied it onto (`appliedOntoV3`), what it applied it after (`appliedAfterV3`),
-and where a given writer's line in a given namespace has got to (`headV3`).
-There is no removal and no upgrade. The interface is `IMigrationRegistryV3`.
+what: a write names its writer and a namespace, and that writer or a delegate it
+approved for the namespace applies one migration in that line after one list —
+the migration it believes ran last in that line, then the migrations in any
+other line it waits on (`applyMigrationV3`, or `applyMigrationHistoryV3` for one
+that already ran). Anyone reads when a given writer's line in a given namespace
+applied a given one (`appliedV3`), what it applied it onto (`appliedOntoV3`),
+what it applied it after (`appliedAfterV3`), which account wrote the record
+(`appliedByV3`), and where that line has got to (`headV3`). A writer approves
+and revokes delegates per namespace (`approveV3`, `revokeV3`, read by
+`approvedV3`). There is no removal and no upgrade. The interface is
+`IMigrationRegistryV3`.
 
 The two writes differ in exactly one thing: where the recorded moment comes
 from. `applyMigrationV3` stamps the block the record lands in, for a script

@@ -71,13 +71,12 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// namespace and one list, whose first entry is that writer in that namespace
 /// at the migration the caller believes ran last in that line, so a chain that
 /// never got that predecessor refuses the write instead of silently skipping a
-/// step, and two migrations
-/// dispatched at once cannot land in the wrong order. They differ only in
-/// where the recorded moment comes from: the block this lands in, or the
-/// moment the caller supplies for a migration that already ran. The first
-/// migration in a line names `MIGRATION_HEAD_GENESIS`, imported from the
-/// interface — never a zero, which is what an uninitialised constant would be
-/// and is refused everywhere.
+/// step, and two migrations dispatched at once cannot land in the wrong
+/// order. They differ only in where the recorded moment comes from: the block
+/// this lands in, or the moment the caller supplies for a migration that
+/// already ran. The first migration in a line names `MIGRATION_HEAD_GENESIS`,
+/// imported from the interface — never a zero, which is what an uninitialised
+/// constant would be and is refused everywhere.
 ///
 /// Every later entry is a prerequisite: a migration in any other line, another
 /// writer's or the writer's own in another namespace, that must already be
@@ -121,10 +120,9 @@ library LibMigrationRegistry {
     /// worse than useless against unknown code: a reader would hand back values
     /// that are not records or approvals, a write, approve or revoke would land
     /// somewhere nothing reads, and a call builder would hand a signer a call
-    /// that goes the same way. The
-    /// check is one function so they cannot drift into checking different
-    /// things, and an entry point added later has one place to call rather
-    /// than a rule to remember.
+    /// that goes the same way. The check is one function so they cannot drift
+    /// into checking different things, and an entry point added later has one
+    /// place to call rather than a rule to remember.
     function checkCodeHash() internal view {
         bytes32 actualCodeHash = LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.codehash;
         if (actualCodeHash != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH) {
@@ -289,8 +287,8 @@ library LibMigrationRegistry {
     /// write that names some, not less.
     ///
     /// The registry's refusals and their order are
-    /// `IMigrationRegistryV3.applyMigrationHistoryV3`'s, with the block this
-    /// lands in as the moment.
+    /// `IMigrationRegistryV3.applyMigrationHistoryV3`'s, with the block this lands
+    /// in as the moment.
     /// @param writer The line's writer: the caller, or one that approved it.
     /// @param namespace The line under `writer` to apply in. Never zero.
     /// @param migration The migration to apply. Never zero, never

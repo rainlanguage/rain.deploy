@@ -7,14 +7,15 @@ import {Prerequisite} from "../../src/interface/IMigrationRegistryV3.sol";
 
 /// @title MockMigrationApplier
 /// @notice A consumer in the shape `LibMigrationRegistry`'s writes are designed
-/// for: it calls the library and nothing else, so the record lands under THIS
-/// contract's address.
+/// for: it calls the library and nothing else, so the call reaches the registry
+/// from THIS contract, and the record lands under the `writer` it names,
+/// written by this contract.
 ///
 /// It exists so the writer can be exercised as the property it is. The
 /// library's functions are `internal` and inline into whatever executes them,
 /// so `msg.sender` at the registry is this CONTRACT, whoever called it. Two of
-/// these are two writers, which is what makes "a record reaches nobody else"
-/// checkable rather than asserted about a single account.
+/// these, each naming itself, are two writers, which is what makes "a record
+/// reaches nobody else" checkable rather than asserted about a single account.
 ///
 /// Two of them are also two sets of heads, which is what makes "one line is
 /// one sequence" checkable across writers at all: nothing about one applier's

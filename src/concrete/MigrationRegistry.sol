@@ -56,7 +56,7 @@ struct MigrationRecord {
 ///
 /// A writer may approve delegates to write one of its lines (`approveV3`), so
 /// several executors share one line. The line is still the writer's: only it
-/// approves, and a delegate writes nothing else.
+/// approves, and the approval lets a delegate write no other line.
 ///
 /// A record is append-only per line, and a head only ever moves forward onto
 /// something new. Both writes refuse a migration already applied in the line,

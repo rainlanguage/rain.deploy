@@ -104,8 +104,9 @@ contract MigrationRegistryDelegateTest is Test {
 
     /// Any caller but the writer, approved elsewhere or not, is `NotApproved`
     /// on the zero namespace; the writer itself is `ZeroNamespace`.
-    function testZeroNamespaceFromAnotherCallerIsNotApproved(address caller) external {
+    function testZeroNamespaceFromAnotherCallerIsNotApproved(address caller, address unapproved) external {
         vm.assume(caller != WRITER && caller != address(0));
+        vm.assume(unapproved != WRITER && unapproved != caller);
         vm.prank(WRITER);
         sRegistry.approveV3(NAMESPACE, caller);
         Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(WRITER, bytes32(0), MIGRATION_HEAD_GENESIS);
@@ -113,6 +114,16 @@ contract MigrationRegistryDelegateTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, bytes32(0), caller));
         sRegistry.applyMigrationV3(WRITER, bytes32(0), MIGRATION, prerequisites);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, bytes32(0), caller));
+        sRegistry.applyMigrationHistoryV3(WRITER, bytes32(0), MIGRATION, 1, prerequisites);
+        vm.stopPrank();
+        vm.startPrank(unapproved);
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, bytes32(0), unapproved)
+        );
+        sRegistry.applyMigrationV3(WRITER, bytes32(0), MIGRATION, prerequisites);
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, bytes32(0), unapproved)
+        );
         sRegistry.applyMigrationHistoryV3(WRITER, bytes32(0), MIGRATION, 1, prerequisites);
         vm.stopPrank();
         vm.startPrank(WRITER);
@@ -179,6 +190,8 @@ contract MigrationRegistryDelegateTest is Test {
         assertEq(sRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), moment);
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION);
         assertEq(sRegistry.appliedV3(DELEGATE, NAMESPACE, MIGRATION), 0);
+        assertEq(sRegistry.headV3(DELEGATE, NAMESPACE), MIGRATION_HEAD_GENESIS);
+        assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), DELEGATE);
     }
 
     /// The history write takes its moment, into the writer's line.
@@ -403,8 +416,7 @@ contract MigrationRegistryDelegateTest is Test {
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, prerequisites);
         Prerequisite[] memory stored = sRegistry.appliedAfterV3(WRITER, NAMESPACE, MIGRATION);
-        assertEq(stored.length, 2);
-        assertEq(stored[1].writer, DELEGATE);
+        assertEq(abi.encode(stored), abi.encode(prerequisites));
         assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), DELEGATE);
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION);
     }
@@ -469,5 +481,13 @@ contract MigrationRegistryDelegateTest is Test {
         sRegistry.appliedByV3(WRITER, NAMESPACE, bytes32(0));
         vm.expectRevert(IMigrationRegistryV3.GenesisMigration.selector);
         sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
+    }
+
+    /// The approvals mapping is not `public`, so there is no generated getter
+    /// answering the zero writer, namespace or delegate with false.
+    function testApprovedNoGeneratedMappingGetter(address writer, bytes32 namespace, address delegate) external {
+        (bool success,) = address(sRegistry)
+            .call(abi.encodeWithSignature("sApproved(address,bytes32,address)", writer, namespace, delegate));
+        assertFalse(success);
     }
 }
