@@ -54,7 +54,8 @@ library LibRainDeployBeacon {
     /// @notice A transition's migration MUST be recorded applied after the latest earlier-declared applied one's.
     /// @param network The beacon's network.
     /// @param beacon The beacon.
-    /// @param transition The index in `transitions` of the one the registry does not record after it.
+    /// @param transition The index in `transitions` of the one the registry does not record after the latest
+    /// earlier-declared applied one.
     error BeaconTransitionsOutOfOrder(string network, address beacon, uint256 transition);
 
     /// @notice Each transition MUST name a distinct migration.

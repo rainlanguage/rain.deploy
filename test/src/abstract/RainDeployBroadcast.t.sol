@@ -26,10 +26,13 @@ import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
 import {ZoltuDeployOrAdopt} from "../../abstract/ZoltuDeployOrAdopt.sol";
 import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
-import {BeaconOwnedByDeployKey} from "../../../src/abstract/RainDeployBroadcast.sol";
+import {BeaconOwnedByDeployKey, SuiteSeatsDeployKey} from "../../../src/abstract/RainDeployBroadcast.sol";
 import {BeaconState, BeaconTransition, DeployBeacon} from "../../../src/lib/LibRainDeployBeacon.sol";
 import {Prerequisite} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {BeaconOwnerDeploy} from "../../concrete/BeaconOwnerDeploy.sol";
+import {MockOriginOwned} from "../../concrete/MockOriginOwned.sol";
+import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
+import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
 
 /// @title RainDeployBroadcastTest
 /// @notice The broadcast entry point, driven exactly as the `Manual sol
@@ -639,5 +642,36 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         deploy.declareBeacon(42161, ownedBy(address(0xB0B), address(0xCAFE)));
         deploy.declareBeacon(8453, ownedBy(address(0xCAFE), vm.addr(2)));
         expectBroadcastRefused(deploy, abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+    }
+
+    function originOwnedSuite() internal pure returns (DeploySuite memory) {
+        return LibBeaconTest.zoltuSuite(
+            "origin-owned@0_0_1",
+            type(MockOriginOwned).creationCode,
+            type(MockOriginOwned).runtimeCode,
+            "MockOriginOwned.sol:MockOriginOwned"
+        );
+    }
+
+    function testBroadcastRefusesASuiteThatSeatsTheDeployKey() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = originOwnedSuite();
+        vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, suite.storedDeployedAddress));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+        assertEq(suite.storedDeployedAddress.code.length, 0);
+    }
+
+    function testBroadcastOfASuiteSeatingAnotherReachesTheNetworkRefusal() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        bytes memory creationCode =
+            abi.encodePacked(type(UpgradeableBeacon).creationCode, abi.encode(address(deploy), address(0xB0B)));
+        DeploySuite memory suite = LibBeaconTest.zoltuSuite(
+            "beacon@0_0_1",
+            creationCode,
+            type(UpgradeableBeacon).runtimeCode,
+            "dependencies/@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon"
+        );
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
     }
 }

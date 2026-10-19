@@ -340,21 +340,22 @@ the catalogue or not, is refused with `BeaconOnUncheckedNetwork`, and a second
 declaration of a beacon on its network with `BeaconDeclaredTwice`. A beacon
 named by `beaconSuite` is deployed locally at its address on its network and
 refused with `BeaconSeatedOwner` or `BeaconSeatedImplementation` when it answers
-`owner()` or `implementation()` with other than its initial state, so a suite
-that seats the deploy key is refused whatever owner it declares. These refusals,
-and those of transition migrations below, are raised offline by the snapshot
-group for every beacon, and by the chain group, before any network is forked,
-for the beacons on the networks it checks; `BeaconOnUncheckedNetwork` there
-covers every beacon. A beacon with transitions reads `MigrationRegistry` on its
-network, which MUST be deployed there. The chain group reads `owner()`, and
-refuses a beacon that answers `pendingOwner()` with anything but zero with
+`owner()` or `implementation()` with other than its initial state. These
+refusals, and those of transition migrations below, are raised offline by the
+snapshot group for every beacon, and by the chain group, before any network is
+forked, for the beacons on the networks it checks; `BeaconOnUncheckedNetwork`
+there covers every beacon. A beacon with transitions reads `MigrationRegistry`
+on its network, which MUST be deployed there. The chain group reads `owner()`,
+and refuses a beacon that answers `pendingOwner()` with anything but zero with
 `BeaconPendingOwner`, or with data that is not one word with
 `BeaconPendingOwnerUnreadable`: a two-step handover is red from
 `transferOwnership` until the batch that accepts it applies its migration.
 Assert any other authority a beacon exposes (roles) yourself, including that the
 deploy key holds none of it. The deploy key is never a declared owner of any
 state, and a broadcast whose key is one is refused with `BeaconOwnedByDeployKey`
-before any network is read; seat governance from the first state.
+before any network is read, as is a broadcast of a suite that, deployed locally
+with the deploy key as sender and origin, answers `owner()` with the deploy key
+(`SuiteSeatsDeployKey`); seat governance from the first state.
 
 Declare transitions in the order their migrations are applied: each applied
 transition's record MUST reach the latest earlier-declared applied one through
