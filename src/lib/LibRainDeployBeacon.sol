@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {IBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/IBeacon.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
 import {Ownable2Step} from "@openzeppelin-contracts-5.7.0/access/Ownable2Step.sol";
-import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../interface/IMigrationRegistryV2.sol";
+import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../interface/IMigrationRegistryV3.sol";
 import {LibMigrationRegistry} from "./LibMigrationRegistry.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 
@@ -118,7 +118,7 @@ library LibRainDeployBeacon {
         uint256 state = 0;
         for (uint256 i = 0; i < beacon.transitions.length; i++) {
             Prerequisite memory migration = beacon.transitions[i].migration;
-            if (LibMigrationRegistry.applied(migration.writer, migration.namespace, migration.migration) == 0) {
+            if (LibMigrationRegistry.appliedV3(migration.writer, migration.namespace, migration.migration) == 0) {
                 continue;
             }
             if (state != 0 && !recordedBefore(beacon.transitions[state - 1].migration, migration)) {
@@ -145,7 +145,7 @@ library LibRainDeployBeacon {
         keys[0] = keccak256(abi.encode(later));
         uint256 count = 1;
         for (uint256 next = 0; next < count; next++) {
-            Prerequisite[] memory entries = LibMigrationRegistry.appliedAfter(
+            Prerequisite[] memory entries = LibMigrationRegistry.appliedAfterV3(
                 reached[next].writer, reached[next].namespace, reached[next].migration
             );
             for (uint256 i = 0; i < entries.length; i++) {
