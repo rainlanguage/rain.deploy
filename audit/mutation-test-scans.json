@@ -344,5 +344,37 @@
       "Gap filled: rain-marvin reported sender as address(this) SURVIVED at a6c3375, where testZoltuBroadcastUnderTheCloneArtifactPathPrintsAManualVerificationNotice called as the test contract, so msg.sender and address(this) matched. That test now pranks a separate caller before calling; all four new mutants are KILLED by it. This run did not re-probe the mutant at a6c3375; the survival is rain-marvin's result.",
       "Survivors unchanged from the previous entry: S24 and B06 equivalent, M04 (console2.log dropped) not observable by the suite."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T12:26:34Z",
+    "commit": "8114ae2967f321e67a3020ba9b0b639a20e57e1c",
+    "testsAfterCommit": "00a6f8adc1b5ca6e7f98d5396a9d696423c48455",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 99,
+    "scope": "pr:310, its code changed since d5e3acd: src/lib/LibRainDeployMechanism.sol withExtendedNetworks, checkNetworkFrozen, checkNetworksFrozen, withUnrecordedNetworks chain ids in play, containsChainId, checkReadsOwnStorageOnly in deployLocally (R); src/abstract/RainDeployBroadcast.sol broadcastSuite, src/abstract/RainDeployVerifyChain.sol checkDeployedOnNetworks, src/abstract/RainDeploySuitesBase.sol onSupportedNetworks, LibRainDeploy.networkChainIds (B); src/lib/LibRainDeploySnapshot.sol declarationValue (S); plus src/abstract/RainDeployVerifySnapshotBase.sol declaredBytes and declaredBytes32 parse refusals added at 00a6f8adc1b5ca6e7f98d5396a9d696423c48455 (C)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 5,
+      "behaviours": 43,
+      "behavioursProbed": 43,
+      "killedByExistingTests": 35,
+      "gapsFilled": 5,
+      "equivalentMutants": 1,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "37 mutants (R 21, B 10, S 6) probed at 8114ae2 with mutation-probe over the offline suite (forge test minus the RPC-dependent tests, 894 green at baseline). 35 KILLED by tests already in the suite; B02 and B06 SURVIVED.",
+      "B06 (matrix chain ids in play from supportedNetworks()) filled by testSubsetTakesNoOutOfPlayCandidateNetwork, which now expects no factory call with Polygon's init data, so an out-of-play network is never deployed locally.",
+      "B02 (broadcast chain ids in play from supportedNetworks()) is unobservable while the candidate declares only supported networks: the extra entries are never read by a broadcast to a subset. Filled by testBroadcastTakesCandidateNetworksAmongTheBroadcastNetworks with WideCandidatePerNetworkCloneDeploy, a hand-written candidateSuites declaring a network beyond supportedNetworks(): broadcasting there is refused with ExtendedNetworkUnfrozen at the release's address before any fork. Offline, no RPC.",
+      "6 mutants (C) on the round-6 fix in declaredBytes and declaredBytes32, probed at cac86802f7cd0261a1b0bb8ccb2fc9b34f5e2dc5 (897 green at baseline): C01 and C02 (parse failure escaping as a raw cheatcode error) KILLED by the tests added with the fix (the harness did not attribute a killer). C03 (32-byte length check dropped) equivalent, since vm.parseBytes32 refuses a short or long value; the check was removed at 00a6f8adc1b5ca6e7f98d5396a9d696423c48455. C04 (the ); tail), C05 (the bytes32( prefix) and C06 (a single closing parenthesis) SURVIVED for want of a value wrapping the record's real hash; testFrozenCodeRecordMalformedHashIsUnreadable gained five, and all three are KILLED at 00a6f8adc1b5ca6e7f98d5396a9d696423c48455."
+    ]
   }
 ]
