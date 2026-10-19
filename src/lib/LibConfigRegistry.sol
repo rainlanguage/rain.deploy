@@ -99,7 +99,7 @@ library LibConfigRegistry {
         // visibly used: a passed-through tuple reads to the analysers as a
         // return value nobody looked at.
         (bytes memory value, uint256 registeredAt) =
-            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).get(name);
+            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(name);
         return (value, registeredAt);
     }
 

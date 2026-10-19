@@ -84,7 +84,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
             vm.selectFork(forkIds[i]);
             assertEq(block.chainid, configs[i].chainId, networks[i]);
             (bytes memory bound,) =
-                IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).get(hashed);
+                IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(hashed);
             assertEq(bound, value, networks[i]);
         }
 
@@ -177,7 +177,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
             abi.encodeWithSelector(LibConfigRegistryRegister.UnexpectedChainId.selector, "base", 8453, 42161)
         );
         this.externalCheckRegisteredOnForks(networks, swapped, name, value);
-        (bytes memory bound,) = IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).get(hashed);
+        (bytes memory bound,) = IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(hashed);
         assertEq(bound, value);
     }
 }

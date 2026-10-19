@@ -49,7 +49,7 @@ contract LibConfigRegistryTest is Test {
         time = uint96(bound(time, 1, type(uint96).max));
         vm.warp(time);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, value);
+        registry.registerV1(name, value);
 
         (bytes memory resolved, uint256 registeredAt) = LibConfigRegistry.resolve(name);
         assertEq(resolved, value);
@@ -64,7 +64,7 @@ contract LibConfigRegistryTest is Test {
     function testConsumerRefusesWrongShape(bytes32 name, address account) external {
         IConfigRegistryV1 registry = deployRegistry();
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encodePacked(account));
+        registry.registerV1(name, abi.encodePacked(account));
         vm.warp(block.timestamp + 2);
 
         // Solidity reverts a failed `abi.decode` with no data.
@@ -80,7 +80,7 @@ contract LibConfigRegistryTest is Test {
         time = uint96(bound(time, 1, type(uint96).max));
         vm.warp(time);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
 
         (bytes memory resolved, uint256 registeredAt) = LibConfigRegistry.resolve(name);
         assertEq(resolved, abi.encode(account));
@@ -101,12 +101,12 @@ contract LibConfigRegistryTest is Test {
 
         vm.warp(first);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(bound));
+        registry.registerV1(name, abi.encode(bound));
         assertEq(resolveAddress(name), bound);
 
         vm.warp(second);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
         (bytes memory resolved, uint256 registeredAt) = LibConfigRegistry.resolve(name);
         assertEq(resolved, abi.encode(account));
         assertEq(registeredAt, second);
@@ -211,7 +211,7 @@ contract LibConfigRegistryTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
 
         extra = uint64(bound(extra, 1, type(uint64).max));
         vm.warp(block.timestamp + uint256(minAge) + uint256(extra));
@@ -225,7 +225,7 @@ contract LibConfigRegistryTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
 
         vm.warp(block.timestamp + uint256(minAge));
         vm.expectRevert(
@@ -240,7 +240,7 @@ contract LibConfigRegistryTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
 
         vm.warp(block.timestamp + uint256(minAge) + 1);
         assertEq(LibConfigRegistry.resolveSafe(name, minAge), abi.encode(account));
@@ -253,7 +253,7 @@ contract LibConfigRegistryTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
 
         vm.warp(block.timestamp + uint256(age));
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, name, age, minAge));
@@ -266,7 +266,7 @@ contract LibConfigRegistryTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
 
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, name, 0, minAge));
         this.externalResolveSafe(name, minAge);
@@ -278,7 +278,7 @@ contract LibConfigRegistryTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
         vm.warp(block.timestamp + uint256(aged));
 
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.ZeroMinAge.selector, name));
@@ -314,13 +314,13 @@ contract LibConfigRegistryTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(boundTo));
+        registry.registerV1(name, abi.encode(boundTo));
 
         vm.warp(block.timestamp + uint256(aged));
         assertEq(LibConfigRegistry.resolveSafe(name, minAge), abi.encode(boundTo));
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
 
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, name, 0, minAge));
         this.externalResolveSafe(name, minAge);
@@ -336,7 +336,7 @@ contract LibConfigRegistryTest is Test {
 
         vm.warp(uint256(ahead) + 1);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
 
         // The clock goes backwards, leaving the binding stamped ahead of it.
         vm.warp(1);
@@ -355,7 +355,7 @@ contract LibConfigRegistryTest is Test {
 
         vm.warp(uint256(ahead) + 1);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
         vm.warp(1);
 
         uint256[3] memory minAges = [uint256(1), uint256(type(uint64).max), type(uint256).max];
@@ -376,7 +376,7 @@ contract LibConfigRegistryTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
 
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, name, 0, minAge));
         this.externalResolveSafe(name, minAge);
@@ -414,7 +414,7 @@ contract LibConfigRegistryTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
         extra = uint64(bound(extra, 1, type(uint64).max));
         vm.warp(block.timestamp + uint256(minAge) + uint256(extra));
 
@@ -431,7 +431,7 @@ contract LibConfigRegistryTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
         vm.warp(block.timestamp + uint256(age));
 
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, name, age, minAge));

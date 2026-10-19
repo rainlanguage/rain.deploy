@@ -4,8 +4,8 @@ pragma solidity ^0.8.25;
 
 /// @title IConfigRegistryV1
 /// @notice A registry of `bytes32` names to ABI-encoded values with exactly two
-/// operations: an immutable root authority binds a name (`register`), and
-/// anyone reads a bound name (`get`). Root may re-bind a name it has already
+/// operations: an immutable root authority binds a name (`registerV1`), and
+/// anyone reads a bound name (`getV1`). Root may re-bind a name it has already
 /// bound. There is no removal, no upgrade and no authority beyond root, and an
 /// implementation MUST NOT add any.
 ///
@@ -47,29 +47,29 @@ pragma solidity ^0.8.25;
 /// `LibRainDeploy.checkResolvedValues` is that check for a value of any type,
 /// compared as the exact bytes the deployment answers.
 ///
-/// `get` also answers with the moment a binding was made, because a value alone
+/// `getV1` also answers with the moment a binding was made, because a value alone
 /// cannot say that it has just moved. The registry reports the moment and
 /// imposes nothing on it: a fresh binding is live at once, and an
 /// implementation MUST NOT withhold one. What counts as too fresh belongs to
 /// the caller.
 interface IConfigRegistryV1 {
-    /// Thrown when an account that is not the root authority calls `register`.
+    /// Thrown when an account that is not the root authority calls `registerV1`.
     /// @param sender The `msg.sender` that was not root.
     error NotRoot(address sender);
 
-    /// Thrown when `register` is called with an empty value. Empty is how an
+    /// Thrown when `registerV1` is called with an empty value. Empty is how an
     /// unbound name reads, so binding it would produce a name that is both
     /// bound and unreadable. A name cannot be unbound once bound; the closest
     /// thing is binding it to something deliberately inert.
     /// @param name The name that was being bound to an empty value.
     error EmptyValue(bytes32 name);
 
-    /// Thrown by `get` when a name has never been bound, so that a caller
+    /// Thrown by `getV1` when a name has never been bound, so that a caller
     /// cannot silently proceed on an empty value by forgetting to check.
     /// @param name The name that is not bound.
     error NameNotRegistered(bytes32 name);
 
-    /// Thrown by `register` when the clock is not strictly after the moment the
+    /// Thrown by `registerV1` when the clock is not strictly after the moment the
     /// name already carries.
     ///
     /// Behind it would lower the moment, and a caller measuring
@@ -110,7 +110,7 @@ interface IConfigRegistryV1 {
     /// any other. The moment dates the write, not the value.
     /// @param name The name to bind.
     /// @param value The ABI-encoded value to bind it to.
-    function register(bytes32 name, bytes calldata value) external;
+    function registerV1(bytes32 name, bytes calldata value) external;
 
     /// The value `name` is currently bound to, and when it was bound.
     ///
@@ -128,7 +128,7 @@ interface IConfigRegistryV1 {
     /// @param name The name to read.
     /// @return The value bound to `name`, byte for byte as it was bound. Never
     /// empty.
-    /// @return The `block.timestamp` of the most recent `register` for `name`.
+    /// @return The `block.timestamp` of the most recent `registerV1` for `name`.
     /// Never zero, so zero in this field means unbound and nothing else.
-    function get(bytes32 name) external view returns (bytes memory, uint256);
+    function getV1(bytes32 name) external view returns (bytes memory, uint256);
 }

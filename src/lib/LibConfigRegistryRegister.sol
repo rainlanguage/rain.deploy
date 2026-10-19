@@ -221,7 +221,7 @@ library LibConfigRegistryRegister {
     /// @return The bound value, or empty.
     /// @return The moment it was bound, or zero.
     function currentBinding(bytes32 name) internal view returns (bytes memory, uint256) {
-        try IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).get(name) returns (
+        try IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(name) returns (
             bytes memory value, uint256 registeredAt
         ) {
             return (value, registeredAt);
@@ -242,9 +242,9 @@ library LibConfigRegistryRegister {
     /// and what `registerOnSelectedChain` sends.
     /// @param name The hashed name.
     /// @param value The ABI-encoded value to bind it to.
-    /// @return The `register` calldata.
+    /// @return The `registerV1` calldata.
     function registerCalldata(bytes32 name, bytes memory value) internal pure returns (bytes memory) {
-        return abi.encodeCall(IConfigRegistryV1.register, (name, value));
+        return abi.encodeCall(IConfigRegistryV1.registerV1, (name, value));
     }
 
     /// The record of a run's inputs, printed before any network: everything the
@@ -333,7 +333,7 @@ library LibConfigRegistryRegister {
         bool binds = keccak256(bound) != keccak256(value);
         if (binds) {
             vm.startBroadcast(sender);
-            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).register(name, value);
+            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).registerV1(name, value);
             vm.stopBroadcast();
         }
         return (binds, record);

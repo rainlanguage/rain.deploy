@@ -180,17 +180,29 @@ library LibRainDeploy {
 
     /// Thrown when a deployed contract answers a read with bytes other than the
     /// ones the deployment expects, on a network.
+    /// @param network The network the read was made on.
+    /// @param target The deployed contract that was read.
+    /// @param index The position of the read in the read calls.
+    /// @param expected The bytes the deployment expects.
+    /// @param actual The bytes the read answered.
     error UnexpectedResolvedValue(string network, address target, uint256 index, bytes expected, bytes actual);
 
     /// Thrown when the read calls and expected values of a post-deploy check do
     /// not pair up.
+    /// @param readCallsLength The number of read calls.
+    /// @param expectedValuesLength The number of expected values.
     error ResolvedValuesLengthMismatch(uint256 readCallsLength, uint256 expectedValuesLength);
 
     /// Thrown when a value check is given no reads, for the reason
     /// `NoResolvedAddressReads` gives.
+    /// @param target The deployed contract the check was for.
     error NoResolvedValueReads(address target);
 
     /// Thrown when a post-deploy value read reverts or answers nothing.
+    /// @param network The network the read was made on.
+    /// @param target The deployed contract that was read.
+    /// @param index The position of the read in the read calls.
+    /// @param returnData What the read returned, the revert data if it reverted.
     error ResolvedValueReadFailed(string network, address target, uint256 index, bytes returnData);
 
     /// Zoltu factory is the same on every network.

@@ -556,6 +556,12 @@ running it again.
 
 - The Trezor: unlocked, with the passphrase of root's wallet if it has one, and
   Trezor Suite closed (it holds the USB connection).
+- Read root from the source:
+
+  ```sh
+  export CONFIG_REGISTRY_ROOT=$(grep -oE "CONFIG_REGISTRY_ROOT = 0x[0-9a-fA-F]{40}" src/concrete/ConfigRegistry.sol | grep -oE "0x[0-9a-fA-F]{40}")
+  ```
+
 - Check the device answers as root (append `--mnemonic-derivation-path "<path>"`
   if root is not the first Ethereum account in Trezor Suite, and the same path
   as `--mnemonic-derivation-paths "<path>"` on the `forge script` commands
@@ -563,7 +569,7 @@ running it again.
 
   ```sh
   nix develop -c cast wallet address --trezor
-  # must print 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c
+  # must print $CONFIG_REGISTRY_ROOT
   ```
 
 - Root needs native gas on every network it binds on.
@@ -582,12 +588,12 @@ export CONFIG_REGISTRY_VALUE=$(nix develop -c cast abi-encode "f(address)" 0x...
 # 1. Dry run. Executes every check and the bind itself on a fork of each
 #    network, and sends nothing.
 nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
-  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy
+  --sender "$CONFIG_REGISTRY_ROOT" --trezor --legacy
 
 # 2. The same command with --broadcast. The device asks once per network the
 #    dry run marked BIND or REBIND.
 nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
-  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy --broadcast
+  --sender "$CONFIG_REGISTRY_ROOT" --trezor --legacy --broadcast
 
 # 3. Once every transaction is mined: reads every network fresh and fails
 #    unless the name resolves to the value on each.
@@ -617,10 +623,10 @@ For each transaction the device shows:
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
-- **Data**: the selector `0x2a28e5a3` (`register(bytes32,bytes)`) and its
+- **Data**: the selector `0xb5a8845f` (`register(bytes32,bytes)`) and its
   arguments: the name hash, the offset `0x40`, the value's length, and the value
   padded to a multiple of 32 bytes — together exactly the calldata the dry run
-  printed. `register` is a call the device cannot decode, so it shows the raw
+  printed. `registerV1` is a call the device cannot decode, so it shows the raw
   bytes; open the full data on the device to compare them.
 
 Labels vary by firmware; whatever they are called, the recipient, amount, chain

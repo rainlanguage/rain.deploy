@@ -40,26 +40,26 @@ address constant CONFIG_REGISTRY_ROOT = 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E
 /// overstates the time that passed.
 contract ConfigRegistry is IConfigRegistryV1 {
     /// @dev One binding. Declared in the contract because it is storage layout
-    /// and no part of anybody's ABI — `get` returns two flat values.
+    /// and no part of anybody's ABI — `getV1` returns two flat values.
     ///
     /// The moment is a full word: `value` occupies a slot of its own whatever
     /// its length, so there is nothing for a narrower moment to pack beside,
     /// and at full width there is nothing to truncate.
     struct Binding {
-        /// Empty if and only if the name is unbound, which is what `register`
+        /// Empty if and only if the name is unbound, which is what `registerV1`
         /// rejecting an empty value preserves.
         bytes value;
-        /// The `block.timestamp` of the most recent `register`. Never zero for
+        /// The `block.timestamp` of the most recent `registerV1`. Never zero for
         /// a bound name.
         uint256 registeredAt;
     }
 
-    /// The bindings. Not `public`: the only reader is `get`, which reverts on an
+    /// The bindings. Not `public`: the only reader is `getV1`, which reverts on an
     /// unbound name rather than answering empty.
     mapping(bytes32 name => Binding binding) internal sBindings;
 
     /// @inheritdoc IConfigRegistryV1
-    function register(bytes32 name, bytes calldata value) external {
+    function registerV1(bytes32 name, bytes calldata value) external {
         if (msg.sender != CONFIG_REGISTRY_ROOT) {
             revert NotRoot(msg.sender);
         }
@@ -87,11 +87,11 @@ contract ConfigRegistry is IConfigRegistryV1 {
     /// @inheritdoc IConfigRegistryV1
     /// @dev Bound-ness is read off `value`, not the moment: the value is the
     /// binding and the moment is metadata about when it was written.
-    function get(bytes32 name) external view returns (bytes memory, uint256) {
+    function getV1(bytes32 name) external view returns (bytes memory, uint256) {
         Binding memory binding = sBindings[name];
         // Slither reaches this because `value` shares a struct with a value
         // written from `block.timestamp`. There is no time in it, and the
-        // strict equality is the definition of unbound: `register` refuses an
+        // strict equality is the definition of unbound: `registerV1` refuses an
         // empty value.
         // slither-disable-start timestamp,incorrect-equality
         if (binding.value.length == 0) {

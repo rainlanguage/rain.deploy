@@ -8,7 +8,7 @@ import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
 import {ConfigRegistry, CONFIG_REGISTRY_ROOT} from "../../../src/concrete/ConfigRegistry.sol";
 
 /// @title ConfigRegistryRegisterTest
-/// @notice Tests for `ConfigRegistry.register`: who may bind a name, that root
+/// @notice Tests for `ConfigRegistry.registerV1`: who may bind a name, that root
 /// may re-bind one, and what a binding may never become.
 contract ConfigRegistryRegisterTest is Test {
     /// The registry under test.
@@ -18,21 +18,21 @@ contract ConfigRegistryRegisterTest is Test {
         sRegistry = new ConfigRegistry();
     }
 
-    /// The value half of `get`.
+    /// The value half of `getV1`.
     /// @param registry The registry to read.
     /// @param name The name to read.
     /// @return The value bound to `name`.
     function getValue(ConfigRegistry registry, bytes32 name) internal view returns (bytes memory) {
-        (bytes memory value,) = registry.get(name);
+        (bytes memory value,) = registry.getV1(name);
         return value;
     }
 
-    /// The moment half of `get`.
+    /// The moment half of `getV1`.
     /// @param registry The registry to read.
     /// @param name The name to read.
     /// @return The moment `name` was most recently bound.
     function getMoment(ConfigRegistry registry, bytes32 name) internal view returns (uint256) {
-        (, uint256 registeredAt) = registry.get(name);
+        (, uint256 registeredAt) = registry.getV1(name);
         return registeredAt;
     }
 
@@ -43,7 +43,7 @@ contract ConfigRegistryRegisterTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
         vm.prank(sender);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
     }
 
     /// Re-binding is root's alone, and the failed attempt leaves the binding
@@ -55,29 +55,29 @@ contract ConfigRegistryRegisterTest is Test {
         vm.assume(bound_.length > 0);
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, bound_);
+        sRegistry.registerV1(name, bound_);
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
         vm.prank(sender);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
 
         assertEq(getValue(sRegistry, name), bound_);
     }
 
     /// Root may re-bind a name to a different value, and the new binding is
-    /// what `get` answers with from then on.
+    /// what `getV1` answers with from then on.
     function testRegisterRebind(bytes32 name, bytes memory bound_, bytes memory value) external {
         vm.assume(bound_.length > 0);
         vm.assume(value.length > 0);
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, bound_);
+        sRegistry.registerV1(name, bound_);
         assertEq(getValue(sRegistry, name), bound_);
 
         // A re-bind has to be in a later block than the bind it replaces.
         vm.warp(block.timestamp + 1);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
         assertEq(getValue(sRegistry, name), value);
     }
 
@@ -97,7 +97,7 @@ contract ConfigRegistryRegisterTest is Test {
         for (uint256 i = 0; i < values.length; i++) {
             vm.warp(i + 1);
             vm.prank(CONFIG_REGISTRY_ROOT);
-            sRegistry.register(name, values[i]);
+            sRegistry.registerV1(name, values[i]);
             assertEq(getValue(sRegistry, name), values[i]);
         }
     }
@@ -108,11 +108,11 @@ contract ConfigRegistryRegisterTest is Test {
         vm.assume(value.length > 0);
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
 
         vm.warp(block.timestamp + 1);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
 
         assertEq(getValue(sRegistry, name), value);
     }
@@ -129,7 +129,7 @@ contract ConfigRegistryRegisterTest is Test {
             // Each re-bind is a block later than the last.
             vm.warp(block.timestamp + 1);
             vm.prank(CONFIG_REGISTRY_ROOT);
-            sRegistry.register(name, values[i]);
+            sRegistry.registerV1(name, values[i]);
             assertEq(getValue(sRegistry, name), values[i]);
         }
         assertEq(getValue(sRegistry, name), values[values.length - 1]);
@@ -139,7 +139,7 @@ contract ConfigRegistryRegisterTest is Test {
     function testRegisterEmptyValue(bytes32 name) external {
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, name));
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, "");
+        sRegistry.registerV1(name, "");
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name));
         getValue(sRegistry, name);
@@ -151,7 +151,7 @@ contract ConfigRegistryRegisterTest is Test {
         assertEq(abi.encode().length, 0);
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, name));
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, abi.encode());
+        sRegistry.registerV1(name, abi.encode());
     }
 
     /// The zero value of every kind of type Solidity can encode is at least one
@@ -175,7 +175,7 @@ contract ConfigRegistryRegisterTest is Test {
             assertGe(values[i].length, 32);
             vm.warp(block.timestamp + 1);
             vm.prank(CONFIG_REGISTRY_ROOT);
-            sRegistry.register(name, values[i]);
+            sRegistry.registerV1(name, values[i]);
             assertEq(getValue(sRegistry, name), values[i]);
         }
     }
@@ -184,7 +184,7 @@ contract ConfigRegistryRegisterTest is Test {
     /// not of short.
     function testRegisterOneByteValue(bytes32 name, bytes1 b) external {
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, abi.encodePacked(b));
+        sRegistry.registerV1(name, abi.encodePacked(b));
 
         assertEq(getValue(sRegistry, name), abi.encodePacked(b));
     }
@@ -195,11 +195,11 @@ contract ConfigRegistryRegisterTest is Test {
         vm.assume(bound_.length > 0);
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, bound_);
+        sRegistry.registerV1(name, bound_);
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, name));
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, "");
+        sRegistry.registerV1(name, "");
 
         assertEq(getValue(sRegistry, name), bound_);
     }
@@ -213,14 +213,14 @@ contract ConfigRegistryRegisterTest is Test {
         vm.assume(valueB.length > 0);
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(nameA, valueA);
+        sRegistry.registerV1(nameA, valueA);
 
         // Binding `nameA` did not bind `nameB`.
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, nameB));
         getValue(sRegistry, nameB);
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(nameB, valueB);
+        sRegistry.registerV1(nameB, valueB);
 
         assertEq(getValue(sRegistry, nameA), valueA);
         assertEq(getValue(sRegistry, nameB), valueB);
@@ -233,7 +233,7 @@ contract ConfigRegistryRegisterTest is Test {
 
         vm.recordLogs();
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 1);
@@ -251,12 +251,12 @@ contract ConfigRegistryRegisterTest is Test {
         vm.assume(value.length > 0);
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, bound_);
+        sRegistry.registerV1(name, bound_);
 
         vm.warp(block.timestamp + 1);
         vm.recordLogs();
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 1);
@@ -264,14 +264,14 @@ contract ConfigRegistryRegisterTest is Test {
         assertEq(entries[0].data, abi.encode(CONFIG_REGISTRY_ROOT, value));
     }
 
-    /// A rejected `register` emits nothing.
+    /// A rejected `registerV1` emits nothing.
     function testRegisterNoEventOnRevert(address sender, bytes32 name, bytes memory value) external {
         vm.assume(sender != CONFIG_REGISTRY_ROOT);
 
         vm.recordLogs();
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
         vm.prank(sender);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
         assertEq(vm.getRecordedLogs().length, 0);
     }
 
@@ -283,7 +283,7 @@ contract ConfigRegistryRegisterTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
         vm.prank(sender, CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name));
         getValue(sRegistry, name);
@@ -305,12 +305,12 @@ contract ConfigRegistryRegisterTest is Test {
 
         vm.warp(first);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, bound_);
+        sRegistry.registerV1(name, bound_);
         assertEq(getMoment(sRegistry, name), first);
 
         vm.warp(second);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
 
         assertEq(getValue(sRegistry, name), value);
         assertEq(getMoment(sRegistry, name), second);
@@ -328,12 +328,12 @@ contract ConfigRegistryRegisterTest is Test {
 
         vm.warp(first);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
         assertEq(getMoment(sRegistry, name), first);
 
         vm.warp(second);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
 
         assertEq(getValue(sRegistry, name), value);
         assertEq(getMoment(sRegistry, name), second);
@@ -354,12 +354,12 @@ contract ConfigRegistryRegisterTest is Test {
 
         vm.warp(first);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, bound_);
+        sRegistry.registerV1(name, bound_);
 
         vm.warp(second);
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
         vm.prank(sender);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
 
         assertEq(getMoment(sRegistry, name), first);
     }
@@ -380,14 +380,14 @@ contract ConfigRegistryRegisterTest is Test {
 
         vm.warp(first);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, bound_);
+        sRegistry.registerV1(name, bound_);
 
         vm.warp(second);
         vm.expectRevert(
             abi.encodeWithSelector(IConfigRegistryV1.TimestampNotAfterBinding.selector, name, second, first)
         );
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
 
         assertEq(getValue(sRegistry, name), bound_);
         assertEq(getMoment(sRegistry, name), first);
@@ -408,11 +408,11 @@ contract ConfigRegistryRegisterTest is Test {
         time = bound(time, 1, type(uint256).max);
         vm.warp(time);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, bound_);
+        sRegistry.registerV1(name, bound_);
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.TimestampNotAfterBinding.selector, name, time, time));
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
 
         assertEq(getValue(sRegistry, name), bound_);
         assertEq(getMoment(sRegistry, name), time);
@@ -432,11 +432,11 @@ contract ConfigRegistryRegisterTest is Test {
 
         vm.warp(time);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, bound_);
+        sRegistry.registerV1(name, bound_);
 
         vm.warp(time + 1);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
 
         assertEq(getValue(sRegistry, name), value);
         assertEq(getMoment(sRegistry, name), time + 1);
@@ -452,7 +452,7 @@ contract ConfigRegistryRegisterTest is Test {
             abi.encodeWithSelector(IConfigRegistryV1.TimestampNotAfterBinding.selector, name, uint256(0), uint256(0))
         );
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name));
         getValue(sRegistry, name);
@@ -465,7 +465,7 @@ contract ConfigRegistryRegisterTest is Test {
 
         vm.warp(1);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, value);
+        sRegistry.registerV1(name, value);
 
         assertEq(getValue(sRegistry, name), value);
         assertEq(getMoment(sRegistry, name), 1);
@@ -482,7 +482,7 @@ contract ConfigRegistryRegisterTest is Test {
         for (uint256 i = 0; i < values.length; i++) {
             vm.warp(start + i);
             vm.prank(CONFIG_REGISTRY_ROOT);
-            sRegistry.register(name, values[i]);
+            sRegistry.registerV1(name, values[i]);
             assertTrue(getMoment(sRegistry, name) != 0);
         }
     }
@@ -503,18 +503,18 @@ contract ConfigRegistryRegisterTest is Test {
 
         vm.warp(high);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(nameA, value);
+        sRegistry.registerV1(nameA, value);
 
         // The clock is now behind nameA's moment.
         vm.warp(low);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(nameB, value);
+        sRegistry.registerV1(nameB, value);
 
         assertEq(getMoment(sRegistry, nameA), high);
         assertEq(getMoment(sRegistry, nameB), low);
     }
 
-    /// An empty-value `register` never moves a moment either.
+    /// An empty-value `registerV1` never moves a moment either.
     function testRegisterEmptyValueCannotMoveMoment(bytes32 name, bytes memory bound_, uint256 first, uint256 second)
         external
     {
@@ -523,12 +523,12 @@ contract ConfigRegistryRegisterTest is Test {
 
         vm.warp(first);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, bound_);
+        sRegistry.registerV1(name, bound_);
 
         vm.warp(second);
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, name));
         vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.register(name, "");
+        sRegistry.registerV1(name, "");
 
         assertEq(getMoment(sRegistry, name), first);
     }

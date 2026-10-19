@@ -393,7 +393,7 @@ contract LibConfigRegistryRegisterTest is Test {
             this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
         assertTrue(broadcast);
         assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, "", 0, value));
-        (bytes memory bound_, uint256 registeredAt) = registry.get(name);
+        (bytes memory bound_, uint256 registeredAt) = registry.getV1(name);
         assertEq(bound_, value);
         assertEq(registeredAt, time);
     }
@@ -416,14 +416,14 @@ contract LibConfigRegistryRegisterTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
         vm.warp(1);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, previous);
+        registry.registerV1(name, previous);
         vm.warp(2);
 
         (bool broadcast, string memory record) =
             this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
         assertTrue(broadcast);
         assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, previous, 1, value));
-        (bytes memory bound_, uint256 registeredAt) = registry.get(name);
+        (bytes memory bound_, uint256 registeredAt) = registry.getV1(name);
         assertEq(bound_, value);
         assertEq(registeredAt, 2);
     }
@@ -441,12 +441,12 @@ contract LibConfigRegistryRegisterTest is Test {
         for (uint256 i = 0; i < nearMisses.length; i++) {
             vm.warp(2 * i + 1);
             vm.prank(CONFIG_REGISTRY_ROOT);
-            registry.register(name, previous);
+            registry.registerV1(name, previous);
             vm.warp(2 * i + 2);
 
             (bool broadcast,) = this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, nearMisses[i]);
             assertTrue(broadcast);
-            (bytes memory bound_,) = registry.get(name);
+            (bytes memory bound_,) = registry.getV1(name);
             assertEq(bound_, nearMisses[i]);
         }
     }
@@ -458,14 +458,14 @@ contract LibConfigRegistryRegisterTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
         vm.warp(1);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, value);
+        registry.registerV1(name, value);
         vm.warp(2);
 
         (bool broadcast, string memory record) =
             this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
         assertFalse(broadcast);
         assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, value, 1, value));
-        (bytes memory bound_, uint256 registeredAt) = registry.get(name);
+        (bytes memory bound_, uint256 registeredAt) = registry.getV1(name);
         assertEq(bound_, value);
         assertEq(registeredAt, 1);
     }
@@ -482,7 +482,7 @@ contract LibConfigRegistryRegisterTest is Test {
 
         vm.warp(7);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, value);
+        registry.registerV1(name, value);
         (bound_, registeredAt) = LibConfigRegistryRegister.currentBinding(name);
         assertEq(bound_, value);
         assertEq(registeredAt, 7);
@@ -525,14 +525,14 @@ contract LibConfigRegistryRegisterTest is Test {
         assertEq(registeredAt, 0);
     }
 
-    /// The bind's calldata is `register(bytes32,bytes)` — selector
-    /// `0x2a28e5a3`, from `cast sig` — over the name hash and the value as a
+    /// The bind's calldata is `registerV1(bytes32,bytes)` — selector
+    /// `0xb5a8845f`, from `cast sig` — over the name hash and the value as a
     /// dynamic argument: its offset, its length and its bytes right-padded to
     /// a word. It is exactly the call the bind makes.
     function testRegisterCalldataIsTheCallSent(bytes32 name, bytes memory value) external {
         vm.assume(value.length > 0);
         bytes memory expected = abi.encodePacked(
-            bytes4(0x2a28e5a3),
+            bytes4(0xb5a8845f),
             name,
             uint256(0x40),
             uint256(value.length),
@@ -550,7 +550,7 @@ contract LibConfigRegistryRegisterTest is Test {
     /// The inputs record, field for field, for st0x's token-owner Safe bound to
     /// `0x…dEaD`. The hash, value and calldata are `cast keccak
     /// st0x.token-owner-safe`, `cast abi-encode "f(address)" 0x…dEaD` and
-    /// `cast calldata "register(bytes32,bytes)" <hash> <value>`.
+    /// `cast calldata "registerV1(bytes32,bytes)" <hash> <value>`.
     function testDescribeInputs() external pure {
         assertEq(
             LibConfigRegistryRegister.describeInputs(
@@ -562,7 +562,7 @@ contract LibConfigRegistryRegisterTest is Test {
                 "Value: 0x000000000000000000000000000000000000000000000000000000000000dead\n",
                 "Sender (root): 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c\n",
                 "Registry: 0x77eBe2915B8d3D81f382A78CfFA4F6d6A0DFbAaB\n",
-                "Calldata: 0x2a28e5a3ba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
+                "Calldata: 0xb5a8845fba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
                 "0000000000000000000000000000000000000000000000000000000000000040",
                 "0000000000000000000000000000000000000000000000000000000000000020",
                 "000000000000000000000000000000000000000000000000000000000000dead"

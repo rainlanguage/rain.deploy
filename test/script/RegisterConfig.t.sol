@@ -75,7 +75,7 @@ contract RegisterConfigTest is Test {
         LibConfigRegistryFork.ensureDeployed(vm);
         vm.prank(CONFIG_REGISTRY_ROOT);
         IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-            .register(keccak256(bytes(name)), value);
+            .registerV1(keccak256(bytes(name)), value);
         vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
         vm.setEnv("CONFIG_REGISTRY_NETWORKS", network);
         vm.setEnv("CONFIG_REGISTRY_NAME", name);
@@ -104,7 +104,7 @@ contract RegisterConfigTest is Test {
         vm.selectFork(forkIds[0]);
         assertEq(block.chainid, LibRainDeploy.declaredNetworkConfigs(LibRainDeploy.supportedNetworks())[0].chainId);
         (bytes memory bound, uint256 registeredAt) =
-            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).get(keccak256(bytes(freshName)));
+            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(keccak256(bytes(freshName)));
         assertEq(bound, freshValue);
         assertEq(registeredAt, block.timestamp);
     }

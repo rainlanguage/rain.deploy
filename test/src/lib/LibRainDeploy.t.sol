@@ -1444,7 +1444,7 @@ contract LibRainDeployTest is Test {
         IConfigRegistryV1 registry =
             IConfigRegistryV1(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(account));
+        registry.registerV1(name, abi.encode(account));
         MockResolvedOwner consumer = new MockResolvedOwner(name);
         return (registry, consumer);
     }
@@ -1527,8 +1527,8 @@ contract LibRainDeployTest is Test {
         // A re-bind needs a later block: a name's moment strictly increases.
         vm.warp(block.timestamp + 1);
         vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.register(name, abi.encode(rebound));
-        (bytes memory nowBound,) = registry.get(name);
+        registry.registerV1(name, abi.encode(rebound));
+        (bytes memory nowBound,) = registry.getV1(name);
         assertEq(nowBound, abi.encode(rebound));
 
         assertEq(consumer.iOwner(), account);
