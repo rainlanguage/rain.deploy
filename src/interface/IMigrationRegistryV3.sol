@@ -57,8 +57,8 @@ struct Prerequisite {
 /// it believes that line is at, then the migrations in any line it waits on —
 /// either as applied now (`applyMigrationV3`) or as already applied at a
 /// moment it supplies (`applyMigrationHistoryV3`). Anyone reads when a given
-/// writer applied a given migration in a given namespace (`appliedV3`), what
-/// it applied it onto (`appliedOntoV3`), what it applied it after
+/// writer's line in a given namespace applied a given migration (`appliedV3`),
+/// what it applied it onto (`appliedOntoV3`), what it applied it after
 /// (`appliedAfterV3`), which account wrote the record (`appliedByV3`), and
 /// where a given writer's line in a given namespace currently is (`headV3`).
 /// A writer approves and revokes delegates per namespace (`approveV3`,

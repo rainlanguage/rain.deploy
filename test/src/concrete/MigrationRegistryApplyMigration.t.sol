@@ -791,12 +791,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
         }
     }
 
-    /// `Migrated` is emitted with the writer and migration both indexed, so the
-    /// log can be filtered by either, and carries the moment as data. The log is
-    /// the only enumeration of the registry, so a record that does not emit is a
-    /// record nobody can find.
+    /// `Migrated` is emitted with the writer, namespace and migration indexed,
+    /// so the log can be filtered by any of them, and carries the sender and
+    /// the moment as data. The log is the only enumeration of the registry, so
+    /// a record that does not emit is a record nobody can find.
     ///
-    /// It carries no head because the log already holds it: one writer's entries
+    /// It carries no head because the log already holds it: one line's entries
     /// in order ARE its chain of heads. It does carry the moment, which the
     /// block a log entry sits in does not — that block says when the record was
     /// written, and the moment says when the migration ran.
@@ -1848,8 +1848,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigrationV3(writer, otherNamespace, migration, onto(writer, otherNamespace, migration));
     }
 
-    /// The first entry must name the namespace the write names. The caller in
-    /// another of its own namespaces, even at exactly that line's head, is
+    /// The first entry must name the namespace the write names. The writer in
+    /// another of its namespaces, even at exactly that line's head, is
     /// not this line's head, and the refusal names the line being written
     /// with the head it is actually at. Nothing lands in either line.
     function testApplyMigrationFirstEntryInAnotherNamespaceReverts(
@@ -1996,7 +1996,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     }
 
     /// One `Migrated` entry: the writer, the namespace and the migration
-    /// indexed in that order, the moment as data.
+    /// indexed in that order, the sender and the moment as data.
     function testApplyMigrationEvent(address writer, bytes32 namespace, bytes32 migration, uint32 blockMoment)
         external
     {
@@ -3000,8 +3000,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
     }
 
     /// The prerequisites are read before the writer's own record: an unapplied
-    /// prerequisite is reported over a migration the caller has already
-    /// applied, onto the head that migration became. A record that exists
+    /// prerequisite is reported over a migration already applied in the line,
+    /// onto the head that migration became. A record that exists
     /// while the prerequisites its script now names do not is the more
     /// alarming fact, and it is not hidden behind "already applied". With the
     /// prerequisite applied, the re-application is `MigrationAlreadyApplied`,

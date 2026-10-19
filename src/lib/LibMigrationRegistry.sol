@@ -133,8 +133,8 @@ library LibMigrationRegistry {
         }
     }
 
-    /// When `writer` applied `migration` in `namespace`, or zero if it never
-    /// did.
+    /// When `writer`'s line in `namespace` applied `migration`, or zero if it
+    /// never did.
     ///
     /// Verifies the registry's code hash before reading, so a chain where the
     /// registry is absent, or where something else occupies its address, is a
@@ -162,8 +162,8 @@ library LibMigrationRegistry {
             .appliedV3(writer, namespace, migration);
     }
 
-    /// What `writer` applied `migration` onto in `namespace`, or zero if it
-    /// never applied it there.
+    /// What `writer`'s line in `namespace` applied `migration` onto, or zero if
+    /// it never applied it.
     ///
     /// Verifies the registry's code hash before reading, for the same reason
     /// `appliedV3` does: occupying code is free to answer zero to every migration,
@@ -175,18 +175,18 @@ library LibMigrationRegistry {
     /// @param namespace The line under `writer` to read. Never zero.
     /// @param migration The migration to ask about. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @return The head `writer` applied `migration` onto in `namespace`, or
-    /// zero if it has not applied it there.
+    /// @return The head `writer`'s line in `namespace` applied `migration`
+    /// onto, or zero if it has not applied it.
     function appliedOntoV3(address writer, bytes32 namespace, bytes32 migration) internal view returns (bytes32) {
         checkCodeHash();
         return IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .appliedOntoV3(writer, namespace, migration);
     }
 
-    /// What `writer` applied `migration` after in `namespace`: the list the
-    /// write gave, as given — `writer` in `namespace` at the head it applied
-    /// onto, then the prerequisites. Empty if `writer` never applied
-    /// `migration` there.
+    /// What `writer`'s line in `namespace` applied `migration` after: the list
+    /// the write gave, as given — `writer` in `namespace` at the head it
+    /// applied onto, then the prerequisites. Empty if the line never applied
+    /// `migration`.
     ///
     /// Verifies the registry's code hash before reading, for the same reason
     /// `appliedV3` does: occupying code is free to answer an empty list for
@@ -201,8 +201,8 @@ library LibMigrationRegistry {
     /// @param namespace The line under `writer` to read. Never zero.
     /// @param migration The migration to ask about. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @return The list `writer` applied `migration` after in `namespace`, as
-    /// the write gave it.
+    /// @return The list `writer`'s line in `namespace` applied `migration`
+    /// after, as the write gave it.
     function appliedAfterV3(address writer, bytes32 namespace, bytes32 migration)
         internal
         view
@@ -213,8 +213,8 @@ library LibMigrationRegistry {
             .appliedAfterV3(writer, namespace, migration);
     }
 
-    /// The migration `writer` applied most recently in `namespace`, or
-    /// `MIGRATION_HEAD_GENESIS` if it has never applied one there.
+    /// The migration `writer`'s line in `namespace` applied most recently, or
+    /// `MIGRATION_HEAD_GENESIS` if it has never applied one.
     ///
     /// Verifies the registry's code hash first for the same reason `appliedV3`
     /// does, and more sharply: occupying code is free to answer any head it
@@ -250,8 +250,8 @@ library LibMigrationRegistry {
     /// transaction is sent from, or a writer that approved it. Never the zero
     /// address.
     /// @param namespace The line under `writer` the write names. Never zero.
-    /// @param headMigration The migration `writer` applied last in
-    /// `namespace`, or `MIGRATION_HEAD_GENESIS` for the first in the line.
+    /// @param headMigration The migration `writer`'s line in `namespace`
+    /// applied last, or `MIGRATION_HEAD_GENESIS` for the first in the line.
     /// @return The one-entry list, in the shape `applyMigrationV3`
     /// and `applyMigrationHistoryV3` take and `appliedAfterV3` answers.
     function onto(address writer, bytes32 namespace, bytes32 headMigration)

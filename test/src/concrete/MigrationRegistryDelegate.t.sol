@@ -186,6 +186,8 @@ contract MigrationRegistryDelegateTest is Test {
         appliedAt = bound(appliedAt, 1, moment);
         vm.warp(moment);
         approveDelegate();
+        vm.expectEmit(address(sRegistry));
+        emit IMigrationRegistryV3.Migrated(DELEGATE, WRITER, NAMESPACE, MIGRATION, appliedAt);
         vm.prank(DELEGATE);
         sRegistry.applyMigrationHistoryV3(
             WRITER, NAMESPACE, MIGRATION, appliedAt, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
@@ -208,8 +210,8 @@ contract MigrationRegistryDelegateTest is Test {
         assertEq(sRegistry.appliedOntoV3(WRITER, NAMESPACE, SECOND), MIGRATION);
     }
 
-    /// The writer writes its own line through the delegated entry points
-    /// without approving itself.
+    /// The writer writes its own line through both writes without approving
+    /// itself.
     function testTheWriterNeedsNoApproval() external {
         vm.startPrank(WRITER);
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
@@ -233,9 +235,10 @@ contract MigrationRegistryDelegateTest is Test {
         vm.stopPrank();
     }
 
-    /// The caller is refused before anything it passed is read: an unapproved
-    /// caller with a zero migration, a zero moment and no head is
-    /// `NotApproved`, not any argument refusal.
+    /// The caller is refused before any argument but `writer` and the
+    /// `namespace` its approval is read under: an unapproved caller with a zero
+    /// migration, a zero moment and no head is `NotApproved`, not any argument
+    /// refusal.
     function testUnapprovedCallerIsRefusedBeforeItsArguments(address caller) external {
         vm.assume(caller != WRITER);
         Prerequisite[] memory none = new Prerequisite[](0);
@@ -285,6 +288,9 @@ contract MigrationRegistryDelegateTest is Test {
         approveDelegate();
         vm.prank(WRITER);
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        vm.warp(2000);
+        vm.prank(DELEGATE);
+        sRegistry.applyMigrationV3(DELEGATE, NAMESPACE, MIGRATION, onto(DELEGATE, NAMESPACE, MIGRATION_HEAD_GENESIS));
         Prerequisite[] memory ontoMigration = onto(WRITER, NAMESPACE, MIGRATION);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.TimestampBeforeHead.selector, 999, 1000));
         vm.prank(DELEGATE);

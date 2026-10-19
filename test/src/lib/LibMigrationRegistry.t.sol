@@ -382,7 +382,7 @@ contract LibMigrationRegistryTest is Test {
         assertEq(LibMigrationRegistry.headV3(address(upstream), namespace), prerequisite);
     }
 
-    /// One caller's record reaches no other writer, and each answers only
+    /// One writer's record reaches no other writer, and each answers only
     /// for itself — heads included, so one consumer's sequence neither blocks
     /// nor unblocks another's. A reader trusts the writer it chooses and that
     /// writer's delegates.

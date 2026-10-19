@@ -628,10 +628,10 @@ what: a write names its writer and a namespace, and applies one migration in
 that line after one list — the migration it believes ran last in that line, then
 the migrations in any other line it waits on (`applyMigrationV3`, or
 `applyMigrationHistoryV3` for one that already ran), anyone reads when a given
-writer applied a given one in a given namespace (`appliedV3`), what it applied
-it onto (`appliedOntoV3`), what it applied it after (`appliedAfterV3`), and
-where a given writer's line in a given namespace has got to (`headV3`). There is
-no removal and no upgrade. The interface is `IMigrationRegistryV3`.
+writer's line in a given namespace applied a given one (`appliedV3`), what it
+applied it onto (`appliedOntoV3`), what it applied it after (`appliedAfterV3`),
+and where a given writer's line in a given namespace has got to (`headV3`).
+There is no removal and no upgrade. The interface is `IMigrationRegistryV3`.
 
 The two writes differ in exactly one thing: where the recorded moment comes
 from. `applyMigrationV3` stamps the block the record lands in, for a script
@@ -680,11 +680,12 @@ nothing strands the line, because the registry refuses anything not applied onto
 the current head, so a writer that skipped its past migrations cannot record its
 next one either.
 
-What a reader gives up is **not** authenticity. A record is keyed by the account
-that wrote it and no authority checks it, so every entry is already exactly as
-trustworthy as its writer and no more; a writer free to invent an id was always
-free to invent the fact. What a reader gives up is precisely that `appliedAt` is
-the block the record landed in. Everything else is kept, by three refusals:
+What a reader gives up is **not** authenticity. A record is keyed by its writer
+and no authority checks it, so every entry is already exactly as trustworthy as
+that writer and the delegates it approved, and no more; a writer free to invent
+an id was always free to invent the fact. What a reader gives up is precisely
+that `appliedAt` is the block the record landed in. Everything else is kept, by
+three refusals:
 
 - **Never zero** (`ZeroTimestamp`), or the record would read back through
   `appliedV3` as no record while the head had moved and the migration could
@@ -780,7 +781,10 @@ lines, which a write may wait on exactly as it waits on another writer's.
 
 **A migration may wait on migrations in other lines.** Every entry after the
 head in the list of `Prerequisite { writer, namespace, migration }` is one, and
-both writes make one refusal over them:
+both writes check them in two passes. The first refuses an entry with a zero key
+as a read would (`ZeroWriter`, `ZeroNamespace`, `ZeroMigration`,
+`GenesisMigration`), and one in the line being written (`OwnPrerequisite`). Only
+then does the second refuse with
 `PrerequisiteNotApplied(writer, namespace, migration)` for the first entry whose
 record does not exist on this registry. The head alone is a migration that waits
 on nothing else. A dependent script names the migration it is waiting on as a

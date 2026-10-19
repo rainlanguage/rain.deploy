@@ -24,9 +24,9 @@ struct MigrationRecord {
 /// into `writer`'s line, by `writer` or a delegate it approved, in a namespace
 /// it names, after one list — the head it believes that line is at, then the
 /// migrations in any line it names — at the moment it says the migration ran,
-/// and anyone reads when a given writer applied a given migration in a given
-/// namespace, what it applied it onto, what it applied it after, which account
-/// wrote it, or where that line has got to.
+/// and anyone reads when a given writer's line in a given namespace applied a
+/// given migration, what it applied it onto, what it applied it after, which
+/// account wrote it, or where that line has got to.
 ///
 /// There is deliberately nothing else. No removal, no upgrade, no pause, and no
 /// authority but each writer's over its own lines — which is the difference
@@ -59,13 +59,13 @@ struct MigrationRecord {
 /// approves, and a delegate writes nothing else.
 ///
 /// A record is append-only per line, and a head only ever moves forward onto
-/// something new. Both writes refuse a migration the writer has already applied
-/// in the line, which is what makes re-running a migration fail rather than
-/// repeat, and refuse one applied onto anything but the line's current head,
-/// which is what makes a skipped or out-of-order migration fail rather than
-/// diverge. There is no way to unrecord one, and no way to rewrite one — a
-/// record describes something that happened, and nothing that happened stops
-/// having happened.
+/// something new. Both writes refuse a migration already applied in the line,
+/// which is what makes re-running a migration fail rather than repeat, and
+/// refuse one applied onto anything but the line's current head, which is
+/// what makes a skipped or out-of-order migration fail rather than diverge.
+/// There is no way to unrecord one, and no way to rewrite one — a record
+/// describes something that happened, and nothing that happened stops having
+/// happened.
 ///
 /// The moment is the CALLER's on `applyMigrationHistoryV3`, so a migration that
 /// ran before this contract reached the chain is recordable with the time it
