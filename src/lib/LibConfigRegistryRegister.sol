@@ -72,6 +72,12 @@ library LibConfigRegistryRegister {
     /// `abi.encode` output is: a bare 20-byte address pasted in place of its
     /// ABI encoding, most likely. The registry binds any non-empty value; this
     /// refuses it before a device is asked to sign one no consumer can decode.
+    ///
+    /// It is the only check on what a value holds. Its type is agreed between
+    /// root and the name's consumers, and any whole-word value can be correct
+    /// for some name: a zero word is a threshold or delay of 0. Checking that
+    /// the bytes encode what consumers decode is on whoever builds them, and
+    /// `checkRegisteredOnNetworks` proves only that the chain holds those bytes.
     /// @param value The value as given.
     error NonCanonicalValue(bytes value);
 

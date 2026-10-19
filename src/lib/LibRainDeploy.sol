@@ -178,6 +178,21 @@ library LibRainDeploy {
     /// not a single address-sized word.
     error ResolvedAddressReadFailed(string network, address target, uint256 index, bytes returnData);
 
+    /// Thrown when a deployed contract answers a read with bytes other than the
+    /// ones the deployment expects, on a network.
+    error UnexpectedResolvedValue(string network, address target, uint256 index, bytes expected, bytes actual);
+
+    /// Thrown when the read calls and expected values of a post-deploy check do
+    /// not pair up.
+    error ResolvedValuesLengthMismatch(uint256 readCallsLength, uint256 expectedValuesLength);
+
+    /// Thrown when a value check is given no reads, for the reason
+    /// `NoResolvedAddressReads` gives.
+    error NoResolvedValueReads(address target);
+
+    /// Thrown when a post-deploy value read reverts or answers nothing.
+    error ResolvedValueReadFailed(string network, address target, uint256 index, bytes returnData);
+
     /// Zoltu factory is the same on every network.
     address constant ZOLTU_FACTORY = 0x7A0D94F55792C434d74a40883C6ed8545E406D12;
 
@@ -618,6 +633,106 @@ library LibRainDeploy {
         // empty read set is reported without an RPC round trip.
         checkResolvedAddressReads(target, readCalls, expectedAddresses);
         checkResolvedAddressesOnForks(vm, networks, createForks(vm, networks), target, readCalls, expectedAddresses);
+    }
+
+    /// The value checks' read-set refusals, for the reasons
+    /// `checkResolvedAddressReads` gives.
+    /// @param target The deployed contract the reads are aimed at, for the
+    /// refusal to name.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedValues The return data each read MUST answer with,
+    /// positionally paired with `readCalls`.
+    function checkResolvedValueReads(address target, bytes[] memory readCalls, bytes[] memory expectedValues)
+        private
+        pure
+    {
+        if (readCalls.length != expectedValues.length) {
+            revert ResolvedValuesLengthMismatch(readCalls.length, expectedValues.length);
+        }
+        if (readCalls.length == 0) {
+            revert NoResolvedValueReads(target);
+        }
+    }
+
+    /// `checkResolvedAddresses` for a value of any type: each read MUST answer
+    /// with exactly the bytes expected, e.g. `abi.encode(uint256(3))` for a
+    /// threshold or `abi.encode(signers)` for an `address[]`.
+    /// @param network The network name, for the error only.
+    /// @param target The deployed contract to read.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedValues The return data each read MUST answer with,
+    /// positionally paired with `readCalls`.
+    function checkResolvedValues(
+        string memory network,
+        address target,
+        bytes[] memory readCalls,
+        bytes[] memory expectedValues
+    ) internal view {
+        checkResolvedValueReads(target, readCalls, expectedValues);
+        for (uint256 i = 0; i < readCalls.length; i++) {
+            // slither-disable-next-line low-level-calls
+            (bool success, bytes memory returnData) = target.staticcall(readCalls[i]);
+            // No ABI-encoded value is empty, and no code at `target` answers
+            // empty, so empty is a failed read rather than a mismatch.
+            if (!success || returnData.length == 0) {
+                revert ResolvedValueReadFailed(network, target, i, returnData);
+            }
+            if (keccak256(returnData) != keccak256(expectedValues[i])) {
+                revert UnexpectedResolvedValue(network, target, i, expectedValues[i], returnData);
+            }
+        }
+    }
+
+    /// `checkResolvedAddressesOnForks` for `checkResolvedValues`.
+    /// @param vm The Vm instance to select forks with.
+    /// @param networks The list of network names to check.
+    /// @param forkIds The fork to check each network on, positionally paired
+    /// with `networks`.
+    /// @param target The deployed contract to read on each network.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedValues The return data each read MUST answer with,
+    /// positionally paired with `readCalls`.
+    function checkResolvedValuesOnForks(
+        Vm vm,
+        string[] memory networks,
+        uint256[] memory forkIds,
+        address target,
+        bytes[] memory readCalls,
+        bytes[] memory expectedValues
+    ) internal {
+        if (networks.length == 0) {
+            revert NoNetworks();
+        }
+        if (forkIds.length != networks.length) {
+            revert ForkIdsLengthMismatch(networks.length, forkIds.length);
+        }
+        checkResolvedValueReads(target, readCalls, expectedValues);
+        for (uint256 i = 0; i < networks.length; i++) {
+            vm.selectFork(forkIds[i]);
+            console2.log("Checking resolved values on network:", networks[i]);
+            checkResolvedValues(networks[i], target, readCalls, expectedValues);
+        }
+    }
+
+    /// `checkResolvedAddressesOnNetworks` for `checkResolvedValues`.
+    /// @param vm The Vm instance to use for forking.
+    /// @param networks The list of network names to check.
+    /// @param target The deployed contract to read on each network.
+    /// @param readCalls The calldata for each read.
+    /// @param expectedValues The return data each read MUST answer with,
+    /// positionally paired with `readCalls`.
+    function checkResolvedValuesOnNetworks(
+        Vm vm,
+        string[] memory networks,
+        address target,
+        bytes[] memory readCalls,
+        bytes[] memory expectedValues
+    ) internal {
+        if (networks.length == 0) {
+            revert NoNetworks();
+        }
+        checkResolvedValueReads(target, readCalls, expectedValues);
+        checkResolvedValuesOnForks(vm, networks, createForks(vm, networks), target, readCalls, expectedValues);
     }
 
     /// What the ZOLTU mechanism needs on a network before it can deploy there.

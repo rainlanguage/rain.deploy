@@ -39,7 +39,7 @@ Approach:
   registry access by `LibConfigRegistry` and `LibMigrationRegistry`.
 - A config registry binding names to ABI-encoded values, read at run time rather
   than compiled into creation code, and a post-deploy check that every target
-  network's deployment took the address it was supposed to.
+  network's deployment took the value it was supposed to, of any type.
 - A migration registry, so operational scripts record what they applied and when
   it ran, each onto the head it is applying to, and tests assert the state that
   implies rather than branching on a deadline.

@@ -44,6 +44,8 @@ pragma solidity ^0.8.25;
 /// deploying it and before anything depends on it: the deployed contract has
 /// already snapshotted the value, so checking it is checking settled state. A
 /// poisoned deploy is a burned deterministic address, discovered before use.
+/// `LibRainDeploy.checkResolvedValues` is that check for a value of any type,
+/// compared as the exact bytes the deployment answers.
 ///
 /// `get` also answers with the moment a binding was made, because a value alone
 /// cannot say that it has just moved. The registry reports the moment and
