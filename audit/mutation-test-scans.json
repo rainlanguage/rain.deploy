@@ -527,5 +527,39 @@
       "Full pass at 15b15b57984378b359fcb4b6633a00a976a315f2, 943 green at baseline: 5/5 killed, R1101-R1104 by testCloneInitializeReadingAfterAWriteIsRefused, R1105 by testCloneFactoryReadingItsOwnStorageIsRefused.",
       "Adversarial: the guard refuses a storage read of any account the call did not create, so each expected revert names the read account and the slot its storage layout puts the read at (MockStorageSource.sValue at 1, MockStorageReadingCloneFactory.sSaltShift at 0), not values read from the guard."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T20:45:35Z",
+    "commit": "d5a97a56ef4ecf91555a48979e2867186eb145a0",
+    "testsAfterCommit": "6b99dfeee43c78bd82195f3e5ebea685efd1bae2",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 146,
+    "scope": "pr:310, its code changed in rounds 11 and 12: the extended networks record (LibRainDeployExtendedNetworks, RainDeploySuitesBase.withExtendedNetworks/extendedNetworksRoot, BuildScript.regenerateExtendedNetworks and its licence hooks), declaredBytes32, declaredAddress and the createdUnder creator-chain walk",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 5,
+      "behaviours": 48,
+      "behavioursProbed": 48,
+      "killedByExistingTests": 37,
+      "gapsFilled": 8,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 1,
+      "confirmed": 1,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Round 12 pass: 43 mutants with mutation-probe over the offline suite at d5a97a56ef4ecf91555a48979e2867186eb145a0, 963 green at baseline: 35/43 killed. The suite at that commit already held the tests written with the extended networks record, so these kills are not attributable to the suite before round 11.",
+      "Survivors: E08 (an entry with two hex literals), S01 (withExtendedNetworks unchecked), S02 (default root), B03 (build writes another key's declaration), V01 (bytes32 length), V02 (bytes32 0x prefix), M02 (one-hop creator walk), N03 (address length).",
+      "S01 killed by new testDeclaredNetworkWithoutARecordIsRefused; S02 by new testExtendedNetworksRootDefaultsToTheRepoRecord; B03 by testRegenerateExtendedNetworksWritesTheRecord once PerNetworkCloneBuildScriptHarness declares its networks for its release key only; M02 by testCloneInitializeReadingAnAccountItCreatesDeploys, strengthened with SourceUse.ReadGrandchild.",
+      "V01, N03 and E08 checked what other code already refuses: vm.parseBytes32 and vm.parseAddress refuse any other digit count, and recordedExtendedNetworks holds the whole body to the writer's. The redundant checks were removed, leaving the 0x prefix check (vm.parseBytes32 reads unprefixed digits) and the indexing guard opened.length < 2. testDeclarationValueOutsideTheWritersShapeIsUnreadable gained 39- and 41-digit addresses, bare and wrapped.",
+      "Re-probe at 6b99dfeee43c78bd82195f3e5ebea685efd1bae2, 966 green at baseline: 10/10 killed, E01 S01 S02 B03 M02 as above; G01-G03 (the tag/name guard removed, tag only, name only) by new testExtendedNetworksPathRefusesATagOrNameOutsideTheRoot; E08b (no hex literal indexed) by testMisshapenEntriesAreUnreadable; V02b (bytes32 prefix unchecked) by testFrozenCodeRecordMalformedHashIsUnreadable.",
+      "Adversarial: extendedNetworksPath took the tag and name from the key unchecked, so a key such as x@../y named a record outside the root that writeExtendedNetworks would write. It now refuses with InvalidRecordRoot unless <tag>/<name> is a path of record root segments. New code in this PR, fixed on it in 6b99dfeee43c78bd82195f3e5ebea685efd1bae2 rather than filed."
+    ]
   }
 ]
