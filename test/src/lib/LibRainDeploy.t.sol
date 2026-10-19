@@ -213,6 +213,21 @@ contract LibRainDeployTest is Test {
         assertEq(configs[8].chainId, 4663);
     }
 
+    /// `networkChainIds` gives each network's chain id in the networks' order, repeats included, and none for none.
+    function testNetworkChainIdsFollowTheNetworks() external pure {
+        SupportedNetwork[] memory networks = new SupportedNetwork[](3);
+        networks[0] = SupportedNetwork({name: "b", chainId: 7, explorerUrl: "", defaultRpcUrl: ""});
+        networks[1] = SupportedNetwork({name: "a", chainId: 3, explorerUrl: "", defaultRpcUrl: ""});
+        networks[2] = SupportedNetwork({name: "c", chainId: 7, explorerUrl: "", defaultRpcUrl: ""});
+        uint256[] memory chainIds = LibRainDeploy.networkChainIds(networks);
+        assertEq(chainIds.length, 3);
+        assertEq(chainIds[0], 7);
+        assertEq(chainIds[1], 3);
+        assertEq(chainIds[2], 7);
+
+        assertEq(LibRainDeploy.networkChainIds(new SupportedNetwork[](0)).length, 0);
+    }
+
     /// Only Robinhood Chain states an explorer url, because it is the only
     /// supported network Etherscan V2 does not index.
     ///

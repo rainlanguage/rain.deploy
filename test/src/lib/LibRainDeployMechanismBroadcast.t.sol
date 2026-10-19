@@ -100,6 +100,25 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         });
     }
 
+    /// `exampleCloneNetworks` as a release recording Arbitrum One alone, with Polygon declared as extended at the
+    /// address its init data derives: the frozen suite `withExtendedNetworks` gives.
+    /// @return The frozen suite.
+    function frozenExampleCloneNetworks() internal pure returns (DeploySuite memory) {
+        CloneNetworks memory clones = exampleCloneNetworks();
+        CloneNetwork[] memory extended = new CloneNetwork[](1);
+        extended[0] = clones.networks[1];
+        clones.networks = new CloneNetwork[](1);
+        clones.networks[0] = exampleCloneNetworks().networks[0];
+        return LibRainDeployMechanism.withExtendedNetworks(perNetworkSuite(clones), extended);
+    }
+
+    /// External wrapper for `LibRainDeployMechanism.deployAndBroadcast` with `suite` as its own frozen suite, for a
+    /// suite that is not per network.
+    /// @param networks The networks to broadcast to.
+    /// @param deployerPrivateKey The key to broadcast as.
+    /// @param suite The suite to broadcast.
+    /// @return Where the suite is on each network.
+    /// @return The fork each network was deployed on.
     function externalDeployAndBroadcast(string[] memory networks, uint256 deployerPrivateKey, DeploySuite memory suite)
         external
         returns (address[] memory, uint256[] memory)
@@ -107,7 +126,8 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, suite, suite);
     }
 
-    /// External wrapper for `LibRainDeployMechanism.deployAndBroadcast` on a given fork Vm, as key 1.
+    /// External wrapper for `LibRainDeployMechanism.deployAndBroadcast` on a given fork Vm, as key 1, with `suite` as its
+    /// own frozen suite, for a suite that is not per network.
     /// @param forkVm The Vm to fork and broadcast with.
     /// @param networks The networks to broadcast to.
     /// @param suite The suite to broadcast.
@@ -117,6 +137,23 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         returns (address[] memory)
     {
         (address[] memory deployed,) = LibRainDeployMechanism.deployAndBroadcast(forkVm, networks, 1, suite, suite);
+        return deployed;
+    }
+
+    /// External wrapper for `LibRainDeployMechanism.deployAndBroadcast` on a given fork Vm against a separate frozen
+    /// suite, as key 1.
+    /// @param forkVm The Vm to fork and broadcast with.
+    /// @param networks The networks to broadcast to.
+    /// @param frozen The suite with its extended networks.
+    /// @param suite The suite to broadcast.
+    /// @return Where the suite is on each network.
+    function externalDeployAndBroadcastFrozenOn(
+        Vm forkVm,
+        string[] memory networks,
+        DeploySuite memory frozen,
+        DeploySuite memory suite
+    ) external returns (address[] memory) {
+        (address[] memory deployed,) = LibRainDeployMechanism.deployAndBroadcast(forkVm, networks, 1, frozen, suite);
         return deployed;
     }
 
@@ -182,7 +219,8 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         networks[1] = LibRainDeploy.POLYGON;
         LocalForkVm forkVm = new LocalForkVm();
         vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 0);
-        address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
+        address[] memory deployed =
+            this.externalDeployAndBroadcastFrozenOn(Vm(address(forkVm)), networks, frozenExampleCloneNetworks(), suite);
         assertEq(deployed.length, 2);
         assertEq(deployed[0], clones.networks[0].deployedAddress);
         assertEq(deployed[1], clones.networks[1].deployedAddress);
@@ -245,22 +283,24 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         CloneNetworks memory clones = exampleCloneNetworks();
         clones.networks[0].deployedAddress = address(1);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalDeployAndBroadcast(new string[](0), 0, perNetworkSuite(clones));
+        this.externalDeployAndBroadcastFrozen(new string[](0), 0, frozenExampleCloneNetworks(), perNetworkSuite(clones));
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalDeployAndBroadcast(new string[](0), 0, zoltuSuite(address(1)));
     }
 
-    /// External wrapper for `LibRainDeployMechanism.deployAndBroadcast` against a separate frozen suite, as key 1.
+    /// External wrapper for `LibRainDeployMechanism.deployAndBroadcast` against a separate frozen suite.
     /// @param networks The networks to broadcast to.
+    /// @param deployerPrivateKey The key to broadcast as.
     /// @param frozen The suite with its extended networks.
     /// @param suite The suite to broadcast.
     function externalDeployAndBroadcastFrozen(
         string[] memory networks,
+        uint256 deployerPrivateKey,
         DeploySuite memory frozen,
         DeploySuite memory suite
     ) external {
-        LibRainDeployMechanism.deployAndBroadcast(vm, networks, 1, frozen, suite);
+        LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, frozen, suite);
     }
 
     /// The library entry point refuses a per-network suite on a network its frozen suite neither records nor
@@ -280,7 +320,7 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
                 clones.networks[1].deployedAddress
             )
         );
-        this.externalDeployAndBroadcastFrozen(arbitrumAndPolygon(), perNetworkSuite(recorded), onNetworks);
+        this.externalDeployAndBroadcastFrozen(arbitrumAndPolygon(), 1, perNetworkSuite(recorded), onNetworks);
         assertFalse(anyForkExists());
     }
 
@@ -313,7 +353,9 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         clones.networks[1].deployedAddress = stale;
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
-        this.externalDeployAndBroadcast(arbitrumAndPolygon(), 1, perNetworkSuite(clones));
+        this.externalDeployAndBroadcastFrozen(
+            arbitrumAndPolygon(), 1, frozenExampleCloneNetworks(), perNetworkSuite(clones)
+        );
         assertFalse(anyForkExists());
     }
 
@@ -324,7 +366,9 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         networks[2] = LibRainDeploy.BASE;
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneNetworkUndeclared.selector, 8453));
-        this.externalDeployAndBroadcast(networks, 1, perNetworkSuite(exampleCloneNetworks()));
+        this.externalDeployAndBroadcastFrozen(
+            networks, 1, frozenExampleCloneNetworks(), perNetworkSuite(exampleCloneNetworks())
+        );
         assertFalse(anyForkExists());
     }
 
@@ -335,7 +379,7 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.DuplicateCloneNetwork.selector, 42161));
-        this.externalDeployAndBroadcast(networks, 1, perNetworkSuite(clones));
+        this.externalDeployAndBroadcastFrozen(networks, 1, frozenExampleCloneNetworks(), perNetworkSuite(clones));
         assertFalse(anyForkExists());
     }
 

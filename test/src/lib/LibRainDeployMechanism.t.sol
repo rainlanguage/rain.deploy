@@ -1021,6 +1021,23 @@ contract LibRainDeployMechanismTest is Test {
         this.externalWithExtendedNetworks(oneData, polygonAt(TEST_DATA));
     }
 
+    /// Extended networks on a Zoltu suite are refused.
+    function testExtendedNetworksOnAZoltuSuiteAreRefused() external {
+        DeploySuite memory zoltu = DeploySuite({
+            suite: "zoltu",
+            creationCode: type(MockDeployable).creationCode,
+            storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
+            storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
+            storedRuntimeCode: type(MockDeployable).runtimeCode,
+            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
+            dependencies: new DeployDependency[](0),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: ""
+        });
+        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnexpected.selector, "zoltu"));
+        this.externalWithExtendedNetworks(zoltu, polygonAt(TEST_DATA));
+    }
+
     /// An extended network at an address its init data does not derive is refused, naming both.
     function testExtendedNetworkAtAnotherAddressIsRefused() external {
         DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));
