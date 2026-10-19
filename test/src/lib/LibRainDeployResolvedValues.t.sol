@@ -114,7 +114,7 @@ contract LibRainDeployResolvedValuesTest is Test {
         bytes memory actual = expectedValues[index];
         bytes memory wrong = bytes.concat(actual);
         bit = bound(bit, 0, wrong.length * 8 - 1);
-        wrong[bit / 8] = wrong[bit / 8] ^ bytes1(uint8(1) << uint8(bit % 8));
+        wrong[bit / 8] ^= bytes1(0x01) << (bit % 8);
         expectedValues[index] = wrong;
 
         vm.expectRevert(
