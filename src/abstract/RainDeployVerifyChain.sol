@@ -9,6 +9,11 @@ import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 
+/// Thrown when `requiresSuiteOn` requires a suite on none of the networks
+/// checked, which would pass the suite having checked it nowhere.
+/// @param suite The suite.
+error SuiteRequiredNowhere(string suite);
+
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the repo.
 abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
@@ -47,6 +52,19 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         }
         suites = onNetworks;
 
+        for (uint256 j = 0; j < suites.length; j++) {
+            bool requiredSomewhere = false;
+            for (uint256 i = 0; i < networks.length; i++) {
+                if (requiresSuiteOn(suites[j], networks[i].name)) {
+                    requiredSomewhere = true;
+                    break;
+                }
+            }
+            if (!requiredSomewhere) {
+                revert SuiteRequiredNowhere(suites[j].suite);
+            }
+        }
+
         DerivedDeploy[] memory derived = deriveDeployments(suites);
         address[][] memory addresses = new address[][](networks.length);
         for (uint256 i = 0; i < networks.length; i++) {
@@ -62,6 +80,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             LibRainDeploy.checkNetworkChainId(networks[i]);
             for (uint256 j = 0; j < suites.length; j++) {
                 if (!requiresSuiteOn(suites[j], networks[i].name)) {
+                    console2.log("Not required on network:", derived[j].suite, networks[i].name);
                     continue;
                 }
                 console2.log("Checking suite on network:", derived[j].suite, networks[i].name);

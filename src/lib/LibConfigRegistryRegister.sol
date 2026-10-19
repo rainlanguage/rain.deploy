@@ -389,6 +389,7 @@ library LibConfigRegistryRegister {
     /// @param value The ABI-encoded value to bind it to.
     /// @return The fork each selected network was simulated on, for
     /// `checkRegisteredOnForks`.
+    /// @return The `describeInputs` record logged.
     function registerOnNetworks(
         Vm vm,
         string[] memory selected,
@@ -396,13 +397,13 @@ library LibConfigRegistryRegister {
         address sender,
         string memory name,
         bytes memory value
-    ) internal returns (uint256[] memory) {
+    ) internal returns (uint256[] memory, string memory) {
         (,, string memory record) = checkInputs(vm, selected, declared, sender, name, value);
         console2.log(record);
 
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, selected);
         registerOnForks(vm, selected, declared, forkIds, sender, name, value);
-        return forkIds;
+        return (forkIds, record);
     }
 
     /// Binds `name` to `value` from `sender` on every given fork, after the

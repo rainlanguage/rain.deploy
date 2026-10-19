@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
+import {RainDeployVerifyChain, SuiteRequiredNowhere} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
@@ -16,11 +16,11 @@ import {
 
 /// @title RainDeployVerifyChainNotRequiredLocalTest
 /// @notice `RainDeployVerifyChainNotRequiredTest` without an RPC: every network
-/// forks as the local EVM, where the first release is live and the second is
-/// absent.
+/// forks as the local EVM, where both releases are live until a test removes
+/// one.
 contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainDeployVerifyChain {
-    /// Whether the second release is required on base.
-    bool internal sSecondRequiredOnBase;
+    /// Whether the second release is required nowhere rather than on base.
+    bool internal sSecondRequiredNowhere;
 
     /// The local fork seam.
     LocalForkVm internal sForkVm;
@@ -32,19 +32,19 @@ contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainD
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    /// @dev The second release on base only when `sSecondRequiredOnBase`, and
-    /// nowhere otherwise; everything else everywhere.
+    /// @dev The second release on base alone, or nowhere when
+    /// `sSecondRequiredNowhere`; everything else everywhere.
     function requiresSuiteOn(DeploySuite memory suite, string memory network) internal view override returns (bool) {
         return keccak256(bytes(suite.suite)) != keccak256("second-address")
-            || (sSecondRequiredOnBase && keccak256(bytes(network)) == keccak256(bytes(LibRainDeploy.BASE)));
+            || (!sSecondRequiredNowhere && keccak256(bytes(network)) == keccak256(bytes(LibRainDeploy.BASE)));
     }
 
-    /// The first release live and the second absent.
+    /// Both releases live.
     function setUp() external {
         sForkVm = new LocalForkVm();
         vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, CONFIG_REGISTRY_RUNTIME_CODE);
         vm.makePersistent(CONFIG_REGISTRY_DEPLOYED_ADDRESS);
-        vm.etch(secondDeployedAddress(), hex"");
+        vm.etch(secondDeployedAddress(), type(MockDeployableV2).runtimeCode);
         vm.makePersistent(secondDeployedAddress());
     }
 
@@ -63,14 +63,30 @@ contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainD
         assertNotEq(supportedNetworks()[0], LibRainDeploy.BASE);
     }
 
-    /// An absent release required nowhere passes.
-    function testNotRequiredEverywherePasses() external {
+    /// Both releases live where they are required passes.
+    function testRequiredWhereLivePasses() external {
+        this.checkLocally();
+    }
+
+    /// A release required on no network is refused rather than passed unchecked.
+    function testSuiteRequiredNowhereReverts() external {
+        sSecondRequiredNowhere = true;
+        vm.expectRevert(abi.encodeWithSelector(SuiteRequiredNowhere.selector, "second-address"));
+        this.checkLocally();
+    }
+
+    /// The refusal comes before any network is walked, ahead of a release
+    /// absent from the first network.
+    function testSuiteRequiredNowherePrecedesTheMatrix() external {
+        sSecondRequiredNowhere = true;
+        vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, hex"");
+        vm.expectRevert(abi.encodeWithSelector(SuiteRequiredNowhere.selector, "second-address"));
         this.checkLocally();
     }
 
     /// The absent release is reported on the one network it is required on.
     function testNotRequiredNetworksAreSkipped() external {
-        sSecondRequiredOnBase = true;
+        vm.etch(secondDeployedAddress(), hex"");
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.BASE, secondDeployedAddress()

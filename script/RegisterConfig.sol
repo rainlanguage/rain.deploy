@@ -49,9 +49,10 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     /// to the value.
     /// @return The fork each selected network was simulated on.
     function run() external returns (uint256[] memory) {
-        return LibConfigRegistryRegister.registerOnNetworks(
+        (uint256[] memory forkIds,) = LibConfigRegistryRegister.registerOnNetworks(
             vm, selectedNetworks(), supportedNetworks(), msg.sender, vm.envString(NAME_VAR), vm.envBytes(VALUE_VAR)
         );
+        return forkIds;
     }
 
     /// Reads every selected network fresh and reverts unless the name resolves

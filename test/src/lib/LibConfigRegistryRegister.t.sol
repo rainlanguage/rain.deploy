@@ -102,7 +102,7 @@ contract LibConfigRegistryRegisterTest is Test {
         address sender,
         string memory name,
         bytes memory value
-    ) external returns (uint256[] memory) {
+    ) external returns (uint256[] memory, string memory) {
         return LibConfigRegistryRegister.registerOnNetworks(vm, selected, declared, sender, name, value);
     }
 

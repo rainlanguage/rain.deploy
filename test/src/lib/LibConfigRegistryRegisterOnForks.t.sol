@@ -30,7 +30,7 @@ import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
 contract LibConfigRegistryRegisterOnForksTest is Test {
     function externalRegisterOnNetworks(string[] memory networks, string memory name, bytes memory value)
         external
-        returns (uint256[] memory)
+        returns (uint256[] memory, string memory)
     {
         return LibConfigRegistryRegister.registerOnNetworks(vm, networks, networks, CONFIG_REGISTRY_ROOT, name, value);
     }
@@ -151,8 +151,11 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
             this.externalRegisterOnNetworks(networks, name, value);
             return;
         }
-        uint256[] memory forkIds = this.externalRegisterOnNetworks(networks, name, value);
+        (uint256[] memory forkIds, string memory record) = this.externalRegisterOnNetworks(networks, name, value);
         assertEq(forkIds.length, networks.length);
+        (,, string memory inputs) =
+            LibConfigRegistryRegister.checkInputs(vm, networks, networks, CONFIG_REGISTRY_ROOT, name, value);
+        assertEq(record, inputs);
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);
     }
 
@@ -169,8 +172,11 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         LibConfigRegistryFork.ensureDeployed(vm);
         vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
-        uint256[] memory forkIds = this.externalRegisterOnNetworks(networks, name, value);
+        (,, string memory inputs) =
+            LibConfigRegistryRegister.checkInputs(vm, networks, networks, CONFIG_REGISTRY_ROOT, name, value);
+        (uint256[] memory forkIds, string memory record) = this.externalRegisterOnNetworks(networks, name, value);
         assertEq(forkIds.length, 2);
+        assertEq(record, inputs);
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);
     }
 
@@ -254,7 +260,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         vm.selectFork(forkIds[0]);
         assertEq(vm.getChainId(), 8453);
         vm.selectFork(forkIds[1]);
-        assertEq(block.chainid, 42161);
+        assertEq(vm.getChainId(), 42161);
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);
 
         // Forks paired with the wrong networks are refused on the chain id,
