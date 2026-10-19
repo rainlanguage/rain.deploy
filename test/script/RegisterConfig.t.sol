@@ -11,13 +11,7 @@ import {LibConfigRegistryDeploy} from "../../src/lib/LibConfigRegistryDeploy.sol
 import {LibConfigRegistryRegister} from "../../src/lib/LibConfigRegistryRegister.sol";
 import {RegisterConfig} from "../../script/RegisterConfig.sol";
 import {LibConfigRegistryFork} from "../lib/LibConfigRegistryFork.sol";
-
-/// Calls `run()` with its own address as `msg.sender`.
-contract RunCaller {
-    function callRun(RegisterConfig script) external returns (uint256[] memory) {
-        return script.run();
-    }
-}
+import {RegisterConfigRunCaller} from "../concrete/RegisterConfigRunCaller.sol";
 
 /// @title RegisterConfigTest
 /// The script's wiring: which variables it reads, that the signer is the
@@ -103,9 +97,9 @@ contract RegisterConfigTest is Test {
         bytes memory freshValue = abi.encode(address(3));
         vm.setEnv("CONFIG_REGISTRY_NAME", freshName);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(freshValue));
-        vm.etch(CONFIG_REGISTRY_ROOT, address(new RunCaller()).code);
+        vm.etch(CONFIG_REGISTRY_ROOT, address(new RegisterConfigRunCaller()).code);
         vm.makePersistent(CONFIG_REGISTRY_ROOT);
-        uint256[] memory forkIds = RunCaller(CONFIG_REGISTRY_ROOT).callRun(script);
+        uint256[] memory forkIds = RegisterConfigRunCaller(CONFIG_REGISTRY_ROOT).callRun(script);
         assertEq(forkIds.length, 1);
         vm.selectFork(forkIds[0]);
         assertEq(block.chainid, LibRainDeploy.declaredNetworkConfigs(LibRainDeploy.supportedNetworks())[0].chainId);
