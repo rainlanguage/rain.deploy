@@ -138,6 +138,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         );
     }
 
+    /// Refuses `BeaconOnUncheckedNetwork` for any of `beacons()` off `supportedNetworks()`, whether or not it is on
+    /// `networks`, before resolving any.
     /// @param networks The networks whose beacons to resolve.
     /// @return Each of `beacons()` on one of `networks`, resolved on it, in declaration order.
     function resolveBeacons(SupportedNetwork[] memory networks) internal returns (ResolvedBeacon[] memory) {
@@ -170,6 +172,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         return resolved;
     }
 
+    /// Refuses `BeaconNamedTwice` and `BeaconUnnamed`, and `BeaconSuiteNotReleased` through `resolveReleased`.
     /// @param declaration The beacon, left unwritten so one declaration can be resolved on several networks.
     /// @param chainId The beacon's network.
     /// @param beaconIndex The beacon's index in `beacons()`, for the refusal.
@@ -220,6 +223,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         return resolved;
     }
 
+    /// Refuses `BeaconSuiteNotReleased` when `key` is not in `released`.
     /// @param key The key a beacon names.
     /// @param released `releasedSuites()`, each replaced by its `onSupportedNetworks` form when first resolved.
     /// @param derived Each released suite's derivation, filled when first resolved.

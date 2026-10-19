@@ -486,6 +486,16 @@ contract LibRainDeployBeaconTest is Test {
         this.externalCheckBeacon(declaration, sImplementation, sOwner);
     }
 
+    function testBeaconWithTheSmallestPendingOwnerIsRefused() external {
+        (MockOwnable2StepBeacon beacon, DeployBeacon memory declaration) = twoStep();
+        vm.prank(sOwner);
+        beacon.transferOwnership(address(1));
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeployBeacon.BeaconPendingOwner.selector, NETWORK, address(beacon), 1)
+        );
+        this.externalCheckBeacon(declaration, sImplementation, sOwner);
+    }
+
     function testBeaconAnsweringPendingOwnerWithoutAWordPasses() external {
         MockSilentFallbackBeacon beacon = new MockSilentFallbackBeacon(sImplementation, sOwner);
         DeployBeacon memory declaration = declared(new BeaconTransition[](0));

@@ -495,6 +495,13 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         assertNoFork("forked before refusing a beacon outside the catalogue");
     }
 
+    function testBeaconOnACheckedNetworkOffTheSupportedNetworksIsRefused() external {
+        supportOnly(LibRainDeploy.ARBITRUM_ONE, "");
+        declare(8453, declared("beacon-implementation@0_0_1", OWNER));
+        vm.expectRevert(abi.encodeWithSelector(BeaconOnUncheckedNetwork.selector, 8453, 0));
+        this.externalResolveBeacons(networksNamed(LibRainDeploy.BASE, ""));
+    }
+
     function assertNoFork(string memory reason) internal view {
         try vm.activeFork() returns (uint256) {
             assertTrue(false, reason);

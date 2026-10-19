@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
-import {RainDeployVerifyChain} from "../../src/abstract/RainDeployVerifyChain.sol";
+import {RainDeployVerifyChain, ResolvedBeacon} from "../../src/abstract/RainDeployVerifyChain.sol";
 import {BeaconState, ChainBeacon} from "../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {
@@ -21,6 +21,8 @@ abstract contract PerNetworkCloneBeaconVerifyChain is PerNetworkCloneDeploys, Ra
 
     address internal sBeacon;
 
+    bool internal sBeaconBySuite;
+
     function supportedNetworks()
         internal
         view
@@ -33,8 +35,12 @@ abstract contract PerNetworkCloneBeaconVerifyChain is PerNetworkCloneDeploys, Ra
     function beacons() internal view override returns (ChainBeacon[] memory) {
         ChainBeacon[] memory chainBeacons = new ChainBeacon[](1);
         chainBeacons[0].chainId = PER_NETWORK_CLONE_POLYGON_CHAIN_ID;
-        chainBeacons[0].beacon.beacon = sBeacon;
-        chainBeacons[0].beacon.beaconCodeHash = sBeacon.codehash;
+        if (sBeaconBySuite) {
+            chainBeacons[0].beacon.beaconSuite = "per-network-clone@0_0_1";
+        } else {
+            chainBeacons[0].beacon.beacon = sBeacon;
+            chainBeacons[0].beacon.beaconCodeHash = sBeacon.codehash;
+        }
         chainBeacons[0].beacon.initial = BeaconState({implementation: "per-network-clone@0_0_1", owner: OWNER});
         return chainBeacons;
     }
@@ -72,5 +78,19 @@ abstract contract PerNetworkCloneBeaconVerifyChain is PerNetworkCloneDeploys, Ra
             )
         );
         this.testSuitesLiveOnEverySupportedNetwork();
+    }
+
+    function externalResolveBeacons(string memory network) external returns (ResolvedBeacon[] memory) {
+        string[] memory names = new string[](1);
+        names[0] = network;
+        return resolveBeacons(LibRainDeploy.declaredNetworkConfigs(names));
+    }
+
+    function testBeaconNamedBySuiteIsAtItsNetworksClone() external {
+        sBeaconBySuite = true;
+        ResolvedBeacon[] memory resolved = this.externalResolveBeacons(LibRainDeploy.POLYGON);
+        assertEq(resolved.length, 1);
+        assertEq(resolved[0].beacon.beacon, perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID));
+        assertTrue(resolved[0].beacon.beacon != perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID));
     }
 }
