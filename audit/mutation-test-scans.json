@@ -139,8 +139,7 @@
       ],
       "alreadyFiled": []
     }
-  }
-,
+  },
   {
     "timestamp": "2026-10-05T09:05:00Z",
     "commit": "f08ee42c6dbdb0f3daa82deae208e9ceccd37103",
@@ -162,8 +161,13 @@
       "nonTerminating": 0,
       "candidates": 3,
       "confirmed": 3,
-      "filed": [255, 256],
-      "alreadyFiled": [249]
+      "filed": [
+        255,
+        256
+      ],
+      "alreadyFiled": [
+        249
+      ]
     },
     "notes": [
       "Base attribution pass at f08ee42 probed 12 mutants over the pre-existing behaviours that are single-edit mutatable; 12/12 KILLED, every one by a test already on main, baseline green at 27. No pre-existing gap was found, so the tests this run added are additive rather than covering for main.",
@@ -195,7 +199,9 @@
       "candidates": 0,
       "confirmed": 0,
       "filed": [],
-      "alreadyFiled": [264]
+      "alreadyFiled": [
+        264
+      ]
     },
     "notes": [
       "Narrowed to the L01 fix, so commit and testsAfterCommit are the same tree: the tests are part of the change under test and the units did not exist before it. killedByExistingTests is 0 and gapsFilled is 0 for that reason, not because nothing was probed — 13 of 13 behaviours were probed and all 13 KILLED. The matrix establishes that each new test discriminates, not which pre-existing test covered what, and no attribution pass was possible.",
@@ -336,6 +342,36 @@
       "Baseline green at 196 on the full round suite. 14 of 15 KILLED by existing tests.",
       "F04 (registerOnForks skipping the sender and value refusals) survived the register suite and is killed by the new testRegisterOnForksRefusesInputsBeforeSelecting, re-probed on a fork-free narrow suite (baseline 8) because public RPC failures turned the register suite's baseline red.",
       "Killer attribution re-run on the register suite (baseline 39) and the snapshot suite (baseline 108) with fail-pattern '(?s)\\[FAIL.*?\\] (test\\w+)\\(': F03 testRegisterOnForksRefusesUnpairedForkIds; F06 testRegisterOnNetworksRefusesInputsInOrder, testWiring; F07 testWiring; F08 testCheckInputsRecordIsTheInputsSigned; F14-F15 testTheCommittedAggregateIsWhatTheGeneratorEmits and the aggregate block tests. testRegisterOnEveryNetwork also appears in fork-noisy killer lists; every such kill also names a non-fork test."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T13:53:18Z",
+    "commit": "72c6f96ea3cea31438f2de3a6a06ab89de7ea1e8",
+    "testsAfterCommit": "d41b6e9a3bb6deb812a23ed872a6b9f82dde3518",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 90,
+    "scope": "PR #315 (#313) round 6, the code changed since 4e23c12: src/lib/LibRainDeploy.sol checkNetworkForks pairing guard (M01-M02); src/lib/LibConfigRegistry.sol resolveSafe stamp and age comparisons (M03-M04); src/lib/LibConfigRegistryRegister.sol checkChain chain id read through vm, its two call sites and the registerOnSelectedChain record chain id (M05-M10)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 10,
+      "behavioursProbed": 10,
+      "killedByExistingTests": 9,
+      "gapsFilled": 1,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Offline suite: the six covering test contracts with the 56 tests that need a live fork excluded, every RPC pointed at a dead endpoint; baseline green at 122. 8 of 10 KILLED by existing tests.",
+      "M01 (pairing != to <) survived and is killed by the new testCheckResolvedValuesOnForksExtraForkIdsReverts and testCheckResolvedAddressesOnForksExtraForkIdsReverts (baseline 124).",
+      "M10 (checkChain dropped from checkRegisteredOnForks) survived offline only; on LibConfigRegistryRegisterOnForksTest against live RPC (baseline 7, -j 1) it is KILLED by testRegisterOnSubset, as are M05 and M07 by testRegisterOnNetworksAgainstLiveChains."
     ]
   }
 ]
