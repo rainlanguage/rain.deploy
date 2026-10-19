@@ -139,8 +139,7 @@
       ],
       "alreadyFiled": []
     }
-  }
-,
+  },
   {
     "timestamp": "2026-10-05T09:05:00Z",
     "commit": "f08ee42c6dbdb0f3daa82deae208e9ceccd37103",
@@ -162,8 +161,13 @@
       "nonTerminating": 0,
       "candidates": 3,
       "confirmed": 3,
-      "filed": [255, 256],
-      "alreadyFiled": [249]
+      "filed": [
+        255,
+        256
+      ],
+      "alreadyFiled": [
+        249
+      ]
     },
     "notes": [
       "Base attribution pass at f08ee42 probed 12 mutants over the pre-existing behaviours that are single-edit mutatable; 12/12 KILLED, every one by a test already on main, baseline green at 27. No pre-existing gap was found, so the tests this run added are additive rather than covering for main.",
@@ -195,7 +199,9 @@
       "candidates": 0,
       "confirmed": 0,
       "filed": [],
-      "alreadyFiled": [264]
+      "alreadyFiled": [
+        264
+      ]
     },
     "notes": [
       "Narrowed to the L01 fix, so commit and testsAfterCommit are the same tree: the tests are part of the change under test and the units did not exist before it. killedByExistingTests is 0 and gapsFilled is 0 for that reason, not because nothing was probed — 13 of 13 behaviours were probed and all 13 KILLED. The matrix establishes that each new test discriminates, not which pre-existing test covered what, and no attribution pass was possible.",
@@ -370,6 +376,37 @@
       "All 4 survived the pre-existing suite: pending check truncated to uint160, pending check refusing only words <= type(uint160).max, pending check masking off bits above 160, reported word truncated to uint160.",
       "All 4 killed by testBeaconAnsweringPendingOwnerWithADirtyWordIsRefused (MockDirtyWordFallbackBeacon answers 1 << 160); the fail-pattern did not name the killer of the truncated-report mutant, which is the only test added.",
       "Adversarial pass: no candidate bugs. BeaconPendingOwner NatSpec says a word with dirty upper bits is not an address and is reported raw, so it is refused; the code does so."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T07:52:39Z",
+    "commit": "8dc450ced219a849cae6348de07ba0d20e0fb7b7",
+    "testsAfterCommit": "8dc450ced219a849cae6348de07ba0d20e0fb7b7",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 95,
+    "scope": "PR #308 (#274) re-audit round: changed code in 8dc450c: LibRainDeployBeacon.checkDistinctMigrations and its calls from appliedState and RainDeployVerifyChain.resolveBeacon, and the checkBeacon pendingOwner refusal of a non-empty answer that is not one word (BeaconPendingOwnerUnreadable)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 23,
+      "behavioursProbed": 23,
+      "killedByExistingTests": null,
+      "gapsFilled": null,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|RainDeploySuitesBaseTest plus LibRainDeployTest testHasChainId via the transport-retrying check script; baseline 130 passed.",
+      "23/23 killed, 0 survived, 0 no-run.",
+      "Attribution not split: this round's tests (two distinct-id tests proposed by rain-marvin, two resolve-time repeat tests, the short-answer test, and the two-word test inverted to expect BeaconPendingOwnerUnreadable) were written before the probe, so the pre-existing suite was not probed alone. Kills by tests present at f8620d3: E04-E11 (repeat tests, updated for the chainId error signature), E15 (silent fallback), E16 (reverting word). Kills needing this round's tests: E01-E03 (distinct writer/namespace), E12-E14 (resolve-time), E17/E19 (short answer).",
+      "Adversarial pass: no candidate bugs. Distinct means distinct (writer, namespace, migration) triple, pinned both ways; an echoing fallback (4-byte answer) is now refused rather than read as no pending owner."
     ]
   }
 ]
