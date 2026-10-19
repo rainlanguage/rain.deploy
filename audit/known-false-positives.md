@@ -14,3 +14,10 @@
   holds fewer than five tokens: an unwrapped line holding exactly four takes the
   wrapped branch, and a wrapped line's four-space prefix splits into four empty
   tokens before its value.
+- `RainDeployVerifySnapshotBase.declaredValue`'s `if (!readable)` guard made
+  `if (false)` (D08), and the same to
+  `LibRainDeploySnapshot.declarationAddress`'s guard (N07). `declarationValue`
+  returns an empty token for an unreadable declaration; `declaredBytes` and
+  `declaredBytes32` split it into one part and `declaredAddress` fails
+  `vm.parseAddress("")`, so each still raises the same
+  `FrozenCodeRecordUnreadable(path)` or `FrozenSnapshotUnreadable(path)`.

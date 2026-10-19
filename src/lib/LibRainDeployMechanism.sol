@@ -69,8 +69,9 @@ error ExtendedNetworkAddressMismatch(string suite, uint256 chainId, address deri
 /// @param deployedAddress The address checked or to be broadcast there.
 error ExtendedNetworkUnfrozen(string suite, string network, address deployedAddress);
 
-/// Thrown when a storage slot of any account but the clone is read while the clone is deployed locally: the factory
-/// call and the clone's `initialize`.
+/// Thrown when a storage slot of an account the factory call did not create is read while the clone is deployed
+/// locally: the factory call and the clone's `initialize`. Writes are not refused, and the clone and any account
+/// created during the call are exempt.
 /// @param suite The suite being deployed.
 /// @param account The account whose storage was read.
 /// @param slot The slot read.

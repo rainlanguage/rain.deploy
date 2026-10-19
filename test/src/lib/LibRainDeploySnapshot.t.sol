@@ -3686,6 +3686,26 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(LibRainDeploySnapshot.withoutBlockComments("x = 1 / 2; /*\nz\n*/y"), "x = 1 / 2; \n\ny");
     }
 
+    /// A quote of the other kind inside a string, or any quote inside a line comment, closes nothing.
+    function testWithoutBlockCommentsOtherQuotesCloseNothing() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"'/*\"b/**/c"), "a\"'/*\"bc");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a'\"/*'b/**/c"), "a'\"/*'bc");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("// it's /* x\ny"), "// it's /* x\ny");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("// a \"/* x\ny"), "// a \"/* x\ny");
+        assertEq(
+            LibRainDeploySnapshot.withoutBlockComments(
+                "string constant S = \"it's /* x\";\nbytes32 constant MECHANISM_DATA = 0;\n"
+            ),
+            "string constant S = \"it's /* x\";\nbytes32 constant MECHANISM_DATA = 0;\n"
+        );
+        assertEq(
+            LibRainDeploySnapshot.withoutBlockComments(
+                "/// it's /* not a comment\nbytes32 constant MECHANISM_DATA = 0;\n"
+            ),
+            "/// it's /* not a comment\nbytes32 constant MECHANISM_DATA = 0;\n"
+        );
+    }
+
     /// A `//` comment runs to the next `\n` and no other byte, so what follows a carriage return in one is still
     /// comment to the scanner.
     function testWithoutBlockCommentsLineCommentEndsAtNewlineOnly() external pure {
