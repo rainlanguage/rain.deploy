@@ -6,6 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {MockResolvedValues} from "../../concrete/MockResolvedValues.sol";
 import {MockRevertingAnswerOwner} from "../../concrete/MockRevertingAnswerOwner.sol";
+import {MockRawAnswerOwner} from "../../concrete/MockRawAnswerOwner.sol";
 import {MockChainDependentOwner} from "../../concrete/MockChainDependentOwner.sol";
 
 /// @title LibRainDeployResolvedValuesTest
@@ -181,12 +182,55 @@ contract LibRainDeployResolvedValuesTest is Test {
     /// against an empty expectation.
     function testCheckResolvedValuesUnreadableTargetReverts(address target) external {
         vm.assume(target.code.length == 0);
+        // Precompiles and forge's own addresses have no code yet answer.
+        vm.assume(uint160(target) > 0xffff);
+        assumeNotForgeAddress(target);
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.ResolvedValueReadFailed.selector, "test_network", target, uint256(0), bytes("")
             )
         );
         this.externalCheckResolvedValues("test_network", target, ownerReadCalls(), one(""));
+    }
+
+    /// An answer that is not whole words is still an answer: it MUST pass on
+    /// exactly those bytes and mismatch on any other, never fail as a read.
+    function testCheckResolvedValuesShortAnswerIsAnAnswer(bytes memory answer, bytes memory other) external {
+        vm.assume(answer.length > 0 && answer.length < 0x20);
+        vm.assume(keccak256(other) != keccak256(answer));
+        MockRawAnswerOwner target = new MockRawAnswerOwner(answer);
+        LibRainDeploy.checkResolvedValues("test_network", address(target), ownerReadCalls(), one(answer));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedValue.selector,
+                "test_network",
+                address(target),
+                uint256(0),
+                other,
+                answer
+            )
+        );
+        this.externalCheckResolvedValues("test_network", address(target), ownerReadCalls(), one(other));
+    }
+
+    /// A failed read after the first MUST be named by its own index.
+    function testCheckResolvedValuesReadFailureNamesTheFailingRead(
+        uint256 threshold,
+        bytes32 codeHash,
+        address[] memory signers
+    ) external {
+        MockResolvedValues target = new MockResolvedValues(threshold, codeHash, signers);
+        bytes[] memory readCalls = valueReadCalls();
+        readCalls[1] = abi.encodeWithSignature("thisFunctionDoesNotExist()");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedValueReadFailed.selector, "test_network", address(target), uint256(1), bytes("")
+            )
+        );
+        this.externalCheckResolvedValues(
+            "test_network", address(target), readCalls, valueExpected(threshold, codeHash, signers)
+        );
     }
 
     /// Every read MUST be checked, not only the first.
