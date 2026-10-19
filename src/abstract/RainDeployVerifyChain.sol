@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {console2} from "forge-std-1.17.0/src/console2.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
@@ -17,11 +18,21 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         checkDeployedOnNetworks(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
     }
 
-    /// Checks every suite against every given network, forking each network once and checking every
-    /// suite on it.
+    /// Checks every suite against every given network, forking with `vm`.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
     function checkDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) internal {
+        checkDeployedOnNetworks(vm, networks, suites);
+    }
+
+    /// Checks every suite against every given network, forking each network once with `forkVm` and checking every
+    /// suite on it.
+    /// @param forkVm The Vm instance to fork with.
+    /// @param networks The catalogue entry of each network to check on.
+    /// @param suites The suites to check.
+    function checkDeployedOnNetworks(Vm forkVm, SupportedNetwork[] memory networks, DeploySuite[] memory suites)
+        internal
+    {
         // Nothing to check is not a reason to touch every RPC endpoint. Forking
         // to check nothing turns an outage into the failure of an assertion
         // that has no subject, which is the one failure this contract is
@@ -45,9 +56,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             }
         }
 
-        uint256[] memory forkIds = LibRainDeploy.createForks(vm, LibRainDeploy.networkNames(networks));
+        uint256[] memory forkIds = LibRainDeploy.createForks(forkVm, LibRainDeploy.networkNames(networks));
         for (uint256 i = 0; i < networks.length; i++) {
-            vm.selectFork(forkIds[i]);
+            forkVm.selectFork(forkIds[i]);
             LibRainDeploy.checkNetworkChainId(networks[i]);
             for (uint256 j = 0; j < suites.length; j++) {
                 if (!requiresSuiteOn(suites[j], networks[i].name)) {
