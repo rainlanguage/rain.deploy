@@ -278,16 +278,20 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   exactly as recorded, so a recorded network keeps its recorded address and the
   refusal of a stale one. The record group does not do this: it matches the
   record against what the release was cut for. A release whose implementation is
-  not its candidate's takes no unrecorded network unless
+  not its candidate's takes no unrecorded network from its candidate unless
   `RainDeploySuitesBase.initDataReaders` names that implementation for the
-  candidate's suite; otherwise it is refused with `InitDataReaderUndeclared`.
+  candidate's suite; otherwise it is refused with `InitDataReaderUndeclared`,
+  before `ExtendedNetworkUnfrozen`. A reader only lets the refusal name the
+  address to declare: a network is admitted by `extendedNetworks` alone, and a
+  declared one is not taken from the candidate, so it needs no reader.
 - **Extended networks.** The candidate's init data can change after a release is
   broadcast to an unrecorded network, which would move that network's address.
   So an unrecorded network is declared, then broadcast: override
   `RainDeploySuitesBase.extendedNetworks` to return it, for the release's key,
   as a `CloneNetwork`: its chain id, the init data it is broadcast with and its
   address. The broadcast refuses an unrecorded network not yet declared with
-  `ExtendedNetworkUnfrozen`, before any fork, naming the address to declare. A
+  `ExtendedNetworkUnfrozen`, before any fork and after the
+  `InitDataReaderUndeclared` check above, naming the address to declare. A
   declared entry is used in place of the candidate's, held to the address its
   init data derives under the release (`ExtendedNetworkAddressMismatch`), and is
   refused on a network the release records (`DuplicateCloneNetwork`) or on a
@@ -1175,11 +1179,15 @@ it. In order:
    candidate's, and that implementation reads the candidate's init data as the
    candidate's implementation does, override `initDataReaders` to return it for
    the candidate's suite key. Without it the release is refused any unrecorded
-   network in play with `InitDataReaderUndeclared`.
+   network in play that `extendedNetworks` does not declare with
+   `InitDataReaderUndeclared`, which is raised before `ExtendedNetworkUnfrozen`
+   and names no address to declare.
 7. For each per-network release broadcast, or to be broadcast, to a network it
    does not record, override `extendedNetworks` to return that network as
    broadcast: declare, then broadcast. Without it the broadcast and the chain
-   group refuse the release there with `ExtendedNetworkUnfrozen`.
+   group refuse the release there with `ExtendedNetworkUnfrozen`, or first with
+   `InitDataReaderUndeclared` under an implementation that is neither the
+   candidate's nor a declared reader (step 6).
 8. A clone whose `initialize` reads storage other than its own is refused by the
    local deploy with `CloneInitializeReadsStorage`. Only storage reads are
    checked: a balance or code read of another account is not refused. The local
