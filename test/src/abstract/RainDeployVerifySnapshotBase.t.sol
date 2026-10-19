@@ -1001,6 +1001,54 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         }
     }
 
+    /// Replaces the rest of the line `marker` ends with `value`.
+    /// @param record The record.
+    /// @param marker Text that occurs once in the record.
+    /// @param value The line's new rest.
+    /// @return The edited record.
+    function withLineRest(string memory record, string memory marker, string memory value)
+        internal
+        pure
+        returns (string memory)
+    {
+        string[] memory parts = vm.split(record, marker);
+        assertEq(parts.length, 2, "the marker is not where the generator writes it");
+        string[] memory rest = vm.split(parts[1], "\n");
+        string memory edited = string.concat(parts[0], marker, value);
+        for (uint256 j = 1; j < rest.length; j++) {
+            edited = string.concat(edited, "\n", rest[j]);
+        }
+        return edited;
+    }
+
+    /// A bytecode hash outside one `bytes32(0x...);` of 32 bytes of hex is unreadable, never a raw parse error.
+    function testFrozenCodeRecordMalformedHashIsUnreadable() external {
+        string[] memory values = new string[](6);
+        values[0] = "bytes32(0xzz00000000000000000000000000000000000000000000000000000000000000);";
+        values[1] = "bytes32(0x00000000000000000000000000000000000000000000000000000000000001);";
+        values[2] = "bytes32(0x000000000000000000000000000000000000000000000000000000000000000001);";
+        values[3] = "0x0000000000000000000000000000000000000000000000000000000000000001;";
+        values[4] = "bytes32(0x0000000000000000000000000000000000000000000000000000000000000001;)";
+        values[5] = "bytes32((0x00000000000000000000000000000000000000000000000000000000000001));";
+        for (uint256 i = 0; i < values.length; i++) {
+            string memory edited = withLineRest(committedCodeRecord(), "bytes32 constant BYTECODE_HASH = ", values[i]);
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord("record.sol", edited);
+        }
+    }
+
+    /// A `bytes` literal holding a non-hex digit or an odd number of digits is unreadable, never a raw parse error.
+    function testFrozenCodeRecordMalformedBytesIsUnreadable() external {
+        string[] memory values = new string[](2);
+        values[0] = "hex\"zz\";";
+        values[1] = "hex\"abc\";";
+        for (uint256 i = 0; i < values.length; i++) {
+            string memory edited = withLineRest(committedCodeRecord(), "bytes constant RUNTIME_CODE =\n    ", values[i]);
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord("record.sol", edited);
+        }
+    }
+
     /// A declaration line holding fewer than the writer's tokens, or no `=` as its fourth, is unreadable.
     function testFrozenCodeRecordDeclarationWithoutASpacedEqualsIsUnreadable() external {
         string memory record = committedCodeRecord();

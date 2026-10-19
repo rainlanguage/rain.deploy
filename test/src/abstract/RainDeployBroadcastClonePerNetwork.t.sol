@@ -24,6 +24,7 @@ import {
 import {ZoltuDeployOrAdopt} from "../../abstract/ZoltuDeployOrAdopt.sol";
 import {PerNetworkCloneDeploy} from "../../concrete/PerNetworkCloneDeploy.sol";
 import {UpgradedPerNetworkCloneDeploy} from "../../concrete/UpgradedPerNetworkCloneDeploy.sol";
+import {WideCandidatePerNetworkCloneDeploy} from "../../concrete/WideCandidatePerNetworkCloneDeploy.sol";
 import {
     upgradedPerNetworkClone,
     upgradedPerNetworkCloneAddress
@@ -392,5 +393,28 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         assertEq(block.chainid, PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
         assertEq(arbitrumAddress.codehash, suite.storedBytecodeHash);
         assertEq(MockCloneable(arbitrumAddress).sInitData(), abi.encode(PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN));
+    }
+
+    /// The candidate's networks are taken among the networks broadcast to, not the repo's supported networks: Polygon,
+    /// declared by the candidate and broadcast to though not supported, is refused as unfrozen at the address the
+    /// release derives there, before any fork.
+    function testBroadcastTakesCandidateNetworksAmongTheBroadcastNetworks() external {
+        DeploySuite memory suite = onlyFirstRecordedNetwork(
+            new UpgradedPerNetworkCloneDeploy().externalSuiteByName("per-network-clone@0_0_1")
+        );
+        WideCandidatePerNetworkCloneDeploy deploy = new WideCandidatePerNetworkCloneDeploy();
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.POLYGON;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ExtendedNetworkUnfrozen.selector,
+                suite.suite,
+                LibRainDeploy.POLYGON,
+                perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID)
+            )
+        );
+        deploy.externalBroadcastSuite(suite, networks, 1);
+        assertFalse(anyForkExists(), "a network was forked before the unfrozen network was refused");
     }
 }

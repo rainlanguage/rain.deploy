@@ -3,15 +3,18 @@
 pragma solidity =0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {CloneNetworks} from "../../../src/lib/LibRainDeployClone.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
+    PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
     PerNetworkCloneDeploys,
     onlyFirstRecordedNetwork,
-    perNetworkCloneReleaseAddress
+    perNetworkCloneInitData
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {
     UpgradedPerNetworkCloneDeploys,
@@ -36,16 +39,18 @@ contract RainDeployVerifyChainClonePerNetworkSubsetTest is UpgradedPerNetworkClo
         return PerNetworkCloneDeploys.supportedNetworks();
     }
 
-    /// Puts the release's dependencies, and its clone at its Arbitrum One address, on every fork.
+    /// Puts the release's dependencies, and its clone at every recorded address, on every fork.
     function setUp() external {
         DeploySuite memory release = releasedSuites()[0];
         for (uint256 i = 0; i < release.dependencies.length; i++) {
             vm.etch(release.dependencies[i].deployedAddress, release.dependencies[i].runtimeCode);
             vm.makePersistent(release.dependencies[i].deployedAddress);
         }
-        address arbitrumAddress = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
-        vm.etch(arbitrumAddress, release.storedRuntimeCode);
-        vm.makePersistent(arbitrumAddress);
+        address[] memory addresses = LibRainDeployMechanism.deployedAddresses(release);
+        for (uint256 i = 0; i < addresses.length; i++) {
+            vm.etch(addresses[i], release.storedRuntimeCode);
+            vm.makePersistent(addresses[i]);
+        }
         sForkVm = new LocalForkVm();
     }
 
@@ -57,7 +62,8 @@ contract RainDeployVerifyChainClonePerNetworkSubsetTest is UpgradedPerNetworkClo
         checkDeployedOnNetworks(Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(networks), suites);
     }
 
-    /// On Arbitrum One alone the candidate's Polygon is out of play, so the release passes and Polygon is never forked.
+    /// On Arbitrum One alone the candidate's Polygon is out of play, so the release passes and Polygon is never deployed
+    /// locally or forked.
     function testSubsetTakesNoOutOfPlayCandidateNetwork() external {
         CloneNetworks memory release =
             abi.decode(onlyFirstRecordedNetwork(releasedSuites()[0]).mechanismData, (CloneNetworks));
@@ -67,6 +73,22 @@ contract RainDeployVerifyChainClonePerNetworkSubsetTest is UpgradedPerNetworkClo
         arbitrum[0] = LibRainDeploy.ARBITRUM_ONE;
         vm.expectCall(address(sForkVm), abi.encodeCall(LocalForkVm.createFork, (LibRainDeploy.POLYGON)), 0);
         vm.expectCall(address(sForkVm), abi.encodeCall(LocalForkVm.createFork, (LibRainDeploy.ARBITRUM_ONE)), 1);
+        vm.expectCall(
+            release.factory,
+            abi.encodeCall(
+                ICloneableFactoryV4.cloneDeterministicOpenSalt,
+                (release.implementation, perNetworkCloneInitData(PER_NETWORK_CLONE_POLYGON_CHAIN_ID), release.salt)
+            ),
+            0
+        );
+        vm.expectCall(
+            release.factory,
+            abi.encodeCall(
+                ICloneableFactoryV4.cloneDeterministicOpenSalt,
+                (release.implementation, perNetworkCloneInitData(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID), release.salt)
+            ),
+            1
+        );
         this.externalCheckOnLocalForks(arbitrum);
     }
 }
