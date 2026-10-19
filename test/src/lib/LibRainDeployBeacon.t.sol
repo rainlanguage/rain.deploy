@@ -22,6 +22,7 @@ import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockOwnable2StepBeacon} from "../../concrete/MockOwnable2StepBeacon.sol";
 import {MockFallbackBeacon} from "../../concrete/MockFallbackBeacon.sol";
+import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
 
 /// @title LibRainDeployBeaconTest
 /// @notice `LibRainDeployBeacon`'s expected state from the migration registry, and its check of a beacon against it.
@@ -50,9 +51,7 @@ contract LibRainDeployBeaconTest is Test {
     }
 
     function applyMigration(bytes32 migration, bytes32 head) internal {
-        vm.prank(WRITER);
-        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigration(NAMESPACE, migration, LibMigrationRegistry.onto(WRITER, NAMESPACE, head));
+        LibBeaconTest.applyMigration(vm, WRITER, NAMESPACE, migration, head);
     }
 
     function onto(bytes32 namespace, bytes32 head) internal pure returns (Prerequisite[] memory) {
@@ -77,9 +76,7 @@ contract LibRainDeployBeaconTest is Test {
     }
 
     function applyIn(bytes32 namespace, bytes32 migration, Prerequisite[] memory list) internal {
-        vm.prank(WRITER);
-        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigration(namespace, migration, list);
+        LibBeaconTest.applyMigration(vm, WRITER, namespace, migration, list);
     }
 
     function applyAt(bytes32 namespace, bytes32 migration, uint256 moment, Prerequisite[] memory list) internal {
@@ -449,9 +446,7 @@ contract LibRainDeployBeaconTest is Test {
         Prerequisite[] memory list = new Prerequisite[](2);
         list[0] = Prerequisite({writer: otherWriter, namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
         list[1] = record(NAMESPACE, UPGRADE);
-        vm.prank(otherWriter);
-        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigration(NAMESPACE, UPGRADE, list);
+        LibBeaconTest.applyMigration(vm, otherWriter, NAMESPACE, UPGRADE, list);
         BeaconTransition[] memory transitions = upgradeThenHandover();
         transitions[1].migration = Prerequisite({writer: otherWriter, namespace: NAMESPACE, migration: UPGRADE});
         assertEq(this.externalAppliedState(declared(transitions)), 2);

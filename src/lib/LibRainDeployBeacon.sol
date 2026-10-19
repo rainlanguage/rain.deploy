@@ -26,9 +26,10 @@ struct BeaconTransition {
 }
 
 /// An upgradeable beacon on one network: `initial` until a transition's migration is applied.
-/// @param beaconSuite The key of the released suite deployed as the beacon, empty for a beacon this repo did not deploy.
-/// @param beacon The address of a beacon this repo did not deploy, zero when named by `beaconSuite`.
-/// @param beaconCodeHash The runtime code hash of a beacon this repo did not deploy, zero when named by `beaconSuite`.
+/// @param beaconSuite The key of the released suite the beacon itself is, empty for any other beacon.
+/// @param beacon The address of a beacon that is not itself a released suite: one a set-deployer `new`s, nonce-deployed
+/// per chain, or one deployed elsewhere. Zero when named by `beaconSuite`.
+/// @param beaconCodeHash The runtime code hash of the beacon at `beacon`, zero when named by `beaconSuite`.
 /// @param initial The state before any transition's migration is applied.
 /// @param transitions The states, each a distinct migration recorded applied after the earlier-declared applied ones.
 struct DeployBeacon {

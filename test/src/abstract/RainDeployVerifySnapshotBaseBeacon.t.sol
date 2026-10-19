@@ -2,18 +2,20 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {
     BeaconDeclaredTwice,
     BeaconNamedTwice,
     BeaconOnUncheckedNetwork,
+    BeaconSeatedOwner,
     BeaconSuiteNotReleased,
     BeaconUnnamed
 } from "../../../src/abstract/RainDeployVerifyBase.sol";
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
-    DeploySuite
+    DeploySuite,
+    RainDeploySuitesBase
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifySnapshotBase} from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {
@@ -25,6 +27,7 @@ import {
 } from "../../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibBeaconDeclarations} from "../../lib/LibBeaconDeclarations.sol";
+import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
 import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 
@@ -35,39 +38,52 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
 
     address constant BEACON = address(0xBEAC0);
 
+    address constant OWNER = address(0xB0B);
+
+    /// The declarations `beacons()` returns.
     ChainBeacon[] internal sBeacons;
+    /// The networks `supportedNetworks()` returns, every catalogue network when empty.
     string[] internal sSupported;
 
     function implementation(string memory key) internal pure returns (DeploySuite memory) {
-        return DeploySuite({
-            suite: key,
-            creationCode: type(MockDeployable).creationCode,
-            storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
-            storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
-            storedRuntimeCode: type(MockDeployable).runtimeCode,
-            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
-            dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
-        });
+        return LibBeaconTest.zoltuSuite(
+            key,
+            type(MockDeployable).creationCode,
+            type(MockDeployable).runtimeCode,
+            "test/concrete/MockDeployable.sol:MockDeployable"
+        );
     }
 
+    /// @inheritdoc RainDeploySuitesBase
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
-        DeploySuite[] memory released = new DeploySuite[](1);
+        DeploySuite[] memory released = new DeploySuite[](2);
         released[0] = implementation("implementation@0_0_1");
+        address implementationAddress = released[0].storedDeployedAddress;
+        released[1] = LibBeaconTest.zoltuSuite(
+            "beacon@0_0_1",
+            abi.encodePacked(type(UpgradeableBeacon).creationCode, abi.encode(implementationAddress, OWNER)),
+            type(UpgradeableBeacon).runtimeCode,
+            "dependencies/@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon"
+        );
+        released[1].dependencies = new DeployDependency[](1);
+        released[1].dependencies[0] =
+            DeployDependency({deployedAddress: implementationAddress, runtimeCode: type(MockDeployable).runtimeCode});
         return released;
     }
 
+    /// @inheritdoc RainDeploySuitesBase
     function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({snapshot: implementation("implementation"), unanchorableReason: ""});
         return candidates;
     }
 
+    /// @inheritdoc RainDeploySuitesBase
     function beacons() internal view override returns (ChainBeacon[] memory) {
         return sBeacons;
     }
 
+    /// @inheritdoc RainDeploySuitesBase
     function supportedNetworks() internal view override returns (string[] memory) {
         return sSupported.length == 0 ? LibRainDeploy.supportedNetworks() : sSupported;
     }
@@ -81,7 +97,7 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
             beaconSuite: "",
             beacon: BEACON,
             beaconCodeHash: keccak256("beacon"),
-            initial: BeaconState({implementation: "implementation@0_0_1", owner: address(0xB0B)}),
+            initial: BeaconState({implementation: "implementation@0_0_1", owner: OWNER}),
             transitions: new BeaconTransition[](0)
         });
     }
@@ -94,9 +110,7 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
     function expectRefusedOffline(bytes memory refusal) internal {
         vm.expectRevert(refusal);
         this.testBeaconDeclarationsResolve();
-        try vm.activeFork() returns (uint256) {
-            fail("forked");
-        } catch {}
+        LibBeaconTest.assertNoFork(vm, "forked");
     }
 
     function testUnreleasedImplementationIsRefusedOffline() external {
@@ -205,5 +219,25 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
     function testOneBeaconAddressOnTwoNetworksIsNotDeclaredTwice() external {
         sBeacons.declare(8453, valid());
         this.testBeaconDeclarationsResolve();
+    }
+
+    function bySuite(address owner) internal pure returns (DeployBeacon memory) {
+        DeployBeacon memory beacon = valid();
+        beacon.beaconSuite = "beacon@0_0_1";
+        beacon.beacon = address(0);
+        beacon.beaconCodeHash = bytes32(0);
+        beacon.initial.owner = owner;
+        return beacon;
+    }
+
+    function testBeaconSuiteSeatingAnotherOwnerIsRefusedOffline() external {
+        redeclare(42161, bySuite(address(0xCAFE)));
+        expectRefusedOffline(abi.encodeWithSelector(BeaconSeatedOwner.selector, 42161, 0, abi.encode(OWNER)));
+    }
+
+    function testBeaconSuiteSeatingItsInitialStateResolvesOffline() external {
+        redeclare(42161, bySuite(OWNER));
+        this.testBeaconDeclarationsResolve();
+        LibBeaconTest.assertNoFork(vm, "forked");
     }
 }

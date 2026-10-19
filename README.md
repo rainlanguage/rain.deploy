@@ -330,19 +330,24 @@ at its code hash, `implementation()` at that suite's address on the network,
 `owner()` at that owner, and the beacon's own suite, when it names one, and that
 state's implementation suite live there as any suite is. A suite a beacon names
 MUST be released, refused otherwise with `BeaconSuiteNotReleased`: a candidate's
-address moves with its source. Name a beacon this repo deploys by its suite key
-in `beaconSuite`, and one it did not deploy by both `beacon` and
+address moves with its source. Name a beacon that is itself a released suite by
+its suite key in `beaconSuite`, and any other (one a set-deployer `new`s,
+nonce-deployed per chain, or one deployed elsewhere) by both `beacon` and
 `beaconCodeHash`; naming it both ways is refused with `BeaconNamedTwice`, and
 naming it by neither, or by only one of `beacon` and `beaconCodeHash`, with
 `BeaconUnnamed`. A beacon whose chain id is not one of `supportedNetworks()`, in
 the catalogue or not, is refused with `BeaconOnUncheckedNetwork`, and a second
-declaration of a beacon on its network with `BeaconDeclaredTwice`. These
-refusals, and those of transition migrations below, are raised offline by the
-snapshot group for every beacon, and by the chain group, before any network is
-forked, for the beacons on the networks it checks; `BeaconOnUncheckedNetwork`
-there covers every beacon. A beacon with transitions reads `MigrationRegistry`
-on its network, which MUST be deployed there. The chain group reads `owner()`,
-and refuses a beacon that answers `pendingOwner()` with anything but zero with
+declaration of a beacon on its network with `BeaconDeclaredTwice`. A beacon
+named by `beaconSuite` is deployed locally at its address on its network and
+refused with `BeaconSeatedOwner` or `BeaconSeatedImplementation` when it answers
+`owner()` or `implementation()` with other than its initial state, so a suite
+that seats the deploy key is refused whatever owner it declares. These refusals,
+and those of transition migrations below, are raised offline by the snapshot
+group for every beacon, and by the chain group, before any network is forked,
+for the beacons on the networks it checks; `BeaconOnUncheckedNetwork` there
+covers every beacon. A beacon with transitions reads `MigrationRegistry` on its
+network, which MUST be deployed there. The chain group reads `owner()`, and
+refuses a beacon that answers `pendingOwner()` with anything but zero with
 `BeaconPendingOwner`, or with data that is not one word with
 `BeaconPendingOwnerUnreadable`: a two-step handover is red from
 `transferOwnership` until the batch that accepts it applies its migration.
@@ -398,13 +403,13 @@ subject's address nor the factory's.
 Five groups, sorted by what each is anchored to and therefore by what each can
 catch:
 
-| Group    | Anchored to                | Catches                                                                                                   | Cannot catch                     |
-| -------- | -------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------- |
-| Internal | the recorded set           | an inconsistently generated set                                                                           | a snapshot of the wrong contract |
-| Source   | `vm.getCode(artifactPath)` | a snapshot of the wrong contract                                                                          | anything about any chain         |
-| Record   | the frozen record          | a release the declaration missed                                                                          | what a declared suite records    |
-| Beacons  | the beacon declarations    | a beacon misnamed, unreleased, off the supported networks, declared twice, or with a malformed transition | what any beacon holds on chain   |
-| Chain    | the networks               | a missing deployment, an alias on another chain, or a beacon off its declared state                       | anything about a candidate       |
+| Group    | Anchored to                | Catches                                                                                                                                         | Cannot catch                     |
+| -------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| Internal | the recorded set           | an inconsistently generated set                                                                                                                 | a snapshot of the wrong contract |
+| Source   | `vm.getCode(artifactPath)` | a snapshot of the wrong contract                                                                                                                | anything about any chain         |
+| Record   | the frozen record          | a release the declaration missed                                                                                                                | what a declared suite records    |
+| Beacons  | the beacon declarations    | a beacon misnamed, unreleased, off the supported networks, declared twice, seating other than its initial state, or with a malformed transition | what any beacon holds on chain   |
+| Chain    | the networks               | a missing deployment, an alias on another chain, or a beacon off its declared state                                                             | anything about a candidate       |
 
 The internal group's blind spot is not a gap to close there: every check in it
 asks the recorded bytes to agree with each other, and the wrong contract's bytes

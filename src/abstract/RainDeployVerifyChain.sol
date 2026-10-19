@@ -18,8 +18,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         checkDeployedOnNetworks(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
     }
 
-    /// Checks every suite and every beacon on the given networks against each, forking each network once, refusing
-    /// a beacon outside `supportedNetworks()` before forking.
+    /// Checks every suite and every beacon on the given networks against each, forking each network once, with
+    /// `resolveBeacons`'s refusals raised before forking.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
     function checkDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) internal {

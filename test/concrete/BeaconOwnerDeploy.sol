@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ChainBeacon, DeployBeacon} from "../../src/lib/LibRainDeployBeacon.sol";
 import {LibBeaconDeclarations} from "../lib/LibBeaconDeclarations.sol";
 import {ExampleDeploy} from "./ExampleDeploy.sol";
@@ -12,8 +12,10 @@ import {ExampleDeploy} from "./ExampleDeploy.sol";
 contract BeaconOwnerDeploy is ExampleDeploy {
     using LibBeaconDeclarations for ChainBeacon[];
 
+    /// The declarations `beacons()` returns.
     ChainBeacon[] internal sBeacons;
 
+    /// @inheritdoc RainDeploySuitesBase
     function beacons() internal view override returns (ChainBeacon[] memory) {
         return sBeacons;
     }

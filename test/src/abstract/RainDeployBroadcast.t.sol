@@ -634,7 +634,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         expectBroadcastRefused(deploy, abi.encodeWithSelector(BeaconOwnedByDeployKey.selector, 42161, 0, 2));
     }
 
-    function testBroadcastPassesBeaconsOwnedByOthers() external {
+    function testBroadcastWithBeaconsOwnedByOthersReachesTheNetworkRefusal() external {
         BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
         deploy.declareBeacon(42161, ownedBy(address(0xB0B), address(0xCAFE)));
         deploy.declareBeacon(8453, ownedBy(address(0xCAFE), vm.addr(2)));

@@ -3,6 +3,8 @@
 pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {IBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/IBeacon.sol";
+import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
 
 import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeployMechanism, ZoltuDerivationMismatch} from "../lib/LibRainDeployMechanism.sol";
@@ -53,6 +55,20 @@ error BeaconOnUncheckedNetwork(uint256 chainId, uint256 beaconIndex);
 /// @param chainId The beacon's network.
 /// @param beaconIndex The index in `beacons()` of the later declaration.
 error BeaconDeclaredTwice(uint256 chainId, uint256 beaconIndex);
+
+/// @notice A beacon named by `beaconSuite`, as its suite deploys it on its network, MUST answer `owner()` with
+/// `initial.owner`.
+/// @param chainId The beacon's network.
+/// @param beaconIndex The beacon's index in `beacons()`.
+/// @param seated The `owner()` answer, raw.
+error BeaconSeatedOwner(uint256 chainId, uint256 beaconIndex, bytes seated);
+
+/// @notice A beacon named by `beaconSuite`, as its suite deploys it on its network, MUST answer `implementation()`
+/// with the address of `initial.implementation` there.
+/// @param chainId The beacon's network.
+/// @param beaconIndex The beacon's index in `beacons()`.
+/// @param seated The `implementation()` answer, raw.
+error BeaconSeatedImplementation(uint256 chainId, uint256 beaconIndex, bytes seated);
 
 /// A beacon with every suite it names resolved on its network.
 /// @param chainId The beacon's network.
@@ -154,8 +170,10 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         return resolved;
     }
 
-    /// Refuses `BeaconNamedTwice` and `BeaconUnnamed`, `BeaconSuiteNotReleased` through `resolveReleased`, and
-    /// `LibRainDeployBeacon.checkTransitionMigrations`'s refusals.
+    /// Refuses `BeaconNamedTwice` and `BeaconUnnamed`, `BeaconSuiteNotReleased` through `resolveReleased`,
+    /// `LibRainDeployBeacon.checkTransitionMigrations`'s refusals, and those of `LibRainDeployMechanism.deployedAddress`
+    /// and `deriveDeployment` for each suite it names on `chainId`, and `checkSeatedState`'s for a beacon named by
+    /// `beaconSuite`.
     /// @param declaration The beacon, left unwritten so one declaration can be resolved on several networks.
     /// @param chainId The beacon's network.
     /// @param beaconIndex The beacon's index in `beacons()`, for the refusal.
@@ -204,7 +222,43 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
                 LibRainDeployMechanism.deployedAddress(released[releasedIndex], chainId);
             resolved.implementationDerived[state] = derived[releasedIndex];
         }
+        if (bytes(beacon.beaconSuite).length != 0) {
+            checkSeatedState(resolved, beaconIndex);
+        }
         return resolved;
+    }
+
+    /// Deploys the beacon's suite locally, as `deriveDeployment` does, and refuses `BeaconSeatedOwner` or
+    /// `BeaconSeatedImplementation` when the deployment at the beacon's address answers `owner()` or
+    /// `implementation()` other than the initial state. A read that reverts or answers nothing is left to the chain
+    /// group's `LibRainDeployBeacon.checkBeacon`.
+    /// @param resolved The beacon, resolved and named by `beaconSuite`.
+    /// @param beaconIndex The beacon's index in `beacons()`, for the refusal.
+    function checkSeatedState(ResolvedBeacon memory resolved, uint256 beaconIndex) internal {
+        uint256 snapshotId = vm.snapshotState();
+        LibRainDeployMechanism.deployLocally(vm, resolved.suite);
+        // slither-disable-next-line low-level-calls
+        (bool ownerAnswered, bytes memory owner) = resolved.beacon.beacon.staticcall(abi.encodeCall(IERC5313.owner, ()));
+        // slither-disable-next-line low-level-calls
+        (bool implementationAnswered, bytes memory implementation) =
+            resolved.beacon.beacon.staticcall(abi.encodeCall(IBeacon.implementation, ()));
+        if (!vm.revertToState(snapshotId)) {
+            revert DerivationSnapshotRevertFailed(resolved.suite.suite, snapshotId);
+        }
+        if (seatsOther(ownerAnswered, owner, resolved.beacon.initial.owner)) {
+            revert BeaconSeatedOwner(resolved.chainId, beaconIndex, owner);
+        }
+        if (seatsOther(implementationAnswered, implementation, resolved.implementationAddresses[0])) {
+            revert BeaconSeatedImplementation(resolved.chainId, beaconIndex, implementation);
+        }
+    }
+
+    /// @param answered Whether the read returned.
+    /// @param answer What it returned.
+    /// @param expected The address it MUST answer.
+    /// @return True when the read returned data other than `expected`'s word.
+    function seatsOther(bool answered, bytes memory answer, address expected) internal pure returns (bool) {
+        return answered && answer.length != 0 && keccak256(answer) != keccak256(abi.encode(expected));
     }
 
     /// Refuses `BeaconSuiteNotReleased` when `key` is not in `released`.
