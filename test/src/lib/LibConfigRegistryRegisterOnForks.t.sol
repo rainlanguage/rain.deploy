@@ -103,7 +103,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
 
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
-            assertEq(block.chainid, configs[i].chainId, networks[i]);
+            assertEq(vm.getChainId(), configs[i].chainId, networks[i]);
             assertEq(
                 LibConfigRegistryRead.getValue(
                     IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), hashed
@@ -198,7 +198,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
             assertEq(LibConfigRegistryRead.getValue(registry, hashed), value, networks[i]);
-            assertEq(LibConfigRegistryRead.getMoment(registry, hashed), block.timestamp, networks[i]);
+            assertEq(LibConfigRegistryRead.getMoment(registry, hashed), vm.getBlockTimestamp(), networks[i]);
         }
     }
 
@@ -252,7 +252,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
             LibConfigRegistryRegister.registerOnSelectedChain(vm, configs[i], CONFIG_REGISTRY_ROOT, hashed, value);
         }
         vm.selectFork(forkIds[0]);
-        assertEq(block.chainid, 8453);
+        assertEq(vm.getChainId(), 8453);
         vm.selectFork(forkIds[1]);
         assertEq(block.chainid, 42161);
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);

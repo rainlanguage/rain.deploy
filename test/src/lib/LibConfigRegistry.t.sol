@@ -216,7 +216,7 @@ contract LibConfigRegistryTest is Test {
         registry.registerV1(name, abi.encode(account));
 
         extra = uint64(bound(extra, 1, type(uint64).max));
-        vm.warp(block.timestamp + uint256(minAge) + uint256(extra));
+        vm.warp(vm.getBlockTimestamp() + uint256(minAge) + uint256(extra));
         assertEq(LibConfigRegistry.resolveSafe(name, minAge), abi.encode(account));
     }
 
@@ -244,7 +244,7 @@ contract LibConfigRegistryTest is Test {
         vm.prank(CONFIG_REGISTRY_ROOT);
         registry.registerV1(name, abi.encode(account));
 
-        vm.warp(block.timestamp + uint256(minAge) + 1);
+        vm.warp(vm.getBlockTimestamp() + uint256(minAge) + 1);
         assertEq(LibConfigRegistry.resolveSafe(name, minAge), abi.encode(account));
     }
 
@@ -318,7 +318,7 @@ contract LibConfigRegistryTest is Test {
         vm.prank(CONFIG_REGISTRY_ROOT);
         registry.registerV1(name, abi.encode(boundTo));
 
-        vm.warp(block.timestamp + uint256(aged));
+        vm.warp(vm.getBlockTimestamp() + uint256(aged));
         assertEq(LibConfigRegistry.resolveSafe(name, minAge), abi.encode(boundTo));
 
         vm.prank(CONFIG_REGISTRY_ROOT);

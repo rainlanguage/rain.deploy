@@ -158,7 +158,7 @@ contract ConfigRegistryRegisterTest is Test {
 
         for (uint256 i = 0; i < values.length; i++) {
             // Each re-bind is a block later than the last.
-            vm.warp(block.timestamp + 1);
+            vm.warp(vm.getBlockTimestamp() + 1);
             vm.prank(CONFIG_REGISTRY_ROOT);
             sRegistry.registerV1(name, values[i]);
             assertEq(LibConfigRegistryRead.getValue(sRegistry, name), values[i]);
@@ -204,7 +204,7 @@ contract ConfigRegistryRegisterTest is Test {
         values[10] = abi.encode(new uint256[](0));
         for (uint256 i = 0; i < values.length; i++) {
             assertGe(values[i].length, 32);
-            vm.warp(block.timestamp + 1);
+            vm.warp(vm.getBlockTimestamp() + 1);
             vm.prank(CONFIG_REGISTRY_ROOT);
             sRegistry.registerV1(name, values[i]);
             assertEq(LibConfigRegistryRead.getValue(sRegistry, name), values[i]);

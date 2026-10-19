@@ -346,11 +346,7 @@ contract LibConfigRegistryRegisterTest is Test {
     function testCheckRegisteredOnForksRefusesExtraForkIds() external {
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, 2, 3));
         this.externalCheckRegisteredOnForks(
-            list("base", "arbitrum"),
-            LibRainDeploy.supportedNetworks(),
-            new uint256[](3),
-            "a.b",
-            abi.encode(address(1))
+            list("base", "arbitrum"), LibRainDeploy.supportedNetworks(), new uint256[](3), "a.b", abi.encode(address(1))
         );
     }
 
