@@ -686,8 +686,8 @@ interface IMigrationRegistryV3 {
     function revokeV3(bytes32 namespace, address delegate) external;
 
     /// Whether `writer` has approved `delegate` for its line in `namespace`.
-    /// Refuses the zero writer, namespace and delegate rather than answering
-    /// false about a question the caller did not mean to ask.
+    /// Refuses `ZeroWriter`, then `ZeroNamespace`, then `ZeroDelegate` rather
+    /// than answering false about a question the caller did not mean to ask.
     /// @param writer The line's writer.
     /// @param namespace The line under the writer.
     /// @param delegate The account asked about.

@@ -295,12 +295,12 @@ contract LibMigrationRegistryTest is Test {
         assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migration), 0);
     }
 
-    /// The first entry is the caller's own head in the namespace the write
+    /// The first entry is the writer's own head in the namespace the write
     /// names, so one naming another writer or another line is refused even
     /// when its migration is exactly the head both lines are at. The list is
     /// passed to the registry as the caller wrote it: nothing here repairs an
     /// entry that names the wrong line into one that names the right one.
-    function testApplyMigrationHeadEntryIsTheCallerInTheNamespace(
+    function testApplyMigrationHeadEntryIsTheWriterInTheNamespace(
         address other,
         bytes32 namespace,
         bytes32 otherNamespace,
