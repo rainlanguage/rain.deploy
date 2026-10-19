@@ -279,7 +279,8 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
 
     /// The value of the `bytes32` constant a code record declares: its `bytes32(0x...)` wrapper, read by
     /// `declaredValue`, holding `0x` and exactly 64 hex digits, with nothing after the closing parenthesis but the
-    /// writer's `;`.
+    /// writer's `;`. `vm.parseBytes32` refuses any other digit count but reads digits without `0x`, so only the
+    /// prefix is checked here.
     /// @param path The record file, for the error only.
     /// @param lines The record's lines, block comments removed.
     /// @param line The declaration's line.
@@ -290,10 +291,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
             revert FrozenCodeRecordUnreadable(path);
         }
         string[] memory closed = vm.split(opened[1], ")");
-        if (
-            closed.length != 2 || keccak256(bytes(closed[1])) != keccak256(";") || bytes(closed[0]).length != 66
-                || vm.indexOf(closed[0], "0x") != 0
-        ) {
+        if (closed.length != 2 || keccak256(bytes(closed[1])) != keccak256(";") || vm.indexOf(closed[0], "0x") != 0) {
             revert FrozenCodeRecordUnreadable(path);
         }
         try vm.parseBytes32(closed[0]) returns (bytes32 declared) {

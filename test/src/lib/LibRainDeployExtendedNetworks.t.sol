@@ -132,6 +132,20 @@ contract LibRainDeployExtendedNetworksTest is Test {
         this.externalPath("../src", SUITE);
     }
 
+    /// A tag or a name that is not a path of record root segments is refused naming `<tag>/<name>`, so no key
+    /// reaches a record outside the root, and none is written.
+    function testExtendedNetworksPathRefusesATagOrNameOutsideTheRoot() external {
+        string[5] memory keys = ["x@../y", "../x@t", "@t", "a@", "a@b@c"];
+        string[5] memory paths = ["../y/x", "t/../x", "t/", "/a", "b@c/a"];
+        for (uint256 i = 0; i < keys.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(InvalidRecordRoot.selector, paths[i]));
+            this.externalPath("src/generated", keys[i]);
+        }
+        string memory root = freshRoot("outside-the-root");
+        vm.expectRevert(abi.encodeWithSelector(InvalidRecordRoot.selector, "../y/x"));
+        this.externalWrite(root, "x@../y", twoNetworks());
+    }
+
     /// What is written is the licence header then the body, and reads back as the networks written, in order.
     function testWriteThenReadRoundTrips() external {
         string memory root = freshRoot("round-trip");

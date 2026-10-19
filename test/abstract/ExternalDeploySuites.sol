@@ -49,6 +49,11 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
         return checkedCandidateSuites();
     }
 
+    /// @return The record root the extended networks records are read from.
+    function externalExtendedNetworksRoot() external view returns (string memory) {
+        return extendedNetworksRoot();
+    }
+
     /// Runs the source anchor over the fixture's own declaration.
     function externalCheckCandidatesAnchoredToSource() external view {
         checkCandidatesAnchoredToSource();

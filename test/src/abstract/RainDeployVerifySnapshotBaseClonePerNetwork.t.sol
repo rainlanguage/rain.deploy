@@ -331,9 +331,9 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
 
     /// A value other than `0x` and 40 hex digits, bare or in `address(...)`, then `;` is unreadable, on the
     /// declaration's line and wrapped, in both forms: 40 hex digits without `0x`, which names an identifier to solc,
-    /// or anything before, inside or after the value.
+    /// other than 40 digits, or anything before, inside or after the value.
     function testDeclarationValueOutsideTheWritersShapeIsUnreadable() external {
-        string[] memory values = new string[](9);
+        string[] memory values = new string[](13);
         values[6] = "abcdefabcdefabcdefabcdefabcdefabcdefabcd;";
         values[7] = "0x000000000000000000000000000000000000bEEF;;";
         values[8] = "0x000000000000000000000000000000000000bEEF";
@@ -343,6 +343,10 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         values[3] = "address(0x000000000000000000000000000000000000bEEF));";
         values[4] = "xaddress(0x000000000000000000000000000000000000bEEF);";
         values[5] = "address(0x000000000000000000000000000000000000bEEF;);";
+        values[9] = "0x00000000000000000000000000000000000bEEF;";
+        values[10] = "0x0000000000000000000000000000000000000bEEF;";
+        values[11] = "address(0x00000000000000000000000000000000000bEEF);";
+        values[12] = "address(0x0000000000000000000000000000000000000bEEF);";
         for (uint256 i = 0; i < values.length; i++) {
             vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
             this.externalRecordedDeployedAddresses(

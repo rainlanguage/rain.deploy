@@ -7,7 +7,10 @@ import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeplo
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {CloneDeploy, CloneNetwork, CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
-import {LibRainDeployExtendedNetworks} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {
+    ExtendedNetworksUnrecorded,
+    LibRainDeployExtendedNetworks
+} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
 import {ExtendedNetworkAddressMismatch, ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
@@ -175,6 +178,14 @@ contract RainDeployVerifyChainClonePerNetworkExtendedTest is PerNetworkCloneDepl
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, sFrozenAddress)
         );
+        this.externalCheckOnLocalForks();
+    }
+
+    /// A declared network the release's extended networks record does not hold is refused before any fork.
+    function testDeclaredNetworkWithoutARecordIsRefused() external {
+        sFrozen = true;
+        vm.expectCall(address(sForkVm), abi.encodeWithSelector(LocalForkVm.createFork.selector), 0);
+        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnrecorded.selector, "per-network-clone@0_0_1"));
         this.externalCheckOnLocalForks();
     }
 

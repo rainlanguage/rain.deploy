@@ -1446,7 +1446,7 @@ library LibRainDeploySnapshot {
     }
 
     /// The address a declaration line's value names: `0x` and 40 hex digits, wrapped in the writer's `address(` and
-    /// `)` or bare, then `;`.
+    /// `)` or bare, then `;`. `vm.parseAddress` refuses any other digit count.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file, for the error only.
     /// @param value The declaration's last token, from the line after it when the writer wrapped it.
@@ -1462,7 +1462,7 @@ library LibRainDeploySnapshot {
             revert FrozenSnapshotUnreadable(path);
         }
         string[] memory closed = vm.split(opened[1], tail);
-        if (closed.length != 2 || bytes(closed[1]).length != 0 || bytes(closed[0]).length != 40) {
+        if (closed.length != 2 || bytes(closed[1]).length != 0) {
             revert FrozenSnapshotUnreadable(path);
         }
         try vm.parseAddress(string.concat("0x", closed[0])) returns (address declared) {

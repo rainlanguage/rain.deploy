@@ -1247,10 +1247,13 @@ contract LibRainDeployMechanismTest is Test {
         this.externalDeployLocally(suite);
     }
 
-    /// An `initialize` that reads the storage of an account it creates deploys, while a read of an account that
-    /// predates the call is still refused.
+    /// An `initialize` that reads the storage of an account it creates, or of one such an account creates, deploys,
+    /// while a read of an account that predates the call is still refused.
     function testCloneInitializeReadingAnAccountItCreatesDeploys() external {
         (DeploySuite memory suite, address source) = storageClone(SourceUse.ReadChild);
+        assertEq(this.externalDeployLocally(suite), suite.storedDeployedAddress);
+
+        (suite, source) = storageClone(SourceUse.ReadGrandchild);
         assertEq(this.externalDeployLocally(suite), suite.storedDeployedAddress);
 
         (suite, source) = storageClone(SourceUse.Read);

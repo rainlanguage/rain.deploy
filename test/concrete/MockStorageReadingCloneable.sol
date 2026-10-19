@@ -16,7 +16,8 @@ error MockInitializeRefused();
 /// `Read` reads it. `ReadRequired` reads it and reverts with `MockNameNotRegistered` on zero. `Write` writes 1 to
 /// it. `WriteThenRead` writes its slot 0, then reads it. `Refuse` reverts with `MockInitializeRefused` without
 /// touching it. `ReadChild` ignores it and reads a `MockStorageSource` it creates. `ReadFactoryChild` takes it as a
-/// `MockStorageSourceFactory` and reads the source that factory creates.
+/// `MockStorageSourceFactory` and reads the source that factory creates. `ReadGrandchild` ignores it and reads the
+/// source a `MockStorageSourceFactory` it creates creates.
 enum SourceUse {
     Read,
     ReadRequired,
@@ -24,7 +25,8 @@ enum SourceUse {
     Refuse,
     ReadChild,
     WriteThenRead,
-    ReadFactoryChild
+    ReadFactoryChild,
+    ReadGrandchild
 }
 
 /// @title MockStorageReadingCloneable
@@ -43,6 +45,8 @@ contract MockStorageReadingCloneable is ICloneableV2 {
             (new MockStorageSource()).sValue();
         } else if (use == SourceUse.ReadFactoryChild) {
             MockStorageSourceFactory(address(source)).create().sValue();
+        } else if (use == SourceUse.ReadGrandchild) {
+            (new MockStorageSourceFactory()).create().sValue();
         } else if (source.sValue() == 0 && use == SourceUse.ReadRequired) {
             revert MockNameNotRegistered();
         }
