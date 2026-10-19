@@ -44,11 +44,12 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             return;
         }
 
+        uint256[] memory chainIds = LibRainDeploy.networkChainIds(networks);
         DeploySuite[] memory frozen = new DeploySuite[](suites.length);
         DeploySuite[] memory onNetworks = new DeploySuite[](suites.length);
         for (uint256 j = 0; j < suites.length; j++) {
             frozen[j] = withExtendedNetworks(suites[j]);
-            onNetworks[j] = onSupportedNetworks(suites[j]);
+            onNetworks[j] = onSupportedNetworks(frozen[j], chainIds);
         }
         suites = onNetworks;
 

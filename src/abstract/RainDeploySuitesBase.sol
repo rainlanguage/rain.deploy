@@ -286,20 +286,24 @@ abstract contract RainDeploySuitesBase {
     }
 
     /// A suite as it is broadcast and as it is checked on chain.
-    /// @param suite The suite.
-    /// @return The suite, with its extended networks and the networks its candidate adds.
-    function onSupportedNetworks(DeploySuite memory suite) internal view returns (DeploySuite memory) {
-        suite = withExtendedNetworks(suite);
-        bytes32 name = keccak256(bytes(suiteKeyName(suite.suite)));
+    /// @param frozen The suite, with its extended networks, as `withExtendedNetworks` gives it.
+    /// @param chainIds The chain ids in play.
+    /// @return The suite, with its extended networks and the networks in play its candidate adds.
+    function onSupportedNetworks(DeploySuite memory frozen, uint256[] memory chainIds)
+        internal
+        view
+        returns (DeploySuite memory)
+    {
+        bytes32 name = keccak256(bytes(suiteKeyName(frozen.suite)));
         DeployCandidate[] memory candidates = checkedCandidateSuites();
         for (uint256 i = 0; i < candidates.length; i++) {
             if (keccak256(bytes(candidates[i].snapshot.suite)) == name) {
                 return LibRainDeployMechanism.withUnrecordedNetworks(
-                    suite, candidates[i].snapshot, initDataReaders(candidates[i].snapshot.suite)
+                    frozen, candidates[i].snapshot, initDataReaders(candidates[i].snapshot.suite), chainIds
                 );
             }
         }
-        return suite;
+        return frozen;
     }
 
     /// A suite with the networks `extendedNetworks` declares for it.

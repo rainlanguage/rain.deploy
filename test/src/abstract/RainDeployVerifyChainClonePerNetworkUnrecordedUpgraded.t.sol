@@ -74,7 +74,12 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
     /// The release takes Polygon under its own implementation, which the candidate declares reads its init data.
     function testUnrecordedNetworkTakesTheDeclaredInitDataReader() external view {
         CloneNetworks memory extended = abi.decode(
-            onSupportedNetworks(onlyFirstRecordedNetwork(releasedSuites()[0])).mechanismData, (CloneNetworks)
+            onSupportedNetworks(
+                withExtendedNetworks(onlyFirstRecordedNetwork(releasedSuites()[0])),
+                LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()))
+            )
+            .mechanismData,
+            (CloneNetworks)
         );
         assertEq(extended.networks.length, 2);
         assertEq(extended.networks[1].chainId, PER_NETWORK_CLONE_POLYGON_CHAIN_ID);

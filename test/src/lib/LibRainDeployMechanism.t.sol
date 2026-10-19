@@ -202,7 +202,7 @@ contract LibRainDeployMechanismTest is Test {
         external
         returns (uint256[] memory)
     {
-        (, uint256[] memory forkIds) = LibRainDeployMechanism.deployAndBroadcast(vm, networks, 1, suite);
+        (, uint256[] memory forkIds) = LibRainDeployMechanism.deployAndBroadcast(vm, networks, 1, suite, suite);
         return forkIds;
     }
 
@@ -703,7 +703,9 @@ contract LibRainDeployMechanismTest is Test {
         pure
         returns (DeploySuite memory)
     {
-        return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidate, new address[](0));
+        return LibRainDeployMechanism.withUnrecordedNetworks(
+            suite, candidate, new address[](0), LibRainDeployMechanism.addressChainIds(candidate)
+        );
     }
 
     /// External wrapper for `LibRainDeployMechanism.withUnrecordedNetworks` with declared init data readers.
@@ -716,7 +718,9 @@ contract LibRainDeployMechanismTest is Test {
         DeploySuite memory candidate,
         address[] memory initDataReaders
     ) external pure returns (DeploySuite memory) {
-        return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidate, initDataReaders);
+        return LibRainDeployMechanism.withUnrecordedNetworks(
+            suite, candidate, initDataReaders, LibRainDeployMechanism.addressChainIds(candidate)
+        );
     }
 
     /// The per-network example clone at `salt` as a candidate for `chainIds`.
@@ -908,6 +912,45 @@ contract LibRainDeployMechanismTest is Test {
         DeploySuite memory candidate =
         LibRainDeployMechanism.cloneCandidate(upgradedPerNetworkClone(), perNetworkCloneChainIds()).snapshot;
         assertEq(this.externalWithUnrecordedNetworks(release, candidate).mechanismData, release.mechanismData);
+    }
+
+    /// External wrapper for `LibRainDeployMechanism.withUnrecordedNetworks` over given chain ids in play.
+    /// @param suite The suite.
+    /// @param candidate The candidate.
+    /// @param chainIds The chain ids in play.
+    /// @return The suite with the candidate's networks in play it lacks.
+    function externalWithUnrecordedNetworksIn(
+        DeploySuite memory suite,
+        DeploySuite memory candidate,
+        uint256[] memory chainIds
+    ) external pure returns (DeploySuite memory) {
+        return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidate, new address[](0), chainIds);
+    }
+
+    /// A candidate network not in play is not added, so a release under another implementation with no reader
+    /// declared is not refused for it, and one under the candidate's own does not take it.
+    function testUnrecordedNetworkNotInPlayIsNotAdded() external view {
+        DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));
+        DeploySuite memory upgraded =
+        LibRainDeployMechanism.cloneCandidate(upgradedPerNetworkClone(), perNetworkCloneChainIds()).snapshot;
+        assertEq(
+            this.externalWithUnrecordedNetworksIn(release, upgraded, onlyChainId(42161)).mechanismData,
+            release.mechanismData
+        );
+        assertEq(
+            this.externalWithUnrecordedNetworksIn(release, upgraded, new uint256[](0)).mechanismData,
+            release.mechanismData
+        );
+        DeploySuite memory candidate = perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds());
+        assertEq(
+            this.externalWithUnrecordedNetworksIn(release, candidate, onlyChainId(42161)).mechanismData,
+            release.mechanismData
+        );
+        CloneNetworks memory polygon = abi.decode(
+            this.externalWithUnrecordedNetworksIn(release, candidate, onlyChainId(137)).mechanismData, (CloneNetworks)
+        );
+        assertEq(polygon.networks.length, 2);
+        assertEq(polygon.networks[1].chainId, 137);
     }
 
     /// External wrapper for `LibRainDeployMechanism.withExtendedNetworks`.

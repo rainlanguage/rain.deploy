@@ -234,16 +234,18 @@ library LibRainDeployMechanism {
         return chainIds;
     }
 
-    /// A per-network clone suite with an entry for every network its candidate has one for, refusing to add one under
-    /// an implementation that is not the candidate's and not one of `initDataReaders`.
+    /// A per-network clone suite with an entry for every network in play its candidate has one for, refusing to add one
+    /// under an implementation that is not the candidate's and not one of `initDataReaders`.
     /// @param suite The suite.
     /// @param candidate The candidate whose init data the suite's unrecorded networks take.
     /// @param initDataReaders The other implementations that read the candidate's init data as its implementation does.
-    /// @return The suite, with the candidate's networks it lacks.
+    /// @param chainIds The chain ids in play; a candidate network on any other chain is not added.
+    /// @return The suite, with the candidate's networks in play it lacks.
     function withUnrecordedNetworks(
         DeploySuite memory suite,
         DeploySuite memory candidate,
-        address[] memory initDataReaders
+        address[] memory initDataReaders,
+        uint256[] memory chainIds
     ) internal pure returns (DeploySuite memory) {
         if (
             suite.mechanism != DeployMechanism.ClonePerNetwork || candidate.mechanism != DeployMechanism.ClonePerNetwork
@@ -260,7 +262,8 @@ library LibRainDeployMechanism {
         }
         uint256 count = recorded;
         for (uint256 i = 0; i < declared.length; i++) {
-            if (!hasChainId(networks, recorded, declared[i].chainId)) {
+            if (!hasChainId(networks, recorded, declared[i].chainId) && containsChainId(chainIds, declared[i].chainId))
+            {
                 networks[count] =
                     CloneNetwork({chainId: declared[i].chainId, data: declared[i].data, deployedAddress: address(0)});
                 count++;
@@ -278,17 +281,7 @@ library LibRainDeployMechanism {
             clones.networks[i].deployedAddress =
                 LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(clones, i));
         }
-        return DeploySuite({
-            suite: suite.suite,
-            creationCode: suite.creationCode,
-            storedDeployedAddress: suite.storedDeployedAddress,
-            storedBytecodeHash: suite.storedBytecodeHash,
-            storedRuntimeCode: suite.storedRuntimeCode,
-            artifactPath: suite.artifactPath,
-            dependencies: suite.dependencies,
-            mechanism: suite.mechanism,
-            mechanismData: abi.encode(clones)
-        });
+        return withMechanismData(suite, abi.encode(clones));
     }
 
     /// A per-network release with the networks declared for it beyond those it records appended, each held to the
@@ -328,17 +321,7 @@ library LibRainDeployMechanism {
             }
         }
         LibRainDeployClone.checkCloneNetworks(clones, suite.dependencies);
-        return DeploySuite({
-            suite: suite.suite,
-            creationCode: suite.creationCode,
-            storedDeployedAddress: suite.storedDeployedAddress,
-            storedBytecodeHash: suite.storedBytecodeHash,
-            storedRuntimeCode: suite.storedRuntimeCode,
-            artifactPath: suite.artifactPath,
-            dependencies: suite.dependencies,
-            mechanism: suite.mechanism,
-            mechanismData: abi.encode(clones)
-        });
+        return withMechanismData(suite, abi.encode(clones));
     }
 
     /// Refuses a per-network release on a network that `frozen` neither records nor declares as extended.
@@ -404,6 +387,41 @@ library LibRainDeployMechanism {
         return false;
     }
 
+    /// Whether a list of chain ids holds a chain id.
+    /// @param chainIds The list.
+    /// @param chainId The chain id looked for.
+    /// @return Whether it is in the list.
+    function containsChainId(uint256[] memory chainIds, uint256 chainId) internal pure returns (bool) {
+        for (uint256 i = 0; i < chainIds.length; i++) {
+            if (chainIds[i] == chainId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// A suite with its mechanism data replaced.
+    /// @param suite The suite.
+    /// @param mechanismData The mechanism data it takes.
+    /// @return The suite with that mechanism data.
+    function withMechanismData(DeploySuite memory suite, bytes memory mechanismData)
+        internal
+        pure
+        returns (DeploySuite memory)
+    {
+        return DeploySuite({
+            suite: suite.suite,
+            creationCode: suite.creationCode,
+            storedDeployedAddress: suite.storedDeployedAddress,
+            storedBytecodeHash: suite.storedBytecodeHash,
+            storedRuntimeCode: suite.storedRuntimeCode,
+            artifactPath: suite.artifactPath,
+            dependencies: suite.dependencies,
+            mechanism: suite.mechanism,
+            mechanismData: mechanismData
+        });
+    }
+
     /// Whether one of the first `count` entries of a list of networks is for a chain id.
     /// @param networks The list.
     /// @param count How many of its leading entries to look at.
@@ -423,6 +441,7 @@ library LibRainDeployMechanism {
     /// A storage read of any account but the clone during the factory call is refused with
     /// `CloneInitializeReadsStorage`, even when the call then reverts: locally that storage is empty. A call that
     /// reverts without one reverts unchanged.
+    /// Only storage reads are checked: a balance or code read of another account is not refused.
     /// Each clone is deployed under a state-diff recording, which ends any recording the caller started.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy.
@@ -492,7 +511,8 @@ library LibRainDeployMechanism {
         return deployed;
     }
 
-    /// Refuses a storage read, recorded while a clone was deployed, of any account but the clone.
+    /// Refuses a storage read, recorded while a clone was deployed, of any account but the clone. Only storage reads
+    /// are checked: a balance or code read of another account is not refused.
     /// @param suite The suite being deployed.
     /// @param clone The clone's address.
     /// @param accesses What was recorded.
@@ -523,20 +543,26 @@ library LibRainDeployMechanism {
         return false;
     }
 
-    /// Broadcasts a suite by its mechanism, to each network, as the given key.
+    /// Broadcasts a suite by its mechanism, to each network, as the given key, after `checkNetworksFrozen` refuses a
+    /// per-network release on a network `frozen` neither records nor declares.
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param networks The networks to broadcast to.
     /// @param deployerPrivateKey The key to broadcast as.
+    /// @param frozen The suite with its extended networks.
     /// @param suite The suite to broadcast.
     /// @return Where the suite is on each network, positionally paired with `networks`.
     /// @return The fork each network was deployed on.
-    function deployAndBroadcast(Vm vm, string[] memory networks, uint256 deployerPrivateKey, DeploySuite memory suite)
-        internal
-        returns (address[] memory, uint256[] memory)
-    {
+    function deployAndBroadcast(
+        Vm vm,
+        string[] memory networks,
+        uint256 deployerPrivateKey,
+        DeploySuite memory frozen,
+        DeploySuite memory suite
+    ) internal returns (address[] memory, uint256[] memory) {
         if (networks.length == 0) {
             revert LibRainDeploy.NoNetworks();
         }
+        checkNetworksFrozen(frozen, suite, networks);
         SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
         NetworkDeploys memory deploys = NetworkDeploys({
             deployStepData: new bytes[](configs.length),

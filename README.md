@@ -267,19 +267,20 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   refused with `NetworkChainIdMismatch`, for every mechanism.
 - **Unrecorded networks.** A release records the networks it was cut for. At
   broadcast and in the chain group, a per-network release first takes an entry
-  for each network its candidate — the candidate whose key is the release key
-  before its `@` — has and it lacks, through
-  `LibRainDeployMechanism.withUnrecordedNetworks`: that network's init data from
-  the current declaration, and the address it derives under the RELEASE's
-  factory, implementation and salt. So a network added to `supportedNetworks()`
-  after the cut is deployable, once declared as an extended network (below), and
-  checked, as it is for a Zoltu or `Clone` release. Recorded entries are kept
-  exactly as recorded, so a recorded network keeps its recorded address and the
-  refusal of a stale one. The record group does not do this: it matches the
-  record against what the release was cut for. A release whose implementation is
-  not its candidate's takes no unrecorded network unless
-  `RainDeploySuitesBase.initDataReaders` names that implementation for the
-  candidate's suite; otherwise it is refused with `InitDataReaderUndeclared`.
+  for each network in play (broadcast to or checked on) its candidate — the
+  candidate whose key is the release key before its `@` — has and it lacks,
+  through `LibRainDeployMechanism.withUnrecordedNetworks`: that network's init
+  data from the current declaration, and the address it derives under the
+  RELEASE's factory, implementation and salt. So a network added to
+  `supportedNetworks()` after the cut is deployable, once declared as an
+  extended network (below), and checked, as it is for a Zoltu or `Clone`
+  release. Recorded entries are kept exactly as recorded, so a recorded network
+  keeps its recorded address and the refusal of a stale one. The record group
+  does not do this: it matches the record against what the release was cut for.
+  A release whose implementation is not its candidate's takes no unrecorded
+  network unless `RainDeploySuitesBase.initDataReaders` names that
+  implementation for the candidate's suite; otherwise it is refused with
+  `InitDataReaderUndeclared`.
 - **Extended networks.** The candidate's init data can change after a release is
   broadcast to an unrecorded network, which would move that network's address.
   So an unrecorded network is declared, then broadcast: override
@@ -1172,15 +1173,16 @@ it. In order:
    candidate's, and that implementation reads the candidate's init data as the
    candidate's implementation does, override `initDataReaders` to return it for
    the candidate's suite key. Without it the release is refused any unrecorded
-   network with `InitDataReaderUndeclared`.
+   network in play with `InitDataReaderUndeclared`.
 7. For each per-network release broadcast, or to be broadcast, to a network it
    does not record, override `extendedNetworks` to return that network as
    broadcast: declare, then broadcast. Without it the broadcast and the chain
    group refuse the release there with `ExtendedNetworkUnfrozen`.
 8. A clone whose `initialize` reads storage other than its own is refused by the
-   local deploy with `CloneInitializeReadsStorage`. The local deploy records
-   each clone's state diff, which ends any state-diff recording the caller
-   started.
+   local deploy with `CloneInitializeReadsStorage`. Only storage reads are
+   checked: a balance or code read of another account is not refused. The local
+   deploy records each clone's state diff, which ends any state-diff recording
+   the caller started.
 9. Regenerate: `forge script ./script/Build.sol` followed by
    `./script/build.sh`.
 
