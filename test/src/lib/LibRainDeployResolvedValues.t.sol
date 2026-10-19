@@ -308,6 +308,18 @@ contract LibRainDeployResolvedValuesTest is Test {
         );
     }
 
+    /// Surplus fork ids MUST be refused as unpaired, before anything is selected
+    /// or the read set is checked.
+    function testCheckResolvedValuesOnForksExtraForkIdsReverts() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, uint256(2), uint256(3)));
+        this.externalCheckResolvedValuesOnForks(
+            networks, LibResolvedReadFixture.unselectableForkIds(3), address(this), new bytes[](0), new bytes[](0)
+        );
+    }
+
     /// An unusable read set MUST be refused before anything is selected.
     function testCheckResolvedValuesOnForksReadSetRefusedBeforeSelecting() external {
         string[] memory networks = new string[](1);

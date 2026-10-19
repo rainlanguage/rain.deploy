@@ -2253,6 +2253,22 @@ contract LibRainDeployTest is Test {
         );
     }
 
+    /// Surplus fork ids MUST be refused as unpaired, before anything is selected.
+    function testCheckResolvedAddressesOnForksExtraForkIdsReverts() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, uint256(2), uint256(3)));
+        this.externalCheckResolvedAddressesOnForks(
+            networks,
+            LibResolvedReadFixture.unselectableForkIds(3),
+            address(this),
+            LibResolvedReadFixture.ownerReadCalls(),
+            expected(address(0xf00))
+        );
+    }
+
     /// `deployToNetworks` MUST deploy when every dependency holds the code its
     /// declaration carries, i.e. a dependency that checks out is not treated as
     /// missing or as changed.
