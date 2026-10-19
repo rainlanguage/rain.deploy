@@ -88,9 +88,10 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// the list `onto` builds.
 ///
 /// `headV3` reads that value back, which is how an author finds what a new
-/// script must name and how an operator sees which migration a chain is at. It is not
-/// how a script tests that its predecessor ran: a head says what was LAST, and
-/// `appliedV3` is what says whether a particular migration ever ran at all.
+/// script must name and how an operator sees which migration a chain is at. It
+/// is not how a script tests that its predecessor ran: a head says what was
+/// LAST, and `appliedV3` is what says whether a particular migration ever ran
+/// at all.
 ///
 /// `appliedOntoV3` reads back the head a record was applied onto, so a line
 /// walked from `headV3` back is the order its migrations ran in — which is a
