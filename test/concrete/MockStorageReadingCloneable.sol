@@ -3,22 +3,13 @@
 pragma solidity =0.8.25;
 
 import {ICloneableV2, ICLONEABLE_V2_SUCCESS} from "rain-factory-0.1.30/src/interface/ICloneableV2.sol";
+import {MockStorageSource} from "./MockStorageSource.sol";
 
 /// Thrown when `initialize` finds nothing registered.
 error MockNameNotRegistered();
 
 /// Thrown when `initialize` is told to revert.
 error MockInitializeRefused();
-
-/// @title MockStorageSource
-/// @notice One storage word another contract's `initialize` reads or writes.
-contract MockStorageSource {
-    uint256 public sValue;
-
-    function set(uint256 value) external {
-        sValue = value;
-    }
-}
 
 /// How `MockStorageReadingCloneable.initialize` treats its source.
 enum SourceUse {

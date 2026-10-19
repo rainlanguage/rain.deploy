@@ -27,6 +27,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
 
     /// Checks every suite against every given network, forking each network once with `forkVm` and checking every
     /// suite on it.
+    /// Each suite is checked as `onSupportedNetworks` gives it, with its candidate's unrecorded networks, and a
+    /// per-network suite live on a network it neither records nor declares in `extendedNetworks` is refused with
+    /// `ExtendedNetworkUnfrozen`.
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.

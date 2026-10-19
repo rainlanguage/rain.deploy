@@ -68,11 +68,11 @@ error ExtendedNetworksUnexpected(string suite);
 /// @param extendedAddress The address it declares.
 error ExtendedNetworkAddressMismatch(string suite, uint256 chainId, address derivedAddress, address extendedAddress);
 
-/// Thrown when a per-network release is live on a network it neither records nor declares as extended, at the
-/// address its candidate's current init data derives.
+/// Thrown when a per-network release is live, or about to be broadcast, on a network it neither records nor declares
+/// as extended, at the address its candidate's current init data derives.
 /// @param suite The release's suite key.
 /// @param network The network.
-/// @param deployedAddress The address checked there.
+/// @param deployedAddress The address checked or to be broadcast there.
 error ExtendedNetworkUnfrozen(string suite, string network, address deployedAddress);
 
 /// Thrown when a clone's `initialize`, run locally, reads storage other than the clone's own.
@@ -292,6 +292,8 @@ library LibRainDeployMechanism {
 
     /// A per-network release with the networks it was extended to after its cut appended, each held to the address its
     /// init data derives under the release.
+    /// Reverts with `ExtendedNetworksUnexpected` on a suite that is not per network, `ExtendedNetworkAddressMismatch` on
+    /// an entry at an address its init data does not derive, and `DuplicateCloneNetwork` on a network named twice.
     /// @param suite The release.
     /// @param extended The networks it was extended to, as broadcast.
     /// @return The release with them.
@@ -356,6 +358,29 @@ library LibRainDeployMechanism {
         }
     }
 
+    /// Refuses to broadcast a per-network release to a network it neither records nor declares as extended, so an
+    /// unrecorded network's address is frozen before it exists on chain.
+    /// @param frozen The release with its extended networks.
+    /// @param onNetworks The release as it would be broadcast, with its candidate's unrecorded networks.
+    /// @param networks The networks to broadcast to.
+    function checkNetworksFrozen(DeploySuite memory frozen, DeploySuite memory onNetworks, string[] memory networks)
+        internal
+        pure
+    {
+        if (onNetworks.mechanism != DeployMechanism.ClonePerNetwork) {
+            return;
+        }
+        SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
+        CloneNetwork[] memory clones = cloneNetworks(onNetworks).networks;
+        for (uint256 i = 0; i < configs.length; i++) {
+            for (uint256 j = 0; j < clones.length; j++) {
+                if (clones[j].chainId == configs[i].chainId) {
+                    checkNetworkFrozen(frozen, networks[i], configs[i].chainId, clones[j].deployedAddress);
+                }
+            }
+        }
+    }
+
     /// Whether an implementation reads a candidate's init data: it is the candidate's implementation, or one of
     /// `initDataReaders`.
     /// @param implementation The implementation.
@@ -396,6 +421,7 @@ library LibRainDeployMechanism {
     /// cross-checked against the formula's.
     /// A clone's `initialize` that reads storage other than the clone's own is refused with
     /// `CloneInitializeReadsStorage`: locally that storage is empty.
+    /// Each clone is deployed under a state-diff recording, which ends any recording the caller started.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy.
     /// @return Where the mechanism deployed it, in the suite's address order — the derived
@@ -447,15 +473,18 @@ library LibRainDeployMechanism {
                         (targets[i].implementation, targets[i].data, targets[i].salt)
                     )
                 );
-            checkReadsOwnStorageOnly(suite.suite, deployed[i], vm.stopAndReturnStateDiff());
+            Vm.AccountAccess[] memory accesses = vm.stopAndReturnStateDiff();
+            if (success) {
+                address cloneAddress = abi.decode(result, (address));
+                if (cloneAddress != deployed[i]) {
+                    revert CloneDerivationMismatch(suite.suite, deployed[i], cloneAddress);
+                }
+            }
+            checkReadsOwnStorageOnly(suite.suite, deployed[i], accesses);
             if (!success) {
                 assembly ("memory-safe") {
                     revert(add(result, 0x20), mload(result))
                 }
-            }
-            address cloneAddress = abi.decode(result, (address));
-            if (cloneAddress != deployed[i]) {
-                revert CloneDerivationMismatch(suite.suite, deployed[i], cloneAddress);
             }
         }
         return deployed;

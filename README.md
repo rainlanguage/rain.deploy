@@ -272,26 +272,27 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   `LibRainDeployMechanism.withUnrecordedNetworks`: that network's init data from
   the current declaration, and the address it derives under the RELEASE's
   factory, implementation and salt. So a network added to `supportedNetworks()`
-  after the cut is deployable and checked, as it is for a Zoltu or `Clone`
-  release. Recorded entries are kept exactly as recorded, so a recorded network
-  keeps its recorded address and the refusal of a stale one. The record group
-  does not do this: it matches the record against what the release was cut for.
-  A release whose implementation is not its candidate's takes no unrecorded
-  network unless `RainDeploySuitesBase.initDataReaders` names that
-  implementation for the candidate's suite; otherwise it is refused with
-  `InitDataReaderUndeclared`.
+  after the cut is deployable, once declared as an extended network (below), and
+  checked, as it is for a Zoltu or `Clone` release. Recorded entries are kept
+  exactly as recorded, so a recorded network keeps its recorded address and the
+  refusal of a stale one. The record group does not do this: it matches the
+  record against what the release was cut for. A release whose implementation is
+  not its candidate's takes no unrecorded network unless
+  `RainDeploySuitesBase.initDataReaders` names that implementation for the
+  candidate's suite; otherwise it is refused with `InitDataReaderUndeclared`.
 - **Extended networks.** The candidate's init data can change after a release is
   broadcast to an unrecorded network, which would move that network's address.
-  So once broadcast, an unrecorded network is frozen by overriding
+  So an unrecorded network is declared, then broadcast: override
   `RainDeploySuitesBase.extendedNetworks` to return it, for the release's key,
-  as a `CloneNetwork`: its chain id, the init data it was broadcast with and its
-  address. A declared entry is used in place of the candidate's, held to the
-  address its init data derives under the release
-  (`ExtendedNetworkAddressMismatch`), and is refused on a network the release
-  records (`DuplicateCloneNetwork`) or on a suite that is not per network
-  (`ExtendedNetworksUnexpected`). The chain group refuses a per-network suite
-  live on a network it neither records nor declares with
-  `ExtendedNetworkUnfrozen`, naming the address to freeze.
+  as a `CloneNetwork`: its chain id, the init data it is broadcast with and its
+  address. The broadcast refuses an unrecorded network not yet declared with
+  `ExtendedNetworkUnfrozen`, before any fork, naming the address to declare. A
+  declared entry is used in place of the candidate's, held to the address its
+  init data derives under the release (`ExtendedNetworkAddressMismatch`), and is
+  refused on a network the release records (`DuplicateCloneNetwork`) or on a
+  suite that is not per network (`ExtendedNetworksUnexpected`). The chain group
+  refuses a per-network suite live on a network it neither records nor declares
+  with `ExtendedNetworkUnfrozen`, naming the address to freeze.
 - **Undeclared networks.** A network the suite still has no entry for — no
   candidate is named by its key, or the candidate has no entry either — is
   refused with `CloneNetworkUndeclared`, before any fork, at broadcast and in
@@ -1172,13 +1173,15 @@ it. In order:
    candidate's implementation does, override `initDataReaders` to return it for
    the candidate's suite key. Without it the release is refused any unrecorded
    network with `InitDataReaderUndeclared`.
-7. For each per-network release already broadcast to a network it does not
-   record, override `extendedNetworks` to return that network as broadcast.
-   Without it the chain group refuses the release there with
-   `ExtendedNetworkUnfrozen`.
+7. For each per-network release broadcast, or to be broadcast, to a network it
+   does not record, override `extendedNetworks` to return that network as
+   broadcast: declare, then broadcast. Without it the broadcast and the chain
+   group refuse the release there with `ExtendedNetworkUnfrozen`.
 8. A clone whose `initialize` reads storage other than its own is refused by the
-   local deploy with `CloneInitializeReadsStorage`.
-9. Regenerate : `forge script ./script/Build.sol` followed by
+   local deploy with `CloneInitializeReadsStorage`. The local deploy records
+   each clone's state diff, which ends any state-diff recording the caller
+   started.
+9. Regenerate: `forge script ./script/Build.sol` followed by
    `./script/build.sh`.
 
 `LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,

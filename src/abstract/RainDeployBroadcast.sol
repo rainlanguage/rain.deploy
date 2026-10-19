@@ -65,7 +65,8 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
 
     /// Broadcasts the selected suite by ITS mechanism, through `LibRainDeployMechanism` — the same
     /// dispatch every verification group derives through, so what is broadcast is what was
-    /// verified.
+    /// verified. A per-network release is broadcast to a network it does not record only once
+    /// `extendedNetworks` declares it there, else `ExtendedNetworkUnfrozen` names the address to declare.
     /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
     /// @param networks The networks to broadcast to, as `deployNetworks()` gave them.
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
@@ -75,6 +76,8 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         internal
         returns (address[] memory, uint256[] memory)
     {
-        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, onSupportedNetworks(suite));
+        DeploySuite memory onNetworks = onSupportedNetworks(suite);
+        LibRainDeployMechanism.checkNetworksFrozen(withExtendedNetworks(suite), onNetworks, networks);
+        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, onNetworks);
     }
 }

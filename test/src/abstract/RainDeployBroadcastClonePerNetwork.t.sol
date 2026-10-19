@@ -4,7 +4,8 @@ pragma solidity =0.8.25;
 
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {CloneDeploy, CloneNetworks, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
+import {ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";
+import {CloneDeploy, CloneNetwork, CloneNetworks, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN,
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
@@ -45,6 +46,19 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.POLYGON;
+        return networks;
+    }
+
+    /// Polygon at its admin's init data and the address the release derives there, as `extendedNetworks` declares
+    /// it once broadcast.
+    /// @return The declaration.
+    function declaredPolygon() internal pure returns (CloneNetwork[] memory) {
+        CloneNetwork[] memory networks = new CloneNetwork[](1);
+        networks[0] = CloneNetwork({
+            chainId: PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
+            data: abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN),
+            deployedAddress: perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID)
+        });
         return networks;
     }
 
@@ -140,6 +154,7 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
     /// Polygon.
     function testBroadcastsAnUnrecordedNetworkAtItsInitDataAddress() external {
         PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
+        deploy.setExtendedNetworks("per-network-clone@0_0_1", declaredPolygon());
         vm.makePersistent(address(this));
         vm.makePersistent(address(deploy));
 
@@ -187,6 +202,7 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
     /// RELEASE's factory, implementation and salt derive it with the candidate's Polygon init data.
     function testBroadcastsAnUnrecordedNetworkUnderTheReleasesFactoryAndImplementation() external {
         UpgradedPerNetworkCloneDeploy deploy = new UpgradedPerNetworkCloneDeploy();
+        deploy.setExtendedNetworks("per-network-clone@0_0_1", declaredPolygon());
         vm.makePersistent(address(this));
         vm.makePersistent(address(deploy));
 
@@ -232,6 +248,7 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
     /// recorded Arbitrum One address refused before any network is forked.
     function testBroadcastRefusesAStaleRecordedAddressBesideAnUnrecordedNetworkBeforeAnyFork() external {
         PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
+        deploy.setExtendedNetworks("per-network-clone@0_0_1", declaredPolygon());
         DeploySuite memory release = onlyFirstRecordedNetwork(deploy.externalSuiteByName("per-network-clone@0_0_1"));
         CloneNetworks memory clones = abi.decode(release.mechanismData, (CloneNetworks));
         address derived = clones.networks[0].deployedAddress;
@@ -242,5 +259,23 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
         deploy.externalBroadcastSuite(release, bothNetworks(), 1);
         assertFalse(anyForkExists(), "a network was forked before the stale address was refused");
+    }
+
+    /// A release recording Arbitrum One alone is refused a broadcast to Polygon, which it does not declare, before any
+    /// network is forked, naming the address Polygon would take.
+    function testBroadcastRefusesAnUndeclaredUnrecordedNetworkBeforeAnyFork() external {
+        PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
+        DeploySuite memory release = onlyFirstRecordedNetwork(deploy.externalSuiteByName("per-network-clone@0_0_1"));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ExtendedNetworkUnfrozen.selector,
+                release.suite,
+                LibRainDeploy.POLYGON,
+                perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID)
+            )
+        );
+        deploy.externalBroadcastSuite(release, bothNetworks(), 1);
+        assertFalse(anyForkExists(), "a network was forked before the undeclared one was refused");
     }
 }

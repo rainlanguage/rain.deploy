@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {CloneNetwork} from "../../src/lib/LibRainDeployClone.sol";
 import {PerNetworkCloneDeploys} from "../abstract/PerNetworkCloneDeploys.sol";
 import {ExternalCloneDeploySuites} from "../abstract/ExternalCloneDeploySuites.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
@@ -16,6 +17,33 @@ contract PerNetworkCloneDeploy is
     ExternalDeploySuites,
     RainDeployBroadcast
 {
+    /// The suite `sExtendedNetworks` is declared for.
+    string internal sExtendedSuite;
+
+    /// The networks `extendedNetworks` declares for `sExtendedSuite`. Empty by default.
+    CloneNetwork[] internal sExtendedNetworks;
+
+    /// Sets what `extendedNetworks` declares.
+    /// @param suite The release's suite key.
+    /// @param networks The networks it declares for that release.
+    function setExtendedNetworks(string memory suite, CloneNetwork[] memory networks) external {
+        sExtendedSuite = suite;
+        delete sExtendedNetworks;
+        for (uint256 i = 0; i < networks.length; i++) {
+            sExtendedNetworks.push(networks[i]);
+        }
+    }
+
+    /// `sExtendedNetworks` for `sExtendedSuite`, else none.
+    /// @param suite The release's suite key.
+    /// @return The networks.
+    function extendedNetworks(string memory suite) internal view override returns (CloneNetwork[] memory) {
+        if (keccak256(bytes(suite)) != keccak256(bytes(sExtendedSuite))) {
+            return new CloneNetwork[](0);
+        }
+        return sExtendedNetworks;
+    }
+
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()
         internal

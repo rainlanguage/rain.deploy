@@ -10,31 +10,43 @@ import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 /// @title LibRainDeployDeployStepToNetworksTest
 /// @notice The shared per-network loop's guards, on local forks.
 contract LibRainDeployDeployStepToNetworksTest is Test {
+    /// Thrown when a step the loop must not reach is reached.
     error DeployStepWasReached();
 
+    /// The local fork Vm the loop forks with.
     LocalForkVm internal sForkVm;
 
+    /// Deploys the local fork Vm.
     function setUp() external {
         sForkVm = new LocalForkVm();
     }
 
+    /// A step that reverts if reached.
+    /// @return Never returns.
     function unreachableDeployStep(Vm, string memory, address, bytes memory) internal pure returns (address) {
         revert DeployStepWasReached();
     }
 
     /// Etches code at the step data's address and reports `address(0xbad)`.
+    /// @param stepData The address to etch, encoded.
+    /// @return `address(0xbad)`.
     function misreportingDeployStep(Vm, string memory, address, bytes memory stepData) internal returns (address) {
         vm.etch(abi.decode(stepData, (address)), hex"00");
         return address(0xbad);
     }
 
     /// Etches code at the step data's address and reports it.
+    /// @param stepData The address to etch, encoded.
+    /// @return The etched address.
     function etchingDeployStep(Vm, string memory, address, bytes memory stepData) internal returns (address) {
         address target = abi.decode(stepData, (address));
         vm.etch(target, hex"00");
         return target;
     }
 
+    /// Arbitrum One, then Polygon when `length` is 2.
+    /// @param length How many networks.
+    /// @return Their catalogue entries.
     function networks(uint256 length) internal pure returns (SupportedNetwork[] memory) {
         string[] memory names = new string[](length);
         names[0] = LibRainDeploy.ARBITRUM_ONE;
@@ -44,6 +56,11 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
         return LibRainDeploy.declaredNetworkConfigs(names);
     }
 
+    /// External wrapper for `LibRainDeploy.deployStepToNetworks` over the local fork Vm.
+    /// @param step 0 for the unreachable step, 1 for the misreporting step, else the etching step.
+    /// @param deploys The expected addresses and their deploy data.
+    /// @param dependencies The declared dependencies.
+    /// @return The fork of each network.
     function externalLoop(uint256 step, NetworkDeploys memory deploys, DeployDependency[] memory dependencies)
         external
         returns (uint256[] memory)

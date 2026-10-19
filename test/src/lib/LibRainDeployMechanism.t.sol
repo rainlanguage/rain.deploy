@@ -38,12 +38,13 @@ import {
 } from "../../abstract/ExampleCloneDeploys.sol";
 import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
+import {MockSaltShiftingCloneFactory} from "../../concrete/MockSaltShiftingCloneFactory.sol";
 import {
     MockInitializeRefused,
     MockStorageReadingCloneable,
-    MockStorageSource,
     SourceUse
 } from "../../concrete/MockStorageReadingCloneable.sol";
+import {MockStorageSource} from "../../concrete/MockStorageSource.sol";
 import {upgradedCloneImplementation, upgradedPerNetworkClone} from "../../abstract/UpgradedPerNetworkCloneDeploys.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN,
@@ -320,6 +321,23 @@ contract LibRainDeployMechanismTest is Test {
             abi.encodeWithSelector(ICloneableFactoryV4.cloneDeterministicOpenSalt.selector),
             abi.encode(elsewhere)
         );
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CloneDerivationMismatch.selector, suite.suite, suite.storedDeployedAddress, elsewhere
+            )
+        );
+        this.externalDeployLocally(suite);
+    }
+
+    /// A real factory whose clone lands, and initializes its own storage, somewhere other than the address the
+    /// formula derives is refused as a derivation mismatch, not as a foreign storage read.
+    function testRealFactoryLandingOffTheFormulaIsADerivationMismatch() external {
+        DeploySuite memory suite = exampleCloneSuite();
+        assertEq(suite.dependencies[0].deployedAddress, exampleCloneFactory());
+        suite.dependencies[0].runtimeCode = type(MockSaltShiftingCloneFactory).runtimeCode;
+        CloneTarget memory shifted = LibRainDeployMechanism.cloneTarget(suite);
+        shifted.salt ^= bytes32(uint256(1));
+        address elsewhere = LibRainDeployClone.cloneDeployedAddress(shifted);
         vm.expectRevert(
             abi.encodeWithSelector(
                 CloneDerivationMismatch.selector, suite.suite, suite.storedDeployedAddress, elsewhere
@@ -1009,6 +1027,73 @@ contract LibRainDeployMechanismTest is Test {
         this.externalCheckNetworkFrozen(exampleCloneSuite(), 8453, address(1));
     }
 
+    /// External wrapper for `LibRainDeployMechanism.checkNetworksFrozen`.
+    /// @param frozen The release with its extended networks.
+    /// @param onNetworks The release as it would be broadcast.
+    /// @param networks The networks to broadcast to.
+    function externalCheckNetworksFrozen(
+        DeploySuite memory frozen,
+        DeploySuite memory onNetworks,
+        string[] memory networks
+    ) external pure {
+        LibRainDeployMechanism.checkNetworksFrozen(frozen, onNetworks, networks);
+    }
+
+    /// Two network names.
+    /// @param first The first.
+    /// @param second The second.
+    /// @return Both, in order.
+    function twoNetworks(string memory first, string memory second) internal pure returns (string[] memory) {
+        string[] memory networks = new string[](2);
+        networks[0] = first;
+        networks[1] = second;
+        return networks;
+    }
+
+    /// A release recording Arbitrum One alone is refused a broadcast to Polygon until Polygon is declared, naming
+    /// Polygon and the address it would be broadcast at, and passes once it is.
+    function testBroadcastToAnUndeclaredNetworkIsRefused() external {
+        DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));
+        DeploySuite memory onNetworks =
+            this.externalWithUnrecordedNetworks(release, perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds()));
+        address polygonAddress = abi.decode(onNetworks.mechanismData, (CloneNetworks)).networks[1].deployedAddress;
+        string[] memory networks = twoNetworks(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ExtendedNetworkUnfrozen.selector, release.suite, LibRainDeploy.POLYGON, polygonAddress
+            )
+        );
+        this.externalCheckNetworksFrozen(release, onNetworks, networks);
+
+        this.externalCheckNetworksFrozen(
+            this.externalWithExtendedNetworks(release, polygonAt(TEST_DATA)), onNetworks, networks
+        );
+    }
+
+    /// Recorded networks need no declaration, and a network the broadcast release has no entry for is left to the
+    /// broadcast to refuse.
+    function testBroadcastToRecordedNetworksIsNotChecked() external view {
+        DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));
+        DeploySuite memory onNetworks =
+            this.externalWithUnrecordedNetworks(release, perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds()));
+        this.externalCheckNetworksFrozen(
+            release, onNetworks, twoNetworks(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE)
+        );
+        DeploySuite memory full = perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds());
+        this.externalCheckNetworksFrozen(full, full, twoNetworks(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON));
+    }
+
+    /// A suite that is not per network is never checked.
+    function testBroadcastOfAOneDataSuiteIsNotChecked() external view {
+        DeploySuite memory oneData = exampleCloneSuite();
+        this.externalCheckNetworksFrozen(
+            perNetworkSuiteAt(TEST_SALT, onlyChainId(42161)),
+            oneData,
+            twoNetworks(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON)
+        );
+    }
+
     /// A clone over a fresh factory and `MockStorageReadingCloneable`, initialized against a fresh source.
     /// @param use How `initialize` treats the source.
     /// @return The suite, and the source.
@@ -1031,11 +1116,15 @@ contract LibRainDeployMechanismTest is Test {
     /// read would have reverted it or not.
     function testCloneInitializeReadingAnotherAccountsStorageIsRefused() external {
         (DeploySuite memory suite, address source) = storageClone(SourceUse.ReadRequired);
-        vm.expectRevert(abi.encodeWithSelector(CloneInitializeReadsStorage.selector, suite.suite, source, bytes32(0)));
+        vm.expectRevert(
+            abi.encodeWithSelector(CloneInitializeReadsStorage.selector, suite.suite, source, bytes32(uint256(1)))
+        );
         this.externalDeployLocally(suite);
 
         (suite, source) = storageClone(SourceUse.Read);
-        vm.expectRevert(abi.encodeWithSelector(CloneInitializeReadsStorage.selector, suite.suite, source, bytes32(0)));
+        vm.expectRevert(
+            abi.encodeWithSelector(CloneInitializeReadsStorage.selector, suite.suite, source, bytes32(uint256(1)))
+        );
         this.externalDeployLocally(suite);
     }
 

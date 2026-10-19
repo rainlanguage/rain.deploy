@@ -67,8 +67,10 @@ error InvalidRecordRoot(string root);
 error SnapshotStateRevertFailed(string suite, uint256 snapshotId);
 
 /// Thrown when a file in the frozen record declares no deployed address, declares one as
-/// `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in decimal digits, or declares one whose
-/// value does not read as an address.
+/// `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in decimal digits, declares one whose
+/// value does not read as an address, declares one outside the writer's format (`=` fourth of
+/// five space-separated tokens, or wrapped onto the next line at the writer's indent), or holds
+/// a line break other than `\n` that solc honours.
 /// @param path The record file with no `DEPLOYED_ADDRESS` or `DEPLOYED_ADDRESS_<chainId>`
 /// declaration, with a `DEPLOYED_ADDRESS_<x>` whose `<x>` is not decimal, or with a declared value
 /// that is not an address.
@@ -1484,6 +1486,7 @@ library LibRainDeploySnapshot {
     /// A record's lines, block comments removed, from a record whose only line break is `\n`.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file, for the error only.
+    /// Reverts with `FrozenSnapshotUnreadable` on any other line break solc honours.
     /// @param record The record file's contents.
     /// @return The lines.
     function recordLines(Vm vm, string memory path, string memory record) internal pure returns (string[] memory) {
