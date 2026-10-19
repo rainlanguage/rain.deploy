@@ -26,6 +26,10 @@ import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
 import {ZoltuDeployOrAdopt} from "../../abstract/ZoltuDeployOrAdopt.sol";
 import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
+import {BeaconOwnedByDeployKey} from "../../../src/abstract/RainDeployBroadcast.sol";
+import {BeaconState, BeaconTransition, DeployBeacon} from "../../../src/lib/LibRainDeployBeacon.sol";
+import {Prerequisite} from "../../../src/interface/IMigrationRegistryV2.sol";
+import {BeaconOwnerDeploy} from "../../concrete/BeaconOwnerDeploy.sol";
 
 /// @title RainDeployBroadcastTest
 /// @notice The broadcast entry point, driven exactly as the `Manual sol
@@ -590,5 +594,50 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
 
         assertEq(release.storedDeployedAddress.code, release.storedRuntimeCode);
         assertEq(release.storedDeployedAddress.codehash, release.storedBytecodeHash);
+    }
+
+    function ownedBy(address initial, address later) internal pure returns (DeployBeacon memory) {
+        DeployBeacon memory beacon = DeployBeacon({
+            beaconSuite: "",
+            beacon: address(0xBEAC0),
+            beaconCodeHash: keccak256("beacon"),
+            initial: BeaconState({implementation: "address-registry@0_0_1", owner: initial}),
+            transitions: new BeaconTransition[](2)
+        });
+        for (uint256 i = 0; i < 2; i++) {
+            beacon.transitions[i] = BeaconTransition({
+                migration: Prerequisite({
+                    writer: address(0x5AFE), namespace: keccak256("beacons"), migration: keccak256(abi.encode(i))
+                }),
+                state: BeaconState({implementation: "address-registry@0_0_1", owner: i == 1 ? later : initial})
+            });
+        }
+        return beacon;
+    }
+
+    function expectBroadcastRefused(BeaconOwnerDeploy deploy, bytes memory refusal) internal {
+        DeploySuite memory suite = deploy.externalSuiteByName("address-registry@0_0_1");
+        vm.expectRevert(refusal);
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function testBroadcastRefusesABeaconInitiallyOwnedByTheDeployKey() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        deploy.declareBeacon(42161, ownedBy(address(0xB0B), address(0xCAFE)));
+        deploy.declareBeacon(8453, ownedBy(vm.addr(1), address(0xCAFE)));
+        expectBroadcastRefused(deploy, abi.encodeWithSelector(BeaconOwnedByDeployKey.selector, 8453, 1, 0));
+    }
+
+    function testBroadcastRefusesABeaconTransitionedToTheDeployKey() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        deploy.declareBeacon(42161, ownedBy(address(0xB0B), vm.addr(1)));
+        expectBroadcastRefused(deploy, abi.encodeWithSelector(BeaconOwnedByDeployKey.selector, 42161, 0, 2));
+    }
+
+    function testBroadcastPassesBeaconsOwnedByOthers() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        deploy.declareBeacon(42161, ownedBy(address(0xB0B), address(0xCAFE)));
+        deploy.declareBeacon(8453, ownedBy(address(0xCAFE), vm.addr(2)));
+        expectBroadcastRefused(deploy, abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
     }
 }

@@ -335,33 +335,39 @@ in `beaconSuite`, and one it did not deploy by both `beacon` and
 `beaconCodeHash`; naming it both ways is refused with `BeaconNamedTwice`, and
 naming it by neither, or by only one of `beacon` and `beaconCodeHash`, with
 `BeaconUnnamed`. A beacon whose chain id is not one of `supportedNetworks()`, in
-the catalogue or not, is refused with `BeaconOnUncheckedNetwork`. These
-refusals, and `BeaconTransitionMigrationRepeated`, are raised offline by the
-snapshot group and by the chain group before any network is forked. A beacon
-with transitions reads `MigrationRegistry` on its network, which MUST be
-deployed there. The chain group reads `owner()`, and refuses a beacon that
-answers `pendingOwner()` with anything but zero with `BeaconPendingOwner`, or
-with data that is not one word with `BeaconPendingOwnerUnreadable`: a two-step
-handover is red from `transferOwnership` until the batch that accepts it applies
-its migration. Assert any other authority a beacon exposes (roles) yourself,
-including that the deploy key holds none of it. The deploy key is never a
-declared owner; seat governance from the first state.
+the catalogue or not, is refused with `BeaconOnUncheckedNetwork`, and a second
+declaration of a beacon on its network with `BeaconDeclaredTwice`. These
+refusals, and those of transition migrations below, are raised offline by the
+snapshot group for every beacon, and by the chain group, before any network is
+forked, for the beacons on the networks it checks; `BeaconOnUncheckedNetwork`
+there covers every beacon. A beacon with transitions reads `MigrationRegistry`
+on its network, which MUST be deployed there. The chain group reads `owner()`,
+and refuses a beacon that answers `pendingOwner()` with anything but zero with
+`BeaconPendingOwner`, or with data that is not one word with
+`BeaconPendingOwnerUnreadable`: a two-step handover is red from
+`transferOwnership` until the batch that accepts it applies its migration.
+Assert any other authority a beacon exposes (roles) yourself, including that the
+deploy key holds none of it. The deploy key is never a declared owner of any
+state, and a broadcast whose key is one is refused with `BeaconOwnedByDeployKey`
+before any network is read; seat governance from the first state.
 
 Declare transitions in the order their migrations are applied: each applied
 transition's record MUST reach the latest earlier-declared applied one through
 `appliedAfter` (its line's head, then its prerequisites), refused otherwise with
 `BeaconTransitionsOutOfOrder`; moments are never compared. Each transition names
 a distinct migration, refused otherwise with
-`BeaconTransitionMigrationRepeated`. A transition written in another line names
-the earlier one, or a record after it, as a prerequisite. The order walk is
-unbounded and costs a fork read per record it reaches: name the previous
-transition's migration as a prerequisite of each transition's record so it reads
-one. Apply a transition's migration in the same transaction as the beacon change
-it describes (one Safe batch: `upgradeTo` or `transferOwnership`, then
-`applyMigration`; for an `Ownable2Step` beacon the handover's migration goes in
-the batch that calls `acceptOwnership`, as `owner()` moves only then). Between
-two separate transactions the chain group refuses the network, as the chain and
-the registry disagree.
+`BeaconTransitionMigrationRepeated`, and one the registry can record (nonzero
+writer and namespace, a migration neither zero nor `MIGRATION_HEAD_GENESIS`),
+refused otherwise with `BeaconTransitionMigrationUnnamed`. A transition written
+in another line names the earlier one, or a record after it, as a prerequisite.
+The order walk is unbounded and costs a fork read per record it reaches: name
+the previous transition's migration as a prerequisite of each transition's
+record so it reads one. Apply a transition's migration in the same transaction
+as the beacon change it describes (one Safe batch: `upgradeTo` or
+`transferOwnership`, then `applyMigration`; for an `Ownable2Step` beacon the
+handover's migration goes in the batch that calls `acceptOwnership`, as
+`owner()` moves only then). Between two separate transactions the chain group
+refuses the network, as the chain and the registry disagree.
 
 ## Deploy verification
 
@@ -389,15 +395,16 @@ to put there. The dependencies are etched first, then the derived address is
 cleared, then the factory is planted, so a declaration can reach neither the
 subject's address nor the factory's.
 
-Four groups, sorted by what each is anchored to and therefore by what each can
+Five groups, sorted by what each is anchored to and therefore by what each can
 catch:
 
-| Group    | Anchored to                | Catches                                            | Cannot catch                     |
-| -------- | -------------------------- | -------------------------------------------------- | -------------------------------- |
-| Internal | the recorded set           | an inconsistently generated set                    | a snapshot of the wrong contract |
-| Source   | `vm.getCode(artifactPath)` | a snapshot of the wrong contract                   | anything about any chain         |
-| Record   | the frozen record          | a release the declaration missed                   | what a declared suite records    |
-| Chain    | the networks               | a missing deployment, or an alias on another chain | anything about a candidate       |
+| Group    | Anchored to                | Catches                                                                                                   | Cannot catch                     |
+| -------- | -------------------------- | --------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| Internal | the recorded set           | an inconsistently generated set                                                                           | a snapshot of the wrong contract |
+| Source   | `vm.getCode(artifactPath)` | a snapshot of the wrong contract                                                                          | anything about any chain         |
+| Record   | the frozen record          | a release the declaration missed                                                                          | what a declared suite records    |
+| Beacons  | the beacon declarations    | a beacon misnamed, unreleased, off the supported networks, declared twice, or with a malformed transition | what any beacon holds on chain   |
+| Chain    | the networks               | a missing deployment, an alias on another chain, or a beacon off its declared state                       | anything about a candidate       |
 
 The internal group's blind spot is not a gap to close there: every check in it
 asks the recorded bytes to agree with each other, and the wrong contract's bytes

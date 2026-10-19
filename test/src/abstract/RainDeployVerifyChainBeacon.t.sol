@@ -27,17 +27,22 @@ import {
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
+import {LibBeaconDeclarations} from "../../lib/LibBeaconDeclarations.sol";
 import {
+    BeaconDeclaredTwice,
     BeaconNamedTwice,
     BeaconOnUncheckedNetwork,
     BeaconSuiteNotReleased,
     BeaconUnnamed,
-    DerivedDeploy
+    DerivedDeploy,
+    ResolvedBeacon
 } from "../../../src/abstract/RainDeployVerifyBase.sol";
 
 /// @title RainDeployVerifyChainBeaconTest
 /// @notice The chain group's check of each declared beacon against its network, state and implementation suite.
 contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
+    using LibBeaconDeclarations for ChainBeacon[];
+
     address constant OWNER = address(0xB0B);
     address constant NEW_OWNER = address(0xCAFE);
     address constant WRITER = address(0x5AFE);
@@ -176,19 +181,6 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         return beacon;
     }
 
-    function declare(uint256 chainId, DeployBeacon memory beacon) internal {
-        ChainBeacon storage chainBeacon = sBeacons.push();
-        chainBeacon.chainId = chainId;
-        DeployBeacon storage stored = chainBeacon.beacon;
-        stored.beaconSuite = beacon.beaconSuite;
-        stored.beacon = beacon.beacon;
-        stored.beaconCodeHash = beacon.beaconCodeHash;
-        stored.initial = beacon.initial;
-        for (uint256 i = 0; i < beacon.transitions.length; i++) {
-            stored.transitions.push(beacon.transitions[i]);
-        }
-    }
-
     function applyMigration() internal {
         applyMigration(MIGRATION, MIGRATION_HEAD_GENESIS);
     }
@@ -277,37 +269,54 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testChainGroupPassesABeaconAtItsInitialState() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
-    function testChainGroupChecksBeaconsOnAnyNetworkWithoutSuites() external {
-        declare(42161, declared("beacon-implementation@0_0_1", NEW_OWNER));
+    function testChainGroupChecksABeaconOnTheFirstNetworkWithoutSuites() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", NEW_OWNER));
         expectUnexpected(1, NEW_OWNER, OWNER);
         this.externalCheckDeployedOnNetworks(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
     }
 
     function testChainGroupChecksEachNetworksOwnBeacons() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         DeployBeacon memory missing = declared("beacon-implementation@0_0_1", OWNER);
         missing.beacon = address(0xBEAC0);
-        declare(8453, missing);
+        sBeacons.declare(8453, missing);
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.BASE, address(0xBEAC0))
         );
         this.externalCheckDeployedOnNetworks(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
     }
 
+    function atASecondBeacon(address owner) internal returns (DeployBeacon memory) {
+        DeployBeacon memory beacon = declared("beacon-implementation@0_0_1", owner);
+        beacon.beacon = address(new UpgradeableBeacon(sImplementation, OWNER));
+        vm.makePersistent(beacon.beacon);
+        return beacon;
+    }
+
     function testChainGroupChecksEveryBeaconOnANetwork() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
-        declare(42161, declared("beacon-implementation@0_0_1", NEW_OWNER));
-        expectUnexpected(1, NEW_OWNER, OWNER);
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        DeployBeacon memory second = atASecondBeacon(NEW_OWNER);
+        sBeacons.declare(42161, second);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedAddress.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                second.beacon,
+                1,
+                NEW_OWNER,
+                OWNER
+            )
+        );
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testABeaconBeforeAValidOneOnItsNetworkIsChecked() external {
-        declare(42161, declared("beacon-implementation@0_0_1", NEW_OWNER));
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", NEW_OWNER));
+        sBeacons.declare(42161, atASecondBeacon(OWNER));
         expectUnexpected(1, NEW_OWNER, OWNER);
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
@@ -315,39 +324,39 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     function testEachBeaconOnANetworkIsCheckedAtItsOwnImplementation() external {
         address second = address(new UpgradeableBeacon(sUpgrade, OWNER));
         vm.makePersistent(second);
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         DeployBeacon memory other = declared("beacon-upgrade@0_0_1", OWNER);
         other.beacon = second;
-        declare(42161, other);
+        sBeacons.declare(42161, other);
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testBeaconMustPointAtTheDeclaredSuitesAddress() external {
-        declare(42161, declared("beacon-upgrade@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-upgrade@0_0_1", OWNER));
         expectUnexpected(0, sUpgrade, sImplementation);
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testUnknownImplementationSuiteIsRefused() external {
-        declare(42161, declared("no-such-suite", OWNER));
+        sBeacons.declare(42161, declared("no-such-suite", OWNER));
         vm.expectRevert(abi.encodeWithSelector(BeaconSuiteNotReleased.selector, "no-such-suite"));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testCandidateImplementationSuiteIsRefused() external {
-        declare(42161, declared("beacon-implementation", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation", OWNER));
         vm.expectRevert(abi.encodeWithSelector(BeaconSuiteNotReleased.selector, "beacon-implementation"));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testCandidateImplementationSuiteInALaterStateIsRefused() external {
-        declare(42161, migrating("beacon-implementation", OWNER));
+        sBeacons.declare(42161, migrating("beacon-implementation", OWNER));
         vm.expectRevert(abi.encodeWithSelector(BeaconSuiteNotReleased.selector, "beacon-implementation"));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testImplementationSuitesMissingDependencyIsRefused() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         vm.etch(DEPENDENCY, hex"");
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, DEPENDENCY)
@@ -356,7 +365,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testImplementationSuitesChangedDependencyIsRefused() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         vm.etch(DEPENDENCY, hex"01");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -373,7 +382,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     function testAppliedStatesDependencyIsChecked() external {
         DeployBeacon memory beacon = migrating("beacon-implementation@0_0_1", OWNER);
         beacon.initial.implementation = "beacon-upgrade@0_0_1";
-        declare(42161, beacon);
+        sBeacons.declare(42161, beacon);
         applyMigration();
         vm.etch(DEPENDENCY, hex"");
         vm.expectRevert(
@@ -386,19 +395,19 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         DeployBeacon memory beacon = declared("beacon-upgrade@0_0_1", OWNER);
         beacon.beacon = address(new UpgradeableBeacon(sUpgrade, OWNER));
         vm.makePersistent(beacon.beacon);
-        declare(42161, beacon);
+        sBeacons.declare(42161, beacon);
         vm.etch(DEPENDENCY, hex"");
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testBeaconsSharingAnImplementationPassOnEveryNetwork() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
-        declare(8453, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(8453, declared("beacon-implementation@0_0_1", OWNER));
         this.externalCheckDeployedOnNetworks(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
     }
 
     function testImplementationSuiteWithoutCodeIsNotDeployed() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         vm.etch(sImplementation, hex"");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -409,7 +418,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testImplementationSuiteMustHaveItsDerivedCode() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         bytes32 derived = sImplementation.codehash;
         vm.etch(sImplementation, type(MockDeployable).runtimeCode);
         vm.expectRevert(
@@ -425,19 +434,19 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testUnappliedMigrationExpectsTheInitialState() external {
-        declare(42161, migrating("beacon-upgrade@0_0_1", NEW_OWNER));
+        sBeacons.declare(42161, migrating("beacon-upgrade@0_0_1", NEW_OWNER));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testChainAheadOfTheRegistryIsRefused() external {
-        declare(42161, migrating("beacon-upgrade@0_0_1", NEW_OWNER));
+        sBeacons.declare(42161, migrating("beacon-upgrade@0_0_1", NEW_OWNER));
         upgradeAndHandOver();
         expectUnexpected(0, sImplementation, sUpgrade);
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testAppliedMigrationExpectsItsTransition() external {
-        declare(42161, migrating("beacon-upgrade@0_0_1", NEW_OWNER));
+        sBeacons.declare(42161, migrating("beacon-upgrade@0_0_1", NEW_OWNER));
         applyMigration();
         upgradeAndHandOver();
         vm.etch(sImplementation, hex"");
@@ -445,21 +454,21 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testAppliedUpgradeMissingFromTheChainIsRefused() external {
-        declare(42161, migrating("beacon-upgrade@0_0_1", OWNER));
+        sBeacons.declare(42161, migrating("beacon-upgrade@0_0_1", OWNER));
         applyMigration();
         expectUnexpected(0, sUpgrade, sImplementation);
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testAppliedHandOverMissingFromTheChainIsRefused() external {
-        declare(42161, migrating("beacon-implementation@0_0_1", NEW_OWNER));
+        sBeacons.declare(42161, migrating("beacon-implementation@0_0_1", NEW_OWNER));
         applyMigration();
         expectUnexpected(1, NEW_OWNER, OWNER);
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testAppliedUpgradeChecksTheUpgradedSuiteIsLive() external {
-        declare(42161, migrating("beacon-upgrade@0_0_1", NEW_OWNER));
+        sBeacons.declare(42161, migrating("beacon-upgrade@0_0_1", NEW_OWNER));
         applyMigration();
         upgradeAndHandOver();
         vm.etch(sUpgrade, hex"");
@@ -470,7 +479,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testChainGroupChecksABeaconOnlyOnALaterNetworkWithoutSuites() external {
-        declare(8453, declared("beacon-implementation@0_0_1", NEW_OWNER));
+        sBeacons.declare(8453, declared("beacon-implementation@0_0_1", NEW_OWNER));
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.UnexpectedResolvedAddress.selector, LibRainDeploy.BASE, sBeacon, 1, NEW_OWNER, OWNER
@@ -481,15 +490,15 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
 
     function testBeaconOnAnUncheckedCatalogueNetworkIsRefused() external {
         supportOnly(LibRainDeploy.ARBITRUM_ONE, "");
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
-        declare(1, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(1, declared("beacon-implementation@0_0_1", OWNER));
         vm.expectRevert(abi.encodeWithSelector(BeaconOnUncheckedNetwork.selector, 1, 1));
         this.externalCheckDeployedOnSupportedNetworks();
         assertNoFork("forked before refusing a beacon on an unchecked network");
     }
 
     function testBeaconOnAChainIdOutsideTheCatalogueIsRefused() external {
-        declare(42162, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42162, declared("beacon-implementation@0_0_1", OWNER));
         vm.expectRevert(abi.encodeWithSelector(BeaconOnUncheckedNetwork.selector, 42162, 0));
         this.externalCheckDeployedOnSupportedNetworks();
         assertNoFork("forked before refusing a beacon outside the catalogue");
@@ -497,7 +506,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
 
     function testBeaconOnACheckedNetworkOffTheSupportedNetworksIsRefused() external {
         supportOnly(LibRainDeploy.ARBITRUM_ONE, "");
-        declare(8453, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(8453, declared("beacon-implementation@0_0_1", OWNER));
         vm.expectRevert(abi.encodeWithSelector(BeaconOnUncheckedNetwork.selector, 8453, 0));
         this.externalResolveBeacons(networksNamed(LibRainDeploy.BASE, ""));
     }
@@ -509,8 +518,8 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testOneDeclarationSharedByTwoChainsResolvesOnEach() external {
-        declare(42161, bySuite("beacon@0_0_1", OWNER));
-        declare(8453, bySuite("beacon@0_0_1", NEW_OWNER));
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", OWNER));
+        sBeacons.declare(8453, bySuite("beacon@0_0_1", NEW_OWNER));
         sShareFirstBeacon = true;
         this.externalCheckDeployedOnNetworks(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
     }
@@ -531,15 +540,17 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testBeaconOnAnEarlierCheckedNetworkResolves() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         assertEq(this.externalResolvedCount(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE)), 1);
     }
 
     function testEachReleasedSuiteBeaconsNameIsDerivedOnce() external {
-        declare(42161, migrating("beacon-upgrade@0_0_1", OWNER));
-        declare(8453, declared("beacon-implementation@0_0_1", OWNER));
-        declare(42161, bySuite("beacon@0_0_1", OWNER));
-        declare(8453, declared("beacon-upgrade@0_0_1", OWNER));
+        sBeacons.declare(42161, migrating("beacon-upgrade@0_0_1", OWNER));
+        sBeacons.declare(8453, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", OWNER));
+        DeployBeacon memory other = declared("beacon-upgrade@0_0_1", OWNER);
+        other.beacon = address(0xBEAC0);
+        sBeacons.declare(8453, other);
         vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployableV2).creationCode, 1);
         vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployable).creationCode, 1);
         vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, beaconCreationCode(), 1);
@@ -551,8 +562,8 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testReleasedSuitesBeaconsNameAreDerivedOnceInTheChainCheck() external {
-        declare(42161, migrating("beacon-upgrade@0_0_1", OWNER));
-        declare(42161, bySuite("beacon@0_0_1", OWNER));
+        sBeacons.declare(42161, migrating("beacon-upgrade@0_0_1", OWNER));
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", OWNER));
         vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployableV2).creationCode, 1);
         vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployable).creationCode, 1);
         vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, beaconCreationCode(), 1);
@@ -560,7 +571,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testReleasedSuiteABeaconImplementsIsDerivedOnceInTheChainCheck() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployableV2).creationCode, 1);
         vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployable).creationCode, 1);
         vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, beaconCreationCode(), 1);
@@ -569,17 +580,17 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
 
     function testBeaconsOnEveryCheckedNetworkAreAccepted() external {
         supportOnly(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         this.externalCheckDeployedOnSupportedNetworks();
     }
 
     function testBeaconNamedBySuitePassesAtItsDerivedAddress() external {
-        declare(42161, bySuite("beacon@0_0_1", OWNER));
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", OWNER));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testBeaconNamedBySuiteIsReadAtItsDerivedAddress() external {
-        declare(42161, bySuite("beacon@0_0_1", NEW_OWNER));
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", NEW_OWNER));
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.UnexpectedResolvedAddress.selector,
@@ -594,7 +605,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testBeaconSuiteMustHaveItsDerivedCode() external {
-        declare(42161, bySuite("beacon@0_0_1", OWNER));
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", OWNER));
         bytes32 derived = sSuiteBeacon.codehash;
         vm.etch(sSuiteBeacon, type(MockDeployable).runtimeCode);
         vm.expectRevert(
@@ -610,7 +621,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testBeaconSuitesMissingDependencyIsRefused() external {
-        declare(42161, bySuite("beacon@0_0_1", OWNER));
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", OWNER));
         vm.etch(BEACON_DEPENDENCY, hex"");
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -621,7 +632,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testCandidateBeaconSuiteIsRefused() external {
-        declare(42161, bySuite("beacon-implementation", OWNER));
+        sBeacons.declare(42161, bySuite("beacon-implementation", OWNER));
         vm.expectRevert(abi.encodeWithSelector(BeaconSuiteNotReleased.selector, "beacon-implementation"));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
@@ -629,7 +640,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     function testBeaconNamedBySuiteAndAddressIsRefused() external {
         DeployBeacon memory beacon = bySuite("beacon@0_0_1", OWNER);
         beacon.beacon = sSuiteBeacon;
-        declare(42161, beacon);
+        sBeacons.declare(42161, beacon);
         vm.expectRevert(abi.encodeWithSelector(BeaconNamedTwice.selector, 42161, 0));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
@@ -637,17 +648,17 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     function testBeaconNamedBySuiteAndCodeHashIsRefused() external {
         DeployBeacon memory beacon = bySuite("beacon@0_0_1", OWNER);
         beacon.beaconCodeHash = sSuiteBeacon.codehash;
-        declare(42161, beacon);
+        sBeacons.declare(42161, beacon);
         vm.expectRevert(abi.encodeWithSelector(BeaconNamedTwice.selector, 42161, 0));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testUnnamedBeaconIsRefused() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         DeployBeacon memory unnamed = declared("beacon-implementation@0_0_1", OWNER);
         unnamed.beacon = address(0);
         unnamed.beaconCodeHash = bytes32(0);
-        declare(42161, unnamed);
+        sBeacons.declare(42161, unnamed);
         vm.expectRevert(abi.encodeWithSelector(BeaconUnnamed.selector, 42161, 1));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
@@ -655,7 +666,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     function testBeaconNamedByAddressAloneIsRefused() external {
         DeployBeacon memory beacon = declared("beacon-implementation@0_0_1", OWNER);
         beacon.beaconCodeHash = bytes32(0);
-        declare(42161, beacon);
+        sBeacons.declare(42161, beacon);
         vm.expectRevert(abi.encodeWithSelector(BeaconUnnamed.selector, 42161, 0));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
@@ -663,16 +674,16 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     function testBeaconNamedByCodeHashAloneIsRefused() external {
         DeployBeacon memory beacon = declared("beacon-implementation@0_0_1", OWNER);
         beacon.beacon = address(0);
-        declare(42161, beacon);
+        sBeacons.declare(42161, beacon);
         vm.expectRevert(abi.encodeWithSelector(BeaconUnnamed.selector, 42161, 0));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testBeaconNamedTwiceBehindAValidBeaconReportsItsIndex() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         DeployBeacon memory twice = bySuite("beacon@0_0_1", OWNER);
         twice.beacon = sSuiteBeacon;
-        declare(42161, twice);
+        sBeacons.declare(42161, twice);
         vm.expectRevert(abi.encodeWithSelector(BeaconNamedTwice.selector, 42161, 1));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
@@ -686,8 +697,8 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testRepeatedMigrationIsRefusedWhileResolving() external {
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
-        declare(42161, repeating(migrating("beacon-upgrade@0_0_1", OWNER)));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, repeating(migrating("beacon-upgrade@0_0_1", OWNER)));
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeployBeacon.BeaconTransitionMigrationRepeated.selector, 42161, sBeacon, 1)
         );
@@ -699,7 +710,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         beacon.beaconSuite = "beacon@0_0_1";
         beacon.beacon = address(0);
         beacon.beaconCodeHash = bytes32(0);
-        declare(42161, repeating(beacon));
+        sBeacons.declare(42161, repeating(beacon));
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeployBeacon.BeaconTransitionMigrationRepeated.selector, 42161, sSuiteBeacon, 1
@@ -710,14 +721,14 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
 
     function testNarrowedCheckAcceptsABeaconOnAnotherSupportedNetwork() external {
         supportOnly(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
-        declare(8453, declared("beacon-implementation@0_0_1", NEW_OWNER));
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(8453, declared("beacon-implementation@0_0_1", NEW_OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testNarrowedCheckResolvesOnlyTheBeaconsOnItsNetworks() external {
-        declare(8453, declared("beacon-upgrade@0_0_1", OWNER));
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(8453, declared("beacon-upgrade@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployable).creationCode, 0);
         vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployableV2).creationCode, 1);
         this.externalResolveBeacons(arbitrum());
@@ -728,16 +739,18 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testNarrowedResolveCountsOnlyTheBeaconsOnItsNetworks() external {
-        declare(8453, declared("beacon-implementation@0_0_1", OWNER));
-        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
-        declare(8453, declared("beacon-upgrade@0_0_1", OWNER));
+        sBeacons.declare(8453, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        DeployBeacon memory other = declared("beacon-upgrade@0_0_1", OWNER);
+        other.beacon = address(0xBEAC0);
+        sBeacons.declare(8453, other);
         assertEq(this.externalResolvedCount(arbitrum()), 1);
         assertEq(this.externalResolvedCount(networksNamed(LibRainDeploy.BASE, "")), 2);
         assertEq(this.externalResolvedCount(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE)), 3);
     }
 
     function testNarrowedResolveWithNoBeaconOnItsNetworksIsEmpty() external {
-        declare(8453, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(8453, declared("beacon-implementation@0_0_1", OWNER));
         assertEq(this.externalResolvedCount(arbitrum()), 0);
     }
 
@@ -747,7 +760,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testTransitionsAppliedInDeclaredOrderExpectTheLatest() external {
-        declare(42161, rollingBack());
+        sBeacons.declare(42161, rollingBack());
         applyMigration();
         vm.warp(block.timestamp + 1);
         applyMigration(ROLLBACK, MIGRATION);
@@ -757,7 +770,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testTransitionsAppliedInDeclaredOrderHoldTheLatestNotTheInitialState() external {
-        declare(42161, rollingBack());
+        sBeacons.declare(42161, rollingBack());
         applyMigration();
         vm.warp(block.timestamp + 1);
         applyMigration(ROLLBACK, MIGRATION);
@@ -766,7 +779,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testTransitionsAppliedOutOfDeclaredOrderAreRefusedOnTheNetwork() external {
-        declare(42161, rollingBack());
+        sBeacons.declare(42161, rollingBack());
         applyMigration(ROLLBACK, MIGRATION_HEAD_GENESIS);
         vm.warp(block.timestamp + 1);
         applyMigration(MIGRATION, ROLLBACK);
@@ -779,8 +792,74 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
     }
 
     function testNarrowedCheckWithNoBeaconOnItsNetworksForksNothing() external {
-        declare(8453, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(8453, declared("beacon-implementation@0_0_1", OWNER));
         this.externalCheckDeployedOnNetworks(arbitrum());
         assertNoFork("forked a network with no beacon and no suite to check");
+    }
+
+    function testMalformedTransitionMigrationIsRefusedBeforeForking() external {
+        DeployBeacon memory beacon = migrating("beacon-upgrade@0_0_1", OWNER);
+        beacon.transitions[0].migration.writer = address(0);
+        sBeacons.declare(42161, beacon);
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeployBeacon.BeaconTransitionMigrationUnnamed.selector, 42161, sBeacon, 0)
+        );
+        this.externalCheckDeployedOnNetworks(arbitrum());
+        assertNoFork("forked before refusing an unnamed transition migration");
+    }
+
+    function testBeaconDeclaredTwiceOnANetworkIsRefusedBeforeForking() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", NEW_OWNER));
+        vm.expectRevert(abi.encodeWithSelector(BeaconDeclaredTwice.selector, 42161, 1));
+        this.externalCheckDeployedOnNetworks(arbitrum());
+        assertNoFork("forked before refusing a beacon declared twice");
+    }
+
+    function testBeaconNamedBySuiteAndAgainByItsAddressIsDeclaredTwice() external {
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", OWNER));
+        DeployBeacon memory again = declared("beacon-implementation@0_0_1", OWNER);
+        again.beacon = sSuiteBeacon;
+        again.beaconCodeHash = sSuiteBeacon.codehash;
+        sBeacons.declare(42161, again);
+        vm.expectRevert(abi.encodeWithSelector(BeaconDeclaredTwice.selector, 42161, 1));
+        this.externalCheckDeployedOnNetworks(arbitrum());
+    }
+
+    function externalDeriveUnlessResolved(DeploySuite memory candidate, SupportedNetwork[] memory networks)
+        external
+        returns (DerivedDeploy memory)
+    {
+        ResolvedBeacon[] memory resolved = resolveBeacons(networks);
+        return deriveUnlessResolved(onSupportedNetworks(candidate), resolved);
+    }
+
+    function testSuiteWithAResolvedKeyButOtherCodeIsDerivedAfresh() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        DeploySuite memory other = suite(
+            "beacon-implementation@0_0_1",
+            type(MockDeployable).creationCode,
+            type(MockDeployable).runtimeCode,
+            "test/concrete/MockDeployable.sol:MockDeployable"
+        );
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployableV2).creationCode, 1);
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployable).creationCode, 1);
+        DerivedDeploy memory derived = this.externalDeriveUnlessResolved(other, arbitrum());
+        assertEq(derived.bytecodeHash, keccak256(type(MockDeployable).runtimeCode));
+    }
+
+    function testSuiteWithAResolvedKeyButOtherDependenciesIsDerivedAfresh() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        DeploySuite memory other = releasedSuites()[0];
+        other.dependencies[0].runtimeCode = hex"03";
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployableV2).creationCode, 2);
+        this.externalDeriveUnlessResolved(other, arbitrum());
+    }
+
+    function testSuiteResolvedByABeaconIsNotDerivedAgain() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployableV2).creationCode, 1);
+        DerivedDeploy memory derived = this.externalDeriveUnlessResolved(releasedSuites()[0], arbitrum());
+        assertEq(derived.bytecodeHash, keccak256(type(MockDeployableV2).runtimeCode));
     }
 }

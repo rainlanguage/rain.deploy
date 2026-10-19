@@ -108,7 +108,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     }
 
     /// The selected fork MUST hold the beacon at its applied state, with its own suite, when it names one, and that
-    /// state's implementation suite live.
+    /// state's implementation suite live. Reverts as `checkSuiteOnNetwork`, `LibRainDeployBeacon.appliedState` and
+    /// `LibRainDeployBeacon.checkBeacon` do.
     /// @param network The network's name, for the refusal.
     /// @param resolved The beacon.
     function checkResolvedBeacon(string memory network, ResolvedBeacon memory resolved) internal view {

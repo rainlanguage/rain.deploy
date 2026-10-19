@@ -21,11 +21,7 @@ import {
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockOwnable2StepBeacon} from "../../concrete/MockOwnable2StepBeacon.sol";
-import {MockSilentFallbackBeacon} from "../../concrete/MockSilentFallbackBeacon.sol";
-import {MockTwoWordFallbackBeacon} from "../../concrete/MockTwoWordFallbackBeacon.sol";
-import {MockRevertingWordFallbackBeacon} from "../../concrete/MockRevertingWordFallbackBeacon.sol";
-import {MockDirtyWordFallbackBeacon} from "../../concrete/MockDirtyWordFallbackBeacon.sol";
-import {MockShortWordFallbackBeacon} from "../../concrete/MockShortWordFallbackBeacon.sol";
+import {MockFallbackBeacon} from "../../concrete/MockFallbackBeacon.sol";
 
 /// @title LibRainDeployBeaconTest
 /// @notice `LibRainDeployBeacon`'s expected state from the migration registry, and its check of a beacon against it.
@@ -528,13 +524,14 @@ contract LibRainDeployBeaconTest is Test {
     }
 
     function testBeaconAnsweringPendingOwnerWithoutAWordPasses() external {
-        MockSilentFallbackBeacon beacon = new MockSilentFallbackBeacon(sImplementation, sOwner);
+        MockFallbackBeacon beacon = new MockFallbackBeacon(sImplementation, sOwner, "", false);
         DeployBeacon memory declaration = declaredAt(address(beacon));
         this.externalCheckBeacon(declaration, sImplementation, sOwner);
     }
 
     function testBeaconAnsweringPendingOwnerWithTwoWordsIsRefused() external {
-        MockTwoWordFallbackBeacon beacon = new MockTwoWordFallbackBeacon(sImplementation, sOwner);
+        MockFallbackBeacon beacon =
+            new MockFallbackBeacon(sImplementation, sOwner, abi.encode(uint256(0xDEAD), uint256(0)), false);
         (bool success, bytes memory answer) = address(beacon).staticcall(abi.encodeWithSignature("pendingOwner()"));
         assertTrue(success);
         assertEq(answer.length, 0x40);
@@ -550,7 +547,7 @@ contract LibRainDeployBeaconTest is Test {
     }
 
     function testBeaconAnsweringPendingOwnerWithLessThanAWordIsRefused() external {
-        MockShortWordFallbackBeacon beacon = new MockShortWordFallbackBeacon(sImplementation, sOwner);
+        MockFallbackBeacon beacon = new MockFallbackBeacon(sImplementation, sOwner, new bytes(0x1f), false);
         (bool success, bytes memory answer) = address(beacon).staticcall(abi.encodeWithSignature("pendingOwner()"));
         assertTrue(success);
         assertEq(answer.length, 0x1f);
@@ -574,7 +571,7 @@ contract LibRainDeployBeaconTest is Test {
     }
 
     function testBeaconRevertingPendingOwnerWithAWordPasses() external {
-        MockRevertingWordFallbackBeacon beacon = new MockRevertingWordFallbackBeacon(sImplementation, sOwner);
+        MockFallbackBeacon beacon = new MockFallbackBeacon(sImplementation, sOwner, abi.encode(uint256(0xDEAD)), true);
         (bool success, bytes memory answer) = address(beacon).staticcall(abi.encodeWithSignature("pendingOwner()"));
         assertFalse(success);
         assertEq(answer.length, 0x20);
@@ -584,11 +581,45 @@ contract LibRainDeployBeaconTest is Test {
     }
 
     function testBeaconAnsweringPendingOwnerWithADirtyWordIsRefused() external {
-        MockDirtyWordFallbackBeacon beacon = new MockDirtyWordFallbackBeacon(sImplementation, sOwner);
+        MockFallbackBeacon beacon =
+            new MockFallbackBeacon(sImplementation, sOwner, abi.encode(uint256(1) << 160), false);
         DeployBeacon memory declaration = declaredAt(address(beacon));
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeployBeacon.BeaconPendingOwner.selector, NETWORK, address(beacon), 1 << 160)
         );
         this.externalCheckBeacon(declaration, sImplementation, sOwner);
+    }
+
+    function expectUnnamedSecondTransition(BeaconTransition[] memory transitions) internal {
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployBeacon.BeaconTransitionMigrationUnnamed.selector, block.chainid, address(sBeacon), 1
+            )
+        );
+        this.externalAppliedState(declared(transitions));
+    }
+
+    function testTransitionWithAZeroWriterIsRefusedBeforeReadingTheRegistry() external {
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        transitions[1].migration.writer = address(0);
+        expectUnnamedSecondTransition(transitions);
+    }
+
+    function testTransitionWithAZeroNamespaceIsRefusedBeforeReadingTheRegistry() external {
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        transitions[1].migration.namespace = bytes32(0);
+        expectUnnamedSecondTransition(transitions);
+    }
+
+    function testTransitionWithAZeroMigrationIsRefusedBeforeReadingTheRegistry() external {
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        transitions[1].migration.migration = bytes32(0);
+        expectUnnamedSecondTransition(transitions);
+    }
+
+    function testTransitionWithTheGenesisMigrationIsRefusedBeforeReadingTheRegistry() external {
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        transitions[1].migration.migration = MIGRATION_HEAD_GENESIS;
+        expectUnnamedSecondTransition(transitions);
     }
 }

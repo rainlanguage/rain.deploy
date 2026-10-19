@@ -4,11 +4,13 @@ pragma solidity =0.8.25;
 
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {PerNetworkCloneDeploys, onlyFirstRecordedNetwork} from "../../abstract/PerNetworkCloneDeploys.sol";
-import {PerNetworkCloneBeaconVerifyChain} from "../../abstract/PerNetworkCloneBeaconVerifyChain.sol";
+import {RainDeployVerifyChainBeaconPerNetworkCloneTestBase} from "./RainDeployVerifyChainBeaconPerNetworkClone.t.sol";
 
 /// @title RainDeployVerifyChainBeaconPerNetworkCloneUnrecordedTest
 /// @notice A beacon on a network the per-network clone release never recorded must point at its init data's clone.
-contract RainDeployVerifyChainBeaconPerNetworkCloneUnrecordedTest is PerNetworkCloneBeaconVerifyChain {
+contract RainDeployVerifyChainBeaconPerNetworkCloneUnrecordedTest is
+    RainDeployVerifyChainBeaconPerNetworkCloneTestBase
+{
     function releasedSuites()
         internal
         pure

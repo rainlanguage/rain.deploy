@@ -6,6 +6,13 @@ import {Script} from "forge-std-1.17.0/src/Script.sol";
 
 import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
+import {ChainBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
+
+/// @notice The deploy key MUST NOT be a declared owner of any state of any beacon.
+/// @param chainId The beacon's network.
+/// @param beaconIndex The beacon's index in `beacons()`.
+/// @param state The state index, as `LibRainDeployBeacon.stateAt` takes it.
+error BeaconOwnedByDeployKey(uint256 chainId, uint256 beaconIndex, uint256 state);
 
 /// @title RainDeployBroadcast
 /// @notice The broadcast, inherited rather than rewritten per repo.
@@ -63,7 +70,8 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         broadcastSuite(suite, deployNetworks(), deployerPrivateKey);
     }
 
-    /// Broadcasts the selected suite by ITS mechanism, through `LibRainDeployMechanism` — the same
+    /// Refuses `BeaconOwnedByDeployKey` before reading any network, then broadcasts the selected suite by ITS
+    /// mechanism, through `LibRainDeployMechanism` — the same
     /// dispatch every verification group derives through, so what is broadcast is what was
     /// verified.
     /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
@@ -75,6 +83,15 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         internal
         returns (address[] memory, uint256[] memory)
     {
+        address deployer = vm.addr(deployerPrivateKey);
+        ChainBeacon[] memory chainBeacons = beacons();
+        for (uint256 beaconIndex = 0; beaconIndex < chainBeacons.length; beaconIndex++) {
+            for (uint256 state = 0; state <= chainBeacons[beaconIndex].beacon.transitions.length; state++) {
+                if (LibRainDeployBeacon.stateAt(chainBeacons[beaconIndex].beacon, state).owner == deployer) {
+                    revert BeaconOwnedByDeployKey(chainBeacons[beaconIndex].chainId, beaconIndex, state);
+                }
+            }
+        }
         return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, onSupportedNetworks(suite));
     }
 }

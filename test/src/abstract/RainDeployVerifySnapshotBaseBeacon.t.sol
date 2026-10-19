@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {
+    BeaconDeclaredTwice,
     BeaconNamedTwice,
     BeaconOnUncheckedNetwork,
     BeaconSuiteNotReleased,
@@ -23,12 +24,15 @@ import {
     LibRainDeployBeacon
 } from "../../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {Prerequisite} from "../../../src/interface/IMigrationRegistryV2.sol";
+import {LibBeaconDeclarations} from "../../lib/LibBeaconDeclarations.sol";
+import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 
 /// @title RainDeployVerifySnapshotBaseBeaconTest
 /// @notice The snapshot group refuses a malformed beacon declaration without forking.
 contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase {
+    using LibBeaconDeclarations for ChainBeacon[];
+
     address constant BEACON = address(0xBEAC0);
 
     ChainBeacon[] internal sBeacons;
@@ -69,7 +73,7 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
     }
 
     function setUp() external {
-        declare(42161, valid());
+        sBeacons.declare(42161, valid());
     }
 
     function valid() internal pure returns (DeployBeacon memory) {
@@ -82,22 +86,9 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
         });
     }
 
-    function declare(uint256 chainId, DeployBeacon memory beacon) internal {
-        ChainBeacon storage chainBeacon = sBeacons.push();
-        chainBeacon.chainId = chainId;
-        DeployBeacon storage stored = chainBeacon.beacon;
-        stored.beaconSuite = beacon.beaconSuite;
-        stored.beacon = beacon.beacon;
-        stored.beaconCodeHash = beacon.beaconCodeHash;
-        stored.initial = beacon.initial;
-        for (uint256 i = 0; i < beacon.transitions.length; i++) {
-            stored.transitions.push(beacon.transitions[i]);
-        }
-    }
-
     function redeclare(uint256 chainId, DeployBeacon memory beacon) internal {
         delete sBeacons;
-        declare(chainId, beacon);
+        sBeacons.declare(chainId, beacon);
     }
 
     function expectRefusedOffline(bytes memory refusal) internal {
@@ -130,7 +121,7 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
     }
 
     function testBeaconOnAnUncheckedNetworkIsRefusedOffline() external {
-        declare(42162, valid());
+        sBeacons.declare(42162, valid());
         expectRefusedOffline(abi.encodeWithSelector(BeaconOnUncheckedNetwork.selector, 42162, 1));
     }
 
@@ -153,9 +144,66 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
         this.testBeaconDeclarationsResolve();
     }
 
-    function testBeaconsAreReadWhenDeclared() external {
+    function testSupportedNetworksAreReadWhenABeaconIsDeclared() external {
         sSupported.push("not-a-catalogue-network");
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NetworkNotInCatalogue.selector, "not-a-catalogue-network"));
+        this.testBeaconDeclarationsResolve();
+    }
+
+    function expectUnnamedMigrationOffline(Prerequisite memory migration) internal {
+        DeployBeacon memory beacon = valid();
+        beacon.transitions = new BeaconTransition[](2);
+        beacon.transitions[0] = BeaconTransition({
+            migration: Prerequisite({
+                writer: address(0x5AFE), namespace: keccak256("beacons"), migration: keccak256("migration")
+            }),
+            state: beacon.initial
+        });
+        beacon.transitions[1] = BeaconTransition({migration: migration, state: beacon.initial});
+        redeclare(42161, beacon);
+        expectRefusedOffline(
+            abi.encodeWithSelector(LibRainDeployBeacon.BeaconTransitionMigrationUnnamed.selector, 42161, BEACON, 1)
+        );
+    }
+
+    function testMigrationWithAZeroWriterIsRefusedOffline() external {
+        expectUnnamedMigrationOffline(
+            Prerequisite({writer: address(0), namespace: keccak256("beacons"), migration: keccak256("later")})
+        );
+    }
+
+    function testMigrationWithAZeroNamespaceIsRefusedOffline() external {
+        expectUnnamedMigrationOffline(
+            Prerequisite({writer: address(0x5AFE), namespace: bytes32(0), migration: keccak256("later")})
+        );
+    }
+
+    function testZeroMigrationIsRefusedOffline() external {
+        expectUnnamedMigrationOffline(
+            Prerequisite({writer: address(0x5AFE), namespace: keccak256("beacons"), migration: bytes32(0)})
+        );
+    }
+
+    function testGenesisMigrationIsRefusedOffline() external {
+        expectUnnamedMigrationOffline(
+            Prerequisite({writer: address(0x5AFE), namespace: keccak256("beacons"), migration: MIGRATION_HEAD_GENESIS})
+        );
+    }
+
+    function testBeaconDeclaredTwiceIsRefusedOffline() external {
+        sBeacons.declare(42161, valid());
+        expectRefusedOffline(abi.encodeWithSelector(BeaconDeclaredTwice.selector, 42161, 1));
+    }
+
+    function testBeaconDeclaredTwiceWithAnotherOwnerIsRefusedOffline() external {
+        DeployBeacon memory beacon = valid();
+        beacon.initial.owner = address(0xCAFE);
+        sBeacons.declare(42161, beacon);
+        expectRefusedOffline(abi.encodeWithSelector(BeaconDeclaredTwice.selector, 42161, 1));
+    }
+
+    function testOneBeaconAddressOnTwoNetworksIsNotDeclaredTwice() external {
+        sBeacons.declare(8453, valid());
         this.testBeaconDeclarationsResolve();
     }
 }

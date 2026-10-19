@@ -49,6 +49,11 @@ error BeaconUnnamed(uint256 chainId, uint256 beaconIndex);
 /// @param beaconIndex The beacon's index in `beacons()`.
 error BeaconOnUncheckedNetwork(uint256 chainId, uint256 beaconIndex);
 
+/// @notice Each beacon on a network MUST be declared once.
+/// @param chainId The beacon's network.
+/// @param beaconIndex The index in `beacons()` of the later declaration.
+error BeaconDeclaredTwice(uint256 chainId, uint256 beaconIndex);
+
 /// A beacon with every suite it names resolved on its network.
 /// @param chainId The beacon's network.
 /// @param beacon The declaration, its `beacon` and `beaconCodeHash` derived when it names `beaconSuite`.
@@ -68,7 +73,7 @@ struct ResolvedBeacon {
 }
 
 /// @title RainDeployVerifyBase
-/// @notice The derivation every deploy-verification group shares.
+/// @notice The derivation and beacon resolution every deploy-verification group shares.
 abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     /// Derives where a suite's mechanism puts it and the code hash it leaves there, from the suite
     /// alone.
@@ -108,7 +113,8 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     }
 
     /// Refuses `BeaconOnUncheckedNetwork` for any of `beacons()` off `supportedNetworks()`, whether or not it is on
-    /// `networks`, before resolving any.
+    /// `networks`, before resolving any; then, for each beacon on `networks`, `resolveBeacon`'s refusals and
+    /// `BeaconDeclaredTwice` for one at an address an earlier one on its network resolved to.
     /// @param networks The networks whose beacons to resolve.
     /// @return Each of `beacons()` on one of `networks`, resolved on it, in declaration order.
     function resolveBeacons(SupportedNetwork[] memory networks) internal returns (ResolvedBeacon[] memory) {
@@ -134,15 +140,22 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         for (uint256 beaconIndex = 0; beaconIndex < chainBeacons.length; beaconIndex++) {
             uint256 chainId = chainBeacons[beaconIndex].chainId;
             if (LibRainDeploy.hasChainId(networks, chainId)) {
-                resolved[resolvedIndex++] =
+                ResolvedBeacon memory beacon =
                     resolveBeacon(chainBeacons[beaconIndex].beacon, chainId, beaconIndex, released, derived);
+                for (uint256 earlier = 0; earlier < resolvedIndex; earlier++) {
+                    if (resolved[earlier].chainId == chainId && resolved[earlier].beacon.beacon == beacon.beacon.beacon)
+                    {
+                        revert BeaconDeclaredTwice(chainId, beaconIndex);
+                    }
+                }
+                resolved[resolvedIndex++] = beacon;
             }
         }
         return resolved;
     }
 
     /// Refuses `BeaconNamedTwice` and `BeaconUnnamed`, `BeaconSuiteNotReleased` through `resolveReleased`, and
-    /// `LibRainDeployBeacon.BeaconTransitionMigrationRepeated`.
+    /// `LibRainDeployBeacon.checkTransitionMigrations`'s refusals.
     /// @param declaration The beacon, left unwritten so one declaration can be resolved on several networks.
     /// @param chainId The beacon's network.
     /// @param beaconIndex The beacon's index in `beacons()`, for the refusal.
@@ -176,7 +189,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         } else if (beacon.beacon == address(0) || beacon.beaconCodeHash == bytes32(0)) {
             revert BeaconUnnamed(chainId, beaconIndex);
         }
-        LibRainDeployBeacon.checkDistinctMigrations(chainId, beacon);
+        LibRainDeployBeacon.checkTransitionMigrations(chainId, beacon);
         resolved.chainId = chainId;
         resolved.beacon = beacon;
         uint256 states = beacon.transitions.length + 1;

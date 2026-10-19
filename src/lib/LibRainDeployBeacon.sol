@@ -64,6 +64,14 @@ library LibRainDeployBeacon {
     /// @param transition The index in `transitions` of the one naming an earlier-declared one's migration.
     error BeaconTransitionMigrationRepeated(uint256 chainId, address beacon, uint256 transition);
 
+    /// @notice Each transition MUST name a migration the registry can record: nonzero writer and namespace, and a
+    /// migration neither zero nor `MIGRATION_HEAD_GENESIS`.
+    /// @dev Keyed by chain id, as `BeaconTransitionMigrationRepeated` is.
+    /// @param chainId The beacon's network.
+    /// @param beacon The beacon.
+    /// @param transition The index in `transitions` of the one naming no record.
+    error BeaconTransitionMigrationUnnamed(uint256 chainId, address beacon, uint256 transition);
+
     /// @notice A beacon that answers `pendingOwner()` MUST answer zero.
     /// @param network The beacon's network.
     /// @param beacon The beacon.
@@ -76,13 +84,20 @@ library LibRainDeployBeacon {
     /// @param answer The answer.
     error BeaconPendingOwnerUnreadable(string network, address beacon, bytes answer);
 
-    /// Refuses `BeaconTransitionMigrationRepeated`, reading nothing.
+    /// Refuses `BeaconTransitionMigrationUnnamed` and `BeaconTransitionMigrationRepeated`, reading nothing.
     /// @param chainId The beacon's network, for the refusal.
-    /// @param beacon The beacon.
-    function checkDistinctMigrations(uint256 chainId, DeployBeacon memory beacon) internal pure {
+    /// @param beacon The beacon, resolved: `beacon` set, as `RainDeployVerifyBase.resolveBeacon` sets it.
+    function checkTransitionMigrations(uint256 chainId, DeployBeacon memory beacon) internal pure {
         bytes32[] memory migrations = new bytes32[](beacon.transitions.length);
         for (uint256 i = 0; i < migrations.length; i++) {
-            migrations[i] = keccak256(abi.encode(beacon.transitions[i].migration));
+            Prerequisite memory migration = beacon.transitions[i].migration;
+            if (
+                migration.writer == address(0) || migration.namespace == bytes32(0) || migration.migration == bytes32(0)
+                    || migration.migration == MIGRATION_HEAD_GENESIS
+            ) {
+                revert BeaconTransitionMigrationUnnamed(chainId, beacon.beacon, i);
+            }
+            migrations[i] = keccak256(abi.encode(migration));
             if (isAmong(migrations, i, migrations[i])) {
                 revert BeaconTransitionMigrationRepeated(chainId, beacon.beacon, i);
             }
@@ -90,15 +105,14 @@ library LibRainDeployBeacon {
     }
 
     /// Zero for `initial`, else one past the latest transition the selected fork's registry reports applied.
-    /// Reverts `BeaconTransitionMigrationRepeated` before reading the registry, then
+    /// Reverts as `checkTransitionMigrations` does before reading the registry, then
     /// `LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash` when a transition is declared and the registry is
-    /// not deployed, the registry's own refusal of a zero writer or namespace, or of a zero or genesis migration, and
-    /// `BeaconTransitionsOutOfOrder`.
+    /// not deployed, and `BeaconTransitionsOutOfOrder`.
     /// @param network The network's name, for the refusal.
-    /// @param beacon The beacon.
+    /// @param beacon The beacon, resolved: `beacon` set, as `RainDeployVerifyBase.resolveBeacon` sets it.
     /// @return The state index, as `stateAt` takes it.
     function appliedState(string memory network, DeployBeacon memory beacon) internal view returns (uint256) {
-        checkDistinctMigrations(block.chainid, beacon);
+        checkTransitionMigrations(block.chainid, beacon);
         uint256 state = 0;
         for (uint256 i = 0; i < beacon.transitions.length; i++) {
             Prerequisite memory migration = beacon.transitions[i].migration;
@@ -197,7 +211,8 @@ library LibRainDeployBeacon {
     /// `LibRainDeploy.ResolvedAddressReadFailed` and `LibRainDeploy.UnexpectedResolvedAddress` on `implementation()`
     /// or `owner()`, and `BeaconPendingOwnerUnreadable` and `BeaconPendingOwner` on `pendingOwner()`.
     /// @param network The network's name, for the refusal.
-    /// @param beacon The beacon.
+    /// @param beacon The beacon, resolved: `beacon` and `beaconCodeHash` set, as `RainDeployVerifyBase.resolveBeacon` sets
+    /// them.
     /// @param implementation The address `implementation()` MUST return.
     /// @param owner The address `owner()` MUST return; roles and any other authority are not read.
     function checkBeacon(string memory network, DeployBeacon memory beacon, address implementation, address owner)
