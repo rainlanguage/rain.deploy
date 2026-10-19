@@ -47,29 +47,32 @@ contract LibRainDeployResolvedValuesTest is Test {
     }
 
     /// The reads of `MockResolvedValues`, in declaration order.
-    function valueReadCalls() internal pure returns (bytes[] memory readCalls) {
-        readCalls = new bytes[](3);
+    function valueReadCalls() internal pure returns (bytes[] memory) {
+        bytes[] memory readCalls = new bytes[](3);
         readCalls[0] = abi.encodeWithSignature("iThreshold()");
         readCalls[1] = abi.encodeWithSignature("iCodeHash()");
         readCalls[2] = abi.encodeWithSignature("signers()");
+        return readCalls;
     }
 
     /// The return data `valueReadCalls` answer with for these values.
     function valueExpected(uint256 threshold, bytes32 codeHash, address[] memory signers)
         internal
         pure
-        returns (bytes[] memory expectedValues)
+        returns (bytes[] memory)
     {
-        expectedValues = new bytes[](3);
+        bytes[] memory expectedValues = new bytes[](3);
         expectedValues[0] = abi.encode(threshold);
         expectedValues[1] = abi.encode(codeHash);
         expectedValues[2] = abi.encode(signers);
+        return expectedValues;
     }
 
     /// A one-element list.
-    function one(bytes memory value) internal pure returns (bytes[] memory values) {
-        values = new bytes[](1);
+    function one(bytes memory value) internal pure returns (bytes[] memory) {
+        bytes[] memory values = new bytes[](1);
         values[0] = value;
+        return values;
     }
 
     /// The read the `iOwner` mocks answer.
@@ -78,11 +81,12 @@ contract LibRainDeployResolvedValuesTest is Test {
     }
 
     /// Fork ids no fork has, so selecting one is itself an error.
-    function unselectableForkIds(uint256 length) internal pure returns (uint256[] memory forkIds) {
-        forkIds = new uint256[](length);
+    function unselectableForkIds(uint256 length) internal pure returns (uint256[] memory) {
+        uint256[] memory forkIds = new uint256[](length);
         for (uint256 i = 0; i < length; i++) {
             forkIds[i] = type(uint256).max;
         }
+        return forkIds;
     }
 
     /// Every read answering exactly its expected bytes MUST pass, a zero

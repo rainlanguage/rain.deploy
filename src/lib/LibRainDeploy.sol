@@ -567,6 +567,19 @@ library LibRainDeploy {
         }
     }
 
+    /// The fork checks' network refusals: an empty network set, and fork ids
+    /// not paired one to one with the networks.
+    /// @param networks The network names.
+    /// @param forkIds The fork ids, positionally paired with `networks`.
+    function checkNetworkForks(string[] memory networks, uint256[] memory forkIds) private pure {
+        if (networks.length == 0) {
+            revert NoNetworks();
+        }
+        if (forkIds.length != networks.length) {
+            revert ForkIdsLengthMismatch(networks.length, forkIds.length);
+        }
+    }
+
     /// SIMULATION verification: runs `checkResolvedAddresses` on forks that
     /// ALREADY EXIST, which `deployToNetworks` returns the ids for.
     ///
@@ -596,12 +609,7 @@ library LibRainDeploy {
         bytes[] memory readCalls,
         address[] memory expectedAddresses
     ) internal {
-        if (networks.length == 0) {
-            revert NoNetworks();
-        }
-        if (forkIds.length != networks.length) {
-            revert ForkIdsLengthMismatch(networks.length, forkIds.length);
-        }
+        checkNetworkForks(networks, forkIds);
         checkResolvedAddressReads(target, readCalls, expectedAddresses);
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
@@ -684,8 +692,9 @@ library LibRainDeploy {
         for (uint256 i = 0; i < readCalls.length; i++) {
             // slither-disable-next-line low-level-calls
             (bool success, bytes memory returnData) = target.staticcall(readCalls[i]);
-            // No ABI-encoded value is empty, and no code at `target` answers
-            // empty, so empty is a failed read rather than a mismatch.
+            // A codeless `target`, or a read of a function returning nothing,
+            // answers empty: a failed read, never a match, so an empty expected
+            // value can never pass.
             if (!success || returnData.length == 0) {
                 revert ResolvedValueReadFailed(network, target, i, returnData);
             }
@@ -712,12 +721,7 @@ library LibRainDeploy {
         bytes[] memory readCalls,
         bytes[] memory expectedValues
     ) internal {
-        if (networks.length == 0) {
-            revert NoNetworks();
-        }
-        if (forkIds.length != networks.length) {
-            revert ForkIdsLengthMismatch(networks.length, forkIds.length);
-        }
+        checkNetworkForks(networks, forkIds);
         checkResolvedValueReads(target, readCalls, expectedValues);
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);

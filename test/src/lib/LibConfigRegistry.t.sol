@@ -5,21 +5,23 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibConfigRegistry} from "../../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.sol";
-import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
 import {ConfigRegistry, CONFIG_REGISTRY_ROOT} from "../../../src/concrete/ConfigRegistry.sol";
 import {DELEGATION_DESIGNATOR_LENGTH, LibAccountCode} from "../../lib/LibAccountCode.sol";
 import {MockSafeResolvedOwner} from "../../concrete/MockSafeResolvedOwner.sol";
+import {LibConfigRegistryFork} from "../../lib/LibConfigRegistryFork.sol";
 
 /// @title LibConfigRegistryTest
 /// Tests for `LibConfigRegistry`. The registry is not mocked: the real
 /// `ConfigRegistry` is deployed through the Zoltu factory, which lands it at
 /// the pinned address with the pinned code hash.
 contract LibConfigRegistryTest is Test {
-    /// Deploys `ConfigRegistry` through the Zoltu factory.
+    /// Deploys `ConfigRegistry` through the Zoltu factory, as a release deploy
+    /// does.
     /// @return The deployed registry.
     function deployRegistry() internal returns (IConfigRegistryV1) {
-        return IConfigRegistryV1(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
+        LibConfigRegistryFork.ensureDeployed(vm);
+        return IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
     }
 
     /// External wrapper for `resolve`, for `vm.expectRevert`'s call depth.

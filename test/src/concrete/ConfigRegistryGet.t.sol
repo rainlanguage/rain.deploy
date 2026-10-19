@@ -6,6 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
 import {ConfigRegistry, CONFIG_REGISTRY_ROOT} from "../../../src/concrete/ConfigRegistry.sol";
+import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
 
 /// @title ConfigRegistryGetTest
 /// @notice Tests for `ConfigRegistry.getV1`: the value, the moment, the revert
@@ -18,28 +19,10 @@ contract ConfigRegistryGetTest is Test {
         sRegistry = new ConfigRegistry();
     }
 
-    /// The value half of `getV1`.
-    /// @param registry The registry to read.
-    /// @param name The name to read.
-    /// @return The value bound to `name`.
-    function getValue(ConfigRegistry registry, bytes32 name) internal view returns (bytes memory) {
-        (bytes memory value,) = registry.getV1(name);
-        return value;
-    }
-
-    /// The moment half of `getV1`.
-    /// @param registry The registry to read.
-    /// @param name The name to read.
-    /// @return The moment `name` was most recently bound.
-    function getMoment(ConfigRegistry registry, bytes32 name) internal view returns (uint256) {
-        (, uint256 registeredAt) = registry.getV1(name);
-        return registeredAt;
-    }
-
     /// A read of an unbound name reverts rather than returning an empty value.
     function testGetUnsetReverts(bytes32 name) external {
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name));
-        getValue(sRegistry, name);
+        LibConfigRegistryRead.getValue(sRegistry, name);
     }
 
     /// A read of a bound name returns exactly what was bound, and does not
@@ -50,8 +33,8 @@ contract ConfigRegistryGetTest is Test {
         vm.prank(CONFIG_REGISTRY_ROOT);
         sRegistry.registerV1(name, value);
 
-        assertEq(getValue(sRegistry, name), value);
-        assertEq(getValue(sRegistry, name), value);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), value);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), value);
     }
 
     /// The value is returned byte for byte at every length either side of the
@@ -63,7 +46,7 @@ contract ConfigRegistryGetTest is Test {
             bytes32 name = bytes32(i);
             vm.prank(CONFIG_REGISTRY_ROOT);
             sRegistry.registerV1(name, value);
-            assertEq(getValue(sRegistry, name), value);
+            assertEq(LibConfigRegistryRead.getValue(sRegistry, name), value);
         }
     }
 
@@ -73,7 +56,7 @@ contract ConfigRegistryGetTest is Test {
         vm.prank(CONFIG_REGISTRY_ROOT);
         sRegistry.registerV1(name, abi.encode(account));
 
-        bytes memory value = getValue(sRegistry, name);
+        bytes memory value = LibConfigRegistryRead.getValue(sRegistry, name);
         assertEq(value.length, 32);
         assertEq(abi.decode(value, (address)), account);
     }
@@ -84,7 +67,7 @@ contract ConfigRegistryGetTest is Test {
         vm.prank(CONFIG_REGISTRY_ROOT);
         sRegistry.registerV1(name, abi.encode(address(0)));
 
-        bytes memory value = getValue(sRegistry, name);
+        bytes memory value = LibConfigRegistryRead.getValue(sRegistry, name);
         assertEq(value, new bytes(32));
         assertEq(abi.decode(value, (address)), address(0));
     }
@@ -96,7 +79,7 @@ contract ConfigRegistryGetTest is Test {
         sRegistry.registerV1(name, abi.encode(accounts, threshold));
 
         (address[] memory gotAccounts, uint256 gotThreshold) =
-            abi.decode(getValue(sRegistry, name), (address[], uint256));
+            abi.decode(LibConfigRegistryRead.getValue(sRegistry, name), (address[], uint256));
         assertEq(gotAccounts, accounts);
         assertEq(gotThreshold, threshold);
     }
@@ -111,7 +94,7 @@ contract ConfigRegistryGetTest is Test {
             ConfigRegistry registry = new ConfigRegistry();
             vm.prank(CONFIG_REGISTRY_ROOT);
             registry.registerV1(names[i], value);
-            assertEq(getValue(registry, names[i]), value);
+            assertEq(LibConfigRegistryRead.getValue(registry, names[i]), value);
         }
     }
 
@@ -191,8 +174,8 @@ contract ConfigRegistryGetTest is Test {
         sRegistry.registerV1(name, value);
 
         vm.warp(time + elapsed);
-        assertEq(getMoment(sRegistry, name), time);
-        assertEq(block.timestamp - getMoment(sRegistry, name), elapsed);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), time);
+        assertEq(block.timestamp - LibConfigRegistryRead.getMoment(sRegistry, name), elapsed);
     }
 
     /// The moment `getV1` answers with is never zero.
@@ -233,8 +216,8 @@ contract ConfigRegistryGetTest is Test {
         vm.prank(CONFIG_REGISTRY_ROOT);
         sRegistry.registerV1(nameB, valueB);
 
-        assertEq(getMoment(sRegistry, nameA), timeA);
-        assertEq(getMoment(sRegistry, nameB), timeB);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, nameA), timeA);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, nameB), timeB);
     }
 
     /// The moment is stored at full width: clocks past every narrower width the
@@ -253,7 +236,7 @@ contract ConfigRegistryGetTest is Test {
             vm.warp(times[i]);
             vm.prank(CONFIG_REGISTRY_ROOT);
             sRegistry.registerV1(name, value);
-            assertEq(getMoment(sRegistry, name), times[i]);
+            assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), times[i]);
         }
     }
 

@@ -56,8 +56,8 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 ///
 /// ## Simulation and confirmation
 ///
-/// The same split as `LibRainDeploy.checkResolvedAddressesOnForks` and
-/// `checkResolvedAddressesOnNetworks`. `registerOnNetworks` returns the forks
+/// The same split as `LibRainDeploy`'s `checkResolved*OnForks` and
+/// `checkResolved*OnNetworks` pairs. `registerOnNetworks` returns the forks
 /// it simulated on, and `checkRegisteredOnForks` reads those; nothing is mined
 /// while the script that registers is running, so the binding exists there and
 /// nowhere else. `checkRegisteredOnNetworks` forks every network fresh, as a

@@ -108,5 +108,22 @@ contract RegisterConfigTest is Test {
             ).getV1(keccak256(bytes(freshName)));
         assertEq(bound, freshValue);
         assertEq(registeredAt, block.timestamp);
+
+        // Run as root on a name already bound to another value rebinds it.
+        string memory rotateName = string.concat(name, "-rotate");
+        bytes memory rotateValue = abi.encode(address(4));
+        vm.warp(block.timestamp - 1);
+        vm.prank(CONFIG_REGISTRY_ROOT);
+        IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
+            .registerV1(keccak256(bytes(rotateName)), freshValue);
+        vm.setEnv("CONFIG_REGISTRY_NAME", rotateName);
+        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(rotateValue));
+        forkIds = RegisterConfigRunCaller(CONFIG_REGISTRY_ROOT).callRun(script);
+        assertEq(forkIds.length, 1);
+        vm.selectFork(forkIds[0]);
+        (bound, registeredAt) = IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
+            .getV1(keccak256(bytes(rotateName)));
+        assertEq(bound, rotateValue);
+        assertEq(registeredAt, block.timestamp);
     }
 }

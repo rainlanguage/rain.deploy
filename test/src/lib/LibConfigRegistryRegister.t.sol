@@ -39,17 +39,17 @@ contract LibConfigRegistryRegisterTest is Test {
     }
 
     /// One-element string list.
-    function list(string memory a) internal pure returns (string[] memory) {
+    function list(string memory only) internal pure returns (string[] memory) {
         string[] memory networks = new string[](1);
-        networks[0] = a;
+        networks[0] = only;
         return networks;
     }
 
     /// Two-element string list.
-    function list(string memory a, string memory b) internal pure returns (string[] memory) {
+    function list(string memory first, string memory second) internal pure returns (string[] memory) {
         string[] memory networks = new string[](2);
-        networks[0] = a;
-        networks[1] = b;
+        networks[0] = first;
+        networks[1] = second;
         return networks;
     }
 

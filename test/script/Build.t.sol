@@ -275,7 +275,7 @@ contract BuildTest is Test {
     /// today.
     ///
     /// `LibRainDeploySnapshotTest.testTheCommittedReleasedLibIsWhatTheGeneratorEmits`
-    /// asserts this of `ConfigRegistry` by name, so every other contract's
+    /// asserts this of `AddressRegistry` by name, so every other contract's
     /// released lib is pinned only by what the record check can reach through
     /// it. That check walks record -> declaration by DERIVED ADDRESS, so it
     /// sees a release dropped from the declaration and nothing else: the order

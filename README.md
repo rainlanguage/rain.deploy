@@ -633,11 +633,10 @@ For each transaction the device shows:
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
-- **Data**: the selector `0xb5a8845f` (`register(bytes32,bytes)`) and its
-  arguments: the name hash, the offset `0x40`, the value's length, and the value
-  padded to a multiple of 32 bytes — together exactly the calldata the dry run
-  printed. `registerV1` is a call the device cannot decode, so it shows the raw
-  bytes; open the full data on the device to compare them.
+- **Data**: exactly the `Calldata:` line the dry run printed: `registerV1`'s
+  selector, the name hash, the offset `0x40`, the value's length and the value
+  padded to a multiple of 32 bytes. The device cannot decode `registerV1`, so it
+  shows the raw bytes; open the full data on the device to compare them.
 
 Labels vary by firmware; whatever they are called, the recipient, amount, chain
 and raw calldata must each match the dry run. Reject on the device if any of

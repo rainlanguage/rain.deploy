@@ -108,6 +108,9 @@ interface IConfigRegistryV1 {
     /// MUST emit `Register` and record `block.timestamp` as the moment —
     /// including when `value` is the value already bound, which is a bind like
     /// any other. The moment dates the write, not the value.
+    /// An implementation storing the moment narrower than `block.timestamp`
+    /// MUST revert on a clock that does not fit rather than truncate it, since a
+    /// truncated moment reads as older.
     /// @param name The name to bind.
     /// @param value The ABI-encoded value to bind it to.
     function registerV1(bytes32 name, bytes calldata value) external;
@@ -118,9 +121,7 @@ interface IConfigRegistryV1 {
     /// unbound, rather than returning an empty value, so that no caller has to
     /// remember to check. It MUST NOT expose any other reader that returns an
     /// empty value for an unbound name, as that reintroduces exactly the mistake
-    /// this reverting read exists to prevent. An implementation storing the
-    /// moment narrower than `block.timestamp` MUST reject what does not fit
-    /// rather than truncate it, since a truncated moment reads as older.
+    /// this reverting read exists to prevent.
     ///
     /// Answers with the current binding: whatever root has bound most
     /// recently, and the moment it was bound. A caller that stores the result
