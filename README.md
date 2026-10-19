@@ -481,10 +481,11 @@ interface is `IConfigRegistryV1`. There is no removal, no upgrade and no
 authority besides root.
 
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
-registry is deployed on a network, root re-binds every live name there with
+registry is deployed on a network, root binds each name a consumer resolves with
 `script/RegisterConfig.sol` (value `cast abi-encode "f(address)" <account>`)
-before any consumer deploys against it. Until then a consumer's
-`LibConfigRegistry.resolve` reverts.
+before that consumer deploys against it. Which names those are is each
+consumer's to declare; until a name is bound, its `LibConfigRegistry.resolve`
+reverts.
 
 `CONFIG_REGISTRY_ROOT` in `src/concrete/ConfigRegistry.sol` is the one place
 root lives. It is welded into the creation code, so rotating it moves the deploy
