@@ -481,7 +481,7 @@ contract MigrationRegistryAppliedAfterTest is Test {
         assertEq(abi.encode(sRegistry.appliedAfterV3(writer, namespace, migration)), abi.encode(expected));
     }
 
-    /// A record is confined to the caller's line here as everywhere else:
+    /// A record is confined to the writer's line here as everywhere else:
     /// one writer's list says nothing about another's, including the
     /// writer the list names, whose own record answers only its own head.
     function testAppliedAfterIsPerWriter(

@@ -2088,8 +2088,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(namespace != bytes32(0));
         vm.assume(other != address(0));
         // The prerequisite is under another writer, so applying it leaves the
-        // caller's head at genesis, which bounds no moment. A prerequisite in
-        // the caller's own line is
+        // writer's head at genesis, which bounds no moment. A prerequisite in
+        // the writer's own line is
         // `testApplyMigrationOwnEarlierMigrationIsNotAPrerequisite`.
         vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
@@ -2272,8 +2272,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(namespace != bytes32(0));
         vm.assume(other != address(0));
         // The prerequisite is under another writer, so applying it leaves the
-        // caller's head where the same call expects it. A prerequisite in
-        // the caller's own line is
+        // writer's head where the same call expects it. A prerequisite in
+        // the writer's own line is
         // `testApplyMigrationOwnEarlierMigrationIsNotAPrerequisite`.
         vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
@@ -2323,8 +2323,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(namespace != bytes32(0));
         vm.assume(other != address(0));
         // The prerequisite is under another writer, so applying it leaves the
-        // caller's head where the same call expects it. A prerequisite in
-        // the caller's own line is
+        // writer's head where the same call expects it. A prerequisite in
+        // the writer's own line is
         // `testApplyMigrationOwnEarlierMigrationIsNotAPrerequisite`.
         vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
@@ -2405,10 +2405,10 @@ contract MigrationRegistryApplyMigrationTest is Test {
         Prerequisite memory unapplied = prerequisites[unappliedIndex];
 
         for (uint256 i = 0; i < prerequisites.length; i++) {
-            // The caller's own migration is never a prerequisite here: applied
+            // The writer's own migration is never a prerequisite here: applied
             // as one, it would make the second half `MigrationAlreadyApplied`.
             vm.assume(prerequisites[i].migration != migration);
-            // Nor is the caller's own line: an own entry after the head
+            // Nor is the writer's own line: an own entry after the head
             // is refused as a key before any record is read.
             vm.assume(prerequisites[i].writer != writer);
             if (i == unappliedIndex) {
@@ -2473,7 +2473,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         for (uint256 i = 0; i < prerequisites.length; i++) {
             vm.assume(prerequisites[i].migration != migration);
-            // Nothing is applied in the caller's own line, so the caller's
+            // Nothing is applied in the writer's own line, so the caller's
             // moment is bounded by genesis alone.
             vm.assume(prerequisites[i].writer != writer);
             if (i == unappliedIndex) {
@@ -2807,7 +2807,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     }
 
     /// A prerequisite naming the migration being applied is an entry after the
-    /// head in the caller's own line, so it is refused as
+    /// head in the writer's own line, so it is refused as
     /// `OwnPrerequisite(migration)` before any record is read — the same
     /// refusal as any own entry, not the `PrerequisiteNotApplied` it would also
     /// be by construction. On both writes, and nothing is recorded.
@@ -2832,10 +2832,10 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.headV3(writer, namespace), MIGRATION_HEAD_GENESIS);
     }
 
-    /// The caller's own line is not a line to name after the head:
+    /// The writer's own line is not a line to name after the head:
     /// an earlier migration of its own is refused as `OwnPrerequisite`,
     /// applied or not, and is never recorded as a prerequisite. The head
-    /// already says everything about the caller's own line, so the earlier
+    /// already says everything about the writer's own line, so the earlier
     /// migration is named there and only there.
     function testApplyMigrationOwnEarlierMigrationIsNotAPrerequisite(
         address writer,
@@ -2999,7 +2999,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigrationHistoryV3(writer, namespace, bytes32(0), 0, headThen(writer, namespace, anyHead, none));
     }
 
-    /// The prerequisites are read before the caller's own record: an unapplied
+    /// The prerequisites are read before the writer's own record: an unapplied
     /// prerequisite is reported over a migration the caller has already
     /// applied, onto the head that migration became. A record that exists
     /// while the prerequisites its script now names do not is the more
@@ -3365,8 +3365,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.assume(namespace != bytes32(0));
         vm.assume(other != address(0));
         // The prerequisite is under another writer, so applying it leaves the
-        // caller's head at genesis, which bounds no moment. A prerequisite in
-        // the caller's own line is
+        // writer's head at genesis, which bounds no moment. A prerequisite in
+        // the writer's own line is
         // `testApplyMigrationOwnEarlierMigrationIsNotAPrerequisite`.
         vm.assume(writer != other);
         LibMigrationFuzz.assumeMigration(vm, migration);
@@ -3618,7 +3618,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.headV3(writer, namespace), migrationA);
     }
 
-    /// The first entry is the caller's own head, so one under any other
+    /// The first entry is the writer's own head, so one under any other
     /// writer is refused even when its migration is exactly the head. The
     /// error names the migration handed in, which is the head itself.
     function testApplyMigrationFirstEntryUnderAnotherWriterReverts(
@@ -3904,9 +3904,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.appliedOntoV3(writer, namespace, migrationB), migrationA);
     }
 
-    /// An entry after the head in the caller's own line is refused as a
+    /// An entry after the head in the writer's own line is refused as a
     /// key, before any record is read, on both writes: the head already says
-    /// everything about the caller's own line.
+    /// everything about the writer's own line.
     function testApplyMigrationOwnEntryAfterTheHeadReverts(
         address writer,
         bytes32 namespace,
@@ -3969,7 +3969,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.appliedV3(writer, namespace, migration), 0);
     }
 
-    /// The caller's own record in another namespace is an ordinary
+    /// The writer's own record in another namespace is an ordinary
     /// prerequisite: once applied there, a write in `namespace` waiting on it
     /// lands with the list as given, and the other line's head is where it
     /// was.
@@ -4003,7 +4003,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.appliedV3(writer, otherNamespace, migrationA), 1000);
     }
 
-    /// The caller's own record in another namespace, not applied there, is
+    /// The writer's own record in another namespace, not applied there, is
     /// refused as any unapplied prerequisite is, naming the line it was
     /// looked for in, by both writes, and nothing is recorded in either line.
     function testApplyMigrationOwnOtherNamespaceUnappliedReverts(
@@ -4046,8 +4046,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.headV3(writer, otherNamespace), MIGRATION_HEAD_GENESIS);
     }
 
-    /// An entry in the caller's own line is `OwnPrerequisite` whatever else
-    /// is listed beside it: an applied entry of the caller's in another
+    /// An entry in the writer's own line is `OwnPrerequisite` whatever else
+    /// is listed beside it: an applied entry of the writer's in another
     /// namespace, before or after it, changes nothing. On both writes.
     function testApplyMigrationOwnLineEntryIsRefusedBesideAnotherNamespace(
         address writer,

@@ -103,7 +103,7 @@ contract MigrationRegistryAppliedOntoTest is Test {
         assertEq(sRegistry.appliedOntoV3(writer, namespace, migrationB), migrationA);
     }
 
-    /// The first entry is the caller at its head, not merely the head: the
+    /// The first entry is the writer at its head, not merely the head: the
     /// right migration under another writer is refused as the wrong head, so
     /// what this answers is always a head of the writer's own line.
     function testAppliedOntoFirstEntryUnderAnotherWriterReverts(
@@ -155,8 +155,8 @@ contract MigrationRegistryAppliedOntoTest is Test {
         assertEq(sRegistry.appliedOntoV3(writer, namespace, migrationB), bytes32(0));
     }
 
-    /// The first entry is the caller in the namespace being written, not
-    /// merely the caller: the caller at the head of one of its OTHER lines is
+    /// The first entry is the writer in the namespace being written, not
+    /// merely the writer: the writer at the head of one of its OTHER lines is
     /// refused as the wrong head, and nothing is recorded in either line.
     function testAppliedOntoFirstEntryInAnotherNamespaceReverts(
         address writer,
@@ -299,7 +299,7 @@ contract MigrationRegistryAppliedOntoTest is Test {
         assertEq(sRegistry.appliedOntoV3(writer, namespace, migration), MIGRATION_HEAD_GENESIS);
     }
 
-    /// A record is confined to the caller's line here as everywhere else:
+    /// A record is confined to the writer's line here as everywhere else:
     /// one writer's chain says nothing about another's.
     function testAppliedOntoIsPerWriter(address writer, bytes32 namespace, address other, bytes32 migration) external {
         vm.assume(writer != address(0));

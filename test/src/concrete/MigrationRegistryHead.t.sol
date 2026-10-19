@@ -249,7 +249,7 @@ contract MigrationRegistryHeadTest is Test {
         assertEq(sRegistry.headV3(writer, namespace), MIGRATION_HEAD_GENESIS);
     }
 
-    /// A first entry in another of the caller's own namespaces is not this
+    /// A first entry in another of the writer's own namespaces is not this
     /// line's head, whatever migration it names, and neither line moves.
     function testHeadUnmovedByFirstEntryInAnotherNamespace(
         address writer,
