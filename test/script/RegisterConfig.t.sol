@@ -103,8 +103,9 @@ contract RegisterConfigTest is Test {
         assertEq(forkIds.length, 1);
         vm.selectFork(forkIds[0]);
         assertEq(block.chainid, LibRainDeploy.declaredNetworkConfigs(LibRainDeploy.supportedNetworks())[0].chainId);
-        (bytes memory bound, uint256 registeredAt) =
-            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(keccak256(bytes(freshName)));
+        (bytes memory bound, uint256 registeredAt) = IConfigRegistryV1(
+                LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS
+            ).getV1(keccak256(bytes(freshName)));
         assertEq(bound, freshValue);
         assertEq(registeredAt, block.timestamp);
     }

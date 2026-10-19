@@ -393,8 +393,8 @@ contract LibConfigRegistryRegisterTest is Test {
             this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
         assertTrue(broadcast);
         assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, "", 0, value));
-        (bytes memory bound_, uint256 registeredAt) = registry.getV1(name);
-        assertEq(bound_, value);
+        (bytes memory boundValue, uint256 registeredAt) = registry.getV1(name);
+        assertEq(boundValue, value);
         assertEq(registeredAt, time);
     }
 
@@ -423,8 +423,8 @@ contract LibConfigRegistryRegisterTest is Test {
             this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
         assertTrue(broadcast);
         assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, previous, 1, value));
-        (bytes memory bound_, uint256 registeredAt) = registry.getV1(name);
-        assertEq(bound_, value);
+        (bytes memory boundValue, uint256 registeredAt) = registry.getV1(name);
+        assertEq(boundValue, value);
         assertEq(registeredAt, 2);
     }
 
@@ -446,8 +446,8 @@ contract LibConfigRegistryRegisterTest is Test {
 
             (bool broadcast,) = this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, nearMisses[i]);
             assertTrue(broadcast);
-            (bytes memory bound_,) = registry.getV1(name);
-            assertEq(bound_, nearMisses[i]);
+            (bytes memory boundValue,) = registry.getV1(name);
+            assertEq(boundValue, nearMisses[i]);
         }
     }
 
@@ -465,8 +465,8 @@ contract LibConfigRegistryRegisterTest is Test {
             this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
         assertFalse(broadcast);
         assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, value, 1, value));
-        (bytes memory bound_, uint256 registeredAt) = registry.getV1(name);
-        assertEq(bound_, value);
+        (bytes memory boundValue, uint256 registeredAt) = registry.getV1(name);
+        assertEq(boundValue, value);
         assertEq(registeredAt, 1);
     }
 
@@ -476,18 +476,18 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(value.length > 0);
         vm.assume(name != other);
         IConfigRegistryV1 registry = deployRegistry();
-        (bytes memory bound_, uint256 registeredAt) = LibConfigRegistryRegister.currentBinding(name);
-        assertEq(bound_, "");
+        (bytes memory boundValue, uint256 registeredAt) = LibConfigRegistryRegister.currentBinding(name);
+        assertEq(boundValue, "");
         assertEq(registeredAt, 0);
 
         vm.warp(7);
         vm.prank(CONFIG_REGISTRY_ROOT);
         registry.registerV1(name, value);
-        (bound_, registeredAt) = LibConfigRegistryRegister.currentBinding(name);
-        assertEq(bound_, value);
+        (boundValue, registeredAt) = LibConfigRegistryRegister.currentBinding(name);
+        assertEq(boundValue, value);
         assertEq(registeredAt, 7);
-        (bound_, registeredAt) = LibConfigRegistryRegister.currentBinding(other);
-        assertEq(bound_, "");
+        (boundValue, registeredAt) = LibConfigRegistryRegister.currentBinding(other);
+        assertEq(boundValue, "");
         assertEq(registeredAt, 0);
     }
 
@@ -520,8 +520,8 @@ contract LibConfigRegistryRegisterTest is Test {
         deployCodeTo(
             "MockRevertingRegistry.sol", abi.encode(thisName), LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS
         );
-        (bytes memory bound_, uint256 registeredAt) = this.externalCurrentBinding(name);
-        assertEq(bound_, "");
+        (bytes memory boundValue, uint256 registeredAt) = this.externalCurrentBinding(name);
+        assertEq(boundValue, "");
         assertEq(registeredAt, 0);
     }
 
@@ -561,7 +561,7 @@ contract LibConfigRegistryRegisterTest is Test {
                 "Name hash (keccak256 of the name): 0xba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8\n",
                 "Value: 0x000000000000000000000000000000000000000000000000000000000000dead\n",
                 "Sender (root): 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c\n",
-                "Registry: 0x77eBe2915B8d3D81f382A78CfFA4F6d6A0DFbAaB\n",
+                "Registry: 0x4b5b74E73D90fF3962c2882F20D9FA73B70192E9\n",
                 "Calldata: 0xb5a8845fba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
                 "0000000000000000000000000000000000000000000000000000000000000040",
                 "0000000000000000000000000000000000000000000000000000000000000020",

@@ -154,8 +154,9 @@ contract ConfigRegistryGetTest is Test {
         assertFalse(bare);
 
         vm.prank(CONFIG_REGISTRY_ROOT);
-        (bool bound_,) = address(sRegistry).call{value: 1}(abi.encodeCall(IConfigRegistryV1.registerV1, (name, value)));
-        assertFalse(bound_);
+        (bool registered,) =
+            address(sRegistry).call{value: 1}(abi.encodeCall(IConfigRegistryV1.registerV1, (name, value)));
+        assertFalse(registered);
 
         vm.prank(CONFIG_REGISTRY_ROOT);
         (bool read,) = address(sRegistry).call{value: 1}(abi.encodeCall(IConfigRegistryV1.getV1, (name)));

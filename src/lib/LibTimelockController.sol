@@ -6,22 +6,29 @@ import {IAccessControl} from "@openzeppelin-contracts-5.7.0/access/IAccessContro
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 
-/// @dev The reads `assertTimelockState` makes of an OpenZeppelin
+/// @dev The reads `assertTimelockState` makes of an OpenZeppelin 5.7.0
 /// `TimelockController`, declared here rather than imported so that importing
 /// this library does not pull the dependency into the importer's compilation
 /// unit: `foundry.toml` restricts that source to the `timelock` profile, and
 /// every source sharing a unit with it is compiled under that profile too.
 interface ITimelockControllerState {
+    /// OpenZeppelin `TimelockController.getMinDelay`: the delay every operation
+    /// waits, in seconds.
     function getMinDelay() external view returns (uint256);
+    /// OpenZeppelin `TimelockController.PROPOSER_ROLE`.
     // forge-lint: disable-next-line(mixed-case-function)
     // slither-disable-next-line naming-convention
     function PROPOSER_ROLE() external view returns (bytes32);
+    /// OpenZeppelin `TimelockController.EXECUTOR_ROLE`.
     // forge-lint: disable-next-line(mixed-case-function)
     // slither-disable-next-line naming-convention
     function EXECUTOR_ROLE() external view returns (bytes32);
+    /// OpenZeppelin `TimelockController.CANCELLER_ROLE`.
     // forge-lint: disable-next-line(mixed-case-function)
     // slither-disable-next-line naming-convention
     function CANCELLER_ROLE() external view returns (bytes32);
+    /// OpenZeppelin `AccessControl.DEFAULT_ADMIN_ROLE`, as `TimelockController`
+    /// inherits it.
     // forge-lint: disable-next-line(mixed-case-function)
     // slither-disable-next-line naming-convention
     function DEFAULT_ADMIN_ROLE() external view returns (bytes32);

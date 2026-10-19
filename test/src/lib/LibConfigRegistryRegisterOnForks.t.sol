@@ -177,7 +177,8 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
             abi.encodeWithSelector(LibConfigRegistryRegister.UnexpectedChainId.selector, "base", 8453, 42161)
         );
         this.externalCheckRegisteredOnForks(networks, swapped, name, value);
-        (bytes memory bound,) = IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(hashed);
+        (bytes memory bound,) =
+            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(hashed);
         assertEq(bound, value);
     }
 }

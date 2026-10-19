@@ -50,9 +50,9 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// registry at the pinned address holds the pinned code hash — the check
 /// `LibConfigRegistry.resolve` makes before every read, so the binding written
 /// is in the registry consumers read. The inputs are checked once, before any
-/// fork: the name is canonical, the value is not empty, the networks are a
-/// non-empty, duplicate-free subset of the declared ones, and the sender is
-/// root.
+/// fork: the name is canonical, the value is not empty and is a
+/// whole number of 32-byte words, the networks are a non-empty,
+/// duplicate-free subset of the declared ones, and the sender is root.
 ///
 /// ## Simulation and confirmation
 ///
