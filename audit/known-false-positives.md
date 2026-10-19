@@ -1,0 +1,14 @@
+# Known false positives
+
+Mutants that survive an offline run (no RPC URLs) because the only lines they
+touch are reached by fork tests alone. Each is killed by the named fork test
+when the `[rpc_endpoints]` aliases resolve.
+
+| Mutant                                                        | Line                                                                                                               | Killed with RPC by                                                                                                                       |
+| ------------------------------------------------------------- | ------------------------------------------------------------------------------------------------------------------ | ---------------------------------------------------------------------------------------------------------------------------------------- |
+| R22: `checkRegisteredOnForks` value comparison removed        | `src/lib/LibConfigRegistryRegister.sol` `if (keccak256(actual) != keccak256(value)) {`                             | `LibConfigRegistryRegisterOnForksTest.testRegisterOnEveryNetwork`                                                                        |
+| R23: `checkRegisteredOnForks` skips `checkChain`              | `src/lib/LibConfigRegistryRegister.sol` `checkChain(vm, networks[i]);` in `checkRegisteredOnForks`                 | `LibConfigRegistryRegisterOnForksTest.testRegisterOnSubset`, `testRegisterOnForksBindsOnEachFork`                                        |
+| S01: `RegisterConfig` ignores the networks env var            | `script/RegisterConfig.sol` `return vm.envOr(NETWORKS_VAR, ",", supportedNetworks());`                             | `RegisterConfigTest.testWiring`                                                                                                          |
+| S02: `RegisterConfig.run` signs as `tx.origin`                | `script/RegisterConfig.sol` `vm, selectedNetworks(), supportedNetworks(), msg.sender, ...` in `run`                | `RegisterConfigTest.testWiring`                                                                                                          |
+| S03: `RegisterConfig.verify` ignores the selection            | `script/RegisterConfig.sol` `vm, selectedNetworks(), supportedNetworks(), vm.envString(NAME_VAR), ...` in `verify` | `RegisterConfigTest.testWiring`                                                                                                          |
+| D10: `checkResolvedValuesOnForks` selects only the first fork | `src/lib/LibRainDeploy.sol` `vm.selectFork(forkIds[i]);` in `checkResolvedValuesOnForks`                           | `LibRainDeployResolvedValuesTest.testCheckResolvedValuesOnForksReachesEveryFork`, `testCheckResolvedValuesOnNetworksReachesEveryNetwork` |

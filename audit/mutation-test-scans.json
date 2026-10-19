@@ -391,5 +391,36 @@
       "M01 (pairing != to <) survived and is killed by the new testCheckResolvedValuesOnForksExtraForkIdsReverts and testCheckResolvedAddressesOnForksExtraForkIdsReverts (baseline 124).",
       "M10 (checkChain dropped from checkRegisteredOnForks) survived offline only; on LibConfigRegistryRegisterOnForksTest against live RPC (baseline 7, -j 1) it is KILLED by testRegisterOnSubset, as are M05 and M07 by testRegisterOnNetworksAgainstLiveChains."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T14:50:56Z",
+    "commit": "df9c3b270de4b81cc9dfd0a263e4c45dfaf1c44e",
+    "testsAfterCommit": "3458b22c0a6c465d9ce9d8bf25f53ae91755d9cf",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 126,
+    "scope": "PR #315 (#313) round 7, the code changed since 156754c plus the review's survivors: src/lib/LibConfigRegistryRegister.sol checkRegisteredOnForks pairing guard (X01), value comparison (R22) and checkChain call (R23); script/RegisterConfig.sol network selection, signer and verify selection (S01-S03); src/lib/LibRainDeploy.sol checkResolvedValuesOnForks fork selection (D10)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 7,
+      "behavioursProbed": 7,
+      "killedByExistingTests": 6,
+      "gapsFilled": 1,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "The merge of origin/main changed only a doc comment in src/concrete/MigrationRegistry.sol on this side; it has no behaviour to probe.",
+      "Live RPC, -j 1. LibConfigRegistryRegister*.t.sol baseline green at 39: X01 (pairing != to <) SURVIVED; R22 KILLED by testRegisterOnEveryNetwork; R23 KILLED by testRegisterOnSubset, testRegisterOnForksBindsOnEachFork. RegisterConfig.t.sol baseline 1: S01-S03 KILLED by testWiring. LibRainDeployResolvedValues.t.sol baseline 20: D10 KILLED by testCheckResolvedValuesOnForksReachesEveryFork, testCheckResolvedValuesOnNetworksReachesEveryNetwork.",
+      "X01 is killed by the new testCheckRegisteredOnForksRefusesExtraForkIds, re-probed on the fork-free LibConfigRegistryRegister.t.sol (baseline 33) because public RPC failures turned the fork suite's baseline red on two of four runs.",
+      "R22, R23, S01-S03 and D10 are recorded in audit/known-false-positives.md as offline-only survivors."
+    ]
   }
 ]
