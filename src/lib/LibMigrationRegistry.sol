@@ -19,6 +19,7 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// the head and the migrations in any other line the caller names, builds the
 /// list for a write that waits on nothing but the head, or builds that write as
 /// a call for another account to send. It approves and revokes delegates,
+/// directly or as a call to send,
 /// reads an approval, and reads which account wrote a record. Which writer a
 /// test trusts, which namespace a repo writes, which invariant each answer
 /// selects, and how an id is derived are entirely the consumer's business and
@@ -38,7 +39,7 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// in its own `vm.startBroadcast` and a test calls it directly. A Safe bundle
 /// or a timelock batch appends the `(to, data)` pair `applyMigrationV3Call` or
 /// `applyMigrationHistoryV3Call` builds instead, because the script building
-/// the bundle is not the account the record must land under. None of those is
+/// the bundle is not the account that must make the write. None of those is
 /// privileged over the others here.
 ///
 /// ## Reading is what this is for

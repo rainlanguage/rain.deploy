@@ -90,7 +90,7 @@ struct MigrationRecord {
 /// i.e. exactly the silent wrong-branch this contract reverts to prevent.
 contract MigrationRegistry is IMigrationRegistryV3 {
     /// Every record, keyed by writer, namespace and migration. A zero
-    /// `appliedAt` means never applied. Not `public`: the only readers are
+    /// `appliedAt` means never applied. Not `public`: the only external readers are
     /// `appliedV3`, `appliedOntoV3`, `appliedAfterV3` and `appliedByV3`, which
     /// refuse the inputs that can only be mistakes.
     mapping(address writer => mapping(bytes32 namespace => mapping(bytes32 migration => MigrationRecord record)))
@@ -104,7 +104,7 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     mapping(address writer => mapping(bytes32 namespace => bytes32 head)) internal sHead;
 
     /// The delegates each writer has approved for each of its lines. Not
-    /// `public`: the only reader is `approvedV3`, which refuses the zero inputs.
+    /// `public`: the only external reader is `approvedV3`, which refuses the zero inputs.
     mapping(address writer => mapping(bytes32 namespace => mapping(address delegate => bool))) internal sApproved;
 
     /// @inheritdoc IMigrationRegistryV3
