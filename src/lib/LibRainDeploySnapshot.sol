@@ -1327,6 +1327,9 @@ library LibRainDeploySnapshot {
 
     string constant DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX = "address constant DEPLOYED_ADDRESS_";
 
+    /// The indent the writer gives a declaration value wrapped onto its own line.
+    string constant WRAPPED_INDENT = "    ";
+
     string constant MECHANISM_DATA_DECLARATION = "bytes constant MECHANISM_DATA =";
 
     /// The addresses a frozen record declares as its deploy addresses, and the chain id each is
@@ -1396,8 +1399,8 @@ library LibRainDeploySnapshot {
         return (chainIds, addresses);
     }
 
-    /// The address the declaration on `lines[line]` names, read by `declarationValue` with the writer's wrapped
-    /// `    address(` prefix.
+    /// The address the declaration on `lines[line]` names, read by `declarationValue` with `address(` at the
+    /// writer's `WRAPPED_INDENT`.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file, for the error only.
     /// @param lines The record's lines, block comments removed.
@@ -1408,7 +1411,8 @@ library LibRainDeploySnapshot {
         pure
         returns (address)
     {
-        (bool readable, string memory value) = declarationValue(vm, lines, line, "    address(");
+        (bool readable, string memory value) =
+            declarationValue(vm, lines, line, string.concat(WRAPPED_INDENT, "address("));
         if (!readable) {
             revert FrozenSnapshotUnreadable(path);
         }
@@ -1492,6 +1496,14 @@ library LibRainDeploySnapshot {
         if (hasForeignLineBreak(vm, record)) {
             revert FrozenSnapshotUnreadable(path);
         }
+        return splitRecordLines(vm, record);
+    }
+
+    /// A record's lines, block comments removed, split on `\n` alone with no line break check.
+    /// @param vm The Vm instance for string operations.
+    /// @param record The record file's contents.
+    /// @return The lines.
+    function splitRecordLines(Vm vm, string memory record) internal pure returns (string[] memory) {
         return vm.split(withoutBlockComments(record), "\n");
     }
 

@@ -232,7 +232,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     }
 
     /// The value a code record's declaration on `lines[line]` gives, read by `LibRainDeploySnapshot.declarationValue`
-    /// with the writer's four-space wrapped indent.
+    /// at the writer's `LibRainDeploySnapshot.WRAPPED_INDENT`.
     /// @param path The record file, for the error only.
     /// @param lines The record's lines, block comments removed.
     /// @param line The declaration's line.
@@ -242,7 +242,8 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         pure
         returns (string memory)
     {
-        (bool readable, string memory value) = LibRainDeploySnapshot.declarationValue(vm, lines, line, "    ");
+        (bool readable, string memory value) =
+            LibRainDeploySnapshot.declarationValue(vm, lines, line, LibRainDeploySnapshot.WRAPPED_INDENT);
         if (!readable) {
             revert FrozenCodeRecordUnreadable(path);
         }
@@ -274,7 +275,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         if (LibRainDeploySnapshot.hasForeignLineBreak(vm, record)) {
             revert FrozenCodeRecordUnreadable(path);
         }
-        string[] memory lines = LibRainDeploySnapshot.recordLines(vm, path, record);
+        string[] memory lines = LibRainDeploySnapshot.splitRecordLines(vm, record);
         for (uint256 i = 0; i < lines.length; i++) {
             if (
                 vm.indexOf(lines[i], LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION) == 0
