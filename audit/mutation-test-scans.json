@@ -430,5 +430,39 @@
       "Registry mutants ran against test/src/concrete/MigrationRegistry*.t.sol only (baseline green at 195): the library suites pin the candidate code hash, which would kill any registry bytecode change for the wrong reason. Library mutants ran against test/src/lib/LibMigrationRegistry*.t.sol.",
       "Adversarial pass: delegation scope, writer-keyed head and timestamp bounds, refusal order against the IMigrationRegistryV3 MUST clauses, and sender-first events were checked against the interface NatSpec and issue #312; no candidate bug."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T14:30:17Z",
+    "commit": "b65934ef3779a4f5fce162c907ce9fa3919c21a1",
+    "testsAfterCommit": "b65934ef3779a4f5fce162c907ce9fa3919c21a1",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 138,
+    "scope": "pr:310, its code changed in round 8: src/lib/LibRainDeployMechanism.sol checkReadsOwnStorageOnly exempting accounts created during the factory call (createdIn) and its call site in deployLocally",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 9,
+      "behavioursProbed": 9,
+      "killedByExistingTests": 2,
+      "gapsFilled": 0,
+      "equivalentMutants": 1,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 1,
+      "confirmed": 0,
+      "filed": [
+        316
+      ],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "9 mutants (R901-R909) probed at b65934ef3779a4f5fce162c907ce9fa3919c21a1 with mutation-probe over the offline suite (940 green at baseline). 8 KILLED, 1 equivalent.",
+      "The fix landed with its test before the probe, so attribution is mixed. R901 (writes refused too) was killed by testCloneInitializeWritingAnotherAccountsStorageDeploys and R902 (no created exemption) by testSubsetTakesNoOutOfPlayCandidateNetwork; both tests predate the round. The probe named testCloneInitializeReadingAnAccountItCreatesDeploys, added in the same commit, as the killer of R903-R907 and R909.",
+      "R908 (the created search starts at the second access) is equivalent: the first recorded access is always the top-level call to the factory, never a Create.",
+      "Adversarial candidate #316 (the created search is not order-aware) was filed before its repro was verified. It was then closed as unreachable: a storage read of an account runs that account's own code, and CREATE succeeds only at a codeless address, so no read of an account can come before its creation."
+    ]
   }
 ]
