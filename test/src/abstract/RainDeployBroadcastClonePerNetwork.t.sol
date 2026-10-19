@@ -4,18 +4,30 @@ pragma solidity =0.8.25;
 
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {ExtendedNetworkAddressMismatch, ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";
-import {CloneDeploy, CloneNetwork, CloneNetworks, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
+import {
+    ExtendedNetworkAddressMismatch,
+    ExtendedNetworkUnfrozen,
+    InitDataReaderUndeclared
+} from "../../../src/lib/LibRainDeployMechanism.sol";
+import {
+    CloneDeploy,
+    CloneNetwork,
+    CloneNetworks,
+    CloneTarget,
+    LibRainDeployClone
+} from "../../../src/lib/LibRainDeployClone.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN,
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
     PER_NETWORK_CLONE_POLYGON_ADMIN,
     PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
     onlyFirstRecordedNetwork,
+    perNetworkCloneRelease,
     perNetworkCloneReleaseAddress
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {ZoltuDeployOrAdopt} from "../../abstract/ZoltuDeployOrAdopt.sol";
 import {PerNetworkCloneDeploy} from "../../concrete/PerNetworkCloneDeploy.sol";
+import {ReaderlessUpgradedPerNetworkCloneDeploy} from "../../concrete/ReaderlessUpgradedPerNetworkCloneDeploy.sol";
 import {UpgradedPerNetworkCloneDeploy} from "../../concrete/UpgradedPerNetworkCloneDeploy.sol";
 import {
     upgradedPerNetworkClone,
@@ -300,5 +312,84 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         );
         deploy.externalBroadcastSuite(release, bothNetworks(), 1);
         assertFalse(anyForkExists(), "a network was forked before the undeclared one was refused");
+    }
+
+    /// A release recording Arbitrum One alone, with Polygon declared at init data other than the candidate's, lands on
+    /// Polygon at the declared address with the declared data, not where the candidate's data derives.
+    function testBroadcastsAnExtendedNetworkAtItsDeclaredData() external {
+        PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
+        bytes memory declaredData = abi.encode(address(0xC4c4c4C4C4c4C4c4c4C4c4c4c4c4c4C4c4c4c4C4));
+        CloneDeploy memory release = perNetworkCloneRelease();
+        address declaredAddress = LibRainDeployClone.cloneDeployedAddress(
+            CloneTarget({
+                factory: release.factory, implementation: release.implementation, data: declaredData, salt: release.salt
+            })
+        );
+        address candidateAddress = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        assertNotEq(declaredAddress, candidateAddress);
+        CloneNetwork[] memory declared = new CloneNetwork[](1);
+        declared[0] = CloneNetwork({
+            chainId: PER_NETWORK_CLONE_POLYGON_CHAIN_ID, data: declaredData, deployedAddress: declaredAddress
+        });
+        deploy.setExtendedNetworks("per-network-clone@0_0_1", declared);
+        vm.makePersistent(address(this));
+        vm.makePersistent(address(deploy));
+
+        DeploySuite memory suite = onlyFirstRecordedNetwork(deploy.externalSuiteByName("per-network-clone@0_0_1"));
+
+        string[] memory networks = bothNetworks();
+        for (uint256 i = 0; i < networks.length; i++) {
+            vm.createSelectFork(networks[i]);
+            vm.makePersistent(
+                zoltuDeployOrAdopt(type(MockCloneFactory).creationCode, type(MockCloneFactory).runtimeCode)
+            );
+            vm.makePersistent(zoltuDeployOrAdopt(type(MockCloneable).creationCode, type(MockCloneable).runtimeCode));
+            assertEq(declaredAddress.code.length, 0, networks[i]);
+            assertEq(candidateAddress.code.length, 0, networks[i]);
+        }
+
+        (address[] memory deployed, uint256[] memory forkIds) = deploy.externalBroadcastSuite(suite, networks, 1);
+        assertEq(deployed.length, 2);
+        assertEq(deployed[1], declaredAddress);
+
+        vm.selectFork(forkIds[1]);
+        assertEq(block.chainid, PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        assertEq(declaredAddress.codehash, suite.storedBytecodeHash);
+        assertEq(MockCloneable(declaredAddress).sInitData(), declaredData);
+        assertEq(candidateAddress.code.length, 0);
+    }
+
+    /// A release recording Arbitrum One alone, under an implementation the candidate no longer uses and with no init
+    /// data reader declared, is refused the full set before any fork, and broadcast to its recorded Arbitrum One alone
+    /// needs no reader.
+    function testBroadcastToTheRecordedSubsetNeedsNoInitDataReader() external {
+        ReaderlessUpgradedPerNetworkCloneDeploy deploy = new ReaderlessUpgradedPerNetworkCloneDeploy();
+        vm.makePersistent(address(this));
+        vm.makePersistent(address(deploy));
+
+        DeploySuite memory suite = onlyFirstRecordedNetwork(deploy.externalSuiteByName("per-network-clone@0_0_1"));
+        CloneNetworks memory clones = abi.decode(suite.mechanismData, (CloneNetworks));
+        assertEq(clones.networks.length, 1);
+        assertNotEq(clones.implementation, upgradedPerNetworkClone().implementation);
+
+        vm.expectRevert(abi.encodeWithSelector(InitDataReaderUndeclared.selector, suite.suite, clones.implementation));
+        deploy.externalBroadcastSuite(suite, bothNetworks(), 1);
+        assertFalse(anyForkExists(), "a network was forked before the undeclared reader was refused");
+
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        vm.createSelectFork(networks[0]);
+        vm.makePersistent(zoltuDeployOrAdopt(type(MockCloneFactory).creationCode, type(MockCloneFactory).runtimeCode));
+        vm.makePersistent(zoltuDeployOrAdopt(type(MockCloneable).creationCode, type(MockCloneable).runtimeCode));
+        address arbitrumAddress = clones.networks[0].deployedAddress;
+        assertEq(arbitrumAddress.code.length, 0);
+
+        (address[] memory deployed, uint256[] memory forkIds) = deploy.externalBroadcastSuite(suite, networks, 1);
+        assertEq(deployed.length, 1);
+        assertEq(deployed[0], arbitrumAddress);
+        vm.selectFork(forkIds[0]);
+        assertEq(block.chainid, PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
+        assertEq(arbitrumAddress.codehash, suite.storedBytecodeHash);
+        assertEq(MockCloneable(arbitrumAddress).sInitData(), abi.encode(PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN));
     }
 }
