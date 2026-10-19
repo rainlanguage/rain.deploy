@@ -1670,10 +1670,10 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.appliedV3(writer, bytes32(0), migration);
     }
 
-    /// The zero namespace is the first argument and the first refusal: it
-    /// wins over the zero id, over genesis as the id, over a zero moment and
-    /// over an empty list, so a caller that has zeroed everything is told
-    /// about the namespace.
+    /// For the writer itself, the zero namespace is the first argument
+    /// refusal: it wins over the zero id, over genesis as the id, over a zero
+    /// moment and over an empty list, so a writer that has zeroed everything
+    /// else is told about the namespace.
     function testApplyMigrationZeroNamespaceCheckedFirst(address writer, bytes32 migration, bytes32 anyHead) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);

@@ -774,10 +774,12 @@ stalled line in one repo would hold the head for all of them. So records are
 keyed by `(writer, namespace, migration)`, with a head per writer and namespace,
 and the same key keeps one line per repo. A namespace is an opaque `bytes32` the
 repo declares beside its migration ids, one named constant per repo; the
-registry refuses only zero (`ZeroNamespace`), on every write and every read, for
-the same reason it refuses the zero writer. There is no plain line outside the
-namespaces: every write names one, and the writer's other namespaces are other
-lines, which a write may wait on exactly as it waits on another writer's.
+registry refuses only zero (`ZeroNamespace`), on every read and on every write
+by the writer itself (any other caller is `NotApproved` first, since no approval
+names zero), for the same reason it refuses the zero writer. There is no plain
+line outside the namespaces: every write names one, and the writer's other
+namespaces are other lines, which a write may wait on exactly as it waits on
+another writer's.
 
 **A migration may wait on migrations in other lines.** Every entry after the
 head in the list of `Prerequisite { writer, namespace, migration }` is one, and
@@ -856,10 +858,11 @@ pins with it trades a clock-guess for a bookkeeping-guess.
 `appliedAfterV3`, `appliedByV3`, `headV3`, `approvedV3`, `approveV3`,
 `revokeV3`, `applyMigrationV3` and `applyMigrationHistoryV3`, plus the `*Call`
 builders for a bundle, each verifying the registry's code hash before it reads
-or writes. There is deliberately **no broadcast runner**: the dominant real
-shape is a Safe executing a bundle that never broadcasts, and such a script
-appends the `applyMigrationV3Call` output to the bundle it is already emitting,
-which makes the record atomic with the migration it describes.
+or writes, and the pure `onto`, which builds the head-only list. There is
+deliberately **no broadcast runner**: the dominant real shape is a Safe
+executing a bundle that never broadcasts, and such a script appends the
+`applyMigrationV3Call` output to the bundle it is already emitting, which makes
+the record atomic with the migration it describes.
 
 ## Deploying, and then releasing
 

@@ -534,7 +534,7 @@ interface IMigrationRegistryV3 {
     /// Emitted every time a migration is applied, by both writes. A migration
     /// is applied at most once per line, so the log is the complete history
     /// of the registry and the only way to discover a record without already
-    /// knowing the id.
+    /// knowing its writer and namespace.
     ///
     /// It carries no head, because the log is ordered and one line's entries
     /// in order ARE that line's chain of heads — each entry's migration is the

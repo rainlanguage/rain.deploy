@@ -13,15 +13,16 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// a chain the caller has not audited; the address plus the code hash says the
 /// caller is talking to the registry it compiled against.
 ///
-/// That is the whole library. It answers when a writer applied a migration in
-/// a namespace, what it applied it onto and after, and where that line has
-/// got to, and it applies one under a writer in a namespace it names, after
+/// That is the whole library. It answers when a writer's line in a namespace
+/// applied a migration, what it applied it onto and after, and where that line
+/// has got to, and it applies one under a writer in a namespace it names, after
 /// the head and the migrations in any other line the caller names, builds the
 /// list for a write that waits on nothing but the head, or builds that write as
-/// a call for another account to send. It approves and revokes delegates, and
-/// reads which account wrote a record. Which writer a test trusts, which
-/// namespace a repo writes, which invariant each answer selects, and how an id
-/// is derived are entirely the consumer's business and none of this library's.
+/// a call for another account to send. It approves and revokes delegates,
+/// reads an approval, and reads which account wrote a record. Which writer a
+/// test trusts, which namespace a repo writes, which invariant each answer
+/// selects, and how an id is derived are entirely the consumer's business and
+/// none of this library's.
 ///
 /// ## There is deliberately no broadcast runner here
 ///
@@ -246,9 +247,9 @@ library LibMigrationRegistry {
     /// same transaction instead names whatever the line is at when the write
     /// lands, so a chain that never got the predecessor, or a sibling that
     /// landed first, is applied onto rather than refused.
-    /// @param writer The writer the write lands under: the account the
-    /// transaction is sent from, or a writer that approved it. Never the zero
-    /// address.
+    /// @param writer The writer the write lands under: the account that calls
+    /// the registry, or a writer that approved it for `namespace`. Never the
+    /// zero address.
     /// @param namespace The line under `writer` the write names. Never zero.
     /// @param headMigration The migration `writer`'s line in `namespace`
     /// applied last, or `MIGRATION_HEAD_GENESIS` for the first in the line.

@@ -12,10 +12,8 @@ import {Prerequisite} from "../../src/interface/IMigrationRegistryV3.sol";
 ///
 /// It exists so the writer can be exercised as the property it is. The
 /// library's functions are `internal` and inline into whatever executes them,
-/// so `msg.sender` at the registry is the calling CONTRACT, not whoever
-/// `vm.prank` last named. A test contract calling the library directly writes
-/// as one caller, into its own lines or those it was approved for. Two of these
-/// are two writers, which is what makes "a record reaches nobody else"
+/// so `msg.sender` at the registry is this CONTRACT, whoever called it. Two of
+/// these are two writers, which is what makes "a record reaches nobody else"
 /// checkable rather than asserted about a single account.
 ///
 /// Two of them are also two sets of heads, which is what makes "one line is

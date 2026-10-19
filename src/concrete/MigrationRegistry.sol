@@ -200,8 +200,8 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// may be genesis, checked against the line. Every later entry is a
     /// record key in another line: refused as `appliedV3` refuses the same key,
     /// refused if it is the writer's own line, and then, in a second pass so
-    /// every malformed entry is reported before the records are read, refused
-    /// if nobody has written it.
+    /// no record is read until every entry has been checked, refused if nobody
+    /// has written it.
     /// @param writer The line's writer.
     /// @param namespace The line under the writer being written.
     /// @param prerequisites The head, then the records that must exist.
