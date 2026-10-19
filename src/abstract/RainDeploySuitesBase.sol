@@ -298,9 +298,7 @@ abstract contract RainDeploySuitesBase {
         DeployCandidate[] memory candidates = checkedCandidateSuites();
         for (uint256 i = 0; i < candidates.length; i++) {
             if (keccak256(bytes(candidates[i].snapshot.suite)) == name) {
-                return LibRainDeployMechanism.withUnrecordedNetworks(
-                    frozen, candidates[i].snapshot, initDataReaders(candidates[i].snapshot.suite), chainIds
-                );
+                return LibRainDeployMechanism.withUnrecordedNetworks(frozen, candidates[i].snapshot, chainIds);
             }
         }
         return frozen;
@@ -323,17 +321,6 @@ abstract contract RainDeploySuitesBase {
     function extendedNetworks(string memory suite) internal view virtual returns (CloneNetwork[] memory) {
         (suite);
         return new CloneNetwork[](0);
-    }
-
-    /// The implementations, other than the named candidate's own, that read its init data as its implementation does:
-    /// a per-network release cut under one of them takes an unrecorded network at the candidate's init data.
-    /// Empty by default, so a release under any other implementation is refused an unrecorded network.
-    /// A network declared in `extendedNetworks` needs no reader: it carries its own init data and address.
-    /// @param suite The candidate's suite key.
-    /// @return The implementations.
-    function initDataReaders(string memory suite) internal view virtual returns (address[] memory) {
-        (suite);
-        return new address[](0);
     }
 
     /// The name half of a suite key.

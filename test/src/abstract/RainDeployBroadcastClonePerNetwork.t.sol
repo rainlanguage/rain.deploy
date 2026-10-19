@@ -4,11 +4,7 @@ pragma solidity =0.8.25;
 
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {
-    ExtendedNetworkAddressMismatch,
-    ExtendedNetworkUnfrozen,
-    InitDataReaderUndeclared
-} from "../../../src/lib/LibRainDeployMechanism.sol";
+import {ExtendedNetworkAddressMismatch, ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {
     CloneDeploy,
     CloneNetwork,
@@ -27,7 +23,6 @@ import {
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {ZoltuDeployOrAdopt} from "../../abstract/ZoltuDeployOrAdopt.sol";
 import {PerNetworkCloneDeploy} from "../../concrete/PerNetworkCloneDeploy.sol";
-import {ReaderlessUpgradedPerNetworkCloneDeploy} from "../../concrete/ReaderlessUpgradedPerNetworkCloneDeploy.sol";
 import {UpgradedPerNetworkCloneDeploy} from "../../concrete/UpgradedPerNetworkCloneDeploy.sol";
 import {
     upgradedPerNetworkClone,
@@ -359,11 +354,10 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         assertEq(candidateAddress.code.length, 0);
     }
 
-    /// A release recording Arbitrum One alone, under an implementation the candidate no longer uses and with no init
-    /// data reader declared, is refused the full set before any fork, and broadcast to its recorded Arbitrum One alone
-    /// needs no reader.
-    function testBroadcastToTheRecordedSubsetNeedsNoInitDataReader() external {
-        ReaderlessUpgradedPerNetworkCloneDeploy deploy = new ReaderlessUpgradedPerNetworkCloneDeploy();
+    /// A release recording Arbitrum One alone, under an implementation the candidate no longer uses and with nothing
+    /// declared, is refused the full set before any fork, and is broadcast to its recorded Arbitrum One alone.
+    function testBroadcastToTheRecordedSubsetUnderAMovedImplementation() external {
+        UpgradedPerNetworkCloneDeploy deploy = new UpgradedPerNetworkCloneDeploy();
         vm.makePersistent(address(this));
         vm.makePersistent(address(deploy));
 
@@ -372,9 +366,16 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         assertEq(clones.networks.length, 1);
         assertNotEq(clones.implementation, upgradedPerNetworkClone().implementation);
 
-        vm.expectRevert(abi.encodeWithSelector(InitDataReaderUndeclared.selector, suite.suite, clones.implementation));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ExtendedNetworkUnfrozen.selector,
+                suite.suite,
+                LibRainDeploy.POLYGON,
+                perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID)
+            )
+        );
         deploy.externalBroadcastSuite(suite, bothNetworks(), 1);
-        assertFalse(anyForkExists(), "a network was forked before the undeclared reader was refused");
+        assertFalse(anyForkExists(), "a network was forked before the unfrozen network was refused");
 
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;

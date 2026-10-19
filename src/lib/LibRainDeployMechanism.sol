@@ -51,12 +51,6 @@ error UnexpectedStoredDeployedAddress(string suite, address storedDeployedAddres
 /// @param suite The declaration's suite key.
 error CloneDataAmbiguous(string suite);
 
-/// Thrown when a per-network release would take an unrecorded network at its candidate's init data, under an
-/// implementation that is neither the candidate's nor declared to read the candidate's init data.
-/// @param suite The release's suite key.
-/// @param implementation The release's implementation.
-error InitDataReaderUndeclared(string suite, address implementation);
-
 /// Thrown when a suite that is not a per-network clone is given extended networks.
 /// @param suite The suite's key.
 error ExtendedNetworksUnexpected(string suite);
@@ -234,27 +228,23 @@ library LibRainDeployMechanism {
         return chainIds;
     }
 
-    /// A per-network clone suite with an entry for every network in play its candidate has one for, refusing to add one
-    /// under an implementation that is not the candidate's and not one of `initDataReaders`.
+    /// A per-network clone suite with an entry for every network in play its candidate has one for.
     /// @param suite The suite.
     /// @param candidate The candidate whose init data the suite's unrecorded networks take.
-    /// @param initDataReaders The other implementations that read the candidate's init data as its implementation does.
     /// @param chainIds The chain ids in play; a candidate network on any other chain is not added.
     /// @return The suite, with the candidate's networks in play it lacks.
-    function withUnrecordedNetworks(
-        DeploySuite memory suite,
-        DeploySuite memory candidate,
-        address[] memory initDataReaders,
-        uint256[] memory chainIds
-    ) internal pure returns (DeploySuite memory) {
+    function withUnrecordedNetworks(DeploySuite memory suite, DeploySuite memory candidate, uint256[] memory chainIds)
+        internal
+        pure
+        returns (DeploySuite memory)
+    {
         if (
             suite.mechanism != DeployMechanism.ClonePerNetwork || candidate.mechanism != DeployMechanism.ClonePerNetwork
         ) {
             return suite;
         }
         CloneNetworks memory clones = cloneNetworks(suite);
-        CloneNetworks memory candidateClones = cloneNetworks(candidate);
-        CloneNetwork[] memory declared = candidateClones.networks;
+        CloneNetwork[] memory declared = cloneNetworks(candidate).networks;
         uint256 recorded = clones.networks.length;
         CloneNetwork[] memory networks = new CloneNetwork[](recorded + declared.length);
         for (uint256 i = 0; i < recorded; i++) {
@@ -268,10 +258,6 @@ library LibRainDeployMechanism {
                     CloneNetwork({chainId: declared[i].chainId, data: declared[i].data, deployedAddress: address(0)});
                 count++;
             }
-        }
-        if (count > recorded && !readsInitData(clones.implementation, candidateClones.implementation, initDataReaders))
-        {
-            revert InitDataReaderUndeclared(suite.suite, clones.implementation);
         }
         clones.networks = new CloneNetwork[](count);
         for (uint256 i = 0; i < count; i++) {
@@ -363,28 +349,6 @@ library LibRainDeployMechanism {
                 }
             }
         }
-    }
-
-    /// Whether an implementation reads a candidate's init data: it is the candidate's implementation, or one of
-    /// `initDataReaders`.
-    /// @param implementation The implementation.
-    /// @param candidateImplementation The candidate's implementation.
-    /// @param initDataReaders The other implementations declared to read the candidate's init data.
-    /// @return Whether it reads it.
-    function readsInitData(address implementation, address candidateImplementation, address[] memory initDataReaders)
-        internal
-        pure
-        returns (bool)
-    {
-        if (implementation == candidateImplementation) {
-            return true;
-        }
-        for (uint256 i = 0; i < initDataReaders.length; i++) {
-            if (initDataReaders[i] == implementation) {
-                return true;
-            }
-        }
-        return false;
     }
 
     /// Whether a list of chain ids holds a chain id.

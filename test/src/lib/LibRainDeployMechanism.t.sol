@@ -24,7 +24,6 @@ import {
     ExtendedNetworkAddressMismatch,
     ExtendedNetworkUnfrozen,
     ExtendedNetworksUnexpected,
-    InitDataReaderUndeclared,
     LibRainDeployMechanism,
     UnexpectedMechanismData,
     UnexpectedStoredDeployedAddress
@@ -45,7 +44,7 @@ import {
     SourceUse
 } from "../../concrete/MockStorageReadingCloneable.sol";
 import {MockStorageSource} from "../../concrete/MockStorageSource.sol";
-import {upgradedCloneImplementation, upgradedPerNetworkClone} from "../../abstract/UpgradedPerNetworkCloneDeploys.sol";
+import {upgradedPerNetworkClone} from "../../abstract/UpgradedPerNetworkCloneDeploys.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN,
     PER_NETWORK_CLONE_POLYGON_ADMIN,
@@ -706,22 +705,7 @@ contract LibRainDeployMechanismTest is Test {
         returns (DeploySuite memory)
     {
         return LibRainDeployMechanism.withUnrecordedNetworks(
-            suite, candidate, new address[](0), LibRainDeployMechanism.addressChainIds(candidate)
-        );
-    }
-
-    /// External wrapper for `LibRainDeployMechanism.withUnrecordedNetworks` with declared init data readers.
-    /// @param suite The suite.
-    /// @param candidate The candidate.
-    /// @param initDataReaders The other implementations declared to read the candidate's init data.
-    /// @return The suite with the candidate's networks it lacks.
-    function externalWithUnrecordedNetworks(
-        DeploySuite memory suite,
-        DeploySuite memory candidate,
-        address[] memory initDataReaders
-    ) external pure returns (DeploySuite memory) {
-        return LibRainDeployMechanism.withUnrecordedNetworks(
-            suite, candidate, initDataReaders, LibRainDeployMechanism.addressChainIds(candidate)
+            suite, candidate, LibRainDeployMechanism.addressChainIds(candidate)
         );
     }
 
@@ -876,31 +860,15 @@ contract LibRainDeployMechanismTest is Test {
         );
     }
 
-    /// A release under another implementation than its candidate's takes an unrecorded network only when that
-    /// implementation is declared to read the candidate's init data, and the candidate's own implementation declared
-    /// as a reader does not stand in for it.
-    function testUnrecordedNetworkUnderAnotherImplementationNeedsADeclaredReader() external {
+    /// A release under another implementation than its candidate's takes an unrecorded network at the candidate's init
+    /// data under its own implementation.
+    function testUnrecordedNetworkUnderAnotherImplementationTakesTheCandidatesData() external view {
         DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));
         DeploySuite memory candidate =
         LibRainDeployMechanism.cloneCandidate(upgradedPerNetworkClone(), perNetworkCloneChainIds()).snapshot;
 
-        vm.expectRevert(
-            abi.encodeWithSelector(InitDataReaderUndeclared.selector, release.suite, exampleCloneImplementation())
-        );
-        this.externalWithUnrecordedNetworks(release, candidate);
-
-        address[] memory readers = new address[](1);
-        readers[0] = upgradedCloneImplementation();
-        vm.expectRevert(
-            abi.encodeWithSelector(InitDataReaderUndeclared.selector, release.suite, exampleCloneImplementation())
-        );
-        this.externalWithUnrecordedNetworks(release, candidate, readers);
-
-        readers = new address[](2);
-        readers[0] = address(0xdead);
-        readers[1] = exampleCloneImplementation();
         CloneNetworks memory extended =
-            abi.decode(this.externalWithUnrecordedNetworks(release, candidate, readers).mechanismData, (CloneNetworks));
+            abi.decode(this.externalWithUnrecordedNetworks(release, candidate).mechanismData, (CloneNetworks));
         assertEq(extended.implementation, exampleCloneImplementation());
         assertEq(extended.networks.length, 2);
         assertEq(extended.networks[1].chainId, 137);
@@ -926,7 +894,7 @@ contract LibRainDeployMechanismTest is Test {
         DeploySuite memory candidate,
         uint256[] memory chainIds
     ) external pure returns (DeploySuite memory) {
-        return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidate, new address[](0), chainIds);
+        return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidate, chainIds);
     }
 
     /// A candidate network not in play is not added, so a release under another implementation with no reader
@@ -1088,8 +1056,8 @@ contract LibRainDeployMechanismTest is Test {
     }
 
     /// A release under another implementation than its candidate's, whose extended networks cover every network
-    /// the candidate has, takes nothing from the candidate and needs no reader declared.
-    function testExtendedReleaseUnderAnotherImplementationNeedsNoReader() external view {
+    /// the candidate has, takes nothing from the candidate.
+    function testExtendedReleaseUnderAnotherImplementationTakesNothingFromTheCandidate() external view {
         DeploySuite memory release = this.externalWithExtendedNetworks(
             perNetworkSuiteAt(TEST_SALT, onlyChainId(42161)), polygonAt(perNetworkCloneInitData(137))
         );

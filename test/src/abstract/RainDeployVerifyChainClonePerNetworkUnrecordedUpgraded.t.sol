@@ -38,16 +38,6 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
         return PerNetworkCloneDeploys.supportedNetworks();
     }
 
-    /// @inheritdoc UpgradedPerNetworkCloneDeploys
-    function initDataReaders(string memory suite)
-        internal
-        pure
-        override(UpgradedPerNetworkCloneDeploys, RainDeploySuitesBase)
-        returns (address[] memory)
-    {
-        return UpgradedPerNetworkCloneDeploys.initDataReaders(suite);
-    }
-
     /// Puts the release's dependencies, and its clone at the release's address for each network, on
     /// every fork.
     function setUp() external {
@@ -71,8 +61,8 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
         checkDeployedOnSupportedNetworks(suites);
     }
 
-    /// The release takes Polygon under its own implementation, which the candidate declares reads its init data.
-    function testUnrecordedNetworkTakesTheDeclaredInitDataReader() external view {
+    /// The release takes Polygon at the candidate's init data under its own implementation.
+    function testUnrecordedNetworkTakesTheCandidatesDataUnderTheReleasesImplementation() external view {
         CloneNetworks memory extended = abi.decode(
             onSupportedNetworks(
                 withExtendedNetworks(onlyFirstRecordedNetwork(releasedSuites()[0])),

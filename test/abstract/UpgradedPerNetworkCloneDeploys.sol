@@ -3,12 +3,10 @@
 pragma solidity ^0.8.25;
 
 import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
-import {RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {CloneDeploy, CloneTarget, LibRainDeployClone} from "../../src/lib/LibRainDeployClone.sol";
 import {DeployDependency, LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {MockCloneFactory} from "../concrete/MockCloneFactory.sol";
 import {MockCloneableV2} from "../concrete/MockCloneableV2.sol";
-import {exampleCloneImplementation} from "./ExampleCloneDeploys.sol";
 import {PerNetworkCloneDeploys, perNetworkCloneInitData} from "./PerNetworkCloneDeploys.sol";
 
 /// The factory the upgraded candidate clones through.
@@ -76,16 +74,5 @@ abstract contract UpgradedPerNetworkCloneDeploys is PerNetworkCloneDeploys {
         CloneDeploy[] memory clones = new CloneDeploy[](1);
         clones[0] = upgradedPerNetworkClone();
         return clones;
-    }
-
-    /// The release's implementation reads the upgraded candidate's init data, for that candidate alone.
-    /// @inheritdoc RainDeploySuitesBase
-    function initDataReaders(string memory suite) internal pure virtual override returns (address[] memory) {
-        if (keccak256(bytes(suite)) != keccak256("per-network-clone")) {
-            return new address[](0);
-        }
-        address[] memory readers = new address[](1);
-        readers[0] = exampleCloneImplementation();
-        return readers;
     }
 }

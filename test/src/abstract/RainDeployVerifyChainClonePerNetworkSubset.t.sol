@@ -6,7 +6,6 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {InitDataReaderUndeclared} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {CloneNetworks} from "../../../src/lib/LibRainDeployClone.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
@@ -22,7 +21,7 @@ import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 
 /// @title RainDeployVerifyChainClonePerNetworkSubsetTest
 /// @notice The chain matrix, on local forks, over a per-network release recording Arbitrum One alone, in a repo whose
-/// candidate has moved to another implementation and declares no init data reader, checked on a subset of networks.
+/// candidate has moved to another implementation, checked on a subset of networks.
 contract RainDeployVerifyChainClonePerNetworkSubsetTest is UpgradedPerNetworkCloneDeploys, RainDeployVerifyChain {
     /// The fork cheatcodes the matrix runs against.
     LocalForkVm internal sForkVm;
@@ -35,19 +34,6 @@ contract RainDeployVerifyChainClonePerNetworkSubsetTest is UpgradedPerNetworkClo
         returns (string[] memory)
     {
         return PerNetworkCloneDeploys.supportedNetworks();
-    }
-
-    /// None.
-    /// @param suite The candidate's suite key.
-    /// @return No implementations.
-    function initDataReaders(string memory suite)
-        internal
-        pure
-        override(UpgradedPerNetworkCloneDeploys, RainDeploySuitesBase)
-        returns (address[] memory)
-    {
-        (suite);
-        return new address[](0);
     }
 
     /// Puts the release's dependencies, and its clone at its Arbitrum One address, on every fork.
@@ -71,8 +57,7 @@ contract RainDeployVerifyChainClonePerNetworkSubsetTest is UpgradedPerNetworkClo
         checkDeployedOnNetworks(Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(networks), suites);
     }
 
-    /// On Arbitrum One alone the candidate's Polygon is out of play, so the release needs no init data reader and
-    /// Polygon is never forked; on every supported network the candidate's Polygon is taken and refused.
+    /// On Arbitrum One alone the candidate's Polygon is out of play, so the release passes and Polygon is never forked.
     function testSubsetTakesNoOutOfPlayCandidateNetwork() external {
         CloneNetworks memory release =
             abi.decode(onlyFirstRecordedNetwork(releasedSuites()[0]).mechanismData, (CloneNetworks));
@@ -83,10 +68,5 @@ contract RainDeployVerifyChainClonePerNetworkSubsetTest is UpgradedPerNetworkClo
         vm.expectCall(address(sForkVm), abi.encodeCall(LocalForkVm.createFork, (LibRainDeploy.POLYGON)), 0);
         vm.expectCall(address(sForkVm), abi.encodeCall(LocalForkVm.createFork, (LibRainDeploy.ARBITRUM_ONE)), 1);
         this.externalCheckOnLocalForks(arbitrum);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(InitDataReaderUndeclared.selector, "per-network-clone@0_0_1", release.implementation)
-        );
-        this.externalCheckOnLocalForks(supportedNetworks());
     }
 }

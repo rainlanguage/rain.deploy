@@ -30,14 +30,4 @@ contract UpgradedPerNetworkCloneDeploy is UpgradedPerNetworkCloneDeploys, PerNet
     {
         return PerNetworkCloneDeployBase.extendedNetworks(suite);
     }
-
-    /// @inheritdoc UpgradedPerNetworkCloneDeploys
-    function initDataReaders(string memory suite)
-        internal
-        pure
-        override(UpgradedPerNetworkCloneDeploys, RainDeploySuitesBase)
-        returns (address[] memory)
-    {
-        return UpgradedPerNetworkCloneDeploys.initDataReaders(suite);
-    }
 }
