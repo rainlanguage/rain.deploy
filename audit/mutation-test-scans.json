@@ -275,5 +275,38 @@
       "Gaps filled (each baseline PASS and mutant FAIL proven on the tests tree): C13 testCloneDeployStepReturnsWhereTheFactoryCloned, C14 testCloneDeployStepBroadcastsAsTheDeployer, P01 testSuiteWriterRefusesAZoltuSuiteCarryingMechanismData, P02 testCloneWriterLeavesNoDeployBehind, P04 and P05 testCloneWriterRecordsTheDeployNotTheSuiteClaims (stored address and runtime code staled, record must still match the committed fixture), P11 testReleasedImportBlockDefaultsToThisRepoSuitesImportPath strengthened in place to pass a clone mechanism through the short arity.",
       "P03 (writer ignores a failed revertToState) is an unkillable defensive guard: revertToState returns false only for an invalid snapshot id, which the writer's own snapshotState never produces, and cheatcodes cannot be mocked to force it."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T06:34:44Z",
+    "commit": "d5e3acd34471afa9a880b75726d70ca04f8ba35c",
+    "testsAfterCommit": "d5e3acd34471afa9a880b75726d70ca04f8ba35c",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 78,
+    "scope": "pr:310, its changed code only: src/lib/LibRainDeploySnapshot.sol recordLines, hasForeignLineBreak, withoutBlockComments, declarationAddress (S); src/abstract/RainDeployVerifySnapshotBase.sol declaredValue, declaredBytes, checkFrozenCodeRecord (B); src/lib/LibRainDeployMechanism.sol deployAndBroadcast verify/notice branch, UnverifiableSource, unverifiableSourceNotice, withUnrecordedNetworks reader check, readsInitData (M); src/abstract/RainDeploySuitesBase.sol initDataReaders hook (U); src/abstract/RainDeployVerifyChain.sol checkDeployedOnNetworks forkVm (C)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 5,
+      "behaviours": 51,
+      "behavioursProbed": 51,
+      "killedByExistingTests": 48,
+      "gapsFilled": 0,
+      "equivalentMutants": 2,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 1,
+      "unobservableSideEffects": 1,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "51 mutants (S 24, B 9, M 13, U 2, C 3) probed with mutation-probe over the offline suite: forge test with only the 169 tests that fail at the unmutated baseline for want of RPC env vars left out of the tally, named per suite and test (baseline green at 863). The PR's tests were written before the probe, so kills are credited to the suite at the scanned commit, not to the pre-PR suite.",
+      "48 KILLED. C01 (the matrix forks on the global vm) first scored SURVIVED under a wrapper that dropped any failure mentioning a missing RPC env var; the global vm makes the offline testMatrixPassesLiveSuitesOnLocalForks fail exactly that way. Re-probed under the per-test baseline exclusion: KILLED.",
+      "Equivalent: S24 (declarationAddress's final tokens.length != 5 as > 5) and B06 (the same in declaredValue). A line reaching that check holds at least 5 tokens: fewer than 4 (or no = fourth) is refused first, and exactly 4 takes the wrapped branch, whose line starts with four spaces and so splits into at least 5.",
+      "Not observable by the suite: M04 (console2.log of unverifiableSourceNotice dropped). A console call is invisible to vm.expectCall on the console address (0 calls recorded on unmutated code, checked). The notice's text is pinned by testUnverifiableSourceNoticeNamesTheAddressAndEachNetwork (M05, M06) and its occurrence by the UnverifiableSource event (M02, M03)."
+    ]
   }
 ]
