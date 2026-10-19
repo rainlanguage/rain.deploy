@@ -487,11 +487,16 @@ contract LibRainDeployBeaconTest is Test {
         assertEq(this.externalAppliedState(declared(upgradeThenHandover())), 2);
     }
 
+    function declaredAt(address beacon) internal view returns (DeployBeacon memory) {
+        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
+        declaration.beacon = beacon;
+        declaration.beaconCodeHash = beacon.codehash;
+        return declaration;
+    }
+
     function twoStep() internal returns (MockOwnable2StepBeacon, DeployBeacon memory) {
         MockOwnable2StepBeacon beacon = new MockOwnable2StepBeacon(sImplementation, sOwner);
-        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
-        declaration.beacon = address(beacon);
-        declaration.beaconCodeHash = address(beacon).codehash;
+        DeployBeacon memory declaration = declaredAt(address(beacon));
         return (beacon, declaration);
     }
 
@@ -524,9 +529,7 @@ contract LibRainDeployBeaconTest is Test {
 
     function testBeaconAnsweringPendingOwnerWithoutAWordPasses() external {
         MockSilentFallbackBeacon beacon = new MockSilentFallbackBeacon(sImplementation, sOwner);
-        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
-        declaration.beacon = address(beacon);
-        declaration.beaconCodeHash = address(beacon).codehash;
+        DeployBeacon memory declaration = declaredAt(address(beacon));
         this.externalCheckBeacon(declaration, sImplementation, sOwner);
     }
 
@@ -537,9 +540,7 @@ contract LibRainDeployBeaconTest is Test {
         assertEq(answer.length, 0x40);
         (uint256 first,) = abi.decode(answer, (uint256, uint256));
         assertEq(first, 0xDEAD);
-        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
-        declaration.beacon = address(beacon);
-        declaration.beaconCodeHash = address(beacon).codehash;
+        DeployBeacon memory declaration = declaredAt(address(beacon));
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeployBeacon.BeaconPendingOwnerUnreadable.selector, NETWORK, address(beacon), answer
@@ -553,9 +554,7 @@ contract LibRainDeployBeaconTest is Test {
         (bool success, bytes memory answer) = address(beacon).staticcall(abi.encodeWithSignature("pendingOwner()"));
         assertTrue(success);
         assertEq(answer.length, 0x1f);
-        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
-        declaration.beacon = address(beacon);
-        declaration.beaconCodeHash = address(beacon).codehash;
+        DeployBeacon memory declaration = declaredAt(address(beacon));
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeployBeacon.BeaconPendingOwnerUnreadable.selector, NETWORK, address(beacon), answer
@@ -580,17 +579,13 @@ contract LibRainDeployBeaconTest is Test {
         assertFalse(success);
         assertEq(answer.length, 0x20);
         assertEq(abi.decode(answer, (uint256)), 0xDEAD);
-        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
-        declaration.beacon = address(beacon);
-        declaration.beaconCodeHash = address(beacon).codehash;
+        DeployBeacon memory declaration = declaredAt(address(beacon));
         this.externalCheckBeacon(declaration, sImplementation, sOwner);
     }
 
     function testBeaconAnsweringPendingOwnerWithADirtyWordIsRefused() external {
         MockDirtyWordFallbackBeacon beacon = new MockDirtyWordFallbackBeacon(sImplementation, sOwner);
-        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
-        declaration.beacon = address(beacon);
-        declaration.beaconCodeHash = address(beacon).codehash;
+        DeployBeacon memory declaration = declaredAt(address(beacon));
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeployBeacon.BeaconPendingOwner.selector, NETWORK, address(beacon), 1 << 160)
         );

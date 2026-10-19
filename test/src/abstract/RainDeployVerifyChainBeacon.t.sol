@@ -205,7 +205,7 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         transitions[0] = beacon.transitions[0];
         transitions[1] = BeaconTransition({
             migration: Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: ROLLBACK}),
-            state: BeaconState({implementation: "beacon-implementation@0_0_1", owner: OWNER})
+            state: BeaconState({implementation: "beacon-implementation@0_0_1", owner: NEW_OWNER})
         });
         beacon.transitions = transitions;
         return beacon;
@@ -502,9 +502,9 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         this.externalResolveBeacons(networksNamed(LibRainDeploy.BASE, ""));
     }
 
-    function assertNoFork(string memory reason) internal view {
+    function assertNoFork(string memory reason) internal {
         try vm.activeFork() returns (uint256) {
-            assertTrue(false, reason);
+            fail(reason);
         } catch {}
     }
 
@@ -751,6 +751,17 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         applyMigration();
         vm.warp(block.timestamp + 1);
         applyMigration(ROLLBACK, MIGRATION);
+        vm.prank(OWNER);
+        UpgradeableBeacon(sBeacon).transferOwnership(NEW_OWNER);
+        this.externalCheckDeployedOnNetworks(arbitrum());
+    }
+
+    function testTransitionsAppliedInDeclaredOrderHoldTheLatestNotTheInitialState() external {
+        declare(42161, rollingBack());
+        applyMigration();
+        vm.warp(block.timestamp + 1);
+        applyMigration(ROLLBACK, MIGRATION);
+        expectUnexpected(1, NEW_OWNER, OWNER);
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 

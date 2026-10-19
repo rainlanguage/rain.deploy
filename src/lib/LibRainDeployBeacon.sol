@@ -90,7 +90,10 @@ library LibRainDeployBeacon {
     }
 
     /// Zero for `initial`, else one past the latest transition the selected fork's registry reports applied.
-    /// Reverts `BeaconTransitionMigrationRepeated` before reading the registry, and `BeaconTransitionsOutOfOrder`.
+    /// Reverts `BeaconTransitionMigrationRepeated` before reading the registry, then
+    /// `LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash` when a transition is declared and the registry is
+    /// not deployed, the registry's own refusal of a zero writer or namespace, or of a zero or genesis migration, and
+    /// `BeaconTransitionsOutOfOrder`.
     /// @param network The network's name, for the refusal.
     /// @param beacon The beacon.
     /// @return The state index, as `stateAt` takes it.
@@ -113,6 +116,8 @@ library LibRainDeployBeacon {
     /// Whether `earlier` is reached from `later` through what each record was applied after, reading each record once.
     /// Unbounded: one read when `later` names `earlier` as a prerequisite, else every record between them, and every
     /// record back to genesis when `earlier` is not reached.
+    /// Reverts `LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash` when the registry is not deployed, and the
+    /// registry's own refusal of a zero writer or namespace, or of a zero or genesis migration.
     /// @param earlier An applied migration.
     /// @param later An applied migration.
     /// @return True when the registry records `earlier` applied before `later`.

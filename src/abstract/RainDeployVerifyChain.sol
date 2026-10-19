@@ -274,7 +274,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     }
 
     /// Every RELEASED suite MUST be live, with the code its creation code produces and its declared
-    /// dependencies under it, on every supported network.
+    /// dependencies under it, on every supported network, and every declared beacon MUST hold its applied
+    /// state there.
     function testSuitesLiveOnEverySupportedNetwork() external {
         checkDeployedOnSupportedNetworks(releasedSuites());
     }
