@@ -150,7 +150,7 @@ library LibRainDeployExtendedNetworks {
         if (wrapped.length < 2 || opened.length < 2) {
             revert ExtendedNetworksUnreadable(path);
         }
-        CloneNetwork memory network;
+        CloneNetwork memory network = CloneNetwork({chainId: 0, data: "", deployedAddress: address(0)});
         try vm.parseUint(named[0]) returns (uint256 chainId) {
             network.chainId = chainId;
         } catch {
