@@ -78,7 +78,7 @@ contract LibConfigRegistryRegisterTest is Test {
         address sender,
         bytes32 name,
         bytes memory value
-    ) external returns (bool) {
+    ) external returns (bool, string memory) {
         return LibConfigRegistryRegister.registerOnSelectedChain(vm, network, sender, name, value);
     }
 
@@ -283,6 +283,32 @@ contract LibConfigRegistryRegisterTest is Test {
         }
     }
 
+    function externalCheckInputs(
+        string[] memory selected,
+        string[] memory declared,
+        address sender,
+        string memory name,
+        bytes memory value
+    ) external pure returns (SupportedNetwork[] memory, string memory) {
+        return LibConfigRegistryRegister.checkInputs(vm, selected, declared, sender, name, value);
+    }
+
+    /// Inputs that pass every refusal give the selected networks and the
+    /// record of exactly the inputs signed.
+    function testCheckInputsRecordIsTheInputsSigned(uint8 words, bytes32 seed) external view {
+        bytes memory value = new bytes(32 * (uint256(words) % 4 + 1));
+        for (uint256 i = 0; i < value.length; i++) {
+            value[i] = keccak256(abi.encode(seed, i))[0];
+        }
+        string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
+        (SupportedNetwork[] memory networks, string memory record) =
+            this.externalCheckInputs(selected, LibRainDeploy.supportedNetworks(), CONFIG_REGISTRY_ROOT, "a.b", value);
+        assertEq(networks.length, 2);
+        assertEq(networks[0].name, LibRainDeploy.ARBITRUM_ONE);
+        assertEq(networks[1].name, LibRainDeploy.BASE);
+        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, "a.b", value, CONFIG_REGISTRY_ROOT));
+    }
+
     /// The confirmed check refuses its inputs before anything is forked.
     function testCheckRegisteredOnNetworksRefusesInputs() external {
         string[] memory declared = LibRainDeploy.supportedNetworks();
@@ -363,7 +389,10 @@ contract LibConfigRegistryRegisterTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
         vm.warp(time);
 
-        assertTrue(this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value));
+        (bool broadcast, string memory record) =
+            this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
+        assertTrue(broadcast);
+        assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, "", 0, value));
         (bytes memory bound_, uint256 registeredAt) = registry.get(name);
         assertEq(bound_, value);
         assertEq(registeredAt, time);
@@ -390,7 +419,10 @@ contract LibConfigRegistryRegisterTest is Test {
         registry.register(name, previous);
         vm.warp(2);
 
-        assertTrue(this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value));
+        (bool broadcast, string memory record) =
+            this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
+        assertTrue(broadcast);
+        assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, previous, 1, value));
         (bytes memory bound_, uint256 registeredAt) = registry.get(name);
         assertEq(bound_, value);
         assertEq(registeredAt, 2);
@@ -412,7 +444,8 @@ contract LibConfigRegistryRegisterTest is Test {
             registry.register(name, previous);
             vm.warp(2 * i + 2);
 
-            assertTrue(this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, nearMisses[i]));
+            (bool broadcast,) = this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, nearMisses[i]);
+            assertTrue(broadcast);
             (bytes memory bound_,) = registry.get(name);
             assertEq(bound_, nearMisses[i]);
         }
@@ -428,7 +461,10 @@ contract LibConfigRegistryRegisterTest is Test {
         registry.register(name, value);
         vm.warp(2);
 
-        assertFalse(this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value));
+        (bool broadcast, string memory record) =
+            this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
+        assertFalse(broadcast);
+        assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, value, 1, value));
         (bytes memory bound_, uint256 registeredAt) = registry.get(name);
         assertEq(bound_, value);
         assertEq(registeredAt, 1);

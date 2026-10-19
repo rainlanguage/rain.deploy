@@ -83,10 +83,10 @@ library LibConfigRegistry {
     /// binding and is never empty.
     ///
     /// The value is returned exactly as root bound it. The caller decodes it
-    /// with the type it expects. `abi.decode` reverts on a value shorter than
-    /// that type's encoding, or on an address or narrow integer with dirty high
-    /// bits, and on nothing else: trailing bytes are ignored, and a word of
-    /// another type with clean high bits decodes. A caller that must refuse a
+    /// with the type it expects. `abi.decode` refuses some wrongly shaped
+    /// values, such as one shorter than the type's encoding or one with bits a
+    /// narrow type cannot hold, but it ignores trailing bytes and decodes any
+    /// word that is valid for the requested type. A caller that must refuse a
     /// wrongly shaped binding checks it, e.g. `value.length == 32` for one
     /// static type, or `keccak256(abi.encode(decoded)) == keccak256(value)`.
     /// @param name The name to resolve. Opaque; the registry constrains nothing

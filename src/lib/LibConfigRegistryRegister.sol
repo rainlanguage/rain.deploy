@@ -311,32 +311,62 @@ library LibConfigRegistryRegister {
     /// @param name The hashed name.
     /// @param value The ABI-encoded value to bind it to.
     /// @return Whether a bind was broadcast.
+    /// @return The record logged.
     function registerOnSelectedChain(
         Vm vm,
         SupportedNetwork memory network,
         address sender,
         bytes32 name,
         bytes memory value
-    ) internal returns (bool) {
+    ) internal returns (bool, string memory) {
         checkChain(network);
         (bytes memory bound, uint256 registeredAt) = currentBinding(name);
 
-        console2.log(describeNetwork(vm, network.name, block.chainid, bound, registeredAt, value));
-        if (keccak256(bound) == keccak256(value)) {
-            return false;
+        string memory record = describeNetwork(vm, network.name, block.chainid, bound, registeredAt, value);
+        console2.log(record);
+        bool binds = keccak256(bound) != keccak256(value);
+        if (binds) {
+            vm.startBroadcast(sender);
+            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).register(name, value);
+            vm.stopBroadcast();
         }
+        return (binds, record);
+    }
 
-        vm.startBroadcast(sender);
-        IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).register(name, value);
-        vm.stopBroadcast();
-        return true;
+    /// Every input refusal of `registerOnNetworks`, in order — the name, the
+    /// value, the networks, then the sender — and the inputs record it logs.
+    /// @param vm The Vm instance to format with.
+    /// @param selected The networks to bind on.
+    /// @param declared The networks the declaration supports.
+    /// @param sender The account that signs. MUST be `CONFIG_REGISTRY_ROOT`.
+    /// @param name The name as a consumer writes it.
+    /// @param value The ABI-encoded value to bind it to.
+    /// @return The selected networks' catalogue entries.
+    /// @return The `describeInputs` record of the inputs.
+    function checkInputs(
+        Vm vm,
+        string[] memory selected,
+        string[] memory declared,
+        address sender,
+        string memory name,
+        bytes memory value
+    ) internal pure returns (SupportedNetwork[] memory, string memory) {
+        bytes32 hashed = nameHash(name);
+        if (value.length == 0) {
+            revert IConfigRegistryV1.EmptyValue(hashed);
+        }
+        if (value.length % 32 != 0) {
+            revert NonCanonicalValue(value);
+        }
+        SupportedNetwork[] memory networks = selectNetworks(selected, declared);
+        checkSender(sender);
+        return (networks, describeInputs(vm, name, value, sender));
     }
 
     /// Binds `name` to `value` on every selected network from `sender`.
     ///
-    /// Every input refusal comes before the first fork — the name, the value,
-    /// the networks, then the sender — and every network is forked before any
-    /// is selected, as `LibRainDeploy.createForks` requires.
+    /// Every input refusal comes before the first fork, and every network is
+    /// forked before any is selected, as `LibRainDeploy.createForks` requires.
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param selected The networks to bind on.
     /// @param declared The networks the declaration supports.
@@ -353,17 +383,10 @@ library LibConfigRegistryRegister {
         string memory name,
         bytes memory value
     ) internal returns (uint256[] memory) {
+        (SupportedNetwork[] memory networks, string memory record) =
+            checkInputs(vm, selected, declared, sender, name, value);
+        console2.log(record);
         bytes32 hashed = nameHash(name);
-        if (value.length == 0) {
-            revert IConfigRegistryV1.EmptyValue(hashed);
-        }
-        if (value.length % 32 != 0) {
-            revert NonCanonicalValue(value);
-        }
-        SupportedNetwork[] memory networks = selectNetworks(selected, declared);
-        checkSender(sender);
-
-        console2.log(describeInputs(vm, name, value, sender));
 
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, selected);
         for (uint256 i = 0; i < networks.length; i++) {

@@ -477,9 +477,8 @@ wrong explorer.
 address, a role id, a threshold, a list of accounts, anything a deployment would
 otherwise compile in. An immutable root authority binds a name, anyone reads a
 bound name, and reading an unbound name reverts rather than answering empty. The
-interface is `IConfigRegistryV1`; `IAddressRegistryV1` is the address-only
-registry, kept for the releases that shipped it. There is no removal, no upgrade
-and no authority besides root.
+interface is `IConfigRegistryV1`. There is no removal, no upgrade and no
+authority besides root.
 
 `CONFIG_REGISTRY_ROOT` in `src/concrete/ConfigRegistry.sol` is the one place
 root lives. It is welded into the creation code, so rotating it moves the deploy
@@ -627,26 +626,6 @@ For each transaction the device shows:
 Labels vary by firmware; whatever they are called, the recipient, amount, chain
 and raw calldata must each match the dry run. Reject on the device if any of
 them differs.
-
-### The deployed `AddressRegistry`
-
-`ConfigRegistry` is a different contract at a different address, so a binding
-made with `RegisterConfig` never reaches the `AddressRegistry` the earlier
-releases ship. A consumer built on `LibAddressRegistry` keeps resolving from
-that registry until it moves to `LibConfigRegistry`, and a name it reads is
-rotated there, not here.
-
-`script/RegisterAddress.sol` binds names in the `AddressRegistry` at
-`0xe2B4C27224DdeFFf7D2B3b0e66E3955ab4e2466A`. It is gone from the current
-source, so run it from `667787d`, the last `main` commit that has it, following
-that commit's README: the same Trezor, root and flow as above, with
-`ADDRESS_REGISTRY_NAME`, `ADDRESS_REGISTRY_ACCOUNT` (a plain address) and
-`ADDRESS_REGISTRY_NETWORKS`. The frozen records under `src/generated/` say which
-release pins which registry address.
-
-```sh
-git worktree add ../rain-deploy-address-registry 667787d
-```
 
 ## Migration registry
 

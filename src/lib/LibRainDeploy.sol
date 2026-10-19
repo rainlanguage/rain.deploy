@@ -484,7 +484,7 @@ library LibRainDeploy {
     ///
     /// It is deliberately source-agnostic. It says the deployed contract holds
     /// the expected address, not where that address came from, because the
-    /// address registry is only one way a deployment acquires one, and because
+    /// config registry is only one way a deployment acquires one, and because
     /// re-reading the registry here would assert a value that can move rather
     /// than the value this deployment actually took.
     ///

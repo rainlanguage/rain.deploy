@@ -75,9 +75,9 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         uint256[] memory forkIds = forksWithRegistry(networks);
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
-            assertTrue(
-                LibConfigRegistryRegister.registerOnSelectedChain(vm, configs[i], CONFIG_REGISTRY_ROOT, hashed, value)
-            );
+            (bool broadcast,) =
+                LibConfigRegistryRegister.registerOnSelectedChain(vm, configs[i], CONFIG_REGISTRY_ROOT, hashed, value);
+            assertTrue(broadcast);
         }
 
         for (uint256 i = 0; i < forkIds.length; i++) {
