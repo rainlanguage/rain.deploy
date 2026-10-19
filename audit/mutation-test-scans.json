@@ -495,5 +495,37 @@
       "Full pass at 3c31b1f9207ee875305730dbfcf6ee545a9b7574, 941 green at baseline: 3/3 killed by testWithoutBlockCommentsOtherQuotesCloseNothing.",
       "Adversarial: solc ends a string only at its own unescaped quote and a line comment only at a line break; the new expectations are the input unchanged, read from that rule, not from the scanner."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T17:22:23Z",
+    "commit": "88fb7f091100631a81e90e9efc7671b8a9d8ee49",
+    "testsAfterCommit": "15b15b57984378b359fcb4b6633a00a976a315f2",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 141,
+    "scope": "pr:310, its code touched in round 10: the access and frame iteration of LibRainDeployMechanism.checkReadsOwnStorageOnly (marvin M30); the other changes are README and audit docs",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 5,
+      "behavioursProbed": 5,
+      "killedByExistingTests": 1,
+      "gapsFilled": 4,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "5 mutants probed with mutation-probe over the offline suite: R1101 only the first storage access of a frame checked (M30), R1102 the access loop stops after one, R1103 every other access skipped, R1104 only the first frame checked, R1105 the first (factory) frame skipped.",
+      "Pre-existing pass: run at 15b15b57984378b359fcb4b6633a00a976a315f2 with testCloneInitializeReadingAfterAWriteIsRefused and testCloneFactoryReadingItsOwnStorageIsRefused excluded, 941 green at baseline, so it holds the 88fb7f091100631a81e90e9efc7671b8a9d8ee49 suite: 1/5 killed (R1104 by testCloneInitializeReadingAnAccountItCreatesDeploys).",
+      "Full pass at 15b15b57984378b359fcb4b6633a00a976a315f2, 943 green at baseline: 5/5 killed, R1101-R1104 by testCloneInitializeReadingAfterAWriteIsRefused, R1105 by testCloneFactoryReadingItsOwnStorageIsRefused.",
+      "Adversarial: the guard refuses a storage read of any account the call did not create, so each expected revert names the read account and the slot its storage layout puts the read at (MockStorageSource.sValue at 1, MockStorageReadingCloneFactory.sSaltShift at 0), not values read from the guard."
+    ]
   }
 ]
