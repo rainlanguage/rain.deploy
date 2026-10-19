@@ -7,18 +7,19 @@ import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {
-    IMigrationRegistryV2,
+    IMigrationRegistryV3,
     MIGRATION_HEAD_GENESIS,
     Prerequisite
-} from "../../../src/interface/IMigrationRegistryV2.sol";
+} from "../../../src/interface/IMigrationRegistryV3.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibAccountCode} from "../../lib/LibAccountCode.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
 /// @title LibMigrationRegistryWriteCallTest
-/// Tests for `LibMigrationRegistry.applyMigrationCall` and
-/// `applyMigrationHistoryCall`: the `(to, data)` a Safe bundle or a timelock
-/// batch sends to write a record under the account that executes it.
+/// Tests for `LibMigrationRegistry.applyMigrationV3Call` and
+/// `applyMigrationHistoryV3Call`: the `(to, data)` a Safe bundle or a timelock
+/// batch sends to write a record into the writer it names, by the account
+/// that executes it.
 ///
 /// The oracle is the real `MigrationRegistry`, deployed through the Zoltu
 /// factory at its pinned address. A built call is sent from a pranked account
@@ -54,7 +55,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assertTrue(success);
     }
 
-    /// External wrapper for `applyMigrationCall` so that `vm.expectRevert`
+    /// External wrapper for `applyMigrationV3Call` so that `vm.expectRevert`
     /// works at the correct call depth.
     /// @param namespace The line to apply in.
     /// @param migration The migration to apply.
@@ -66,10 +67,10 @@ contract LibMigrationRegistryWriteCallTest is Test {
         view
         returns (address, bytes memory)
     {
-        return LibMigrationRegistry.applyMigrationCall(namespace, migration, prerequisites);
+        return LibMigrationRegistry.applyMigrationV3Call(address(this), namespace, migration, prerequisites);
     }
 
-    /// External wrapper for `applyMigrationHistoryCall` so that
+    /// External wrapper for `applyMigrationHistoryV3Call` so that
     /// `vm.expectRevert` works at the correct call depth.
     /// @param namespace The line to apply in.
     /// @param migration The migration to apply.
@@ -83,14 +84,16 @@ contract LibMigrationRegistryWriteCallTest is Test {
         uint256 appliedAt,
         Prerequisite[] memory prerequisites
     ) external view returns (address, bytes memory) {
-        return LibMigrationRegistry.applyMigrationHistoryCall(namespace, migration, appliedAt, prerequisites);
+        return LibMigrationRegistry.applyMigrationHistoryV3Call(
+            address(this), namespace, migration, appliedAt, prerequisites
+        );
     }
 
-    /// The built call, sent by another account, records the migration under
-    /// THAT account, in the namespace named, after the exact list given — a
-    /// head entry and a prerequisite in another writer's line — stamped with
+    /// The built call, sent by the writer it names, records the migration
+    /// under that writer, in the namespace named, after the exact list given —
+    /// a head entry and a prerequisite in another writer's line — stamped with
     /// the block it lands in. The script that built it is nobody's writer.
-    function testApplyMigrationCallLandsUnderTheSender(
+    function testApplyMigrationCallLandsUnderTheWriter(
         address sender,
         address upstream,
         bytes32 namespace,
@@ -110,8 +113,9 @@ contract LibMigrationRegistryWriteCallTest is Test {
         deployRegistry();
         vm.warp(landedAt);
         vm.prank(upstream);
-        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigration(
+        IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .applyMigrationV3(
+                upstream,
                 upstreamNamespace,
                 prerequisite,
                 LibMigrationRegistry.onto(upstream, upstreamNamespace, MIGRATION_HEAD_GENESIS)
@@ -121,25 +125,28 @@ contract LibMigrationRegistryWriteCallTest is Test {
         prerequisites[0] = Prerequisite({writer: sender, namespace: namespace, migration: MIGRATION_HEAD_GENESIS});
         prerequisites[1] = Prerequisite({writer: upstream, namespace: upstreamNamespace, migration: prerequisite});
 
-        (address to, bytes memory data) = LibMigrationRegistry.applyMigrationCall(namespace, migration, prerequisites);
+        (address to, bytes memory data) =
+            LibMigrationRegistry.applyMigrationV3Call(sender, namespace, migration, prerequisites);
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         // Building writes nothing.
-        assertEq(LibMigrationRegistry.applied(sender, namespace, migration), 0);
+        assertEq(LibMigrationRegistry.appliedV3(sender, namespace, migration), 0);
 
         send(sender, to, data);
 
-        assertEq(LibMigrationRegistry.applied(sender, namespace, migration), landedAt);
-        assertEq(LibMigrationRegistry.head(sender, namespace), migration);
-        assertEq(LibMigrationRegistry.appliedOnto(sender, namespace, migration), MIGRATION_HEAD_GENESIS);
-        assertEq(abi.encode(LibMigrationRegistry.appliedAfter(sender, namespace, migration)), abi.encode(prerequisites));
-        assertEq(LibMigrationRegistry.applied(address(this), namespace, migration), 0);
+        assertEq(LibMigrationRegistry.appliedV3(sender, namespace, migration), landedAt);
+        assertEq(LibMigrationRegistry.headV3(sender, namespace), migration);
+        assertEq(LibMigrationRegistry.appliedOntoV3(sender, namespace, migration), MIGRATION_HEAD_GENESIS);
+        assertEq(
+            abi.encode(LibMigrationRegistry.appliedAfterV3(sender, namespace, migration)), abi.encode(prerequisites)
+        );
+        assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migration), 0);
     }
 
     /// The history call records the moment it was GIVEN, not the block it
-    /// landed in, under the account that sent it. The moment is bounded by the
+    /// landed in, under the writer it names. The moment is bounded by the
     /// block the write lands in, so a call built before that moment still
     /// lands.
-    function testApplyMigrationHistoryCallLandsUnderTheSender(
+    function testApplyMigrationHistoryCallLandsUnderTheWriter(
         address sender,
         bytes32 namespace,
         bytes32 migrationA,
@@ -160,12 +167,12 @@ contract LibMigrationRegistryWriteCallTest is Test {
         deployRegistry();
         vm.warp(builtAt);
 
-        (address toA, bytes memory dataA) = LibMigrationRegistry.applyMigrationHistoryCall(
-            namespace, migrationA, appliedAt, LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS)
-        );
-        (address toB, bytes memory dataB) = LibMigrationRegistry.applyMigrationHistoryCall(
-            namespace, migrationB, appliedAt, LibMigrationRegistry.onto(sender, namespace, migrationA)
-        );
+        Prerequisite[] memory ontoGenesis = LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS);
+        (address toA, bytes memory dataA) =
+            LibMigrationRegistry.applyMigrationHistoryV3Call(sender, namespace, migrationA, appliedAt, ontoGenesis);
+        Prerequisite[] memory ontoA = LibMigrationRegistry.onto(sender, namespace, migrationA);
+        (address toB, bytes memory dataB) =
+            LibMigrationRegistry.applyMigrationHistoryV3Call(sender, namespace, migrationB, appliedAt, ontoA);
         assertEq(toA, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         assertEq(toB, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
 
@@ -173,21 +180,18 @@ contract LibMigrationRegistryWriteCallTest is Test {
         send(sender, toA, dataA);
         send(sender, toB, dataB);
 
-        assertEq(LibMigrationRegistry.applied(sender, namespace, migrationA), appliedAt);
-        assertEq(LibMigrationRegistry.applied(sender, namespace, migrationB), appliedAt);
-        assertEq(LibMigrationRegistry.head(sender, namespace), migrationB);
-        assertEq(LibMigrationRegistry.appliedOnto(sender, namespace, migrationB), migrationA);
-        assertEq(
-            abi.encode(LibMigrationRegistry.appliedAfter(sender, namespace, migrationB)),
-            abi.encode(LibMigrationRegistry.onto(sender, namespace, migrationA))
-        );
-        assertEq(LibMigrationRegistry.applied(address(this), namespace, migrationA), 0);
+        assertEq(LibMigrationRegistry.appliedV3(sender, namespace, migrationA), appliedAt);
+        assertEq(LibMigrationRegistry.appliedV3(sender, namespace, migrationB), appliedAt);
+        assertEq(LibMigrationRegistry.headV3(sender, namespace), migrationB);
+        assertEq(LibMigrationRegistry.appliedOntoV3(sender, namespace, migrationB), migrationA);
+        assertEq(abi.encode(LibMigrationRegistry.appliedAfterV3(sender, namespace, migrationB)), abi.encode(ontoA));
+        assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migrationA), 0);
     }
 
-    /// A call whose head entry names the account that BUILT it, sent by
-    /// another, is refused: the writer is the sender, so the head entry has to
-    /// name the Safe or the timelock that will execute it, never the script.
-    function testApplyMigrationCallHeadEntryMustNameTheSender(address sender, bytes32 namespace, bytes32 migration)
+    /// A call that names the account that BUILT it as the writer, sent by
+    /// another, is refused: the script is nobody's writer, and the sender has
+    /// no approval for its line.
+    function testApplyMigrationCallNamingTheBuilderIsRefused(address sender, bytes32 namespace, bytes32 migration)
         external
     {
         assumeSender(sender);
@@ -195,8 +199,11 @@ contract LibMigrationRegistryWriteCallTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        (address to, bytes memory data) = LibMigrationRegistry.applyMigrationCall(
-            namespace, migration, LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS)
+        (address to, bytes memory data) = LibMigrationRegistry.applyMigrationV3Call(
+            address(this),
+            namespace,
+            migration,
+            LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS)
         );
 
         vm.prank(sender);
@@ -204,17 +211,10 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assertFalse(success);
         assertEq(
             returnData,
-            abi.encodeWithSelector(
-                IMigrationRegistryV2.UnexpectedMigrationHead.selector,
-                sender,
-                namespace,
-                namespace,
-                MIGRATION_HEAD_GENESIS,
-                MIGRATION_HEAD_GENESIS
-            )
+            abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, address(this), namespace, sender)
         );
-        assertEq(LibMigrationRegistry.applied(sender, namespace, migration), 0);
-        assertEq(LibMigrationRegistry.applied(address(this), namespace, migration), 0);
+        assertEq(LibMigrationRegistry.appliedV3(sender, namespace, migration), 0);
+        assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migration), 0);
     }
 
     /// The hazard the build-time check exists for: a low-level call into an
@@ -225,8 +225,8 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assumeSender(sender);
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
         bytes memory data = abi.encodeCall(
-            IMigrationRegistryV2.applyMigration,
-            (namespace, migration, LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS))
+            IMigrationRegistryV3.applyMigrationV3,
+            (sender, namespace, migration, LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS))
         );
         send(sender, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, data);
 

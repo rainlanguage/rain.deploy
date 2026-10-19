@@ -275,5 +275,29 @@
       "Gaps filled (each baseline PASS and mutant FAIL proven on the tests tree): C13 testCloneDeployStepReturnsWhereTheFactoryCloned, C14 testCloneDeployStepBroadcastsAsTheDeployer, P01 testSuiteWriterRefusesAZoltuSuiteCarryingMechanismData, P02 testCloneWriterLeavesNoDeployBehind, P04 and P05 testCloneWriterRecordsTheDeployNotTheSuiteClaims (stored address and runtime code staled, record must still match the committed fixture), P11 testReleasedImportBlockDefaultsToThisRepoSuitesImportPath strengthened in place to pass a clone mechanism through the short arity.",
       "P03 (writer ignores a failed revertToState) is an unkillable defensive guard: revertToState returns false only for an invalid snapshot id, which the writer's own snapshotState never produces, and cheatcodes cannot be mocked to force it."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T11:05:47Z",
+    "commit": "669ebf7fdaaa613e2b76597f621315b7cac81783",
+    "testsAfterCommit": "669ebf7fdaaa613e2b76597f621315b7cac81783",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 93,
+    "scope": "PR #314 (#312), the changed code only: src/concrete/MigrationRegistry.sol (R: delegate check, approvals, writer-keyed head, prerequisite and record checks, writtenBy, events, V3 readers, key checks) and src/lib/LibMigrationRegistry.sol (L: V3 forwarders, onto, write and approval call builders, code-hash checks)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behavioursProbed": 77,
+      "killedByExistingTests": 77,
+      "gapsFilled": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "77 mutants (R 48, L 29), probed with mutation-probe against the pre-existing suite at the scanned commit; 77 KILLED, 0 survived, 0 no-run, 0 harness errors. No tests were added, so testsAfterCommit equals commit.",
+      "Registry mutants ran against test/src/concrete/MigrationRegistry*.t.sol only (baseline green at 195): the library suites pin the candidate code hash, which would kill any registry bytecode change for the wrong reason. Library mutants ran against test/src/lib/LibMigrationRegistry*.t.sol.",
+      "Adversarial pass: delegation scope, writer-keyed head and timestamp bounds, refusal order against the IMigrationRegistryV3 MUST clauses, and sender-first events were checked against the interface NatSpec and issue #312; no candidate bug."
+    ]
   }
 ]
