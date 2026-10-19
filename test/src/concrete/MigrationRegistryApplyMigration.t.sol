@@ -2473,7 +2473,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         for (uint256 i = 0; i < prerequisites.length; i++) {
             vm.assume(prerequisites[i].migration != migration);
-            // Nothing is applied in the writer's own line, so the caller's
+            // Nothing is applied in the writer's own line, so the supplied
             // moment is bounded by genesis alone.
             vm.assume(prerequisites[i].writer != writer);
             if (i == unappliedIndex) {
@@ -3938,7 +3938,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     }
 
     /// An own-line entry is checked as a key before it is checked as the
-    /// caller.s own: a zero or genesis migration under the caller in the
+    /// writer's own: a zero or genesis migration under the writer in the
     /// line being written is `ZeroMigration` or `GenesisMigration`, not
     /// `OwnPrerequisite`, on both writes.
     function testApplyMigrationOwnEntryKeyCheckedBeforeOwn(address writer, bytes32 namespace, bytes32 migration)

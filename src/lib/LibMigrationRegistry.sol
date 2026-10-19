@@ -267,15 +267,15 @@ library LibMigrationRegistry {
     /// Applies `migration` under `writer` in `namespace`, after
     /// `prerequisites`.
     ///
-    /// The caller is whoever the resulting transaction is sent from — a Safe
-    /// executing a bundle, a broadcasting EOA, a timelock — and the registry
-    /// refuses it unless it is `writer` or approved by `writer` for
-    /// `namespace`. A reader asks about `writer`, whichever account sent it,
-    /// so which writer a migration is applied under is a decision with a
-    /// consequence rather than an implementation detail. The namespace is the
-    /// line under `writer` this moves the head of: one key writing
-    /// for several repos names one namespace per repo, and a reader asks about
-    /// the one it means.
+    /// The caller is the account executing this code — the contract running
+    /// it, or the broadcaster under `vm.broadcast`; a Safe or timelock bundle
+    /// uses `applyMigrationV3Call` — and the registry refuses it unless it is
+    /// `writer` or approved by `writer` for `namespace`. A reader asks about
+    /// `writer`, whichever account sent it, so which writer a migration is
+    /// applied under is a decision with a consequence rather than an
+    /// implementation detail. The namespace is the line under `writer` this
+    /// moves the head of: one key writing for several repos names one
+    /// namespace per repo, and a reader asks about the one it means.
     ///
     /// Verifies the registry's code hash before writing, so a migration is
     /// never "applied" into unknown code. A write into an EMPTY address fails

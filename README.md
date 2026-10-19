@@ -854,8 +854,8 @@ pins with it trades a clock-guess for a bookkeeping-guess.
 builders for a bundle, each verifying the registry's code hash before it reads
 or writes. There is deliberately **no broadcast runner**: the dominant real
 shape is a Safe executing a bundle that never broadcasts, and such a script
-appends `applyMigrationV3` to the bundle it is already emitting, which makes the
-record atomic with the migration it describes.
+appends the `applyMigrationV3Call` output to the bundle it is already emitting,
+which makes the record atomic with the migration it describes.
 
 ## Deploying, and then releasing
 
