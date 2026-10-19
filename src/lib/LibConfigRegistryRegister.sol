@@ -205,10 +205,13 @@ library LibConfigRegistryRegister {
 
     /// Reverts unless the selected chain is the network's and its registry is
     /// the pinned one.
+    /// @param vm The Vm the chain id is read through, so the read follows the
+    /// selected fork.
     /// @param network The catalogue entry of the selected chain.
-    function checkChain(SupportedNetwork memory network) internal view {
-        if (block.chainid != network.chainId) {
-            revert UnexpectedChainId(network.name, network.chainId, block.chainid);
+    function checkChain(Vm vm, SupportedNetwork memory network) internal view {
+        uint256 chainId = vm.getChainId();
+        if (chainId != network.chainId) {
+            revert UnexpectedChainId(network.name, network.chainId, chainId);
         }
         LibConfigRegistry.checkCodeHash();
     }
@@ -325,10 +328,10 @@ library LibConfigRegistryRegister {
         bytes32 name,
         bytes memory value
     ) internal returns (bool, string memory) {
-        checkChain(network);
+        checkChain(vm, network);
         (bytes memory bound, uint256 registeredAt) = currentBinding(name);
 
-        string memory record = describeNetwork(vm, network.name, block.chainid, bound, registeredAt, value);
+        string memory record = describeNetwork(vm, network.name, network.chainId, bound, registeredAt, value);
         console2.log(record);
         bool binds = keccak256(bound) != keccak256(value);
         if (binds) {
@@ -450,7 +453,7 @@ library LibConfigRegistryRegister {
         }
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
-            checkChain(networks[i]);
+            checkChain(vm, networks[i]);
             (bytes memory actual, uint256 registeredAt) = LibConfigRegistry.resolve(hashed);
             if (keccak256(actual) != keccak256(value)) {
                 revert UnexpectedBinding(networks[i].name, hashed, value, actual);

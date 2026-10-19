@@ -140,6 +140,7 @@ library LibConfigRegistry {
             revert BindingStampedInFuture(name, registeredAt, block.timestamp);
         }
         uint256 age = block.timestamp - registeredAt;
+        // forge-lint: disable-next-line(block-timestamp)
         if (age <= minAge) {
             revert BindingTooFresh(name, age, minAge);
         }
