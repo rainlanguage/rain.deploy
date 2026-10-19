@@ -36,8 +36,7 @@ bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.hea
 /// line the write waited on. A later entry is the key `applied` takes, so
 /// anything `applied` refuses to answer about is refused as a prerequisite.
 struct Prerequisite {
-    /// The writer. Never the zero address; in the first entry, the line's
-    /// writer (the caller under V2).
+    /// The writer. Never the zero address; in the first entry, the caller.
     address writer;
     /// The namespace under the writer. Never zero; in the first entry, the
     /// namespace the write names.
