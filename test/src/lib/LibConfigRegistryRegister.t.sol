@@ -341,6 +341,19 @@ contract LibConfigRegistryRegisterTest is Test {
         this.externalCheckRegisteredOnForks(list("nowhere"), declared, new uint256[](1), "a.b", abi.encode(address(1)));
     }
 
+    /// The fork check refuses more fork ids than networks, before selecting
+    /// any.
+    function testCheckRegisteredOnForksRefusesExtraForkIds() external {
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, 2, 3));
+        this.externalCheckRegisteredOnForks(
+            list("base", "arbitrum"),
+            LibRainDeploy.supportedNetworks(),
+            new uint256[](3),
+            "a.b",
+            abi.encode(address(1))
+        );
+    }
+
     /// A chain that is not the network's is refused before the registry is
     /// read.
     function testRegisterOnWrongChain(uint64 chainId) external {
