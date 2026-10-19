@@ -237,6 +237,7 @@ contract MigrationRegistryHeadTest is Test {
                 IMigrationRegistryV3.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                writer,
                 namespace,
                 wrongHead,
                 MIGRATION_HEAD_GENESIS
@@ -267,6 +268,7 @@ contract MigrationRegistryHeadTest is Test {
                 IMigrationRegistryV3.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                writer,
                 otherNamespace,
                 MIGRATION_HEAD_GENESIS,
                 MIGRATION_HEAD_GENESIS
@@ -293,6 +295,7 @@ contract MigrationRegistryHeadTest is Test {
                 IMigrationRegistryV3.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                address(0),
                 bytes32(0),
                 bytes32(0),
                 MIGRATION_HEAD_GENESIS
@@ -310,6 +313,7 @@ contract MigrationRegistryHeadTest is Test {
                 IMigrationRegistryV3.UnexpectedMigrationHead.selector,
                 writer,
                 namespace,
+                address(0),
                 bytes32(0),
                 bytes32(0),
                 migration

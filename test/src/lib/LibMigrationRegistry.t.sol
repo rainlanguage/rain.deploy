@@ -284,6 +284,7 @@ contract LibMigrationRegistryTest is Test {
                 IMigrationRegistryV3.UnexpectedMigrationHead.selector,
                 address(this),
                 namespace,
+                address(this),
                 namespace,
                 skipped,
                 MIGRATION_HEAD_GENESIS
@@ -318,6 +319,7 @@ contract LibMigrationRegistryTest is Test {
                 IMigrationRegistryV3.UnexpectedMigrationHead.selector,
                 address(this),
                 namespace,
+                other,
                 namespace,
                 MIGRATION_HEAD_GENESIS,
                 MIGRATION_HEAD_GENESIS
@@ -330,6 +332,7 @@ contract LibMigrationRegistryTest is Test {
                 IMigrationRegistryV3.UnexpectedMigrationHead.selector,
                 address(this),
                 namespace,
+                address(this),
                 otherNamespace,
                 MIGRATION_HEAD_GENESIS,
                 MIGRATION_HEAD_GENESIS
@@ -1454,6 +1457,7 @@ contract LibMigrationRegistryTest is Test {
                 IMigrationRegistryV3.UnexpectedMigrationHead.selector,
                 address(this),
                 namespace,
+                address(0),
                 bytes32(0),
                 bytes32(0),
                 MIGRATION_HEAD_GENESIS
@@ -1465,6 +1469,7 @@ contract LibMigrationRegistryTest is Test {
                 IMigrationRegistryV3.UnexpectedMigrationHead.selector,
                 address(this),
                 namespace,
+                address(0),
                 bytes32(0),
                 bytes32(0),
                 MIGRATION_HEAD_GENESIS
@@ -1595,6 +1600,7 @@ contract LibMigrationRegistryTest is Test {
                 IMigrationRegistryV3.UnexpectedMigrationHead.selector,
                 address(this),
                 namespace,
+                address(this),
                 namespace,
                 MIGRATION_HEAD_GENESIS,
                 migrationA

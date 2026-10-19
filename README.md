@@ -838,14 +838,16 @@ account that wrote it (`appliedByV3`). An approved delegate can also move the
 line's head onto any id, which no write can undo, so a compromised delegate can
 stop every script queued against the line, leaving a new namespace as the only
 way out. Approve only accounts held to the writer's own custody, and revoke
-before rotating one out. A namespace is not an authority: it is the writer's to
-name, and a record in it is that writer's claim. A root would have to be welded
-into the creation code, the way `ADDRESS_REGISTRY_ROOT` is — and the account
-that applies a migration is a different Safe, deployer or timelock for every
-consumer and every chain, so one root would have to be all of them, and baking
-each consumer's authority in would give each a different address for what is
-meant to be one shared registry. With nothing to configure there is also no
-rollout state in which it is inert.
+before rotating one out. Approvals cannot be enumerated on chain, only asked
+about one delegate at a time, so a consumer's prod tests assert `approvedV3` is
+false for every retired delegate beside the true answers for the live ones. A
+namespace is not an authority: it is the writer's to name, and a record in it is
+that writer's claim. A root would have to be welded into the creation code, the
+way `ADDRESS_REGISTRY_ROOT` is — and the account that applies a migration is a
+different Safe, deployer or timelock for every consumer and every chain, so one
+root would have to be all of them, and baking each consumer's authority in would
+give each a different address for what is meant to be one shared registry. With
+nothing to configure there is also no rollout state in which it is inert.
 
 **An index, not proof.** The registry says which invariant applies. It does not
 say the invariant holds — a multisig can act out of band and nothing here moves.

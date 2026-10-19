@@ -54,9 +54,9 @@ struct MigrationRecord {
 /// is also no rollout state in which this contract is inert: it does its whole
 /// job the moment it exists on a chain.
 ///
-/// A writer may approve delegates to write one of its lines
-/// (`approveV3`), so several executors share one line. The line is
-/// still the writer's: only it approves, and a delegate writes nothing else.
+/// A writer may approve delegates to write one of its lines (`approveV3`), so
+/// several executors share one line. The line is still the writer's: only it
+/// approves, and a delegate writes nothing else.
 ///
 /// A record is append-only per line, and a head only ever moves forward onto
 /// something new. Both writes refuse a migration the writer has already applied
@@ -84,11 +84,10 @@ struct MigrationRecord {
 /// No storage mapping is `public`. `appliedV3`, `appliedOntoV3`,
 /// `appliedAfterV3`, `appliedByV3` and `headV3` refuse the zero writer and the
 /// zero namespace, `approvedV3` refuses those and the zero delegate, the four
-/// record readers
-/// refuse the two ids a migration can never be, and a public mapping's
-/// generated getter would answer all of them with zero — which for a record is
-/// "not applied" and for `headV3` is a value no head can ever hold, i.e.
-/// exactly the silent wrong-branch this contract reverts to prevent.
+/// record readers refuse the two ids a migration can never be, and a public
+/// mapping's generated getter would answer all of them with zero — which for a
+/// record is "not applied" and for `headV3` is a value no head can ever hold,
+/// i.e. exactly the silent wrong-branch this contract reverts to prevent.
 contract MigrationRegistry is IMigrationRegistryV3 {
     /// Every record, keyed by writer, namespace and migration. A zero
     /// `appliedAt` means never applied. Not `public`: the only readers are
@@ -165,9 +164,9 @@ contract MigrationRegistry is IMigrationRegistryV3 {
         }
     }
 
-    /// Refuses a write whose caller is neither `writer` nor approved
-    /// by it for `namespace`. The zero writer is refused first: nothing can
-    /// call as it or be approved by it.
+    /// Refuses a write whose caller is neither `writer` nor approved by it for
+    /// `namespace`. The zero writer is refused first: nothing can call as it or
+    /// be approved by it.
     /// @param writer The line's writer.
     /// @param namespace The line under the writer.
     function checkDelegate(address writer, bytes32 namespace) internal view {
@@ -212,8 +211,8 @@ contract MigrationRegistry is IMigrationRegistryV3 {
         internal
         view
     {
-        // The first entry is the writer at the head the caller believes it is at. An
-        // empty list names no head at all, so it is refused as a zero head,
+        // The first entry is the writer at the head the caller believes it is
+        // at. An empty list names no head at all, so it is refused as a zero head,
         // which no line can be at; a first entry under anyone but the writer,
         // or in any namespace but the one being written, is not this line's
         // head whatever migration it names.
@@ -225,6 +224,7 @@ contract MigrationRegistry is IMigrationRegistryV3 {
             revert UnexpectedMigrationHead(
                 writer,
                 namespace,
+                prerequisites.length == 0 ? address(0) : prerequisites[0].writer,
                 prerequisites.length == 0 ? bytes32(0) : prerequisites[0].namespace,
                 prerequisites.length == 0 ? bytes32(0) : prerequisites[0].migration,
                 actualHead

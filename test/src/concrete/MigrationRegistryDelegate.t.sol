@@ -287,7 +287,13 @@ contract MigrationRegistryDelegateTest is Test {
         vm.prank(DELEGATE);
         vm.expectRevert(
             abi.encodeWithSelector(
-                IMigrationRegistryV3.UnexpectedMigrationHead.selector, WRITER, NAMESPACE, NAMESPACE, genesis, genesis
+                IMigrationRegistryV3.UnexpectedMigrationHead.selector,
+                WRITER,
+                NAMESPACE,
+                DELEGATE,
+                NAMESPACE,
+                genesis,
+                genesis
             )
         );
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(DELEGATE, NAMESPACE, genesis));
@@ -305,6 +311,23 @@ contract MigrationRegistryDelegateTest is Test {
         vm.prank(DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.OwnPrerequisite.selector, MIGRATION));
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, prerequisites);
+    }
+
+    /// A delegate's own line is another line: a delegated write may wait on it.
+    function testDelegateMayWaitOnItsOwnLine() external {
+        approveDelegate();
+        vm.prank(DELEGATE);
+        sRegistry.applyMigrationV3(DELEGATE, NAMESPACE, MIGRATION, onto(DELEGATE, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        Prerequisite[] memory prerequisites = new Prerequisite[](2);
+        prerequisites[0] = Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
+        prerequisites[1] = Prerequisite({writer: DELEGATE, namespace: NAMESPACE, migration: MIGRATION});
+        vm.prank(DELEGATE);
+        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, prerequisites);
+        Prerequisite[] memory stored = sRegistry.appliedAfterV3(WRITER, NAMESPACE, MIGRATION);
+        assertEq(stored.length, 2);
+        assertEq(stored[1].writer, DELEGATE);
+        assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), DELEGATE);
+        assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION);
     }
 
     /// The writer's own writes are unchanged by delegation and land in the

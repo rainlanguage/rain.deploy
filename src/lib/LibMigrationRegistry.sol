@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IMigrationRegistryV3, Prerequisite, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV3.sol";
+import {IMigrationRegistryV3, Prerequisite} from "../interface/IMigrationRegistryV3.sol";
 import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 
 /// @title LibMigrationRegistry
@@ -18,11 +18,10 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// got to, and it applies one under a writer in a namespace it names, after
 /// the head and the migrations in any other line the caller names, builds the
 /// list for a write that waits on nothing but the head, or builds that write as
-/// a call for another account to send. It approves and revokes delegates,
-/// and reads which account wrote a record. Which writer a test trusts, which
-/// namespace a repo writes, which invariant each
-/// answer selects, and how an id is derived are entirely the consumer's
-/// business and none of this library's.
+/// a call for another account to send. It approves and revokes delegates, and
+/// reads which account wrote a record. Which writer a test trusts, which
+/// namespace a repo writes, which invariant each answer selects, and how an id
+/// is derived are entirely the consumer's business and none of this library's.
 ///
 /// ## There is deliberately no broadcast runner here
 ///
@@ -67,10 +66,11 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 ///
 /// ## Writing names what it is applied after, the head first
 ///
-/// `applyMigrationV3` and `applyMigrationHistoryV3` both take a writer, a namespace and
-/// one list, whose first entry is that writer in that namespace at the
-/// migration the caller believes ran last in that line, so a chain that never got that predecessor
-/// refuses the write instead of silently skipping a step, and two migrations
+/// `applyMigrationV3` and `applyMigrationHistoryV3` both take a writer, a
+/// namespace and one list, whose first entry is that writer in that namespace
+/// at the migration the caller believes ran last in that line, so a chain that
+/// never got that predecessor refuses the write instead of silently skipping a
+/// step, and two migrations
 /// dispatched at once cannot land in the wrong order. They differ only in
 /// where the recorded moment comes from: the block this lands in, or the
 /// moment the caller supplies for a migration that already ran. The first
@@ -87,8 +87,8 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// A migration that waits on nothing else passes the head alone, which is
 /// the list `onto` builds.
 ///
-/// `headV3` reads that value back, which is how an author finds what a new script
-/// must name and how an operator sees which migration a chain is at. It is not
+/// `headV3` reads that value back, which is how an author finds what a new
+/// script must name and how an operator sees which migration a chain is at. It is not
 /// how a script tests that its predecessor ran: a head says what was LAST, and
 /// `appliedV3` is what says whether a particular migration ever ran at all.
 ///
@@ -116,11 +116,10 @@ library LibMigrationRegistry {
     /// Reverts unless the pinned registry address holds the pinned code.
     ///
     /// Every entry point checks, and they check the same way, because each is
-    /// worse than useless against unknown code: `appliedV3` would branch a test on
-    /// whatever timestamp that code returned, `appliedOntoV3`, `appliedAfterV3`
-    /// and `headV3` would hand back values that are not records, either write
-    /// would record a migration somewhere nothing will ever read it, and either
-    /// call builder would hand a signer a write that goes the same way. The
+    /// worse than useless against unknown code: a reader would hand back values
+    /// that are not records or approvals, a write, approve or revoke would land
+    /// somewhere nothing reads, and a call builder would hand a signer a call
+    /// that goes the same way. The
     /// check is one function so they cannot drift into checking different
     /// things, and an entry point added later has one place to call rather
     /// than a rule to remember.

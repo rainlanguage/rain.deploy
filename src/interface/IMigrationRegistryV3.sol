@@ -35,6 +35,10 @@ bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.hea
 /// namespace it is writing, and every later entry is a record in some other
 /// line the write waited on. A later entry is the key `appliedV3` takes, so
 /// anything `appliedV3` refuses to answer about is refused as a prerequisite.
+///
+/// The deprecated V2 interface declares a distinct `Prerequisite` and its own
+/// `MIGRATION_HEAD_GENESIS`, so a file importing both aliases V2's, e.g.
+/// `import {Prerequisite as PrerequisiteV2} from ".../IMigrationRegistryV2.sol";`.
 struct Prerequisite {
     /// The writer. Never the zero address; in the first entry, the line's
     /// writer, never the caller: a delegate names the writer that approved it.
@@ -312,7 +316,9 @@ struct Prerequisite {
 /// write can undo, so a compromised delegate can stop every script queued
 /// against the line, leaving a new namespace as the only way out. Approve only
 /// accounts held to the writer's own custody, and revoke before rotating one
-/// out.
+/// out. Approvals cannot be enumerated here, only asked about one delegate at
+/// a time, so a consumer's prod tests assert `approvedV3` is false for every
+/// retired delegate beside the true answers for the live ones.
 ///
 /// ## Identity is opaque
 ///
@@ -428,13 +434,20 @@ interface IMigrationRegistryV3 {
     /// told so before anything else about it is.
     /// @param writer The line's writer.
     /// @param namespace The namespace the write named.
+    /// @param expectedWriter The first entry's writer, or zero for an empty
+    /// list.
     /// @param expectedNamespace The first entry's namespace, or zero for an
     /// empty list.
     /// @param expectedHead The first entry's migration, or zero for an empty
     /// list.
     /// @param actualHead The head the line is actually at.
     error UnexpectedMigrationHead(
-        address writer, bytes32 namespace, bytes32 expectedNamespace, bytes32 expectedHead, bytes32 actualHead
+        address writer,
+        bytes32 namespace,
+        address expectedWriter,
+        bytes32 expectedNamespace,
+        bytes32 expectedHead,
+        bytes32 actualHead
     );
 
     /// Thrown when a write would record a zero moment:
