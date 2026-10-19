@@ -548,8 +548,9 @@ library LibRainDeployMechanism {
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param networks The networks to broadcast to.
     /// @param deployerPrivateKey The key to broadcast as.
-    /// @param frozen The suite with its extended networks.
-    /// @param suite The suite to broadcast.
+    /// @param frozen The suite with its extended networks, and nothing else beyond what it records. The refusal is only
+    /// as strong as `frozen`: passing `suite` here disables it, as every network `suite` takes is then one it records.
+    /// @param suite The suite to broadcast, with its candidate's unrecorded networks. Never also passed as `frozen`.
     /// @return Where the suite is on each network, positionally paired with `networks`.
     /// @return The fork each network was deployed on.
     function deployAndBroadcast(

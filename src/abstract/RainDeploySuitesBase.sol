@@ -328,6 +328,7 @@ abstract contract RainDeploySuitesBase {
     /// The implementations, other than the named candidate's own, that read its init data as its implementation does:
     /// a per-network release cut under one of them takes an unrecorded network at the candidate's init data.
     /// Empty by default, so a release under any other implementation is refused an unrecorded network.
+    /// A network declared in `extendedNetworks` needs no reader: it carries its own init data and address.
     /// @param suite The candidate's suite key.
     /// @return The implementations.
     function initDataReaders(string memory suite) internal view virtual returns (address[] memory) {
