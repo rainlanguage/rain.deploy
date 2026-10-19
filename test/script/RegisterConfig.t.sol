@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {CONFIG_REGISTRY_ROOT} from "../../src/concrete/ConfigRegistry.sol";
 import {IConfigRegistryV1} from "../../src/interface/IConfigRegistryV1.sol";
@@ -11,6 +11,7 @@ import {LibConfigRegistryDeploy} from "../../src/lib/LibConfigRegistryDeploy.sol
 import {LibConfigRegistryRegister} from "../../src/lib/LibConfigRegistryRegister.sol";
 import {RegisterConfig} from "../../script/RegisterConfig.sol";
 import {LibConfigRegistryFork} from "../lib/LibConfigRegistryFork.sol";
+import {LibConfigRegistryRead} from "../lib/LibConfigRegistryRead.sol";
 import {RegisterConfigRunCaller} from "../concrete/RegisterConfigRunCaller.sol";
 
 /// @title RegisterConfigTest
@@ -57,6 +58,10 @@ contract RegisterConfigTest is Test {
         vm.expectRevert(LibConfigRegistryFork.unboundResolveRevert(keccak256(bytes(name))));
         script.verify();
 
+        runAsRootOnEveryNetwork(script, name);
+        vm.setEnv("CONFIG_REGISTRY_NAME", name);
+        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
+
         vm.setEnv("CONFIG_REGISTRY_NETWORKS", "base,nowhere");
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
         script.run();
@@ -91,14 +96,10 @@ contract RegisterConfigTest is Test {
         script.verify();
 
         // Run as root on a fresh name binds it on exactly the selected network.
-        // A prank cannot reach `run()`, since a prank and a broadcast cannot
-        // both be active, so root calls it through code etched there.
         string memory freshName = string.concat(name, "-run");
         bytes memory freshValue = abi.encode(address(3));
         vm.setEnv("CONFIG_REGISTRY_NAME", freshName);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(freshValue));
-        vm.etch(CONFIG_REGISTRY_ROOT, address(new RegisterConfigRunCaller()).code);
-        vm.makePersistent(CONFIG_REGISTRY_ROOT);
         uint256[] memory forkIds = RegisterConfigRunCaller(CONFIG_REGISTRY_ROOT).callRun(script);
         assertEq(forkIds.length, 1);
         vm.selectFork(forkIds[0]);
@@ -108,6 +109,8 @@ contract RegisterConfigTest is Test {
             ).getV1(keccak256(bytes(freshName)));
         assertEq(bound, freshValue);
         assertEq(registeredAt, block.timestamp);
+
+        assertRunSkips(script, keccak256(bytes(freshName)), freshValue, registeredAt);
 
         // Run as root on a name already bound to another value rebinds it.
         string memory rotateName = string.concat(name, "-rotate");
@@ -125,5 +128,57 @@ contract RegisterConfigTest is Test {
             .getV1(keccak256(bytes(rotateName)));
         assertEq(bound, rotateValue);
         assertEq(registeredAt, block.timestamp);
+    }
+
+    /// Runs as root with networks unset, which binds on every supported
+    /// network in declaration order. A prank cannot reach `run()`, since a
+    /// prank and a broadcast cannot both be active, so root calls it through
+    /// code etched there. The registry is persistent so every fork `run`
+    /// creates holds it.
+    /// @param script The script.
+    /// @param name The test's base name.
+    function runAsRootOnEveryNetwork(RegisterConfig script, string memory name) internal {
+        LibConfigRegistryFork.ensureDeployed(vm);
+        vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+        vm.etch(CONFIG_REGISTRY_ROOT, address(new RegisterConfigRunCaller()).code);
+        vm.makePersistent(CONFIG_REGISTRY_ROOT);
+        bytes32 allName = keccak256(bytes(string.concat(name, "-all")));
+        bytes memory allValue = abi.encode(address(5));
+        vm.setEnv("CONFIG_REGISTRY_NAME", string.concat(name, "-all"));
+        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(allValue));
+
+        string[] memory supported = LibRainDeploy.supportedNetworks();
+        uint256[] memory forkIds = RegisterConfigRunCaller(CONFIG_REGISTRY_ROOT).callRun(script);
+        assertEq(forkIds.length, supported.length);
+        for (uint256 i = 0; i < forkIds.length; i++) {
+            vm.selectFork(forkIds[i]);
+            assertEq(block.chainid, LibRainDeploy.declaredNetworkConfigs(supported)[i].chainId);
+            assertEq(
+                LibConfigRegistryRead.getValue(
+                    IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), allName
+                ),
+                allValue
+            );
+        }
+    }
+
+    /// Runs again as root with `name` bound to `value` already, which skips it:
+    /// no `Register`, and the binding and its moment are unchanged.
+    /// @param script The script.
+    /// @param name The bound name, hashed.
+    /// @param value The value it is bound to.
+    /// @param registeredAt The moment it was bound at.
+    function assertRunSkips(RegisterConfig script, bytes32 name, bytes memory value, uint256 registeredAt) internal {
+        vm.recordLogs();
+        uint256[] memory forkIds = RegisterConfigRunCaller(CONFIG_REGISTRY_ROOT).callRun(script);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        for (uint256 i = 0; i < entries.length; i++) {
+            assertTrue(entries[i].emitter != LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+        }
+        assertEq(forkIds.length, 1);
+        vm.selectFork(forkIds[0]);
+        IConfigRegistryV1 registry = IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+        assertEq(LibConfigRegistryRead.getValue(registry, name), value);
+        assertEq(LibConfigRegistryRead.getMoment(registry, name), registeredAt);
     }
 }

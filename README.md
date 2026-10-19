@@ -578,8 +578,7 @@ running it again.
   below):
 
   ```sh
-  nix develop -c cast wallet address --trezor
-  # must print $CONFIG_REGISTRY_ROOT
+  [ "$(nix develop -c cast wallet address --trezor)" = "$CONFIG_REGISTRY_ROOT" ] && echo "root OK" || echo "NOT root"
   ```
 
 - Root needs native gas on every network it binds on.

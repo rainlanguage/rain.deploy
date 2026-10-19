@@ -1344,8 +1344,8 @@ contract LibRainDeploySnapshotTest is Test {
         );
     }
 
-    /// This repo's own contract: the one the committed libs are generated from,
-    /// and the one every emitter test emits for.
+    /// This repo's retired contract: its committed released lib is frozen
+    /// (Build.retiredContractNames) and is the one every emitter test emits for.
     string constant EMITTED_CONTRACT = "AddressRegistry";
 
     /// The library the committed released lib declares, derived from
@@ -2262,16 +2262,19 @@ contract LibRainDeploySnapshotTest is Test {
     /// below are about the body.
     string constant EXPECTED_AGGREGATE_HEADER = "/// @title LibReleasedSuites\n"
         "/// @notice Every frozen release this repo has cut, of every contract it\n"
-        "/// deploys: the per-contract released libs concatenated, in declaration\n" "/// order.\n" "///\n"
+        "/// deploys: the per-contract released libs concatenated, retired contracts\n"
+        "/// first, then declaration order.\n" "///\n"
         "/// There is one released lib per deployed contract because a release freezes\n"
         "/// every contract it names into a single tag directory, so a lib that took\n"
         "/// the record whole would give another contract's snapshot this contract's\n"
         "/// suite key and collide with its own entry for that tag. This is where\n"
-        "/// those libs meet, and it is emitted from the same list that wrote them --\n"
-        "/// so a contract that is generated, aliased and frozen cannot be missing\n"
-        "/// from the declaration, and a release missing from the declaration is a\n"
-        "/// release every check quietly stops asking about.\n" "library LibReleasedSuites {\n"
-        "    /// Every released suite, in declaration order.\n" "    /// @return The released suites.\n"
+        "/// those libs meet, and it is emitted from the retired contracts' frozen\n"
+        "/// libs and then the same list that wrote the rest -- so a contract that\n"
+        "/// is generated, aliased and frozen cannot be missing from the\n"
+        "/// declaration, and a release missing from the declaration is a release\n"
+        "/// every check quietly stops asking about.\n" "library LibReleasedSuites {\n"
+        "    /// Every released suite, retired contracts first, then declaration order.\n"
+        "    /// @return The released suites.\n"
         "    function releasedSuites() internal pure returns (DeploySuite[] memory) {\n";
 
     /// The aggregate's text from below the released libs it reads to the end of

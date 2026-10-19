@@ -71,7 +71,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
     /// unsets or restores it, and forge runs tests concurrently — so two tests
     /// holding two values for one variable is two tests racing over one
     /// variable, and this contract was exactly that until it was seen losing
-    /// the race: the unset case resolved the `address-registry` the other test
+    /// the race: the unset case resolved the `config-registry` the other test
     /// had written. Sequenced inside one test the values cannot interleave, and
     /// every `vm.setEnv` in this repo is one of the four below — with every
     /// write to `DEPLOYMENT_SUITE` after the only read that needs it absent, so
@@ -166,12 +166,12 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         );
         sDeploy.run();
 
-        vm.setEnv("DEPLOYMENT_SUITE", "address-registry");
+        vm.setEnv("DEPLOYMENT_SUITE", "config-registry");
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
-                "address-registry",
+                "config-registry",
                 "config-registry@0_0_1, second-address, config-registry-candidate, second-address-candidate"
             )
         );

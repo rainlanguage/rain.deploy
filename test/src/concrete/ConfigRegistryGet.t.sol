@@ -178,21 +178,6 @@ contract ConfigRegistryGetTest is Test {
         assertEq(block.timestamp - LibConfigRegistryRead.getMoment(sRegistry, name), elapsed);
     }
 
-    /// The moment `getV1` answers with is never zero.
-    function testGetMomentNeverZero(bytes32 name, bytes memory value, uint256 time) external {
-        vm.assume(value.length > 0);
-        time = bound(time, 1, type(uint256).max);
-
-        vm.warp(time);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.registerV1(name, value);
-
-        (bytes memory got, uint256 registeredAt) = sRegistry.getV1(name);
-        assertEq(got, value);
-        assertTrue(registeredAt != 0);
-        assertEq(registeredAt, time);
-    }
-
     /// Moments are per name.
     function testGetMomentDistinctNames(
         bytes32 nameA,

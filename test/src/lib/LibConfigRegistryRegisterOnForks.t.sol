@@ -10,6 +10,7 @@ import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.
 import {LibConfigRegistryRegister} from "../../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {LibConfigRegistryFork} from "../../lib/LibConfigRegistryFork.sol";
+import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
 
 /// @title LibConfigRegistryRegisterOnForksTest
 /// The fork loops of `LibConfigRegistryRegister`, against every supported
@@ -83,9 +84,13 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
             assertEq(block.chainid, configs[i].chainId, networks[i]);
-            (bytes memory bound,) =
-                IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(hashed);
-            assertEq(bound, value, networks[i]);
+            assertEq(
+                LibConfigRegistryRead.getValue(
+                    IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), hashed
+                ),
+                value,
+                networks[i]
+            );
         }
 
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);
@@ -177,8 +182,11 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
             abi.encodeWithSelector(LibConfigRegistryRegister.UnexpectedChainId.selector, "base", 8453, 42161)
         );
         this.externalCheckRegisteredOnForks(networks, swapped, name, value);
-        (bytes memory bound,) =
-            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(hashed);
-        assertEq(bound, value);
+        assertEq(
+            LibConfigRegistryRead.getValue(
+                IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), hashed
+            ),
+            value
+        );
     }
 }

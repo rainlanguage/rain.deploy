@@ -47,8 +47,8 @@ contract Build is BuildScript, RegistryDeploySuites {
     }
 
     /// @inheritdoc BuildScript
-    /// @dev In declaration order — the order the aggregate emits its entries
-    /// in. Read by the freeze and the aggregate.
+    /// @dev In declaration order. Read by the freeze, and after
+    /// retiredContractNames() by releasedContractNames().
     function snapshotContractNames() internal pure override returns (string[] memory) {
         GeneratedContract[] memory contracts = generatedContracts();
         string[] memory names = new string[](contracts.length);

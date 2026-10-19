@@ -168,7 +168,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         return paths;
     }
 
-    /// A record of BOTH committed snapshots. `AddressRegistry` is what the
+    /// A record of BOTH committed snapshots. `ConfigRegistry` is what the
     /// exemplar's first released suite derives; `MigrationRegistry` is declared
     /// by no released suite here, so it is a real record file that really is
     /// undeclared, and the undeclared one is the LAST.

@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
 import {MockResolvedValues} from "../../concrete/MockResolvedValues.sol";
 import {MockRevertingAnswerOwner} from "../../concrete/MockRevertingAnswerOwner.sol";
 import {MockRawAnswerOwner} from "../../concrete/MockRawAnswerOwner.sol";
@@ -12,10 +13,11 @@ import {MockChainDependentOwner} from "../../concrete/MockChainDependentOwner.so
 /// @title LibRainDeployResolvedValuesTest
 /// Tests for `LibRainDeploy.checkResolvedValues` and its fork stages.
 contract LibRainDeployResolvedValuesTest is Test {
-    /// Chain id of Arbitrum One.
-    uint256 constant ARBITRUM_ONE_CHAIN_ID = 42161;
-
     /// External wrapper so `vm.expectRevert` sees the library revert.
+    /// @param network The network name, for the error only.
+    /// @param target The deployed contract to read.
+    /// @param readCalls The calldata of each read.
+    /// @param expectedValues The bytes each read must answer.
     function externalCheckResolvedValues(
         string memory network,
         address target,
@@ -26,6 +28,11 @@ contract LibRainDeployResolvedValuesTest is Test {
     }
 
     /// External wrapper so `vm.expectRevert` sees the library revert.
+    /// @param networks The network names.
+    /// @param forkIds The fork of each network, positionally paired.
+    /// @param target The deployed contract to read.
+    /// @param readCalls The calldata of each read.
+    /// @param expectedValues The bytes each read must answer.
     function externalCheckResolvedValuesOnForks(
         string[] memory networks,
         uint256[] memory forkIds,
@@ -37,6 +44,10 @@ contract LibRainDeployResolvedValuesTest is Test {
     }
 
     /// External wrapper so `vm.expectRevert` sees the library revert.
+    /// @param networks The network names.
+    /// @param target The deployed contract to read.
+    /// @param readCalls The calldata of each read.
+    /// @param expectedValues The bytes each read must answer.
     function externalCheckResolvedValuesOnNetworks(
         string[] memory networks,
         address target,
@@ -47,6 +58,7 @@ contract LibRainDeployResolvedValuesTest is Test {
     }
 
     /// The reads of `MockResolvedValues`, in declaration order.
+    /// @return The read call list.
     function valueReadCalls() internal pure returns (bytes[] memory) {
         bytes[] memory readCalls = new bytes[](3);
         readCalls[0] = abi.encodeWithSignature("iThreshold()");
@@ -56,6 +68,10 @@ contract LibRainDeployResolvedValuesTest is Test {
     }
 
     /// The return data `valueReadCalls` answer with for these values.
+    /// @param threshold The `iThreshold` answer.
+    /// @param codeHash The `iCodeHash` answer.
+    /// @param signers The `signers` answer.
+    /// @return The expected value list.
     function valueExpected(uint256 threshold, bytes32 codeHash, address[] memory signers)
         internal
         pure
@@ -69,24 +85,12 @@ contract LibRainDeployResolvedValuesTest is Test {
     }
 
     /// A one-element list.
+    /// @param value The element.
+    /// @return The list.
     function one(bytes memory value) internal pure returns (bytes[] memory) {
         bytes[] memory values = new bytes[](1);
         values[0] = value;
         return values;
-    }
-
-    /// The read the `iOwner` mocks answer.
-    function ownerReadCalls() internal pure returns (bytes[] memory) {
-        return one(abi.encodeWithSignature("iOwner()"));
-    }
-
-    /// Fork ids no fork has, so selecting one is itself an error.
-    function unselectableForkIds(uint256 length) internal pure returns (uint256[] memory) {
-        uint256[] memory forkIds = new uint256[](length);
-        for (uint256 i = 0; i < length; i++) {
-            forkIds[i] = type(uint256).max;
-        }
-        return forkIds;
     }
 
     /// Every read answering exactly its expected bytes MUST pass, a zero
@@ -179,7 +183,9 @@ contract LibRainDeployResolvedValuesTest is Test {
                 LibRainDeploy.ResolvedValueReadFailed.selector, "test_network", address(target), uint256(0), answer
             )
         );
-        this.externalCheckResolvedValues("test_network", address(target), ownerReadCalls(), one(answer));
+        this.externalCheckResolvedValues(
+            "test_network", address(target), LibResolvedReadFixture.ownerReadCalls(), one(answer)
+        );
     }
 
     /// A target with no code answers nothing, which MUST fail as a read, even
@@ -194,7 +200,7 @@ contract LibRainDeployResolvedValuesTest is Test {
                 LibRainDeploy.ResolvedValueReadFailed.selector, "test_network", target, uint256(0), bytes("")
             )
         );
-        this.externalCheckResolvedValues("test_network", target, ownerReadCalls(), one(""));
+        this.externalCheckResolvedValues("test_network", target, LibResolvedReadFixture.ownerReadCalls(), one(""));
     }
 
     /// An answer that is not whole words is still an answer: it MUST pass on
@@ -203,7 +209,9 @@ contract LibRainDeployResolvedValuesTest is Test {
         vm.assume(answer.length > 0 && answer.length < 0x20);
         vm.assume(keccak256(other) != keccak256(answer));
         MockRawAnswerOwner target = new MockRawAnswerOwner(answer);
-        LibRainDeploy.checkResolvedValues("test_network", address(target), ownerReadCalls(), one(answer));
+        LibRainDeploy.checkResolvedValues(
+            "test_network", address(target), LibResolvedReadFixture.ownerReadCalls(), one(answer)
+        );
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -215,7 +223,9 @@ contract LibRainDeployResolvedValuesTest is Test {
                 answer
             )
         );
-        this.externalCheckResolvedValues("test_network", address(target), ownerReadCalls(), one(other));
+        this.externalCheckResolvedValues(
+            "test_network", address(target), LibResolvedReadFixture.ownerReadCalls(), one(other)
+        );
     }
 
     /// A failed read after the first MUST be named by its own index.
@@ -293,7 +303,7 @@ contract LibRainDeployResolvedValuesTest is Test {
         networks[1] = LibRainDeploy.BASE;
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, uint256(2), uint256(1)));
         this.externalCheckResolvedValuesOnForks(
-            networks, unselectableForkIds(1), address(this), new bytes[](0), new bytes[](0)
+            networks, LibResolvedReadFixture.unselectableForkIds(1), address(this), new bytes[](0), new bytes[](0)
         );
     }
 
@@ -306,12 +316,12 @@ contract LibRainDeployResolvedValuesTest is Test {
             abi.encodeWithSelector(LibRainDeploy.ResolvedValuesLengthMismatch.selector, uint256(2), uint256(1))
         );
         this.externalCheckResolvedValuesOnForks(
-            networks, unselectableForkIds(1), address(this), new bytes[](2), new bytes[](1)
+            networks, LibResolvedReadFixture.unselectableForkIds(1), address(this), new bytes[](2), new bytes[](1)
         );
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoResolvedValueReads.selector, address(this)));
         this.externalCheckResolvedValuesOnForks(
-            networks, unselectableForkIds(1), address(this), new bytes[](0), new bytes[](0)
+            networks, LibResolvedReadFixture.unselectableForkIds(1), address(this), new bytes[](0), new bytes[](0)
         );
     }
 
@@ -341,7 +351,8 @@ contract LibRainDeployResolvedValuesTest is Test {
     function testCheckResolvedValuesOnNetworksReachesEveryNetwork() external {
         address account = address(0xf00);
         address wrong = address(0xba4);
-        MockChainDependentOwner target = new MockChainDependentOwner(account, wrong, ARBITRUM_ONE_CHAIN_ID);
+        MockChainDependentOwner target =
+            new MockChainDependentOwner(account, wrong, LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID);
         vm.makePersistent(address(target));
 
         string[] memory networks = new string[](2);
@@ -359,14 +370,15 @@ contract LibRainDeployResolvedValuesTest is Test {
             )
         );
         this.externalCheckResolvedValuesOnNetworks(
-            networks, address(target), ownerReadCalls(), one(abi.encode(account))
+            networks, address(target), LibResolvedReadFixture.ownerReadCalls(), one(abi.encode(account))
         );
     }
 
     /// Every network agreeing MUST pass.
     function testCheckResolvedValuesOnNetworksEachNetwork() external {
         address account = address(0xf00);
-        MockChainDependentOwner target = new MockChainDependentOwner(account, account, ARBITRUM_ONE_CHAIN_ID);
+        MockChainDependentOwner target =
+            new MockChainDependentOwner(account, account, LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID);
         vm.makePersistent(address(target));
 
         string[] memory networks = new string[](2);
@@ -374,7 +386,7 @@ contract LibRainDeployResolvedValuesTest is Test {
         networks[1] = LibRainDeploy.BASE;
 
         LibRainDeploy.checkResolvedValuesOnNetworks(
-            vm, networks, address(target), ownerReadCalls(), one(abi.encode(account))
+            vm, networks, address(target), LibResolvedReadFixture.ownerReadCalls(), one(abi.encode(account))
         );
     }
 }

@@ -6,14 +6,14 @@ import {LibConfigRegistry} from "../../src/lib/LibConfigRegistry.sol";
 
 /// @title MockSafeResolvedOwner
 /// @notice Resolves a name exactly once, in its constructor, and reverts the
-/// deploy if the binding has not stood for `minAge`.
+/// deploy if the binding has not stood for longer than `minAge`.
 contract MockSafeResolvedOwner {
     /// The address the registry answered with at construction, and forever.
     address public immutable iOwner;
 
     /// @param name The name to resolve, once.
-    /// @param minAge The least time the binding must have stood for this
-    /// contract to accept it.
+    /// @param minAge The binding must have stood for longer than this for
+    /// this contract to accept it.
     constructor(bytes32 name, uint256 minAge) {
         iOwner = abi.decode(LibConfigRegistry.resolveSafe(name, minAge), (address));
     }

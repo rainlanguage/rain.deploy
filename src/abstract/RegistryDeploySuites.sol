@@ -90,9 +90,11 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// freezes every contract it names into a single tag directory, so a lib
     /// that took the record whole would give another contract's snapshot this
     /// contract's suite key and collide with its own entry for that tag.
-    /// `LibReleasedSuites` is the concatenation of them, generated from the
-    /// same list that wrote them — so this is one call rather than a summation
-    /// per contract, and adding a contract does not touch this function at all.
+    /// `LibReleasedSuites` concatenates them, generated from
+    /// `releasedContractNames()`: the retired contracts' never-rewritten libs
+    /// first, then the libs written from the generated list — so this is one
+    /// call rather than a summation per contract, and adding a contract does
+    /// not touch this function at all.
     ///
     /// Empty until the first release is cut. The rolling `candidate/` snapshots
     /// are not releases and do exist.

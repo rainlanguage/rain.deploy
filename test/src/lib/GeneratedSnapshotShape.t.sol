@@ -24,6 +24,10 @@ error DeclaredWithoutSnapshotOrRecord(string name);
 /// @param expected The snapshots plus the retired contracts.
 error AggregateCountMismatch(uint256 declared, uint256 expected);
 
+/// A contract the aggregate imports more than once.
+/// @param name The contract.
+error DuplicateAggregateDeclaration(string name);
+
 /// @title GeneratedSnapshotShapeTest
 /// @notice What a generated deploy snapshot must look like, asserted against
 /// the real generator's committed output.
@@ -67,7 +71,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// remembering to add it — which is the failure mode a shape spec is least
     /// able to notice, since a file nobody checks looks exactly like a file
     /// that passes.
-    /// @return One entry per snapshot, e.g. `AddressRegistry`.
+    /// @return One entry per snapshot, e.g. `ConfigRegistry`.
     function snapshotContractNames() internal view returns (string[] memory) {
         Vm.DirEntry[] memory entries = vm.readDir(LibRainDeploySnapshot.dirForSnapshot(LibRainDeploySnapshot.CANDIDATE));
 
@@ -85,7 +89,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// name. A snapshot shares its file name with the contract it describes, so
     /// forge disambiguates the two artifacts, and how it does that depends on
     /// what else compiles: a nested `out/candidate/` directory for
-    /// `AddressRegistry`, and a compiler-profile suffix inside the shared
+    /// `ConfigRegistry`, and a compiler-profile suffix inside the shared
     /// `out/TimelockController.sol/` for OpenZeppelin's `TimelockController`,
     /// whose 2000-runs build takes the unsuffixed name. Both directories are
     /// searched and the artifact whose AST is the snapshot's source is read.
@@ -313,9 +317,10 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
         }
     }
 
-    /// PROPERTY: the released aggregate declares exactly the contracts that
-    /// have a rolling deploy snapshot. A parameterised contract's code record
-    /// is not a release and is not in the aggregate.
+    /// PROPERTY: the released aggregate declares every contract with a rolling
+    /// deploy snapshot, plus retired contracts that have frozen records, each
+    /// exactly once. A parameterised contract's code record is not a release
+    /// and is not in the aggregate.
     ///
     /// `releasedSuites()` reads `src/lib/LibReleasedSuites.sol` and nothing
     /// else, so a contract missing from it has no declared release at all: its
@@ -370,6 +375,9 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
 
         MemoryKV declaredSet = MemoryKV.wrap(0);
         for (uint256 i = 0; i < declared.length; i++) {
+            if (declaredSet.has(MemoryKVKey.wrap(keccak256(bytes(declared[i]))))) {
+                revert DuplicateAggregateDeclaration(declared[i]);
+            }
             declaredSet = declaredSet.set(MemoryKVKey.wrap(keccak256(bytes(declared[i]))), MemoryKVVal.wrap(0));
         }
 
@@ -421,15 +429,25 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     }
 
     /// A contract imported twice, as when one name is both retired and
-    /// generated, fails the count.
+    /// generated, is refused.
     function testCheckReleasedAggregateRefusesADuplicate() external {
         string[] memory declared = new string[](2);
         declared[0] = "Current";
         declared[1] = "Current";
         string[] memory snapshots = new string[](1);
         snapshots[0] = "Current";
-        vm.expectRevert(abi.encodeWithSelector(AggregateCountMismatch.selector, 2, 1));
+        vm.expectRevert(abi.encodeWithSelector(DuplicateAggregateDeclaration.selector, "Current"));
         this.checkReleasedAggregate(declared, snapshots, FIXTURE_RECORD_ROOT);
+    }
+
+    /// A retired contract imported twice is refused too, though each copy has
+    /// frozen records and the count would balance.
+    function testCheckReleasedAggregateRefusesADuplicateRetired() external {
+        string[] memory declared = new string[](2);
+        declared[0] = "AddressRegistry";
+        declared[1] = "AddressRegistry";
+        vm.expectRevert(abi.encodeWithSelector(DuplicateAggregateDeclaration.selector, "AddressRegistry"));
+        this.checkReleasedAggregate(declared, new string[](0), FIXTURE_RECORD_ROOT);
     }
 
     /// PROPERTY: every deploy snapshot declares exactly the five constants a deploy

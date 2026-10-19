@@ -6,7 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibConfigRegistry} from "../../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.sol";
 import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
-import {ConfigRegistry, CONFIG_REGISTRY_ROOT} from "../../../src/concrete/ConfigRegistry.sol";
+import {CONFIG_REGISTRY_ROOT} from "../../../src/concrete/ConfigRegistry.sol";
 import {DELEGATION_DESIGNATOR_LENGTH, LibAccountCode} from "../../lib/LibAccountCode.sol";
 import {MockSafeResolvedOwner} from "../../concrete/MockSafeResolvedOwner.sol";
 import {LibConfigRegistryFork} from "../../lib/LibConfigRegistryFork.sol";
@@ -200,8 +200,8 @@ contract LibConfigRegistryTest is Test {
 
     /// External wrapper for `resolveSafe`, for `vm.expectRevert`'s call depth.
     /// @param name The name to resolve.
-    /// @param minAge The least time the binding must have stood.
-    /// @return The address bound to `name`.
+    /// @param minAge The binding must have stood for longer than this.
+    /// @return The ABI-encoded value bound to `name`.
     function externalResolveSafe(bytes32 name, uint256 minAge) external view returns (bytes memory) {
         return LibConfigRegistry.resolveSafe(name, minAge);
     }

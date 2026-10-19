@@ -179,13 +179,13 @@ contract BuildTest is Test {
         }
     }
 
-    /// PROPERTY: the committed aggregate imports the generated contracts in
-    /// `generatedContracts()`'s ORDER, not merely as a set.
+    /// PROPERTY: the committed aggregate imports releasedContractNames() in
+    /// ORDER (retired first, then generatedContracts()), not merely as a set.
     ///
     /// Declaration order is claimed twice — the emitted library documents its
-    /// entries as being "in declaration order" and `snapshotContractNames()`
-    /// documents itself as giving "the order the aggregate emits its entries
-    /// in" — and nothing else pins it.
+    /// entries as "retired contracts first, then declaration order" and
+    /// `snapshotContractNames()` documents itself as "In declaration order" —
+    /// and nothing else pins it.
     /// `testTheCommittedAggregateIsWhatTheGeneratorEmits` takes the contract
     /// list from the committed file itself, so it holds for any permutation of
     /// it, and `testEverySnapshotIsInTheReleasedAggregate` matches sets. So the
@@ -217,13 +217,13 @@ contract BuildTest is Test {
     /// PROPERTY: `snapshotContractNames()` is every `generatedContracts()`
     /// entry's `contractName`, positionally.
     ///
-    /// It is the list `cutRelease` freezes and the list the aggregate is
-    /// emitted from, and both reach it only through `forge script`. A name
-    /// list shorter than the declaration freezes one contract fewer and emits
-    /// an aggregate that declares that contract's releases as nothing at all,
-    /// and every other assertion here is still green: the tests above read
-    /// `generatedContracts()` and the committed file, neither of which this
-    /// list passes through.
+    /// It is the list `cutRelease` freezes and, after the retired names, the
+    /// list the aggregate is emitted from, and both reach it only through
+    /// `forge script`. A name list shorter than the declaration freezes one
+    /// contract fewer and emits an aggregate that declares that contract's
+    /// releases as nothing at all, and every other assertion here is still
+    /// green: the tests above read `generatedContracts()` and the committed
+    /// file, neither of which this list passes through.
     function testSnapshotContractNamesAreTheDeclarationInOrder() external view {
         GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
         string[] memory names = sBuild.externalSnapshotContractNames();

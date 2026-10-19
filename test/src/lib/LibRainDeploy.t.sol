@@ -20,6 +20,7 @@ import {MockCloneable} from "../../concrete/MockCloneable.sol";
 import {MockUncloneableMispredictingCloneFactory} from "../../concrete/MockUncloneableMispredictingCloneFactory.sol";
 import {MOCK_DEPLOYABLE_OWNER, MockDeployableOwner} from "../../concrete/MockDeployableOwner.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
+import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
 
 /// @title LibRainDeployTest
 /// Tests for `LibRainDeploy`. External wrappers are used for library functions
@@ -28,9 +29,6 @@ import {MockReverter} from "../../concrete/MockReverter.sol";
 contract LibRainDeployTest is Test {
     /// Chain id of Base.
     uint256 constant BASE_CHAIN_ID = 8453;
-
-    /// Chain id of Arbitrum One.
-    uint256 constant ARBITRUM_ONE_CHAIN_ID = 42161;
 
     /// The address the Zoltu factory derives for empty creation code, i.e.
     /// CREATE2 over the factory address, a zero salt and the hash of empty
@@ -284,7 +282,7 @@ contract LibRainDeployTest is Test {
         vm.selectFork(forkIds[0]);
         assertEq(block.chainid, BASE_CHAIN_ID);
         vm.selectFork(forkIds[1]);
-        assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
+        assertEq(block.chainid, LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID);
     }
 
     /// A read the caller made BEFORE any fork existed MUST NOT decide what a
@@ -314,7 +312,7 @@ contract LibRainDeployTest is Test {
         assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
 
         vm.selectFork(forkIds[1]);
-        assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
+        assertEq(block.chainid, LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID);
         assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
     }
 
@@ -625,7 +623,7 @@ contract LibRainDeployTest is Test {
         assertEq(result.codehash, mockDeployableCodeHash());
 
         vm.selectFork(1);
-        assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
+        assertEq(block.chainid, LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID);
         assertEq(result.codehash, mockDeployableCodeHash());
     }
 
@@ -693,7 +691,7 @@ contract LibRainDeployTest is Test {
         // The second network is the one the pre-fork read used to take out, and
         // a deploy landed on it.
         vm.selectFork(1);
-        assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
+        assertEq(block.chainid, LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID);
         assertEq(result.codehash, mockDeployableCodeHash());
     }
 
@@ -1449,14 +1447,6 @@ contract LibRainDeployTest is Test {
         return (registry, consumer);
     }
 
-    /// The calldata for reading `MockResolvedOwner`'s stored address.
-    /// @return The single-element read call list.
-    function ownerReadCalls() internal pure returns (bytes[] memory) {
-        bytes[] memory readCalls = new bytes[](1);
-        readCalls[0] = abi.encodeWithSignature("iOwner()");
-        return readCalls;
-    }
-
     /// The calldata for reading the chain `MockDeployableOwner` is read on.
     /// @return The single-element read call list.
     function chainOwnerReadCalls() internal pure returns (bytes[] memory) {
@@ -1510,7 +1500,9 @@ contract LibRainDeployTest is Test {
         vm.assume(account != address(0));
         (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
-        LibRainDeploy.checkResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(account));
+        LibRainDeploy.checkResolvedAddresses(
+            "test_network", address(consumer), LibResolvedReadFixture.ownerReadCalls(), expected(account)
+        );
     }
 
     /// The check is against settled state, which is the entire point of running
@@ -1532,7 +1524,9 @@ contract LibRainDeployTest is Test {
         assertEq(nowBound, abi.encode(rebound));
 
         assertEq(consumer.iOwner(), account);
-        LibRainDeploy.checkResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(account));
+        LibRainDeploy.checkResolvedAddresses(
+            "test_network", address(consumer), LibResolvedReadFixture.ownerReadCalls(), expected(account)
+        );
 
         // And the value the registry now answers with is NOT what this
         // deployment holds, so a check against it fails.
@@ -1546,7 +1540,9 @@ contract LibRainDeployTest is Test {
                 account
             )
         );
-        this.externalCheckResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(rebound));
+        this.externalCheckResolvedAddresses(
+            "test_network", address(consumer), LibResolvedReadFixture.ownerReadCalls(), expected(rebound)
+        );
     }
 
     /// `checkResolvedAddresses` MUST revert with `UnexpectedResolvedAddress`
@@ -1567,7 +1563,9 @@ contract LibRainDeployTest is Test {
                 account
             )
         );
-        this.externalCheckResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(wrong));
+        this.externalCheckResolvedAddresses(
+            "test_network", address(consumer), LibResolvedReadFixture.ownerReadCalls(), expected(wrong)
+        );
     }
 
     /// `checkResolvedAddresses` MUST check every read, not only the first, so a
@@ -1719,7 +1717,9 @@ contract LibRainDeployTest is Test {
                 LibRainDeploy.ResolvedAddressReadFailed.selector, "test_network", target, uint256(0), bytes("")
             )
         );
-        this.externalCheckResolvedAddresses("test_network", target, ownerReadCalls(), expected(account));
+        this.externalCheckResolvedAddresses(
+            "test_network", target, LibResolvedReadFixture.ownerReadCalls(), expected(account)
+        );
     }
 
     /// A read that reverts is never a pass either.
@@ -1767,7 +1767,9 @@ contract LibRainDeployTest is Test {
                 abi.encode(account)
             )
         );
-        this.externalCheckResolvedAddresses("test_network", address(target), ownerReadCalls(), expected(account));
+        this.externalCheckResolvedAddresses(
+            "test_network", address(target), LibResolvedReadFixture.ownerReadCalls(), expected(account)
+        );
     }
 
     /// A read that answers with one word whose upper 96 bits are dirty has not
@@ -1798,7 +1800,10 @@ contract LibRainDeployTest is Test {
             )
         );
         this.externalCheckResolvedAddresses(
-            "test_network", address(target), ownerReadCalls(), expected(address(uint160(uint256(word))))
+            "test_network",
+            address(target),
+            LibResolvedReadFixture.ownerReadCalls(),
+            expected(address(uint160(uint256(word))))
         );
     }
 
@@ -1826,7 +1831,9 @@ contract LibRainDeployTest is Test {
                 LibRainDeploy.ResolvedAddressReadFailed.selector, "test_network", address(target), uint256(0), answer
             )
         );
-        this.externalCheckResolvedAddresses("test_network", address(target), ownerReadCalls(), expected(account));
+        this.externalCheckResolvedAddresses(
+            "test_network", address(target), LibResolvedReadFixture.ownerReadCalls(), expected(account)
+        );
     }
 
     /// An answer SHORTER than a word is not an ABI-encoded address either, and
@@ -1855,7 +1862,9 @@ contract LibRainDeployTest is Test {
                 LibRainDeploy.ResolvedAddressReadFailed.selector, "test_network", address(target), uint256(0), answer
             )
         );
-        this.externalCheckResolvedAddresses("test_network", address(target), ownerReadCalls(), expected(account));
+        this.externalCheckResolvedAddresses(
+            "test_network", address(target), LibResolvedReadFixture.ownerReadCalls(), expected(account)
+        );
     }
 
     /// `checkResolvedAddresses` MUST revert when the reads and expected
@@ -1906,7 +1915,9 @@ contract LibRainDeployTest is Test {
         this.externalCheckResolvedAddresses("test_network", address(consumer), new bytes[](0), expected(account));
 
         // One read still passes, so the refusal is about emptiness alone.
-        LibRainDeploy.checkResolvedAddresses("test_network", address(consumer), ownerReadCalls(), expected(account));
+        LibRainDeploy.checkResolvedAddresses(
+            "test_network", address(consumer), LibResolvedReadFixture.ownerReadCalls(), expected(account)
+        );
     }
 
     /// `checkResolvedAddressesOnNetworks` MUST revert with `NoNetworks` when
@@ -1916,7 +1927,9 @@ contract LibRainDeployTest is Test {
         string[] memory networks = new string[](0);
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalCheckResolvedAddressesOnNetworks(networks, address(this), ownerReadCalls(), expected(account));
+        this.externalCheckResolvedAddressesOnNetworks(
+            networks, address(this), LibResolvedReadFixture.ownerReadCalls(), expected(account)
+        );
     }
 
     /// `checkResolvedAddressesOnNetworks` MUST report the OUTERMOST refusal
@@ -1981,7 +1994,7 @@ contract LibRainDeployTest is Test {
         networks[1] = LibRainDeploy.BASE;
 
         LibRainDeploy.checkResolvedAddressesOnNetworks(
-            vm, networks, address(consumer), ownerReadCalls(), expected(account)
+            vm, networks, address(consumer), LibResolvedReadFixture.ownerReadCalls(), expected(account)
         );
     }
 
@@ -2007,7 +2020,9 @@ contract LibRainDeployTest is Test {
                 account
             )
         );
-        this.externalCheckResolvedAddressesOnNetworks(networks, address(consumer), ownerReadCalls(), expected(wrong));
+        this.externalCheckResolvedAddressesOnNetworks(
+            networks, address(consumer), LibResolvedReadFixture.ownerReadCalls(), expected(wrong)
+        );
     }
 
     /// `checkResolvedAddressesOnNetworks` MUST advance past the first network.
@@ -2026,7 +2041,8 @@ contract LibRainDeployTest is Test {
     function testCheckResolvedAddressesOnNetworksReachesEveryNetwork() external {
         address account = address(0xf00);
         address wrong = address(0xba4);
-        MockChainDependentOwner target = new MockChainDependentOwner(account, wrong, ARBITRUM_ONE_CHAIN_ID);
+        MockChainDependentOwner target =
+            new MockChainDependentOwner(account, wrong, LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID);
         vm.makePersistent(address(target));
 
         string[] memory networks = new string[](2);
@@ -2043,7 +2059,9 @@ contract LibRainDeployTest is Test {
                 wrong
             )
         );
-        this.externalCheckResolvedAddressesOnNetworks(networks, address(target), ownerReadCalls(), expected(account));
+        this.externalCheckResolvedAddressesOnNetworks(
+            networks, address(target), LibResolvedReadFixture.ownerReadCalls(), expected(account)
+        );
     }
 
     /// `checkResolvedAddressesOnNetworks` MUST create every fork BEFORE it
@@ -2076,7 +2094,9 @@ contract LibRainDeployTest is Test {
                 account
             )
         );
-        this.externalCheckResolvedAddressesOnNetworks(networks, address(consumer), ownerReadCalls(), expected(wrong));
+        this.externalCheckResolvedAddressesOnNetworks(
+            networks, address(consumer), LibResolvedReadFixture.ownerReadCalls(), expected(wrong)
+        );
 
         // This test forks nothing of its own, so ids 0 and 1 are the call's, in
         // the order it was given. Selecting id 1 at all is the assertion; the
@@ -2101,18 +2121,6 @@ contract LibRainDeployTest is Test {
         address[] memory expectedAddresses
     ) external {
         LibRainDeploy.checkResolvedAddressesOnForks(vm, networks, forkIds, target, readCalls, expectedAddresses);
-    }
-
-    /// A fork id no fork has, so selecting it is itself an error. That is what
-    /// makes "refused before anything is selected" observable from outside.
-    /// @param length How many of them to make.
-    /// @return The list.
-    function unselectableForkIds(uint256 length) internal pure returns (uint256[] memory) {
-        uint256[] memory forkIds = new uint256[](length);
-        for (uint256 i = 0; i < length; i++) {
-            forkIds[i] = type(uint256).max;
-        }
-        return forkIds;
     }
 
     /// `deployToNetworks` MUST hand back the fork it deployed on for each
@@ -2143,7 +2151,7 @@ contract LibRainDeployTest is Test {
         assertEq(result.codehash, mockDeployableCodeHash());
 
         vm.selectFork(forkIds[1]);
-        assertEq(block.chainid, ARBITRUM_ONE_CHAIN_ID);
+        assertEq(block.chainid, LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID);
         assertEq(result.codehash, mockDeployableCodeHash());
     }
 
@@ -2162,7 +2170,7 @@ contract LibRainDeployTest is Test {
         (address deployed, uint256[] memory forkIds) = deployMockDeployableOwner(networks);
 
         LibRainDeploy.checkResolvedAddressesOnForks(
-            vm, networks, forkIds, deployed, ownerReadCalls(), expected(MOCK_DEPLOYABLE_OWNER)
+            vm, networks, forkIds, deployed, LibResolvedReadFixture.ownerReadCalls(), expected(MOCK_DEPLOYABLE_OWNER)
         );
     }
 
@@ -2186,12 +2194,91 @@ contract LibRainDeployTest is Test {
                 LibRainDeploy.BASE,
                 deployed,
                 uint256(0),
-                chainOwner(ARBITRUM_ONE_CHAIN_ID),
+                chainOwner(LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID),
                 chainOwner(BASE_CHAIN_ID)
             )
         );
         this.externalCheckResolvedAddressesOnForks(
-            networks, forkIds, deployed, chainOwnerReadCalls(), expected(chainOwner(ARBITRUM_ONE_CHAIN_ID))
+            networks,
+            forkIds,
+            deployed,
+            chainOwnerReadCalls(),
+            expected(chainOwner(LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID))
+        );
+    }
+
+    /// External wrapper for `checkResolvedValuesOnForks` so that
+    /// `vm.expectRevert` works at the correct call depth.
+    /// @param networks The network names.
+    /// @param forkIds The fork of each network, positionally paired.
+    /// @param target The deployed contract to read.
+    /// @param readCalls The calldata of each read.
+    /// @param expectedValues The bytes each read must answer.
+    function externalCheckResolvedValuesOnForks(
+        string[] memory networks,
+        uint256[] memory forkIds,
+        address target,
+        bytes[] memory readCalls,
+        bytes[] memory expectedValues
+    ) external {
+        LibRainDeploy.checkResolvedValuesOnForks(vm, networks, forkIds, target, readCalls, expectedValues);
+    }
+
+    /// A single-element expected value list holding `account` ABI-encoded.
+    /// @param account The expected address.
+    /// @return The list.
+    function expectedValue(address account) internal pure returns (bytes[] memory) {
+        bytes[] memory expectedValues = new bytes[](1);
+        expectedValues[0] = abi.encode(account);
+        return expectedValues;
+    }
+
+    /// A first-time deploy MUST be verifiable as values in the run that deploys
+    /// it, on the forks `deployToNetworks` hands back. Nothing is made
+    /// persistent, so the deployment exists on those forks and nowhere else.
+    function testDeployThenCheckResolvedValuesOnTheDeployForks() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
+
+        (address deployed, uint256[] memory forkIds) = deployMockDeployableOwner(networks);
+
+        LibRainDeploy.checkResolvedValuesOnForks(
+            vm,
+            networks,
+            forkIds,
+            deployed,
+            LibResolvedReadFixture.ownerReadCalls(),
+            expectedValue(MOCK_DEPLOYABLE_OWNER)
+        );
+    }
+
+    /// `checkResolvedValuesOnForks` MUST select every fork it is given, not
+    /// only the first: the expected value holds on the first fork only, so the
+    /// check fails naming the SECOND network and the value it read there.
+    function testCheckResolvedValuesOnForksReachesEveryFork() external {
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
+
+        (address deployed, uint256[] memory forkIds) = deployMockDeployableOwner(networks);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedValue.selector,
+                LibRainDeploy.BASE,
+                deployed,
+                uint256(0),
+                abi.encode(chainOwner(LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID)),
+                abi.encode(chainOwner(BASE_CHAIN_ID))
+            )
+        );
+        this.externalCheckResolvedValuesOnForks(
+            networks,
+            forkIds,
+            deployed,
+            chainOwnerReadCalls(),
+            expectedValue(chainOwner(LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID))
         );
     }
 
@@ -2222,7 +2309,7 @@ contract LibRainDeployTest is Test {
             )
         );
         this.externalCheckResolvedAddressesOnNetworks(
-            networks, deployed, ownerReadCalls(), expected(MOCK_DEPLOYABLE_OWNER)
+            networks, deployed, LibResolvedReadFixture.ownerReadCalls(), expected(MOCK_DEPLOYABLE_OWNER)
         );
     }
 
@@ -2248,7 +2335,11 @@ contract LibRainDeployTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, uint256(2), uint256(1)));
         this.externalCheckResolvedAddressesOnForks(
-            networks, unselectableForkIds(1), address(this), ownerReadCalls(), expected(address(0xf00))
+            networks,
+            LibResolvedReadFixture.unselectableForkIds(1),
+            address(this),
+            LibResolvedReadFixture.ownerReadCalls(),
+            expected(address(0xf00))
         );
     }
 
@@ -2263,12 +2354,12 @@ contract LibRainDeployTest is Test {
             abi.encodeWithSelector(LibRainDeploy.ResolvedAddressesLengthMismatch.selector, uint256(2), uint256(1))
         );
         this.externalCheckResolvedAddressesOnForks(
-            networks, unselectableForkIds(1), address(this), new bytes[](2), new address[](1)
+            networks, LibResolvedReadFixture.unselectableForkIds(1), address(this), new bytes[](2), new address[](1)
         );
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoResolvedAddressReads.selector, address(this)));
         this.externalCheckResolvedAddressesOnForks(
-            networks, unselectableForkIds(1), address(this), new bytes[](0), new address[](0)
+            networks, LibResolvedReadFixture.unselectableForkIds(1), address(this), new bytes[](0), new address[](0)
         );
     }
 

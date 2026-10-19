@@ -14,19 +14,20 @@ import {LibMigrationRegistryReleased} from "./LibMigrationRegistryReleased.sol";
 
 /// @title LibReleasedSuites
 /// @notice Every frozen release this repo has cut, of every contract it
-/// deploys: the per-contract released libs concatenated, in declaration
-/// order.
+/// deploys: the per-contract released libs concatenated, retired contracts
+/// first, then declaration order.
 ///
 /// There is one released lib per deployed contract because a release freezes
 /// every contract it names into a single tag directory, so a lib that took
 /// the record whole would give another contract's snapshot this contract's
 /// suite key and collide with its own entry for that tag. This is where
-/// those libs meet, and it is emitted from the same list that wrote them --
-/// so a contract that is generated, aliased and frozen cannot be missing
-/// from the declaration, and a release missing from the declaration is a
-/// release every check quietly stops asking about.
+/// those libs meet, and it is emitted from the retired contracts' frozen
+/// libs and then the same list that wrote the rest -- so a contract that
+/// is generated, aliased and frozen cannot be missing from the
+/// declaration, and a release missing from the declaration is a release
+/// every check quietly stops asking about.
 library LibReleasedSuites {
-    /// Every released suite, in declaration order.
+    /// Every released suite, retired contracts first, then declaration order.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
         DeploySuite[][] memory released = new DeploySuite[][](3);

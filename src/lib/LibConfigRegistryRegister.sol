@@ -347,6 +347,7 @@ library LibConfigRegistryRegister {
     /// @param sender The account that signs. MUST be `CONFIG_REGISTRY_ROOT`.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
+    /// @return The hashed name.
     /// @return The selected networks' catalogue entries.
     /// @return The `describeInputs` record of the inputs.
     function checkInputs(
@@ -356,7 +357,7 @@ library LibConfigRegistryRegister {
         address sender,
         string memory name,
         bytes memory value
-    ) internal pure returns (SupportedNetwork[] memory, string memory) {
+    ) internal pure returns (bytes32, SupportedNetwork[] memory, string memory) {
         bytes32 hashed = nameHash(name);
         if (value.length == 0) {
             revert IConfigRegistryV1.EmptyValue(hashed);
@@ -366,7 +367,7 @@ library LibConfigRegistryRegister {
         }
         SupportedNetwork[] memory networks = selectNetworks(selected, declared);
         checkSender(sender);
-        return (networks, describeInputs(vm, name, value, sender));
+        return (hashed, networks, describeInputs(vm, name, value, sender));
     }
 
     /// Binds `name` to `value` on every selected network from `sender`.
@@ -389,10 +390,9 @@ library LibConfigRegistryRegister {
         string memory name,
         bytes memory value
     ) internal returns (uint256[] memory) {
-        (SupportedNetwork[] memory networks, string memory record) =
+        (bytes32 hashed, SupportedNetwork[] memory networks, string memory record) =
             checkInputs(vm, selected, declared, sender, name, value);
         console2.log(record);
-        bytes32 hashed = nameHash(name);
 
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, selected);
         for (uint256 i = 0; i < networks.length; i++) {

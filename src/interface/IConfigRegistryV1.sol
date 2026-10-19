@@ -130,6 +130,6 @@ interface IConfigRegistryV1 {
     /// @return The value bound to `name`, byte for byte as it was bound. Never
     /// empty.
     /// @return The `block.timestamp` of the most recent `registerV1` for `name`.
-    /// Never zero, so zero in this field means unbound and nothing else.
+    /// Never zero.
     function getV1(bytes32 name) external view returns (bytes memory, uint256);
 }

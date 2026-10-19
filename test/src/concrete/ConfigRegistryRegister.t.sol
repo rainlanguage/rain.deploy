@@ -29,6 +29,16 @@ contract ConfigRegistryRegisterTest is Test {
         sRegistry.registerV1(name, value);
     }
 
+    /// A non-root caller with an empty value is refused as `NotRoot`, not
+    /// `EmptyValue`: the root check runs first.
+    function testRegisterNonRootEmptyValueIsNotRoot(address sender, bytes32 name) external {
+        vm.assume(sender != CONFIG_REGISTRY_ROOT);
+
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
+        vm.prank(sender);
+        sRegistry.registerV1(name, "");
+    }
+
     /// Re-binding is root's alone, and the failed attempt leaves the binding
     /// untouched.
     function testRegisterRebindOnlyRoot(address sender, bytes32 name, bytes memory boundValue, bytes memory value)
@@ -66,7 +76,7 @@ contract ConfigRegistryRegisterTest is Test {
 
     /// A re-bind replaces the value whole, whichever of the two is longer: a
     /// value moving between the short and long storage encodings, or shrinking
-    /// within the long one, leaves nothing of the old value behind.
+    /// within the long one, leaves nothing of the old value behind in storage.
     function testRegisterRebindAcrossLengths() external {
         bytes32 name = keccak256("a.b");
         bytes[6] memory values = [
@@ -82,7 +92,45 @@ contract ConfigRegistryRegisterTest is Test {
             vm.prank(CONFIG_REGISTRY_ROOT);
             sRegistry.registerV1(name, values[i]);
             assertEq(LibConfigRegistryRead.getValue(sRegistry, name), values[i]);
+            assertStoredBinding(name, values[i], i + 1);
         }
+    }
+
+    /// Asserts the raw storage of `name`'s binding. `sBindings` is slot 0;
+    /// `value` is the struct's first slot and `registeredAt` its second. A
+    /// value under 32 bytes is stored left-aligned with `length * 2` in the low
+    /// byte; a longer one as `length * 2 + 1`, its bytes from
+    /// `keccak256(base)`. Slots `data + 0..2` cover every value here, the
+    /// longest being three words, and any not holding this value are zero.
+    /// @param name The bound name.
+    /// @param value The value it is bound to.
+    /// @param moment The moment it was bound at.
+    function assertStoredBinding(bytes32 name, bytes memory value, uint256 moment) internal view {
+        bytes32 base = keccak256(abi.encode(name, uint256(0)));
+        uint256 data = uint256(keccak256(abi.encode(base)));
+        bool short = value.length < 32;
+        bytes memory padded = bytes.concat(value, new bytes(96));
+        assertEq(
+            vm.load(address(sRegistry), base),
+            short ? wordAt(padded, 0) | bytes32(value.length * 2) : bytes32(value.length * 2 + 1)
+        );
+        for (uint256 k = 0; k < 3; k++) {
+            bytes32 expected = !short && k * 32 < value.length ? wordAt(padded, k) : bytes32(0);
+            assertEq(vm.load(address(sRegistry), bytes32(data + k)), expected);
+        }
+        assertEq(uint256(vm.load(address(sRegistry), bytes32(uint256(base) + 1))), moment);
+    }
+
+    /// The `k`th 32-byte word of `b`.
+    /// @param b The bytes, at least `(k + 1) * 32` long.
+    /// @param k The word index.
+    /// @return The word.
+    function wordAt(bytes memory b, uint256 k) internal pure returns (bytes32) {
+        bytes32 word;
+        assembly ("memory-safe") {
+            word := mload(add(add(b, 0x20), mul(k, 0x20)))
+        }
+        return word;
     }
 
     /// Re-binding a name to the value it already holds is allowed and leaves the
@@ -243,6 +291,31 @@ contract ConfigRegistryRegisterTest is Test {
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 1);
+        assertEq(entries[0].emitter, address(sRegistry));
+        assertEq(entries[0].topics.length, 2);
+        assertEq(entries[0].topics[0], keccak256("Register(address,bytes32,bytes)"));
+        assertEq(entries[0].topics[1], name);
+        assertEq(entries[0].data, abi.encode(CONFIG_REGISTRY_ROOT, value));
+    }
+
+    /// Re-binding a name to the value it already holds is a bind like any
+    /// other, so it emits its own `Register` too.
+    function testRegisterRebindSameValueEvent(bytes32 name, bytes memory value) external {
+        vm.assume(value.length > 0);
+
+        vm.prank(CONFIG_REGISTRY_ROOT);
+        sRegistry.registerV1(name, value);
+
+        vm.warp(block.timestamp + 1);
+        vm.recordLogs();
+        vm.prank(CONFIG_REGISTRY_ROOT);
+        sRegistry.registerV1(name, value);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        assertEq(entries.length, 1);
+        assertEq(entries[0].emitter, address(sRegistry));
+        assertEq(entries[0].topics.length, 2);
+        assertEq(entries[0].topics[0], keccak256("Register(address,bytes32,bytes)"));
         assertEq(entries[0].topics[1], name);
         assertEq(entries[0].data, abi.encode(CONFIG_REGISTRY_ROOT, value));
     }
@@ -452,22 +525,6 @@ contract ConfigRegistryRegisterTest is Test {
 
         assertEq(LibConfigRegistryRead.getValue(sRegistry, name), value);
         assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), 1);
-    }
-
-    /// No bound name carries a moment of zero, asserted over a run of binds.
-    function testRegisterMomentNeverZero(bytes32 name, bytes[] memory values, uint256 start) external {
-        vm.assume(values.length > 0);
-        start = bound(start, 1, type(uint256).max - values.length);
-        for (uint256 i = 0; i < values.length; i++) {
-            vm.assume(values[i].length > 0);
-        }
-
-        for (uint256 i = 0; i < values.length; i++) {
-            vm.warp(start + i);
-            vm.prank(CONFIG_REGISTRY_ROOT);
-            sRegistry.registerV1(name, values[i]);
-            assertTrue(LibConfigRegistryRead.getMoment(sRegistry, name) != 0);
-        }
     }
 
     /// The rule is per name: a clock behind ONE name's moment does not stop

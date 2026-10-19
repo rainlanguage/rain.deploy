@@ -11,6 +11,7 @@ import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.
 import {LibConfigRegistryRegister} from "../../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {MockRevertingRegistry} from "../../concrete/MockRevertingRegistry.sol";
+import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
 
 /// @title LibConfigRegistryRegisterTest
 /// Every guard `LibConfigRegistryRegister` makes before a bind, and the bind
@@ -289,20 +290,21 @@ contract LibConfigRegistryRegisterTest is Test {
         address sender,
         string memory name,
         bytes memory value
-    ) external pure returns (SupportedNetwork[] memory, string memory) {
+    ) external pure returns (bytes32, SupportedNetwork[] memory, string memory) {
         return LibConfigRegistryRegister.checkInputs(vm, selected, declared, sender, name, value);
     }
 
-    /// Inputs that pass every refusal give the selected networks and the
-    /// record of exactly the inputs signed.
+    /// Inputs that pass every refusal give the hashed name, the selected
+    /// networks and the record of exactly the inputs signed.
     function testCheckInputsRecordIsTheInputsSigned(uint8 words, bytes32 seed) external view {
         bytes memory value = new bytes(32 * (uint256(words) % 4 + 1));
         for (uint256 i = 0; i < value.length; i++) {
             value[i] = keccak256(abi.encode(seed, i))[0];
         }
         string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
-        (SupportedNetwork[] memory networks, string memory record) =
+        (bytes32 hashed, SupportedNetwork[] memory networks, string memory record) =
             this.externalCheckInputs(selected, LibRainDeploy.supportedNetworks(), CONFIG_REGISTRY_ROOT, "a.b", value);
+        assertEq(hashed, keccak256("a.b"));
         assertEq(networks.length, 2);
         assertEq(networks[0].name, LibRainDeploy.ARBITRUM_ONE);
         assertEq(networks[1].name, LibRainDeploy.BASE);
@@ -446,8 +448,7 @@ contract LibConfigRegistryRegisterTest is Test {
 
             (bool broadcast,) = this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, nearMisses[i]);
             assertTrue(broadcast);
-            (bytes memory boundValue,) = registry.getV1(name);
-            assertEq(boundValue, nearMisses[i]);
+            assertEq(LibConfigRegistryRead.getValue(registry, name), nearMisses[i]);
         }
     }
 
@@ -560,8 +561,12 @@ contract LibConfigRegistryRegisterTest is Test {
                 "Name: st0x.token-owner-safe\n",
                 "Name hash (keccak256 of the name): 0xba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8\n",
                 "Value: 0x000000000000000000000000000000000000000000000000000000000000dead\n",
-                "Sender (root): 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c\n",
-                "Registry: 0x4b5b74E73D90fF3962c2882F20D9FA73B70192E9\n",
+                "Sender (root): ",
+                vm.toString(CONFIG_REGISTRY_ROOT),
+                "\n",
+                "Registry: ",
+                vm.toString(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
+                "\n",
                 "Calldata: 0xb5a8845fba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
                 "0000000000000000000000000000000000000000000000000000000000000040",
                 "0000000000000000000000000000000000000000000000000000000000000020",

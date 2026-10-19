@@ -1792,7 +1792,7 @@ library LibRainDeploySnapshot {
     }
 
     /// The library block of the generated aggregate lib: every per-contract
-    /// released lib read once and copied into one array, in declaration order.
+    /// released lib read once and copied into one array, in the order given.
     ///
     /// It emits the concatenation rather than computing one, because the
     /// entries are only known when the emitted source RUNS: a released lib
@@ -1836,18 +1836,19 @@ library LibRainDeploySnapshot {
             "/// @title ",
             RELEASED_SUITES_LIBRARY,
             "\n/// @notice Every frozen release this repo has cut, of every contract it\n",
-            "/// deploys: the per-contract released libs concatenated, in declaration\n",
-            "/// order.\n///\n",
+            "/// deploys: the per-contract released libs concatenated, retired contracts\n",
+            "/// first, then declaration order.\n///\n",
             "/// There is one released lib per deployed contract because a release freezes\n",
             "/// every contract it names into a single tag directory, so a lib that took\n",
             "/// the record whole would give another contract's snapshot this contract's\n",
             "/// suite key and collide with its own entry for that tag. This is where\n",
-            "/// those libs meet, and it is emitted from the same list that wrote them --\n",
-            "/// so a contract that is generated, aliased and frozen cannot be missing\n",
-            "/// from the declaration, and a release missing from the declaration is a\n",
-            "/// release every check quietly stops asking about.\nlibrary ",
+            "/// those libs meet, and it is emitted from the retired contracts' frozen\n",
+            "/// libs and then the same list that wrote the rest -- so a contract that\n"
+            "/// is generated, aliased and frozen cannot be missing from the\n",
+            "/// declaration, and a release missing from the declaration is a release\n",
+            "/// every check quietly stops asking about.\nlibrary ",
             RELEASED_SUITES_LIBRARY,
-            " {\n    /// Every released suite, in declaration order.\n",
+            " {\n    /// Every released suite, retired contracts first, then declaration order.\n",
             "    /// @return The released suites.\n",
             "    function releasedSuites() internal pure returns (DeploySuite[] memory) {\n",
             contractNames.length == 0
