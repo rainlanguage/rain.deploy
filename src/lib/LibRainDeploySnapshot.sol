@@ -1421,27 +1421,23 @@ library LibRainDeploySnapshot {
     /// @param lines The record's lines, block comments removed.
     /// @param line The declaration's line.
     /// @param wrappedPrefix The start the writer gives a wrapped value's line.
-    /// @return readable Whether the declaration is in the writer's format.
-    /// @return value The value's token, empty when not readable.
+    /// @return Whether the declaration is in the writer's format.
+    /// @return The value's token, empty when not readable.
     function declarationValue(Vm vm, string[] memory lines, uint256 line, string memory wrappedPrefix)
         internal
         pure
-        returns (bool readable, string memory value)
+        returns (bool, string memory)
     {
         string[] memory tokens = vm.split(lines[line], " ");
-        if (tokens.length < 4 || keccak256(bytes(tokens[3])) != keccak256("=")) {
-            return (false, "");
-        }
-        if (tokens.length == 4) {
-            if (line + 1 >= lines.length || vm.indexOf(lines[line + 1], wrappedPrefix) != 0) {
-                return (false, "");
+        bool readable = tokens.length >= 4 && keccak256(bytes(tokens[3])) == keccak256("=");
+        if (readable && tokens.length == 4) {
+            readable = line + 1 < lines.length && vm.indexOf(lines[line + 1], wrappedPrefix) == 0;
+            if (readable) {
+                tokens = vm.split(lines[line + 1], " ");
             }
-            tokens = vm.split(lines[line + 1], " ");
         }
-        if (tokens.length != 5) {
-            return (false, "");
-        }
-        return (true, tokens[4]);
+        readable = readable && tokens.length == 5;
+        return (readable, readable ? tokens[4] : "");
     }
 
     /// The address a declaration line's value names.
