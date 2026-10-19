@@ -20,30 +20,38 @@ import {Prerequisite} from "../../src/interface/IMigrationRegistryV3.sol";
 /// one sequence" checkable across writers at all: nothing about one applier's
 /// heads can be shown to leave the other's alone from inside a single writer.
 contract MockMigrationApplier {
-    /// Applies `migration` under this contract in `namespace`, after
+    /// Applies `migration` in `writer`'s line in `namespace`, after
     /// `prerequisites`.
+    /// @param writer The line's writer: this contract or one that approved it.
     /// @param namespace The line to apply in.
     /// @param migration The migration to apply.
-    /// @param prerequisites This contract in `namespace` at the head it
-    /// believes it is at, then the migrations that must already be applied.
-    function applyMigrationV3(bytes32 namespace, bytes32 migration, Prerequisite[] calldata prerequisites) external {
-        LibMigrationRegistry.applyMigrationV3(address(this), namespace, migration, prerequisites);
+    /// @param prerequisites `writer` in `namespace` at the head it is believed
+    /// to be at, then the migrations that must already be applied.
+    function applyMigrationV3(
+        address writer,
+        bytes32 namespace,
+        bytes32 migration,
+        Prerequisite[] calldata prerequisites
+    ) external {
+        LibMigrationRegistry.applyMigrationV3(writer, namespace, migration, prerequisites);
     }
 
-    /// Applies `migration` under this contract in `namespace`, at `appliedAt`,
+    /// Applies `migration` in `writer`'s line in `namespace`, at `appliedAt`,
     /// after `prerequisites`.
+    /// @param writer The line's writer: this contract or one that approved it.
     /// @param namespace The line to apply in.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment the migration was applied.
-    /// @param prerequisites This contract in `namespace` at the head it
-    /// believes it is at, then the migrations that must already be applied.
+    /// @param prerequisites `writer` in `namespace` at the head it is believed
+    /// to be at, then the migrations that must already be applied.
     function applyMigrationHistoryV3(
+        address writer,
         bytes32 namespace,
         bytes32 migration,
         uint256 appliedAt,
         Prerequisite[] calldata prerequisites
     ) external {
-        LibMigrationRegistry.applyMigrationHistoryV3(address(this), namespace, migration, appliedAt, prerequisites);
+        LibMigrationRegistry.applyMigrationHistoryV3(writer, namespace, migration, appliedAt, prerequisites);
     }
 
     /// Approves `delegate` for this contract's line in `namespace`.

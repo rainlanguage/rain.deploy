@@ -10,6 +10,7 @@ import {
     MIGRATION_HEAD_GENESIS
 } from "../../../src/interface/IMigrationRegistryV3.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
+import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 
 /// @title MigrationRegistryDelegateTest
 /// @notice A test suite for delegated writes: a writer approves a delegate per
@@ -27,12 +28,6 @@ contract MigrationRegistryDelegateTest is Test {
 
     function setUp() external {
         sRegistry = new MigrationRegistry();
-    }
-
-    function onto(address writer, bytes32 namespace, bytes32 head) internal pure returns (Prerequisite[] memory) {
-        Prerequisite[] memory prerequisites = new Prerequisite[](1);
-        prerequisites[0] = Prerequisite({writer: writer, namespace: namespace, migration: head});
-        return prerequisites;
     }
 
     function approveDelegate() internal {
@@ -91,13 +86,17 @@ contract MigrationRegistryDelegateTest is Test {
         vm.prank(WRITER);
         sRegistry.revokeV3(NAMESPACE, DELEGATE);
         assertTrue(sRegistry.approvedV3(WRITER, otherNamespace, DELEGATE));
-        Prerequisite[] memory prerequisites = onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
+        Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
         vm.prank(DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
         sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, MIGRATION, 1, prerequisites);
         vm.prank(DELEGATE);
         sRegistry.applyMigrationHistoryV3(
-            WRITER, otherNamespace, MIGRATION, 1, onto(WRITER, otherNamespace, MIGRATION_HEAD_GENESIS)
+            WRITER,
+            otherNamespace,
+            MIGRATION,
+            1,
+            LibMigrationRegistry.onto(WRITER, otherNamespace, MIGRATION_HEAD_GENESIS)
         );
         assertEq(sRegistry.headV3(WRITER, otherNamespace), MIGRATION);
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION_HEAD_GENESIS);
@@ -109,7 +108,7 @@ contract MigrationRegistryDelegateTest is Test {
         vm.assume(caller != WRITER && caller != address(0));
         vm.prank(WRITER);
         sRegistry.approveV3(NAMESPACE, caller);
-        Prerequisite[] memory prerequisites = onto(WRITER, bytes32(0), MIGRATION_HEAD_GENESIS);
+        Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(WRITER, bytes32(0), MIGRATION_HEAD_GENESIS);
         vm.startPrank(caller);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, bytes32(0), caller));
         sRegistry.applyMigrationV3(WRITER, bytes32(0), MIGRATION, prerequisites);
@@ -174,7 +173,9 @@ contract MigrationRegistryDelegateTest is Test {
         vm.expectEmit(address(sRegistry));
         emit IMigrationRegistryV3.Migrated(DELEGATE, WRITER, NAMESPACE, MIGRATION, moment);
         vm.prank(DELEGATE);
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        );
         assertEq(sRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), moment);
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION);
         assertEq(sRegistry.appliedV3(DELEGATE, NAMESPACE, MIGRATION), 0);
@@ -190,7 +191,11 @@ contract MigrationRegistryDelegateTest is Test {
         emit IMigrationRegistryV3.Migrated(DELEGATE, WRITER, NAMESPACE, MIGRATION, appliedAt);
         vm.prank(DELEGATE);
         sRegistry.applyMigrationHistoryV3(
-            WRITER, NAMESPACE, MIGRATION, appliedAt, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+            WRITER,
+            NAMESPACE,
+            MIGRATION,
+            appliedAt,
+            LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
         );
         assertEq(sRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), appliedAt);
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION);
@@ -203,9 +208,11 @@ contract MigrationRegistryDelegateTest is Test {
         vm.prank(WRITER);
         sRegistry.approveV3(NAMESPACE, other);
         vm.prank(DELEGATE);
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        );
         vm.prank(other);
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, onto(WRITER, NAMESPACE, MIGRATION));
+        sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION));
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), SECOND);
         assertEq(sRegistry.appliedOntoV3(WRITER, NAMESPACE, SECOND), MIGRATION);
     }
@@ -214,9 +221,11 @@ contract MigrationRegistryDelegateTest is Test {
     /// itself.
     function testTheWriterNeedsNoApproval() external {
         vm.startPrank(WRITER);
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        );
         sRegistry.applyMigrationHistoryV3(
-            WRITER, NAMESPACE, SECOND, block.timestamp, onto(WRITER, NAMESPACE, MIGRATION)
+            WRITER, NAMESPACE, SECOND, block.timestamp, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION)
         );
         vm.stopPrank();
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), SECOND);
@@ -226,7 +235,7 @@ contract MigrationRegistryDelegateTest is Test {
     /// itself.
     function testUnapprovedCallerIsRefused(address caller) external {
         vm.assume(caller != WRITER);
-        Prerequisite[] memory prerequisites = onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
+        Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
         vm.startPrank(caller);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, caller));
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, prerequisites);
@@ -256,7 +265,7 @@ contract MigrationRegistryDelegateTest is Test {
         vm.assume(other != WRITER && other != DELEGATE && other != address(0));
         vm.prank(other);
         sRegistry.approveV3(NAMESPACE, DELEGATE);
-        Prerequisite[] memory prerequisites = onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
+        Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
         vm.startPrank(DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, prerequisites);
@@ -272,8 +281,10 @@ contract MigrationRegistryDelegateTest is Test {
         vm.warp(100);
         approveDelegate();
         vm.prank(DELEGATE);
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
-        Prerequisite[] memory ontoMigration = onto(WRITER, NAMESPACE, MIGRATION);
+        sRegistry.applyMigrationV3(
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        );
+        Prerequisite[] memory ontoMigration = LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION);
         vm.expectRevert(
             abi.encodeWithSelector(IMigrationRegistryV3.MigrationAlreadyApplied.selector, WRITER, NAMESPACE, MIGRATION)
         );
@@ -287,11 +298,15 @@ contract MigrationRegistryDelegateTest is Test {
         vm.warp(1000);
         approveDelegate();
         vm.prank(WRITER);
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        );
         vm.warp(2000);
         vm.prank(DELEGATE);
-        sRegistry.applyMigrationV3(DELEGATE, NAMESPACE, MIGRATION, onto(DELEGATE, NAMESPACE, MIGRATION_HEAD_GENESIS));
-        Prerequisite[] memory ontoMigration = onto(WRITER, NAMESPACE, MIGRATION);
+        sRegistry.applyMigrationV3(
+            DELEGATE, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(DELEGATE, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        );
+        Prerequisite[] memory ontoMigration = LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.TimestampBeforeHead.selector, 999, 1000));
         vm.prank(DELEGATE);
         sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, SECOND, 999, ontoMigration);
@@ -301,7 +316,7 @@ contract MigrationRegistryDelegateTest is Test {
     function testApprovalWritesNoOtherNamespace(bytes32 otherNamespace) external {
         vm.assume(otherNamespace != NAMESPACE && otherNamespace != bytes32(0));
         approveDelegate();
-        Prerequisite[] memory prerequisites = onto(WRITER, otherNamespace, MIGRATION_HEAD_GENESIS);
+        Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(WRITER, otherNamespace, MIGRATION_HEAD_GENESIS);
         vm.prank(DELEGATE);
         vm.expectRevert(
             abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, otherNamespace, DELEGATE)
@@ -314,19 +329,21 @@ contract MigrationRegistryDelegateTest is Test {
     function testRevokedDelegateIsRefused() external {
         approveDelegate();
         vm.prank(DELEGATE);
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        );
         vm.prank(WRITER);
         sRegistry.revokeV3(NAMESPACE, DELEGATE);
         vm.prank(DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, onto(WRITER, NAMESPACE, MIGRATION));
+        sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION));
         assertTrue(sRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION) != 0);
     }
 
     /// A delegated write is refused on the zero writer before any approval
     /// is read.
     function testDelegatedWriteRefusesTheZeroWriter() external {
-        Prerequisite[] memory prerequisites = onto(address(0), NAMESPACE, bytes32(0));
+        Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(address(0), NAMESPACE, bytes32(0));
         vm.prank(DELEGATE);
         vm.expectRevert(IMigrationRegistryV3.ZeroWriter.selector);
         sRegistry.applyMigrationV3(address(0), NAMESPACE, MIGRATION, prerequisites);
@@ -352,7 +369,9 @@ contract MigrationRegistryDelegateTest is Test {
                 genesis
             )
         );
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(DELEGATE, NAMESPACE, genesis));
+        sRegistry.applyMigrationV3(
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(DELEGATE, NAMESPACE, genesis)
+        );
     }
 
     /// A later entry in the writer's own line is the writer's own
@@ -360,7 +379,9 @@ contract MigrationRegistryDelegateTest is Test {
     function testDelegateRefusesTheWritersOwnLineAsAPrerequisite() external {
         approveDelegate();
         vm.prank(DELEGATE);
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        );
         Prerequisite[] memory prerequisites = new Prerequisite[](2);
         prerequisites[0] = Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: MIGRATION});
         prerequisites[1] = Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: MIGRATION});
@@ -373,7 +394,9 @@ contract MigrationRegistryDelegateTest is Test {
     function testDelegateMayWaitOnItsOwnLine() external {
         approveDelegate();
         vm.prank(DELEGATE);
-        sRegistry.applyMigrationV3(DELEGATE, NAMESPACE, MIGRATION, onto(DELEGATE, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(
+            DELEGATE, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(DELEGATE, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        );
         Prerequisite[] memory prerequisites = new Prerequisite[](2);
         prerequisites[0] = Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
         prerequisites[1] = Prerequisite({writer: DELEGATE, namespace: NAMESPACE, migration: MIGRATION});
@@ -391,9 +414,11 @@ contract MigrationRegistryDelegateTest is Test {
     function testTheWritersOwnWritesShareTheLine() external {
         approveDelegate();
         vm.prank(DELEGATE);
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        );
         vm.prank(WRITER);
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, onto(WRITER, NAMESPACE, MIGRATION));
+        sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION));
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), SECOND);
     }
 
@@ -405,11 +430,17 @@ contract MigrationRegistryDelegateTest is Test {
         bytes32 third = keccak256("third");
         assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), address(0));
         vm.prank(DELEGATE);
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        );
         vm.prank(WRITER);
-        sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, SECOND, 1000, onto(WRITER, NAMESPACE, MIGRATION));
+        sRegistry.applyMigrationHistoryV3(
+            WRITER, NAMESPACE, SECOND, 1000, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION)
+        );
         vm.prank(DELEGATE);
-        sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, third, 1000, onto(WRITER, NAMESPACE, SECOND));
+        sRegistry.applyMigrationHistoryV3(
+            WRITER, NAMESPACE, third, 1000, LibMigrationRegistry.onto(WRITER, NAMESPACE, SECOND)
+        );
         assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), DELEGATE);
         assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, SECOND), WRITER);
         assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, third), DELEGATE);
@@ -420,7 +451,9 @@ contract MigrationRegistryDelegateTest is Test {
     function testAppliedBySurvivesRevocation() external {
         approveDelegate();
         vm.prank(DELEGATE);
-        sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS));
+        sRegistry.applyMigrationV3(
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        );
         vm.prank(WRITER);
         sRegistry.revokeV3(NAMESPACE, DELEGATE);
         assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), DELEGATE);

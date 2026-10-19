@@ -365,9 +365,12 @@ contract LibMigrationRegistryTest is Test {
         deployRegistry();
         MockMigrationApplier upstream = new MockMigrationApplier();
         MockMigrationApplier applier = new MockMigrationApplier();
-        upstream.applyMigrationV3(namespace, prerequisite, one(address(upstream), namespace, MIGRATION_HEAD_GENESIS));
+        upstream.applyMigrationV3(
+            address(upstream), namespace, prerequisite, one(address(upstream), namespace, MIGRATION_HEAD_GENESIS)
+        );
 
         applier.applyMigrationV3(
+            address(applier),
             namespace,
             migration,
             headThen(
@@ -393,7 +396,9 @@ contract LibMigrationRegistryTest is Test {
         MockMigrationApplier applier = new MockMigrationApplier();
         MockMigrationApplier other = new MockMigrationApplier();
 
-        applier.applyMigrationV3(namespace, migration, one(address(applier), namespace, MIGRATION_HEAD_GENESIS));
+        applier.applyMigrationV3(
+            address(applier), namespace, migration, one(address(applier), namespace, MIGRATION_HEAD_GENESIS)
+        );
 
         assertEq(other.appliedV3(address(applier), namespace, migration), block.timestamp);
         assertEq(other.appliedV3(address(other), namespace, migration), 0);
@@ -1142,12 +1147,14 @@ contract LibMigrationRegistryTest is Test {
         vm.warp(appliedAt);
         MockMigrationApplier upstream = new MockMigrationApplier();
         MockMigrationApplier applier = new MockMigrationApplier();
-        upstream.applyMigrationV3(namespace, prerequisite, one(address(upstream), namespace, MIGRATION_HEAD_GENESIS));
+        upstream.applyMigrationV3(
+            address(upstream), namespace, prerequisite, one(address(upstream), namespace, MIGRATION_HEAD_GENESIS)
+        );
 
         Prerequisite[] memory prerequisites = headThen(
             address(applier), namespace, MIGRATION_HEAD_GENESIS, one(address(upstream), namespace, prerequisite)
         );
-        applier.applyMigrationHistoryV3(namespace, migration, appliedAt, prerequisites);
+        applier.applyMigrationHistoryV3(address(applier), namespace, migration, appliedAt, prerequisites);
 
         assertEq(LibMigrationRegistry.appliedV3(address(applier), namespace, migration), appliedAt);
         assertEq(LibMigrationRegistry.appliedOntoV3(address(applier), namespace, migration), MIGRATION_HEAD_GENESIS);
