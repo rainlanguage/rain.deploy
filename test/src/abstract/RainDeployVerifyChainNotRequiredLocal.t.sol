@@ -43,7 +43,9 @@ contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainD
     function setUp() external {
         sForkVm = new LocalForkVm();
         vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, CONFIG_REGISTRY_RUNTIME_CODE);
+        vm.makePersistent(CONFIG_REGISTRY_DEPLOYED_ADDRESS);
         vm.etch(secondDeployedAddress(), hex"");
+        vm.makePersistent(secondDeployedAddress());
     }
 
     /// The released suites, second first so a skip precedes a required suite,
