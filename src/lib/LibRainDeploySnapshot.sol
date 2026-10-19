@@ -9,8 +9,8 @@ import {
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
-import {DeployDependency, DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
-import {LibRainDeploy} from "./LibRainDeploy.sol";
+import {DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
 import {CloneNetworks} from "./LibRainDeployClone.sol";
 import {LibRainDeployMechanism} from "./LibRainDeployMechanism.sol";
 

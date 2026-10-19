@@ -29,4 +29,14 @@ contract PerNetworkCloneDeploy is PerNetworkCloneDeploys, PerNetworkCloneDeployB
     {
         return PerNetworkCloneDeployBase.extendedNetworks(suite);
     }
+
+    /// @inheritdoc PerNetworkCloneDeployBase
+    function extendedNetworksRoot()
+        internal
+        view
+        override(PerNetworkCloneDeployBase, RainDeploySuitesBase)
+        returns (string memory)
+    {
+        return PerNetworkCloneDeployBase.extendedNetworksRoot();
+    }
 }

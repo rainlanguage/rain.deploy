@@ -294,8 +294,17 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   the release records (`DuplicateCloneNetwork`) or on a suite that is not per
   network (`ExtendedNetworksUnexpected`). The chain group refuses a per-network
   suite live on a network it neither records nor declares with
-  `ExtendedNetworkUnfrozen`, naming the address to freeze. The declaration lives
-  in the consumer's source, not in the published release record.
+  `ExtendedNetworkUnfrozen`, naming the address to freeze. Both the init data
+  and the address are literals copied from the broadcast: the build
+  (`BuildScript.run()`, through `regenerateExtendedNetworks`) writes them to the
+  release's append-only record, `src/generated/extended/<tag>/<name>.sol`, as
+  `DEPLOYED_ADDRESS_<chain id>` and `INIT_DATA_<chain id>`. It refuses to drop,
+  change or reorder an entry already written (`ExtendedNetworksRewritten`), and
+  the broadcast and the chain group refuse a declaration that is not exactly
+  what the record holds (`ExtendedNetworksUnrecorded`) or a record that is not
+  exactly what the writer writes (`ExtendedNetworksUnreadable`). The record is
+  published with the rest of `src/generated/`; the generated
+  `Lib<Contract>Released` does not carry it.
 - **Undeclared networks.** A network the suite still has no entry for — no
   candidate is named by its key, or the candidate has no entry either — is
   refused with `CloneNetworkUndeclared`, before any fork, at broadcast and in
@@ -1202,6 +1211,11 @@ it. In order:
    that refusal names at broadcast is what the candidate's current init data
    derives: a release already live on that network is declared with the init
    data it was broadcast with, from its `NewClone` event, not with that address.
+   Then run the build and commit the record it writes under
+   `src/generated/extended/` (override `extendedNetworksSpdxLicenseIdentifier`
+   and `extendedNetworksCopyrightText` for a licence other than this org's): the
+   broadcast and the chain group refuse a declaration it does not hold with
+   `ExtendedNetworksUnrecorded`.
 7. A clone whose `initialize` reads storage of any account but the clone and the
    accounts created under it is refused by the local deploy with
    `CloneInitializeReadsStorage`. An account created through a dependency that

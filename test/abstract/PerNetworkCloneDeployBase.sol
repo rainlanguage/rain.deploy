@@ -2,9 +2,12 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
+import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {CloneNetwork} from "../../src/lib/LibRainDeployClone.sol";
+import {LibRainDeployExtendedNetworks} from "../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {ExternalCloneDeploySuites} from "./ExternalCloneDeploySuites.sol";
 import {ExternalDeploySuites} from "./ExternalDeploySuites.sol";
 
@@ -18,15 +21,35 @@ abstract contract PerNetworkCloneDeployBase is ExternalCloneDeploySuites, Extern
     /// The networks `extendedNetworks` declares for `sExtendedSuite`. Empty by default.
     CloneNetwork[] internal sExtendedNetworks;
 
-    /// Sets what `extendedNetworks` declares.
+    /// The record root `extendedNetworksRoot` gives once `setExtendedNetworks` has run.
+    string internal sExtendedRoot;
+
+    /// Sets what `extendedNetworks` declares, and records it as the build would under its own fixture root, after
+    /// removing whatever an earlier run left there.
+    /// @param label The fixture root's directory under `fixture-lib/extended-networks`, one per test.
     /// @param suite The release's suite key.
     /// @param networks The networks it declares for that release.
-    function setExtendedNetworks(string memory suite, CloneNetwork[] memory networks) external {
+    function setExtendedNetworks(string memory label, string memory suite, CloneNetwork[] memory networks) external {
+        sExtendedRoot = string.concat("fixture-lib/extended-networks/", label);
+        (,, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(sExtendedRoot, suite);
+        if (StdConstants.VM.exists(path)) {
+            StdConstants.VM.removeFile(path);
+        }
+        LibRainDeployExtendedNetworks.writeExtendedNetworks(StdConstants.VM, sExtendedRoot, suite, networks);
         sExtendedSuite = suite;
         delete sExtendedNetworks;
         for (uint256 i = 0; i < networks.length; i++) {
             sExtendedNetworks.push(networks[i]);
         }
+    }
+
+    /// `sExtendedRoot` once `setExtendedNetworks` has run, else the repo's own record.
+    /// @return The record root.
+    function extendedNetworksRoot() internal view virtual override returns (string memory) {
+        if (bytes(sExtendedRoot).length == 0) {
+            return LibRainDeploySnapshot.LIB_FS_ROOT;
+        }
+        return sExtendedRoot;
     }
 
     /// `sExtendedNetworks` for `sExtendedSuite`, else none.

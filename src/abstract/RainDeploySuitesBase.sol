@@ -11,6 +11,8 @@ import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 import {DeployDependency, LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {CloneNetwork} from "../lib/LibRainDeployClone.sol";
+import {LibRainDeployExtendedNetworks} from "../lib/LibRainDeployExtendedNetworks.sol";
+import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
@@ -311,17 +313,33 @@ abstract contract RainDeploySuitesBase {
         return suite;
     }
 
-    /// A suite with the networks `extendedNetworks` declares for it.
+    /// A suite with the networks `extendedNetworks` declares for it. Reverts with `ExtendedNetworksUnrecorded` unless
+    /// they are exactly the ones its extended networks record under `extendedNetworksRoot()` holds.
     /// @param suite The suite.
     /// @return The suite, with its extended networks.
     function withExtendedNetworks(DeploySuite memory suite) internal view returns (DeploySuite memory) {
-        return LibRainDeployMechanism.withExtendedNetworks(suite, extendedNetworks(suite.suite));
+        CloneNetwork[] memory declared = extendedNetworks(suite.suite);
+        LibRainDeployExtendedNetworks.checkExtendedNetworksRecorded(
+            StdConstants.VM, extendedNetworksRoot(), suite.suite, declared
+        );
+        return LibRainDeployMechanism.withExtendedNetworks(suite, declared);
+    }
+
+    /// The record root the extended networks records are read from and written under.
+    /// Overridable so a test can declare extended networks against a record other than the repo's own, which is
+    /// append-only.
+    /// @return The record root.
+    function extendedNetworksRoot() internal view virtual returns (string memory) {
+        return LibRainDeploySnapshot.LIB_FS_ROOT;
     }
 
     /// The networks a per-network release takes beyond those it records, each declared before it is broadcast there:
     /// its chain id, the init data it is broadcast with and the address that derives. The broadcast refuses an
     /// unrecorded network not named here, and the chain group a release live on one, so an unrecorded network's
     /// address is frozen before it exists on chain.
+    /// The init data and the address MUST be literals copied from the broadcast: the build writes them to the
+    /// release's append-only extended networks record (`LibRainDeployExtendedNetworks`), refuses to change an entry
+    /// already written, and `withExtendedNetworks` refuses a declaration that is not exactly what the record holds.
     /// Empty by default.
     /// @param suite The release's suite key.
     /// @return The networks.

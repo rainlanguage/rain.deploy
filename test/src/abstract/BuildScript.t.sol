@@ -6,6 +6,16 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {CloneNetwork} from "../../../src/lib/LibRainDeployClone.sol";
+import {
+    ExtendedNetworksRewritten,
+    LibRainDeployExtendedNetworks
+} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {
+    LibCodeGen,
+    RAIN_COPYRIGHT_TEXT,
+    RAIN_SPDX_LICENSE_IDENTIFIER
+} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
 import {CloneBuildScriptHarness} from "../../concrete/CloneBuildScriptHarness.sol";
 import {PerNetworkCloneBuildScriptHarness} from "../../concrete/PerNetworkCloneBuildScriptHarness.sol";
@@ -73,6 +83,9 @@ contract BuildScriptTest is Test {
     /// Where the per-network clone `cutRelease()` fixture's released-suites lib is written, under
     /// `fixture-lib` for the reason `CLONE_CUT_LIB_DIR` is.
     string constant PER_NETWORK_CLONE_CUT_LIB_DIR = "fixture-lib/buildscript-per-network-clone-cut";
+
+    /// Where the extended networks fixture's records are written. Under `fixture-lib`, which nothing compiles.
+    string constant EXTENDED_NETWORKS_FIXTURE_ROOT = "fixture-lib/buildscript-extended-networks";
 
     /// Carries its AST because `foundry.toml` sets `ast = true`.
     string constant BASE_ARTIFACT = "out/BuildScript.sol/BuildScript.json";
@@ -277,6 +290,60 @@ contract BuildScriptTest is Test {
         assertTrue(
             vm.contains(lib, string.concat("mechanismData: ", prefix, "_MECHANISM_DATA")),
             "and is the release's mechanism data"
+        );
+    }
+
+    /// PROPERTY: the build writes each release's declared extended networks to its record under the declared
+    /// licence, writes nothing for a release declaring none, and refuses a declaration that drops a recorded network.
+    function testRegenerateExtendedNetworksWritesTheRecord() external {
+        resetFixture(EXTENDED_NETWORKS_FIXTURE_ROOT);
+        PerNetworkCloneBuildScriptHarness harness =
+            new PerNetworkCloneBuildScriptHarness(EXTENDED_NETWORKS_FIXTURE_ROOT, EXTENDED_NETWORKS_FIXTURE_ROOT);
+        (,, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(
+            EXTENDED_NETWORKS_FIXTURE_ROOT, "per-network-clone@0_0_1"
+        );
+
+        harness.externalRegenerateExtendedNetworks();
+        assertFalse(vm.exists(path), "a release declaring nothing has no record");
+
+        CloneNetwork[] memory networks = new CloneNetwork[](2);
+        networks[0] = CloneNetwork({
+            chainId: 137, data: hex"00aa", deployedAddress: address(0x1111111111111111111111111111111111111111)
+        });
+        networks[1] = CloneNetwork({
+            chainId: 8453, data: hex"", deployedAddress: address(0x2222222222222222222222222222222222222222)
+        });
+        CloneNetwork[] memory first = new CloneNetwork[](1);
+        first[0] = networks[0];
+        harness.setExtendedNetworks(first);
+        harness.externalRegenerateExtendedNetworks();
+        string memory rainRecord = vm.readFile(path);
+
+        harness.setExtendedNetworksLicence("MIT", "Copyright (c) Someone");
+        harness.setExtendedNetworks(networks);
+        harness.externalRegenerateExtendedNetworks();
+        string memory mitRecord = vm.readFile(path);
+
+        harness.setExtendedNetworks(new CloneNetwork[](0));
+        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksRewritten.selector, "per-network-clone@0_0_1", 0));
+        harness.externalRegenerateExtendedNetworks();
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(EXTENDED_NETWORKS_FIXTURE_ROOT, true);
+
+        assertEq(
+            rainRecord,
+            string.concat(
+                LibCodeGen.filePrefix(RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT),
+                LibRainDeployExtendedNetworks.extendedNetworksBody(vm, first)
+            )
+        );
+        assertEq(
+            mitRecord,
+            string.concat(
+                LibCodeGen.filePrefix("MIT", "Copyright (c) Someone"),
+                LibRainDeployExtendedNetworks.extendedNetworksBody(vm, networks)
+            )
         );
     }
 
@@ -722,6 +789,12 @@ contract BuildScriptTest is Test {
         for (uint256 i = 0; i < keys.length; i++) {
             string memory child = string.concat(path, ".", keys[i]);
             collectReferences(json, child, references);
+            // An object child is a node, walked above; only an array child is indexed. JSONPath indexes an object
+            // as well, so indexing a node such as a `for` loop's `initializationExpression` would select its
+            // fields rather than array elements.
+            if (vm.keyExistsJson(json, string.concat(child, ".nodeType"))) {
+                continue;
+            }
             for (uint256 j = 0; vm.keyExistsJson(json, string.concat(child, "[", vm.toString(j), "].nodeType")); j++) {
                 collectReferences(json, string.concat(child, "[", vm.toString(j), "]"), references);
             }

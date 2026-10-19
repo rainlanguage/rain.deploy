@@ -7,6 +7,7 @@ import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeplo
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {CloneDeploy, CloneNetwork, CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
+import {LibRainDeployExtendedNetworks} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
 import {ExtendedNetworkAddressMismatch, ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
@@ -60,6 +61,10 @@ contract RainDeployVerifyChainClonePerNetworkExtendedTest is PerNetworkCloneDepl
     /// The fork cheatcodes the matrix runs against.
     LocalForkVm internal sForkVm;
 
+    /// The record root the extended networks record is read from: one nothing writes to until `record` names
+    /// another.
+    string internal sExtendedRoot = "fixture-lib/extended-networks/verify-extended-none";
+
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()
         internal
@@ -93,6 +98,26 @@ contract RainDeployVerifyChainClonePerNetworkExtendedTest is PerNetworkCloneDepl
             deployedAddress: sFrozenAddress
         });
         return networks;
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    function extendedNetworksRoot() internal view override returns (string memory) {
+        return sExtendedRoot;
+    }
+
+    /// Records what `extendedNetworks` now declares, as the build would, under a fixture root of its own after
+    /// removing whatever an earlier run left there.
+    /// @param label The fixture root's directory under `fixture-lib/extended-networks`, one per test.
+    function record(string memory label) internal {
+        sExtendedRoot = string.concat("fixture-lib/extended-networks/", label);
+        (,, string memory path) =
+            LibRainDeployExtendedNetworks.extendedNetworksPath(sExtendedRoot, "per-network-clone@0_0_1");
+        if (vm.exists(path)) {
+            vm.removeFile(path);
+        }
+        LibRainDeployExtendedNetworks.writeExtendedNetworks(
+            vm, sExtendedRoot, "per-network-clone@0_0_1", extendedNetworks("per-network-clone@0_0_1")
+        );
     }
 
     /// Puts the release's dependencies, and its clone at its original address on each network, on every fork.
@@ -142,6 +167,7 @@ contract RainDeployVerifyChainClonePerNetworkExtendedTest is PerNetworkCloneDepl
     /// Frozen, Polygon is checked at the address it was broadcast to, whatever the candidate's init data now is.
     function testFrozenNetworkIsCheckedAtItsFrozenAddress() external {
         sFrozen = true;
+        record("verify-extended-frozen");
         this.externalCheckOnLocalForks();
 
         vm.etch(sFrozenAddress, hex"");
@@ -157,6 +183,7 @@ contract RainDeployVerifyChainClonePerNetworkExtendedTest is PerNetworkCloneDepl
         sFrozen = true;
         address derived = sFrozenAddress;
         sFrozenAddress = movedReleaseAddress();
+        record("verify-extended-misdeclared");
         vm.expectCall(address(sForkVm), abi.encodeWithSelector(LocalForkVm.createFork.selector), 0);
         vm.expectRevert(
             abi.encodeWithSelector(

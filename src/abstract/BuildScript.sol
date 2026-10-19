@@ -3,9 +3,11 @@
 pragma solidity ^0.8.25;
 
 import {Script} from "forge-std-1.17.0/src/Script.sol";
-import {RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
+import {RAIN_COPYRIGHT_TEXT, RAIN_SPDX_LICENSE_IDENTIFIER} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
+import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../lib/LibRainDeployConfig.sol";
+import {LibRainDeployExtendedNetworks} from "../lib/LibRainDeployExtendedNetworks.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// @title BuildScript
@@ -107,11 +109,42 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         );
     }
 
+    /// The SPDX licence identifier the generated extended networks records declare. Defaults to
+    /// `RAIN_SPDX_LICENSE_IDENTIFIER`, for a repo this org owns.
+    /// @return The SPDX licence identifier.
+    function extendedNetworksSpdxLicenseIdentifier() internal view virtual returns (string memory) {
+        return RAIN_SPDX_LICENSE_IDENTIFIER;
+    }
+
+    /// The copyright text the generated extended networks records declare. Defaults to `RAIN_COPYRIGHT_TEXT`, for a
+    /// repo this org owns.
+    /// @return The copyright text.
+    function extendedNetworksCopyrightText() internal view virtual returns (string memory) {
+        return RAIN_COPYRIGHT_TEXT;
+    }
+
+    /// Writes each release's extended networks record from `extendedNetworks`, under `extendedNetworksRoot()`.
+    /// Append-only: reverts with `ExtendedNetworksRewritten` on a declaration that drops, changes or reorders a
+    /// network a record already holds. Run by `run()`, which `Git is clean` calls, so a declaration nothing recorded
+    /// fails there.
+    function regenerateExtendedNetworks() internal {
+        DeploySuite[] memory released = releasedSuites();
+        string memory root = extendedNetworksRoot();
+        string memory spdxLicenseIdentifier = extendedNetworksSpdxLicenseIdentifier();
+        string memory copyrightText = extendedNetworksCopyrightText();
+        for (uint256 i = 0; i < released.length; i++) {
+            LibRainDeployExtendedNetworks.writeExtendedNetworks(
+                vm, root, released[i].suite, extendedNetworks(released[i].suite), spdxLicenseIdentifier, copyrightText
+            );
+        }
+    }
+
     /// @notice Regenerate everything this repo generates. Freezes nothing.
     function run() external {
         regenerateConfig();
         regenerateSnapshots();
         regenerateLibs();
+        regenerateExtendedNetworks();
     }
 
     /// @notice Regenerate the rolling snapshots, freeze them as this release's
