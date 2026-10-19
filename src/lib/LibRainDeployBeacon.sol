@@ -57,8 +57,8 @@ library LibRainDeployBeacon {
     error BeaconTransitionsOutOfOrder(string network, address beacon, uint256 transition);
 
     /// @notice Each transition MUST name a distinct migration.
-    /// @dev Keyed by chain id, like `RainDeployVerifyChain`'s `BeaconNamedTwice` and `BeaconUnnamed`, because it is also raised while
-    /// resolving `beacons()`, before any network is selected or named.
+    /// @dev Keyed by chain id, like `RainDeployVerifyBase`'s `BeaconNamedTwice` and `BeaconUnnamed`, because it is
+    /// also raised while resolving `beacons()`, before any network is selected or named.
     /// @param chainId The beacon's network.
     /// @param beacon The beacon.
     /// @param transition The index in `transitions` of the one naming an earlier-declared one's migration.

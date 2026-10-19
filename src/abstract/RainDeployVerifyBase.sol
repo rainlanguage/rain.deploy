@@ -6,6 +6,8 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeployMechanism, ZoltuDerivationMismatch} from "../lib/LibRainDeployMechanism.sol";
+import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
+import {ChainBeacon, DeployBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
 
 /// Thrown when the state snapshot taken around a derivation could not be
 /// reverted. The derivation plants code at the derived address, clears its
@@ -26,6 +28,43 @@ struct DerivedDeploy {
     address[] deployedAddresses;
     /// The code hash the mechanism leaves behind at those addresses.
     bytes32 bytecodeHash;
+}
+
+/// @notice A suite a beacon names, as its implementation or as itself, MUST be released.
+/// @param suite The declared key.
+error BeaconSuiteNotReleased(string suite);
+
+/// @notice A beacon MUST NOT be named both by `beaconSuite` and by `beacon` or `beaconCodeHash`.
+/// @param chainId The beacon's network.
+/// @param beaconIndex The beacon's index in `beacons()`.
+error BeaconNamedTwice(uint256 chainId, uint256 beaconIndex);
+
+/// @notice A beacon MUST be named by `beaconSuite` or by both `beacon` and `beaconCodeHash`.
+/// @param chainId The beacon's network.
+/// @param beaconIndex The beacon's index in `beacons()`.
+error BeaconUnnamed(uint256 chainId, uint256 beaconIndex);
+
+/// @notice A beacon's chain id MUST be one of `supportedNetworks()`.
+/// @param chainId The beacon's chain id.
+/// @param beaconIndex The beacon's index in `beacons()`.
+error BeaconOnUncheckedNetwork(uint256 chainId, uint256 beaconIndex);
+
+/// A beacon with every suite it names resolved on its network.
+/// @param chainId The beacon's network.
+/// @param beacon The declaration, its `beacon` and `beaconCodeHash` derived when it names `beaconSuite`.
+/// @param suite The beacon's suite when it names `beaconSuite`.
+/// @param derived The beacon's suite's derivation when it names `beaconSuite`.
+/// @param implementations Each state's implementation suite, indexed as `LibRainDeployBeacon.stateAt`.
+/// @param implementationAddresses Each state's implementation address on the beacon's network.
+/// @param implementationDerived Each state's implementation derivation.
+struct ResolvedBeacon {
+    uint256 chainId;
+    DeployBeacon beacon;
+    DeploySuite suite;
+    DerivedDeploy derived;
+    DeploySuite[] implementations;
+    address[] implementationAddresses;
+    DerivedDeploy[] implementationDerived;
 }
 
 /// @title RainDeployVerifyBase
@@ -66,5 +105,112 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
             derived[i] = deriveDeployment(suites[i]);
         }
         return derived;
+    }
+
+    /// Refuses `BeaconOnUncheckedNetwork` for any of `beacons()` off `supportedNetworks()`, whether or not it is on
+    /// `networks`, before resolving any.
+    /// @param networks The networks whose beacons to resolve.
+    /// @return Each of `beacons()` on one of `networks`, resolved on it, in declaration order.
+    function resolveBeacons(SupportedNetwork[] memory networks) internal returns (ResolvedBeacon[] memory) {
+        ChainBeacon[] memory chainBeacons = beacons();
+        if (chainBeacons.length == 0) {
+            return new ResolvedBeacon[](0);
+        }
+        SupportedNetwork[] memory supported = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
+        uint256 onNetworks = 0;
+        for (uint256 beaconIndex = 0; beaconIndex < chainBeacons.length; beaconIndex++) {
+            uint256 chainId = chainBeacons[beaconIndex].chainId;
+            if (!LibRainDeploy.hasChainId(supported, chainId)) {
+                revert BeaconOnUncheckedNetwork(chainId, beaconIndex);
+            }
+            if (LibRainDeploy.hasChainId(networks, chainId)) {
+                onNetworks++;
+            }
+        }
+        DeploySuite[] memory released = releasedSuites();
+        DerivedDeploy[] memory derived = new DerivedDeploy[](released.length);
+        ResolvedBeacon[] memory resolved = new ResolvedBeacon[](onNetworks);
+        uint256 resolvedIndex = 0;
+        for (uint256 beaconIndex = 0; beaconIndex < chainBeacons.length; beaconIndex++) {
+            uint256 chainId = chainBeacons[beaconIndex].chainId;
+            if (LibRainDeploy.hasChainId(networks, chainId)) {
+                resolved[resolvedIndex++] =
+                    resolveBeacon(chainBeacons[beaconIndex].beacon, chainId, beaconIndex, released, derived);
+            }
+        }
+        return resolved;
+    }
+
+    /// Refuses `BeaconNamedTwice` and `BeaconUnnamed`, `BeaconSuiteNotReleased` through `resolveReleased`, and
+    /// `LibRainDeployBeacon.BeaconTransitionMigrationRepeated`.
+    /// @param declaration The beacon, left unwritten so one declaration can be resolved on several networks.
+    /// @param chainId The beacon's network.
+    /// @param beaconIndex The beacon's index in `beacons()`, for the refusal.
+    /// @param released `releasedSuites()`, as `resolveReleased` takes it.
+    /// @param derived Each released suite's derivation, as `resolveReleased` takes it.
+    /// @return The beacon, resolved on `chainId`.
+    function resolveBeacon(
+        DeployBeacon memory declaration,
+        uint256 chainId,
+        uint256 beaconIndex,
+        DeploySuite[] memory released,
+        DerivedDeploy[] memory derived
+    ) internal returns (ResolvedBeacon memory) {
+        DeployBeacon memory beacon = DeployBeacon({
+            beaconSuite: declaration.beaconSuite,
+            beacon: declaration.beacon,
+            beaconCodeHash: declaration.beaconCodeHash,
+            initial: declaration.initial,
+            transitions: declaration.transitions
+        });
+        ResolvedBeacon memory resolved;
+        if (bytes(beacon.beaconSuite).length != 0) {
+            if (beacon.beacon != address(0) || beacon.beaconCodeHash != bytes32(0)) {
+                revert BeaconNamedTwice(chainId, beaconIndex);
+            }
+            uint256 releasedIndex = resolveReleased(beacon.beaconSuite, released, derived);
+            resolved.suite = released[releasedIndex];
+            resolved.derived = derived[releasedIndex];
+            beacon.beacon = LibRainDeployMechanism.deployedAddress(released[releasedIndex], chainId);
+            beacon.beaconCodeHash = derived[releasedIndex].bytecodeHash;
+        } else if (beacon.beacon == address(0) || beacon.beaconCodeHash == bytes32(0)) {
+            revert BeaconUnnamed(chainId, beaconIndex);
+        }
+        LibRainDeployBeacon.checkDistinctMigrations(chainId, beacon);
+        resolved.chainId = chainId;
+        resolved.beacon = beacon;
+        uint256 states = beacon.transitions.length + 1;
+        resolved.implementations = new DeploySuite[](states);
+        resolved.implementationAddresses = new address[](states);
+        resolved.implementationDerived = new DerivedDeploy[](states);
+        for (uint256 state = 0; state < states; state++) {
+            uint256 releasedIndex =
+                resolveReleased(LibRainDeployBeacon.stateAt(beacon, state).implementation, released, derived);
+            resolved.implementations[state] = released[releasedIndex];
+            resolved.implementationAddresses[state] =
+                LibRainDeployMechanism.deployedAddress(released[releasedIndex], chainId);
+            resolved.implementationDerived[state] = derived[releasedIndex];
+        }
+        return resolved;
+    }
+
+    /// Refuses `BeaconSuiteNotReleased` when `key` is not in `released`.
+    /// @param key The key a beacon names.
+    /// @param released `releasedSuites()`, each replaced by its `onSupportedNetworks` form when first resolved.
+    /// @param derived Each released suite's derivation, filled when first resolved.
+    /// @return The index of `key` in `released`.
+    function resolveReleased(string memory key, DeploySuite[] memory released, DerivedDeploy[] memory derived)
+        internal
+        returns (uint256)
+    {
+        uint256 releasedIndex = suiteIndex(released, key);
+        if (releasedIndex == released.length) {
+            revert BeaconSuiteNotReleased(key);
+        }
+        if (bytes(derived[releasedIndex].suite).length == 0) {
+            released[releasedIndex] = onSupportedNetworks(released[releasedIndex]);
+            derived[releasedIndex] = deriveDeployment(released[releasedIndex]);
+        }
+        return releasedIndex;
     }
 }

@@ -4,7 +4,8 @@ pragma solidity ^0.8.25;
 
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
-import {RainDeployVerifyChain, ResolvedBeacon} from "../../src/abstract/RainDeployVerifyChain.sol";
+import {RainDeployVerifyChain} from "../../src/abstract/RainDeployVerifyChain.sol";
+import {ResolvedBeacon} from "../../src/abstract/RainDeployVerifyBase.sol";
 import {BeaconState, ChainBeacon} from "../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {

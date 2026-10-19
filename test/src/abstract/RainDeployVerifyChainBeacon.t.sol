@@ -9,13 +9,7 @@ import {
     DeployMechanism,
     DeploySuite
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {
-    BeaconNamedTwice,
-    BeaconOnUncheckedNetwork,
-    BeaconSuiteNotReleased,
-    BeaconUnnamed,
-    RainDeployVerifyChain
-} from "../../../src/abstract/RainDeployVerifyChain.sol";
+import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {
     BeaconState,
     BeaconTransition,
@@ -33,7 +27,13 @@ import {
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
-import {DerivedDeploy} from "../../../src/abstract/RainDeployVerifyBase.sol";
+import {
+    BeaconNamedTwice,
+    BeaconOnUncheckedNetwork,
+    BeaconSuiteNotReleased,
+    BeaconUnnamed,
+    DerivedDeploy
+} from "../../../src/abstract/RainDeployVerifyBase.sol";
 
 /// @title RainDeployVerifyChainBeaconTest
 /// @notice The chain group's check of each declared beacon against its network, state and implementation suite.
