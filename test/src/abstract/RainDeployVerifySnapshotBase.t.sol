@@ -1024,7 +1024,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// A bytecode hash outside one `bytes32(0x...);` of 32 bytes of hex is unreadable, never a raw parse error, even when
     /// it wraps the record's real hash.
     function testFrozenCodeRecordMalformedHashIsUnreadable() external {
-        string[] memory values = new string[](11);
+        string[] memory values = new string[](13);
         values[0] = "bytes32(0xzz00000000000000000000000000000000000000000000000000000000000000);";
         values[1] = "bytes32(0x00000000000000000000000000000000000000000000000000000000000001);";
         values[2] = "bytes32(0x000000000000000000000000000000000000000000000000000000000000000001);";
@@ -1037,6 +1037,9 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         values[8] = string.concat("bytes32(", hash, ");)");
         values[9] = string.concat("bytes32(", hash, ";");
         values[10] = string.concat("bytes32(", hash, "));");
+        // 64 hex digits `vm.parseBytes32` reads without `0x`, which solc reads as an identifier.
+        values[11] = string.concat("bytes32(", vm.replace(hash, "0x", ""), ");");
+        values[12] = string.concat("bytes32(", vm.replace(hash, "0x", "0X"), ");");
         for (uint256 i = 0; i < values.length; i++) {
             string memory edited = withLineRest(committedCodeRecord(), "bytes32 constant BYTECODE_HASH = ", values[i]);
             vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));

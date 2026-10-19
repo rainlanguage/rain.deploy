@@ -64,14 +64,16 @@ error ExtendedNetworkAddressMismatch(string suite, uint256 chainId, address deri
 
 /// Thrown when a per-network release is live, or about to be broadcast, on a network it neither records nor declares
 /// as extended, at the address its candidate's current init data derives.
+/// At broadcast that address is what the candidate's data derives now, not necessarily where the release is live: a
+/// release already broadcast there is declared with the init data it was broadcast with, from its `NewClone` event.
 /// @param suite The release's suite key.
 /// @param network The network.
 /// @param deployedAddress The address checked or to be broadcast there.
 error ExtendedNetworkUnfrozen(string suite, string network, address deployedAddress);
 
-/// Thrown when a storage slot of an account the factory call did not create is read while the clone is deployed
-/// locally: the factory call and the clone's `initialize`. Writes are not refused, and the clone and any account
-/// created during the call are exempt.
+/// Thrown when a storage slot of any account but the clone and the accounts created under it is read while the clone
+/// is deployed locally: the factory call and the clone's `initialize`. A full-slot write is not refused; a write to
+/// part of a slot reads the slot first and is refused like a read.
 /// @param suite The suite being deployed.
 /// @param account The account whose storage was read.
 /// @param slot The slot read.
@@ -331,6 +333,8 @@ library LibRainDeployMechanism {
 
     /// Refuses to broadcast a per-network release to a network it neither records nor declares as extended, so an
     /// unrecorded network's address is frozen before it exists on chain.
+    /// A network `onNetworks` has no entry for is not checked here; `deployAndBroadcast` refuses it with
+    /// `CloneNetworkUndeclared`.
     /// @param frozen The release with its extended networks.
     /// @param onNetworks The release as it would be broadcast, with its candidate's unrecorded networks.
     /// @param networks The networks to broadcast to.
@@ -403,9 +407,10 @@ library LibRainDeployMechanism {
 
     /// Runs a suite's mechanism on the local EVM and returns where it landed, each address
     /// cross-checked against the formula's.
-    /// A storage read during the factory call of any account the call did not create is refused with
-    /// `CloneInitializeReadsStorage`, even when the call then reverts: locally that storage is empty, while an account
-    /// the call creates, the clone among them, is empty on chain too. A call that reverts without one reverts
+    /// A storage read during the factory call of any account but the clone and the accounts created under it is
+    /// refused with `CloneInitializeReadsStorage`, even when the call then reverts: locally that storage is empty,
+    /// while the clone and what it creates are empty on chain too. An account created by one that predates the call,
+    /// such as a factory, may already exist on chain, so it is not exempt. A call that reverts without one reverts
     /// unchanged.
     /// Only storage reads are checked: a balance or code read of another account is not refused. A write to part of a
     /// slot reads the slot first, so it is refused like a read.
@@ -468,7 +473,7 @@ library LibRainDeployMechanism {
                     revert CloneDerivationMismatch(suite.suite, deployed[i], cloneAddress);
                 }
             }
-            checkReadsOwnStorageOnly(suite.suite, accesses);
+            checkReadsOwnStorageOnly(suite.suite, deployed[i], accesses);
             if (!success) {
                 assembly ("memory-safe") {
                     revert(add(result, 0x20), mload(result))
@@ -478,33 +483,63 @@ library LibRainDeployMechanism {
         return deployed;
     }
 
-    /// Refuses a storage read, recorded while a clone was deployed, of any account not created in the recording: the
-    /// clone and any account its `initialize` creates are empty on chain too. Only storage reads are checked: a
-    /// balance or code read of another account is not refused.
+    /// Refuses a storage read, recorded while a clone was deployed, of any account but the clone and the accounts
+    /// created under it: those are empty on chain too, while an account a pre-existing one creates may already exist
+    /// there. Only storage reads are checked: a balance or code read of another account is not refused.
     /// @param suite The suite being deployed.
+    /// @param clone The clone's address.
     /// @param accesses What was recorded.
-    function checkReadsOwnStorageOnly(string memory suite, Vm.AccountAccess[] memory accesses) internal pure {
+    function checkReadsOwnStorageOnly(string memory suite, address clone, Vm.AccountAccess[] memory accesses)
+        internal
+        pure
+    {
         for (uint256 i = 0; i < accesses.length; i++) {
             for (uint256 j = 0; j < accesses[i].storageAccesses.length; j++) {
                 Vm.StorageAccess memory access = accesses[i].storageAccesses[j];
-                if (!access.isWrite && !createdIn(access.account, accesses)) {
+                if (!access.isWrite && !createdUnder(access.account, clone, accesses)) {
                     revert CloneInitializeReadsStorage(suite, access.account, access.slot);
                 }
             }
         }
     }
 
-    /// Whether a recording created an account.
+    /// Whether an account is the clone or was created, in a recording, by an account that is.
+    /// Each step follows a distinct `Create` access to its creator, so a chain longer than the recording is a cycle
+    /// and is not the clone's.
+    /// @param account The account.
+    /// @param clone The clone's address.
+    /// @param accesses What was recorded.
+    /// @return Whether `account` is `clone` or its chain of creators reaches `clone`.
+    function createdUnder(address account, address clone, Vm.AccountAccess[] memory accesses)
+        internal
+        pure
+        returns (bool)
+    {
+        for (uint256 hops = 0; hops <= accesses.length; hops++) {
+            if (account == clone) {
+                return true;
+            }
+            (bool created, address creator) = creatorIn(account, accesses);
+            if (!created) {
+                return false;
+            }
+            account = creator;
+        }
+        return false;
+    }
+
+    /// The account that created an account in a recording.
     /// @param account The account.
     /// @param accesses What was recorded.
     /// @return Whether some access created `account`.
-    function createdIn(address account, Vm.AccountAccess[] memory accesses) internal pure returns (bool) {
+    /// @return The creating access's accessor, zero when none did.
+    function creatorIn(address account, Vm.AccountAccess[] memory accesses) internal pure returns (bool, address) {
         for (uint256 k = 0; k < accesses.length; k++) {
             if (accesses[k].kind == VmSafe.AccountAccessKind.Create && accesses[k].account == account) {
-                return true;
+                return (true, accesses[k].accessor);
             }
         }
-        return false;
+        return (false, address(0));
     }
 
     /// Whether an address appears in a list before a given position.

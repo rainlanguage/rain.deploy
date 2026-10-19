@@ -319,6 +319,56 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         }
     }
 
+    /// A wrapped value that does not end at the writer's `);` is unreadable, rather than read as its first address
+    /// while solc compiles the expression it continues into.
+    function testPerNetworkDeclarationWrappedValueContinuingIsUnreadable() external {
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol",
+            "address constant DEPLOYED_ADDRESS_137 =\n    address(0x1111111111111111111111111111111111111111)\n    != address(0) ? address(0x2222222222222222222222222222222222222222) : address(0x3333333333333333333333333333333333333333);\n"
+        );
+    }
+
+    /// A value other than `0x` and 40 hex digits, bare or in `address(...)`, then `;` is unreadable, on the
+    /// declaration's line and wrapped, in both forms: 40 hex digits without `0x`, which names an identifier to solc,
+    /// or anything before, inside or after the value.
+    function testDeclarationValueOutsideTheWritersShapeIsUnreadable() external {
+        string[] memory values = new string[](9);
+        values[6] = "abcdefabcdefabcdefabcdefabcdefabcdefabcd;";
+        values[7] = "0x000000000000000000000000000000000000bEEF;;";
+        values[8] = "0x000000000000000000000000000000000000bEEF";
+        values[0] = "address(abcdefabcdefabcdefabcdefabcdefabcdefabcd);";
+        values[1] = "address(0x000000000000000000000000000000000000bEEF)";
+        values[2] = "address(0x000000000000000000000000000000000000bEEF);;";
+        values[3] = "address(0x000000000000000000000000000000000000bEEF));";
+        values[4] = "xaddress(0x000000000000000000000000000000000000bEEF);";
+        values[5] = "address(0x000000000000000000000000000000000000bEEF;);";
+        for (uint256 i = 0; i < values.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol", string.concat("address constant DEPLOYED_ADDRESS = ", values[i], "\n")
+            );
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol", string.concat("address constant DEPLOYED_ADDRESS_1 = ", values[i], "\n")
+            );
+        }
+        for (uint256 i = 0; i < values.length; i++) {
+            if (vm.indexOf(values[i], "address(") != 0) {
+                continue;
+            }
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol", string.concat("address constant DEPLOYED_ADDRESS_1 =\n    ", values[i], "\n")
+            );
+        }
+        (, address[] memory addresses) = this.externalRecordedDeployedAddresses(
+            "record.sol",
+            "address constant DEPLOYED_ADDRESS_1 =\n    address(0x000000000000000000000000000000000000bEEF);\n"
+        );
+        assertEq(addresses[0], address(0xbeef));
+    }
+
     /// A declaration followed by a line comment is unreadable rather than read as the comment's last token, in the
     /// every-network form, the per-network form and the wrapped form.
     function testDeclarationFollowedByALineCommentIsUnreadable() external {

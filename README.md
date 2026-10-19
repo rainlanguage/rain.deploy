@@ -284,14 +284,18 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   `RainDeploySuitesBase.extendedNetworks` to return it, for the release's key,
   as a `CloneNetwork`: its chain id, the init data it is broadcast with and its
   address. The broadcast refuses an unrecorded network not yet declared with
-  `ExtendedNetworkUnfrozen`, before any fork, naming the address to declare. A
-  declared entry is used in place of the candidate's, held to the address its
-  init data derives under the release (`ExtendedNetworkAddressMismatch`), and is
-  refused on a network the release records (`DuplicateCloneNetwork`) or on a
-  suite that is not per network (`ExtendedNetworksUnexpected`). The chain group
-  refuses a per-network suite live on a network it neither records nor declares
-  with `ExtendedNetworkUnfrozen`, naming the address to freeze. The declaration
-  lives in the consumer's source, not in the published release record.
+  `ExtendedNetworkUnfrozen`, before any fork, naming the address the candidate's
+  current init data derives. That is the address to declare only for a network
+  the release is not yet live on: a release already broadcast there is declared
+  with the init data it was broadcast with, from its `NewClone` event, or a
+  second clone is deployed and the live one orphaned. A declared entry is used
+  in place of the candidate's, held to the address its init data derives under
+  the release (`ExtendedNetworkAddressMismatch`), and is refused on a network
+  the release records (`DuplicateCloneNetwork`) or on a suite that is not per
+  network (`ExtendedNetworksUnexpected`). The chain group refuses a per-network
+  suite live on a network it neither records nor declares with
+  `ExtendedNetworkUnfrozen`, naming the address to freeze. The declaration lives
+  in the consumer's source, not in the published release record.
 - **Undeclared networks.** A network the suite still has no entry for — no
   candidate is named by its key, or the candidate has no entry either — is
   refused with `CloneNetworkUndeclared`, before any fork, at broadcast and in
@@ -396,9 +400,10 @@ artifact is what refuses the declaration.
 A Zoltu suite whose `artifactPath` is `CLONE_ARTIFACT_PATH` (a historical entry
 generated under a clone template) names no compiled source, so its broadcast
 prints no verify command. It emits
-`LibRainDeployMechanism.UnverifiableSource(sender, entryAddress, networks)` and
-logs a notice naming the address and each network, whose source must be verified
-by hand.
+`UnverifiableSource(sender, entryAddress, networks)`, a file-level event
+imported from `LibRainDeployMechanism.sol`, and logs a notice naming the address
+and each network, whose source must be verified by hand. Both appear only in the
+script run's local trace: neither is part of a broadcast transaction.
 
 Uniqueness is not something `vm.getCode` reports. It resolves a BARE contract
 name to whichever same-named artifact comes first, and answers rather than
@@ -1193,15 +1198,30 @@ it. In order:
 6. For each per-network release broadcast, or to be broadcast, to a network it
    does not record, override `extendedNetworks` to return that network as
    broadcast: declare, then broadcast. Without it the broadcast and the chain
-   group refuse the release there with `ExtendedNetworkUnfrozen`.
-7. A clone whose `initialize` reads storage of an account the factory call did
-   not create is refused by the local deploy with `CloneInitializeReadsStorage`.
-   Accounts created during the call, the clone among them, are exempt. Only
-   storage reads are checked: a balance or code read of another account is not
-   refused. A write to part of a slot reads the slot first, so it is refused
-   like a read. The local deploy records each clone's state diff, which ends any
-   state-diff recording the caller started.
-8. Regenerate: `forge script ./script/Build.sol` followed by
+   group refuse the release there with `ExtendedNetworkUnfrozen`. The address
+   that refusal names at broadcast is what the candidate's current init data
+   derives: a release already live on that network is declared with the init
+   data it was broadcast with, from its `NewClone` event, not with that address.
+7. A clone whose `initialize` reads storage of any account but the clone and the
+   accounts created under it is refused by the local deploy with
+   `CloneInitializeReadsStorage`. An account created through a dependency that
+   predates the call, such as a factory, is not exempt: it may already exist on
+   chain. Only storage reads are checked: a balance or code read of another
+   account is not refused. A write to part of a slot reads the slot first, so it
+   is refused like a read. The local deploy records each clone's state diff,
+   which ends any state-diff recording the caller started.
+8. Move to the V3 migration registry. `LibMigrationRegistry.applied`,
+   `appliedOnto`, `appliedAfter` and `head` are `appliedV3`, `appliedOntoV3`,
+   `appliedAfterV3` and `headV3`. `applyMigration` and `applyMigrationHistory`
+   are `applyMigrationV3` and `applyMigrationHistoryV3`, and take the
+   `address writer` first; `applyMigrationCall` and `applyMigrationHistoryCall`
+   are `applyMigrationV3Call` and `applyMigrationHistoryV3Call`, likewise.
+   Import `Prerequisite` from `src/interface/IMigrationRegistryV3.sol`;
+   `IMigrationRegistryV1` and `IMigrationRegistryV2` moved to
+   `src/interface/deprecated/`. The registry has a new address, so migrations
+   recorded in the 0.1.18 registry stay there and read as unapplied in V3: apply
+   them again, with `applyMigrationHistoryV3` for one that already ran.
+9. Regenerate: `forge script ./script/Build.sol` followed by
    `./script/build.sh`.
 
 `LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,

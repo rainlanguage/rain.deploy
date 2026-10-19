@@ -52,7 +52,7 @@ error FrozenCodeRecordDeclaresDeployedAddress(string path);
 /// code record is: `BYTECODE_HASH`, `CREATION_CODE` and `RUNTIME_CODE`; declares one outside the
 /// writer's format (`=` fourth of five space-separated tokens, or wrapped onto the next line at a
 /// four-space indent); gives a `bytes` constant a value that is not one `hex"..."` literal of whole bytes, or the
-/// `bytes32` constant a value that is not one `bytes32(0x...)` of 32 bytes; or holds
+/// `bytes32` constant a value that is not one `bytes32(0x...)` of `0x` and 64 hex digits; or holds
 /// a line break other than `\n` that solc honours.
 /// @param path The record file.
 error FrozenCodeRecordUnreadable(string path);
@@ -278,8 +278,8 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     }
 
     /// The value of the `bytes32` constant a code record declares: its `bytes32(0x...)` wrapper, read by
-    /// `declaredValue`, holding hex `vm.parseBytes32` reads as exactly 32 bytes, with nothing after the closing
-    /// parenthesis but the writer's `;`.
+    /// `declaredValue`, holding `0x` and exactly 64 hex digits, with nothing after the closing parenthesis but the
+    /// writer's `;`.
     /// @param path The record file, for the error only.
     /// @param lines The record's lines, block comments removed.
     /// @param line The declaration's line.
@@ -290,7 +290,10 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
             revert FrozenCodeRecordUnreadable(path);
         }
         string[] memory closed = vm.split(opened[1], ")");
-        if (closed.length != 2 || keccak256(bytes(closed[1])) != keccak256(";")) {
+        if (
+            closed.length != 2 || keccak256(bytes(closed[1])) != keccak256(";") || bytes(closed[0]).length != 66
+                || vm.indexOf(closed[0], "0x") != 0
+        ) {
             revert FrozenCodeRecordUnreadable(path);
         }
         try vm.parseBytes32(closed[0]) returns (bytes32 declared) {

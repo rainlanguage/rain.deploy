@@ -44,6 +44,7 @@ import {
     SourceUse
 } from "../../concrete/MockStorageReadingCloneable.sol";
 import {MockStorageSource} from "../../concrete/MockStorageSource.sol";
+import {MockStorageSourceFactory} from "../../concrete/MockStorageSourceFactory.sol";
 import {MockStorageReadingCloneFactory} from "../../concrete/MockStorageReadingCloneFactory.sol";
 import {upgradedPerNetworkClone} from "../../abstract/UpgradedPerNetworkCloneDeploys.sol";
 import {
@@ -876,8 +877,7 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(extended.networks[1].data, perNetworkCloneInitData(137));
     }
 
-    /// A release under another implementation that records every network its candidate has is unchanged, with no
-    /// reader declared.
+    /// A release under another implementation that records every network its candidate has is unchanged.
     function testFullyRecordedReleaseUnderAnotherImplementationIsUnchanged() external view {
         DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds());
         DeploySuite memory candidate =
@@ -898,8 +898,8 @@ contract LibRainDeployMechanismTest is Test {
         return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidate, chainIds);
     }
 
-    /// A candidate network not in play is not added, so a release under another implementation with no reader
-    /// declared is not refused for it, and one under the candidate's own does not take it.
+    /// A candidate network not in play is not added, so a release under another implementation is not refused for
+    /// it, and one under the candidate's own does not take it.
     function testUnrecordedNetworkNotInPlayIsNotAdded() external view {
         DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));
         DeploySuite memory upgraded =
@@ -1180,18 +1180,55 @@ contract LibRainDeployMechanismTest is Test {
     /// @return The suite.
     /// @return The source `initialize` treats as `use` says.
     function storageClone(SourceUse use) internal returns (DeploySuite memory, address) {
-        MockCloneFactory factory = new MockCloneFactory();
+        address source = address(new MockStorageSource());
+        return (storageCloneOver(address(new MockCloneFactory()), source, use), source);
+    }
+
+    /// A clone over a given factory and `MockStorageReadingCloneable`, initialized against a given source.
+    /// @param factory The clone factory.
+    /// @param source The account `initialize` treats as `use` says.
+    /// @param use How `initialize` treats the source.
+    /// @return The suite.
+    function storageCloneOver(address factory, address source, SourceUse use) internal returns (DeploySuite memory) {
         MockStorageReadingCloneable implementation = new MockStorageReadingCloneable();
-        MockStorageSource source = new MockStorageSource();
         DeployDependency[] memory dependencies = new DeployDependency[](3);
-        dependencies[0] = DeployDependency({deployedAddress: address(factory), runtimeCode: address(factory).code});
+        dependencies[0] = DeployDependency({deployedAddress: factory, runtimeCode: factory.code});
         dependencies[1] =
             DeployDependency({deployedAddress: address(implementation), runtimeCode: address(implementation).code});
-        dependencies[2] = DeployDependency({deployedAddress: address(source), runtimeCode: address(source).code});
-        CloneDeploy memory clone =
-            declaredClone("storage-clone", address(factory), address(implementation), dependencies);
+        dependencies[2] = DeployDependency({deployedAddress: source, runtimeCode: source.code});
+        CloneDeploy memory clone = declaredClone("storage-clone", factory, address(implementation), dependencies);
         clone.data = abi.encode(source, use);
-        return (LibRainDeployMechanism.cloneCandidate(clone, new uint256[](0)).snapshot, address(source));
+        return LibRainDeployMechanism.cloneCandidate(clone, new uint256[](0)).snapshot;
+    }
+
+    /// A factory whose clone lands off the formula and whose call reads another account's storage is refused as a
+    /// derivation mismatch: where the clone landed is checked before what the call read.
+    function testCloneFactoryLandingOffTheFormulaAndReadingStorageIsADerivationMismatch() external {
+        address source = address(new MockStorageSource());
+        DeploySuite memory suite = storageCloneOver(address(new MockSaltShiftingCloneFactory()), source, SourceUse.Read);
+        CloneTarget memory shifted = LibRainDeployMechanism.cloneTarget(suite);
+        shifted.salt ^= bytes32(uint256(1));
+        address elsewhere = LibRainDeployClone.cloneDeployedAddress(shifted);
+        assertNotEq(elsewhere, suite.storedDeployedAddress);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CloneDerivationMismatch.selector, suite.suite, suite.storedDeployedAddress, elsewhere
+            )
+        );
+        this.externalDeployLocally(suite);
+    }
+
+    /// An `initialize` that reads an account a pre-existing dependency creates for it is refused naming that
+    /// account: only the clone and what it creates are empty on chain too.
+    function testCloneInitializeReadingAnAccountADependencyCreatesIsRefused() external {
+        address sourceFactory = address(new MockStorageSourceFactory());
+        DeploySuite memory suite =
+            storageCloneOver(address(new MockCloneFactory()), sourceFactory, SourceUse.ReadFactoryChild);
+        address child = vm.computeCreateAddress(sourceFactory, vm.getNonce(sourceFactory));
+        vm.expectRevert(
+            abi.encodeWithSelector(CloneInitializeReadsStorage.selector, suite.suite, child, bytes32(uint256(1)))
+        );
+        this.externalDeployLocally(suite);
     }
 
     /// An `initialize` that reads another account's storage is refused naming the account and slot, whether the

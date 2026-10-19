@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {ICloneableV2, ICLONEABLE_V2_SUCCESS} from "rain-factory-0.1.30/src/interface/ICloneableV2.sol";
 import {MockStorageSource} from "./MockStorageSource.sol";
+import {MockStorageSourceFactory} from "./MockStorageSourceFactory.sol";
 
 /// Thrown when `initialize` finds nothing registered.
 error MockNameNotRegistered();
@@ -14,14 +15,16 @@ error MockInitializeRefused();
 /// How `MockStorageReadingCloneable.initialize` treats its source.
 /// `Read` reads it. `ReadRequired` reads it and reverts with `MockNameNotRegistered` on zero. `Write` writes 1 to
 /// it. `WriteThenRead` writes its slot 0, then reads it. `Refuse` reverts with `MockInitializeRefused` without
-/// touching it. `ReadChild` ignores it and reads a `MockStorageSource` it creates.
+/// touching it. `ReadChild` ignores it and reads a `MockStorageSource` it creates. `ReadFactoryChild` takes it as a
+/// `MockStorageSourceFactory` and reads the source that factory creates.
 enum SourceUse {
     Read,
     ReadRequired,
     Write,
     Refuse,
     ReadChild,
-    WriteThenRead
+    WriteThenRead,
+    ReadFactoryChild
 }
 
 /// @title MockStorageReadingCloneable
@@ -38,6 +41,8 @@ contract MockStorageReadingCloneable is ICloneableV2 {
             source.setPaddingThenRead(1);
         } else if (use == SourceUse.ReadChild) {
             (new MockStorageSource()).sValue();
+        } else if (use == SourceUse.ReadFactoryChild) {
+            MockStorageSourceFactory(address(source)).create().sValue();
         } else if (source.sValue() == 0 && use == SourceUse.ReadRequired) {
             revert MockNameNotRegistered();
         }

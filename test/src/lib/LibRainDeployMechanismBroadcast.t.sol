@@ -145,15 +145,15 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
     /// @param forkVm The Vm to fork and broadcast with.
     /// @param networks The networks to broadcast to.
     /// @param frozen The suite with its extended networks.
-    /// @param suite The suite to broadcast.
+    /// @param candidate The release's candidate.
     /// @return Where the suite is on each network.
     function externalDeployAndBroadcastFrozenOn(
         Vm forkVm,
         string[] memory networks,
         DeploySuite memory frozen,
-        DeploySuite memory suite
+        DeploySuite memory candidate
     ) external returns (address[] memory) {
-        (address[] memory deployed,) = LibRainDeployMechanism.deployAndBroadcast(forkVm, networks, 1, frozen, suite);
+        (address[] memory deployed,) = LibRainDeployMechanism.deployAndBroadcast(forkVm, networks, 1, frozen, candidate);
         return deployed;
     }
 
@@ -331,14 +331,14 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
     /// @param networks The networks to broadcast to.
     /// @param deployerPrivateKey The key to broadcast as.
     /// @param frozen The suite with its extended networks.
-    /// @param suite The suite to broadcast.
+    /// @param candidate The release's candidate.
     function externalDeployAndBroadcastFrozen(
         string[] memory networks,
         uint256 deployerPrivateKey,
         DeploySuite memory frozen,
-        DeploySuite memory suite
+        DeploySuite memory candidate
     ) external {
-        LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, frozen, suite);
+        LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, frozen, candidate);
     }
 
     /// The library entry point refuses a per-network suite on a network its frozen suite neither records nor

@@ -68,7 +68,7 @@ error SnapshotStateRevertFailed(string suite, uint256 snapshotId);
 
 /// Thrown when a file in the frozen record declares no deployed address, declares one as
 /// `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in decimal digits, declares one whose
-/// value does not read as an address, declares one outside the writer's format (`=` fourth of
+/// value is not `0x` and 40 hex digits, bare or in `address(...)`, then `;`, declares one outside the writer's format (`=` fourth of
 /// five space-separated tokens, or wrapped onto the next line at the writer's indent), or holds
 /// a line break other than `\n` that solc honours.
 /// @param path The record file that declares no deployed address, declares one it cannot read, or
@@ -1445,14 +1445,27 @@ library LibRainDeploySnapshot {
         return (readable, readable ? tokens[4] : "");
     }
 
-    /// The address a declaration line's value names.
+    /// The address a declaration line's value names: `0x` and 40 hex digits, wrapped in the writer's `address(` and
+    /// `)` or bare, then `;`.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file, for the error only.
     /// @param value The declaration's last token, from the line after it when the writer wrapped it.
     /// @return The address.
     function declaredAddress(Vm vm, string memory path, string memory value) internal pure returns (address) {
-        string memory bare = vm.replace(vm.replace(vm.replace(value, "address(", ""), ")", ""), ";", "");
-        try vm.parseAddress(bare) returns (address declared) {
+        string[] memory opened = vm.split(value, "address(0x");
+        string memory tail = ");";
+        if (opened.length != 2 || bytes(opened[0]).length != 0) {
+            opened = vm.split(value, "0x");
+            tail = ";";
+        }
+        if (opened.length != 2 || bytes(opened[0]).length != 0) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        string[] memory closed = vm.split(opened[1], tail);
+        if (closed.length != 2 || bytes(closed[1]).length != 0 || bytes(closed[0]).length != 40) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        try vm.parseAddress(string.concat("0x", closed[0])) returns (address declared) {
             return declared;
         } catch {
             revert FrozenSnapshotUnreadable(path);
