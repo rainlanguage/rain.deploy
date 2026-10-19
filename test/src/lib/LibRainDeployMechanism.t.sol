@@ -848,7 +848,7 @@ contract LibRainDeployMechanismTest is Test {
     function testUnrecordedNetworkUnderAnotherImplementationNeedsADeclaredReader() external {
         DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));
         DeploySuite memory candidate =
-            LibRainDeployMechanism.cloneCandidate(upgradedPerNetworkClone(), perNetworkCloneChainIds()).snapshot;
+        LibRainDeployMechanism.cloneCandidate(upgradedPerNetworkClone(), perNetworkCloneChainIds()).snapshot;
 
         vm.expectRevert(
             abi.encodeWithSelector(InitDataReaderUndeclared.selector, release.suite, exampleCloneImplementation())
@@ -878,7 +878,7 @@ contract LibRainDeployMechanismTest is Test {
     function testFullyRecordedReleaseUnderAnotherImplementationIsUnchanged() external view {
         DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds());
         DeploySuite memory candidate =
-            LibRainDeployMechanism.cloneCandidate(upgradedPerNetworkClone(), perNetworkCloneChainIds()).snapshot;
+        LibRainDeployMechanism.cloneCandidate(upgradedPerNetworkClone(), perNetworkCloneChainIds()).snapshot;
         assertEq(this.externalWithUnrecordedNetworks(release, candidate).mechanismData, release.mechanismData);
     }
 }

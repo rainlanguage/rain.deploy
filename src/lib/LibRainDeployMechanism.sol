@@ -64,7 +64,7 @@ library LibRainDeployMechanism {
     /// @param sender The caller.
     /// @param entryAddress Where the entry is deployed on every network.
     /// @param networks The networks it was broadcast to.
-    event UnverifiableSource(address sender, address entryAddress, string[] networks);
+    event UnverifiableSource(address indexed sender, address indexed entryAddress, string[] networks);
 
     /// Requires a Zoltu suite to carry no mechanism data.
     /// @param suite The Zoltu suite.
@@ -219,11 +219,7 @@ library LibRainDeployMechanism {
         DeploySuite memory suite,
         DeploySuite memory candidate,
         address[] memory initDataReaders
-    )
-        internal
-        pure
-        returns (DeploySuite memory)
-    {
+    ) internal pure returns (DeploySuite memory) {
         if (
             suite.mechanism != DeployMechanism.ClonePerNetwork || candidate.mechanism != DeployMechanism.ClonePerNetwork
         ) {
@@ -245,7 +241,8 @@ library LibRainDeployMechanism {
                 count++;
             }
         }
-        if (count > recorded && !readsInitData(clones.implementation, candidateClones.implementation, initDataReaders)) {
+        if (count > recorded && !readsInitData(clones.implementation, candidateClones.implementation, initDataReaders))
+        {
             revert InitDataReaderUndeclared(suite.suite, clones.implementation);
         }
         clones.networks = new CloneNetwork[](count);
@@ -410,6 +407,7 @@ library LibRainDeployMechanism {
             if (keccak256(bytes(suite.artifactPath)) != keccak256(bytes(CLONE_ARTIFACT_PATH))) {
                 LibRainDeploy.logVerifyCommands(vm, networks, deploys.expectedAddresses[0], suite.artifactPath);
             } else {
+                // slither-disable-next-line reentrancy-events
                 emit UnverifiableSource(msg.sender, deploys.expectedAddresses[0], networks);
                 console2.log(unverifiableSourceNotice(vm, networks, deploys.expectedAddresses[0]));
             }
