@@ -482,10 +482,11 @@ authority besides root.
 
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
 registry is deployed on a network, root binds each name a consumer resolves with
-`script/RegisterConfig.sol` (value `cast abi-encode "f(address)" <account>`)
-before that consumer deploys against it. Which names those are is each
-consumer's to declare; until a name is bound, its `LibConfigRegistry.resolve`
-reverts.
+`script/RegisterConfig.sol` (value `cast abi-encode "f(address)" <account>`, and
+`CONFIG_REGISTRY_NETWORKS` naming the networks it is deployed on until that is
+every declared one) before that consumer deploys against it. Which names those
+are is each consumer's to declare; until a name is bound, its
+`LibConfigRegistry.resolve` reverts.
 
 `CONFIG_REGISTRY_ROOT` in `src/concrete/ConfigRegistry.sol` is the one place
 root lives. It is welded into the creation code, so rotating it moves the deploy
@@ -558,10 +559,17 @@ after its `<org>`; anything else (a capital, a stray space or newline, an
 already-hashed `0x…`, a name with its `<org>.` dropped) is refused, because it
 is a near miss of a real name that no consumer resolves.
 
-It binds on every network the registry is deployed to, by default — one binding
-everywhere, as the deployment is the same everywhere — and a network already
-bound to the same value is skipped, so a run that stopped partway is fixed by
-running it again.
+**The value is ABI-encoded.** The script binds ABI-encoded values only and
+refuses one that is not a whole number of 32-byte words, though the registry
+itself binds any non-empty bytes.
+
+It binds on every declared network by default — one binding everywhere, as the
+deployment is the same everywhere — and a network already bound to the same
+value is skipped, so a run that stopped partway is fixed by running it again.
+The default needs the registry deployed on every declared network: it checks the
+registry's code hash on each and reverts `UnexpectedConfigRegistryCodeHash` on
+the first one without it, binding nothing. While the registry is on only some
+networks, set `CONFIG_REGISTRY_NETWORKS` to those.
 
 ### Before the first run
 
@@ -579,7 +587,7 @@ running it again.
   on the `forge script` commands below):
 
   ```sh
-  [ "$(nix develop -c cast wallet address --trezor)" = "$CONFIG_REGISTRY_ROOT" ] && echo "root OK" || echo "NOT root"
+  [ "$(nix develop -c cast wallet address --trezor)" = "${CONFIG_REGISTRY_ROOT:?}" ] && echo "root OK" || echo "NOT root"
   ```
 
 - Root needs native gas on every network it binds on.

@@ -54,6 +54,19 @@ contract LibConfigRegistryRegisterTest is Test {
         return networks;
     }
 
+    /// Three-element string list.
+    function list(string memory first, string memory second, string memory third)
+        internal
+        pure
+        returns (string[] memory)
+    {
+        string[] memory networks = new string[](3);
+        networks[0] = first;
+        networks[1] = second;
+        networks[2] = third;
+        return networks;
+    }
+
     function externalNameHash(string memory name) external pure returns (bytes32) {
         return LibConfigRegistryRegister.nameHash(name);
     }
@@ -185,6 +198,12 @@ contract LibConfigRegistryRegisterTest is Test {
     function testSelectDuplicateNetwork() external {
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.DuplicateNetwork.selector, "base"));
         this.externalSelectNetworks(list("base", "base"), LibRainDeploy.supportedNetworks());
+    }
+
+    /// The repeated network is named, not the first one selected.
+    function testSelectDuplicateNetworkNamesTheRepeat() external {
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.DuplicateNetwork.selector, "arbitrum"));
+        this.externalSelectNetworks(list("base", "arbitrum", "arbitrum"), LibRainDeploy.supportedNetworks());
     }
 
     /// A selection answers with the catalogue entry of each selected network,

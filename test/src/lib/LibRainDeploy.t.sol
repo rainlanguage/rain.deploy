@@ -27,9 +27,6 @@ import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
 /// that need `vm.expectRevert` at the correct call depth, and for functions
 /// that require a storage mapping reference.
 contract LibRainDeployTest is Test {
-    /// Chain id of Base.
-    uint256 constant BASE_CHAIN_ID = 8453;
-
     /// The address the Zoltu factory derives for empty creation code, i.e.
     /// CREATE2 over the factory address, a zero salt and the hash of empty
     /// creation code. An account is created there but it has no code.
@@ -251,7 +248,7 @@ contract LibRainDeployTest is Test {
         // Every id it handed back is a real fork of the network in that
         // position, so nothing was skipped or forked twice.
         vm.selectFork(forkIds[0]);
-        assertEq(block.chainid, BASE_CHAIN_ID);
+        assertEq(block.chainid, LibResolvedReadFixture.BASE_CHAIN_ID);
         vm.selectFork(forkIds[1]);
         assertEq(block.chainid, LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID);
     }
@@ -279,7 +276,7 @@ contract LibRainDeployTest is Test {
         // forks are created as the loop reaches them. Both are asserted so a
         // first network that broke would be seen as well.
         vm.selectFork(forkIds[0]);
-        assertEq(block.chainid, BASE_CHAIN_ID);
+        assertEq(block.chainid, LibResolvedReadFixture.BASE_CHAIN_ID);
         assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, LibRainDeploy.ZOLTU_FACTORY_CODEHASH);
 
         vm.selectFork(forkIds[1]);
@@ -590,7 +587,7 @@ contract LibRainDeployTest is Test {
         // loop that starts late puts the wrong chain at id 0, and a loop that
         // forks `networks[0]` every iteration puts the same chain at both ids.
         vm.selectFork(0);
-        assertEq(block.chainid, BASE_CHAIN_ID);
+        assertEq(block.chainid, LibResolvedReadFixture.BASE_CHAIN_ID);
         assertEq(result.codehash, mockDeployableCodeHash());
 
         vm.selectFork(1);
@@ -2066,7 +2063,7 @@ contract LibRainDeployTest is Test {
         // chain id says it is the second network rather than another fork of
         // the first.
         vm.selectFork(1);
-        assertEq(block.chainid, BASE_CHAIN_ID);
+        assertEq(block.chainid, LibResolvedReadFixture.BASE_CHAIN_ID);
     }
 
     /// External wrapper for `checkResolvedAddressesOnForks` so that
@@ -2110,7 +2107,7 @@ contract LibRainDeployTest is Test {
         assertEq(forkIds.length, networks.length);
 
         vm.selectFork(forkIds[0]);
-        assertEq(block.chainid, BASE_CHAIN_ID);
+        assertEq(block.chainid, LibResolvedReadFixture.BASE_CHAIN_ID);
         assertEq(result.codehash, mockDeployableCodeHash());
 
         vm.selectFork(forkIds[1]);
@@ -2160,7 +2157,7 @@ contract LibRainDeployTest is Test {
                 deployed,
                 uint256(0),
                 LibResolvedReadFixture.chainOwner(LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID),
-                LibResolvedReadFixture.chainOwner(BASE_CHAIN_ID)
+                LibResolvedReadFixture.chainOwner(LibResolvedReadFixture.BASE_CHAIN_ID)
             )
         );
         this.externalCheckResolvedAddressesOnForks(

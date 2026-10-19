@@ -50,6 +50,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             vm.selectFork(forkIds[i]);
             LibRainDeploy.checkNetworkChainId(networks[i]);
             for (uint256 j = 0; j < suites.length; j++) {
+                if (!requiresSuiteOn(suites[j], networks[i].name)) {
+                    continue;
+                }
                 console2.log("Checking suite on network:", derived[j].suite, networks[i].name);
                 LibRainDeploy.checkDeclaredDependencies(networks[i].name, suites[j].dependencies);
                 LibRainDeploy.checkDeployedCode(networks[i].name, addresses[i][j], derived[j].bytecodeHash);
@@ -58,7 +61,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     }
 
     /// Every RELEASED suite MUST be live, with the code its creation code produces and its declared
-    /// dependencies under it, on every supported network.
+    /// dependencies under it, on every supported network `requiresSuiteOn` requires it on.
     function testSuitesLiveOnEverySupportedNetwork() external {
         checkDeployedOnSupportedNetworks(releasedSuites());
     }

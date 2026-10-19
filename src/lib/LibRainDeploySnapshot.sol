@@ -1642,6 +1642,7 @@ library LibRainDeploySnapshot {
     /// @param spdxLicenseIdentifier The SPDX licence identifier the written lib declares.
     /// @param copyrightText The copyright text the written lib declares.
     /// @param template The candidate declaration the metadata comes from.
+    /// @param suitesImportPath The path the emitted lib reaches the suite types by.
     /// @return The path written.
     function writeReleasedSuitesLib(
         Vm vm,
@@ -1684,6 +1685,7 @@ library LibRainDeploySnapshot {
     /// @param contractName The contract the released lib is written for.
     /// @param template The suite the released entries take their key and
     /// artifact path from.
+    /// @param suitesImportPath The path the emitted lib reaches the suite types by.
     /// @return The path written.
     function writeReleasedSuitesLib(
         Vm vm,
@@ -1888,9 +1890,8 @@ library LibRainDeploySnapshot {
     /// release that first freezes that contract — at which point the record
     /// check fails the release job with the tag already pushed.
     ///
-    /// So it is emitted rather than written, from the names the build script
-    /// passes — its retired contracts, then the generated list the other places
-    /// read — and there is no fourth place.
+    /// So it is emitted rather than written, from the names the caller passes,
+    /// in order.
     ///
     /// Written beside the libs it imports, which is what makes those imports
     /// sibling paths.
@@ -1945,6 +1946,7 @@ library LibRainDeploySnapshot {
     /// @param libDir The directory to write into, under the constraint the
     /// arity above states — `LIB_DIR` for a repo's real libs.
     /// @param contractNames The contracts whose released libs to aggregate.
+    /// @param suitesImportPath The path the emitted lib reaches `DeploySuite` by.
     /// @return The path written.
     function writeReleasedSuitesAggregate(
         Vm vm,

@@ -49,10 +49,13 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// the chain id is the one the catalogue states for the alias, and the
 /// registry at the pinned address holds the pinned code hash — the check
 /// `LibConfigRegistry.resolve` makes before every read, so the binding written
-/// is in the registry consumers read. The inputs are checked once, before any
-/// fork: the name is canonical, the value is not empty and is a
+/// is in the registry consumers read. `checkInputs` checks the inputs before
+/// any fork: the name is canonical, the value is not empty and is a
 /// whole number of 32-byte words, the networks are a non-empty,
 /// duplicate-free subset of the declared ones, and the sender is root.
+/// `registerOnNetworks` runs it and logs the inputs record before creating
+/// the forks; `registerOnForks` runs it again for a caller with its own forks,
+/// and logs no record.
 ///
 /// ## Simulation and confirmation
 ///
@@ -71,7 +74,8 @@ library LibConfigRegistryRegister {
     /// Thrown when a value is not a whole number of 32-byte words, which every
     /// `abi.encode` output is: a bare 20-byte address pasted in place of its
     /// ABI encoding, most likely. The registry binds any non-empty value; this
-    /// refuses it before a device is asked to sign one no consumer can decode.
+    /// refuses it before a device is asked to sign a value that is not the
+    /// output of any `abi.encode`. This script binds ABI-encoded values only.
     ///
     /// It is the only check on what a value holds. Its type is agreed between
     /// root and the name's consumers, and any whole-word value can be correct

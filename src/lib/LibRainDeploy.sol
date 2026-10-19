@@ -676,7 +676,8 @@ library LibRainDeploy {
 
     /// `checkResolvedAddresses` for a value of any type: each read MUST answer
     /// with exactly the bytes expected, e.g. `abi.encode(uint256(3))` for a
-    /// threshold or `abi.encode(signers)` for an `address[]`.
+    /// threshold or `abi.encode(signers)` for an `address[]`. A `bytes` or
+    /// `string` getter answers `abi.encode(raw)`, not `raw`.
     /// @param network The network name, for the error only.
     /// @param target The deployed contract to read.
     /// @param readCalls The calldata for each read.
@@ -704,7 +705,10 @@ library LibRainDeploy {
         }
     }
 
-    /// `checkResolvedAddressesOnForks` for `checkResolvedValues`.
+    /// SIMULATION verification for `checkResolvedValues`, on the forks the
+    /// deploy simulated on, as `checkResolvedAddressesOnForks` is for
+    /// addresses. Mispaired networks and forks, and a mispaired or empty read
+    /// set, are refused before any fork is selected.
     /// @param vm The Vm instance to select forks with.
     /// @param networks The list of network names to check.
     /// @param forkIds The fork to check each network on, positionally paired
@@ -730,7 +734,12 @@ library LibRainDeploy {
         }
     }
 
-    /// `checkResolvedAddressesOnNetworks` for `checkResolvedValues`.
+    /// CONFIRMED-DEPLOYMENT verification for `checkResolvedValues`, on a FRESH
+    /// fork of every network, as `checkResolvedAddressesOnNetworks` is for
+    /// addresses. An empty network set and a mispaired or empty read set are
+    /// refused before anything is forked. Every fork is created before the
+    /// first is selected. In the same script as the deploy it reads no code at
+    /// the address and reverts `ResolvedValueReadFailed`.
     /// @param vm The Vm instance to use for forking.
     /// @param networks The list of network names to check.
     /// @param target The deployed contract to read on each network.
@@ -747,6 +756,8 @@ library LibRainDeploy {
         if (networks.length == 0) {
             revert NoNetworks();
         }
+        // Repeated here rather than left to the fork loop, so a mispaired or
+        // empty read set is reported without an RPC round trip.
         checkResolvedValueReads(target, readCalls, expectedValues);
         checkResolvedValuesOnForks(vm, networks, createForks(vm, networks), target, readCalls, expectedValues);
     }

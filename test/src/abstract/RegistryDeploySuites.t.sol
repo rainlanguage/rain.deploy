@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {DeployCandidate} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployCandidate, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 
@@ -309,5 +309,50 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
             options = string.concat(options, "          - ", candidates[i].snapshot.suite, "\n");
         }
         assertTrue(vm.contains(vm.readFile(MANUAL_DEPLOY_WORKFLOW), string.concat(options, "jobs:\n")));
+    }
+
+    /// A suite with only its key set, for `registryRequiresSuiteOn`.
+    /// @param key The suite key.
+    /// @return The suite.
+    function keyedSuite(string memory key) internal pure returns (DeploySuite memory) {
+        DeploySuite memory suite;
+        suite.suite = key;
+        return suite;
+    }
+
+    /// The retired releases are frozen to every network supported at
+    /// retirement, and to no network added since.
+    function testAddressRegistryNetworksAreTheSupportedNetworksAtRetirement() external pure {
+        string[] memory networks = addressRegistryNetworks();
+        assertEq(networks.length, 9);
+        assertEq(networks[0], "arbitrum");
+        assertEq(networks[1], "base");
+        assertEq(networks[2], "base_sepolia");
+        assertEq(networks[3], "bsc");
+        assertEq(networks[4], "ethereum");
+        assertEq(networks[5], "flare");
+        assertEq(networks[6], "hyperevm");
+        assertEq(networks[7], "polygon");
+        assertEq(networks[8], "robinhood");
+    }
+
+    /// A retired release is required on every network it was live on at
+    /// retirement.
+    function testRequiresRetiredReleaseOnItsNetworks() external pure {
+        string[] memory networks = addressRegistryNetworks();
+        for (uint256 i = 0; i < networks.length; i++) {
+            assertTrue(registryRequiresSuiteOn(keyedSuite("address-registry@0_1_18"), networks[i]));
+            assertTrue(registryRequiresSuiteOn(keyedSuite("address-registry@0_1_7"), networks[i]));
+        }
+    }
+
+    /// A retired release is not required on a network added after it was
+    /// retired, and the narrowing is keyed to the exact name half.
+    function testRetiredReleaseNotRequiredOnANewNetwork() external pure {
+        assertFalse(registryRequiresSuiteOn(keyedSuite("address-registry@0_1_18"), "new_network"));
+        assertFalse(registryRequiresSuiteOn(keyedSuite("address-registry"), "new_network"));
+        assertTrue(registryRequiresSuiteOn(keyedSuite("address-registry-v2@0_1_18"), "new_network"));
+        assertTrue(registryRequiresSuiteOn(keyedSuite("config-registry@0_1_19"), "new_network"));
+        assertTrue(registryRequiresSuiteOn(keyedSuite("migration-registry"), "new_network"));
     }
 }

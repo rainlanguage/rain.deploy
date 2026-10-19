@@ -3,8 +3,8 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {GeneratedContract} from "../../script/Build.sol";
-import {DeployCandidate} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {GeneratedContract, RetiredContract} from "../../script/Build.sol";
+import {DeployCandidate, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibCodeGen} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {LibReleasedSuitesAggregate} from "../lib/LibReleasedSuitesAggregate.sol";
@@ -183,7 +183,7 @@ contract BuildTest is Test {
     /// ORDER (retired first, then generatedContracts()), not merely as a set.
     ///
     /// Declaration order is claimed twice — the emitted library documents its
-    /// entries as "retired contracts first, then declaration order" and
+    /// entries as "in the order the build script lists them" and
     /// `snapshotContractNames()` documents itself as "In declaration order" —
     /// and nothing else pins it.
     /// `testTheCommittedAggregateIsWhatTheGeneratorEmits` takes the contract
@@ -309,6 +309,65 @@ contract BuildTest is Test {
         }
     }
 
+    /// PROPERTY: EVERY retired contract's committed released lib is
+    /// byte-exactly what the generator emits for it today, so the build that
+    /// regenerates it is a no-op.
+    function testEveryCommittedRetiredLibIsWhatTheGeneratorEmits() external view {
+        RetiredContract[] memory retired = sBuild.externalRetiredContracts();
+        assertGt(retired.length, 0, "no retired contracts");
+
+        for (uint256 i = 0; i < retired.length; i++) {
+            string memory libraryName = LibRainDeploySnapshot.releasedLibraryName(retired[i].contractName);
+            string[] memory paths = LibRainDeploySnapshot.recordPathsForContract(
+                vm, LibRainDeploySnapshot.LIB_FS_ROOT, retired[i].contractName
+            );
+            assertGt(paths.length, 0, string.concat("retired contract has no frozen record: ", retired[i].contractName));
+
+            assertEq(
+                vm.readFile(LibRainDeploySnapshot.pathForLib(libraryName)),
+                string.concat(
+                    LibCodeGen.filePrefix(),
+                    "\n",
+                    LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+                    LibRainDeploySnapshot.releasedLibraryBlock(
+                        vm, libraryName, retired[i].contractName, paths, sBuild.externalRetiredTemplate(retired[i])
+                    )
+                ),
+                string.concat("committed retired lib is not what the generator emits: ", retired[i].contractName)
+            );
+        }
+    }
+
+    /// The retired names are `retiredContracts()` in order, and lead the
+    /// released names.
+    function testReleasedContractNamesLeadWithTheRetired() external view {
+        RetiredContract[] memory retired = sBuild.externalRetiredContracts();
+        string[] memory released = sBuild.externalReleasedContractNames();
+        string[] memory current = sBuild.externalSnapshotContractNames();
+        assertEq(released.length, retired.length + current.length);
+        for (uint256 i = 0; i < retired.length; i++) {
+            assertEq(released[i], retired[i].contractName);
+        }
+        for (uint256 i = 0; i < current.length; i++) {
+            assertEq(released[retired.length + i], current[i]);
+        }
+    }
+
+    /// The retired template carries the key and artifact path and nothing the
+    /// record holds.
+    function testRetiredTemplateIsKeyAndArtifactPathOnly() external view {
+        RetiredContract memory retired =
+            RetiredContract({contractName: "Retired", suite: "retired-suite", artifactPath: "src/R.sol:Retired"});
+        DeploySuite memory template = sBuild.externalRetiredTemplate(retired);
+        assertEq(template.suite, "retired-suite");
+        assertEq(template.artifactPath, "src/R.sol:Retired");
+        assertEq(template.creationCode.length, 0);
+        assertEq(template.storedRuntimeCode.length, 0);
+        assertEq(template.storedDeployedAddress, address(0));
+        assertEq(template.storedBytecodeHash, bytes32(0));
+        assertEq(template.dependencies.length, 0);
+    }
+
     /// PROPERTY: a build with nothing overridden writes its libs into the
     /// directory the committed ones are in.
     ///
@@ -376,10 +435,14 @@ contract BuildTest is Test {
         vm.createDir(LIBS_FIXTURE_DIR, true);
         harness.externalRegenerateLibs();
 
-        string[] memory names = new string[](generated.length * 2 + 1);
+        RetiredContract[] memory retired = sBuild.externalRetiredContracts();
+        string[] memory names = new string[](retired.length + generated.length * 2 + 1);
+        for (uint256 i = 0; i < retired.length; i++) {
+            names[i] = string.concat(LibRainDeploySnapshot.releasedLibraryName(retired[i].contractName), ".sol");
+        }
         for (uint256 i = 0; i < generated.length; i++) {
-            names[i * 2] = string.concat("Lib", generated[i].contractName, "Deploy.sol");
-            names[i * 2 + 1] =
+            names[retired.length + i * 2] = string.concat("Lib", generated[i].contractName, "Deploy.sol");
+            names[retired.length + i * 2 + 1] =
                 string.concat(LibRainDeploySnapshot.releasedLibraryName(generated[i].contractName), ".sol");
         }
         names[names.length - 1] = string.concat(LibRainDeploySnapshot.RELEASED_SUITES_LIBRARY, ".sol");

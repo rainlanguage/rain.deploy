@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
+import {MockResolvedBytes} from "../../concrete/MockResolvedBytes.sol";
 import {MockResolvedValues} from "../../concrete/MockResolvedValues.sol";
 import {MockRevertingAnswerOwner} from "../../concrete/MockRevertingAnswerOwner.sol";
 import {MockRawAnswerOwner} from "../../concrete/MockRawAnswerOwner.sol";
@@ -452,5 +453,71 @@ contract LibRainDeployResolvedValuesTest is Test {
             LibResolvedReadFixture.chainOwnerReadCalls(),
             one(abi.encode(LibResolvedReadFixture.chainOwner(LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID)))
         );
+    }
+
+    /// A `bytes` getter answers `abi.encode(raw)`: that passes, and the raw
+    /// value fails closed.
+    function testCheckResolvedValuesBytesGetterAnswersAbiEncoded(bytes memory data) external {
+        MockResolvedBytes target = new MockResolvedBytes(data);
+        bytes[] memory readCalls = one(abi.encodeCall(MockResolvedBytes.data, ()));
+        LibRainDeploy.checkResolvedValues("test_network", address(target), readCalls, one(abi.encode(data)));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedValue.selector,
+                "test_network",
+                address(target),
+                uint256(0),
+                data,
+                abi.encode(data)
+            )
+        );
+        this.externalCheckResolvedValues("test_network", address(target), readCalls, one(data));
+    }
+
+    /// A same-script run cannot see a simulated deploy: the fresh fork has no
+    /// code at the address.
+    function testCheckResolvedValuesOnNetworksCannotSeeASimulatedDeploy() external {
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        (address deployed,) = LibResolvedReadFixture.deployMockDeployableOwner(vm, networks, address(this));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.ResolvedValueReadFailed.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                deployed,
+                uint256(0),
+                bytes("")
+            )
+        );
+        this.externalCheckResolvedValuesOnNetworks(
+            networks, deployed, LibResolvedReadFixture.ownerReadCalls(), one(abi.encode(MOCK_DEPLOYABLE_OWNER))
+        );
+    }
+
+    /// Every fork is created before the first is selected.
+    function testCheckResolvedValuesOnNetworksCreatesEveryForkFirst() external {
+        address account = address(0xf00);
+        address wrong = address(0xba4);
+        MockChainDependentOwner target =
+            new MockChainDependentOwner(account, account, LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID);
+        vm.makePersistent(address(target));
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedResolvedValue.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                address(target),
+                uint256(0),
+                abi.encode(wrong),
+                abi.encode(account)
+            )
+        );
+        this.externalCheckResolvedValuesOnNetworks(
+            networks, address(target), LibResolvedReadFixture.ownerReadCalls(), one(abi.encode(wrong))
+        );
+        vm.selectFork(1);
+        assertEq(vm.getChainId(), LibResolvedReadFixture.BASE_CHAIN_ID);
     }
 }

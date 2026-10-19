@@ -36,8 +36,10 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     string constant NETWORKS_VAR = "CONFIG_REGISTRY_NETWORKS";
 
     /// The networks to act on: `CONFIG_REGISTRY_NETWORKS` if set, otherwise
-    /// every network the declaration supports — the set the registry itself is
-    /// deployed to.
+    /// every network the declaration supports. The default needs the registry
+    /// on every one of them: the first without it reverts
+    /// `UnexpectedConfigRegistryCodeHash`, so a partial rollout sets
+    /// `CONFIG_REGISTRY_NETWORKS` to the networks it is deployed on.
     /// @return The network names, as `[rpc_endpoints]` aliases.
     function selectedNetworks() internal view returns (string[] memory) {
         return vm.envOr(NETWORKS_VAR, ",", supportedNetworks());
