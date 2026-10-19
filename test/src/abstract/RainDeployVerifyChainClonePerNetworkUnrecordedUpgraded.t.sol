@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {CloneDeploy, CloneNetworks} from "../../../src/lib/LibRainDeployClone.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
@@ -82,8 +83,8 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
         );
     }
 
-    /// The release passes with its clone at the release-derived Polygon address, and with that
-    /// address empty is refused on Polygon naming it.
+    /// With its clone at the release-derived Polygon address the release is refused there as
+    /// unfrozen, and with that address empty is refused on Polygon as not deployed, naming it.
     function testUnrecordedNetworkIsCheckedUnderTheReleasesFactoryAndImplementation() external {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = onlyFirstRecordedNetwork(releasedSuites()[0]);
@@ -101,6 +102,11 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
         assertEq(candidate.implementation.code.length, 0);
         assertEq(candidate.factory.code.length, 0);
 
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ExtendedNetworkUnfrozen.selector, "per-network-clone@0_0_1", LibRainDeploy.POLYGON, polygonAddress
+            )
+        );
         this.externalCheckDeployedOnSupportedNetworks(suites);
 
         vm.etch(polygonAddress, hex"");

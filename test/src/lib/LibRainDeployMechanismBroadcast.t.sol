@@ -10,7 +10,7 @@ import {
     CloneTarget,
     LibRainDeployClone
 } from "../../../src/lib/LibRainDeployClone.sol";
-import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
+import {LibRainDeployMechanism, UnverifiableSource} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     exampleCloneDependencies,
@@ -103,6 +103,11 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, suite);
     }
 
+    /// External wrapper for `LibRainDeployMechanism.deployAndBroadcast` on a given fork Vm, as key 1.
+    /// @param forkVm The Vm to fork and broadcast with.
+    /// @param networks The networks to broadcast to.
+    /// @param suite The suite to broadcast.
+    /// @return Where the suite is on each network.
     function externalDeployAndBroadcastOn(Vm forkVm, string[] memory networks, DeploySuite memory suite)
         external
         returns (address[] memory)
@@ -151,7 +156,7 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
             address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector, suite.storedDeployedAddress), 1
         );
         vm.expectEmit(address(this));
-        emit LibRainDeployMechanism.UnverifiableSource(caller, suite.storedDeployedAddress, networks);
+        emit UnverifiableSource(caller, suite.storedDeployedAddress, networks);
         vm.prank(caller);
         address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
         assertEq(deployed.length, 2);
@@ -196,9 +201,7 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         for (uint256 i = 0; i < logs.length; i++) {
-            assertTrue(
-                logs[i].topics.length == 0 || logs[i].topics[0] != LibRainDeployMechanism.UnverifiableSource.selector
-            );
+            assertTrue(logs[i].topics.length == 0 || logs[i].topics[0] != UnverifiableSource.selector);
         }
     }
 

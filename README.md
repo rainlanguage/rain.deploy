@@ -280,6 +280,18 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   network unless `RainDeploySuitesBase.initDataReaders` names that
   implementation for the candidate's suite; otherwise it is refused with
   `InitDataReaderUndeclared`.
+- **Extended networks.** The candidate's init data can change after a release is
+  broadcast to an unrecorded network, which would move that network's address.
+  So once broadcast, an unrecorded network is frozen by overriding
+  `RainDeploySuitesBase.extendedNetworks` to return it, for the release's key,
+  as a `CloneNetwork`: its chain id, the init data it was broadcast with and its
+  address. A declared entry is used in place of the candidate's, held to the
+  address its init data derives under the release
+  (`ExtendedNetworkAddressMismatch`), and is refused on a network the release
+  records (`DuplicateCloneNetwork`) or on a suite that is not per network
+  (`ExtendedNetworksUnexpected`). The chain group refuses a per-network suite
+  live on a network it neither records nor declares with
+  `ExtendedNetworkUnfrozen`, naming the address to freeze.
 - **Undeclared networks.** A network the suite still has no entry for — no
   candidate is named by its key, or the candidate has no entry either — is
   refused with `CloneNetworkUndeclared`, before any fork, at broadcast and in
@@ -1153,7 +1165,13 @@ it. In order:
    candidate's implementation does, override `initDataReaders` to return it for
    the candidate's suite key. Without it the release is refused any unrecorded
    network with `InitDataReaderUndeclared`.
-7. Regenerate: `forge script ./script/Build.sol` followed by
+7. For each per-network release already broadcast to a network it does not
+   record, override `extendedNetworks` to return that network as broadcast.
+   Without it the chain group refuses the release there with
+   `ExtendedNetworkUnfrozen`.
+8. A clone whose `initialize` reads storage other than its own is refused by the
+   local deploy with `CloneInitializeReadsStorage`.
+9. Regenerate : `forge script ./script/Build.sol` followed by
    `./script/build.sh`.
 
 `LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,

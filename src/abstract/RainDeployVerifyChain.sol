@@ -41,8 +41,10 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             return;
         }
 
+        DeploySuite[] memory frozen = new DeploySuite[](suites.length);
         DeploySuite[] memory onNetworks = new DeploySuite[](suites.length);
         for (uint256 j = 0; j < suites.length; j++) {
+            frozen[j] = withExtendedNetworks(suites[j]);
             onNetworks[j] = onSupportedNetworks(suites[j]);
         }
         suites = onNetworks;
@@ -64,6 +66,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
                 console2.log("Checking suite on network:", derived[j].suite, networks[i].name);
                 LibRainDeploy.checkDeclaredDependencies(networks[i].name, suites[j].dependencies);
                 LibRainDeploy.checkDeployedCode(networks[i].name, addresses[i][j], derived[j].bytecodeHash);
+                LibRainDeployMechanism.checkNetworkFrozen(
+                    frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]
+                );
             }
         }
     }

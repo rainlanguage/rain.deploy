@@ -10,6 +10,7 @@ import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 // what holds a declared pair to a chain.
 import {DeployDependency, LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
+import {CloneNetwork} from "../lib/LibRainDeployClone.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
@@ -286,8 +287,9 @@ abstract contract RainDeploySuitesBase {
 
     /// A suite as it is broadcast and as it is checked on chain.
     /// @param suite The suite.
-    /// @return The suite, with the networks its candidate adds.
+    /// @return The suite, with its extended networks and the networks its candidate adds.
     function onSupportedNetworks(DeploySuite memory suite) internal view returns (DeploySuite memory) {
+        suite = withExtendedNetworks(suite);
         bytes32 name = keccak256(bytes(suiteKeyName(suite.suite)));
         DeployCandidate[] memory candidates = checkedCandidateSuites();
         for (uint256 i = 0; i < candidates.length; i++) {
@@ -298,6 +300,24 @@ abstract contract RainDeploySuitesBase {
             }
         }
         return suite;
+    }
+
+    /// A suite with the networks `extendedNetworks` declares for it.
+    /// @param suite The suite.
+    /// @return The suite, with its extended networks.
+    function withExtendedNetworks(DeploySuite memory suite) internal view returns (DeploySuite memory) {
+        return LibRainDeployMechanism.withExtendedNetworks(suite, extendedNetworks(suite.suite));
+    }
+
+    /// The networks a per-network release was broadcast to after its cut, each as broadcast: its chain id, the init
+    /// data it took and the address that derives. The chain group refuses a release live on a network it neither
+    /// records nor names here, so an unrecorded network's address is frozen once broadcast.
+    /// Empty by default.
+    /// @param suite The release's suite key.
+    /// @return The networks.
+    function extendedNetworks(string memory suite) internal view virtual returns (CloneNetwork[] memory) {
+        (suite);
+        return new CloneNetwork[](0);
     }
 
     /// The implementations, other than the named candidate's own, that read its init data as its implementation does:
