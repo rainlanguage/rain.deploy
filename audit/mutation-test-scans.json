@@ -139,8 +139,7 @@
       ],
       "alreadyFiled": []
     }
-  }
-,
+  },
   {
     "timestamp": "2026-10-05T09:05:00Z",
     "commit": "f08ee42c6dbdb0f3daa82deae208e9ceccd37103",
@@ -162,8 +161,13 @@
       "nonTerminating": 0,
       "candidates": 3,
       "confirmed": 3,
-      "filed": [255, 256],
-      "alreadyFiled": [249]
+      "filed": [
+        255,
+        256
+      ],
+      "alreadyFiled": [
+        249
+      ]
     },
     "notes": [
       "Base attribution pass at f08ee42 probed 12 mutants over the pre-existing behaviours that are single-edit mutatable; 12/12 KILLED, every one by a test already on main, baseline green at 27. No pre-existing gap was found, so the tests this run added are additive rather than covering for main.",
@@ -195,7 +199,9 @@
       "candidates": 0,
       "confirmed": 0,
       "filed": [],
-      "alreadyFiled": [264]
+      "alreadyFiled": [
+        264
+      ]
     },
     "notes": [
       "Narrowed to the L01 fix, so commit and testsAfterCommit are the same tree: the tests are part of the change under test and the units did not exist before it. killedByExistingTests is 0 and gapsFilled is 0 for that reason, not because nothing was probed — 13 of 13 behaviours were probed and all 13 KILLED. The matrix establishes that each new test discriminates, not which pre-existing test covered what, and no attribution pass was possible.",
@@ -274,6 +280,38 @@
       "P05's pass-1 HARNESS-ERROR was a target occurring in both the Zoltu and clone writers; re-anchored on the clone writer's preceding suite.creationCode and re-probed (SURVIVED).",
       "Gaps filled (each baseline PASS and mutant FAIL proven on the tests tree): C13 testCloneDeployStepReturnsWhereTheFactoryCloned, C14 testCloneDeployStepBroadcastsAsTheDeployer, P01 testSuiteWriterRefusesAZoltuSuiteCarryingMechanismData, P02 testCloneWriterLeavesNoDeployBehind, P04 and P05 testCloneWriterRecordsTheDeployNotTheSuiteClaims (stored address and runtime code staled, record must still match the committed fixture), P11 testReleasedImportBlockDefaultsToThisRepoSuitesImportPath strengthened in place to pass a clone mechanism through the short arity.",
       "P03 (writer ignores a failed revertToState) is an unkillable defensive guard: revertToState returns false only for an invalid snapshot id, which the writer's own snapshotState never produces, and cheatcodes cannot be mocked to force it."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T06:51:00Z",
+    "commit": "4124f731e49ff1b68faaf4cd882648aa1d00cd32",
+    "testsAfterCommit": "391fe885eb27021ee232e65fcfa02c1f68400474",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 78,
+    "scope": "PR #315 (#313) round 4, the code changed on 1a2ae2f: src/lib/LibRainDeploy.sol checkResolvedValues, checkResolvedValuesOnForks, checkResolvedValuesOnNetworks (W), plus a re-probe of round 3 survivor N16 in src/lib/LibConfigRegistryRegister.sol registerOnNetworks",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 25,
+      "behavioursProbed": 25,
+      "killedByExistingTests": 23,
+      "gapsFilled": 2,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "The W functions are new on the scanned commit and their tests (test/src/lib/LibRainDeployResolvedValues.t.sol) were committed with them, so the existing suite here is those tests; nothing before the scanned commit could reach the code.",
+      "Baseline green at 51. 23 of 25 KILLED, N16 (round 3 survivor) now killed by the round 3 testRegisterOnEveryNetwork.",
+      "Gaps filled: W07 (a short non-empty answer treated as a failed read) testCheckResolvedValuesShortAnswerIsAnAnswer; W08 (read failure names index 0) testCheckResolvedValuesReadFailureNamesTheFailingRead. Both re-probed KILLED at baseline 53.",
+      "The killer lists under-report fuzz kills: the fail-pattern stops at the first ] inside a counterexample args=[...]. testRegisterOnEveryNetwork appears in several unrelated killer lists from fork transport noise; every such kill also names a W test.",
+      "The foundry.toml MigrationRegistry compilation_restrictions entry is build config, not suite-reachable, and was not probed."
     ]
   }
 ]
