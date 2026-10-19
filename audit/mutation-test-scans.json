@@ -402,5 +402,38 @@
       "Attribution not split: this round's tests (two distinct-id tests proposed by rain-marvin, two resolve-time repeat tests, the short-answer test, and the two-word test inverted to expect BeaconPendingOwnerUnreadable) were written before the probe, so the pre-existing suite was not probed alone. Kills by tests present at f8620d3: E04-E11 (repeat tests, updated for the chainId error signature), E15 (silent fallback), E16 (reverting word). Kills needing this round's tests: E01-E03 (distinct writer/namespace), E12-E14 (resolve-time), E17/E19 (short answer).",
       "Adversarial pass: no candidate bugs. Distinct means distinct (writer, namespace, migration) triple, pinned both ways; an echoing fallback (4-byte answer) is now refused rather than read as no pending owner."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T13:21:58Z",
+    "commit": "306f369f8a53d89dc62c9a0a751d57d51c236d71",
+    "testsAfterCommit": "5ebd709c2e2977631dec1e618b9cdf670fac9d5c",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 102,
+    "scope": "PR #308 (#274) round 6: code changed since 8dc450c: RainDeployBroadcast.broadcastSuite (BeaconOwnedByDeployKey) and checkSeatsNoDeployKey (SuiteSeatsDeployKey); RainDeployVerifySnapshotBase.testBeaconDeclarationsResolve; LibRainDeployBeacon.checkTransitionMigrations (BeaconTransitionMigrationUnnamed); RainDeployVerifyBase.resolveBeacons/resolveBeacon/checkSeatedState/seatsOther/resolveReleased; RainDeployVerifyChain.deriveUnlessResolved",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 6,
+      "behaviours": 54,
+      "behavioursProbed": 54,
+      "killedByExistingTests": 46,
+      "gapsFilled": 8,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|RainDeploySuitesBaseTest|RainDeployVerifyChain|RainDeployVerify|RegistryDeployVerify|RainDeployBroadcast (excluding testRunReachesSelectionPastAnUnanchorableCandidate, a pre-existing setEnv race) plus LibRainDeployTest testHasChainId, via a wrapper that retries an all-transport red tally and withholds it after three attempts (NO-RUN); baseline 329 passed at the scanned commit.",
+      "Pre-existing suite, before any new test: 46 killed (45 in the first pass, C02 on re-probe); survived F09 (seat check ignoring whether owner() answered), F10 (seat check state not reverted), V19 (seated owner held to the latest state), V20 (seated implementation held to the latest state), V24 (BeaconSeatedOwner index forced 0), C01 (derivation reuse ignoring whether a beacon names a suite).",
+      "V21 (seatsOther ignoring whether the read answered) and V22 (seatsOther refusing an empty answer) were NO-RUN in three probes: every failure each time was a public-RPC 429 or HyperEVM invalid-block-height fork error, no non-transport failure. Treated as uncredited survivors.",
+      "Gaps filled at 5ebd709, all 8 killed by a re-probe whose suite was only the 8 added tests (offline; the full wrapper suite was withheld on 429s): F09 testBroadcastOfASuiteRevertingWithTheDeployKeyReachesTheNetworkRefusal (MockOriginRevertingOwner); F10 testSeatCheckLeavesNothingDeployed; V19 and V20 testBeaconSuiteSeatingItsInitialStateBeforeATransitionResolves; V21 testAReadThatRevertsSeatsNothing; V22 testAReadAnsweringNothingSeatsNothing; V24 testBeaconSuiteSeatingAnotherOwnerIsRefusedAtItsIndex; C01 testUnsetSuiteOfABeaconNamedByAddressIsNotReused (the unset suite is derived and refused with DeployFailed rather than reusing an empty derivation). The fail-pattern did not name the V19, V20 and V24 killers because forge renders the chain id in their revert reasons as 42161 [4.216e4]; those attributions are by elimination among the 8 tests (only the transition test declares a later state, only the index test reaches BeaconSeatedOwner).",
+      "Handoff's predicted equivalents were not equivalent: V19/V20 differ once a suite beacon declares a transition to another owner or implementation, and C01 differs for the all-zero suite.",
+      "Adversarial pass: no candidate bugs. The seat checks are lenient on a reverting or empty read by design (left to checkBeacon); the broadcast seat check reads owner() only, as ruled."
+    ]
   }
 ]
