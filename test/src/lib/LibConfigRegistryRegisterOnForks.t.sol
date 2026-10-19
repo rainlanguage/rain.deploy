@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {CONFIG_REGISTRY_ROOT} from "../../../src/concrete/ConfigRegistry.sol";
 import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
@@ -32,6 +32,15 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         returns (uint256[] memory)
     {
         return LibConfigRegistryRegister.registerOnNetworks(vm, networks, networks, CONFIG_REGISTRY_ROOT, name, value);
+    }
+
+    function externalRegisterOnForks(
+        string[] memory networks,
+        uint256[] memory forkIds,
+        string memory name,
+        bytes memory value
+    ) external {
+        LibConfigRegistryRegister.registerOnForks(vm, networks, networks, forkIds, CONFIG_REGISTRY_ROOT, name, value);
     }
 
     function externalCheckRegisteredOnForks(
@@ -136,8 +145,9 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);
     }
 
-    /// `registerOnNetworks` binds on every selected network, each on its own
-    /// chain. The registry is persistent, so each fork it creates holds it.
+    /// `registerOnNetworks` forks every selected network in declaration order;
+    /// the persistent registry carries the first fork's bind to the rest,
+    /// which skip.
     function testRegisterOnNetworksBindsEverySelected() external {
         (string memory name,, bytes memory value) = fresh();
         string[] memory networks = new string[](2);
@@ -151,6 +161,49 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         uint256[] memory forkIds = this.externalRegisterOnNetworks(networks, name, value);
         assertEq(forkIds.length, 2);
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);
+    }
+
+    /// `registerOnForks` binds on every given fork's own registry, with
+    /// nothing persistent: one `Register` log per network, and each fork's
+    /// registry holds the value bound at that fork's own moment.
+    function testRegisterOnForksBindsOnEachFork() external {
+        (string memory name, bytes32 hashed, bytes memory value) = fresh();
+        string[] memory networks = LibRainDeploy.supportedNetworks();
+        uint256[] memory forkIds = forksWithRegistry(networks);
+        IConfigRegistryV1 registry = IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+
+        vm.recordLogs();
+        this.externalRegisterOnForks(networks, forkIds, name, value);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        uint256 registers = 0;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].emitter == address(registry) && logs[i].topics[0] == IConfigRegistryV1.Register.selector) {
+                assertEq(logs[i].topics[1], hashed);
+                registers++;
+            }
+        }
+        assertEq(registers, networks.length);
+
+        for (uint256 i = 0; i < forkIds.length; i++) {
+            vm.selectFork(forkIds[i]);
+            assertEq(LibConfigRegistryRead.getValue(registry, hashed), value, networks[i]);
+            assertEq(LibConfigRegistryRead.getMoment(registry, hashed), block.timestamp, networks[i]);
+        }
+    }
+
+    /// `registerOnForks` refuses fork ids not paired one to one with the
+    /// selected networks, before selecting any fork.
+    function testRegisterOnForksRefusesUnpairedForkIds() external {
+        (string memory name,, bytes memory value) = fresh();
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+        uint256[] memory forkIds = new uint256[](1);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, 2, 1));
+        this.externalRegisterOnForks(networks, forkIds, name, value);
+        forkIds = new uint256[](3);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, 2, 3));
+        this.externalRegisterOnForks(networks, forkIds, name, value);
     }
 
     /// A subset binds on exactly the networks selected, in selection order.

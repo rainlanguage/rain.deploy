@@ -18,7 +18,7 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
 import {MockUncloneableMispredictingCloneFactory} from "../../concrete/MockUncloneableMispredictingCloneFactory.sol";
-import {MOCK_DEPLOYABLE_OWNER, MockDeployableOwner} from "../../concrete/MockDeployableOwner.sol";
+import {MOCK_DEPLOYABLE_OWNER} from "../../concrete/MockDeployableOwner.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
 import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
 
@@ -68,35 +68,6 @@ contract LibRainDeployTest is Test {
     /// @return The deterministic address for `MockDeployableV2`.
     function mockDeployableV2Address() internal pure returns (address) {
         return LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
-    }
-
-    /// Deploys `MockDeployableOwner` to each network through `deployToNetworks`:
-    /// a first-time deployment of a target that answers the resolved-address
-    /// read. Nothing is made persistent, so it exists on the returned forks and
-    /// nowhere else, which is the state a deploy script is in when it returns.
-    /// @param networks The network names to deploy to.
-    /// @return The deterministic address it landed at.
-    /// @return The fork each network was deployed on.
-    function deployMockDeployableOwner(string[] memory networks) internal returns (address, uint256[] memory) {
-        (address deployed, uint256[] memory forkIds) = this.externalDeployToNetworks(
-            networks,
-            address(this),
-            type(MockDeployableOwner).creationCode,
-            "test/concrete/MockDeployableOwner.sol:MockDeployableOwner",
-            LibRainDeploy.zoltuAddress(type(MockDeployableOwner).creationCode),
-            keccak256(type(MockDeployableOwner).runtimeCode),
-            new DeployDependency[](0)
-        );
-        return (deployed, forkIds);
-    }
-
-    /// The address `MockDeployableOwner.iChainOwner` answers on a given chain.
-    /// @param chainId The chain id.
-    /// @return The chain id as an address.
-    function chainOwner(uint256 chainId) internal pure returns (address) {
-        // The low 160 bits are the whole of any chain id this repo forks.
-        // forge-lint: disable-next-line(unsafe-typecast)
-        return address(uint160(chainId));
     }
 
     /// `supportedNetworks` MUST return exactly 9 networks in the expected
@@ -1447,14 +1418,6 @@ contract LibRainDeployTest is Test {
         return (registry, consumer);
     }
 
-    /// The calldata for reading the chain `MockDeployableOwner` is read on.
-    /// @return The single-element read call list.
-    function chainOwnerReadCalls() internal pure returns (bytes[] memory) {
-        bytes[] memory readCalls = new bytes[](1);
-        readCalls[0] = abi.encodeWithSignature("iChainOwner()");
-        return readCalls;
-    }
-
     /// A single-element expected address list.
     /// @param account The expected address.
     /// @return The list.
@@ -2167,7 +2130,8 @@ contract LibRainDeployTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.BASE;
 
-        (address deployed, uint256[] memory forkIds) = deployMockDeployableOwner(networks);
+        (address deployed, uint256[] memory forkIds) =
+            LibResolvedReadFixture.deployMockDeployableOwner(vm, networks, address(this));
 
         LibRainDeploy.checkResolvedAddressesOnForks(
             vm, networks, forkIds, deployed, LibResolvedReadFixture.ownerReadCalls(), expected(MOCK_DEPLOYABLE_OWNER)
@@ -2186,7 +2150,8 @@ contract LibRainDeployTest is Test {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.BASE;
 
-        (address deployed, uint256[] memory forkIds) = deployMockDeployableOwner(networks);
+        (address deployed, uint256[] memory forkIds) =
+            LibResolvedReadFixture.deployMockDeployableOwner(vm, networks, address(this));
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -2194,91 +2159,16 @@ contract LibRainDeployTest is Test {
                 LibRainDeploy.BASE,
                 deployed,
                 uint256(0),
-                chainOwner(LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID),
-                chainOwner(BASE_CHAIN_ID)
+                LibResolvedReadFixture.chainOwner(LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID),
+                LibResolvedReadFixture.chainOwner(BASE_CHAIN_ID)
             )
         );
         this.externalCheckResolvedAddressesOnForks(
             networks,
             forkIds,
             deployed,
-            chainOwnerReadCalls(),
-            expected(chainOwner(LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID))
-        );
-    }
-
-    /// External wrapper for `checkResolvedValuesOnForks` so that
-    /// `vm.expectRevert` works at the correct call depth.
-    /// @param networks The network names.
-    /// @param forkIds The fork of each network, positionally paired.
-    /// @param target The deployed contract to read.
-    /// @param readCalls The calldata of each read.
-    /// @param expectedValues The bytes each read must answer.
-    function externalCheckResolvedValuesOnForks(
-        string[] memory networks,
-        uint256[] memory forkIds,
-        address target,
-        bytes[] memory readCalls,
-        bytes[] memory expectedValues
-    ) external {
-        LibRainDeploy.checkResolvedValuesOnForks(vm, networks, forkIds, target, readCalls, expectedValues);
-    }
-
-    /// A single-element expected value list holding `account` ABI-encoded.
-    /// @param account The expected address.
-    /// @return The list.
-    function expectedValue(address account) internal pure returns (bytes[] memory) {
-        bytes[] memory expectedValues = new bytes[](1);
-        expectedValues[0] = abi.encode(account);
-        return expectedValues;
-    }
-
-    /// A first-time deploy MUST be verifiable as values in the run that deploys
-    /// it, on the forks `deployToNetworks` hands back. Nothing is made
-    /// persistent, so the deployment exists on those forks and nowhere else.
-    function testDeployThenCheckResolvedValuesOnTheDeployForks() external {
-        string[] memory networks = new string[](2);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        networks[1] = LibRainDeploy.BASE;
-
-        (address deployed, uint256[] memory forkIds) = deployMockDeployableOwner(networks);
-
-        LibRainDeploy.checkResolvedValuesOnForks(
-            vm,
-            networks,
-            forkIds,
-            deployed,
-            LibResolvedReadFixture.ownerReadCalls(),
-            expectedValue(MOCK_DEPLOYABLE_OWNER)
-        );
-    }
-
-    /// `checkResolvedValuesOnForks` MUST select every fork it is given, not
-    /// only the first: the expected value holds on the first fork only, so the
-    /// check fails naming the SECOND network and the value it read there.
-    function testCheckResolvedValuesOnForksReachesEveryFork() external {
-        string[] memory networks = new string[](2);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        networks[1] = LibRainDeploy.BASE;
-
-        (address deployed, uint256[] memory forkIds) = deployMockDeployableOwner(networks);
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRainDeploy.UnexpectedResolvedValue.selector,
-                LibRainDeploy.BASE,
-                deployed,
-                uint256(0),
-                abi.encode(chainOwner(LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID)),
-                abi.encode(chainOwner(BASE_CHAIN_ID))
-            )
-        );
-        this.externalCheckResolvedValuesOnForks(
-            networks,
-            forkIds,
-            deployed,
-            chainOwnerReadCalls(),
-            expectedValue(chainOwner(LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID))
+            LibResolvedReadFixture.chainOwnerReadCalls(),
+            expected(LibResolvedReadFixture.chainOwner(LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID))
         );
     }
 
@@ -2297,7 +2187,7 @@ contract LibRainDeployTest is Test {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
-        (address deployed,) = deployMockDeployableOwner(networks);
+        (address deployed,) = LibResolvedReadFixture.deployMockDeployableOwner(vm, networks, address(this));
 
         vm.expectRevert(
             abi.encodeWithSelector(

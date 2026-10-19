@@ -390,16 +390,40 @@ library LibConfigRegistryRegister {
         string memory name,
         bytes memory value
     ) internal returns (uint256[] memory) {
-        (bytes32 hashed, SupportedNetwork[] memory networks, string memory record) =
-            checkInputs(vm, selected, declared, sender, name, value);
+        (,, string memory record) = checkInputs(vm, selected, declared, sender, name, value);
         console2.log(record);
 
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, selected);
+        registerOnForks(vm, selected, declared, forkIds, sender, name, value);
+        return forkIds;
+    }
+
+    /// Binds `name` to `value` from `sender` on every given fork, after the
+    /// input refusals of `checkInputs`.
+    /// @param vm The Vm instance to select forks and broadcast with.
+    /// @param selected The networks the forks are of.
+    /// @param declared The networks the declaration supports.
+    /// @param forkIds The fork of each selected network, positionally paired.
+    /// @param sender The account that signs. MUST be `CONFIG_REGISTRY_ROOT`.
+    /// @param name The name as a consumer writes it.
+    /// @param value The ABI-encoded value to bind it to.
+    function registerOnForks(
+        Vm vm,
+        string[] memory selected,
+        string[] memory declared,
+        uint256[] memory forkIds,
+        address sender,
+        string memory name,
+        bytes memory value
+    ) internal {
+        (bytes32 hashed, SupportedNetwork[] memory networks,) = checkInputs(vm, selected, declared, sender, name, value);
+        if (forkIds.length != networks.length) {
+            revert LibRainDeploy.ForkIdsLengthMismatch(networks.length, forkIds.length);
+        }
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
             registerOnSelectedChain(vm, networks[i], sender, hashed, value);
         }
-        return forkIds;
     }
 
     /// Reverts unless every given fork's registry binds `name` to `value`, read

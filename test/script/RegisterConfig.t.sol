@@ -130,11 +130,11 @@ contract RegisterConfigTest is Test {
         assertEq(registeredAt, block.timestamp);
     }
 
-    /// Runs as root with networks unset, which binds on every supported
-    /// network in declaration order. A prank cannot reach `run()`, since a
+    /// Runs as root with networks unset, which forks every supported network in
+    /// declaration order; the persistent registry carries the first fork's bind
+    /// to the rest, which skip. A prank cannot reach `run()`, since a
     /// prank and a broadcast cannot both be active, so root calls it through
-    /// code etched there. The registry is persistent so every fork `run`
-    /// creates holds it.
+    /// code etched there.
     /// @param script The script.
     /// @param name The test's base name.
     function runAsRootOnEveryNetwork(RegisterConfig script, string memory name) internal {

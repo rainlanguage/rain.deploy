@@ -108,8 +108,8 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// in `script/Build.sol`'s generated-contract list — nothing else. The
     /// released declaration follows from that third entry rather than being a
     /// fourth place to edit: `script/Build.sol` generates the per-contract
-    /// released lib AND the aggregate `releasedSuites()` reads from that one
-    /// list.
+    /// released lib from that list, and the aggregate `releasedSuites()` reads
+    /// from `releasedContractNames()`, its retired contracts then that list.
     function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = configRegistryCandidate();

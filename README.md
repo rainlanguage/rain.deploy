@@ -572,10 +572,10 @@ running it again.
   export CONFIG_REGISTRY_ROOT=$(grep -oE "CONFIG_REGISTRY_ROOT = 0x[0-9a-fA-F]{40}" src/concrete/ConfigRegistry.sol | grep -oE "0x[0-9a-fA-F]{40}")
   ```
 
-- Check the device answers as root (append `--mnemonic-derivation-path "<path>"`
-  if root is not the first Ethereum account in Trezor Suite, and the same path
-  as `--mnemonic-derivation-paths "<path>"` on the `forge script` commands
-  below):
+- Check the device answers as root (add `--mnemonic-derivation-path "<path>"`
+  after `--trezor` inside the `$(…)` if root is not the first Ethereum account
+  in Trezor Suite, and the same path as `--mnemonic-derivation-paths "<path>"`
+  on the `forge script` commands below):
 
   ```sh
   [ "$(nix develop -c cast wallet address --trezor)" = "$CONFIG_REGISTRY_ROOT" ] && echo "root OK" || echo "NOT root"

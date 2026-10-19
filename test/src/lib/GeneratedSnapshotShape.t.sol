@@ -18,12 +18,6 @@ error SnapshotNotInAggregate(string name);
 /// @param name The contract.
 error DeclaredWithoutSnapshotOrRecord(string name);
 
-/// The aggregate imports a different number of contracts than its snapshots
-/// and retired contracts account for.
-/// @param declared The contracts it imports.
-/// @param expected The snapshots plus the retired contracts.
-error AggregateCountMismatch(uint256 declared, uint256 expected);
-
 /// A contract the aggregate imports more than once.
 /// @param name The contract.
 error DuplicateAggregateDeclaration(string name);
@@ -344,9 +338,10 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// the declared candidates through the generator to what `releasedSuites()`
     /// returns.
     ///
-    /// Both directions and the count, for the reason the snapshot match gives:
-    /// an aggregate that imports one contract twice and another not at all has
-    /// the right number of imports, and a copied import line is how it happens.
+    /// Both directions and no duplicates, for the reason the snapshot match
+    /// gives: an aggregate that imports one contract twice and another not at
+    /// all has the right number of imports, and a copied import line is how it
+    /// happens.
     function testEverySnapshotIsInTheReleasedAggregate() external view {
         this.checkReleasedAggregate(
             LibReleasedSuitesAggregate.declaredContractNames(
@@ -387,17 +382,12 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
             }
         }
 
-        uint256 retired = 0;
         for (uint256 i = 0; i < declared.length; i++) {
             if (!snapshotSet.has(MemoryKVKey.wrap(keccak256(bytes(declared[i]))))) {
                 if (LibRainDeploySnapshot.recordPathsForContract(vm, recordRoot, declared[i]).length == 0) {
                     revert DeclaredWithoutSnapshotOrRecord(declared[i]);
                 }
-                retired++;
             }
-        }
-        if (declared.length != snapshots.length + retired) {
-            revert AggregateCountMismatch(declared.length, snapshots.length + retired);
         }
     }
 
