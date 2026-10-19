@@ -341,22 +341,26 @@ both `beacon` and `beaconCodeHash`; naming it both ways is refused with
 with `BeaconDeclaredTwice`. A beacon named by `beaconSuite` is deployed locally
 at its address on its network and refused with `BeaconSeatedOwner` or
 `BeaconSeatedImplementation` when it answers `owner()` or `implementation()`
-with other than its initial state. These refusals, and those of transition
-migrations below, are raised offline by the snapshot group for every beacon, and
-by the chain group, before any network is forked, for the beacons on the
-networks it checks; `BeaconOnUncheckedNetwork` there covers every beacon. A
-beacon with transitions reads `MigrationRegistry` on its network, which MUST be
-deployed there. The chain group reads `owner()`, and refuses a beacon that
-answers `pendingOwner()` with anything but zero with `BeaconPendingOwner`, or
-with data that is not one word with `BeaconPendingOwnerUnreadable`: a two-step
-handover is red from `transferOwnership` until the batch that accepts it applies
-its migration. Assert any other authority a beacon exposes (roles) yourself,
+with other than its initial state. These refusals, and
+`BeaconTransitionMigrationRepeated` and `BeaconTransitionMigrationUnnamed`
+below, are raised offline by the snapshot group for every beacon, and by the
+chain group, before any network is forked, for the beacons on the networks it
+checks; `BeaconOnUncheckedNetwork` there covers every beacon. A beacon with
+transitions reads `MigrationRegistry` on its network, which MUST be deployed
+there. The chain group reads `owner()`, and refuses a beacon that answers
+`pendingOwner()` with anything but zero with `BeaconPendingOwner`, or with data
+that is not one word with `BeaconPendingOwnerUnreadable`: a two-step handover is
+red from `transferOwnership` until the batch that accepts it applies its
+migration. Assert any other authority a beacon exposes (roles) yourself,
 including that the deploy key holds none of it. The deploy key is never a
 declared owner of any state, and a broadcast whose key is one is refused with
 `BeaconOwnedByDeployKey` before any network is read, as is a broadcast of a
 suite that, deployed locally with the deploy key as sender and origin, answers
 `owner()` with the deploy key (`SuiteSeatsDeployKey`); seat governance from the
-first state.
+first state. That check reads `owner()` only, on every network's clone of a
+per-network suite, the networks the broadcast does not reach included: roles,
+pending owners, admin slots and contracts a constructor creates are not read, so
+assert those yourself.
 
 Declare transitions in the order their migrations are applied: each applied
 transition's record MUST reach the latest earlier-declared applied one through
@@ -367,14 +371,16 @@ names a distinct migration, refused otherwise with
 writer and namespace, a migration neither zero nor `MIGRATION_HEAD_GENESIS`),
 refused otherwise with `BeaconTransitionMigrationUnnamed`. A transition written
 in another line names the earlier one, or a record after it, as a prerequisite.
-The order walk is unbounded and costs a fork read per record it reaches: name
-the previous transition's migration as a prerequisite of each transition's
-record so it reads one. Apply a transition's migration in the same transaction
-as the beacon change it describes (one Safe batch: `upgradeTo` or
-`transferOwnership`, then `applyMigrationV3`; for an `Ownable2Step` beacon the
-handover's migration goes in the batch that calls `acceptOwnership`, as
-`owner()` moves only then). Between two separate transactions the chain group
-refuses the network, as the chain and the registry disagree.
+The order walk is unbounded and costs a fork read per record it reaches: apply
+each transition onto the previous transition's migration as its line's head or,
+when it is written in another line, name it as a prerequisite, so the walk reads
+one record; every migration applied between two transitions in one line is read.
+Apply a transition's migration in the same transaction as the beacon change it
+describes (one Safe batch: `upgradeTo` or `transferOwnership`, then
+`applyMigrationV3`; for an `Ownable2Step` beacon the handover's migration goes
+in the batch that calls `acceptOwnership`, as `owner()` moves only then).
+Between two separate transactions the chain group refuses the network, as the
+chain and the registry disagree.
 
 ## Deploy verification
 

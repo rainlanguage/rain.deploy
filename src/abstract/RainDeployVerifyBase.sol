@@ -228,20 +228,23 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         return resolved;
     }
 
-    /// Deploys the beacon's suite locally, as `deriveDeployment` does, and refuses `BeaconSeatedOwner` or
-    /// `BeaconSeatedImplementation` when the deployment at the beacon's address answers `owner()` or
-    /// `implementation()` other than the initial state. A read that reverts or answers nothing is left to the chain
+    /// Deploys the beacon's suite locally, as `deriveDeployment` does but under the beacon's chain id, and refuses
+    /// `BeaconSeatedOwner` or `BeaconSeatedImplementation` when the deployment at the beacon's address answers
+    /// `owner()` or `implementation()` other than the initial state. A read that reverts or answers nothing is left to the chain
     /// group's `LibRainDeployBeacon.checkBeacon`.
     /// @param resolved The beacon, resolved and named by `beaconSuite`.
     /// @param beaconIndex The beacon's index in `beacons()`, for the refusal.
     function checkSeatedState(ResolvedBeacon memory resolved, uint256 beaconIndex) internal {
+        uint256 localChainId = block.chainid;
         uint256 snapshotId = vm.snapshotState();
+        vm.chainId(resolved.chainId);
         LibRainDeployMechanism.deployLocally(vm, resolved.suite);
         // slither-disable-next-line low-level-calls
         (bool ownerAnswered, bytes memory owner) = resolved.beacon.beacon.staticcall(abi.encodeCall(IERC5313.owner, ()));
         // slither-disable-next-line low-level-calls
         (bool implementationAnswered, bytes memory implementation) =
             resolved.beacon.beacon.staticcall(abi.encodeCall(IBeacon.implementation, ()));
+        vm.chainId(localChainId);
         if (!vm.revertToState(snapshotId)) {
             revert DerivationSnapshotRevertFailed(resolved.suite.suite, snapshotId);
         }

@@ -19,7 +19,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     }
 
     /// Checks every suite and every beacon on the given networks against each, forking each network once, with
-    /// `resolveBeacons`'s refusals raised before forking.
+    /// `resolveBeacons`'s refusals raised before forking. With no suites, only the networks a beacon is on are forked.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
     function checkDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) internal {
@@ -31,6 +31,10 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         // supposed to be legible against.
         if (suites.length == 0 && resolved.length == 0) {
             return;
+        }
+        // For the same reason, with no suites only the networks a beacon is on are forked.
+        if (suites.length == 0) {
+            networks = beaconNetworks(networks, resolved);
         }
 
         DeploySuite[] memory onNetworks = new DeploySuite[](suites.length);
@@ -64,6 +68,36 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
                 }
             }
         }
+    }
+
+    /// @param networks The networks to check.
+    /// @param resolved The resolved beacons.
+    /// @return The networks in `networks`, in order, whose chain id a beacon in `resolved` is on.
+    function beaconNetworks(SupportedNetwork[] memory networks, ResolvedBeacon[] memory resolved)
+        internal
+        pure
+        returns (SupportedNetwork[] memory)
+    {
+        bool[] memory kept = new bool[](networks.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < networks.length; i++) {
+            for (uint256 j = 0; j < resolved.length; j++) {
+                if (resolved[j].chainId == networks[i].chainId) {
+                    kept[i] = true;
+                    count++;
+                    break;
+                }
+            }
+        }
+        SupportedNetwork[] memory onBeacons = new SupportedNetwork[](count);
+        count = 0;
+        for (uint256 i = 0; i < networks.length; i++) {
+            if (kept[i]) {
+                onBeacons[count] = networks[i];
+                count++;
+            }
+        }
+        return onBeacons;
     }
 
     /// `suite`'s derivation, reused from a beacon in `resolved` that resolved `suite` itself, else derived.

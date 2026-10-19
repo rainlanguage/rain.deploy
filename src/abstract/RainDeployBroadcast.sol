@@ -10,7 +10,8 @@ import {DerivationSnapshotRevertFailed} from "./RainDeployVerifyBase.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {ChainBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
 
-/// @notice The deploy key MUST NOT own anything the broadcast deploys.
+/// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with the deploy key. Roles,
+/// pending owners, admin slots and contracts the suite's constructors create are not read.
 /// @param suite The suite being broadcast.
 /// @param deployed The address, deployed locally as the deploy key would, that answers `owner()` with the deploy key.
 error SuiteSeatsDeployKey(string suite, address deployed);
@@ -105,7 +106,9 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     }
 
     /// Deploys `suite` locally with `deployer` as sender and origin, and refuses `SuiteSeatsDeployKey` for any
-    /// deployed address answering `owner()` with `deployer`.
+    /// deployed address answering `owner()` with `deployer`. Every target of `suite` is deployed and read, those of
+    /// networks this broadcast does not reach included, so one network's clone seating the deploy key refuses the
+    /// broadcast to every network.
     /// @param suite The suite to broadcast, in its `onSupportedNetworks` form.
     /// @param deployer The deploy key's address.
     function checkSeatsNoDeployKey(DeploySuite memory suite, address deployer) internal {

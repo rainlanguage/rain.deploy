@@ -119,6 +119,38 @@ contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerif
         this.externalCheckDeployedOnNetworks(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
     }
 
+    function testChainGroupWithoutSuitesForksOnlyTheBeaconsNetworks() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        this.externalCheckDeployedOnNetworks(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
+        assertEq(block.chainid, 42161);
+        (bool extraFork,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", uint256(1)));
+        assertFalse(extraFork);
+    }
+
+    function testBeaconNetworksKeepsTheBeaconsNetworksInOrder() external {
+        sBeacons.declare(8453, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(8453, atASecondBeaconUnchecked());
+        string[] memory names = new string[](3);
+        names[0] = LibRainDeploy.ARBITRUM_ONE;
+        names[1] = LibRainDeploy.POLYGON;
+        names[2] = LibRainDeploy.BASE;
+        SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(names);
+        SupportedNetwork[] memory onBeacons = beaconNetworks(networks, resolveBeacons(networks));
+        assertEq(onBeacons.length, 2);
+        assertEq(onBeacons[0].name, LibRainDeploy.ARBITRUM_ONE);
+        assertEq(onBeacons[0].chainId, 42161);
+        assertEq(onBeacons[1].name, LibRainDeploy.BASE);
+        assertEq(onBeacons[1].chainId, 8453);
+    }
+
+    /// @return A second beacon at the implementation suite, owned by `OWNER`, named by address.
+    function atASecondBeaconUnchecked() internal returns (DeployBeacon memory) {
+        DeployBeacon memory beacon = declared("beacon-implementation@0_0_1", OWNER);
+        beacon.beacon = address(new UpgradeableBeacon(sImplementation, OWNER));
+        return beacon;
+    }
+
     function testChainGroupChecksEachNetworksOwnBeacons() external {
         sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
         DeployBeacon memory missing = declared("beacon-implementation@0_0_1", OWNER);

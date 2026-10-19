@@ -6,5 +6,10 @@ pragma solidity =0.8.25;
 /// @notice Seats whoever originated its deployment as `owner()`.
 contract MockOriginOwned {
     /// The deployment's origin.
-    address public owner = tx.origin;
+    address internal sOwner = tx.origin;
+
+    /// @return The deployment's origin.
+    function owner() external view returns (address) {
+        return sOwner;
+    }
 }

@@ -57,7 +57,7 @@ abstract contract BeaconVerifyFixture is RainDeployVerifyBase {
     bool internal sShareFirstBeacon;
 
     /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+    function releasedSuites() internal pure virtual override returns (DeploySuite[] memory) {
         DeploySuite[] memory released = new DeploySuite[](3);
         released[0] = LibBeaconTest.zoltuSuite(
             "beacon-implementation@0_0_1",
