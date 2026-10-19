@@ -534,12 +534,13 @@ library LibRainDeployMechanism {
     /// @return Whether some access created `account`.
     /// @return The creating access's accessor, zero when none did.
     function creatorIn(address account, Vm.AccountAccess[] memory accesses) internal pure returns (bool, address) {
-        for (uint256 k = 0; k < accesses.length; k++) {
-            if (accesses[k].kind == VmSafe.AccountAccessKind.Create && accesses[k].account == account) {
-                return (true, accesses[k].accessor);
-            }
+        bool created = false;
+        address creator = address(0);
+        for (uint256 k = 0; k < accesses.length && !created; k++) {
+            created = accesses[k].kind == VmSafe.AccountAccessKind.Create && accesses[k].account == account;
+            creator = created ? accesses[k].accessor : address(0);
         }
-        return (false, address(0));
+        return (created, creator);
     }
 
     /// Whether an address appears in a list before a given position.

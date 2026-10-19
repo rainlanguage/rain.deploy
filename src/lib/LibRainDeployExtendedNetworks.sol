@@ -53,22 +53,25 @@ library LibRainDeployExtendedNetworks {
     {
         LibRainDeploySnapshot.requireRecordRoot(root);
         bytes memory key = bytes(suite);
-        for (uint256 i = 0; i < key.length; i++) {
-            if (key[i] == "@") {
-                bytes memory name = new bytes(i);
-                for (uint256 j = 0; j < i; j++) {
-                    name[j] = key[j];
-                }
-                bytes memory tag = new bytes(key.length - i - 1);
-                for (uint256 j = 0; j < tag.length; j++) {
-                    tag[j] = key[i + 1 + j];
-                }
-                LibRainDeploySnapshot.requireRecordRoot(string.concat(string(tag), "/", string(name)));
-                string memory dir = string.concat(root, "/", EXTENDED_DIR, "/", string(tag));
-                return (true, dir, string.concat(dir, "/", string(name), ".sol"));
-            }
+        uint256 at = 0;
+        while (at < key.length && key[at] != "@") {
+            at++;
         }
-        return (false, "", "");
+        bool tagged = at < key.length;
+        if (!tagged) {
+            return (tagged, "", "");
+        }
+        bytes memory name = new bytes(at);
+        for (uint256 j = 0; j < at; j++) {
+            name[j] = key[j];
+        }
+        bytes memory tag = new bytes(key.length - at - 1);
+        for (uint256 j = 0; j < tag.length; j++) {
+            tag[j] = key[at + 1 + j];
+        }
+        LibRainDeploySnapshot.requireRecordRoot(string.concat(string(tag), "/", string(name)));
+        string memory dir = string.concat(root, "/", EXTENDED_DIR, "/", string(tag));
+        return (tagged, dir, string.concat(dir, "/", string(name), ".sol"));
     }
 
     /// The body the writer writes below the header for a list of networks: each network's address, then its init
