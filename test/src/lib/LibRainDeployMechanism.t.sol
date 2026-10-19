@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
 import {DeployCandidate, DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
@@ -1245,6 +1245,24 @@ contract LibRainDeployMechanismTest is Test {
             abi.encodeWithSelector(CloneInitializeReadsStorage.selector, suite.suite, source, bytes32(uint256(1)))
         );
         this.externalDeployLocally(suite);
+    }
+
+    /// An account no `Create` access names has no creator, reported as zero, even when an access of another kind
+    /// names it.
+    function testCreatorInOfAnAccountNothingCreatedIsAbsentAndZero() external pure {
+        Vm.AccountAccess[] memory accesses = new Vm.AccountAccess[](2);
+        accesses[0].kind = VmSafe.AccountAccessKind.Create;
+        accesses[0].account = address(0xA1);
+        accesses[0].accessor = address(0xC1);
+        accesses[1].kind = VmSafe.AccountAccessKind.Call;
+        accesses[1].account = address(0xA2);
+        accesses[1].accessor = address(0xC2);
+        (bool created, address creator) = LibRainDeployMechanism.creatorIn(address(0xA2), accesses);
+        assertFalse(created);
+        assertEq(creator, address(0));
+        (created, creator) = LibRainDeployMechanism.creatorIn(address(0xA1), accesses);
+        assertTrue(created);
+        assertEq(creator, address(0xC1));
     }
 
     /// An `initialize` that reads the storage of an account it creates, or of one such an account creates, deploys,
