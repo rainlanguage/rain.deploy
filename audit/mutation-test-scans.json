@@ -307,5 +307,35 @@
       "The killer lists under-report fuzz kills: the fail-pattern stops at the first ] inside a counterexample args=[...]. testRegisterOnEveryNetwork appears in several unrelated killer lists from fork transport noise; every such kill also names a W test.",
       "The foundry.toml MigrationRegistry compilation_restrictions entry is build config, not suite-reachable, and was not probed."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T11:48:00Z",
+    "commit": "4451af3b1943660c363128142fad35236f9aeaf1",
+    "testsAfterCommit": "f901d23b77303e5853e3ccffb6338b22ab5a1df0",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 86,
+    "scope": "PR #315 (#313) round 5, the code changed since 4124f73: src/lib/LibConfigRegistryRegister.sol registerOnForks, registerOnNetworks and checkInputs (F01-F08); src/lib/LibRainDeploy.sol checkNetworkForks and its two call sites (F09-F13); src/lib/LibRainDeploySnapshot.sol aggregate emitted text (F14-F15)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 15,
+      "behavioursProbed": 15,
+      "killedByExistingTests": 14,
+      "gapsFilled": 1,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Baseline green at 196 on the full round suite. 14 of 15 KILLED by existing tests.",
+      "F04 (registerOnForks skipping the sender and value refusals) survived the register suite and is killed by the new testRegisterOnForksRefusesInputsBeforeSelecting, re-probed on a fork-free narrow suite (baseline 8) because public RPC failures turned the register suite's baseline red.",
+      "Killer attribution re-run on the register suite (baseline 39) and the snapshot suite (baseline 108) with fail-pattern '(?s)\\[FAIL.*?\\] (test\\w+)\\(': F03 testRegisterOnForksRefusesUnpairedForkIds; F06 testRegisterOnNetworksRefusesInputsInOrder, testWiring; F07 testWiring; F08 testCheckInputsRecordIsTheInputsSigned; F14-F15 testTheCommittedAggregateIsWhatTheGeneratorEmits and the aggregate block tests. testRegisterOnEveryNetwork also appears in fork-noisy killer lists; every such kill also names a non-fork test."
+    ]
   }
 ]
