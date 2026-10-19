@@ -309,5 +309,36 @@
       "Equivalent mutant B14: doubled copying from index 1 instead of 0. Index 0 is always later, read before anything else is reached. A record names only records that exist when it is written (PrerequisiteNotApplied) and is never rewritten (MigrationAlreadyApplied), so no walk reaches later again and dropping its record and key changes nothing.",
       "Adversarial pass: no candidate bugs. The resolveBeacon copy shares initial and transitions with the declaration, which nothing writes; a reverting or non-one-word pendingOwner answer is treated as no pending owner, per the NatSpec."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T05:46:21Z",
+    "commit": "0f34914e426d54161b3185a7108d833a716b1971",
+    "testsAfterCommit": "75a5ba63541be5340a254697de67502735f3a8e2",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 91,
+    "scope": "PR #308 (#274) re-audit round: the mutants named by the open rain-marvin threads in src/lib/LibRainDeployBeacon.sol checkBeacon (pendingOwner guard) and src/abstract/RainDeployVerifyChain.sol resolveBeacons/resolveBeacon",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 6,
+      "behavioursProbed": 6,
+      "killedByExistingTests": 3,
+      "gapsFilled": 3,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|RainDeploySuitesBaseTest, baseline 120 at the scanned commit, 124 after. Pre-existing suite probed in a fresh clone at the scanned commit before any new test.",
+      "Killed by the pre-existing suite: pending guard length >= 0x20 (testBeaconAnsweringPendingOwnerWithTwoWordsPasses), pending guard dropping success (testBeaconRevertingPendingOwnerWithAWordPasses), resolveBeacon writing the declaration (testOneDeclarationSharedByTwoChainsResolvesOnEach, testResolvingABeaconLeavesItsDeclarationUnwritten).",
+      "Gaps filled: pendingOwner != 0 to > 1 by testBeaconWithTheSmallestPendingOwnerIsRefused; BeaconOnUncheckedNetwork skipped for a checked network by testBeaconOnACheckedNetworkOffTheSupportedNetworksIsRefused; beaconSuite address at a fixed chain id by testBeaconNamedBySuiteIsAtItsNetworksClone (both per-network clone beacon contracts).",
+      "Adversarial pass: no candidate bugs. The only source change this round is NatSpec naming each resolve refusal."
+    ]
   }
 ]
