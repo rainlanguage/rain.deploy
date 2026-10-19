@@ -11,6 +11,7 @@ import {LibConfigRegistryRegister} from "../../../src/lib/LibConfigRegistryRegis
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {LibConfigRegistryFork} from "../../lib/LibConfigRegistryFork.sol";
 import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
+import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
 
 /// @title LibConfigRegistryRegisterOnForksTest
 /// The fork loops of `LibConfigRegistryRegister`, against every supported
@@ -41,6 +42,16 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         bytes memory value
     ) external {
         LibConfigRegistryRegister.registerOnForks(vm, networks, networks, forkIds, CONFIG_REGISTRY_ROOT, name, value);
+    }
+
+    function externalRegisterOnForksFrom(
+        string[] memory networks,
+        uint256[] memory forkIds,
+        address sender,
+        string memory name,
+        bytes memory value
+    ) external {
+        LibConfigRegistryRegister.registerOnForks(vm, networks, networks, forkIds, sender, name, value);
     }
 
     function externalCheckRegisteredOnForks(
@@ -204,6 +215,26 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         forkIds = new uint256[](3);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, 2, 3));
         this.externalRegisterOnForks(networks, forkIds, name, value);
+    }
+
+    /// `registerOnForks` refuses a sender other than root and a value that is
+    /// not whole words as `checkInputs` does, before selecting any fork.
+    function testRegisterOnForksRefusesInputsBeforeSelecting() external {
+        (string memory name,, bytes memory value) = fresh();
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+        uint256[] memory forkIds = LibResolvedReadFixture.unselectableForkIds(2);
+        address other = address(uint160(CONFIG_REGISTRY_ROOT) ^ 1);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotRoot.selector, other, CONFIG_REGISTRY_ROOT)
+        );
+        this.externalRegisterOnForksFrom(networks, forkIds, other, name, value);
+
+        bytes memory unaligned = abi.encodePacked(value, bytes1(0));
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, unaligned));
+        this.externalRegisterOnForksFrom(networks, forkIds, CONFIG_REGISTRY_ROOT, name, unaligned);
     }
 
     /// A subset binds on exactly the networks selected, in selection order.
