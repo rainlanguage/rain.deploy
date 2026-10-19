@@ -315,12 +315,13 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// that describes the record at its head, to the one that describes the
     /// block — which is the order in which a caller can do something about
     /// them.
-    /// @param writer The line's writer, which `checkDelegate` has already refused as zero.
+    /// @param writer The line's writer, which `checkDelegate` has already
+    /// refused as zero.
     /// @param namespace The line under `writer` to apply in.
     /// @param migration The migration to apply.
     /// @param appliedAt The moment to record against it.
-    /// @param prerequisites The head the caller believes `writer`'s line is at, then
-    /// the records it was applied after, every one of which
+    /// @param prerequisites The head the caller believes `writer`'s line is at,
+    /// then the records it was applied after, every one of which
     /// `checkPrerequisites` has found to exist.
     function writeMigrationRecord(
         address writer,
