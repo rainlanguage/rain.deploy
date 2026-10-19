@@ -131,6 +131,23 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);
     }
 
+    /// `registerOnNetworks` binds on every selected network, each on its own
+    /// chain. The registry is persistent, so each fork it creates holds it.
+    function testRegisterOnNetworksBindsEverySelected() external {
+        (string memory name,, bytes memory value) = fresh();
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+
+        vm.createSelectFork(networks[0]);
+        LibConfigRegistryFork.ensureDeployed(vm);
+        vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+
+        uint256[] memory forkIds = this.externalRegisterOnNetworks(networks, name, value);
+        assertEq(forkIds.length, 2);
+        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, name, value);
+    }
+
     /// A subset binds on exactly the networks selected, in selection order.
     function testRegisterOnSubset() external {
         (string memory name, bytes32 hashed, bytes memory value) = fresh();
