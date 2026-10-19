@@ -250,7 +250,8 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         return value;
     }
 
-    /// The value of a `bytes` constant a code record declares: its `hex"..."` literal, read by `declaredValue`.
+    /// The value of a `bytes` constant a code record declares: its `hex"..."` literal, read by `declaredValue`, with
+    /// nothing after the closing quote but the writer's `;`.
     /// @param path The record file, for the error only.
     /// @param lines The record's lines, block comments removed.
     /// @param line The declaration's line.
@@ -265,6 +266,9 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
             revert FrozenCodeRecordUnreadable(path);
         }
         string[] memory closed = vm.split(opened[1], "\"");
+        if (closed.length != 2 || keccak256(bytes(closed[1])) != keccak256(";")) {
+            revert FrozenCodeRecordUnreadable(path);
+        }
         return vm.parseBytes(string.concat("0x", closed[0]));
     }
 
@@ -285,7 +289,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
             }
         }
         uint256 hashLine = declarationLine(path, lines, BYTECODE_HASH_DECLARATION);
-        declarationLine(path, lines, CREATION_CODE_DECLARATION);
+        declaredBytes(path, lines, declarationLine(path, lines, CREATION_CODE_DECLARATION));
         uint256 runtimeLine = declarationLine(path, lines, RUNTIME_CODE_DECLARATION);
 
         string memory literal = declaredValue(path, lines, hashLine);

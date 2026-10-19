@@ -7,7 +7,8 @@ import {CloneNetwork} from "../../src/lib/LibRainDeployClone.sol";
 import {PerNetworkCloneDeployBase} from "../abstract/PerNetworkCloneDeployBase.sol";
 import {PerNetworkCloneDeploys} from "../abstract/PerNetworkCloneDeploys.sol";
 
-/// @title PerNetworkCloneDeploy `PerNetworkCloneDeploys` under `PerNetworkCloneDeployBase`.
+/// @title PerNetworkCloneDeploy
+/// @notice `PerNetworkCloneDeploys` under `PerNetworkCloneDeployBase`.
 contract PerNetworkCloneDeploy is PerNetworkCloneDeploys, PerNetworkCloneDeployBase {
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()

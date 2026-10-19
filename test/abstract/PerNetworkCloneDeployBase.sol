@@ -1,6 +1,6 @@
 // SPDX-License-Identifier: LicenseRef-DCL-1.0
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
-pragma solidity =0.8.25;
+pragma solidity ^0.8.25;
 
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -8,7 +8,8 @@ import {CloneNetwork} from "../../src/lib/LibRainDeployClone.sol";
 import {ExternalCloneDeploySuites} from "./ExternalCloneDeploySuites.sol";
 import {ExternalDeploySuites} from "./ExternalDeploySuites.sol";
 
-/// @title PerNetworkCloneDeployBase `RainDeployBroadcast` with settable extended networks and external wrappers,
+/// @title PerNetworkCloneDeployBase
+/// @notice `RainDeployBroadcast` with settable extended networks and external wrappers,
 /// so a plain `Test` contract can drive a per-network clone declaration under it.
 abstract contract PerNetworkCloneDeployBase is ExternalCloneDeploySuites, ExternalDeploySuites, RainDeployBroadcast {
     /// The suite `sExtendedNetworks` is declared for.

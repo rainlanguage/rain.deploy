@@ -6,6 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {
     InvalidIdentifier,
+    NEWLINE_DUE_TO_MAX_LENGTH,
     RAIN_COPYRIGHT_TEXT,
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
@@ -224,6 +225,11 @@ contract LibRainDeploySnapshotTest is Test {
         writeFixture(path);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeLine(path, "address constant DEPLOYED_ADDRESS = address(0x0000000000000000000000000000000000000001);");
+    }
+
+    /// The wrapped-value indent the reader holds a record to is the one `LibCodeGen` writes.
+    function testWrappedIndentIsTheWritersLineWrap() external pure {
+        assertEq(string.concat("\n", LibRainDeploySnapshot.WRAPPED_INDENT), NEWLINE_DUE_TO_MAX_LENGTH);
     }
 
     /// A release tag is what `tagForVersion` produces and nothing else, so

@@ -1064,6 +1064,50 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         this.externalCheckFrozenCodeRecord("record.sol", edited);
     }
 
+    /// A `bytes` literal followed by anything but the writer's `;`, or with no closing quote, is unreadable, for
+    /// `CREATION_CODE` and `RUNTIME_CODE` alike.
+    function testFrozenCodeRecordLiteralNotEndingInTheWritersSemicolonIsUnreadable() external {
+        string[] memory declarations = new string[](2);
+        declarations[0] = "bytes constant CREATION_CODE =\n    hex\"";
+        declarations[1] = "bytes constant RUNTIME_CODE =\n    hex\"";
+        string[] memory endings = new string[](5);
+        endings[0] = "\"";
+        endings[1] = "\";;";
+        endings[2] = "\"x;";
+        endings[3] = "\";\"";
+        endings[4] = "";
+        for (uint256 i = 0; i < declarations.length; i++) {
+            string[] memory parts = vm.split(committedCodeRecord(), declarations[i]);
+            assertEq(parts.length, 2, "the record's code is not where the generator writes it");
+            string[] memory rest = vm.split(parts[1], "\";");
+            assertGt(rest.length, 1, "the record's literal does not end where the generator ends it");
+            string memory tail = rest[1];
+            for (uint256 k = 2; k < rest.length; k++) {
+                tail = string.concat(tail, "\";", rest[k]);
+            }
+            assertEq(string.concat(parts[0], declarations[i], rest[0], "\";", tail), committedCodeRecord());
+            for (uint256 j = 0; j < endings.length; j++) {
+                string memory edited = string.concat(parts[0], declarations[i], rest[0], endings[j], tail);
+                vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+                this.externalCheckFrozenCodeRecord("record.sol", edited);
+            }
+        }
+    }
+
+    /// `CREATION_CODE`'s value is held to the writer's format even though the check hashes only `RUNTIME_CODE`.
+    function testFrozenCodeRecordUnreadableCreationCodeIsUnreadable() external {
+        string[] memory parts = vm.split(committedCodeRecord(), "bytes constant CREATION_CODE =\n    hex\"");
+        assertEq(parts.length, 2, "the record's creation code is not where the generator writes it");
+        string[] memory variants = new string[](3);
+        variants[0] = "bytes constant CREATION_CODE =\n   hex\"";
+        variants[1] = "bytes constant CREATION_CODE = // hex\"";
+        variants[2] = "bytes constant CREATION_CODE =\n    x\"";
+        for (uint256 i = 0; i < variants.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord("record.sol", string.concat(parts[0], variants[i], parts[1]));
+        }
+    }
+
     /// A code record that declares a deploy address is a deploy record under a
     /// code record's name, and is refused.
     function testFrozenCodeRecordWithADeployedAddressReverts() external {

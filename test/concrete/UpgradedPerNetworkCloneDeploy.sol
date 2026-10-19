@@ -8,7 +8,8 @@ import {PerNetworkCloneDeployBase} from "../abstract/PerNetworkCloneDeployBase.s
 import {PerNetworkCloneDeploys} from "../abstract/PerNetworkCloneDeploys.sol";
 import {UpgradedPerNetworkCloneDeploys} from "../abstract/UpgradedPerNetworkCloneDeploys.sol";
 
-/// @title UpgradedPerNetworkCloneDeploy `UpgradedPerNetworkCloneDeploys` under `PerNetworkCloneDeployBase`.
+/// @title UpgradedPerNetworkCloneDeploy
+/// @notice `UpgradedPerNetworkCloneDeploys` under `PerNetworkCloneDeployBase`.
 contract UpgradedPerNetworkCloneDeploy is UpgradedPerNetworkCloneDeploys, PerNetworkCloneDeployBase {
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()
