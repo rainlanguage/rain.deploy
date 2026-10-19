@@ -1174,7 +1174,8 @@ it. In order:
    group refuse the release there with `ExtendedNetworkUnfrozen`.
 7. A clone whose `initialize` reads storage other than its own is refused by the
    local deploy with `CloneInitializeReadsStorage`. Only storage reads are
-   checked: a balance or code read of another account is not refused. The local
+   checked: a balance or code read of another account is not refused. A write to
+   part of a slot reads the slot first, so it is refused like a read. The local
    deploy records each clone's state diff, which ends any state-diff recording
    the caller started.
 8. Regenerate: `forge script ./script/Build.sol` followed by

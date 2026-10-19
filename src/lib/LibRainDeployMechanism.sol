@@ -405,7 +405,8 @@ library LibRainDeployMechanism {
     /// A storage read of any account but the clone during the factory call is refused with
     /// `CloneInitializeReadsStorage`, even when the call then reverts: locally that storage is empty. A call that
     /// reverts without one reverts unchanged.
-    /// Only storage reads are checked: a balance or code read of another account is not refused.
+    /// Only storage reads are checked: a balance or code read of another account is not refused. A write to part of a
+    /// slot reads the slot first, so it is refused like a read.
     /// Each clone is deployed under a state-diff recording, which ends any recording the caller started.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy.
@@ -507,14 +508,13 @@ library LibRainDeployMechanism {
         return false;
     }
 
-    /// Broadcasts a suite by its mechanism, to each network, as the given key, after `checkNetworksFrozen` refuses a
-    /// per-network release on a network `frozen` neither records nor declares.
+    /// Broadcasts a suite by its mechanism, to each network, as the given key: `frozen` with `candidate`'s networks it
+    /// lacks among `networks`, after `checkNetworksFrozen` refuses any of those `frozen` does not declare.
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param networks The networks to broadcast to.
     /// @param deployerPrivateKey The key to broadcast as.
-    /// @param frozen The suite with its extended networks, and nothing else beyond what it records. The refusal is only
-    /// as strong as `frozen`: passing `suite` here disables it, as every network `suite` takes is then one it records.
-    /// @param suite The suite to broadcast, with its candidate's unrecorded networks. Never also passed as `frozen`.
+    /// @param frozen The release with its extended networks.
+    /// @param candidate The release's candidate, or `frozen` when it has none.
     /// @return Where the suite is on each network, positionally paired with `networks`.
     /// @return The fork each network was deployed on.
     function deployAndBroadcast(
@@ -522,13 +522,14 @@ library LibRainDeployMechanism {
         string[] memory networks,
         uint256 deployerPrivateKey,
         DeploySuite memory frozen,
-        DeploySuite memory suite
+        DeploySuite memory candidate
     ) internal returns (address[] memory, uint256[] memory) {
         if (networks.length == 0) {
             revert LibRainDeploy.NoNetworks();
         }
-        checkNetworksFrozen(frozen, suite, networks);
         SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
+        DeploySuite memory suite = withUnrecordedNetworks(frozen, candidate, LibRainDeploy.networkChainIds(configs));
+        checkNetworksFrozen(frozen, suite, networks);
         NetworkDeploys memory deploys = NetworkDeploys({
             deployStepData: new bytes[](configs.length),
             expectedAddresses: new address[](configs.length),

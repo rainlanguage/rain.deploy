@@ -294,14 +294,21 @@ abstract contract RainDeploySuitesBase {
         view
         returns (DeploySuite memory)
     {
-        bytes32 name = keccak256(bytes(suiteKeyName(frozen.suite)));
+        return LibRainDeployMechanism.withUnrecordedNetworks(frozen, candidateOf(frozen), chainIds);
+    }
+
+    /// A suite's candidate snapshot.
+    /// @param suite The suite.
+    /// @return The snapshot of the candidate named as `suite` is, or `suite` when there is none.
+    function candidateOf(DeploySuite memory suite) internal view returns (DeploySuite memory) {
+        bytes32 name = keccak256(bytes(suiteKeyName(suite.suite)));
         DeployCandidate[] memory candidates = checkedCandidateSuites();
         for (uint256 i = 0; i < candidates.length; i++) {
             if (keccak256(bytes(candidates[i].snapshot.suite)) == name) {
-                return LibRainDeployMechanism.withUnrecordedNetworks(frozen, candidates[i].snapshot, chainIds);
+                return candidates[i].snapshot;
             }
         }
-        return frozen;
+        return suite;
     }
 
     /// A suite with the networks `extendedNetworks` declares for it.

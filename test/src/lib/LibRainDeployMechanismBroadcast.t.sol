@@ -211,19 +211,57 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         LibRainDeploy.etchAndDeployZoltu(vm, type(MockCloneFactory).creationCode);
         address implementation = LibRainDeploy.etchAndDeployZoltu(vm, type(MockCloneable).creationCode);
         CloneNetworks memory clones = exampleCloneNetworks();
-        DeploySuite memory suite = perNetworkSuite(clones);
-        suite.storedBytecodeHash = LibRainDeployClone.cloneDeployedCodehash(implementation);
-        suite.artifactPath = "test/concrete/MockCloneable.sol:MockCloneable";
-        string[] memory networks = new string[](2);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        networks[1] = LibRainDeploy.POLYGON;
+        DeploySuite memory frozen = frozenExampleCloneNetworks();
+        frozen.storedBytecodeHash = LibRainDeployClone.cloneDeployedCodehash(implementation);
+        frozen.artifactPath = "test/concrete/MockCloneable.sol:MockCloneable";
         LocalForkVm forkVm = new LocalForkVm();
         vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 0);
-        address[] memory deployed =
-            this.externalDeployAndBroadcastFrozenOn(Vm(address(forkVm)), networks, frozenExampleCloneNetworks(), suite);
+        address[] memory deployed = this.externalDeployAndBroadcastFrozenOn(
+            Vm(address(forkVm)), arbitrumAndPolygon(), frozen, perNetworkSuite(clones)
+        );
         assertEq(deployed.length, 2);
         assertEq(deployed[0], clones.networks[0].deployedAddress);
         assertEq(deployed[1], clones.networks[1].deployedAddress);
+    }
+
+    /// A release recording Arbitrum One alone, with Polygon declared at init data other than the candidate's, lands on
+    /// Polygon at the declared address with the declared data, not where the candidate's data derives.
+    function testBroadcastsAnExtendedNetworkAtItsDeclaredDataOffline() external {
+        LibRainDeploy.etchAndDeployZoltu(vm, type(MockCloneFactory).creationCode);
+        address implementation = LibRainDeploy.etchAndDeployZoltu(vm, type(MockCloneable).creationCode);
+        CloneNetworks memory candidate = exampleCloneNetworks();
+        CloneNetworks memory recorded = exampleCloneNetworks();
+        recorded.networks = new CloneNetwork[](1);
+        recorded.networks[0] = candidate.networks[0];
+        CloneNetwork[] memory extended = new CloneNetwork[](1);
+        extended[0] = CloneNetwork({chainId: 137, data: abi.encode(uint256(0xc4)), deployedAddress: address(0)});
+        CloneNetworks memory declaredClones = exampleCloneNetworks();
+        declaredClones.networks[1].data = extended[0].data;
+        extended[0].deployedAddress =
+            LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(declaredClones, 1));
+        assertNotEq(extended[0].deployedAddress, candidate.networks[1].deployedAddress);
+        DeploySuite memory frozen = LibRainDeployMechanism.withExtendedNetworks(perNetworkSuite(recorded), extended);
+        frozen.storedBytecodeHash = LibRainDeployClone.cloneDeployedCodehash(implementation);
+
+        address[] memory deployed = this.externalDeployAndBroadcastFrozenOn(
+            Vm(address(new LocalForkVm())), arbitrumAndPolygon(), frozen, perNetworkSuite(candidate)
+        );
+        assertEq(deployed[1], extended[0].deployedAddress);
+        assertEq(MockCloneable(deployed[1]).sInitData(), extended[0].data);
+        assertEq(candidate.networks[1].deployedAddress.code.length, 0);
+    }
+
+    /// The release passed as its own candidate takes no network it does not record, so it is refused one before any
+    /// fork rather than broadcast there.
+    function testTheReleaseAsItsOwnCandidateIsRefusedAnUnrecordedNetworkBeforeForking() external {
+        CloneNetworks memory recorded = exampleCloneNetworks();
+        recorded.networks = new CloneNetwork[](1);
+        recorded.networks[0] = exampleCloneNetworks().networks[0];
+        DeploySuite memory release = perNetworkSuite(recorded);
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneNetworkUndeclared.selector, 137));
+        this.externalDeployAndBroadcastFrozen(arbitrumAndPolygon(), 1, release, release);
+        assertFalse(anyForkExists());
     }
 
     /// A Zoltu broadcast under a compiled artifact path formats one verify command per network and emits no
@@ -353,9 +391,7 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         clones.networks[1].deployedAddress = stale;
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
-        this.externalDeployAndBroadcastFrozen(
-            arbitrumAndPolygon(), 1, frozenExampleCloneNetworks(), perNetworkSuite(clones)
-        );
+        this.externalDeployAndBroadcastFrozen(arbitrumAndPolygon(), 1, perNetworkSuite(clones), perNetworkSuite(clones));
         assertFalse(anyForkExists());
     }
 

@@ -79,9 +79,6 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         returns (address[] memory, uint256[] memory)
     {
         DeploySuite memory frozen = withExtendedNetworks(suite);
-        uint256[] memory chainIds = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(networks));
-        return LibRainDeployMechanism.deployAndBroadcast(
-            vm, networks, deployerPrivateKey, frozen, onSupportedNetworks(frozen, chainIds)
-        );
+        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, frozen, candidateOf(frozen));
     }
 }
