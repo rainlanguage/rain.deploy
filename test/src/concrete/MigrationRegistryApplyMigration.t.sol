@@ -3302,9 +3302,10 @@ contract MigrationRegistryApplyMigrationTest is Test {
     }
 
     /// A write naming prerequisites emits `Migrated` exactly as one naming none
-    /// does: one entry, the writer and migration indexed, the moment as data,
-    /// and nothing about the list — the list is in the record, read back by
-    /// `prerequisites`, so one filter on `Migrated` is the complete history.
+    /// does: one entry, the writer, namespace and migration indexed, the
+    /// sender and the moment as data, and nothing about the list — the list is
+    /// in the record, read back by `appliedAfterV3`, so one filter on
+    /// `Migrated` is the complete history.
     function testApplyMigrationWithPrerequisitesEmitsOneMigrated(
         address writer,
         bytes32 namespace,

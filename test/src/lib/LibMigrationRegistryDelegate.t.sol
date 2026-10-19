@@ -233,8 +233,8 @@ contract LibMigrationRegistryDelegateTest is Test {
         expectDelegationWrappersRefuse(keccak256(code));
     }
 
-    /// Every delegation builder, read and direct write refuses a registry
-    /// address delegated to another account.
+    /// Every delegation builder, read and direct approve and revoke refuses a
+    /// registry address delegated to another account.
     function testDelegationWrappersDelegatedCodeIsRefused(address delegate) external {
         vm.assume(delegate != address(0));
         bytes memory designator = LibAccountCode.delegationDesignator(delegate);
