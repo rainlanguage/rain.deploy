@@ -290,7 +290,8 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   refused on a network the release records (`DuplicateCloneNetwork`) or on a
   suite that is not per network (`ExtendedNetworksUnexpected`). The chain group
   refuses a per-network suite live on a network it neither records nor declares
-  with `ExtendedNetworkUnfrozen`, naming the address to freeze.
+  with `ExtendedNetworkUnfrozen`, naming the address to freeze. The declaration
+  lives in the consumer's source, not in the published release record.
 - **Undeclared networks.** A network the suite still has no entry for — no
   candidate is named by its key, or the candidate has no entry either — is
   refused with `CloneNetworkUndeclared`, before any fork, at broadcast and in

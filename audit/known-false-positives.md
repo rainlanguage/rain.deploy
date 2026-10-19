@@ -9,11 +9,11 @@
   so the two are equal there.
 - `LibRainDeploySnapshot.declarationValue`: the value read as
   `tokens[tokens.length - 1]` instead of `tokens[4]` (D7), or the final
-  `tokens.length != 5` loosened to `> 5` (T5G, D4). The count is already pinned
-  to exactly 5 when the value is read, and a line reaching that check never
-  holds fewer than five tokens: an unwrapped line holding exactly four takes the
-  wrapped branch, and a wrapped line's four-space prefix splits into four empty
-  tokens before its value.
+  `tokens.length == 5` relaxed to `tokens.length <= 5` (T5G, D4). The count is
+  already pinned to exactly 5 when the value is read, and a line reaching that
+  check never holds fewer than five tokens: an unwrapped line holding exactly
+  four takes the wrapped branch, and a wrapped line's four-space prefix splits
+  into four empty tokens before its value.
 - `RainDeployVerifySnapshotBase.declaredValue`'s `if (!readable)` guard made
   `if (false)` (D08), and the same to
   `LibRainDeploySnapshot.declarationAddress`'s guard (N07). `declarationValue`

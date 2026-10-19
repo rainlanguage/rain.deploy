@@ -16,4 +16,12 @@ contract MockStorageSource {
     function set(uint256 value) external {
         sValue = value;
     }
+
+    /// Sets `sPadding`, then reads `sValue`.
+    /// @param value The new padding.
+    /// @return The value.
+    function setPaddingThenRead(uint256 value) external returns (uint256) {
+        sPadding = value;
+        return sValue;
+    }
 }

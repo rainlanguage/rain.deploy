@@ -1222,6 +1222,15 @@ contract LibRainDeployMechanismTest is Test {
         this.externalDeployLocally(suite);
     }
 
+    /// A read of another account's storage is refused when that account wrote a slot first in the same call.
+    function testCloneInitializeReadingAfterAWriteIsRefused() external {
+        (DeploySuite memory suite, address source) = storageClone(SourceUse.WriteThenRead);
+        vm.expectRevert(
+            abi.encodeWithSelector(CloneInitializeReadsStorage.selector, suite.suite, source, bytes32(uint256(1)))
+        );
+        this.externalDeployLocally(suite);
+    }
+
     /// An `initialize` that writes another account's storage without reading it deploys.
     function testCloneInitializeWritingAnotherAccountsStorageDeploys() external {
         (DeploySuite memory suite, address source) = storageClone(SourceUse.Write);
