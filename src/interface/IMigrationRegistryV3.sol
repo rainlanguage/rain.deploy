@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {Prerequisite} from "./IMigrationRegistryV2.sol";
+import {Prerequisite} from "./deprecated/IMigrationRegistryV2.sol";
 
 /// @title IMigrationRegistryV3
 /// `IMigrationRegistryV2` with the writer as a parameter of every write, so a

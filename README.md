@@ -632,20 +632,6 @@ writer applied a given one in a given namespace (`appliedV3`), what it applied
 it onto (`appliedOntoV3`), what it applied it after (`appliedAfterV3`), and
 where a given writer's line in a given namespace has got to (`headV3`). There is
 no removal and no upgrade. The interface is `IMigrationRegistryV3`.
-`IMigrationRegistryV2` is the same registry with the writer fixed to
-`msg.sender`, and `IMigrationRegistryV1` is it before prerequisites and
-namespaces, both kept for the releases that shipped them. Each is its own
-registry at its own address, so records written to an earlier one are not
-visible through `IMigrationRegistryV3`; a consumer moving to it records the
-migrations that already ran again, with `applyMigrationHistoryV3` and the
-moments they ran at. `LibMigrationRegistry.replayV2Call` builds those writes for
-one V2 line, oldest first, refusing any `v2` whose code is not the released V2
-registry. Each call must be sent after every record its list names, so lines
-that wait on each other are replayed record by record, interleaved, not line by
-line. A replayed record's `appliedByV3` names the account that sent the replay,
-so `writer` should send its own. `LibMigrationRegistry.checkV2Replayed` reverts
-unless a line's V3 head is its V2 head: call it in the cutover test before any
-reader moves to `appliedV3`, which answers zero for every unreplayed record.
 
 The two writes differ in exactly one thing: where the recorded moment comes
 from. `applyMigrationV3` stamps the block the record lands in, for a script
@@ -869,12 +855,11 @@ pins with it trades a clock-guess for a bookkeeping-guess.
 `LibMigrationRegistry` is the surface — `appliedV3`, `appliedOntoV3`,
 `appliedAfterV3`, `appliedByV3`, `headV3`, `approvedV3`, `approveV3`,
 `revokeV3`, `applyMigrationV3` and `applyMigrationHistoryV3`, plus the `*Call`
-builders for a bundle, `replayV2Call` and `checkV2Replayed`, each verifying the
-registry's code hash before it reads or writes. There is deliberately **no
-broadcast runner**: the dominant real shape is a Safe executing a bundle that
-never broadcasts, and such a script appends `applyMigrationV3` to the bundle it
-is already emitting, which makes the record atomic with the migration it
-describes.
+builders for a bundle, each verifying the registry's code hash before it reads
+or writes. There is deliberately **no broadcast runner**: the dominant real
+shape is a Safe executing a bundle that never broadcasts, and such a script
+appends `applyMigrationV3` to the bundle it is already emitting, which makes the
+record atomic with the migration it describes.
 
 ## Deploying, and then releasing
 

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Prerequisite, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV2.sol";
+import {Prerequisite, MIGRATION_HEAD_GENESIS} from "../interface/deprecated/IMigrationRegistryV2.sol";
 import {IMigrationRegistryV3} from "../interface/IMigrationRegistryV3.sol";
 
 /// @dev One line's record of one migration. Written in one call, so a record
