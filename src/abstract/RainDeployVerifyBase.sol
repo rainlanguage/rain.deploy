@@ -235,7 +235,6 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     /// @param resolved The beacon, resolved and named by `beaconSuite`.
     /// @param beaconIndex The beacon's index in `beacons()`, for the refusal.
     function checkSeatedState(ResolvedBeacon memory resolved, uint256 beaconIndex) internal {
-        uint256 localChainId = block.chainid;
         uint256 snapshotId = vm.snapshotState();
         vm.chainId(resolved.chainId);
         LibRainDeployMechanism.deployLocally(vm, resolved.suite);
@@ -244,7 +243,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         // slither-disable-next-line low-level-calls
         (bool implementationAnswered, bytes memory implementation) =
             resolved.beacon.beacon.staticcall(abi.encodeCall(IBeacon.implementation, ()));
-        vm.chainId(localChainId);
+        // Restores the chain id with the state.
         if (!vm.revertToState(snapshotId)) {
             revert DerivationSnapshotRevertFailed(resolved.suite.suite, snapshotId);
         }
