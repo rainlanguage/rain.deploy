@@ -451,5 +451,34 @@
       "Live RPC, -j 2, six test contracts (Build, RegistryDeploySuites, RegistryDeployVerify, RainDeployVerifyChain, RainDeployVerifyChainNotRequired, LibConfigRegistryRegister); baseline green at 86. A first baseline at default parallelism was red on 16 fork tests from public RPC failures.",
       "This round's tests were written from the review threads before probing, so the kills credit the suite at 778ddc1, which includes them, not a pre-round suite."
     ]
+    },
+  {
+    "timestamp": "2026-10-19T17:46:31Z",
+    "commit": "0bfd3fb97c0368f9fe575b124dcf81341cc14119",
+    "testsAfterCommit": "0bfd3fb97c0368f9fe575b124dcf81341cc14119",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 132,
+    "scope": "PR #315 (#313) round 9, offline only: src/abstract/RainDeploySuitesBase.sol requiresSuiteOn default and src/abstract/RainDeployVerifyChain.sol its skip (C01-C07)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 7,
+      "behavioursProbed": 7,
+      "killedByExistingTests": 0,
+      "gapsFilled": 7,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Offline suite: RainDeploySuitesBaseTest, RegistryDeploySuitesTest, RegistryDeployVerifyTest, BuildScriptTest, with the inherited fork tests testSuitesLiveOnEverySupportedNetwork and testSupportedNetworkChainIdsAreBound excluded. Pre-existing pass: baseline 46, 0/7 killed. With RainDeploySuitesBaseRequiresSuiteOnTest and RainDeployVerifyChainNotRequiredLocalTest added: baseline 51, 7/7 killed.",
+      "The chain matrix takes its fork Vm as a parameter so LocalForkVm reaches the skip without an RPC."
+    ]
   }
 ]
