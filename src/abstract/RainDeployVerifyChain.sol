@@ -76,7 +76,10 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         }
         suites = onNetworks;
 
-        DerivedDeploy[] memory derived = deriveDeployments(suites);
+        DerivedDeploy[] memory derived = new DerivedDeploy[](suites.length);
+        for (uint256 j = 0; j < suites.length; j++) {
+            derived[j] = deriveUnlessResolved(suites[j], resolved);
+        }
         address[][] memory addresses = new address[][](networks.length);
         for (uint256 i = 0; i < networks.length; i++) {
             addresses[i] = new address[](suites.length);
@@ -98,6 +101,31 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
                 }
             }
         }
+    }
+
+    /// `suite`'s derivation, reused from a beacon in `resolved` that resolved `suite` itself, else derived.
+    /// @param suite The suite.
+    /// @param resolved The resolved beacons.
+    /// @return The derivation.
+    function deriveUnlessResolved(DeploySuite memory suite, ResolvedBeacon[] memory resolved)
+        internal
+        returns (DerivedDeploy memory)
+    {
+        bytes32 encoded = keccak256(abi.encode(suite));
+        for (uint256 i = 0; i < resolved.length; i++) {
+            // `resolved[i].suite` is unset when the beacon names no `beaconSuite`.
+            if (
+                bytes(resolved[i].beacon.beaconSuite).length != 0 && keccak256(abi.encode(resolved[i].suite)) == encoded
+            ) {
+                return resolved[i].derived;
+            }
+            for (uint256 state = 0; state < resolved[i].implementations.length; state++) {
+                if (keccak256(abi.encode(resolved[i].implementations[state])) == encoded) {
+                    return resolved[i].implementationDerived[state];
+                }
+            }
+        }
+        return deriveDeployment(suite);
     }
 
     /// The selected fork MUST hold `suite` at `deployedAddress` with its derived code and its declared dependencies.

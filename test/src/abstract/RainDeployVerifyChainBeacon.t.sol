@@ -546,6 +546,27 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         this.externalResolveBeacons(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE));
     }
 
+    function externalCheckReleasedOnNetworks(SupportedNetwork[] memory networks) external {
+        checkDeployedOnNetworks(networks, releasedSuites());
+    }
+
+    function testReleasedSuitesBeaconsNameAreDerivedOnceInTheChainCheck() external {
+        declare(42161, migrating("beacon-upgrade@0_0_1", OWNER));
+        declare(42161, bySuite("beacon@0_0_1", OWNER));
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployableV2).creationCode, 1);
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployable).creationCode, 1);
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, beaconCreationCode(), 1);
+        this.externalCheckReleasedOnNetworks(arbitrum());
+    }
+
+    function testReleasedSuiteABeaconImplementsIsDerivedOnceInTheChainCheck() external {
+        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployableV2).creationCode, 1);
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployable).creationCode, 1);
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, beaconCreationCode(), 1);
+        this.externalCheckReleasedOnNetworks(arbitrum());
+    }
+
     function testBeaconsOnEveryCheckedNetworkAreAccepted() external {
         supportOnly(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
         declare(42161, declared("beacon-implementation@0_0_1", OWNER));

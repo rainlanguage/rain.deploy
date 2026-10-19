@@ -57,6 +57,8 @@ library LibRainDeployBeacon {
     error BeaconTransitionsOutOfOrder(string network, address beacon, uint256 transition);
 
     /// @notice Each transition MUST name a distinct migration.
+    /// @dev Keyed by chain id, like `RainDeployVerifyChain`'s `BeaconNamedTwice` and `BeaconUnnamed`, because it is also raised while
+    /// resolving `beacons()`, before any network is selected or named.
     /// @param chainId The beacon's network.
     /// @param beacon The beacon.
     /// @param transition The index in `transitions` of the one naming an earlier-declared one's migration.
@@ -186,6 +188,9 @@ library LibRainDeployBeacon {
     }
 
     /// The selected fork MUST hold `beacon` at its declared code, `implementation` and `owner`, and no pending owner.
+    /// Reverts `LibRainDeploy.NotDeployedOnNetwork` and `LibRainDeploy.CodeHashMismatchOnNetwork` on the code,
+    /// `LibRainDeploy.ResolvedAddressReadFailed` and `LibRainDeploy.UnexpectedResolvedAddress` on `implementation()`
+    /// or `owner()`, and `BeaconPendingOwnerUnreadable` and `BeaconPendingOwner` on `pendingOwner()`.
     /// @param network The network's name, for the refusal.
     /// @param beacon The beacon.
     /// @param implementation The address `implementation()` MUST return.
