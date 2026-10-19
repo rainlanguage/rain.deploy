@@ -24,6 +24,7 @@ import {MockOwnable2StepBeacon} from "../../concrete/MockOwnable2StepBeacon.sol"
 import {MockSilentFallbackBeacon} from "../../concrete/MockSilentFallbackBeacon.sol";
 import {MockTwoWordFallbackBeacon} from "../../concrete/MockTwoWordFallbackBeacon.sol";
 import {MockRevertingWordFallbackBeacon} from "../../concrete/MockRevertingWordFallbackBeacon.sol";
+import {MockDirtyWordFallbackBeacon} from "../../concrete/MockDirtyWordFallbackBeacon.sol";
 
 /// @title LibRainDeployBeaconTest
 /// @notice `LibRainDeployBeacon`'s expected state from the migration registry, and its check of a beacon against it.
@@ -536,6 +537,17 @@ contract LibRainDeployBeaconTest is Test {
         DeployBeacon memory declaration = declared(new BeaconTransition[](0));
         declaration.beacon = address(beacon);
         declaration.beaconCodeHash = address(beacon).codehash;
+        this.externalCheckBeacon(declaration, sImplementation, sOwner);
+    }
+
+    function testBeaconAnsweringPendingOwnerWithADirtyWordIsRefused() external {
+        MockDirtyWordFallbackBeacon beacon = new MockDirtyWordFallbackBeacon(sImplementation, sOwner);
+        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
+        declaration.beacon = address(beacon);
+        declaration.beaconCodeHash = address(beacon).codehash;
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeployBeacon.BeaconPendingOwner.selector, NETWORK, address(beacon), 1 << 160)
+        );
         this.externalCheckBeacon(declaration, sImplementation, sOwner);
     }
 }
