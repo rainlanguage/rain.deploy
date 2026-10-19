@@ -608,4 +608,13 @@ contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerif
         DerivedDeploy memory derived = this.externalDeriveUnlessResolved(releasedSuites()[0], arbitrum());
         assertEq(derived.bytecodeHash, keccak256(type(MockDeployableV2).runtimeCode));
     }
+
+    function testUnsetSuiteOfABeaconNamedByAddressIsNotReused() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        DeploySuite memory unset;
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, true, LibRainDeploy.zoltuAddress(""))
+        );
+        this.externalDeriveUnlessResolved(unset, arbitrum());
+    }
 }

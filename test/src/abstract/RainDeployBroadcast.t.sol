@@ -31,6 +31,7 @@ import {BeaconState, BeaconTransition, DeployBeacon} from "../../../src/lib/LibR
 import {Prerequisite} from "../../../src/interface/IMigrationRegistryV2.sol";
 import {BeaconOwnerDeploy} from "../../concrete/BeaconOwnerDeploy.sol";
 import {MockOriginOwned} from "../../concrete/MockOriginOwned.sol";
+import {MockOriginRevertingOwner} from "../../concrete/MockOriginRevertingOwner.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
 
@@ -673,5 +674,31 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         );
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function testBroadcastOfASuiteRevertingWithTheDeployKeyReachesTheNetworkRefusal() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = LibBeaconTest.zoltuSuite(
+            "origin-reverting-owner@0_0_1",
+            type(MockOriginRevertingOwner).creationCode,
+            type(MockOriginRevertingOwner).runtimeCode,
+            "MockOriginRevertingOwner.sol:MockOriginRevertingOwner"
+        );
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function testSeatCheckLeavesNothingDeployed() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        bytes memory creationCode =
+            abi.encodePacked(type(UpgradeableBeacon).creationCode, abi.encode(address(deploy), address(0xB0B)));
+        DeploySuite memory suite = LibBeaconTest.zoltuSuite(
+            "beacon@0_0_1",
+            creationCode,
+            type(UpgradeableBeacon).runtimeCode,
+            "dependencies/@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon"
+        );
+        deploy.externalCheckSeatsNoDeployKey(suite, vm.addr(1));
+        assertEq(suite.storedDeployedAddress.code.length, 0);
     }
 }

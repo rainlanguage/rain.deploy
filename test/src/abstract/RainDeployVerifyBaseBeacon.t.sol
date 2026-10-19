@@ -7,6 +7,7 @@ import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     BeaconOnUncheckedNetwork,
     BeaconSeatedImplementation,
+    BeaconSeatedOwner,
     DerivedDeploy
 } from "../../../src/abstract/RainDeployVerifyBase.sol";
 import {
@@ -172,5 +173,32 @@ contract RainDeployVerifyBaseBeaconTest is BeaconVerifyFixture {
         UpgradeableBeacon(sSuiteBeacon).transferOwnership(NEW_OWNER);
         this.externalResolveBeacons(arbitrum());
         assertEq(UpgradeableBeacon(sSuiteBeacon).owner(), NEW_OWNER);
+    }
+
+    function testBeaconSuiteSeatingItsInitialStateBeforeATransitionResolves() external {
+        DeployBeacon memory beacon = bySuite("beacon@0_0_1", OWNER);
+        beacon.transitions = migrating("beacon-upgrade@0_0_1", NEW_OWNER).transitions;
+        sBeacons.declare(42161, beacon);
+        assertEq(this.externalResolvedCount(arbitrum()), 1);
+    }
+
+    function testBeaconSuiteSeatingAnotherOwnerIsRefusedAtItsIndex() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", NEW_OWNER));
+        vm.expectRevert(abi.encodeWithSelector(BeaconSeatedOwner.selector, 42161, 1, abi.encode(OWNER)));
+        this.externalResolveBeacons(arbitrum());
+    }
+
+    function testAReadThatRevertsSeatsNothing() external pure {
+        assertFalse(seatsOther(false, abi.encode(NEW_OWNER), OWNER));
+    }
+
+    function testAReadAnsweringNothingSeatsNothing() external pure {
+        assertFalse(seatsOther(true, "", OWNER));
+    }
+
+    function testAReadAnsweringAnotherAddressSeatsIt() external pure {
+        assertTrue(seatsOther(true, abi.encode(NEW_OWNER), OWNER));
+        assertFalse(seatsOther(true, abi.encode(OWNER), OWNER));
     }
 }
