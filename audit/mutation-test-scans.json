@@ -406,5 +406,29 @@
       "11 mutants (R801-R811) probed at 1808fd446737427b65fc4c3f8587f4c1bf5f9a8d with mutation-probe over the offline suite (forge test minus the RPC-dependent tests, 899 green at baseline). All 11 KILLED.",
       "The fix landed with its tests before the probe, so attribution is mixed: R801 (frozen and candidate swapped) and R803 (candidate broadcast as is) were killed by testBroadcastsAnExtendedNetworkAtItsDeclaredDataOffline, added in the same commit as the offline twin of the RPC test testBroadcastsAnExtendedNetworkAtItsDeclaredData. The other 9 were killed by tests that predate the round."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T11:05:47Z",
+    "commit": "669ebf7fdaaa613e2b76597f621315b7cac81783",
+    "testsAfterCommit": "669ebf7fdaaa613e2b76597f621315b7cac81783",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 93,
+    "scope": "PR #314 (#312), the changed code only: src/concrete/MigrationRegistry.sol (R: delegate check, approvals, writer-keyed head, prerequisite and record checks, writtenBy, events, V3 readers, key checks) and src/lib/LibMigrationRegistry.sol (L: V3 forwarders, onto, write and approval call builders, code-hash checks)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behavioursProbed": 77,
+      "killedByExistingTests": 77,
+      "gapsFilled": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "77 mutants (R 48, L 29), probed with mutation-probe against the pre-existing suite at the scanned commit; 77 KILLED, 0 survived, 0 no-run, 0 harness errors. No tests were added, so testsAfterCommit equals commit.",
+      "Registry mutants ran against test/src/concrete/MigrationRegistry*.t.sol only (baseline green at 195): the library suites pin the candidate code hash, which would kill any registry bytecode change for the wrong reason. Library mutants ran against test/src/lib/LibMigrationRegistry*.t.sol.",
+      "Adversarial pass: delegation scope, writer-keyed head and timestamp bounds, refusal order against the IMigrationRegistryV3 MUST clauses, and sender-first events were checked against the interface NatSpec and issue #312; no candidate bug."
+    ]
   }
 ]
