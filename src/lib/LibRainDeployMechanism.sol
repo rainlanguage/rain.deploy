@@ -75,7 +75,8 @@ error ExtendedNetworkAddressMismatch(string suite, uint256 chainId, address deri
 /// @param deployedAddress The address checked or to be broadcast there.
 error ExtendedNetworkUnfrozen(string suite, string network, address deployedAddress);
 
-/// Thrown when a clone's `initialize`, run locally, reads storage other than the clone's own.
+/// Thrown when a storage slot of any account but the clone is read while the clone is deployed locally: the factory
+/// call and the clone's `initialize`.
 /// @param suite The suite being deployed.
 /// @param account The account whose storage was read.
 /// @param slot The slot read.
@@ -290,12 +291,12 @@ library LibRainDeployMechanism {
         });
     }
 
-    /// A per-network release with the networks it was extended to after its cut appended, each held to the address its
-    /// init data derives under the release.
+    /// A per-network release with the networks declared for it beyond those it records appended, each held to the
+    /// address its init data derives under the release.
     /// Reverts with `ExtendedNetworksUnexpected` on a suite that is not per network, `ExtendedNetworkAddressMismatch` on
     /// an entry at an address its init data does not derive, and `DuplicateCloneNetwork` on a network named twice.
     /// @param suite The release.
-    /// @param extended The networks it was extended to, as broadcast.
+    /// @param extended The networks declared for it, each as it is or will be broadcast.
     /// @return The release with them.
     function withExtendedNetworks(DeploySuite memory suite, CloneNetwork[] memory extended)
         internal
@@ -419,8 +420,9 @@ library LibRainDeployMechanism {
 
     /// Runs a suite's mechanism on the local EVM and returns where it landed, each address
     /// cross-checked against the formula's.
-    /// A clone's `initialize` that reads storage other than the clone's own is refused with
-    /// `CloneInitializeReadsStorage`: locally that storage is empty.
+    /// A storage read of any account but the clone during the factory call is refused with
+    /// `CloneInitializeReadsStorage`, even when the call then reverts: locally that storage is empty. A call that
+    /// reverts without one reverts unchanged.
     /// Each clone is deployed under a state-diff recording, which ends any recording the caller started.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy.

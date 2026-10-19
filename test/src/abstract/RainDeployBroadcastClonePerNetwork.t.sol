@@ -50,7 +50,7 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
     }
 
     /// Polygon at its admin's init data and the address the release derives there, as `extendedNetworks` declares
-    /// it once broadcast.
+    /// it before it is broadcast.
     /// @return The declaration.
     function declaredPolygon() internal pure returns (CloneNetwork[] memory) {
         CloneNetwork[] memory networks = new CloneNetwork[](1);

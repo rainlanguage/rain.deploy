@@ -309,9 +309,10 @@ abstract contract RainDeploySuitesBase {
         return LibRainDeployMechanism.withExtendedNetworks(suite, extendedNetworks(suite.suite));
     }
 
-    /// The networks a per-network release was broadcast to after its cut, each as broadcast: its chain id, the init
-    /// data it took and the address that derives. The chain group refuses a release live on a network it neither
-    /// records nor names here, so an unrecorded network's address is frozen once broadcast.
+    /// The networks a per-network release takes beyond those it records, each declared before it is broadcast there:
+    /// its chain id, the init data it is broadcast with and the address that derives. The broadcast refuses an
+    /// unrecorded network not named here, and the chain group a release live on one, so an unrecorded network's
+    /// address is frozen before it exists on chain.
     /// Empty by default.
     /// @param suite The release's suite key.
     /// @return The networks.
