@@ -172,7 +172,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         return resolved;
     }
 
-    /// Refuses `BeaconNamedTwice` and `BeaconUnnamed`, and `BeaconSuiteNotReleased` through `resolveReleased`.
+    /// Refuses `BeaconNamedTwice` and `BeaconUnnamed`, `BeaconSuiteNotReleased` through `resolveReleased`, and
+    /// `LibRainDeployBeacon.BeaconTransitionMigrationRepeated`.
     /// @param declaration The beacon, left unwritten so one declaration can be resolved on several networks.
     /// @param chainId The beacon's network.
     /// @param beaconIndex The beacon's index in `beacons()`, for the refusal.
@@ -206,6 +207,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         } else if (beacon.beacon == address(0) || beacon.beaconCodeHash == bytes32(0)) {
             revert BeaconUnnamed(chainId, beaconIndex);
         }
+        LibRainDeployBeacon.checkDistinctMigrations(chainId, beacon);
         resolved.chainId = chainId;
         resolved.beacon = beacon;
         uint256 states = beacon.transitions.length + 1;

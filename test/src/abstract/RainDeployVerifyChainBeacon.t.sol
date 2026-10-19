@@ -656,6 +656,37 @@ contract RainDeployVerifyChainBeaconTest is RainDeployVerifyChain {
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
+    function repeating(DeployBeacon memory beacon) internal pure returns (DeployBeacon memory) {
+        BeaconTransition[] memory transitions = new BeaconTransition[](2);
+        transitions[0] = beacon.transitions[0];
+        transitions[1] = beacon.transitions[0];
+        beacon.transitions = transitions;
+        return beacon;
+    }
+
+    function testRepeatedMigrationIsRefusedWhileResolving() external {
+        declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        declare(42161, repeating(migrating("beacon-upgrade@0_0_1", OWNER)));
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeployBeacon.BeaconTransitionMigrationRepeated.selector, 42161, sBeacon, 1)
+        );
+        this.externalResolveBeacons(arbitrum());
+    }
+
+    function testRepeatedMigrationOnASuiteBeaconNamesItsDerivedAddress() external {
+        DeployBeacon memory beacon = migrating("beacon-upgrade@0_0_1", OWNER);
+        beacon.beaconSuite = "beacon@0_0_1";
+        beacon.beacon = address(0);
+        beacon.beaconCodeHash = bytes32(0);
+        declare(42161, repeating(beacon));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployBeacon.BeaconTransitionMigrationRepeated.selector, 42161, sSuiteBeacon, 1
+            )
+        );
+        this.externalResolveBeacons(arbitrum());
+    }
+
     function testNarrowedCheckAcceptsABeaconOnAnotherSupportedNetwork() external {
         supportOnly(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
         declare(8453, declared("beacon-implementation@0_0_1", NEW_OWNER));

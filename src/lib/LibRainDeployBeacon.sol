@@ -57,10 +57,10 @@ library LibRainDeployBeacon {
     error BeaconTransitionsOutOfOrder(string network, address beacon, uint256 transition);
 
     /// @notice Each transition MUST name a distinct migration.
-    /// @param network The beacon's network.
+    /// @param chainId The beacon's network.
     /// @param beacon The beacon.
     /// @param transition The index in `transitions` of the one naming an earlier-declared one's migration.
-    error BeaconTransitionMigrationRepeated(string network, address beacon, uint256 transition);
+    error BeaconTransitionMigrationRepeated(uint256 chainId, address beacon, uint256 transition);
 
     /// @notice A beacon that answers `pendingOwner()` MUST answer zero.
     /// @param network The beacon's network.
@@ -68,19 +68,32 @@ library LibRainDeployBeacon {
     /// @param pendingOwner The word `pendingOwner()` answered, raw: a word with dirty upper bits is not an address.
     error BeaconPendingOwner(string network, address beacon, uint256 pendingOwner);
 
+    /// @notice A beacon that answers `pendingOwner()` with data MUST answer exactly one word.
+    /// @param network The beacon's network.
+    /// @param beacon The beacon.
+    /// @param answer The answer.
+    error BeaconPendingOwnerUnreadable(string network, address beacon, bytes answer);
+
+    /// Refuses `BeaconTransitionMigrationRepeated`, reading nothing.
+    /// @param chainId The beacon's network, for the refusal.
+    /// @param beacon The beacon.
+    function checkDistinctMigrations(uint256 chainId, DeployBeacon memory beacon) internal pure {
+        bytes32[] memory migrations = new bytes32[](beacon.transitions.length);
+        for (uint256 i = 0; i < migrations.length; i++) {
+            migrations[i] = keccak256(abi.encode(beacon.transitions[i].migration));
+            if (isAmong(migrations, i, migrations[i])) {
+                revert BeaconTransitionMigrationRepeated(chainId, beacon.beacon, i);
+            }
+        }
+    }
+
     /// Zero for `initial`, else one past the latest transition the selected fork's registry reports applied.
     /// Reverts `BeaconTransitionMigrationRepeated` before reading the registry, and `BeaconTransitionsOutOfOrder`.
     /// @param network The network's name, for the refusal.
     /// @param beacon The beacon.
     /// @return The state index, as `stateAt` takes it.
     function appliedState(string memory network, DeployBeacon memory beacon) internal view returns (uint256) {
-        bytes32[] memory migrations = new bytes32[](beacon.transitions.length);
-        for (uint256 i = 0; i < migrations.length; i++) {
-            migrations[i] = keccak256(abi.encode(beacon.transitions[i].migration));
-            if (isAmong(migrations, i, migrations[i])) {
-                revert BeaconTransitionMigrationRepeated(network, beacon.beacon, i);
-            }
-        }
+        checkDistinctMigrations(block.chainid, beacon);
         uint256 state = 0;
         for (uint256 i = 0; i < beacon.transitions.length; i++) {
             Prerequisite memory migration = beacon.transitions[i].migration;
@@ -96,6 +109,8 @@ library LibRainDeployBeacon {
     }
 
     /// Whether `earlier` is reached from `later` through what each record was applied after, reading each record once.
+    /// Unbounded: one read when `later` names `earlier` as a prerequisite, else every record between them, and every
+    /// record back to genesis when `earlier` is not reached.
     /// @param earlier An applied migration.
     /// @param later An applied migration.
     /// @return True when the registry records `earlier` applied before `later`.
@@ -189,7 +204,10 @@ library LibRainDeployBeacon {
         LibRainDeploy.checkResolvedAddresses(network, beacon.beacon, reads, expected);
         // slither-disable-next-line low-level-calls
         (bool success, bytes memory pending) = beacon.beacon.staticcall(abi.encodeCall(Ownable2Step.pendingOwner, ()));
-        if (success && pending.length == 0x20) {
+        if (success && pending.length != 0) {
+            if (pending.length != 0x20) {
+                revert BeaconPendingOwnerUnreadable(network, beacon.beacon, pending);
+            }
             uint256 pendingOwner = abi.decode(pending, (uint256));
             if (pendingOwner != 0) {
                 revert BeaconPendingOwner(network, beacon.beacon, pendingOwner);

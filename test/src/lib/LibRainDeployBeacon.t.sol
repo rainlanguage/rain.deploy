@@ -25,6 +25,7 @@ import {MockSilentFallbackBeacon} from "../../concrete/MockSilentFallbackBeacon.
 import {MockTwoWordFallbackBeacon} from "../../concrete/MockTwoWordFallbackBeacon.sol";
 import {MockRevertingWordFallbackBeacon} from "../../concrete/MockRevertingWordFallbackBeacon.sol";
 import {MockDirtyWordFallbackBeacon} from "../../concrete/MockDirtyWordFallbackBeacon.sol";
+import {MockShortWordFallbackBeacon} from "../../concrete/MockShortWordFallbackBeacon.sol";
 
 /// @title LibRainDeployBeaconTest
 /// @notice `LibRainDeployBeacon`'s expected state from the migration registry, and its check of a beacon against it.
@@ -415,7 +416,7 @@ contract LibRainDeployBeaconTest is Test {
     function expectRepeated(uint256 index) internal {
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibRainDeployBeacon.BeaconTransitionMigrationRepeated.selector, NETWORK, address(sBeacon), index
+                LibRainDeployBeacon.BeaconTransitionMigrationRepeated.selector, block.chainid, address(sBeacon), index
             )
         );
     }
@@ -434,6 +435,30 @@ contract LibRainDeployBeaconTest is Test {
         transitions[2].migration.migration = HANDOVER;
         expectRepeated(2);
         this.externalAppliedState(declared(transitions));
+    }
+
+    function testTheSameMigrationIdInAnotherLineIsADistinctTransition() external {
+        deployRegistry();
+        applyIn(NAMESPACE, UPGRADE, onto(NAMESPACE, MIGRATION_HEAD_GENESIS));
+        applyIn(OTHER, UPGRADE, andAfter(onto(OTHER, MIGRATION_HEAD_GENESIS), NAMESPACE, UPGRADE));
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        transitions[1].migration = record(OTHER, UPGRADE);
+        assertEq(this.externalAppliedState(declared(transitions)), 2);
+    }
+
+    function testTheSameMigrationIdUnderAnotherWriterIsADistinctTransition() external {
+        deployRegistry();
+        applyMigration(UPGRADE, MIGRATION_HEAD_GENESIS);
+        address otherWriter = address(0x0DD);
+        Prerequisite[] memory list = new Prerequisite[](2);
+        list[0] = Prerequisite({writer: otherWriter, namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
+        list[1] = record(NAMESPACE, UPGRADE);
+        vm.prank(otherWriter);
+        IMigrationRegistryV2(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .applyMigration(NAMESPACE, UPGRADE, list);
+        BeaconTransition[] memory transitions = upgradeThenHandover();
+        transitions[1].migration = Prerequisite({writer: otherWriter, namespace: NAMESPACE, migration: UPGRADE});
+        assertEq(this.externalAppliedState(declared(transitions)), 2);
     }
 
     function applyInterims(bytes32 head, uint256 count) internal returns (bytes32) {
@@ -505,7 +530,7 @@ contract LibRainDeployBeaconTest is Test {
         this.externalCheckBeacon(declaration, sImplementation, sOwner);
     }
 
-    function testBeaconAnsweringPendingOwnerWithTwoWordsPasses() external {
+    function testBeaconAnsweringPendingOwnerWithTwoWordsIsRefused() external {
         MockTwoWordFallbackBeacon beacon = new MockTwoWordFallbackBeacon(sImplementation, sOwner);
         (bool success, bytes memory answer) = address(beacon).staticcall(abi.encodeWithSignature("pendingOwner()"));
         assertTrue(success);
@@ -515,6 +540,27 @@ contract LibRainDeployBeaconTest is Test {
         DeployBeacon memory declaration = declared(new BeaconTransition[](0));
         declaration.beacon = address(beacon);
         declaration.beaconCodeHash = address(beacon).codehash;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployBeacon.BeaconPendingOwnerUnreadable.selector, NETWORK, address(beacon), answer
+            )
+        );
+        this.externalCheckBeacon(declaration, sImplementation, sOwner);
+    }
+
+    function testBeaconAnsweringPendingOwnerWithLessThanAWordIsRefused() external {
+        MockShortWordFallbackBeacon beacon = new MockShortWordFallbackBeacon(sImplementation, sOwner);
+        (bool success, bytes memory answer) = address(beacon).staticcall(abi.encodeWithSignature("pendingOwner()"));
+        assertTrue(success);
+        assertEq(answer.length, 0x1f);
+        DeployBeacon memory declaration = declared(new BeaconTransition[](0));
+        declaration.beacon = address(beacon);
+        declaration.beaconCodeHash = address(beacon).codehash;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployBeacon.BeaconPendingOwnerUnreadable.selector, NETWORK, address(beacon), answer
+            )
+        );
         this.externalCheckBeacon(declaration, sImplementation, sOwner);
     }
 
