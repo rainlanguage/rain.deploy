@@ -1395,9 +1395,8 @@ library LibRainDeploySnapshot {
         return (chainIds, addresses);
     }
 
-    /// The address the declaration on `lines[line]` names: its value from the next line when the writer wrapped it there,
-    /// and the last of exactly the writer's five space-separated tokens on whichever line carries it, the fourth of an
-    /// unwrapped declaration being `=`.
+    /// The address the declaration on `lines[line]` names, read by `declarationValue` with the writer's wrapped
+    /// `    address(` prefix.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file, for the error only.
     /// @param lines The record's lines, block comments removed.
@@ -1408,20 +1407,41 @@ library LibRainDeploySnapshot {
         pure
         returns (address)
     {
-        string[] memory tokens = vm.split(lines[line], " ");
-        if (tokens.length < 4 || keccak256(bytes(tokens[3])) != keccak256("=")) {
+        (bool readable, string memory value) = declarationValue(vm, lines, line, "    address(");
+        if (!readable) {
             revert FrozenSnapshotUnreadable(path);
         }
+        return declaredAddress(vm, path, value);
+    }
+
+    /// The value the declaration on `lines[line]` gives, held to the writer's format: the last of exactly five
+    /// space-separated tokens, on the declaration's own line with `=` fourth, or on the next line when the declaration
+    /// ends at its `=` and that line starts with `wrappedPrefix`.
+    /// @param vm The Vm instance for string operations.
+    /// @param lines The record's lines, block comments removed.
+    /// @param line The declaration's line.
+    /// @param wrappedPrefix The start the writer gives a wrapped value's line.
+    /// @return readable Whether the declaration is in the writer's format.
+    /// @return value The value's token, empty when not readable.
+    function declarationValue(Vm vm, string[] memory lines, uint256 line, string memory wrappedPrefix)
+        internal
+        pure
+        returns (bool readable, string memory value)
+    {
+        string[] memory tokens = vm.split(lines[line], " ");
+        if (tokens.length < 4 || keccak256(bytes(tokens[3])) != keccak256("=")) {
+            return (false, "");
+        }
         if (tokens.length == 4) {
-            if (line + 1 >= lines.length || vm.indexOf(lines[line + 1], "    address(") != 0) {
-                revert FrozenSnapshotUnreadable(path);
+            if (line + 1 >= lines.length || vm.indexOf(lines[line + 1], wrappedPrefix) != 0) {
+                return (false, "");
             }
             tokens = vm.split(lines[line + 1], " ");
         }
         if (tokens.length != 5) {
-            revert FrozenSnapshotUnreadable(path);
+            return (false, "");
         }
-        return declaredAddress(vm, path, tokens[4]);
+        return (true, tokens[4]);
     }
 
     /// The address a declaration line's value names.

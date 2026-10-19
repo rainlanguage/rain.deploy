@@ -338,6 +338,25 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         );
     }
 
+    /// A declaration whose value is followed by exactly one more token is unreadable, not read as its fifth token, in
+    /// the every-network form, the per-network form and the wrapped form.
+    function testDeclarationOfSixTokensIsUnreadable() external {
+        string memory value =
+            "address(0x0000000000000000000000000000000000000001); //address(0x0000000000000000000000000000000000000002);\n";
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", string.concat("address constant DEPLOYED_ADDRESS = ", value)
+        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", string.concat("address constant DEPLOYED_ADDRESS_1 = ", value)
+        );
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddresses(
+            "record.sol", string.concat("address constant DEPLOYED_ADDRESS_1 =\n    ", value)
+        );
+    }
+
     /// A record holding a carriage return, vertical tab, form feed, NEL, LS or PS, each of which ends a line comment for
     /// the compiler but not for the reader, is unreadable, so a declaration after one in a comment is never missed.
     function testRecordHoldingAnotherLineBreakIsUnreadable() external {

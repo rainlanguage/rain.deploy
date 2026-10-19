@@ -390,6 +390,13 @@ deploy. On a candidate that declares itself unanchorable it is the other way
 round: resolving to nothing is the state being declared, and resolving to an
 artifact is what refuses the declaration.
 
+A Zoltu suite whose `artifactPath` is `CLONE_ARTIFACT_PATH` (a historical entry
+generated under a clone template) names no compiled source, so its broadcast
+prints no verify command. It emits
+`LibRainDeployMechanism.UnverifiableSource(sender, entryAddress, networks)` and
+logs a notice naming the address and each network, whose source must be verified
+by hand.
+
 Uniqueness is not something `vm.getCode` reports. It resolves a BARE contract
 name to whichever same-named artifact comes first, and answers rather than
 reverting when several match, so a bare name anchors a candidate to a contract

@@ -228,32 +228,22 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         return index;
     }
 
-    /// The value a code record's declaration on `lines[line]` gives: the last of exactly the writer's five
-    /// space-separated tokens, on the declaration's own line with `=` fourth, or on the line after it when the
-    /// generator wrapped the declaration after its `=`.
+    /// The value a code record's declaration on `lines[line]` gives, read by `LibRainDeploySnapshot.declarationValue`
+    /// with the writer's four-space wrapped indent.
     /// @param path The record file, for the error only.
     /// @param lines The record's lines, block comments removed.
-    /// @param line The declaration's line, which starts with its `<type> constant <NAME> =`.
+    /// @param line The declaration's line.
     /// @return The value's token.
     function declaredValue(string memory path, string[] memory lines, uint256 line)
         internal
         pure
         returns (string memory)
     {
-        string[] memory tokens = vm.split(lines[line], " ");
-        if (keccak256(bytes(tokens[3])) != keccak256("=")) {
+        (bool readable, string memory value) = LibRainDeploySnapshot.declarationValue(vm, lines, line, "    ");
+        if (!readable) {
             revert FrozenCodeRecordUnreadable(path);
         }
-        if (tokens.length == 4) {
-            if (line + 1 >= lines.length || vm.indexOf(lines[line + 1], "    ") != 0) {
-                revert FrozenCodeRecordUnreadable(path);
-            }
-            tokens = vm.split(lines[line + 1], " ");
-        }
-        if (tokens.length != 5) {
-            revert FrozenCodeRecordUnreadable(path);
-        }
-        return tokens[4];
+        return value;
     }
 
     /// The value of a `bytes` constant a code record declares: its `hex"..."` literal, read by `declaredValue`.
