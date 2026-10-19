@@ -181,12 +181,14 @@ contract LibRainDeployMechanismTest is Test {
         return LibRainDeployMechanism.deployLocally(vm, suite)[0];
     }
 
+    /// External wrapper for `LibRainDeployMechanism.deployStepData` on Arbitrum One.
     /// @param suite The suite whose step data is wanted.
     /// @return The suite's step data on Arbitrum One.
     function externalDeployStepData(DeploySuite memory suite) external pure returns (bytes memory) {
         return LibRainDeployMechanism.deployStepData(suite, 42161);
     }
 
+    /// External wrapper for `LibRainDeployMechanism.deployStep` on a local Arbitrum One fork.
     /// @param suite The suite whose step is run.
     /// @return The address the suite's step reports, on a local fork.
     function externalDeployStep(DeploySuite memory suite) external returns (address) {
@@ -1033,6 +1035,56 @@ contract LibRainDeployMechanismTest is Test {
         this.externalWithExtendedNetworks(release, extension);
     }
 
+    /// A second extended network at an address its init data does not derive is refused though the first is
+    /// correct, and both are appended once it is corrected.
+    function testSecondExtendedNetworkAtAnotherAddressIsRefused() external {
+        DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));
+        bytes memory baseData = abi.encode(address(0xb4b4B4B4b4b4B4B4b4b4B4B4b4b4b4b4B4B4B4B4));
+        CloneNetwork[] memory extension = new CloneNetwork[](2);
+        extension[0] = polygonAt(TEST_DATA)[0];
+        extension[1] = CloneNetwork({chainId: 8453, data: baseData, deployedAddress: address(0xdead)});
+        address derived = exampleCloneAddress(baseData);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ExtendedNetworkAddressMismatch.selector, release.suite, uint256(8453), derived, address(0xdead)
+            )
+        );
+        this.externalWithExtendedNetworks(release, extension);
+
+        extension[1].deployedAddress = derived;
+        CloneNetworks memory extended =
+            abi.decode(this.externalWithExtendedNetworks(release, extension).mechanismData, (CloneNetworks));
+        assertEq(extended.networks.length, 3);
+        assertEq(extended.networks[1].chainId, 137);
+        assertEq(extended.networks[2].chainId, 8453);
+        assertEq(extended.networks[2].deployedAddress, derived);
+    }
+
+    /// A network declared twice as extended is refused as a duplicate.
+    function testExtendedNetworkDeclaredTwiceIsRefused() external {
+        DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));
+        CloneNetwork[] memory extension = new CloneNetwork[](2);
+        extension[0] = polygonAt(TEST_DATA)[0];
+        extension[1] = polygonAt(TEST_DATA)[0];
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.DuplicateCloneNetwork.selector, uint256(137)));
+        this.externalWithExtendedNetworks(release, extension);
+    }
+
+    /// A release under another implementation than its candidate's, whose extended networks cover every network
+    /// the candidate has, takes nothing from the candidate and needs no reader declared.
+    function testExtendedReleaseUnderAnotherImplementationNeedsNoReader() external view {
+        DeploySuite memory release = this.externalWithExtendedNetworks(
+            perNetworkSuiteAt(TEST_SALT, onlyChainId(42161)), polygonAt(perNetworkCloneInitData(137))
+        );
+        DeploySuite memory candidate =
+        LibRainDeployMechanism.cloneCandidate(upgradedPerNetworkClone(), perNetworkCloneChainIds()).snapshot;
+        assertNotEq(
+            abi.decode(candidate.mechanismData, (CloneNetworks)).implementation,
+            abi.decode(release.mechanismData, (CloneNetworks)).implementation
+        );
+        assertEq(this.externalWithUnrecordedNetworks(release, candidate).mechanismData, release.mechanismData);
+    }
+
     /// An extended network the release already records is refused as a duplicate.
     function testExtendedNetworkTheReleaseRecordsIsRefused() external {
         DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds());
@@ -1139,7 +1191,8 @@ contract LibRainDeployMechanismTest is Test {
 
     /// A clone over a fresh factory and `MockStorageReadingCloneable`, initialized against a fresh source.
     /// @param use How `initialize` treats the source.
-    /// @return The suite, and the source.
+    /// @return The suite.
+    /// @return The source `initialize` treats as `use` says.
     function storageClone(SourceUse use) internal returns (DeploySuite memory, address) {
         MockCloneFactory factory = new MockCloneFactory();
         MockStorageReadingCloneable implementation = new MockStorageReadingCloneable();

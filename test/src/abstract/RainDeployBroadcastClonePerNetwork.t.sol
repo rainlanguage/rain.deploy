@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";
+import {ExtendedNetworkAddressMismatch, ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {CloneDeploy, CloneNetwork, CloneNetworks, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN,
@@ -259,6 +259,29 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, stale, derived));
         deploy.externalBroadcastSuite(release, bothNetworks(), 1);
         assertFalse(anyForkExists(), "a network was forked before the stale address was refused");
+    }
+
+    /// A release recording Arbitrum One alone, with Polygon declared at an address its init data does not derive, is
+    /// refused before any network is forked, naming both addresses.
+    function testBroadcastRefusesAMisdeclaredExtendedNetworkBeforeAnyFork() external {
+        PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
+        CloneNetwork[] memory declared = declaredPolygon();
+        address derived = declared[0].deployedAddress;
+        declared[0].deployedAddress = address(0xdead);
+        deploy.setExtendedNetworks("per-network-clone@0_0_1", declared);
+        DeploySuite memory release = onlyFirstRecordedNetwork(deploy.externalSuiteByName("per-network-clone@0_0_1"));
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ExtendedNetworkAddressMismatch.selector,
+                release.suite,
+                PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
+                derived,
+                address(0xdead)
+            )
+        );
+        deploy.externalBroadcastSuite(release, bothNetworks(), 1);
+        assertFalse(anyForkExists(), "a network was forked before the misdeclared one was refused");
     }
 
     /// A release recording Arbitrum One alone is refused a broadcast to Polygon, which it does not declare, before any

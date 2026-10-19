@@ -12,6 +12,8 @@ error MockNameNotRegistered();
 error MockInitializeRefused();
 
 /// How `MockStorageReadingCloneable.initialize` treats its source.
+/// `Read` reads it. `ReadRequired` reads it and reverts with `MockNameNotRegistered` on zero. `Write` writes 1 to
+/// it. `Refuse` reverts with `MockInitializeRefused` without touching it.
 enum SourceUse {
     Read,
     ReadRequired,

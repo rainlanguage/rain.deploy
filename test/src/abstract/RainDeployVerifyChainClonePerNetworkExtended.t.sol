@@ -57,6 +57,9 @@ contract RainDeployVerifyChainClonePerNetworkExtendedTest is PerNetworkCloneDepl
     /// The address `extendedNetworks` declares for Polygon.
     address internal sFrozenAddress;
 
+    /// The fork cheatcodes the matrix runs against.
+    LocalForkVm internal sForkVm;
+
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()
         internal
@@ -107,15 +110,14 @@ contract RainDeployVerifyChainClonePerNetworkExtendedTest is PerNetworkCloneDepl
             vm.makePersistent(addresses[i]);
         }
         sFrozenAddress = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        sForkVm = new LocalForkVm();
     }
 
     /// The matrix on local forks, over the release recording Arbitrum One alone.
     function externalCheckOnLocalForks() external {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = onlyFirstRecordedNetwork(releasedSuites()[0]);
-        checkDeployedOnNetworks(
-            Vm(address(new LocalForkVm())), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites
-        );
+        checkDeployedOnNetworks(Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
     }
 
     /// Unfrozen, Polygon takes the candidate's moved init data, and once a clone is live there it is refused as
@@ -155,6 +157,7 @@ contract RainDeployVerifyChainClonePerNetworkExtendedTest is PerNetworkCloneDepl
         sFrozen = true;
         address derived = sFrozenAddress;
         sFrozenAddress = movedReleaseAddress();
+        vm.expectCall(address(sForkVm), abi.encodeWithSelector(LocalForkVm.createFork.selector), 0);
         vm.expectRevert(
             abi.encodeWithSelector(
                 ExtendedNetworkAddressMismatch.selector,

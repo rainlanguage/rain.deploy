@@ -8,6 +8,7 @@ import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 /// @title LocalForkVm
 /// @notice Forks each catalogue alias as the local EVM at its catalogue chain id, or at `sReportedChainId` once set, and formats addresses as the cheatcodes do.
 contract LocalForkVm {
+    /// The cheatcodes this stands in front of.
     Vm internal constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));
 
     /// The chain id every fork selected reports once set; 0 for each fork's catalogue chain id.
@@ -42,7 +43,10 @@ contract LocalForkVm {
     }
 
     /// Broadcasts nothing.
-    function startBroadcast(address) external pure {}
+    /// @param broadcaster The account that would broadcast, ignored.
+    function startBroadcast(address broadcaster) external pure {
+        (broadcaster);
+    }
 
     /// Broadcasts nothing.
     function stopBroadcast() external pure {}
