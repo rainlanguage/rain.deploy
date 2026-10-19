@@ -13,12 +13,14 @@ error MockInitializeRefused();
 
 /// How `MockStorageReadingCloneable.initialize` treats its source.
 /// `Read` reads it. `ReadRequired` reads it and reverts with `MockNameNotRegistered` on zero. `Write` writes 1 to
-/// it. `Refuse` reverts with `MockInitializeRefused` without touching it.
+/// it. `Refuse` reverts with `MockInitializeRefused` without touching it. `ReadChild` ignores it and reads a
+/// `MockStorageSource` it creates.
 enum SourceUse {
     Read,
     ReadRequired,
     Write,
-    Refuse
+    Refuse,
+    ReadChild
 }
 
 /// @title MockStorageReadingCloneable
@@ -31,6 +33,8 @@ contract MockStorageReadingCloneable is ICloneableV2 {
             source.set(1);
         } else if (use == SourceUse.Refuse) {
             revert MockInitializeRefused();
+        } else if (use == SourceUse.ReadChild) {
+            (new MockStorageSource()).sValue();
         } else if (source.sValue() == 0 && use == SourceUse.ReadRequired) {
             revert MockNameNotRegistered();
         }

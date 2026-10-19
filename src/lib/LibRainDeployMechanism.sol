@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
 
@@ -402,9 +402,10 @@ library LibRainDeployMechanism {
 
     /// Runs a suite's mechanism on the local EVM and returns where it landed, each address
     /// cross-checked against the formula's.
-    /// A storage read of any account but the clone during the factory call is refused with
-    /// `CloneInitializeReadsStorage`, even when the call then reverts: locally that storage is empty. A call that
-    /// reverts without one reverts unchanged.
+    /// A storage read during the factory call of any account the call did not create is refused with
+    /// `CloneInitializeReadsStorage`, even when the call then reverts: locally that storage is empty, while an account
+    /// the call creates, the clone among them, is empty on chain too. A call that reverts without one reverts
+    /// unchanged.
     /// Only storage reads are checked: a balance or code read of another account is not refused. A write to part of a
     /// slot reads the slot first, so it is refused like a read.
     /// Each clone is deployed under a state-diff recording, which ends any recording the caller started.
@@ -466,7 +467,7 @@ library LibRainDeployMechanism {
                     revert CloneDerivationMismatch(suite.suite, deployed[i], cloneAddress);
                 }
             }
-            checkReadsOwnStorageOnly(suite.suite, deployed[i], accesses);
+            checkReadsOwnStorageOnly(suite.suite, accesses);
             if (!success) {
                 assembly ("memory-safe") {
                     revert(add(result, 0x20), mload(result))
@@ -476,23 +477,33 @@ library LibRainDeployMechanism {
         return deployed;
     }
 
-    /// Refuses a storage read, recorded while a clone was deployed, of any account but the clone. Only storage reads
-    /// are checked: a balance or code read of another account is not refused.
+    /// Refuses a storage read, recorded while a clone was deployed, of any account not created in the recording: the
+    /// clone and any account its `initialize` creates are empty on chain too. Only storage reads are checked: a
+    /// balance or code read of another account is not refused.
     /// @param suite The suite being deployed.
-    /// @param clone The clone's address.
     /// @param accesses What was recorded.
-    function checkReadsOwnStorageOnly(string memory suite, address clone, Vm.AccountAccess[] memory accesses)
-        internal
-        pure
-    {
+    function checkReadsOwnStorageOnly(string memory suite, Vm.AccountAccess[] memory accesses) internal pure {
         for (uint256 i = 0; i < accesses.length; i++) {
             for (uint256 j = 0; j < accesses[i].storageAccesses.length; j++) {
                 Vm.StorageAccess memory access = accesses[i].storageAccesses[j];
-                if (!access.isWrite && access.account != clone) {
+                if (!access.isWrite && !createdIn(access.account, accesses)) {
                     revert CloneInitializeReadsStorage(suite, access.account, access.slot);
                 }
             }
         }
+    }
+
+    /// Whether a recording created an account.
+    /// @param account The account.
+    /// @param accesses What was recorded.
+    /// @return Whether some access created `account`.
+    function createdIn(address account, Vm.AccountAccess[] memory accesses) internal pure returns (bool) {
+        for (uint256 k = 0; k < accesses.length; k++) {
+            if (accesses[k].kind == VmSafe.AccountAccessKind.Create && accesses[k].account == account) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// Whether an address appears in a list before a given position.

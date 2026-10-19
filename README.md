@@ -302,9 +302,10 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   local deploy rather than from the addresses the suite claims. The generated
   `Lib<Contract>Released` entry imports no `DEPLOYED_ADDRESS`, stores
   `address(0)`, and carries `DeployMechanism.ClonePerNetwork` and that
-  `MECHANISM_DATA`. A storage read of any account but the clone during the local
-  deploy is refused with `CloneInitializeReadsStorage`: locally that storage is
-  empty.
+  `MECHANISM_DATA`. A storage read during the local deploy of any account it did
+  not create is refused with `CloneInitializeReadsStorage`: locally that storage
+  is empty, while an account the deploy creates, the clone among them, is empty
+  on chain too.
 - **Verification.** The record group holds each network's recorded address to
   its derivation and matches a frozen record to its release by chain id AND
   address, so a record whose per-network labels were swapped matches no release.
@@ -1192,12 +1193,13 @@ it. In order:
    does not record, override `extendedNetworks` to return that network as
    broadcast: declare, then broadcast. Without it the broadcast and the chain
    group refuse the release there with `ExtendedNetworkUnfrozen`.
-7. A clone whose `initialize` reads storage other than its own is refused by the
-   local deploy with `CloneInitializeReadsStorage`. Only storage reads are
-   checked: a balance or code read of another account is not refused. A write to
-   part of a slot reads the slot first, so it is refused like a read. The local
-   deploy records each clone's state diff, which ends any state-diff recording
-   the caller started.
+7. A clone whose `initialize` reads storage of an account the factory call did
+   not create is refused by the local deploy with `CloneInitializeReadsStorage`.
+   Accounts created during the call, the clone among them, are exempt. Only
+   storage reads are checked: a balance or code read of another account is not
+   refused. A write to part of a slot reads the slot first, so it is refused
+   like a read. The local deploy records each clone's state diff, which ends any
+   state-diff recording the caller started.
 8. Regenerate: `forge script ./script/Build.sol` followed by
    `./script/build.sh`.
 

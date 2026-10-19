@@ -1209,6 +1209,19 @@ contract LibRainDeployMechanismTest is Test {
         this.externalDeployLocally(suite);
     }
 
+    /// An `initialize` that reads the storage of an account it creates deploys, while a read of an account that
+    /// predates the call is still refused.
+    function testCloneInitializeReadingAnAccountItCreatesDeploys() external {
+        (DeploySuite memory suite, address source) = storageClone(SourceUse.ReadChild);
+        assertEq(this.externalDeployLocally(suite), suite.storedDeployedAddress);
+
+        (suite, source) = storageClone(SourceUse.Read);
+        vm.expectRevert(
+            abi.encodeWithSelector(CloneInitializeReadsStorage.selector, suite.suite, source, bytes32(uint256(1)))
+        );
+        this.externalDeployLocally(suite);
+    }
+
     /// An `initialize` that writes another account's storage without reading it deploys.
     function testCloneInitializeWritingAnotherAccountsStorageDeploys() external {
         (DeploySuite memory suite, address source) = storageClone(SourceUse.Write);
