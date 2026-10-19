@@ -96,15 +96,15 @@ contract MigrationRegistryAppliedAfterTest is Test {
         bytes32 namespace,
         bytes32 migrationA,
         bytes32 migrationB,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migrationA);
         LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
 
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migrationA, one(writer, namespace, MIGRATION_HEAD_GENESIS));
@@ -116,7 +116,7 @@ contract MigrationRegistryAppliedAfterTest is Test {
         MigrationRegistry history = new MigrationRegistry();
         vm.prank(writer);
         history.applyMigrationHistoryV3(
-            writer, namespace, migrationB, now_, one(writer, namespace, MIGRATION_HEAD_GENESIS)
+            writer, namespace, migrationB, blockMoment, one(writer, namespace, MIGRATION_HEAD_GENESIS)
         );
         assertEq(
             abi.encode(history.appliedAfterV3(writer, namespace, migrationB)),
@@ -133,7 +133,7 @@ contract MigrationRegistryAppliedAfterTest is Test {
         bytes32 migrationA,
         bytes32 migrationB,
         bytes32 migrationC,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
@@ -143,8 +143,8 @@ contract MigrationRegistryAppliedAfterTest is Test {
         vm.assume(migrationA != migrationB);
         vm.assume(migrationA != migrationC);
         vm.assume(migrationB != migrationC);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migrationA, one(writer, namespace, MIGRATION_HEAD_GENESIS));
 
@@ -160,7 +160,9 @@ contract MigrationRegistryAppliedAfterTest is Test {
         );
 
         vm.prank(writer);
-        sRegistry.applyMigrationHistoryV3(writer, namespace, migrationC, now_, one(writer, namespace, migrationB));
+        sRegistry.applyMigrationHistoryV3(
+            writer, namespace, migrationC, blockMoment, one(writer, namespace, migrationB)
+        );
         assertEq(
             abi.encode(sRegistry.appliedAfterV3(writer, namespace, migrationC)),
             abi.encode(one(writer, namespace, migrationB))
@@ -181,7 +183,7 @@ contract MigrationRegistryAppliedAfterTest is Test {
         bytes32 migrationA,
         bytes32 migrationB,
         bytes32 prerequisite,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
@@ -191,8 +193,8 @@ contract MigrationRegistryAppliedAfterTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migrationB);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migrationA != migrationB);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
         applyUnder(other, namespace, prerequisite);
 
         Prerequisite[] memory rootList =
@@ -204,14 +206,14 @@ contract MigrationRegistryAppliedAfterTest is Test {
         assertEq(abi.encode(sRegistry.appliedAfterV3(writer, namespace, migrationA)), abi.encode(rootList));
 
         vm.prank(writer);
-        sRegistry.applyMigrationHistoryV3(writer, namespace, migrationB, now_, nonRootList);
+        sRegistry.applyMigrationHistoryV3(writer, namespace, migrationB, blockMoment, nonRootList);
         assertEq(abi.encode(sRegistry.appliedAfterV3(writer, namespace, migrationB)), abi.encode(nonRootList));
 
         MigrationRegistry history = new MigrationRegistry();
         vm.prank(other);
         history.applyMigrationV3(other, namespace, prerequisite, one(other, namespace, MIGRATION_HEAD_GENESIS));
         vm.prank(writer);
-        history.applyMigrationHistoryV3(writer, namespace, migrationA, now_, rootList);
+        history.applyMigrationHistoryV3(writer, namespace, migrationA, blockMoment, rootList);
         assertEq(abi.encode(history.appliedAfterV3(writer, namespace, migrationA)), abi.encode(rootList));
         vm.prank(writer);
         history.applyMigrationV3(writer, namespace, migrationB, nonRootList);
@@ -227,15 +229,15 @@ contract MigrationRegistryAppliedAfterTest is Test {
         bytes32 migrationA,
         bytes32 migrationB,
         bytes32[] memory seeds,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migrationA);
         LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
         Prerequisite[] memory prerequisites = new Prerequisite[](seeds.length);
         for (uint256 i = 0; i < seeds.length; i++) {
             prerequisites[i] = Prerequisite({
@@ -261,7 +263,7 @@ contract MigrationRegistryAppliedAfterTest is Test {
         sRegistry.applyMigrationV3(writer, namespace, migrationA, rootList);
         assertEq(abi.encode(sRegistry.appliedAfterV3(writer, namespace, migrationA)), abi.encode(rootList));
         vm.prank(writer);
-        sRegistry.applyMigrationHistoryV3(writer, namespace, migrationB, now_, nonRootList);
+        sRegistry.applyMigrationHistoryV3(writer, namespace, migrationB, blockMoment, nonRootList);
         assertEq(abi.encode(sRegistry.appliedAfterV3(writer, namespace, migrationB)), abi.encode(nonRootList));
 
         MigrationRegistry history = new MigrationRegistry();
@@ -279,7 +281,7 @@ contract MigrationRegistryAppliedAfterTest is Test {
             }
         }
         vm.prank(writer);
-        history.applyMigrationHistoryV3(writer, namespace, migrationA, now_, rootList);
+        history.applyMigrationHistoryV3(writer, namespace, migrationA, blockMoment, rootList);
         assertEq(abi.encode(history.appliedAfterV3(writer, namespace, migrationA)), abi.encode(rootList));
         vm.prank(writer);
         history.applyMigrationV3(writer, namespace, migrationB, nonRootList);

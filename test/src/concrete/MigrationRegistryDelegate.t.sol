@@ -58,20 +58,70 @@ contract MigrationRegistryDelegateTest is Test {
         assertFalse(sRegistry.approvedV3(otherWriter, NAMESPACE, DELEGATE));
     }
 
-    /// Approving twice leaves it approved; revoking removes it and is emitted;
-    /// revoking twice leaves it revoked.
+    /// Revoking an unapproved delegate, approving twice and revoking twice
+    /// each emit and leave the approval as named.
     function testRevokeRemovesTheApproval() external {
-        approveDelegate();
-        approveDelegate();
-        assertTrue(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
         vm.expectEmit(address(sRegistry));
         emit IMigrationRegistryV3.Revoked(WRITER, NAMESPACE, DELEGATE);
         vm.prank(WRITER);
         sRegistry.revokeV3(NAMESPACE, DELEGATE);
         assertFalse(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
+        for (uint256 i = 0; i < 2; i++) {
+            vm.expectEmit(address(sRegistry));
+            emit IMigrationRegistryV3.Approved(WRITER, NAMESPACE, DELEGATE);
+            approveDelegate();
+            assertTrue(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
+        }
+        for (uint256 i = 0; i < 2; i++) {
+            vm.expectEmit(address(sRegistry));
+            emit IMigrationRegistryV3.Revoked(WRITER, NAMESPACE, DELEGATE);
+            vm.prank(WRITER);
+            sRegistry.revokeV3(NAMESPACE, DELEGATE);
+            assertFalse(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
+        }
+    }
+
+    /// A revoke in one namespace leaves the writer's approval in another, and
+    /// the revoked namespace refuses history writes too.
+    function testRevokeIsPerNamespaceAndStopsHistoryWrites(bytes32 otherNamespace) external {
+        vm.assume(otherNamespace != NAMESPACE && otherNamespace != bytes32(0));
+        approveDelegate();
+        vm.prank(WRITER);
+        sRegistry.approveV3(otherNamespace, DELEGATE);
         vm.prank(WRITER);
         sRegistry.revokeV3(NAMESPACE, DELEGATE);
-        assertFalse(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
+        assertTrue(sRegistry.approvedV3(WRITER, otherNamespace, DELEGATE));
+        Prerequisite[] memory prerequisites = onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
+        vm.prank(DELEGATE);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
+        sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, MIGRATION, 1, prerequisites);
+        vm.prank(DELEGATE);
+        sRegistry.applyMigrationHistoryV3(
+            WRITER, otherNamespace, MIGRATION, 1, onto(WRITER, otherNamespace, MIGRATION_HEAD_GENESIS)
+        );
+        assertEq(sRegistry.headV3(WRITER, otherNamespace), MIGRATION);
+        assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION_HEAD_GENESIS);
+    }
+
+    /// Any caller but the writer, approved elsewhere or not, is `NotApproved`
+    /// on the zero namespace; the writer itself is `ZeroNamespace`.
+    function testZeroNamespaceFromAnotherCallerIsNotApproved(address caller) external {
+        vm.assume(caller != WRITER && caller != address(0));
+        vm.prank(WRITER);
+        sRegistry.approveV3(NAMESPACE, caller);
+        Prerequisite[] memory prerequisites = onto(WRITER, bytes32(0), MIGRATION_HEAD_GENESIS);
+        vm.startPrank(caller);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, bytes32(0), caller));
+        sRegistry.applyMigrationV3(WRITER, bytes32(0), MIGRATION, prerequisites);
+        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, bytes32(0), caller));
+        sRegistry.applyMigrationHistoryV3(WRITER, bytes32(0), MIGRATION, 1, prerequisites);
+        vm.stopPrank();
+        vm.startPrank(WRITER);
+        vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
+        sRegistry.applyMigrationV3(WRITER, bytes32(0), MIGRATION, prerequisites);
+        vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
+        sRegistry.applyMigrationHistoryV3(WRITER, bytes32(0), MIGRATION, 1, prerequisites);
+        vm.stopPrank();
     }
 
     /// The zero namespace and the zero delegate name no approval.

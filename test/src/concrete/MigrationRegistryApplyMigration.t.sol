@@ -946,20 +946,20 @@ contract MigrationRegistryApplyMigrationTest is Test {
         address writer,
         bytes32 namespace,
         bytes32 migration,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
 
         vm.prank(writer);
         sRegistry.applyMigrationHistoryV3(
             writer, namespace, migration, block.timestamp, onto(writer, namespace, MIGRATION_HEAD_GENESIS)
         );
 
-        assertEq(sRegistry.appliedV3(writer, namespace, migration), now_);
+        assertEq(sRegistry.appliedV3(writer, namespace, migration), blockMoment);
     }
 
     /// The two writes make the SAME record when the moment is this block, down
@@ -971,15 +971,15 @@ contract MigrationRegistryApplyMigrationTest is Test {
         bytes32 namespace,
         bytes32 migrationA,
         bytes32 migrationB,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migrationA);
         LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
 
         MigrationRegistry stamping = new MigrationRegistry();
         MigrationRegistry supplied = new MigrationRegistry();
@@ -1013,16 +1013,18 @@ contract MigrationRegistryApplyMigrationTest is Test {
         address writer,
         bytes32 namespace,
         bytes32 migration,
-        uint32 now_,
+        uint32 blockMoment,
         uint256 appliedAt
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
-        vm.warp(now_);
-        appliedAt = bound(appliedAt, uint256(now_) + 1, type(uint256).max);
+        vm.warp(blockMoment);
+        appliedAt = bound(appliedAt, uint256(blockMoment) + 1, type(uint256).max);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.FutureTimestamp.selector, appliedAt, uint256(now_)));
+        vm.expectRevert(
+            abi.encodeWithSelector(IMigrationRegistryV3.FutureTimestamp.selector, appliedAt, uint256(blockMoment))
+        );
         vm.prank(writer);
         sRegistry.applyMigrationHistoryV3(
             writer, namespace, migration, appliedAt, onto(writer, namespace, MIGRATION_HEAD_GENESIS)
@@ -1035,28 +1037,33 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
     /// One second past the current block is refused, and the current block is
     /// not: the boundary is the block's own timestamp, inclusive.
-    function testApplyMigrationHistoryFutureBoundary(address writer, bytes32 namespace, bytes32 migration, uint32 now_)
-        external
-    {
+    function testApplyMigrationHistoryFutureBoundary(
+        address writer,
+        bytes32 namespace,
+        bytes32 migration,
+        uint32 blockMoment
+    ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV3.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
+            abi.encodeWithSelector(
+                IMigrationRegistryV3.FutureTimestamp.selector, uint256(blockMoment) + 1, uint256(blockMoment)
+            )
         );
         vm.prank(writer);
         sRegistry.applyMigrationHistoryV3(
-            writer, namespace, migration, uint256(now_) + 1, onto(writer, namespace, MIGRATION_HEAD_GENESIS)
+            writer, namespace, migration, uint256(blockMoment) + 1, onto(writer, namespace, MIGRATION_HEAD_GENESIS)
         );
 
         vm.prank(writer);
         sRegistry.applyMigrationHistoryV3(
-            writer, namespace, migration, uint256(now_), onto(writer, namespace, MIGRATION_HEAD_GENESIS)
+            writer, namespace, migration, uint256(blockMoment), onto(writer, namespace, MIGRATION_HEAD_GENESIS)
         );
-        assertEq(sRegistry.appliedV3(writer, namespace, migration), now_);
+        assertEq(sRegistry.appliedV3(writer, namespace, migration), blockMoment);
     }
 
     /// A supplied zero is refused, rather than written as a record that
@@ -1066,13 +1073,13 @@ contract MigrationRegistryApplyMigrationTest is Test {
         address writer,
         bytes32 namespace,
         bytes32 migration,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.ZeroTimestamp.selector));
         vm.prank(writer);
@@ -1242,7 +1249,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         bytes32 namespace,
         bytes32 migrationA,
         bytes32 migrationB,
-        uint32 now_,
+        uint32 blockMoment,
         uint256 earlier
     ) external {
         vm.assume(writer != address(0));
@@ -1250,17 +1257,17 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migrationA);
         LibMigrationFuzz.assumeMigration(vm, migrationB);
         vm.assume(migrationA != migrationB);
-        vm.assume(now_ > 1);
-        vm.warp(now_);
-        earlier = bound(earlier, 1, uint256(now_) - 1);
+        vm.assume(blockMoment > 1);
+        vm.warp(blockMoment);
+        earlier = bound(earlier, 1, uint256(blockMoment) - 1);
 
         vm.prank(writer);
         sRegistry.applyMigrationHistoryV3(
-            writer, namespace, migrationA, uint256(now_), onto(writer, namespace, MIGRATION_HEAD_GENESIS)
+            writer, namespace, migrationA, uint256(blockMoment), onto(writer, namespace, MIGRATION_HEAD_GENESIS)
         );
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV3.TimestampBeforeHead.selector, earlier, uint256(now_))
+            abi.encodeWithSelector(IMigrationRegistryV3.TimestampBeforeHead.selector, earlier, uint256(blockMoment))
         );
         vm.prank(writer);
         sRegistry.applyMigrationHistoryV3(writer, namespace, migrationB, earlier, onto(writer, namespace, migrationA));
@@ -1271,9 +1278,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         vm.prank(writer);
         sRegistry.applyMigrationHistoryV3(
-            writer, namespace, migrationB, uint256(now_), onto(writer, namespace, migrationA)
+            writer, namespace, migrationB, uint256(blockMoment), onto(writer, namespace, migrationA)
         );
-        assertEq(sRegistry.appliedV3(writer, namespace, migrationB), uint256(now_));
+        assertEq(sRegistry.appliedV3(writer, namespace, migrationB), uint256(blockMoment));
         assertEq(sRegistry.headV3(writer, namespace), migrationB);
     }
 
@@ -1357,19 +1364,23 @@ contract MigrationRegistryApplyMigrationTest is Test {
         address writer,
         bytes32 namespace,
         bytes32 migration,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
 
         // Nothing can put a record at genesis to be bounded by.
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.GenesisMigration.selector));
         vm.prank(writer);
         sRegistry.applyMigrationHistoryV3(
-            writer, namespace, MIGRATION_HEAD_GENESIS, uint256(now_), onto(writer, namespace, MIGRATION_HEAD_GENESIS)
+            writer,
+            namespace,
+            MIGRATION_HEAD_GENESIS,
+            uint256(blockMoment),
+            onto(writer, namespace, MIGRATION_HEAD_GENESIS)
         );
 
         vm.prank(writer);
@@ -1986,12 +1997,14 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
     /// One `Migrated` entry: the writer, the namespace and the migration
     /// indexed in that order, the moment as data.
-    function testApplyMigrationEvent(address writer, bytes32 namespace, bytes32 migration, uint32 now_) external {
+    function testApplyMigrationEvent(address writer, bytes32 namespace, bytes32 migration, uint32 blockMoment)
+        external
+    {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
 
         vm.recordLogs();
         vm.prank(writer);
@@ -2005,7 +2018,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
         assertEq(entries[0].topics[2], namespace);
         assertEq(entries[0].topics[3], migration);
-        assertEq(entries[0].data, abi.encode(writer, uint256(now_)));
+        assertEq(entries[0].data, abi.encode(writer, uint256(blockMoment)));
     }
 
     /// With its one prerequisite applied, a write naming it records exactly
@@ -2020,7 +2033,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         address other,
         bytes32 migration,
         bytes32 prerequisite,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
@@ -2029,8 +2042,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
 
         MigrationRegistry plain = new MigrationRegistry();
         MigrationRegistry waiting = new MigrationRegistry();
@@ -2049,7 +2062,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         waiting.applyMigrationV3(writer, namespace, migration, waitingList);
 
         assertEq(waiting.appliedV3(writer, namespace, migration), plain.appliedV3(writer, namespace, migration));
-        assertEq(waiting.appliedV3(writer, namespace, migration), now_);
+        assertEq(waiting.appliedV3(writer, namespace, migration), blockMoment);
         assertEq(waiting.appliedOntoV3(writer, namespace, migration), plain.appliedOntoV3(writer, namespace, migration));
         assertEq(waiting.headV3(writer, namespace), plain.headV3(writer, namespace));
         assertEq(waiting.headV3(writer, namespace), migration);
@@ -2069,7 +2082,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         bytes32 migration,
         bytes32 prerequisite,
         uint32 appliedAt,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
@@ -2083,8 +2096,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
         vm.assume(appliedAt != 0);
-        vm.assume(now_ >= appliedAt);
-        vm.warp(now_);
+        vm.assume(blockMoment >= appliedAt);
+        vm.warp(blockMoment);
 
         MigrationRegistry waiting = new MigrationRegistry();
         vm.prank(other);
@@ -2304,7 +2317,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         bytes32 migration,
         bytes32 prerequisite,
         uint32 appliedAt,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
@@ -2318,8 +2331,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
         vm.assume(appliedAt != 0);
-        vm.assume(now_ >= appliedAt);
-        vm.warp(now_);
+        vm.assume(blockMoment >= appliedAt);
+        vm.warp(blockMoment);
         Prerequisite[] memory prerequisites =
             headThen(writer, namespace, MIGRATION_HEAD_GENESIS, one(other, namespace, prerequisite));
 
@@ -2445,15 +2458,15 @@ contract MigrationRegistryApplyMigrationTest is Test {
         bytes32[] memory seeds,
         uint256 unappliedIndex,
         uint32 appliedAt,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         vm.assume(seeds.length > 0);
         vm.assume(appliedAt != 0);
-        vm.assume(now_ >= appliedAt);
-        vm.warp(now_);
+        vm.assume(blockMoment >= appliedAt);
+        vm.warp(blockMoment);
         Prerequisite[] memory prerequisites = keysFromSeeds(seeds);
         unappliedIndex = bound(unappliedIndex, 0, prerequisites.length - 1);
         Prerequisite memory unapplied = prerequisites[unappliedIndex];
@@ -3225,7 +3238,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         bytes32 migration,
         bytes32 prerequisite,
         uint32 prerequisiteAt,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
@@ -3234,8 +3247,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(prerequisiteAt != 0);
-        vm.assume(now_ >= prerequisiteAt);
-        vm.warp(now_);
+        vm.assume(blockMoment >= prerequisiteAt);
+        vm.warp(blockMoment);
         vm.prank(other);
         sRegistry.applyMigrationHistoryV3(
             other, namespace, prerequisite, prerequisiteAt, onto(other, namespace, MIGRATION_HEAD_GENESIS)
@@ -3246,7 +3259,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.prank(writer);
         sRegistry.applyMigrationV3(writer, namespace, migration, prerequisites);
 
-        assertEq(sRegistry.appliedV3(writer, namespace, migration), now_);
+        assertEq(sRegistry.appliedV3(writer, namespace, migration), blockMoment);
     }
 
     /// A prerequisite bounds no moment. A record whose moment is EARLIER than
@@ -3262,7 +3275,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         bytes32 prerequisite,
         uint32 appliedAt,
         uint32 prerequisiteAt,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
@@ -3272,8 +3285,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(appliedAt != 0);
         vm.assume(prerequisiteAt > appliedAt);
-        vm.assume(now_ >= prerequisiteAt);
-        vm.warp(now_);
+        vm.assume(blockMoment >= prerequisiteAt);
+        vm.warp(blockMoment);
         vm.prank(other);
         sRegistry.applyMigrationHistoryV3(
             other, namespace, prerequisite, prerequisiteAt, onto(other, namespace, MIGRATION_HEAD_GENESIS)
@@ -3300,7 +3313,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         bytes32 migration,
         bytes32 prerequisiteA,
         bytes32 prerequisiteB,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
@@ -3313,8 +3326,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeMigration(vm, prerequisiteB);
         vm.assume(migration != prerequisiteA);
         vm.assume(migration != prerequisiteB);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
         applyUnder(otherA, namespace, prerequisiteA);
         if (sRegistry.appliedV3(otherB, namespace, prerequisiteB) == 0) {
             applyUnder(otherB, namespace, prerequisiteB);
@@ -3334,7 +3347,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
         assertEq(entries[0].topics[2], namespace);
         assertEq(entries[0].topics[3], migration);
-        assertEq(entries[0].data, abi.encode(writer, uint256(now_)));
+        assertEq(entries[0].data, abi.encode(writer, uint256(blockMoment)));
     }
 
     /// The same one entry from `applyMigrationHistoryV3`, with the caller's
@@ -3346,7 +3359,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         bytes32 migration,
         bytes32 prerequisite,
         uint32 appliedAt,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(writer != address(0));
         vm.assume(namespace != bytes32(0));
@@ -3360,8 +3373,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migration != prerequisite);
         vm.assume(appliedAt != 0);
-        vm.assume(now_ >= appliedAt);
-        vm.warp(now_);
+        vm.assume(blockMoment >= appliedAt);
+        vm.warp(blockMoment);
         applyUnder(other, namespace, prerequisite);
         Prerequisite[] memory prerequisites = one(other, namespace, prerequisite);
 

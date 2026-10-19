@@ -154,8 +154,8 @@ library LibMigrationRegistry {
     /// @param namespace The line under `writer` to read. Never zero.
     /// @param migration The migration to ask about. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @return The block timestamp `writer` applied `migration` at in
-    /// `namespace`, or zero if it has not.
+    /// @return The moment recorded against `migration` in `writer`'s line in
+    /// `namespace`, or zero if it has not been applied there.
     function appliedV3(address writer, bytes32 namespace, bytes32 migration) internal view returns (uint256) {
         checkCodeHash();
         return IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
@@ -287,20 +287,9 @@ library LibMigrationRegistry {
     /// answer "applied" to every prerequisite, so the check matters more for a
     /// write that names some, not less.
     ///
-    /// The registry refuses the zero namespace and the zero id, refuses a
-    /// caller that is neither `writer` nor approved by it for `namespace`,
-    /// refuses a migration `writer` has already applied in the line, and
-    /// refuses a first entry that is not `writer` in the namespace at the line's
-    /// actual head — which between them make a re-dispatched, a skipped and
-    /// an out-of-order migration all fail rather than land. It refuses a later
-    /// entry that is not a record key — the zero writer, the zero namespace,
-    /// the zero id, `MIGRATION_HEAD_GENESIS` — exactly as `appliedV3` refuses
-    /// the same key, refuses one in `writer`'s own line, and refuses the
-    /// write with `PrerequisiteNotApplied`, naming the first entry whose
-    /// migration has not been applied in its line, so a Safe bundle that
-    /// appends this reverts whole if the migration it depends on has not
-    /// landed. The moment is the block this lands in, which the registry
-    /// refuses if it is zero.
+    /// The registry's refusals and their order are
+    /// `IMigrationRegistryV3.applyMigrationHistoryV3`'s, with the block this
+    /// lands in as the moment.
     /// @param writer The line's writer: the caller, or one that approved it.
     /// @param namespace The line under `writer` to apply in. Never zero.
     /// @param migration The migration to apply. Never zero, never

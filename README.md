@@ -717,8 +717,8 @@ order consumers do not have: two migrations authored on one day collide, and one
 migration split across two scripts because it landed on two networks a week
 apart cannot be one comparable value at all. A set represents both exactly, and
 the ordering between migrations moves into the assertion —
-`applied(V5) != 0 ? … : applied(V4) != 0 ? … : …` — which is where the semantic
-dependency actually lives.
+`appliedV3(V5) != 0 ? … : appliedV3(V4) != 0 ? … : …` — which is where the
+semantic dependency actually lives.
 
 **A head, so a step cannot be skipped or repeated.** A line — one writer's
 records in one namespace — has a head: the migration it applied most recently,
@@ -733,16 +733,16 @@ first in the writer's own line is `OwnPrerequisite`: the head already says
 everything about that line, so every later entry names a record in another line.
 
 ```solidity
-Prerequisite[] memory after = new Prerequisite[](1);
+Prerequisite[] memory prerequisites = new Prerequisite[](1);
 // The first migration in a line, applied in this transaction.
-after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
-LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V1, after);
+prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
+LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V1, prerequisites);
 // Every later one names its predecessor.
-after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V1});
-LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V2, after);
+prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V1});
+LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V2, prerequisites);
 // One that ran before the registry reached this chain names the moment it ran.
-after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
-LibMigrationRegistry.applyMigrationHistoryV3(address(this), NAMESPACE, MIGRATION_V3, 1750000000, after);
+prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
+LibMigrationRegistry.applyMigrationHistoryV3(address(this), NAMESPACE, MIGRATION_V3, 1750000000, prerequisites);
 ```
 
 Each record keeps that first entry, which `appliedOntoV3` reads back, so a line
@@ -791,15 +791,15 @@ and the head still orders its own line exactly as before.
 // Lands only once FLEET_SAFE has recorded FLEET_UPGRADE in FLEET_NAMESPACE;
 // refused with `PrerequisiteNotApplied(FLEET_SAFE, FLEET_NAMESPACE, FLEET_UPGRADE)`
 // until then.
-Prerequisite[] memory after = new Prerequisite[](2);
-after[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
-after[1] = Prerequisite({writer: FLEET_SAFE, namespace: FLEET_NAMESPACE, migration: FLEET_UPGRADE});
-LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V3, after);
+Prerequisite[] memory prerequisites = new Prerequisite[](2);
+prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
+prerequisites[1] = Prerequisite({writer: FLEET_SAFE, namespace: FLEET_NAMESPACE, migration: FLEET_UPGRADE});
+LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V3, prerequisites);
 ```
 
 The list is the record, and `appliedAfterV3` reads it back exactly as the write
 gave it: the head under the writer's own line first, then the prerequisites as
-listed, duplicates included. A root's answer starts with
+listed, duplicates included. A line's first migration's answer starts with
 `MIGRATION_HEAD_GENESIS`, the one entry that is a head and not a record. Empty
 only for a migration never applied. Within a line `appliedOntoV3` walks the
 chain back to genesis; `appliedAfterV3` walks from a record to every record it
@@ -812,15 +812,9 @@ carry an earlier moment than its prerequisite, because what is checked is that
 the record existed when this write landed, which is chain order, and the moments
 in another line are that writer's data.
 
-The refusals sit in this order: the caller first (`ZeroWriter`, `NotApproved`);
-then its arguments (`ZeroNamespace`, `ZeroMigration`, `GenesisMigration`,
-`ZeroTimestamp`); then the list in the order it is written —
-`UnexpectedMigrationHead` over the first entry, then every entry after it as a
-record key in another line (`ZeroWriter`, `ZeroNamespace`, `ZeroMigration`,
-`GenesisMigration` exactly as `appliedV3` refuses them, then `OwnPrerequisite`)
-before any is read, then `PrerequisiteNotApplied` for the first unapplied one;
-then the writer's own record (`MigrationAlreadyApplied`, `TimestampBeforeHead`,
-`FutureTimestamp`). Duplicates are ordinary index checks.
+The refusals and their order are specified once, on
+`IMigrationRegistryV3.applyMigrationHistoryV3`. Duplicates are ordinary index
+checks.
 
 **The writer decides who writes its lines, and that is the whole access
 control.** A write names its writer, and the registry refuses it with

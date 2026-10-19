@@ -13,6 +13,7 @@ import {
 } from "../../../src/interface/IMigrationRegistryV3.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
+import {LibAccountCode} from "../../lib/LibAccountCode.sol";
 
 /// @title LibMigrationRegistryDelegateTest
 /// @notice The delegation builders and read: each targets the pinned
@@ -29,9 +30,10 @@ contract LibMigrationRegistryDelegateTest is Test {
         LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode);
     }
 
-    function genesis() internal pure returns (Prerequisite[] memory prerequisites) {
-        prerequisites = new Prerequisite[](1);
+    function genesis() internal pure returns (Prerequisite[] memory) {
+        Prerequisite[] memory prerequisites = new Prerequisite[](1);
         prerequisites[0] = Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
+        return prerequisites;
     }
 
     function send(address sender, address to, bytes memory data) internal {
@@ -204,6 +206,40 @@ contract LibMigrationRegistryDelegateTest is Test {
     /// `appliedByV3` refuses an address with no registry.
     function testAppliedByNoRegistryIsRefused() external {
         expectNoRegistry();
+        this.externalAppliedBy();
+    }
+
+    /// Every delegation builder and read refuses other code at the registry
+    /// address, naming its hash.
+    function testDelegationWrappersWrongCodeIsRefused(bytes memory code) external {
+        vm.assume(code.length > 0 && code[0] != 0xef);
+        vm.assume(keccak256(code) != LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH);
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, code);
+        expectDelegationWrappersRefuse(keccak256(code));
+    }
+
+    /// Every delegation builder, read and direct write refuses a registry
+    /// address delegated to another account.
+    function testDelegationWrappersDelegatedCodeIsRefused(address delegate) external {
+        vm.assume(delegate != address(0));
+        bytes memory designator = LibAccountCode.delegationDesignator(delegate);
+        vm.etch(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, designator);
+        expectDelegationWrappersRefuse(keccak256(designator));
+        MockMigrationApplier applier = new MockMigrationApplier();
+        expectCodeHash(keccak256(designator));
+        applier.approveV3(NAMESPACE, DELEGATE);
+        expectCodeHash(keccak256(designator));
+        applier.revokeV3(NAMESPACE, DELEGATE);
+    }
+
+    function expectDelegationWrappersRefuse(bytes32 actualCodeHash) internal {
+        expectCodeHash(actualCodeHash);
+        this.externalApproveCall();
+        expectCodeHash(actualCodeHash);
+        this.externalRevokeCall();
+        expectCodeHash(actualCodeHash);
+        this.externalApproved();
+        expectCodeHash(actualCodeHash);
         this.externalAppliedBy();
     }
 }

@@ -35,13 +35,9 @@ bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.hea
 /// namespace it is writing, and every later entry is a record in some other
 /// line the write waited on. A later entry is the key `appliedV3` takes, so
 /// anything `appliedV3` refuses to answer about is refused as a prerequisite.
-///
-/// The deprecated V2 interface declares a distinct `Prerequisite` and its own
-/// `MIGRATION_HEAD_GENESIS`, so a file importing both aliases V2's, e.g.
-/// `import {Prerequisite as PrerequisiteV2} from ".../IMigrationRegistryV2.sol";`.
 struct Prerequisite {
-    /// The writer. Never the zero address; in the first entry, the line's
-    /// writer, never the caller: a delegate names the writer that approved it.
+    /// The writer. Never the zero address; in the first entry, the write's
+    /// `writer`, whoever calls: a delegate names the writer that approved it.
     address writer;
     /// The namespace under the writer. Never zero; in the first entry, the
     /// namespace the write names.
@@ -394,8 +390,9 @@ interface IMigrationRegistryV3 {
     /// is `UnexpectedMigrationHead` rather than this.
     error ZeroWriter();
 
-    /// Thrown by every write when called with the zero namespace or given a
-    /// prerequisite naming it, by every read when asked about it, and by
+    /// Thrown by every write that `writer` makes with the zero namespace (any
+    /// other caller is `NotApproved` first, as no approval names it) or that is
+    /// given a prerequisite naming it, by every read when asked about it, and by
     /// `approveV3`, `revokeV3` and `approvedV3` when given it. Zero is what an
     /// uninitialised `bytes32` constant reads as, so it is never a namespace
     /// anybody meant to name: a write into it would put a record where no
@@ -565,8 +562,8 @@ interface IMigrationRegistryV3 {
     /// @param delegate The approved account.
     event Approved(address indexed sender, bytes32 indexed namespace, address indexed delegate);
 
-    /// Emitted when `sender` revokes `delegate`'s approval for its line in
-    /// `namespace`.
+    /// Emitted when `sender` revokes `delegate` for its line in `namespace`,
+    /// whether or not `delegate` was approved.
     /// @param sender The revoking writer, which is the account that called.
     /// @param namespace The line under the writer.
     /// @param delegate The revoked account.
@@ -674,14 +671,16 @@ interface IMigrationRegistryV3 {
         Prerequisite[] calldata prerequisites
     ) external;
 
-    /// Approves `delegate` to write the caller's line in `namespace`.
-    /// Approving an approved delegate leaves it approved.
+    /// Approves `delegate` to write the caller's line in `namespace` and emits
+    /// `Approved`. Approving an approved delegate leaves it approved and still
+    /// emits. Refuses `ZeroNamespace`, then `ZeroDelegate`.
     /// @param namespace The line under the caller. MUST NOT be zero.
     /// @param delegate The account to approve. MUST NOT be zero.
     function approveV3(bytes32 namespace, address delegate) external;
 
-    /// Revokes `delegate`'s approval for the caller's line in `namespace`.
-    /// Revoking an unapproved delegate leaves it unapproved.
+    /// Revokes `delegate`'s approval for the caller's line in `namespace` and
+    /// emits `Revoked`. Revoking an unapproved delegate leaves it unapproved
+    /// and still emits. Refuses `ZeroNamespace`, then `ZeroDelegate`.
     /// @param namespace The line under the caller. MUST NOT be zero.
     /// @param delegate The account to revoke. MUST NOT be zero.
     function revokeV3(bytes32 namespace, address delegate) external;

@@ -176,9 +176,7 @@ contract MigrationRegistry is IMigrationRegistryV3 {
         }
     }
 
-    /// Reached by every write, so there is one order whichever of them
-    /// supplied the moment: the writer and the caller, then the call's own
-    /// arguments, then the list in order, then the record.
+    /// Reached by every write, so both share one refusal order.
     /// @param writer The line's writer: the caller, or one that approved it.
     /// @param namespace The line under the writer to apply in.
     /// @param migration The migration to apply.
@@ -261,42 +259,16 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// @param migration The migration to apply.
     /// @param appliedAt The moment to record against it.
     function checkMigrationArguments(bytes32 namespace, bytes32 migration, uint256 appliedAt) internal pure {
-        // First because it is the first argument: an uninitialised namespace
-        // is reported as the mistake it is rather than as a line nobody reads.
         if (namespace == bytes32(0)) {
             revert ZeroNamespace();
         }
-        // Checked before the moment, so an uninitialised id is reported as
-        // the mistake it is rather than as a first record of zero.
         if (migration == bytes32(0)) {
             revert ZeroMigration();
         }
-        // Genesis is a head, not a migration. Applying it would leave `sHead`
-        // holding the value an empty line reads as, so a line that had
-        // applied something would be at a head indistinguishable from one that
-        // had applied nothing — and the next first-migration script would be
-        // accepted against it.
         if (migration == MIGRATION_HEAD_GENESIS) {
             revert GenesisMigration();
         }
-        // Beside the two id refusals because it is the same kind of mistake in
-        // the same kind of value: an uninitialised `uint256`, refused whatever
-        // line it arrives at and whatever block it lands in. Zero is the
-        // one moment a record cannot carry — `appliedV3` would answer it as
-        // "never applied" while the head had moved and the migration could
-        // never be applied again. Reached by `applyMigrationV3` as well, in a
-        // block whose timestamp is zero: a test can warp to zero and a chain
-        // can be configured from a zero genesis.
-        //
-        // Slither flags a strict equality on anything reaching it from
-        // `block.timestamp`, which `applyMigrationV3` does. Zero is the only
-        // value this refuses and the only one it can refuse, so there is no
-        // window for a validator to nudge the clock across. Suppressed on this
-        // comparison rather than turned off for the repo. The timestamp detector
-        // flags the same comparison now that it sits in its own function with
-        // nothing else for it to attach to, hence the start/end pair: only one
-        // comment fits immediately above the `if`, and `forge fmt` moves a
-        // trailing one inside the braces.
+        // Zero is the only value refused, so no clock nudge crosses it.
         // slither-disable-start timestamp
         // slither-disable-next-line incorrect-equality
         if (appliedAt == 0) {
@@ -330,48 +302,17 @@ contract MigrationRegistry is IMigrationRegistryV3 {
         uint256 appliedAt,
         Prerequisite[] calldata prerequisites
     ) internal {
-        // There is deliberately no zero-writer case here: `checkDelegate` has
-        // refused it.
-        // Nor is there a zero-head case: a head is either genesis or an applied
-        // id, both nonzero, so a zero in the first entry can never match and is
-        // already refused below, by an error that names the zero it was handed.
-
-        // A migration that has already run has already run whatever the list
-        // says, and the record it would overwrite is the original.
         MigrationRecord storage record = sRecords[writer][namespace][migration];
         if (record.appliedAt != 0) {
             revert MigrationAlreadyApplied(writer, namespace, migration);
         }
         bytes32 actualHead = prerequisites[0].migration;
-        // Reads the record at the head the list named first, which
-        // checkPrerequisites has already confirmed is this line's head.
-        //
-        // At genesis there is nothing to be before. Genesis can never be
-        // applied, so the record at it is empty in every line forever and
-        // this comparison against zero can only pass — which is the same
-        // statement a genesis branch would make, made by the value itself.
-        //
+        // Genesis is never applied, so its record reads zero and this passes.
         uint256 headAppliedAt = sRecords[writer][namespace][actualHead].appliedAt;
         if (appliedAt < headAppliedAt) {
             revert TimestampBeforeHead(appliedAt, headAppliedAt);
         }
-        // Last, because it is the only refusal here that time itself resolves:
-        // every other one describes something wrong with the call or with where
-        // the line is, and this one describes a moment that has not arrived
-        // yet.
-        //
-        // The usual hazard behind a `block.timestamp` comparison — the one the
-        // static analysers flag here — is a validator nudging the clock across a
-        // threshold. The nudge is available and it is harmless: a validator that
-        // moves the clock forward admits a record a second earlier than it would
-        // otherwise have been admitted, of a migration that has run either way,
-        // and moving it backwards is not something a chain lets a proposer do.
-        // So the warnings are suppressed on this one comparison rather than
-        // turned off for the repo.
-        //
-        // Slither's is a start/end pair rather than a next-line because only one
-        // comment fits immediately above the `if`, `forge fmt` moves a trailing
-        // one inside the braces, and forge-lint has no pair form.
+        // A forward clock nudge only admits a migration that ran either way.
         // slither-disable-start timestamp
         // forge-lint: disable-next-line(block-timestamp)
         if (appliedAt > block.timestamp) {

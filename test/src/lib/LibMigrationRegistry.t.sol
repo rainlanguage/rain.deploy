@@ -494,15 +494,15 @@ contract LibMigrationRegistryTest is Test {
         bytes32 namespace,
         bytes32 migration,
         bytes32 prerequisite,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(other != address(0));
         vm.assume(other != address(this));
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
-        vm.assume(now_ != 0);
-        vm.warp(now_);
+        vm.assume(blockMoment != 0);
+        vm.warp(blockMoment);
         IMigrationRegistryV3 registry = deployRegistry();
         vm.prank(other);
         registry.applyMigrationV3(other, namespace, prerequisite, one(other, namespace, MIGRATION_HEAD_GENESIS));
@@ -511,7 +511,7 @@ contract LibMigrationRegistryTest is Test {
             headThen(address(this), namespace, MIGRATION_HEAD_GENESIS, one(other, namespace, prerequisite));
         LibMigrationRegistry.applyMigrationV3(address(this), namespace, migration, list);
 
-        assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migration), now_);
+        assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migration), blockMoment);
         assertEq(LibMigrationRegistry.appliedOntoV3(address(this), namespace, migration), MIGRATION_HEAD_GENESIS);
         assertEq(LibMigrationRegistry.headV3(address(this), namespace), migration);
 
@@ -995,7 +995,7 @@ contract LibMigrationRegistryTest is Test {
         bytes32 migration,
         bytes32 prerequisite,
         uint32 appliedAt,
-        uint32 now_
+        uint32 blockMoment
     ) external {
         vm.assume(other != address(0));
         vm.assume(other != address(this));
@@ -1003,8 +1003,8 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(appliedAt != 0);
-        vm.assume(now_ >= appliedAt);
-        vm.warp(now_);
+        vm.assume(blockMoment >= appliedAt);
+        vm.warp(blockMoment);
         IMigrationRegistryV3 registry = deployRegistry();
         vm.prank(other);
         registry.applyMigrationV3(other, namespace, prerequisite, one(other, namespace, MIGRATION_HEAD_GENESIS));
@@ -1080,19 +1080,21 @@ contract LibMigrationRegistryTest is Test {
 
     /// The registry's future-moment refusal arrives unmodified through
     /// `applyMigrationHistoryV3`.
-    function testApplyMigrationHistoryFutureTimestampReverts(bytes32 namespace, bytes32 migration, uint32 now_)
+    function testApplyMigrationHistoryFutureTimestampReverts(bytes32 namespace, bytes32 migration, uint32 blockMoment)
         external
     {
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
-        vm.warp(now_);
+        vm.warp(blockMoment);
 
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV3.FutureTimestamp.selector, uint256(now_) + 1, uint256(now_))
+            abi.encodeWithSelector(
+                IMigrationRegistryV3.FutureTimestamp.selector, uint256(blockMoment) + 1, uint256(blockMoment)
+            )
         );
         this.externalApplyMigrationHistory(
-            namespace, migration, uint256(now_) + 1, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
+            namespace, migration, uint256(blockMoment) + 1, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
         );
     }
 
