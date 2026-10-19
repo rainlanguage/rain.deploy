@@ -464,5 +464,36 @@
       "R908 (the created search starts at the second access) is equivalent: the first recorded access is always the top-level call to the factory, never a Create.",
       "Adversarial candidate #316 (the created search is not order-aware) was filed before its repro was verified. It was then closed as unreachable: a storage read of an account runs that account's own code, and CREATE succeeds only at a codeless address, so no read of an account can come before its creation."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T15:36:18Z",
+    "commit": "6a610309f02a68ef8ab94e7631c21a806b21ec2c",
+    "testsAfterCommit": "3c31b1f9207ee875305730dbfcf6ee545a9b7574",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 139,
+    "scope": "pr:310, its code changed in round 9: the string and line-comment exit in LibRainDeploySnapshot.withoutBlockComments (marvin N17); the other changes are NatSpec and audit docs",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 3,
+      "behavioursProbed": 3,
+      "killedByExistingTests": 0,
+      "gapsFilled": 3,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "3 mutants (S01-S03: any quote, an apostrophe, or a double quote ends a string or line comment) probed with mutation-probe over the offline suite. Pre-existing pass: run at 3c31b1f9207ee875305730dbfcf6ee545a9b7574 with testWithoutBlockCommentsOtherQuotesCloseNothing excluded, 940 green at baseline, so it holds the 6a610309f02a68ef8ab94e7631c21a806b21ec2c suite: 0/3 killed.",
+      "Full pass at 3c31b1f9207ee875305730dbfcf6ee545a9b7574, 941 green at baseline: 3/3 killed by testWithoutBlockCommentsOtherQuotesCloseNothing.",
+      "Adversarial: solc ends a string only at its own unescaped quote and a line comment only at a line break; the new expectations are the input unchanged, read from that rule, not from the scanner."
+    ]
   }
 ]
