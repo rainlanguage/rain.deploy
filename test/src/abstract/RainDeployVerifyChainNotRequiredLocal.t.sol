@@ -19,8 +19,8 @@ import {
 /// forks as the local EVM, where both releases are live until a test removes
 /// one.
 contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainDeployVerifyChain {
-    /// Whether the second release is required nowhere rather than on base.
-    bool internal sSecondRequiredNowhere;
+    /// The one network the second release is required on, or empty for none.
+    string internal sSecondRequiredOn = LibRainDeploy.BASE;
 
     /// The local fork seam.
     LocalForkVm internal sForkVm;
@@ -32,11 +32,11 @@ contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainD
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    /// @dev The second release on base alone, or nowhere when
-    /// `sSecondRequiredNowhere`; everything else everywhere.
+    /// @dev The second release on `sSecondRequiredOn` alone; everything else
+    /// everywhere.
     function requiresSuiteOn(DeploySuite memory suite, string memory network) internal view override returns (bool) {
         return keccak256(bytes(suite.suite)) != keccak256("second-address")
-            || (!sSecondRequiredNowhere && keccak256(bytes(network)) == keccak256(bytes(LibRainDeploy.BASE)));
+            || keccak256(bytes(network)) == keccak256(bytes(sSecondRequiredOn));
     }
 
     /// Both releases live.
@@ -58,6 +58,14 @@ contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainD
         checkDeployedOnNetworks(Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
     }
 
+    /// The released suites in declared order, so the last suite is the second
+    /// release, against every supported network on the local seam.
+    function checkLocallyInDeclaredOrder() external {
+        checkDeployedOnNetworks(
+            Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), releasedSuites()
+        );
+    }
+
     /// The fixture is only meaningful if base is not the first network walked.
     function testBaseIsNotTheFirstSupportedNetwork() external view {
         assertNotEq(supportedNetworks()[0], LibRainDeploy.BASE);
@@ -68,17 +76,37 @@ contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainD
         this.checkLocally();
     }
 
+    /// A release required on the first network alone is required somewhere.
+    function testRequiredOnTheFirstNetworkAlonePasses() external {
+        sSecondRequiredOn = supportedNetworks()[0];
+        this.checkLocally();
+    }
+
+    /// A release required on the last network alone is required somewhere.
+    function testRequiredOnTheLastNetworkAlonePasses() external {
+        string[] memory networks = supportedNetworks();
+        sSecondRequiredOn = networks[networks.length - 1];
+        this.checkLocally();
+    }
+
     /// A release required on no network is refused rather than passed unchecked.
     function testSuiteRequiredNowhereReverts() external {
-        sSecondRequiredNowhere = true;
+        sSecondRequiredOn = "";
         vm.expectRevert(abi.encodeWithSelector(SuiteRequiredNowhere.selector, "second-address"));
         this.checkLocally();
+    }
+
+    /// The last suite is held to the same floor, and the refusal names it.
+    function testSuiteRequiredNowhereRevertsAsTheLastSuite() external {
+        sSecondRequiredOn = "";
+        vm.expectRevert(abi.encodeWithSelector(SuiteRequiredNowhere.selector, "second-address"));
+        this.checkLocallyInDeclaredOrder();
     }
 
     /// The refusal comes before any network is walked, ahead of a release
     /// absent from the first network.
     function testSuiteRequiredNowherePrecedesTheMatrix() external {
-        sSecondRequiredNowhere = true;
+        sSecondRequiredOn = "";
         vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, hex"");
         vm.expectRevert(abi.encodeWithSelector(SuiteRequiredNowhere.selector, "second-address"));
         this.checkLocally();
