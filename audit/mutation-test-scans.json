@@ -422,5 +422,34 @@
       "X01 is killed by the new testCheckRegisteredOnForksRefusesExtraForkIds, re-probed on the fork-free LibConfigRegistryRegister.t.sol (baseline 33) because public RPC failures turned the fork suite's baseline red on two of four runs.",
       "R22, R23, S01-S03 and D10 are recorded in audit/known-false-positives.md as offline-only survivors."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T16:17:26Z",
+    "commit": "778ddc1d978ef687da12045e6de9dff6d6afb425",
+    "testsAfterCommit": "778ddc1d978ef687da12045e6de9dff6d6afb425",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 130,
+    "scope": "PR #315 (#313) round 8, the code changed since fae83a9: script/Build.sol retired released-lib regeneration, retiredContracts, retiredTemplate and retiredContractNames (B01-B08); src/abstract/RainDeploySuitesBase.sol requiresSuiteOn default and src/abstract/RainDeployVerifyChain.sol its skip (C01-C04); src/abstract/RegistryDeploySuites.sol registryRequiresSuiteOn and addressRegistryNetworks (R01-R07); src/lib/LibConfigRegistryRegister.sol DuplicateNetwork argument (D01)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 20,
+      "behavioursProbed": 20,
+      "killedByExistingTests": 20,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Live RPC, -j 2, six test contracts (Build, RegistryDeploySuites, RegistryDeployVerify, RainDeployVerifyChain, RainDeployVerifyChainNotRequired, LibConfigRegistryRegister); baseline green at 86. A first baseline at default parallelism was red on 16 fork tests from public RPC failures.",
+      "This round's tests were written from the review threads before probing, so the kills credit the suite at 778ddc1, which includes them, not a pre-round suite."
+    ]
   }
 ]
