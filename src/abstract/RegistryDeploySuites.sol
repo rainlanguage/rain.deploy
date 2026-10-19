@@ -164,8 +164,8 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// source anchor is what says the record describes THIS contract.
     ///
     /// `MigrationRegistry` has no constructor argument, no compile-time
-    /// authority and no dependency to be on chain first — the namespace is
-    /// `msg.sender`, so there is nothing to configure and nothing to resolve.
+    /// authority and no dependency to be on chain first, so there is nothing to
+    /// configure and nothing to resolve.
     /// That is also why it is deployable to a new network the day the network
     /// is added, with no follow-up transaction to make it useful.
     /// @return The candidate.
