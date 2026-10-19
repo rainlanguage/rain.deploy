@@ -340,5 +340,36 @@
       "Gaps filled: pendingOwner != 0 to > 1 by testBeaconWithTheSmallestPendingOwnerIsRefused; BeaconOnUncheckedNetwork skipped for a checked network by testBeaconOnACheckedNetworkOffTheSupportedNetworksIsRefused; beaconSuite address at a fixed chain id by testBeaconNamedBySuiteIsAtItsNetworksClone (both per-network clone beacon contracts).",
       "Adversarial pass: no candidate bugs. The only source change this round is NatSpec naming each resolve refusal."
     ]
+  },
+  {
+    "timestamp": "2026-10-19T06:38:14Z",
+    "commit": "d532e52233e1fae5ac852533ece8021e4fd54821",
+    "testsAfterCommit": "4d0619780bb9ba123a94195053fb6aeb7f644d39",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 93,
+    "scope": "PR #308 (#274) re-audit round: src/lib/LibRainDeployBeacon.sol checkBeacon pendingOwner refusal of a one-word answer with bits above 160 set, named by the open rain-marvin thread",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 4,
+      "behavioursProbed": 4,
+      "killedByExistingTests": 0,
+      "gapsFilled": 4,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|RainDeploySuitesBaseTest, baseline 124 at the scanned commit, 125 after. Pre-existing suite probed with the test file at the scanned commit before the new test.",
+      "All 4 survived the pre-existing suite: pending check truncated to uint160, pending check refusing only words <= type(uint160).max, pending check masking off bits above 160, reported word truncated to uint160.",
+      "All 4 killed by testBeaconAnsweringPendingOwnerWithADirtyWordIsRefused (MockDirtyWordFallbackBeacon answers 1 << 160); the fail-pattern did not name the killer of the truncated-report mutant, which is the only test added.",
+      "Adversarial pass: no candidate bugs. BeaconPendingOwner NatSpec says a word with dirty upper bits is not an address and is reported raw, so it is refused; the code does so."
+    ]
   }
 ]
