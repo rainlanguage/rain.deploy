@@ -61,7 +61,7 @@ error InitDataReaderUndeclared(string suite, address implementation);
 /// @notice The one place anything dispatches on a suite's `DeployMechanism`.
 library LibRainDeployMechanism {
     /// Emitted when a broadcast Zoltu entry under `CLONE_ARTIFACT_PATH` leaves its source to verify by hand.
-    /// @param sender The caller.
+    /// @param sender The deploy's `msg.sender`, not the broadcasting key.
     /// @param entryAddress Where the entry is deployed on every network.
     /// @param networks The networks it was broadcast to.
     event UnverifiableSource(address indexed sender, address indexed entryAddress, string[] networks);

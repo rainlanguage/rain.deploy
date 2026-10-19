@@ -36,11 +36,11 @@ relocated.
   raised after a network forked, other than `NetworkChainIdMismatch` (which
   describes the endpoint bound to the alias), describes the deployment
   (`NotDeployedOnNetwork`, `CodeHashMismatchOnNetwork`, `MissingDependency`,
-  `DependencyChanged`, ...). Forks load state lazily, so a backend or fetch
-  error raised while reading forked state is the endpoint, like a `createFork`
-  failure. The deploy and the chain matrix create every fork before selecting
-  any, so such a failure takes the whole run before any network is checked
-  rather than stopping partway down the list.
+  `DependencyChanged`, ...). The deploy and the chain matrix create every fork
+  before selecting any, so a `createFork` failure takes the whole run before any
+  network is checked rather than stopping partway down the list. Forks load
+  state lazily, so a backend or fetch error raised while reading forked state is
+  also the endpoint, and it can stop the run partway down the list.
 - **Foundry REFUSES a cheatcode write to the project root's own
   `foundry.toml`.** "access to `foundry.toml` is not allowed", from a guard on
   the path — no `fs_permissions` grant and no spelling of the path gets past it,

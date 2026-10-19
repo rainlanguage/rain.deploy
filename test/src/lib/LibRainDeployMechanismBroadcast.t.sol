@@ -133,7 +133,8 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
     }
 
     /// A Zoltu broadcast under `CLONE_ARTIFACT_PATH` formats no verify command, and instead one notice naming the
-    /// deployed address once, whose source needs verifying by hand on each network, emitted as `UnverifiableSource`.
+    /// deployed address once, whose source needs verifying by hand on each network, emitted as `UnverifiableSource`
+    /// with the caller, not the test contract, as its sender.
     function testZoltuBroadcastUnderTheCloneArtifactPathPrintsAManualVerificationNotice() external {
         LibRainDeploy.etchZoltuFactory(vm);
         DeploySuite memory suite = zoltuSuite(LibRainDeploy.zoltuAddress(type(MockCloneable).creationCode));
@@ -143,13 +144,15 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.POLYGON;
 
+        address caller = makeAddr("broadcast caller");
         LocalForkVm forkVm = new LocalForkVm();
         vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 1);
         vm.expectCall(
             address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector, suite.storedDeployedAddress), 1
         );
         vm.expectEmit(address(this));
-        emit LibRainDeployMechanism.UnverifiableSource(address(this), suite.storedDeployedAddress, networks);
+        emit LibRainDeployMechanism.UnverifiableSource(caller, suite.storedDeployedAddress, networks);
+        vm.prank(caller);
         address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
         assertEq(deployed.length, 2);
         assertEq(deployed[0], suite.storedDeployedAddress);
