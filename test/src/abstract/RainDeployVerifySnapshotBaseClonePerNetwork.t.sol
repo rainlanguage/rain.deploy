@@ -338,13 +338,16 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         );
     }
 
-    /// A record holding a carriage return, vertical tab or form feed, each of which ends a line comment for the
-    /// compiler but not for the reader, is unreadable, so a declaration after one in a comment is never missed.
+    /// A record holding a carriage return, vertical tab, form feed, NEL, LS or PS, each of which ends a line comment for
+    /// the compiler but not for the reader, is unreadable, so a declaration after one in a comment is never missed.
     function testRecordHoldingAnotherLineBreakIsUnreadable() external {
-        string[] memory breaks = new string[](3);
+        string[] memory breaks = new string[](6);
         breaks[0] = "\r";
         breaks[1] = "\x0b";
         breaks[2] = "\x0c";
+        breaks[3] = "\xc2\x85";
+        breaks[4] = "\xe2\x80\xa8";
+        breaks[5] = "\xe2\x80\xa9";
         for (uint256 i = 0; i < breaks.length; i++) {
             vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
             this.externalRecordedDeployedAddresses(

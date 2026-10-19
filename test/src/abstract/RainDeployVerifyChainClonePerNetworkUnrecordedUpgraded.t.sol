@@ -37,6 +37,16 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
         return PerNetworkCloneDeploys.supportedNetworks();
     }
 
+    /// @inheritdoc UpgradedPerNetworkCloneDeploys
+    function initDataReaders(string memory suite)
+        internal
+        pure
+        override(UpgradedPerNetworkCloneDeploys, RainDeploySuitesBase)
+        returns (address[] memory)
+    {
+        return UpgradedPerNetworkCloneDeploys.initDataReaders(suite);
+    }
+
     /// Puts the release's dependencies, and its clone at the release's address for each network, on
     /// every fork.
     function setUp() external {
@@ -58,6 +68,15 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
     /// @param suites The suites to check.
     function externalCheckDeployedOnSupportedNetworks(DeploySuite[] memory suites) external {
         checkDeployedOnSupportedNetworks(suites);
+    }
+
+    /// The release takes Polygon under its own implementation, which the candidate declares reads its init data.
+    function testUnrecordedNetworkTakesTheDeclaredInitDataReader() external view {
+        CloneNetworks memory extended =
+            abi.decode(onSupportedNetworks(onlyFirstRecordedNetwork(releasedSuites()[0])).mechanismData, (CloneNetworks));
+        assertEq(extended.networks.length, 2);
+        assertEq(extended.networks[1].chainId, PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+        assertEq(extended.networks[1].deployedAddress, perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID));
     }
 
     /// The release passes with its clone at the release-derived Polygon address, and with that

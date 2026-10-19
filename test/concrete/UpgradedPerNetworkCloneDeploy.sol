@@ -27,6 +27,16 @@ contract UpgradedPerNetworkCloneDeploy is
         return PerNetworkCloneDeploys.supportedNetworks();
     }
 
+    /// @inheritdoc UpgradedPerNetworkCloneDeploys
+    function initDataReaders(string memory suite)
+        internal
+        pure
+        override(UpgradedPerNetworkCloneDeploys, RainDeploySuitesBase)
+        returns (address[] memory)
+    {
+        return UpgradedPerNetworkCloneDeploys.initDataReaders(suite);
+    }
+
     /// External wrapper for `broadcastSuite`.
     /// @param suite The suite to broadcast.
     /// @param networks The networks to broadcast to.

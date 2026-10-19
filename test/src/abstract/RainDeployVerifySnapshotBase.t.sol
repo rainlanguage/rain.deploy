@@ -935,13 +935,16 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         this.externalCheckFrozenCodeRecord("record.sol", edited);
     }
 
-    /// A code record holding a carriage return, vertical tab or form feed is an unreadable code record, so no code is
-    /// read from it.
+    /// A code record holding a carriage return, vertical tab, form feed, NEL, LS or PS is an unreadable code record, so
+    /// no code is read from it.
     function testFrozenCodeRecordHoldingAnotherLineBreakIsUnreadable() external {
-        string[] memory breaks = new string[](3);
+        string[] memory breaks = new string[](6);
         breaks[0] = "\r";
         breaks[1] = "\x0b";
         breaks[2] = "\x0c";
+        breaks[3] = "\xc2\x85";
+        breaks[4] = "\xe2\x80\xa8";
+        breaks[5] = "\xe2\x80\xa9";
         for (uint256 i = 0; i < breaks.length; i++) {
             string memory record = string.concat("// note", breaks[i], committedCodeRecord());
             vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));

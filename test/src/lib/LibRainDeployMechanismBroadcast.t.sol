@@ -133,7 +133,7 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
     }
 
     /// A Zoltu broadcast under `CLONE_ARTIFACT_PATH` formats no verify command, and instead one notice naming the
-    /// deployed address once, whose source needs verifying by hand on each network.
+    /// deployed address once, whose source needs verifying by hand on each network, emitted as `UnverifiableSource`.
     function testZoltuBroadcastUnderTheCloneArtifactPathPrintsAManualVerificationNotice() external {
         LibRainDeploy.etchZoltuFactory(vm);
         DeploySuite memory suite = zoltuSuite(LibRainDeploy.zoltuAddress(type(MockCloneable).creationCode));
@@ -148,6 +148,8 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         vm.expectCall(
             address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector, suite.storedDeployedAddress), 1
         );
+        vm.expectEmit(address(this));
+        emit LibRainDeployMechanism.UnverifiableSource(address(this), suite.storedDeployedAddress, networks);
         address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
         assertEq(deployed.length, 2);
         assertEq(deployed[0], suite.storedDeployedAddress);
@@ -174,7 +176,8 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         assertEq(deployed[1], clones.networks[1].deployedAddress);
     }
 
-    /// A Zoltu broadcast under a compiled artifact path formats one verify command per network.
+    /// A Zoltu broadcast under a compiled artifact path formats one verify command per network and emits no
+    /// `UnverifiableSource`.
     function testZoltuBroadcastUnderACompiledArtifactPrintsVerifyCommands() external {
         LibRainDeploy.etchZoltuFactory(vm);
         DeploySuite memory suite = zoltuSuite(LibRainDeploy.zoltuAddress(type(MockCloneable).creationCode));
@@ -186,7 +189,14 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         vm.expectCall(
             address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector, suite.storedDeployedAddress), 2
         );
+        vm.recordLogs();
         this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+        for (uint256 i = 0; i < logs.length; i++) {
+            assertTrue(
+                logs[i].topics.length == 0 || logs[i].topics[0] != LibRainDeployMechanism.UnverifiableSource.selector
+            );
+        }
     }
 
     function anyForkExists() internal returns (bool) {

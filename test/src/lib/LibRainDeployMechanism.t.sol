@@ -20,6 +20,7 @@ import {
     CloneCreationCodeMismatch,
     CloneDataAmbiguous,
     CloneDerivationMismatch,
+    InitDataReaderUndeclared,
     LibRainDeployMechanism,
     UnexpectedMechanismData,
     UnexpectedStoredDeployedAddress
@@ -33,6 +34,7 @@ import {
 } from "../../abstract/ExampleCloneDeploys.sol";
 import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
+import {upgradedCloneImplementation, upgradedPerNetworkClone} from "../../abstract/UpgradedPerNetworkCloneDeploys.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN,
     PER_NETWORK_CLONE_POLYGON_ADMIN,
@@ -673,7 +675,20 @@ contract LibRainDeployMechanismTest is Test {
         pure
         returns (DeploySuite memory)
     {
-        return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidate);
+        return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidate, new address[](0));
+    }
+
+    /// External wrapper for `LibRainDeployMechanism.withUnrecordedNetworks` with declared init data readers.
+    /// @param suite The suite.
+    /// @param candidate The candidate.
+    /// @param initDataReaders The other implementations declared to read the candidate's init data.
+    /// @return The suite with the candidate's networks it lacks.
+    function externalWithUnrecordedNetworks(
+        DeploySuite memory suite,
+        DeploySuite memory candidate,
+        address[] memory initDataReaders
+    ) external pure returns (DeploySuite memory) {
+        return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidate, initDataReaders);
     }
 
     /// The per-network example clone at `salt` as a candidate for `chainIds`.
@@ -825,5 +840,45 @@ contract LibRainDeployMechanismTest is Test {
             LibRainDeployMechanism.unverifiableSourceNotice(vm, networks, 0x1234567890AbcdEF1234567890aBcdef12345678),
             "no verify command: the Zoltu entry carries the clone artifact path; verify the source at 0x1234567890AbcdEF1234567890aBcdef12345678 by hand on base arbitrum"
         );
+    }
+
+    /// A release under another implementation than its candidate's takes an unrecorded network only when that
+    /// implementation is declared to read the candidate's init data, and the candidate's own implementation declared
+    /// as a reader does not stand in for it.
+    function testUnrecordedNetworkUnderAnotherImplementationNeedsADeclaredReader() external {
+        DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));
+        DeploySuite memory candidate =
+            LibRainDeployMechanism.cloneCandidate(upgradedPerNetworkClone(), perNetworkCloneChainIds()).snapshot;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(InitDataReaderUndeclared.selector, release.suite, exampleCloneImplementation())
+        );
+        this.externalWithUnrecordedNetworks(release, candidate);
+
+        address[] memory readers = new address[](1);
+        readers[0] = upgradedCloneImplementation();
+        vm.expectRevert(
+            abi.encodeWithSelector(InitDataReaderUndeclared.selector, release.suite, exampleCloneImplementation())
+        );
+        this.externalWithUnrecordedNetworks(release, candidate, readers);
+
+        readers = new address[](2);
+        readers[0] = address(0xdead);
+        readers[1] = exampleCloneImplementation();
+        CloneNetworks memory extended =
+            abi.decode(this.externalWithUnrecordedNetworks(release, candidate, readers).mechanismData, (CloneNetworks));
+        assertEq(extended.implementation, exampleCloneImplementation());
+        assertEq(extended.networks.length, 2);
+        assertEq(extended.networks[1].chainId, 137);
+        assertEq(extended.networks[1].data, perNetworkCloneInitData(137));
+    }
+
+    /// A release under another implementation that records every network its candidate has is unchanged, with no
+    /// reader declared.
+    function testFullyRecordedReleaseUnderAnotherImplementationIsUnchanged() external view {
+        DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, perNetworkCloneChainIds());
+        DeploySuite memory candidate =
+            LibRainDeployMechanism.cloneCandidate(upgradedPerNetworkClone(), perNetworkCloneChainIds()).snapshot;
+        assertEq(this.externalWithUnrecordedNetworks(release, candidate).mechanismData, release.mechanismData);
     }
 }

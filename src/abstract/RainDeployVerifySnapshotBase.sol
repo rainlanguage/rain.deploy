@@ -232,8 +232,8 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// space-separated tokens, on the declaration's own line with `=` fourth, or on the line after it when the
     /// generator wrapped the declaration after its `=`.
     /// @param path The record file, for the error only.
+    /// @param lines The record's lines, block comments removed.
     /// @param line The declaration's line, which starts with its `<type> constant <NAME> =`.
-    /// @param line The declaration's line.
     /// @return The value's token.
     function declaredValue(string memory path, string[] memory lines, uint256 line)
         internal

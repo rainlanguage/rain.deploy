@@ -276,6 +276,10 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   release. Recorded entries are kept exactly as recorded, so a recorded network
   keeps its recorded address and the refusal of a stale one. The record group
   does not do this: it matches the record against what the release was cut for.
+  A release whose implementation is not its candidate's takes no unrecorded
+  network unless `RainDeploySuitesBase.initDataReaders` names that
+  implementation for the candidate's suite; otherwise it is refused with
+  `InitDataReaderUndeclared`.
 - **Undeclared networks.** A network the suite still has no entry for — no
   candidate is named by its key, or the candidate has no entry either — is
   refused with `CloneNetworkUndeclared`, before any fork, at broadcast and in
@@ -1144,15 +1148,23 @@ it. In order:
      takes both after `deployer`.
    - `LibRainDeploySnapshot.releasedImport`, `releasedImportBlock` and
      `releasedLibraryBlock` are `view`.
-6. Regenerate: `forge script ./script/Build.sol` followed by
+6. If a per-network release is cut under an implementation other than its
+   candidate's, and that implementation reads the candidate's init data as the
+   candidate's implementation does, override `initDataReaders` to return it for
+   the candidate's suite key. Without it the release is refused any unrecorded
+   network with `InitDataReaderUndeclared`.
+7. Regenerate: `forge script ./script/Build.sol` followed by
    `./script/build.sh`.
 
 `LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,
-`RainDeployBroadcast.broadcastSuite` and the chain matrix
-(`RainDeployVerifyChain.checkDeployedOnNetworks`) take catalogue aliases only
-(`NetworkNotInCatalogue`), refuse a fork reporting another chain id
+`RainDeployBroadcast.broadcastSuite` and
+`RainDeployVerifyChain.checkDeployedOnSupportedNetworks` take catalogue aliases
+only (`NetworkNotInCatalogue`), refuse a fork reporting another chain id
 (`NetworkChainIdMismatch`), and check the declared dependencies on every
 network, including one the suite is already deployed on.
+`RainDeployVerifyChain.checkDeployedOnNetworks` takes `SupportedNetwork` entries
+as given, with no catalogue lookup, and holds each fork's chain id to its
+entry's `chainId`, checking the declared dependencies likewise.
 `LibRainDeploy.createForks`, `checkResolvedAddressesOnNetworks` and
 `checkResolvedAddressesOnForks` take raw `[rpc_endpoints]` aliases, with no
 catalogue lookup and no chain id check.

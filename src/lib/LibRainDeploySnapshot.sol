@@ -1340,7 +1340,21 @@ library LibRainDeploySnapshot {
         pure
         returns (uint256[] memory, address[] memory)
     {
-        string[] memory lines = recordLines(vm, path, record);
+        return recordedDeployedAddresses(vm, path, recordLines(vm, path, record));
+    }
+
+    /// The addresses a frozen record declares as its deploy addresses, and the chain id each is
+    /// for, from the record's lines.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file, for the error only.
+    /// @param lines The record's lines, as `recordLines` returns them.
+    /// @return The chain id each address is for.
+    /// @return The addresses the record declares, in file order.
+    function recordedDeployedAddresses(Vm vm, string memory path, string[] memory lines)
+        internal
+        pure
+        returns (uint256[] memory, address[] memory)
+    {
         uint256[] memory chainIds = new uint256[](lines.length);
         address[] memory addresses = new address[](lines.length);
         uint256 perNetwork = 0;
@@ -1463,12 +1477,14 @@ library LibRainDeploySnapshot {
         return vm.split(withoutBlockComments(record), "\n");
     }
 
-    /// Whether a record holds a line break other than `\n`: `\r`, `\x0b` or `\x0c`.
+    /// Whether a record holds a line break solc honours other than `\n`: `\r`, `\x0b`, `\x0c`, NEL, LS or PS.
     /// @param vm The Vm instance for string operations.
     /// @param record The record file's contents.
     /// @return Whether it holds one.
     function hasForeignLineBreak(Vm vm, string memory record) internal pure returns (bool) {
-        return vm.contains(record, "\r") || vm.contains(record, "\x0b") || vm.contains(record, "\x0c");
+        return vm.contains(record, "\r") || vm.contains(record, "\x0b") || vm.contains(record, "\x0c")
+            || vm.contains(record, "\xc2\x85") || vm.contains(record, "\xe2\x80\xa8")
+            || vm.contains(record, "\xe2\x80\xa9");
     }
 
     /// A record's text with every block comment removed but its line breaks, read left to right: the first `*/` closes
@@ -1531,9 +1547,8 @@ library LibRainDeploySnapshot {
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
     /// @return The mechanism the record was cut with.
     function recordedMechanism(Vm vm, string memory path) internal view returns (DeployMechanism) {
-        string memory record = vm.readFile(path);
-        (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, record);
-        string[] memory lines = recordLines(vm, path, record);
+        string[] memory lines = recordLines(vm, path, vm.readFile(path));
+        (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, lines);
         uint256 mechanismData = 0;
         for (uint256 i = 0; i < lines.length; i++) {
             if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {

@@ -51,9 +51,21 @@ error UnexpectedStoredDeployedAddress(string suite, address storedDeployedAddres
 /// @param suite The declaration's suite key.
 error CloneDataAmbiguous(string suite);
 
+/// Thrown when a per-network release would take an unrecorded network at its candidate's init data, under an
+/// implementation that is neither the candidate's nor declared to read the candidate's init data.
+/// @param suite The release's suite key.
+/// @param implementation The release's implementation.
+error InitDataReaderUndeclared(string suite, address implementation);
+
 /// @title LibRainDeployMechanism
 /// @notice The one place anything dispatches on a suite's `DeployMechanism`.
 library LibRainDeployMechanism {
+    /// Emitted when a broadcast Zoltu entry under `CLONE_ARTIFACT_PATH` leaves its source to verify by hand.
+    /// @param sender The caller.
+    /// @param entryAddress Where the entry is deployed on every network.
+    /// @param networks The networks it was broadcast to.
+    event UnverifiableSource(address sender, address entryAddress, string[] networks);
+
     /// Requires a Zoltu suite to carry no mechanism data.
     /// @param suite The Zoltu suite.
     function checkZoltuMechanismData(DeploySuite memory suite) internal pure {
@@ -197,12 +209,17 @@ library LibRainDeployMechanism {
         return chainIds;
     }
 
-    /// A per-network clone suite with an entry for every network its candidate has one for.
-    /// Precondition: the suite's implementation reads the candidate's init data as the candidate's implementation does.
+    /// A per-network clone suite with an entry for every network its candidate has one for, refusing to add one under
+    /// an implementation that is not the candidate's and not one of `initDataReaders`.
     /// @param suite The suite.
     /// @param candidate The candidate whose init data the suite's unrecorded networks take.
+    /// @param initDataReaders The other implementations that read the candidate's init data as its implementation does.
     /// @return The suite, with the candidate's networks it lacks.
-    function withUnrecordedNetworks(DeploySuite memory suite, DeploySuite memory candidate)
+    function withUnrecordedNetworks(
+        DeploySuite memory suite,
+        DeploySuite memory candidate,
+        address[] memory initDataReaders
+    )
         internal
         pure
         returns (DeploySuite memory)
@@ -213,7 +230,8 @@ library LibRainDeployMechanism {
             return suite;
         }
         CloneNetworks memory clones = cloneNetworks(suite);
-        CloneNetwork[] memory declared = cloneNetworks(candidate).networks;
+        CloneNetworks memory candidateClones = cloneNetworks(candidate);
+        CloneNetwork[] memory declared = candidateClones.networks;
         uint256 recorded = clones.networks.length;
         CloneNetwork[] memory networks = new CloneNetwork[](recorded + declared.length);
         for (uint256 i = 0; i < recorded; i++) {
@@ -226,6 +244,9 @@ library LibRainDeployMechanism {
                     CloneNetwork({chainId: declared[i].chainId, data: declared[i].data, deployedAddress: address(0)});
                 count++;
             }
+        }
+        if (count > recorded && !readsInitData(clones.implementation, candidateClones.implementation, initDataReaders)) {
+            revert InitDataReaderUndeclared(suite.suite, clones.implementation);
         }
         clones.networks = new CloneNetwork[](count);
         for (uint256 i = 0; i < count; i++) {
@@ -246,6 +267,28 @@ library LibRainDeployMechanism {
             mechanism: suite.mechanism,
             mechanismData: abi.encode(clones)
         });
+    }
+
+    /// Whether an implementation reads a candidate's init data: it is the candidate's implementation, or one of
+    /// `initDataReaders`.
+    /// @param implementation The implementation.
+    /// @param candidateImplementation The candidate's implementation.
+    /// @param initDataReaders The other implementations declared to read the candidate's init data.
+    /// @return Whether it reads it.
+    function readsInitData(address implementation, address candidateImplementation, address[] memory initDataReaders)
+        internal
+        pure
+        returns (bool)
+    {
+        if (implementation == candidateImplementation) {
+            return true;
+        }
+        for (uint256 i = 0; i < initDataReaders.length; i++) {
+            if (initDataReaders[i] == implementation) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// Whether one of the first `count` entries of a list of networks is for a chain id.
@@ -367,6 +410,7 @@ library LibRainDeployMechanism {
             if (keccak256(bytes(suite.artifactPath)) != keccak256(bytes(CLONE_ARTIFACT_PATH))) {
                 LibRainDeploy.logVerifyCommands(vm, networks, deploys.expectedAddresses[0], suite.artifactPath);
             } else {
+                emit UnverifiableSource(msg.sender, deploys.expectedAddresses[0], networks);
                 console2.log(unverifiableSourceNotice(vm, networks, deploys.expectedAddresses[0]));
             }
         }
