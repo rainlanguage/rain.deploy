@@ -44,6 +44,7 @@ import {
     SourceUse
 } from "../../concrete/MockStorageReadingCloneable.sol";
 import {MockStorageSource} from "../../concrete/MockStorageSource.sol";
+import {MockStorageReadingCloneFactory} from "../../concrete/MockStorageReadingCloneFactory.sol";
 import {upgradedPerNetworkClone} from "../../abstract/UpgradedPerNetworkCloneDeploys.sol";
 import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN,
@@ -1227,6 +1228,23 @@ contract LibRainDeployMechanismTest is Test {
         (DeploySuite memory suite, address source) = storageClone(SourceUse.WriteThenRead);
         vm.expectRevert(
             abi.encodeWithSelector(CloneInitializeReadsStorage.selector, suite.suite, source, bytes32(uint256(1)))
+        );
+        this.externalDeployLocally(suite);
+    }
+
+    /// A factory's read of its own storage is refused: the factory predates the call.
+    function testCloneFactoryReadingItsOwnStorageIsRefused() external {
+        MockStorageReadingCloneFactory factory = new MockStorageReadingCloneFactory();
+        MockCloneable implementation = new MockCloneable();
+        DeployDependency[] memory dependencies = new DeployDependency[](2);
+        dependencies[0] = DeployDependency({deployedAddress: address(factory), runtimeCode: address(factory).code});
+        dependencies[1] =
+            DeployDependency({deployedAddress: address(implementation), runtimeCode: address(implementation).code});
+        CloneDeploy memory clone =
+            declaredClone("storage-factory", address(factory), address(implementation), dependencies);
+        DeploySuite memory suite = LibRainDeployMechanism.cloneCandidate(clone, new uint256[](0)).snapshot;
+        vm.expectRevert(
+            abi.encodeWithSelector(CloneInitializeReadsStorage.selector, suite.suite, address(factory), bytes32(0))
         );
         this.externalDeployLocally(suite);
     }
