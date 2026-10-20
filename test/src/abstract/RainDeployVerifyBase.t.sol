@@ -9,10 +9,10 @@ import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDependentDeployable} from "../../concrete/MockDependentDeployable.sol";
 import {
-    CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE,
-    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-    RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
-} from "../../../src/generated/candidate/AddressRegistry.sol";
+    CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE,
+    DEPLOYED_ADDRESS as CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE
+} from "../../../src/generated/candidate/ConfigRegistry.sol";
 
 /// @title RainDeployVerifyBaseTest
 /// @notice What the derivation RETURNS, read directly, which no other group asks it for.
@@ -28,11 +28,11 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
     function testDerivationReadsTheCreationCodeAndNotTheRecordedFields() external {
         DeploySuite memory suite = DeploySuite({
             suite: "a-declared-key",
-            creationCode: ADDRESS_REGISTRY_CREATION_CODE,
+            creationCode: CONFIG_REGISTRY_CREATION_CODE,
             storedDeployedAddress: address(0xdead),
             storedBytecodeHash: bytes32(uint256(1)),
             storedRuntimeCode: hex"00",
-            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
@@ -42,8 +42,8 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
 
         assertEq(derived.suite, "a-declared-key");
         assertEq(derived.deployedAddresses.length, 1);
-        assertEq(derived.deployedAddresses[0], ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
-        assertEq(derived.bytecodeHash, keccak256(ADDRESS_REGISTRY_RUNTIME_CODE));
+        assertEq(derived.deployedAddresses[0], CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+        assertEq(derived.bytecodeHash, keccak256(CONFIG_REGISTRY_RUNTIME_CODE));
 
         // The recorded fields really were something else, so agreeing with the
         // creation code is a different answer from echoing them back.

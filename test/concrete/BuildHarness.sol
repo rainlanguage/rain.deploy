@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Build, GeneratedContract} from "../../script/Build.sol";
-import {DeployCandidate} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {Build, GeneratedContract, RetiredContract} from "../../script/Build.sol";
+import {DeployCandidate, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ParameterisedContract} from "../../src/abstract/RegistryDeploySuites.sol";
 
 /// Thrown when a harness left pointed at `Build`'s own lib directory is asked
@@ -54,6 +54,25 @@ contract BuildHarness is Build {
     /// @return The generated contracts.
     function externalGeneratedContracts() external pure returns (GeneratedContract[] memory) {
         return generatedContracts();
+    }
+
+    /// The retired contracts.
+    /// @return The retired contracts.
+    function externalRetiredContracts() external pure returns (RetiredContract[] memory) {
+        return retiredContracts();
+    }
+
+    /// The template a retired contract's released entries are emitted from.
+    /// @param retired The retired contract.
+    /// @return The template.
+    function externalRetiredTemplate(RetiredContract memory retired) external pure returns (DeploySuite memory) {
+        return retiredTemplate(retired);
+    }
+
+    /// The names the released aggregate is emitted from.
+    /// @return The retired contract names, then the generated ones.
+    function externalReleasedContractNames() external pure returns (string[] memory) {
+        return releasedContractNames();
     }
 
     /// The names a release cut from this script freezes.
