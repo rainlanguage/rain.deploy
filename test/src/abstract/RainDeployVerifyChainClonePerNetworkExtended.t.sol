@@ -6,7 +6,7 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {CloneDeploy, CloneNetwork, CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
+import {CloneDeploy, CloneNetwork} from "../../../src/lib/LibRainDeployClone.sol";
 import {
     ExtendedNetworksUnrecorded,
     LibRainDeployExtendedNetworks
@@ -19,7 +19,7 @@ import {
     onlyFirstRecordedNetwork,
     perNetworkClone,
     perNetworkCloneInitData,
-    perNetworkCloneRelease,
+    perNetworkCloneReleaseAddressAt,
     perNetworkCloneReleaseAddress
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
@@ -41,15 +41,7 @@ function movedInitData(uint256 chainId) pure returns (bytes memory) {
 /// The address the release derives on Polygon at the moved init data.
 /// @return The address.
 function movedReleaseAddress() pure returns (address) {
-    CloneDeploy memory release = perNetworkCloneRelease();
-    return LibRainDeployClone.cloneDeployedAddress(
-        CloneTarget({
-            factory: release.factory,
-            implementation: release.implementation,
-            data: movedInitData(PER_NETWORK_CLONE_POLYGON_CHAIN_ID),
-            salt: release.salt
-        })
-    );
+    return perNetworkCloneReleaseAddressAt(movedInitData(PER_NETWORK_CLONE_POLYGON_CHAIN_ID));
 }
 
 /// @title RainDeployVerifyChainClonePerNetworkExtendedTest

@@ -105,20 +105,23 @@ function onlyFirstRecordedNetwork(DeploySuite memory release) pure returns (Depl
 }
 
 /// Where the `per-network-clone` release's factory, implementation and salt put a clone initialized
-/// with a network's admin, derived from a `CloneTarget` built here rather than through any
-/// per-network code.
-/// @param chainId The network's chain id.
+/// with `data`, derived from a `CloneTarget` built here rather than through any per-network code.
+/// @param data The clone's init data.
 /// @return The clone address.
-function perNetworkCloneReleaseAddress(uint256 chainId) pure returns (address) {
+function perNetworkCloneReleaseAddressAt(bytes memory data) pure returns (address) {
     CloneDeploy memory release = perNetworkCloneRelease();
     return LibRainDeployClone.cloneDeployedAddress(
         CloneTarget({
-            factory: release.factory,
-            implementation: release.implementation,
-            data: abi.encode(perNetworkCloneAdmin(chainId)),
-            salt: release.salt
+            factory: release.factory, implementation: release.implementation, data: data, salt: release.salt
         })
     );
+}
+
+/// Where the `per-network-clone` release puts a clone initialized with a network's admin.
+/// @param chainId The network's chain id.
+/// @return The clone address.
+function perNetworkCloneReleaseAddress(uint256 chainId) pure returns (address) {
+    return perNetworkCloneReleaseAddressAt(abi.encode(perNetworkCloneAdmin(chainId)));
 }
 
 /// @title PerNetworkCloneDeploys
