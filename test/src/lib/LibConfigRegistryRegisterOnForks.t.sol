@@ -228,6 +228,62 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(address(this), hashed);
     }
 
+    function externalSimulateOnForks(
+        string[] memory networks,
+        uint256[] memory forkIds,
+        string memory name,
+        bytes memory value
+    ) external {
+        LibConfigRegistryRegister.simulateOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
+    }
+
+    /// `simulateOnForks` binds as the authority on every given fork's own
+    /// registry, with nothing persistent: each fork's registry holds the value
+    /// bound at that fork's own moment, and the authority's nonce is untouched
+    /// on each, since nothing is broadcast.
+    function testSimulateOnForksBindsOnEachFork() external {
+        (string memory name, bytes32 hashed, bytes memory value) = fresh();
+        string[] memory networks = LibRainDeploy.supportedNetworks();
+        uint256[] memory forkIds = forksWithRegistry(networks);
+        IConfigRegistryV1 registry = IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+        uint64[] memory nonces = new uint64[](forkIds.length);
+        for (uint256 i = 0; i < forkIds.length; i++) {
+            vm.selectFork(forkIds[i]);
+            nonces[i] = vm.getNonce(AUTHORITY);
+        }
+
+        this.externalSimulateOnForks(networks, forkIds, name, value);
+
+        for (uint256 i = 0; i < forkIds.length; i++) {
+            vm.selectFork(forkIds[i]);
+            assertEq(LibConfigRegistryRead.getValue(registry, AUTHORITY, hashed), value, networks[i]);
+            assertEq(LibConfigRegistryRead.getMoment(registry, AUTHORITY, hashed), vm.getBlockTimestamp(), networks[i]);
+            assertEq(vm.getNonce(AUTHORITY), nonces[i], networks[i]);
+        }
+    }
+
+    /// `simulateOnForks` refuses fork ids not paired one to one with the
+    /// selected networks, and inputs `checkInputs` refuses, before selecting
+    /// any fork.
+    function testSimulateOnForksRefusesBeforeSelecting() external {
+        (string memory name,, bytes memory value) = fresh();
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, 2, 1));
+        this.externalSimulateOnForks(networks, new uint256[](1), name, value);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, 2, 3));
+        this.externalSimulateOnForks(networks, new uint256[](3), name, value);
+
+        uint256[] memory forkIds = LibResolvedReadFixture.unselectableForkIds(2);
+        bytes memory unaligned = abi.encodePacked(value, bytes1(0));
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, unaligned));
+        this.externalSimulateOnForks(networks, forkIds, name, unaligned);
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "A.b"));
+        this.externalSimulateOnForks(networks, forkIds, "A.b", value);
+    }
+
     /// `registerOnForks` binds on every given fork's own registry, with
     /// nothing persistent: one `Register` log per network, and each fork's
     /// registry holds the value bound at that fork's own moment.

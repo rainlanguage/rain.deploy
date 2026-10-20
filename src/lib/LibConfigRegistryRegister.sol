@@ -421,16 +421,41 @@ library LibConfigRegistryRegister {
         string memory name,
         bytes memory value
     ) internal returns (uint256[] memory, string memory) {
-        (bytes32 hashed, SupportedNetwork[] memory networks, string memory record) =
-            checkInputs(vm, selected, declared, authority, authority, name, value);
+        (,, string memory record) = checkInputs(vm, selected, declared, authority, authority, name, value);
         console2.log(record);
 
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, selected);
+        simulateOnForks(vm, selected, declared, forkIds, authority, name, value);
+        return (forkIds, record);
+    }
+
+    /// The bind simulated as `authority` on every given fork, after the input
+    /// refusals of `checkInputs` but the sender's.
+    /// @param vm The Vm instance to select forks and prank with.
+    /// @param selected The networks the forks are of.
+    /// @param declared The networks the declaration supports.
+    /// @param forkIds The fork of each selected network, positionally paired.
+    /// @param authority The authority to bind under.
+    /// @param name The name as a consumer writes it.
+    /// @param value The ABI-encoded value to bind it to.
+    function simulateOnForks(
+        Vm vm,
+        string[] memory selected,
+        string[] memory declared,
+        uint256[] memory forkIds,
+        address authority,
+        string memory name,
+        bytes memory value
+    ) internal {
+        (bytes32 hashed, SupportedNetwork[] memory networks,) =
+            checkInputs(vm, selected, declared, authority, authority, name, value);
+        if (forkIds.length != networks.length) {
+            revert LibRainDeploy.ForkIdsLengthMismatch(networks.length, forkIds.length);
+        }
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
             simulateOnSelectedChain(vm, networks[i], authority, hashed, value);
         }
-        return (forkIds, record);
     }
 
     /// Every input refusal of `registerOnNetworks`, in order — the name, the

@@ -524,7 +524,8 @@ contract LibConfigRegistryRegisterTest is Test {
     }
 
     /// The bind is broadcast from the sender it is given, so it lands under
-    /// that sender as authority and under no other.
+    /// that sender as authority and under no other, and the broadcast spends
+    /// one of the sender's nonces.
     function testRegisterBroadcastsFromSender(address sender) external {
         assumeNotPrecompile(sender);
         assumeNotForgeAddress(sender);
@@ -533,8 +534,10 @@ contract LibConfigRegistryRegisterTest is Test {
         bytes32 name = keccak256("a");
         bytes memory value = abi.encode(address(1));
         vm.warp(1);
+        uint64 nonce = vm.getNonce(sender);
         (bool broadcast,) = this.externalRegisterOnSelectedChain(base(), sender, name, value);
         assertTrue(broadcast);
+        assertEq(vm.getNonce(sender), nonce + 1);
         assertEq(LibConfigRegistryRead.getValue(registry, sender, name), value);
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, AUTHORITY, name));
         registry.getV1(AUTHORITY, name);
@@ -600,15 +603,18 @@ contract LibConfigRegistryRegisterTest is Test {
     }
 
     /// A contract authority's simulation binds an unbound name under the
-    /// authority, not under the caller, at the chain's moment.
+    /// authority, not under the caller, at the chain's moment, without a
+    /// broadcast: the authority's nonce does not move.
     function testSimulateUnbound(bytes32 name, bytes memory value, uint96 time) external {
         vm.assume(value.length > 0);
         time = uint96(bound(time, 1, type(uint96).max));
         IConfigRegistryV1 registry = deployRegistry();
         vm.warp(time);
 
+        uint64 nonce = vm.getNonce(AUTHORITY);
         (bool binds, string memory record) = this.externalSimulateOnSelectedChain(base(), name, value);
         assertTrue(binds);
+        assertEq(vm.getNonce(AUTHORITY), nonce);
         assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, "", 0, value));
         (bytes memory boundValue, uint256 registeredAt) = registry.getV1(AUTHORITY, name);
         assertEq(boundValue, value);
