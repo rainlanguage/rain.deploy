@@ -11,8 +11,11 @@ import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
     PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
     PerNetworkCloneDeploys,
+    etchPerNetworkCloneRelease,
     onlyFirstRecordedNetwork,
-    perNetworkCloneReleaseAddress
+    onlyFirstRecordedNetworkSuites,
+    perNetworkCloneReleaseAddress,
+    perNetworkCloneReleaseAddresses
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {
     UpgradedPerNetworkCloneDeploys,
@@ -41,18 +44,7 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
     /// Puts the release's dependencies, and its clone at the release's address for each network, on
     /// every fork.
     function setUp() external {
-        DeploySuite memory release = releasedSuites()[0];
-        for (uint256 i = 0; i < release.dependencies.length; i++) {
-            vm.etch(release.dependencies[i].deployedAddress, release.dependencies[i].runtimeCode);
-            vm.makePersistent(release.dependencies[i].deployedAddress);
-        }
-        address[] memory addresses = new address[](2);
-        addresses[0] = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
-        addresses[1] = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
-        for (uint256 i = 0; i < addresses.length; i++) {
-            vm.etch(addresses[i], release.storedRuntimeCode);
-            vm.makePersistent(addresses[i]);
-        }
+        etchPerNetworkCloneRelease(vm, releasedSuites()[0], perNetworkCloneReleaseAddresses());
     }
 
     /// External wrapper for `checkDeployedOnSupportedNetworks`.
@@ -82,8 +74,7 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
     /// whether its clone is there or that address is empty: the frozen check runs before the code
     /// check.
     function testUnrecordedNetworkIsRefusedAsUnfrozenAtTheReleaseDerivedAddress() external {
-        DeploySuite[] memory suites = new DeploySuite[](1);
-        suites[0] = onlyFirstRecordedNetwork(releasedSuites()[0]);
+        DeploySuite[] memory suites = onlyFirstRecordedNetworkSuites(releasedSuites()[0]);
         CloneNetworks memory release = abi.decode(suites[0].mechanismData, (CloneNetworks));
         assertEq(release.networks.length, 1);
         assertEq(release.networks[0].chainId, PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);

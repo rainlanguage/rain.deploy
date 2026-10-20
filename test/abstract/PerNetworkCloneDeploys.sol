@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
 import {DeployMechanism, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {
@@ -111,9 +112,7 @@ function onlyFirstRecordedNetwork(DeploySuite memory release) pure returns (Depl
 function perNetworkCloneReleaseAddressAt(bytes memory data) pure returns (address) {
     CloneDeploy memory release = perNetworkCloneRelease();
     return LibRainDeployClone.cloneDeployedAddress(
-        CloneTarget({
-            factory: release.factory, implementation: release.implementation, data: data, salt: release.salt
-        })
+        CloneTarget({factory: release.factory, implementation: release.implementation, data: data, salt: release.salt})
     );
 }
 
@@ -122,6 +121,39 @@ function perNetworkCloneReleaseAddressAt(bytes memory data) pure returns (addres
 /// @return The clone address.
 function perNetworkCloneReleaseAddress(uint256 chainId) pure returns (address) {
     return perNetworkCloneReleaseAddressAt(abi.encode(perNetworkCloneAdmin(chainId)));
+}
+
+/// `perNetworkCloneReleaseAddress` on Arbitrum One, then on Polygon.
+/// @return The two clone addresses.
+function perNetworkCloneReleaseAddresses() pure returns (address[] memory) {
+    address[] memory addresses = new address[](2);
+    addresses[0] = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
+    addresses[1] = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
+    return addresses;
+}
+
+/// Etches a release's dependencies, and its runtime code at each of `addresses`, persistent across forks.
+/// @param vm The cheatcodes.
+/// @param release The release.
+/// @param addresses Where its clone is live.
+function etchPerNetworkCloneRelease(Vm vm, DeploySuite memory release, address[] memory addresses) {
+    for (uint256 i = 0; i < release.dependencies.length; i++) {
+        vm.etch(release.dependencies[i].deployedAddress, release.dependencies[i].runtimeCode);
+        vm.makePersistent(release.dependencies[i].deployedAddress);
+    }
+    for (uint256 i = 0; i < addresses.length; i++) {
+        vm.etch(addresses[i], release.storedRuntimeCode);
+        vm.makePersistent(addresses[i]);
+    }
+}
+
+/// A release recording its first network alone, as the one suite to check.
+/// @param release The release.
+/// @return The suites.
+function onlyFirstRecordedNetworkSuites(DeploySuite memory release) pure returns (DeploySuite[] memory) {
+    DeploySuite[] memory suites = new DeploySuite[](1);
+    suites[0] = onlyFirstRecordedNetwork(release);
+    return suites;
 }
 
 /// @title PerNetworkCloneDeploys

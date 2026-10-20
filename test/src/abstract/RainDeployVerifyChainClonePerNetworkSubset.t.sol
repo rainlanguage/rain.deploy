@@ -13,7 +13,9 @@ import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
     PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
     PerNetworkCloneDeploys,
+    etchPerNetworkCloneRelease,
     onlyFirstRecordedNetwork,
+    onlyFirstRecordedNetworkSuites,
     perNetworkCloneInitData
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {
@@ -42,23 +44,14 @@ contract RainDeployVerifyChainClonePerNetworkSubsetTest is UpgradedPerNetworkClo
     /// Puts the release's dependencies, and its clone at every recorded address, on every fork.
     function setUp() external {
         DeploySuite memory release = releasedSuites()[0];
-        for (uint256 i = 0; i < release.dependencies.length; i++) {
-            vm.etch(release.dependencies[i].deployedAddress, release.dependencies[i].runtimeCode);
-            vm.makePersistent(release.dependencies[i].deployedAddress);
-        }
-        address[] memory addresses = LibRainDeployMechanism.deployedAddresses(release);
-        for (uint256 i = 0; i < addresses.length; i++) {
-            vm.etch(addresses[i], release.storedRuntimeCode);
-            vm.makePersistent(addresses[i]);
-        }
+        etchPerNetworkCloneRelease(vm, release, LibRainDeployMechanism.deployedAddresses(release));
         sForkVm = new LocalForkVm();
     }
 
     /// The matrix on local forks over the given networks, over the release recording Arbitrum One alone.
     /// @param networks The networks to check on.
     function externalCheckOnLocalForks(string[] memory networks) external {
-        DeploySuite[] memory suites = new DeploySuite[](1);
-        suites[0] = onlyFirstRecordedNetwork(releasedSuites()[0]);
+        DeploySuite[] memory suites = onlyFirstRecordedNetworkSuites(releasedSuites()[0]);
         checkDeployedOnNetworks(Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(networks), suites);
     }
 
