@@ -234,21 +234,14 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     }
 
     /// The value a code record's declaration on `lines[line]` gives, read by `LibRainDeploySnapshot.declarationValue`
-    /// at the writer's `LibRainDeploySnapshot.WRAPPED_INDENT`.
-    /// @param path The record file, for the error only.
+    /// at the writer's `LibRainDeploySnapshot.WRAPPED_INDENT`. An unreadable declaration gives an empty token, which
+    /// splits into one part, so `declaredBytes` and `declaredBytes32` refuse it at their opened-count check.
     /// @param lines The record's lines, block comments removed.
     /// @param line The declaration's line.
-    /// @return The value's token.
-    function declaredValue(string memory path, string[] memory lines, uint256 line)
-        internal
-        pure
-        returns (string memory)
-    {
-        (bool readable, string memory value) =
+    /// @return The value's token, empty when not readable.
+    function declaredValue(string[] memory lines, uint256 line) internal pure returns (string memory) {
+        (, string memory value) =
             LibRainDeploySnapshot.declarationValue(vm, lines, line, LibRainDeploySnapshot.WRAPPED_INDENT);
-        if (!readable) {
-            revert FrozenCodeRecordUnreadable(path);
-        }
         return value;
     }
 
@@ -263,7 +256,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         pure
         returns (bytes memory)
     {
-        string[] memory opened = vm.split(declaredValue(path, lines, line), "hex\"");
+        string[] memory opened = vm.split(declaredValue(lines, line), "hex\"");
         if (opened.length != 2 || bytes(opened[0]).length != 0) {
             revert FrozenCodeRecordUnreadable(path);
         }
@@ -287,7 +280,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// @param line The declaration's line.
     /// @return The bytes32.
     function declaredBytes32(string memory path, string[] memory lines, uint256 line) internal pure returns (bytes32) {
-        string[] memory opened = vm.split(declaredValue(path, lines, line), "bytes32(");
+        string[] memory opened = vm.split(declaredValue(lines, line), "bytes32(");
         if (opened.length != 2 || bytes(opened[0]).length != 0) {
             revert FrozenCodeRecordUnreadable(path);
         }
