@@ -50,10 +50,16 @@ pragma solidity ^0.8.25;
 ///
 /// A consumer resolves under one authority address on every chain, so it
 /// trusts whoever controls that address on each of them. An EOA is one key on
-/// every chain; a contract authority is not, because its address on a chain it
-/// has not been deployed to is claimable by whoever deploys there first. A
-/// Safe or timelock authority must be deployed at its address on a chain
-/// before any consumer there resolves under it.
+/// every chain; a contract authority is not. Its controllers are per-chain
+/// state, so a rotation of a Safe's owners or threshold, or of a timelock's
+/// roles, is done on every chain its names are consumed on and verified on
+/// each; a chain left out is still controlled by the old controllers, who can
+/// rebind every name there. Where it is not yet deployed, its address is
+/// claimable by whoever deploys there first only if the deployment path does
+/// not commit to its controllers — a CREATE-nonce deployment, or a factory that
+/// does not bind the initializer or is missing on that chain. A Zoltu timelock
+/// or a SafeProxyFactory CREATE2 Safe commits to its init, so deploying it
+/// first seats the same controllers.
 ///
 /// Bindings are mutable because the configuration they name is. Rotating an
 /// owning multisig is ordinary business, and a binding that could never change

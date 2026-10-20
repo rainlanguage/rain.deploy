@@ -594,10 +594,16 @@ authority whose operators rotate is an account whose address survives the
 rotation — a Safe, a timelock — rather than a key that hands its authority on.
 
 A consumer resolves under one authority address on every network, so it trusts
-whoever controls that address on each. An EOA is one key everywhere; a Safe or
-timelock address is claimable on a network it has not been deployed to, so a
-contract authority must be deployed at its address on a network before any
-consumer there resolves under it.
+whoever controls that address on each. An EOA is one key everywhere; a contract
+authority is not. A Safe's owners and threshold, and a timelock's roles, are
+per-network state, so rotating them is done on every network the authority's
+names are consumed on, then verified on each: a network left out is still
+controlled by the old controllers, who can rebind every name there. On a network
+it is not yet deployed to, its address is claimable by whoever deploys there
+first only where the deployment path does not commit to its controllers — a
+CREATE-nonce deployment, or a factory that does not bind the initializer or is
+missing on that network. A Zoltu timelock or a SafeProxyFactory CREATE2 Safe
+commits to its init, so deploying it first seats the same controllers.
 
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
 registry is deployed on a network, an authority binds each name its consumers
