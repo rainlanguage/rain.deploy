@@ -100,6 +100,7 @@ contract LibRainDeployBeaconProxyTest is Test {
 
     /// The runtime matches what a real `BeaconProxy` deploy leaves, for any beacon address.
     function testBeaconProxyRuntimeMatchesARealDeploy(address beacon) external {
+        assumeNotForgeAddress(beacon);
         vm.assume(uint160(beacon) > 0xffff && beacon.code.length == 0);
         vm.assume(beacon != BEACON_PROXY_STAND_IN_IMPLEMENTATION);
         vm.etch(beacon, type(BeaconProxyStandInBeacon).runtimeCode);
