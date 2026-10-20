@@ -116,6 +116,14 @@ contract LibConfigRegistryRegisterTest is Test {
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, selected, declared, forkIds, name, value);
     }
 
+    function externalCheckRegisteredOnSelectedChain(SupportedNetwork memory network, bytes32 name, bytes memory value)
+        external
+        view
+        returns (uint256)
+    {
+        return LibConfigRegistryRegister.checkRegisteredOnSelectedChain(vm, network, name, value);
+    }
+
     function externalCheckRegisteredOnNetworks(
         string[] memory selected,
         string[] memory declared,
@@ -367,6 +375,76 @@ contract LibConfigRegistryRegisterTest is Test {
         this.externalCheckRegisteredOnForks(
             list("base", "arbitrum"), LibRainDeploy.supportedNetworks(), new uint256[](3), "a.b", abi.encode(address(1))
         );
+    }
+
+    /// The check passes on the bound value and returns the moment it was
+    /// bound.
+    function testCheckRegisteredOnSelectedChainBound(bytes32 name, bytes memory value, uint96 time) external {
+        vm.assume(value.length > 0);
+        time = uint96(bound(time, 1, type(uint96).max));
+        IConfigRegistryV1 registry = deployRegistry();
+        vm.warp(time);
+        vm.prank(CONFIG_REGISTRY_ROOT);
+        registry.registerV1(name, value);
+        vm.warp(uint256(time) + 1);
+
+        assertEq(this.externalCheckRegisteredOnSelectedChain(base(), name, value), time);
+    }
+
+    /// Any other bound value is refused, naming the network, the name, the
+    /// value expected and the value bound, in that order.
+    function testCheckRegisteredOnSelectedChainOtherValue(bytes32 name, bytes memory bound_, bytes memory value)
+        external
+    {
+        vm.assume(bound_.length > 0);
+        vm.assume(keccak256(bound_) != keccak256(value));
+        IConfigRegistryV1 registry = deployRegistry();
+        vm.warp(1);
+        vm.prank(CONFIG_REGISTRY_ROOT);
+        registry.registerV1(name, bound_);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(LibConfigRegistryRegister.UnexpectedBinding.selector, "base", name, value, bound_)
+        );
+        this.externalCheckRegisteredOnSelectedChain(base(), name, value);
+    }
+
+    /// An unbound name is refused by the registry itself.
+    function testCheckRegisteredOnSelectedChainUnbound(bytes32 name) external {
+        deployRegistry();
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name));
+        this.externalCheckRegisteredOnSelectedChain(base(), name, abi.encode(address(1)));
+    }
+
+    /// A chain that is not the network's is refused before the registry is
+    /// read, even when the name is bound to the value.
+    function testCheckRegisteredOnSelectedChainWrongChain(uint64 chainId) external {
+        vm.assume(chainId != base().chainId);
+        IConfigRegistryV1 registry = deployRegistry();
+        vm.warp(1);
+        vm.prank(CONFIG_REGISTRY_ROOT);
+        registry.registerV1(keccak256("a"), abi.encode(address(1)));
+        vm.chainId(chainId);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.UnexpectedChainId.selector, "base", base().chainId, uint256(chainId)
+            )
+        );
+        this.externalCheckRegisteredOnSelectedChain(base(), keccak256("a"), abi.encode(address(1)));
+    }
+
+    /// A registry address without the pinned code is refused.
+    function testCheckRegisteredOnSelectedChainWithoutRegistry() external {
+        vm.chainId(base().chainId);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
+                LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
+                bytes32(0)
+            )
+        );
+        this.externalCheckRegisteredOnSelectedChain(base(), keccak256("a"), abi.encode(address(1)));
     }
 
     /// A chain that is not the network's is refused before the registry is
