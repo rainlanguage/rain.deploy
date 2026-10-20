@@ -3,7 +3,10 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {DeployCandidate} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployCandidate, DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {BEACON_PROXY_ARTIFACT_PATH} from "../../../src/lib/LibRainDeployBeaconProxy.sol";
+import {BeaconProxyOnlyDeploySuites} from "../../concrete/BeaconProxyOnlyDeploySuites.sol";
+import {MixedCloneBeaconProxyDeploySuites} from "../../concrete/MixedCloneBeaconProxyDeploySuites.sol";
 import {NoCloneDeploys} from "../../../src/abstract/RainDeployCloneSuitesBase.sol";
 import {CLONE_ARTIFACT_PATH} from "../../../src/lib/LibRainDeployClone.sol";
 import {CloneNetworks, CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
@@ -56,8 +59,8 @@ contract RainDeployCloneSuitesBaseTest is Test {
         fixtureDeploy.externalCheckCandidatesAnchoredToSource();
     }
 
-    /// An empty clone list MUST be refused with `NoCloneDeploys`, on EVERY reader that goes through
-    /// it.
+    /// Empty clone and beacon proxy lists MUST be refused with `NoCloneDeploys`, on EVERY reader that
+    /// goes through them.
     function testNoCloneDeploysReverts() external {
         NoCloneDeploySuites empty = new NoCloneDeploySuites();
 
@@ -147,5 +150,61 @@ contract RainDeployCloneSuitesBaseTest is Test {
                 )
             );
         }
+    }
+
+    /// @param actual The candidate read.
+    /// @param expected The candidate derived on its own.
+    function assertSameCandidate(DeployCandidate memory actual, DeployCandidate memory expected) internal pure {
+        assertEq(actual.snapshot.suite, expected.snapshot.suite);
+        assertEq(actual.snapshot.creationCode, expected.snapshot.creationCode);
+        assertEq(actual.snapshot.storedDeployedAddress, expected.snapshot.storedDeployedAddress);
+        assertEq(actual.snapshot.storedBytecodeHash, expected.snapshot.storedBytecodeHash);
+        assertEq(actual.snapshot.storedRuntimeCode, expected.snapshot.storedRuntimeCode);
+        assertEq(actual.snapshot.artifactPath, expected.snapshot.artifactPath);
+        assertEq(uint256(actual.snapshot.mechanism), uint256(expected.snapshot.mechanism));
+        assertEq(actual.snapshot.mechanismData, expected.snapshot.mechanismData);
+        assertEq(abi.encode(actual.snapshot.dependencies), abi.encode(expected.snapshot.dependencies));
+        assertEq(actual.unanchorableReason, expected.unanchorableReason);
+    }
+
+    /// With no clones, the candidates MUST be `beaconProxyCandidate` mapped over `beaconProxyDeploys()`, and
+    /// every reader of them answers rather than refusing `NoCloneDeploys`.
+    function testCandidatesAreTheBeaconProxyListDerived() external {
+        BeaconProxyOnlyDeploySuites deploy = new BeaconProxyOnlyDeploySuites();
+        assertEq(deploy.externalCloneDeploysLength(), 0);
+        assertEq(deploy.externalBeaconProxyDeploysLength(), 1);
+
+        DeployCandidate[] memory candidates = deploy.externalCheckedCandidateSuites();
+        assertEq(candidates.length, 1);
+        assertSameCandidate(candidates[0], deploy.externalBeaconProxyDeployCandidate(0));
+        assertEq(uint256(candidates[0].snapshot.mechanism), uint256(DeployMechanism.BeaconProxy));
+        assertEq(candidates[0].snapshot.artifactPath, BEACON_PROXY_ARTIFACT_PATH);
+
+        deploy.externalCheckCandidatesAnchoredToSource();
+        DeploySuite[] memory suites = deploy.externalAllSuites();
+        assertEq(suites.length, 1);
+        assertEq(suites[0].suite, "example-beacon-proxy");
+        assertEq(deploy.externalSuiteNames(), "example-beacon-proxy");
+    }
+
+    /// With both, the candidates MUST be the clones' candidates, in order, then the beacon proxies'.
+    function testCandidatesAreTheClonesThenTheBeaconProxies() external {
+        MixedCloneBeaconProxyDeploySuites deploy = new MixedCloneBeaconProxyDeploySuites();
+        uint256 clones = deploy.externalCloneDeploysLength();
+        uint256 proxies = deploy.externalBeaconProxyDeploysLength();
+        assertEq(clones, 2);
+        assertEq(proxies, 2);
+
+        DeployCandidate[] memory candidates = deploy.externalCheckedCandidateSuites();
+        assertEq(candidates.length, clones + proxies);
+        for (uint256 i = 0; i < clones; i++) {
+            assertSameCandidate(candidates[i], deploy.externalCloneDeployCandidate(i));
+        }
+        for (uint256 i = 0; i < proxies; i++) {
+            assertSameCandidate(candidates[clones + i], deploy.externalBeaconProxyDeployCandidate(i));
+            assertEq(uint256(candidates[clones + i].snapshot.mechanism), uint256(DeployMechanism.BeaconProxy));
+        }
+        assertNotEq(candidates[2].snapshot.storedDeployedAddress, candidates[3].snapshot.storedDeployedAddress);
+        deploy.externalCheckCandidatesAnchoredToSource();
     }
 }

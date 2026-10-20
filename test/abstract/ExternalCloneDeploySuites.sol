@@ -26,4 +26,16 @@ abstract contract ExternalCloneDeploySuites is RainDeployCloneSuitesBase {
     function externalSupportedChainIds() external view returns (uint256[] memory) {
         return supportedChainIds();
     }
+
+    /// @return The number of beacon proxies `beaconProxyDeploys()` declares.
+    function externalBeaconProxyDeploysLength() external pure returns (uint256) {
+        return beaconProxyDeploys().length;
+    }
+
+    /// @param index The beacon proxy's index in `beaconProxyDeploys()`.
+    /// @return Its candidate, as `LibRainDeployMechanism.beaconProxyCandidate` builds it for the supported chain
+    /// ids.
+    function externalBeaconProxyDeployCandidate(uint256 index) external view returns (DeployCandidate memory) {
+        return LibRainDeployMechanism.beaconProxyCandidate(beaconProxyDeploys()[index], supportedChainIds());
+    }
 }
