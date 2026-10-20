@@ -31,11 +31,16 @@ contract RegisterConfigTest is Test {
         RegisterConfig script = new RegisterConfig();
         string memory name = string.concat("rain.deploy.register-test.", vm.toString(vm.randomUint()));
 
-        // Authority unset: every other input is valid, so the run stops on
-        // reading it.
+        // Authority not an address, set here so an exported one cannot leak
+        // in: every other input is valid, so the run stops on reading it.
+        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", "not-an-address");
         vm.setEnv("CONFIG_REGISTRY_NAME", name);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
-        vm.expectRevert(bytes("vm.envAddress: environment variable \"CONFIG_REGISTRY_AUTHORITY\" not found"));
+        vm.expectRevert(
+            bytes(
+                "vm.envAddress: failed parsing $CONFIG_REGISTRY_AUTHORITY as type `address`: parser error:\n$CONFIG_REGISTRY_AUTHORITY\n^\nexpected hex digits or the `0x` prefix for an empty hex string"
+            )
+        );
         script.run();
         vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(AUTHORITY));
 
