@@ -343,6 +343,55 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   implementation it delegates to, so the right code hash at its address over a
   missing or changed implementation does not work.
 
+#### Beacon proxies
+
+A repo whose deployment is an OpenZeppelin `BeaconProxy` over an upgradeable
+beacon, deployed by an `ICloneableFactoryV5` factory, declares it in
+`beaconProxyDeploys()` beside, or instead of, `cloneDeploys()`. Both default to
+empty, `candidateSuites()` is the clones' candidates then the beacon proxies',
+and only both empty is refused with `NoCloneDeploys`. A `BeaconProxyDeploy` has
+the fields of a `CloneDeploy`, with `beacon` in place of `implementation`, and
+its dependencies MUST name the factory and the beacon, refused otherwise with
+`CloneDependencyUndeclared`. Because `cloneDeploys()` now has a default body, a
+contract that inherits it from an abstract of its own as well as from
+`RainDeployCloneSuitesBase` names both in its override:
+`override(MyCloneDeploys, RainDeployCloneSuitesBase)`.
+
+The candidate is built by `LibRainDeployMechanism.beaconProxyCandidate`. Its
+mechanism is `DeployMechanism.BeaconProxy`, or `BeaconProxyPerNetwork` with init
+data per network, and its `mechanismData` is the same `CloneTarget` or
+`CloneNetworks` a clone's is, with the beacon in the `implementation` field. The
+address is the factory's open-salt beacon proxy derivation
+(`LibICloneableFactoryV5`), and the runtime code is `BeaconProxy`'s with the
+beacon written into its one immutable, so the recorded code hash says which
+beacon the proxy reads. The proxy is unanchorable like a clone: it carries
+`BEACON_PROXY_UNANCHORABLE_REASON` and `BEACON_PROXY_ARTIFACT_PATH`.
+
+A beacon proxy's snapshot is a clone's with one more line,
+`bool constant BEACON_PROXY = true;`, which is how a frozen record is read back
+as a beacon proxy rather than a clone. A record with the marker and no
+`MECHANISM_DATA` is refused with
+`FrozenSnapshotBeaconProxyMechanismDataMissing`, and one with the marker twice
+with `FrozenSnapshotBeaconProxyMarkerAmbiguous`.
+
+The local derivation etches the dependencies, then replaces the beacon with a
+stand-in whose implementation initializes to success with any data, and calls
+the real factory. The proxy's code does not depend on what the beacon serves, so
+the derived code is the chain's. A suite whose creation code is not the beacon
+proxy's over its beacon is refused with `CloneCreationCodeMismatch`.
+
+The broadcast step asks the factory where it would put the proxy and refuses
+`BeaconProxyFactoryPredictionMismatch` if it disagrees with the derivation. It
+then calls `beaconProxyDeterministicOpenSalt` and refuses
+`BeaconProxySeatsDeployKey` if the proxy answers `owner()` with the deploy key.
+
+The chain group checks the proxy's code at its address and its dependencies as
+for a clone. The code says nothing about what the beacon serves, so on every
+network the proxy is required on, `beacons()` MUST declare its beacon, refused
+before any fork with `BeaconProxyBeaconUndeclared`. The beacon's own checks then
+hold its implementation and owner. The broadcast does not yet check the beacon
+before deploying a proxy over it.
+
 ### Upgradeable beacons
 
 Declare every beacon with its network's chain id, naming implementations by
