@@ -800,5 +800,38 @@
       "E01-E05 on the offline suite (RainDeployVerifyChainNotRequiredLocalTest, RainDeployVerifyChainEmptyTest): 1/5 killed by the suite at the scanned commit (E03), 5/5 with testEmptyRosterIsNoNetworks and testNoSuitesOnEmptyRosterPasses from testsAfterCommit.",
       "F23 (registerOnForks passes networks[0]) and F29 (registerOnNetworks returns an empty record) on the fork suite (check11r.sh, public RPCs, 3x retry): 2/2 killed by existing fork tests, F29 confirmed by testRegisterOnNetworksBindsEverySelected alone. Both listed in audit/known-false-positives.md with their killers."
     ]
+  },
+  {
+    "timestamp": "2026-10-20T14:23:48Z",
+    "commit": "fb7c1a2f185cb5d250ace15001b110181fddd262",
+    "testsAfterCommit": "670e05bdeeba9801669d9d2b1e41a2c7415eb3e7",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 204,
+    "scope": "PR #308 (#274) round 9: the PR's changed source at fb7c1a2 in src/abstract/RainDeployVerifyChain.sol, RainDeploySuitesBase.sol, RainDeployVerifySnapshotBase.sol, RainDeployVerifyBase.sol, RainDeployBroadcast.sol and src/lib/LibRainDeployMechanism.sol, LibRainDeployBeacon.sol, LibRainDeploy.sol (batches C, S, V, R, B, offline), then the code changed since in 9996bde..a86f089",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 8,
+      "behaviours": 279,
+      "behavioursProbed": 279,
+      "killedByExistingTests": 261,
+      "gapsFilled": 13,
+      "equivalentMutants": 2,
+      "unkillableDefensiveGuards": 2,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pre-existing suite at fb7c1a2, offline (dead RPC endpoints, fork-reaching tests excluded by name): C 38/44, S 16/18, V 62/66, R 49/54, B 96/97 killed.",
+      "Survivors killed by tests at testsAfterCommit (re-probe at 8a18332, plus R17 at 670e05b): M05, M07 by the LocalForkVm chain-group twins; M06 by testNotRequiredNetworksAreSkipped and testRequiredSuiteIsStillCheckedEverywhere; M31 by testImplementationSuiteMustHaveItsDerivedCodeOffline; M22 by testBeaconSuiteWithAResolvedKeyButOtherCodeIsDerivedAfresh; S12 by testSuiteIndexIsTheFirstOfARepeatedKey; M42, M48 by the reverting-read beacon seat tests; M49 at a later index; B16, B19 by testBroadcastRefusesASuiteSeatingTheDeployKeyOnASupportedNetworkBesideAnOutsideDispatch; B29 by testSeatCheckLeavesNoPrank; R17 (a reached record ends the order walk) by testOrderWalkReadsPastAReachedRecordToTheEarlier.",
+      "Equivalent, redundant code removed in 9996bde rather than exempted: B06 (testBeaconDeclarationsResolve now calls resolveSupportedBeacons) and L09 (deployLocallyOnChain reads block.chainid, which every caller sets).",
+      "Unkillable, in audit/known-false-positives.md: M64 and B44 (DerivationSnapshotRevertFailed arguments; revertToState never fails here) and M32 (a console2.log removal, unobservable).",
+      "a86f089 changed only NatSpec and a blank line in src (RainDeployBroadcast.broadcastSuite, RainDeployVerifyChain), so it adds no behaviour to probe.",
+      "Adversarial pass on R17: the expected true comes from the registry graph the test applies (OTHER HANDOVER reaches THIRD UPGRADE only through OTHER ROLLBACK then THIRD HANDOVER), not from the walk."
+    ]
   }
 ]
