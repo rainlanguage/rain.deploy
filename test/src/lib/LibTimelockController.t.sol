@@ -9,6 +9,7 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibTimelockController} from "../../../src/lib/LibTimelockController.sol";
 import {BYTECODE_HASH, CREATION_CODE, RUNTIME_CODE} from "../../../src/generated/candidate/TimelockController.sol";
 import {CREATION_CODE as CREATION_CODE_0_1_18} from "../../../src/generated/0_1_18/TimelockController.sol";
+import {CREATION_CODE as CREATION_CODE_0_1_19} from "../../../src/generated/0_1_19/TimelockController.sol";
 import {MockTimelockControllerGeneration} from "../../concrete/MockTimelockControllerGeneration.sol";
 import {MockTimelockControllerImmutableGeneration} from "../../concrete/MockTimelockControllerImmutableGeneration.sol";
 import {MockSnapshotDeletingCreation} from "../../concrete/MockSnapshotDeletingCreation.sol";
@@ -90,6 +91,23 @@ contract LibTimelockControllerTest is Test {
         assertEq(
             LibTimelockController.expectedTimelockAddress(
                 CREATION_CODE_0_1_18, 48 hours, 0x3840aeDaEc8e82f79d8F6a8F6ADCa271E13E0329
+            ),
+            0x831E4e1bB2b9a67C00b7d17F252A18a22cd0bD2B
+        );
+    }
+
+    /// The frozen 0_1_19 generation freezes the same generation as 0_1_18, so
+    /// it derives the same production timelocks.
+    function testFrozen0119CodeDerivesProductionTimelocks() external pure {
+        assertEq(
+            LibTimelockController.expectedTimelockAddress(
+                CREATION_CODE_0_1_19, 48 hours, 0xe70d821f3462a074e63b42d0AaC6523faAe1d611
+            ),
+            0x48ba1371A78E6cC54157c63721756ab444510DB3
+        );
+        assertEq(
+            LibTimelockController.expectedTimelockAddress(
+                CREATION_CODE_0_1_19, 48 hours, 0x3840aeDaEc8e82f79d8F6a8F6ADCa271E13E0329
             ),
             0x831E4e1bB2b9a67C00b7d17F252A18a22cd0bD2B
         );
