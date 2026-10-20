@@ -899,5 +899,37 @@
       "The pre-existing suite is this PR's own conversion: the tests were rewritten for authority keys in the same branch, so 'existing' means present before the probe, not before the PR.",
       "Adversarial pass: authority isolation (one name under two authorities, same-block binds by two authorities, a revert for another authority not read as unbound), sender-is-authority refusal, and the Register event's indexed sender were checked against the interface NatSpec; no candidate."
     ]
+  },
+  {
+    "timestamp": "2026-10-20T22:50:31Z",
+    "commit": "00dc9df57eeffe5a75ef9a1429e65e2bee386176",
+    "testsAfterCommit": "00dc9df57eeffe5a75ef9a1429e65e2bee386176",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 221,
+    "scope": "PR #322 Marvin follow-up: the contract-authority dry run (src/lib/LibConfigRegistryRegister.sol registerOnSelectedChain, planOnSelectedChain, simulateOnSelectedChain, simulateOnNetworks, simulateOnForks; script/RegisterConfig.sol simulateContractAuthority)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 6,
+      "behaviours": 24,
+      "behavioursProbed": 24,
+      "killedByExistingTests": 19,
+      "gapsFilled": 3,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Round 1 at 79be67ddfa6c8eccf5cc84ddeffdfe67202dbd38 (suite: RegisterConfigTest + LibConfigRegistryRegister*, 53 tests): 16/20 killed. The simulate tests were written in the same commit as the code, so existing means present before the probe, not before the change.",
+      "Gaps filled at the scanned commit: register pranking instead of broadcasting (testRegisterBroadcastsFromSender now asserts one sender nonce spent); simulate broadcasting instead of pranking (simulate tests assert the authority nonce unchanged); simulateOnNetworks looping only the first network (loop moved to simulateOnForks, testSimulateOnForksBindsOnEachFork on forks each holding their own registry).",
+      "Round 2 at the scanned commit (55 tests): 22/24 killed, plus S01-S02.",
+      "Survived, unobservable by the forge suite: M06 (planOnSelectedChain dropping console2.log of the network record) and M13 (simulateOnNetworks dropping console2.log of the inputs record). vm.expectCall on the console address records zero calls, and ffi is not enabled. The logged strings are returned and asserted; only the print is unpinned. M06 read KILLED once in round 2 by an rpc.hyperliquid.xyz invalid-block-height fork failure and SURVIVED on re-probe.",
+      "Adversarial pass: no sender refusal on the contract path, chain id and code hash still checked, bind lands under the authority and not the caller, nothing broadcast; checked against the review finding and NatSpec; no candidate."
+    ]
   }
 ]
