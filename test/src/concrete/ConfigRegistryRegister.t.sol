@@ -5,13 +5,17 @@ pragma solidity =0.8.25;
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
-import {ConfigRegistry, CONFIG_REGISTRY_ROOT} from "../../../src/concrete/ConfigRegistry.sol";
+import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
 
 /// @title ConfigRegistryRegisterTest
-/// @notice Tests for `ConfigRegistry.registerV1`: who may bind a name, that root
-/// may re-bind one, and what a binding may never become.
+/// @notice Tests for `ConfigRegistry.registerV1`: that any caller binds under
+/// itself and only itself, that an authority may re-bind its own name, and what
+/// a binding may never become.
 contract ConfigRegistryRegisterTest is Test {
+    /// The authority most tests bind under. Any account is one.
+    address internal constant AUTHORITY = address(0xA11CE);
+
     /// The registry under test.
     ConfigRegistry internal sRegistry;
 
@@ -19,59 +23,123 @@ contract ConfigRegistryRegisterTest is Test {
         sRegistry = new ConfigRegistry();
     }
 
-    /// Only root may bind a name, and a non-root caller is rejected as `NotRoot`
-    /// whatever it passes — the root check runs before the empty-value one.
-    function testRegisterOnlyRoot(address sender, bytes32 name, bytes memory value) external {
-        vm.assume(sender != CONFIG_REGISTRY_ROOT);
-
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
-        vm.prank(sender);
-        sRegistry.registerV1(name, value);
+    /// Asserts `entry` is the one `Register` a bind of `name` to `value` by
+    /// `sender` emits: the sender and the name indexed, the value whole in the
+    /// data, so the log holds the value itself rather than its hash.
+    /// @param entry The log.
+    /// @param sender The account that bound.
+    /// @param name The name bound.
+    /// @param value The value bound.
+    function assertRegisterLog(Vm.Log memory entry, address sender, bytes32 name, bytes memory value) internal view {
+        assertEq(entry.emitter, address(sRegistry));
+        assertEq(entry.topics.length, 3);
+        assertEq(entry.topics[0], keccak256("Register(address,bytes32,bytes)"));
+        assertEq(entry.topics[0], IConfigRegistryV1.Register.selector);
+        assertEq(entry.topics[1], bytes32(uint256(uint160(sender))));
+        assertEq(entry.topics[2], name);
+        assertEq(entry.data, abi.encode(value));
     }
 
-    /// A non-root caller with an empty value is refused as `NotRoot`, not
-    /// `EmptyValue`: the root check runs first.
-    function testRegisterNonRootEmptyValueIsNotRoot(address sender, bytes32 name) external {
-        vm.assume(sender != CONFIG_REGISTRY_ROOT);
+    /// Any caller binds, with no permission asked, and the binding lands under
+    /// the caller: it reads back under the caller and emits `Register` naming
+    /// it.
+    function testRegisterAnyCallerBindsUnderItself(address sender, bytes32 name, bytes memory value) external {
+        vm.assume(value.length > 0);
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
+        vm.recordLogs();
+        vm.prank(sender);
+        sRegistry.registerV1(name, value);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, sender, name), value);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, sender, name), block.timestamp);
+        assertEq(entries.length, 1);
+        assertRegisterLog(entries[0], sender, name, value);
+    }
+
+    /// A bind lands under the caller and no other account: the same name stays
+    /// unbound under every other authority.
+    function testRegisterBindsUnderNoOtherAuthority(address sender, address other, bytes32 name, bytes memory value)
+        external
+    {
+        vm.assume(sender != other);
+        vm.assume(value.length > 0);
+
+        vm.prank(sender);
+        sRegistry.registerV1(name, value);
+
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, other, name));
+        LibConfigRegistryRead.getValue(sRegistry, other, name);
+    }
+
+    /// Another account binding the same name, at any clock, leaves the
+    /// authority's binding — value and moment — untouched, and gets a binding
+    /// of its own.
+    function testRegisterOtherCallerLeavesBindingUntouched(
+        address sender,
+        bytes32 name,
+        bytes memory boundValue,
+        bytes memory value,
+        uint256 first,
+        uint256 second
+    ) external {
+        vm.assume(sender != AUTHORITY);
+        vm.assume(boundValue.length > 0);
+        vm.assume(value.length > 0);
+        first = bound(first, 1, type(uint256).max);
+        second = bound(second, 1, type(uint256).max);
+
+        vm.warp(first);
+        vm.prank(AUTHORITY);
+        sRegistry.registerV1(name, boundValue);
+
+        vm.warp(second);
+        vm.prank(sender);
+        sRegistry.registerV1(name, value);
+
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), boundValue);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), first);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, sender, name), value);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, sender, name), second);
+    }
+
+    /// The authority is the CALLER, never the transaction origin: a call made
+    /// by another account in a transaction the authority originates binds
+    /// under that account.
+    function testRegisterAuthorityIsCallerNotOrigin(address sender, bytes32 name, bytes memory value) external {
+        vm.assume(sender != AUTHORITY);
+        vm.assume(value.length > 0);
+
+        vm.prank(sender, AUTHORITY);
+        sRegistry.registerV1(name, value);
+
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, sender, name), value);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, AUTHORITY, name));
+        LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name);
+    }
+
+    /// An empty value is refused whoever calls.
+    function testRegisterEmptyValueAnyCaller(address sender, bytes32 name) external {
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, name));
         vm.prank(sender);
         sRegistry.registerV1(name, "");
     }
 
-    /// Re-binding is root's alone, and the failed attempt leaves the binding
-    /// untouched.
-    function testRegisterRebindOnlyRoot(address sender, bytes32 name, bytes memory boundValue, bytes memory value)
-        external
-    {
-        vm.assume(sender != CONFIG_REGISTRY_ROOT);
-        vm.assume(boundValue.length > 0);
-
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.registerV1(name, boundValue);
-
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
-        vm.prank(sender);
-        sRegistry.registerV1(name, value);
-
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), boundValue);
-    }
-
-    /// Root may re-bind a name to a different value, and the new binding is
+    /// An authority may re-bind a name to a different value, and the new binding is
     /// what `getV1` answers with from then on.
     function testRegisterRebind(bytes32 name, bytes memory boundValue, bytes memory value) external {
         vm.assume(boundValue.length > 0);
         vm.assume(value.length > 0);
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, boundValue);
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), boundValue);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), boundValue);
 
         // A re-bind has to be in a later block than the bind it replaces.
         vm.warp(block.timestamp + 1);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), value);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), value);
     }
 
     /// A re-bind replaces the value whole, whichever of the two is longer: a
@@ -89,24 +157,27 @@ contract ConfigRegistryRegisterTest is Test {
         ];
         for (uint256 i = 0; i < values.length; i++) {
             vm.warp(i + 1);
-            vm.prank(CONFIG_REGISTRY_ROOT);
+            vm.prank(AUTHORITY);
             sRegistry.registerV1(name, values[i]);
-            assertEq(LibConfigRegistryRead.getValue(sRegistry, name), values[i]);
-            assertStoredBinding(name, values[i], i + 1);
+            assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), values[i]);
+            assertStoredBinding(AUTHORITY, name, values[i], i + 1);
         }
     }
 
-    /// Asserts the raw storage of `name`'s binding. `sBindings` is slot 0;
+    /// Asserts the raw storage of `authority`'s binding of `name`. `sBindings`
+    /// is slot 0, so the authority's inner mapping is at
+    /// `keccak256(authority . 0)` and the binding at `keccak256(name . that)`;
     /// `value` is the struct's first slot and `registeredAt` its second. A
     /// value under 32 bytes is stored left-aligned with `length * 2` in the low
     /// byte; a longer one as `length * 2 + 1`, its bytes from
     /// `keccak256(base)`. Slots `data + 0..2` cover every value here, the
     /// longest being three words, and any not holding this value are zero.
+    /// @param authority The authority it is bound under.
     /// @param name The bound name.
     /// @param value The value it is bound to.
     /// @param moment The moment it was bound at.
-    function assertStoredBinding(bytes32 name, bytes memory value, uint256 moment) internal view {
-        bytes32 base = keccak256(abi.encode(name, uint256(0)));
+    function assertStoredBinding(address authority, bytes32 name, bytes memory value, uint256 moment) internal view {
+        bytes32 base = keccak256(abi.encode(name, keccak256(abi.encode(authority, uint256(0)))));
         uint256 data = uint256(keccak256(abi.encode(base)));
         bool short = value.length < 32;
         bytes memory padded = bytes.concat(value, new bytes(96));
@@ -138,14 +209,14 @@ contract ConfigRegistryRegisterTest is Test {
     function testRegisterRebindSameValue(bytes32 name, bytes memory value) external {
         vm.assume(value.length > 0);
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
 
         vm.warp(block.timestamp + 1);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
 
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), value);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), value);
     }
 
     /// Re-binding survives any number of rotations, and only the most recent one
@@ -159,21 +230,21 @@ contract ConfigRegistryRegisterTest is Test {
         for (uint256 i = 0; i < values.length; i++) {
             // Each re-bind is a block later than the last.
             vm.warp(vm.getBlockTimestamp() + 1);
-            vm.prank(CONFIG_REGISTRY_ROOT);
+            vm.prank(AUTHORITY);
             sRegistry.registerV1(name, values[i]);
-            assertEq(LibConfigRegistryRead.getValue(sRegistry, name), values[i]);
+            assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), values[i]);
         }
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), values[values.length - 1]);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), values[values.length - 1]);
     }
 
     /// An empty value is rejected, and the name is left unbound.
     function testRegisterEmptyValue(bytes32 name) external {
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, name));
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, "");
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name));
-        LibConfigRegistryRead.getValue(sRegistry, name);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, AUTHORITY, name));
+        LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name);
     }
 
     /// The empty tuple is the only ABI encoding that is empty, so it is the
@@ -181,7 +252,7 @@ contract ConfigRegistryRegisterTest is Test {
     function testRegisterEmptyTupleIsTheEmptyValue(bytes32 name) external {
         assertEq(abi.encode().length, 0);
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, name));
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, abi.encode());
     }
 
@@ -205,19 +276,19 @@ contract ConfigRegistryRegisterTest is Test {
         for (uint256 i = 0; i < values.length; i++) {
             assertGe(values[i].length, 32);
             vm.warp(vm.getBlockTimestamp() + 1);
-            vm.prank(CONFIG_REGISTRY_ROOT);
+            vm.prank(AUTHORITY);
             sRegistry.registerV1(name, values[i]);
-            assertEq(LibConfigRegistryRead.getValue(sRegistry, name), values[i]);
+            assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), values[i]);
         }
     }
 
     /// A single byte is the shortest value accepted: the refusal is of empty,
     /// not of short.
     function testRegisterOneByteValue(bytes32 name, bytes1 b) external {
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, abi.encodePacked(b));
 
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), abi.encodePacked(b));
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), abi.encodePacked(b));
     }
 
     /// An empty value is rejected for an already bound name too, so a name
@@ -225,14 +296,14 @@ contract ConfigRegistryRegisterTest is Test {
     function testRegisterEmptyValueCannotUnbind(bytes32 name, bytes memory boundValue) external {
         vm.assume(boundValue.length > 0);
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, boundValue);
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, name));
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, "");
 
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), boundValue);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), boundValue);
     }
 
     /// Names are independent: binding one says nothing about any other.
@@ -243,36 +314,33 @@ contract ConfigRegistryRegisterTest is Test {
         vm.assume(valueA.length > 0);
         vm.assume(valueB.length > 0);
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(nameA, valueA);
 
         // Binding `nameA` did not bind `nameB`.
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, nameB));
-        LibConfigRegistryRead.getValue(sRegistry, nameB);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, AUTHORITY, nameB));
+        LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, nameB);
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(nameB, valueB);
 
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, nameA), valueA);
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, nameB), valueB);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, nameA), valueA);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, nameB), valueB);
     }
 
-    /// `Register` is emitted once, with the name indexed and the value whole in
-    /// the data, so the log holds the value itself rather than its hash.
+    /// `Register` is emitted once, with the authority and the name indexed and
+    /// the value whole in the data, so the log holds the value itself rather
+    /// than its hash.
     function testRegisterEvent(bytes32 name, bytes memory value) external {
         vm.assume(value.length > 0);
 
         vm.recordLogs();
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 1);
-        assertEq(entries[0].emitter, address(sRegistry));
-        assertEq(entries[0].topics.length, 2);
-        assertEq(entries[0].topics[0], keccak256("Register(address,bytes32,bytes)"));
-        assertEq(entries[0].topics[1], name);
-        assertEq(entries[0].data, abi.encode(CONFIG_REGISTRY_ROOT, value));
+        assertRegisterLog(entries[0], AUTHORITY, name, value);
     }
 
     /// A re-binding emits its own `Register`, so the most recent entry for a
@@ -281,21 +349,17 @@ contract ConfigRegistryRegisterTest is Test {
         vm.assume(boundValue.length > 0);
         vm.assume(value.length > 0);
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, boundValue);
 
         vm.warp(block.timestamp + 1);
         vm.recordLogs();
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 1);
-        assertEq(entries[0].emitter, address(sRegistry));
-        assertEq(entries[0].topics.length, 2);
-        assertEq(entries[0].topics[0], keccak256("Register(address,bytes32,bytes)"));
-        assertEq(entries[0].topics[1], name);
-        assertEq(entries[0].data, abi.encode(CONFIG_REGISTRY_ROOT, value));
+        assertRegisterLog(entries[0], AUTHORITY, name, value);
     }
 
     /// Re-binding a name to the value it already holds is a bind like any
@@ -303,46 +367,26 @@ contract ConfigRegistryRegisterTest is Test {
     function testRegisterRebindSameValueEvent(bytes32 name, bytes memory value) external {
         vm.assume(value.length > 0);
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
 
         vm.warp(block.timestamp + 1);
         vm.recordLogs();
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 1);
-        assertEq(entries[0].emitter, address(sRegistry));
-        assertEq(entries[0].topics.length, 2);
-        assertEq(entries[0].topics[0], keccak256("Register(address,bytes32,bytes)"));
-        assertEq(entries[0].topics[1], name);
-        assertEq(entries[0].data, abi.encode(CONFIG_REGISTRY_ROOT, value));
+        assertRegisterLog(entries[0], AUTHORITY, name, value);
     }
 
     /// A rejected `registerV1` emits nothing.
-    function testRegisterNoEventOnRevert(address sender, bytes32 name, bytes memory value) external {
-        vm.assume(sender != CONFIG_REGISTRY_ROOT);
-
+    function testRegisterNoEventOnRevert(address sender, bytes32 name) external {
         vm.recordLogs();
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, name));
         vm.prank(sender);
-        sRegistry.registerV1(name, value);
+        sRegistry.registerV1(name, "");
         assertEq(vm.getRecordedLogs().length, 0);
-    }
-
-    /// Root is the CALLER, never the transaction origin: a call from a non-root
-    /// account is refused even when the transaction originates from root.
-    function testRegisterRootIsCallerNotOrigin(address sender, bytes32 name, bytes memory value) external {
-        vm.assume(sender != CONFIG_REGISTRY_ROOT);
-        vm.assume(value.length > 0);
-
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
-        vm.prank(sender, CONFIG_REGISTRY_ROOT);
-        sRegistry.registerV1(name, value);
-
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name));
-        LibConfigRegistryRead.getValue(sRegistry, name);
     }
 
     /// A re-bind replaces the moment along with the value.
@@ -360,16 +404,16 @@ contract ConfigRegistryRegisterTest is Test {
         second = bound(second, first + 1, type(uint256).max);
 
         vm.warp(first);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, boundValue);
-        assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), first);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), first);
 
         vm.warp(second);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
 
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), value);
-        assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), second);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), value);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), second);
     }
 
     /// Re-binding a name to the value it already holds still refreshes the
@@ -383,41 +427,16 @@ contract ConfigRegistryRegisterTest is Test {
         second = bound(second, first + 1, type(uint256).max);
 
         vm.warp(first);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
-        assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), first);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), first);
 
         vm.warp(second);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
 
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), value);
-        assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), second);
-    }
-
-    /// A non-root caller cannot refresh a binding's age.
-    function testRegisterNonRootCannotMoveMoment(
-        address sender,
-        bytes32 name,
-        bytes memory boundValue,
-        bytes memory value,
-        uint256 first,
-        uint256 second
-    ) external {
-        vm.assume(sender != CONFIG_REGISTRY_ROOT);
-        vm.assume(boundValue.length > 0);
-        first = bound(first, 1, type(uint256).max);
-
-        vm.warp(first);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        sRegistry.registerV1(name, boundValue);
-
-        vm.warp(second);
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
-        vm.prank(sender);
-        sRegistry.registerV1(name, value);
-
-        assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), first);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), value);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), second);
     }
 
     /// A re-bind at a clock behind the moment the name carries is refused, and
@@ -435,18 +454,18 @@ contract ConfigRegistryRegisterTest is Test {
         first = bound(first, second + 1, type(uint256).max);
 
         vm.warp(first);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, boundValue);
 
         vm.warp(second);
         vm.expectRevert(
             abi.encodeWithSelector(IConfigRegistryV1.TimestampNotAfterBinding.selector, name, second, first)
         );
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
 
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), boundValue);
-        assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), first);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), boundValue);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), first);
     }
 
     /// A re-bind at EXACTLY the moment the name carries is refused too, so the
@@ -463,15 +482,15 @@ contract ConfigRegistryRegisterTest is Test {
 
         time = bound(time, 1, type(uint256).max);
         vm.warp(time);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, boundValue);
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.TimestampNotAfterBinding.selector, name, time, time));
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
 
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), boundValue);
-        assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), time);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), boundValue);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), time);
     }
 
     /// One block later is enough: the rule is strictly-after, not some wider
@@ -487,15 +506,15 @@ contract ConfigRegistryRegisterTest is Test {
         time = bound(time, 1, type(uint256).max - 1);
 
         vm.warp(time);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, boundValue);
 
         vm.warp(time + 1);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
 
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), value);
-        assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), time + 1);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), value);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), time + 1);
     }
 
     /// A bind at a clock of ZERO is refused, first bind or not, and the name
@@ -507,11 +526,11 @@ contract ConfigRegistryRegisterTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(IConfigRegistryV1.TimestampNotAfterBinding.selector, name, uint256(0), uint256(0))
         );
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name));
-        LibConfigRegistryRead.getValue(sRegistry, name);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, AUTHORITY, name));
+        LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name);
     }
 
     /// A first bind at a clock of one succeeds, and its moment is that clock, so
@@ -520,11 +539,11 @@ contract ConfigRegistryRegisterTest is Test {
         vm.assume(value.length > 0);
 
         vm.warp(1);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, value);
 
-        assertEq(LibConfigRegistryRead.getValue(sRegistry, name), value);
-        assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), 1);
+        assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), value);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), 1);
     }
 
     /// The rule is per name: a clock behind ONE name's moment does not stop
@@ -542,16 +561,62 @@ contract ConfigRegistryRegisterTest is Test {
         high = bound(high, low + 1, type(uint256).max);
 
         vm.warp(high);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(nameA, value);
 
         // The clock is now behind nameA's moment.
         vm.warp(low);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(nameB, value);
 
-        assertEq(LibConfigRegistryRead.getMoment(sRegistry, nameA), high);
-        assertEq(LibConfigRegistryRead.getMoment(sRegistry, nameB), low);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, nameA), high);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, nameB), low);
+    }
+
+    /// The rule is per authority too: a clock behind one authority's moment
+    /// for a name does not stop another authority binding the same name.
+    function testRegisterMonotonicityIsPerAuthority(
+        address other,
+        bytes32 name,
+        bytes memory value,
+        uint256 high,
+        uint256 low
+    ) external {
+        vm.assume(other != AUTHORITY);
+        vm.assume(value.length > 0);
+        low = bound(low, 1, type(uint256).max - 1);
+        high = bound(high, low + 1, type(uint256).max);
+
+        vm.warp(high);
+        vm.prank(AUTHORITY);
+        sRegistry.registerV1(name, value);
+
+        // The clock is now behind the authority's moment for the name.
+        vm.warp(low);
+        vm.prank(other);
+        sRegistry.registerV1(name, value);
+
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), high);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, other, name), low);
+    }
+
+    /// One name under two authorities is two bindings in two storage slots,
+    /// each holding exactly its own value and moment.
+    function testRegisterSameNameTwoAuthoritiesStoredApart(address other) external {
+        vm.assume(other != AUTHORITY);
+        bytes32 name = keccak256("a.b");
+        bytes memory valueA = abi.encode(uint256(1), uint256(2));
+        bytes memory valueB = hex"03";
+
+        vm.warp(5);
+        vm.prank(AUTHORITY);
+        sRegistry.registerV1(name, valueA);
+        vm.warp(7);
+        vm.prank(other);
+        sRegistry.registerV1(name, valueB);
+
+        assertStoredBinding(AUTHORITY, name, valueA, 5);
+        assertStoredBinding(other, name, valueB, 7);
     }
 
     /// An empty-value `registerV1` never moves a moment either.
@@ -565,14 +630,14 @@ contract ConfigRegistryRegisterTest is Test {
         first = bound(first, 1, type(uint256).max);
 
         vm.warp(first);
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, boundValue);
 
         vm.warp(second);
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, name));
-        vm.prank(CONFIG_REGISTRY_ROOT);
+        vm.prank(AUTHORITY);
         sRegistry.registerV1(name, "");
 
-        assertEq(LibConfigRegistryRead.getMoment(sRegistry, name), first);
+        assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), first);
     }
 }

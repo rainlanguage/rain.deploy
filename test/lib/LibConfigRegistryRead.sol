@@ -9,19 +9,25 @@ import {IConfigRegistryV1} from "../../src/interface/IConfigRegistryV1.sol";
 library LibConfigRegistryRead {
     /// The value half of `getV1`.
     /// @param registry The registry to read.
+    /// @param authority The authority to read under.
     /// @param name The name to read.
-    /// @return The value bound to `name`.
-    function getValue(IConfigRegistryV1 registry, bytes32 name) internal view returns (bytes memory) {
-        (bytes memory value,) = registry.getV1(name);
+    /// @return The value `authority` bound `name` to.
+    function getValue(IConfigRegistryV1 registry, address authority, bytes32 name)
+        internal
+        view
+        returns (bytes memory)
+    {
+        (bytes memory value,) = registry.getV1(authority, name);
         return value;
     }
 
     /// The moment half of `getV1`.
     /// @param registry The registry to read.
+    /// @param authority The authority to read under.
     /// @param name The name to read.
-    /// @return The moment `name` was most recently bound.
-    function getMoment(IConfigRegistryV1 registry, bytes32 name) internal view returns (uint256) {
-        (, uint256 registeredAt) = registry.getV1(name);
+    /// @return The moment `authority` most recently bound `name`.
+    function getMoment(IConfigRegistryV1 registry, address authority, bytes32 name) internal view returns (uint256) {
+        (, uint256 registeredAt) = registry.getV1(authority, name);
         return registeredAt;
     }
 }

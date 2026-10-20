@@ -24,15 +24,16 @@ library LibConfigRegistryFork {
             == LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH;
     }
 
-    /// The revert a resolve of `name` gives on the selected chain when `name` is
-    /// bound nowhere: the registry's own `NameNotRegistered` where the pinned
+    /// The revert a resolve of `name` under `authority` gives on the selected
+    /// chain when `authority` has bound `name` nowhere: the registry's own `NameNotRegistered` where the pinned
     /// registry is deployed, and the code-hash refusal, naming what is there,
     /// where it is not.
+    /// @param authority The authority read under.
     /// @param name The unbound name.
     /// @return The revert data.
-    function unboundResolveRevert(bytes32 name) internal view returns (bytes memory) {
+    function unboundResolveRevert(address authority, bytes32 name) internal view returns (bytes memory) {
         if (isDeployed()) {
-            return abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name);
+            return abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, authority, name);
         }
         return abi.encodeWithSelector(
             LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
