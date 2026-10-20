@@ -219,6 +219,23 @@ contract LibRainDeployMechanismTest is Test {
         .snapshot;
     }
 
+    /// `MockDeployable` as a Zoltu suite.
+    /// @param suite The suite key.
+    /// @return The suite.
+    function zoltuMockDeployableSuite(string memory suite) internal pure returns (DeploySuite memory) {
+        return DeploySuite({
+            suite: suite,
+            creationCode: type(MockDeployable).creationCode,
+            storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
+            storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
+            storedRuntimeCode: type(MockDeployable).runtimeCode,
+            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
+            dependencies: new DeployDependency[](0),
+            mechanism: DeployMechanism.Zoltu,
+            mechanismData: ""
+        });
+    }
+
     /// A clone suite deploys locally to the address its mechanism derives, and what lands there is
     /// the proxy.
     function testCloneSuiteDeploysLocallyToItsDerivedAddress() external {
@@ -260,17 +277,7 @@ contract LibRainDeployMechanismTest is Test {
 
     /// A Zoltu suite has no mechanism data.
     function testZoltuSuiteCarryingMechanismDataIsRefused() external {
-        DeploySuite memory suite = DeploySuite({
-            suite: "zoltu-with-data",
-            creationCode: type(MockDeployable).creationCode,
-            storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
-            storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
-            storedRuntimeCode: type(MockDeployable).runtimeCode,
-            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
-            dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
-        });
+        DeploySuite memory suite = zoltuMockDeployableSuite("zoltu-with-data");
         assertEq(this.externalDeployedAddress(suite), suite.storedDeployedAddress);
 
         suite.mechanismData = hex"00";
@@ -289,17 +296,7 @@ contract LibRainDeployMechanismTest is Test {
 
     /// Each mechanism's step deploys its suite to the suite's derived address.
     function testDeployStepDeploysEachMechanismToItsDerivedAddress() external {
-        DeploySuite memory zoltu = DeploySuite({
-            suite: "zoltu",
-            creationCode: type(MockDeployable).creationCode,
-            storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
-            storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
-            storedRuntimeCode: type(MockDeployable).runtimeCode,
-            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
-            dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
-        });
+        DeploySuite memory zoltu = zoltuMockDeployableSuite("zoltu");
         LibRainDeploy.etchZoltuFactory(vm);
         address deployed = this.externalDeployStep(zoltu);
         assertEq(deployed, zoltu.storedDeployedAddress);
@@ -499,18 +496,7 @@ contract LibRainDeployMechanismTest is Test {
     /// A suite at one address on every network has no per-address chain ids.
     function testAddressChainIdsIsEmptyForAOneAddressSuite() external view {
         assertEq(this.externalAddressChainIds(exampleCloneSuite()).length, 0);
-        DeploySuite memory zoltu = DeploySuite({
-            suite: "zoltu",
-            creationCode: type(MockDeployable).creationCode,
-            storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
-            storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
-            storedRuntimeCode: type(MockDeployable).runtimeCode,
-            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
-            dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
-        });
-        assertEq(this.externalAddressChainIds(zoltu).length, 0);
+        assertEq(this.externalAddressChainIds(zoltuMockDeployableSuite("zoltu")).length, 0);
     }
 
     /// A declaration with one init data for every network AND init data per network is refused
@@ -992,19 +978,8 @@ contract LibRainDeployMechanismTest is Test {
 
     /// Extended networks on a Zoltu suite are refused.
     function testExtendedNetworksOnAZoltuSuiteAreRefused() external {
-        DeploySuite memory zoltu = DeploySuite({
-            suite: "zoltu",
-            creationCode: type(MockDeployable).creationCode,
-            storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
-            storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
-            storedRuntimeCode: type(MockDeployable).runtimeCode,
-            artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
-            dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
-        });
         vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnexpected.selector, "zoltu"));
-        this.externalWithExtendedNetworks(zoltu, polygonAt(TEST_DATA));
+        this.externalWithExtendedNetworks(zoltuMockDeployableSuite("zoltu"), polygonAt(TEST_DATA));
     }
 
     /// An extended network at an address its init data does not derive is refused, naming both.
