@@ -879,7 +879,9 @@ Four separate steps, in this order. Nothing automatic ever broadcasts.
    is key custody and real money, and no merge or tag should be able to trigger
    it. It is idempotent — a network that already has the code is skipped — so a
    partial run is fixed by running it again rather than by unpicking anything.
-2. **Cut.** Run `forge script ./script/Build.sol --sig 'cutRelease()'` then
+2. **Cut.** Set `[external.package].version` in `foundry.toml` to the release
+   version first, because `cutRelease()` freezes under that version's tag. Then
+   run `forge script ./script/Build.sol --sig 'cutRelease()'`, then
    `forge script ./script/Build.sol` FOLLOWED BY `./script/build.sh`, and open
    the release PR. Its CI checks the newly released suites on chain, so merge it
    only once step 1 has landed on every supported network.
@@ -891,9 +893,10 @@ Four separate steps, in this order. Nothing automatic ever broadcasts.
 
 This is a deploy repo: it carries deployed concretes whose addresses and
 codehashes consumers pin, so releases are **manual `sol-v*` tags**, not merges.
-`[external.package].version` is the version of the LAST Soldeer publish, and
-only a release moves it. A release cut under this lifecycle also names the
-frozen `src/generated/<tag>/` record `cutRelease()` wrote for it. Every version
+`[external.package].version` is the newest release cut into
+`src/generated/<tag>/`: only the release PR that cuts that tag moves it, and an
+ordinary PR does not. A release cut under this lifecycle also names the frozen
+`src/generated/<tag>/` record `cutRelease()` wrote for it. Every version
 published under the previous merge-driven lifecycle predates that record and has
 none, so `src/generated/` holds no directory for it; those versions stay
 published, and consumers pin exact versions and are unaffected.

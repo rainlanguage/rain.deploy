@@ -48,6 +48,11 @@ import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.
 /// @param newest The newest frozen release.
 error VersionNotNewestRelease(string tag, string newest);
 
+/// A frozen release does not hold a contract the release before it holds.
+/// @param tag The release that drops the contract.
+/// @param contractName The contract it drops.
+error ReleaseDropsContract(string tag, string contractName);
+
 /// @title LibRainDeploySnapshotTest
 /// @notice The guards on the release machinery every deploy repo inherits.
 ///
@@ -3281,7 +3286,7 @@ contract LibRainDeploySnapshotTest is Test {
     string constant AHEAD_FIXTURE_ROOT = "test/generated-snapshot/ahead";
 
     /// `[external.package].version` MUST be the newest release frozen under
-    /// `src/generated/`: a `sol-v*` release moves the two in lockstep.
+    /// `src/generated/`: the release PR moves the two in lockstep.
     function testVersionIsTheNewestFrozenRelease() external view {
         this.externalCheckVersionIsNewestRelease(LibRainDeploySnapshot.LIB_FS_ROOT, LibRainDeploySnapshot.deployTag(vm));
     }
@@ -3297,6 +3302,84 @@ contract LibRainDeploySnapshotTest is Test {
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(AHEAD_FIXTURE_ROOT, true);
+    }
+
+    /// External wrapper so `vm.expectRevert` lands at the right call depth.
+    /// Reverts unless every release frozen under `recordRoot` holds every
+    /// contract the release before it holds.
+    /// @param recordRoot The record root to read the releases from.
+    function externalCheckNoReleaseDropsAContract(string memory recordRoot) external view {
+        string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, recordRoot);
+        for (uint256 i = 0; i < paths.length; i++) {
+            string memory tag = LibRainDeploySnapshot.tagForRecordPath(vm, paths[i]);
+            // `next` is the least frozen tag strictly following `tag`, once `hasNext`.
+            bool hasNext = false;
+            string memory next;
+            for (uint256 j = 0; j < paths.length; j++) {
+                string memory other = LibRainDeploySnapshot.tagForRecordPath(vm, paths[j]);
+                if (
+                    LibRainDeploySnapshot.tagPrecedes(vm, tag, other)
+                        && (!hasNext || LibRainDeploySnapshot.tagPrecedes(vm, other, next))
+                ) {
+                    next = other;
+                    hasNext = true;
+                }
+            }
+            if (!hasNext) {
+                continue;
+            }
+            string memory name = LibRainDeploySnapshot.contractForRecordPath(vm, paths[i]);
+            if (!vm.exists(LibRainDeploySnapshot.pathForSnapshot(recordRoot, next, name))) {
+                revert ReleaseDropsContract(next, name);
+            }
+        }
+    }
+
+    /// A record whose newest release drops a contract. See
+    /// `NEWEST_FIXTURE_ROOT`.
+    string constant DROPS_FIXTURE_ROOT = "test/generated-snapshot/drops";
+
+    /// A record whose releases keep or add contracts. See
+    /// `NEWEST_FIXTURE_ROOT`.
+    string constant KEEPS_FIXTURE_ROOT = "test/generated-snapshot/keeps";
+
+    /// Every release frozen under `src/generated/` MUST hold every contract
+    /// the release before it holds.
+    function testNoReleaseDropsAContract() external view {
+        assertGt(LibRainDeploySnapshot.frozenSnapshotPaths(vm).length, 0);
+        this.externalCheckNoReleaseDropsAContract(LibRainDeploySnapshot.LIB_FS_ROOT);
+    }
+
+    /// A release that adds a contract, or keeps every one, MUST be accepted,
+    /// across a gap in the tags and the `0_1_9` to `0_1_10` step a text order
+    /// gets wrong.
+    function testReleaseKeepingEveryContractIsAccepted() external {
+        writeFixture(string.concat(KEEPS_FIXTURE_ROOT, "/0_1_9/A.sol"));
+        writeFixture(string.concat(KEEPS_FIXTURE_ROOT, "/0_1_10/A.sol"));
+        writeFixture(string.concat(KEEPS_FIXTURE_ROOT, "/0_1_10/B.sol"));
+        writeFixture(string.concat(KEEPS_FIXTURE_ROOT, "/0_1_12/A.sol"));
+        writeFixture(string.concat(KEEPS_FIXTURE_ROOT, "/0_1_12/B.sol"));
+
+        this.externalCheckNoReleaseDropsAContract(KEEPS_FIXTURE_ROOT);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(KEEPS_FIXTURE_ROOT, true);
+    }
+
+    /// A release that drops a contract the release before it holds MUST be
+    /// refused, naming that release and the contract: `0_1_12` drops the `B`
+    /// that `0_1_10`, the release before it, holds.
+    function testReleaseDroppingAContractIsRefused() external {
+        writeFixture(string.concat(DROPS_FIXTURE_ROOT, "/0_1_9/A.sol"));
+        writeFixture(string.concat(DROPS_FIXTURE_ROOT, "/0_1_10/A.sol"));
+        writeFixture(string.concat(DROPS_FIXTURE_ROOT, "/0_1_10/B.sol"));
+        writeFixture(string.concat(DROPS_FIXTURE_ROOT, "/0_1_12/A.sol"));
+
+        vm.expectRevert(abi.encodeWithSelector(ReleaseDropsContract.selector, "0_1_12", "B"));
+        this.externalCheckNoReleaseDropsAContract(DROPS_FIXTURE_ROOT);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(DROPS_FIXTURE_ROOT, true);
     }
 
     /// Over EVERY tag, against a record on disk, the guard MUST accept exactly

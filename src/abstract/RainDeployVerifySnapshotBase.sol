@@ -159,6 +159,22 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         return new string[](0);
     }
 
+    /// The index of the first of `codeRecordNames` that `path`'s file name is,
+    /// plus `.sol`.
+    /// @param path A frozen record file.
+    /// @param codeRecordNames The code records' names.
+    /// @return The index, or `codeRecordNames.length` when none matches.
+    function codeRecordIndex(string memory path, string[] memory codeRecordNames) internal pure returns (uint256) {
+        string[] memory components = vm.split(path, "/");
+        bytes32 file = keccak256(bytes(components[components.length - 1]));
+        for (uint256 i = 0; i < codeRecordNames.length; i++) {
+            if (file == keccak256(bytes(string.concat(codeRecordNames[i], ".sol")))) {
+                return i;
+            }
+        }
+        return codeRecordNames.length;
+    }
+
     /// `paths` split into the deploy records and the code records, each in
     /// the order given. A path is a code record when its file name is one of
     /// `codeRecordNames` plus `.sol`.
@@ -174,14 +190,9 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         bool[] memory isCode = new bool[](paths.length);
         uint256 codeCount = 0;
         for (uint256 i = 0; i < paths.length; i++) {
-            string[] memory components = vm.split(paths[i], "/");
-            bytes32 file = keccak256(bytes(components[components.length - 1]));
-            for (uint256 j = 0; j < codeRecordNames.length; j++) {
-                if (file == keccak256(bytes(string.concat(codeRecordNames[j], ".sol")))) {
-                    isCode[i] = true;
-                    codeCount++;
-                    break;
-                }
+            if (codeRecordIndex(paths[i], codeRecordNames) < codeRecordNames.length) {
+                isCode[i] = true;
+                codeCount++;
             }
         }
         string[] memory deployRecords = new string[](paths.length - codeCount);
@@ -255,6 +266,18 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         return vm.parseBytes(string.concat("0x", closed[0]));
     }
 
+    /// The value of the `BYTECODE_HASH` a code record declares: the
+    /// `bytes32(0x...)` literal ending the declaration's line.
+    /// @param lines The record's lines, block comments removed.
+    /// @param line The declaration's line.
+    /// @return The hash.
+    function declaredBytecodeHash(string[] memory lines, uint256 line) internal pure returns (bytes32) {
+        string[] memory tokens = vm.split(lines[line], " ");
+        return vm.parseBytes32(
+            vm.replace(vm.replace(vm.replace(tokens[tokens.length - 1], "bytes32(", ""), ")", ""), ";", "")
+        );
+    }
+
     /// Checks one frozen code record against itself.
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
@@ -272,10 +295,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         declarationLine(path, lines, CREATION_CODE_DECLARATION);
         uint256 runtimeLine = declarationLine(path, lines, RUNTIME_CODE_DECLARATION);
 
-        string[] memory tokens = vm.split(lines[hashLine], " ");
-        string memory literal = tokens[tokens.length - 1];
-        bytes32 storedBytecodeHash =
-            vm.parseBytes32(vm.replace(vm.replace(vm.replace(literal, "bytes32(", ""), ")", ""), ";", ""));
+        bytes32 storedBytecodeHash = declaredBytecodeHash(lines, hashLine);
         bytes32 runtimeCodeHash = keccak256(declaredBytes(path, lines, runtimeLine));
         if (runtimeCodeHash != storedBytecodeHash) {
             revert FrozenCodeRecordInconsistent(path, storedBytecodeHash, runtimeCodeHash);

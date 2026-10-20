@@ -51,21 +51,11 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
         assertGt(codeRecords.length, 0);
         for (uint256 i = 0; i < codeRecords.length; i++) {
             string memory path = codeRecords[i];
-            string[] memory components = vm.split(path, "/");
-            bytes32 file = keccak256(bytes(components[components.length - 1]));
-            uint256 matched = type(uint256).max;
-            for (uint256 j = 0; j < declared.length; j++) {
-                if (file == keccak256(bytes(string.concat(parameterisedContractName(declared[j]), ".sol")))) {
-                    matched = j;
-                }
-            }
+            uint256 matched = codeRecordIndex(path, frozenCodeRecordNames());
             assertLt(matched, declared.length, path);
 
             string[] memory lines = vm.split(LibRainDeploySnapshot.withoutBlockComments(vm, vm.readFile(path)), "\n");
-            string[] memory tokens = vm.split(lines[declarationLine(path, lines, BYTECODE_HASH_DECLARATION)], " ");
-            bytes32 recordedHash = vm.parseBytes32(
-                vm.replace(vm.replace(vm.replace(tokens[tokens.length - 1], "bytes32(", ""), ")", ""), ";", "")
-            );
+            bytes32 recordedHash = declaredBytecodeHash(lines, declarationLine(path, lines, BYTECODE_HASH_DECLARATION));
             bytes memory initCode = abi.encodePacked(
                 declaredBytes(path, lines, declarationLine(path, lines, CREATION_CODE_DECLARATION)),
                 declared[matched].referenceConstructorArgs
