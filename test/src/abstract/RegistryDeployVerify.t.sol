@@ -12,7 +12,9 @@ import {
     BYTECODE_HASH as BYTECODE_HASH_0_1_19,
     CREATION_CODE as CREATION_CODE_0_1_19
 } from "../../../src/generated/0_1_19/TimelockController.sol";
+import {LibTimelockController} from "../../../src/lib/LibTimelockController.sol";
 import {MockTimelockControllerGeneration} from "../../concrete/MockTimelockControllerGeneration.sol";
+import {MockTimelockControllerImmutableGeneration} from "../../concrete/MockTimelockControllerImmutableGeneration.sol";
 
 /// A frozen code record's `CREATION_CODE` deploys code that does not hash to
 /// its `BYTECODE_HASH`.
@@ -63,24 +65,41 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
     /// deploys-other-code fixture, because forge runs the two in parallel.
     string constant COUNT_FIXTURE_ROOT = "test/generated-deploy-verify-count";
 
+    /// Where the hash-mismatch fixture is written. Its own tree, apart from
+    /// the other fixtures, because forge runs them in parallel.
+    string constant HASH_FIXTURE_ROOT = "test/generated-deploy-verify-hash";
+
+    /// Where the two-declaration fixture is written. Its own tree, apart from
+    /// the other fixtures, because forge runs them in parallel.
+    string constant TWO_DECLARED_FIXTURE_ROOT = "test/generated-deploy-verify-two";
+
     /// @inheritdoc RainDeployVerifySnapshotBase
     function frozenCodeRecordNames() internal pure override returns (string[] memory) {
         return parameterisedContractNames();
     }
 
-    /// Reverts unless every frozen code record under `recordRoot` deploys its
-    /// `CREATION_CODE`, with its declaration's `referenceConstructorArgs`, to
-    /// runtime code hashing to its `BYTECODE_HASH`.
+    /// Reverts unless every frozen code record under `recordRoot` that
+    /// `declared` names deploys its `CREATION_CODE`, with that declaration's
+    /// `referenceConstructorArgs`, to runtime code hashing to its
+    /// `BYTECODE_HASH`.
     /// @param recordRoot The record root to read the code records from.
+    /// @param declared The parameterised contracts the code records are of.
     /// @return The number of code records checked.
-    function checkFrozenCodeRecordsDeploy(string memory recordRoot) internal returns (uint256) {
+    function checkFrozenCodeRecordsDeploy(string memory recordRoot, ParameterisedContract[] memory declared)
+        internal
+        returns (uint256)
+    {
+        string[] memory names = new string[](declared.length);
+        for (uint256 i = 0; i < declared.length; i++) {
+            names[i] = parameterisedContractName(declared[i]);
+        }
+        // Every code record's file name is one of `names`, so `matched`
+        // indexes `declared`.
         (, string[] memory codeRecords) =
-            partitionFrozenRecords(LibRainDeploySnapshot.frozenSnapshotPaths(vm, recordRoot), frozenCodeRecordNames());
-        ParameterisedContract[] memory declared = parameterisedContracts();
+            partitionFrozenRecords(LibRainDeploySnapshot.frozenSnapshotPaths(vm, recordRoot), names);
         for (uint256 i = 0; i < codeRecords.length; i++) {
             string memory path = codeRecords[i];
-            uint256 matched = codeRecordIndex(path, frozenCodeRecordNames());
-            assertLt(matched, declared.length, path);
+            uint256 matched = codeRecordIndex(path, names);
 
             string[] memory lines = vm.split(LibRainDeploySnapshot.withoutBlockComments(vm, vm.readFile(path)), "\n");
             bytes32 recordedHash = declaredBytecodeHash(lines, declarationLine(path, lines, BYTECODE_HASH_DECLARATION));
@@ -103,7 +122,17 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
     /// External wrapper so `vm.expectRevert` lands at the right call depth.
     /// @param recordRoot The record root to read the code records from.
     function externalCheckFrozenCodeRecordsDeploy(string memory recordRoot) external returns (uint256) {
-        return checkFrozenCodeRecordsDeploy(recordRoot);
+        return checkFrozenCodeRecordsDeploy(recordRoot, parameterisedContracts());
+    }
+
+    /// External wrapper so `vm.expectRevert` lands at the right call depth.
+    /// @param recordRoot The record root to read the code records from.
+    /// @param declared The parameterised contracts the code records are of.
+    function externalCheckFrozenCodeRecordsDeployAgainst(
+        string memory recordRoot,
+        ParameterisedContract[] memory declared
+    ) external returns (uint256) {
+        return checkFrozenCodeRecordsDeploy(recordRoot, declared);
     }
 
     /// Every frozen code record's `CREATION_CODE`, deployed with its
@@ -198,6 +227,100 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(DEPLOYS_OTHER_FIXTURE_ROOT, true);
+    }
+
+    /// A code record whose `CREATION_CODE` deploys its own `RUNTIME_CODE` but
+    /// whose `BYTECODE_HASH` names other code MUST be refused against the
+    /// declared hash, not the hash of the declared runtime code.
+    function testFrozenCodeRecordDeployingOtherThanItsHashIsRefused() external {
+        if (vm.exists(HASH_FIXTURE_ROOT)) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(HASH_FIXTURE_ROOT, true);
+        }
+        string memory path = string.concat(HASH_FIXTURE_ROOT, "/0_1_19/TimelockController.sol");
+        bytes32 otherHash = keccak256(type(MockTimelockControllerGeneration).runtimeCode);
+        string memory record = vm.replace(
+            vm.readFile("src/generated/0_1_19/TimelockController.sol"),
+            vm.replace(vm.toString(BYTECODE_HASH_0_1_19), "0x", ""),
+            vm.replace(vm.toString(otherHash), "0x", "")
+        );
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(string.concat(HASH_FIXTURE_ROOT, "/0_1_19"), true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(path, record);
+
+        vm.expectRevert(
+            abi.encodeWithSelector(FrozenCodeRecordDeploysOtherCode.selector, path, otherHash, BYTECODE_HASH_0_1_19)
+        );
+        this.externalCheckFrozenCodeRecordsDeploy(HASH_FIXTURE_ROOT);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(HASH_FIXTURE_ROOT, true);
+    }
+
+    /// With two parameterised contracts declared, each code record MUST be
+    /// deployed with its own declaration's `referenceConstructorArgs`. The
+    /// second declaration's contract keeps its `minDelay` in an immutable, so
+    /// the first declaration's args deploy it to other code.
+    function testEachCodeRecordDeploysWithItsOwnDeclaration() external {
+        if (vm.exists(TWO_DECLARED_FIXTURE_ROOT)) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(TWO_DECLARED_FIXTURE_ROOT, true);
+        }
+        string memory dir = string.concat(TWO_DECLARED_FIXTURE_ROOT, "/0_1_19");
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.createDir(dir, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(
+            string.concat(dir, "/TimelockController.sol"), vm.readFile("src/generated/0_1_19/TimelockController.sol")
+        );
+
+        ParameterisedContract[] memory declared = new ParameterisedContract[](2);
+        declared[0] = parameterisedContracts()[0];
+        declared[1] = ParameterisedContract({
+            artifactPath: "test/concrete/MockTimelockControllerImmutableGeneration.sol:MockTimelockControllerImmutableGeneration",
+            referenceConstructorArgs: LibTimelockController.timelockConstructorArgs(7, address(1)),
+            spdxLicenseIdentifier: "LicenseRef-DCL-1.0",
+            copyrightText: "Copyright (c) 2020 Rain Open Source Software Ltd"
+        });
+
+        bytes memory creationCode = type(MockTimelockControllerImmutableGeneration).creationCode;
+        bytes memory runtimeCode = deployedCode(abi.encodePacked(creationCode, declared[1].referenceConstructorArgs));
+        assertNotEq(
+            keccak256(deployedCode(abi.encodePacked(creationCode, declared[0].referenceConstructorArgs))),
+            keccak256(runtimeCode)
+        );
+
+        string memory path = string.concat(dir, "/MockTimelockControllerImmutableGeneration.sol");
+        string memory record = string.concat(
+            "bytes32 constant BYTECODE_HASH = bytes32(",
+            vm.toString(keccak256(runtimeCode)),
+            ");\nbytes constant CREATION_CODE = hex\"",
+            vm.replace(vm.toString(creationCode), "0x", ""),
+            "\";\nbytes constant RUNTIME_CODE = hex\"",
+            vm.replace(vm.toString(runtimeCode), "0x", ""),
+            "\";\n"
+        );
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.writeFile(path, record);
+        checkFrozenCodeRecord(path, record);
+
+        assertEq(this.externalCheckFrozenCodeRecordsDeployAgainst(TWO_DECLARED_FIXTURE_ROOT, declared), 2);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(TWO_DECLARED_FIXTURE_ROOT, true);
+    }
+
+    /// The runtime code `initCode` deploys.
+    /// @param initCode The creation code with its constructor args.
+    /// @return The deployed code.
+    function deployedCode(bytes memory initCode) internal returns (bytes memory) {
+        address deployed;
+        assembly ("memory-safe") {
+            deployed := create(0, add(initCode, 0x20), mload(initCode))
+        }
+        assertNotEq(deployed, address(0));
+        return deployed.code;
     }
 
     /// @inheritdoc RainDeploySuitesBase
