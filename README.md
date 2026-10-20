@@ -869,7 +869,7 @@ the record atomic with the migration it describes.
 
 ## Deploying, and then releasing
 
-Three separate steps, in this order. Nothing automatic ever broadcasts.
+Four separate steps, in this order. Nothing automatic ever broadcasts.
 
 1. **Deploy.** Dispatch the
    [`Manual sol artifacts`](.github/workflows/manual-sol-artifacts.yaml)
@@ -879,9 +879,13 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
    is key custody and real money, and no merge or tag should be able to trigger
    it. It is idempotent — a network that already has the code is skipped — so a
    partial run is fixed by running it again rather than by unpicking anything.
-2. **Verify.** `RegistryDeployVerifyTest` passes only once every **released**
+2. **Cut.** Run `forge script ./script/Build.sol --sig 'cutRelease()'` then
+   `./script/build.sh`, and open the release PR. Its CI checks the newly
+   released suites on chain, so merge it only once step 1 has landed on every
+   supported network.
+3. **Verify.** `RegistryDeployVerifyTest` passes only once every **released**
    suite is live on every supported network, with the code that release froze.
-3. **Tag.** Push a `sol-v*` tag, the sole release trigger. It verifies and
+4. **Tag.** Push a `sol-v*` tag, the sole release trigger. It verifies and
    publishes but never broadcasts, which is exactly why step 1 cannot be folded
    into it. The release mechanics are `rainix-tag-release`'s.
 

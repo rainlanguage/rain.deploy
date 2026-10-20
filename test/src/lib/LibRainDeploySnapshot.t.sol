@@ -43,6 +43,11 @@ import {CloneNetworks} from "../../../src/lib/LibRainDeployClone.sol";
 import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
 import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.2.0/src/lib/LibMemoryKV.sol";
 
+/// The version `foundry.toml` declares is not the newest frozen release.
+/// @param tag The tag the version converts to.
+/// @param newest The newest frozen release.
+error VersionNotNewestRelease(string tag, string newest);
+
 /// @title LibRainDeploySnapshotTest
 /// @notice The guards on the release machinery every deploy repo inherits.
 ///
@@ -3258,6 +3263,40 @@ contract LibRainDeploySnapshotTest is Test {
             //forge-lint: disable-next-line(unsafe-cheatcode)
             vm.removeDir(GREATER_FIXTURE_ROOT, true);
         }
+    }
+
+    /// External wrapper so `vm.expectRevert` lands at the right call depth.
+    /// Reverts unless `tag` is the newest release frozen under `recordRoot`.
+    /// @param recordRoot The record root to read the newest release from.
+    /// @param tag The tag the version converts to.
+    function externalCheckVersionIsNewestRelease(string memory recordRoot, string memory tag) external view {
+        string memory newest = LibRainDeploySnapshot.newestFrozenTag(vm, recordRoot);
+        if (keccak256(bytes(tag)) != keccak256(bytes(newest))) {
+            revert VersionNotNewestRelease(tag, newest);
+        }
+    }
+
+    /// The record frozen one release past the version. See
+    /// `NEWEST_FIXTURE_ROOT`.
+    string constant AHEAD_FIXTURE_ROOT = "test/generated-snapshot/ahead";
+
+    /// `[external.package].version` MUST be the newest release frozen under
+    /// `src/generated/`: a `sol-v*` release moves the two in lockstep.
+    function testVersionIsTheNewestFrozenRelease() external view {
+        this.externalCheckVersionIsNewestRelease(LibRainDeploySnapshot.LIB_FS_ROOT, LibRainDeploySnapshot.deployTag(vm));
+    }
+
+    /// A version behind the newest frozen release MUST be refused.
+    function testVersionBehindTheNewestFrozenReleaseIsRefused() external {
+        writeFixture(string.concat(AHEAD_FIXTURE_ROOT, "/0_1_19/", FIXTURE_CONTRACT, ".sol"));
+        writeFixture(string.concat(AHEAD_FIXTURE_ROOT, "/0_1_20/", FIXTURE_CONTRACT, ".sol"));
+
+        vm.expectRevert(abi.encodeWithSelector(VersionNotNewestRelease.selector, "0_1_19", "0_1_20"));
+        this.externalCheckVersionIsNewestRelease(AHEAD_FIXTURE_ROOT, "0_1_19");
+        this.externalCheckVersionIsNewestRelease(AHEAD_FIXTURE_ROOT, "0_1_20");
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(AHEAD_FIXTURE_ROOT, true);
     }
 
     /// Over EVERY tag, against a record on disk, the guard MUST accept exactly
