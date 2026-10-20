@@ -931,5 +931,36 @@
       "Survived, unobservable by the forge suite: M06 (planOnSelectedChain dropping console2.log of the network record) and M13 (simulateOnNetworks dropping console2.log of the inputs record). vm.expectCall on the console address records zero calls, and ffi is not enabled. The logged strings are returned and asserted; only the print is unpinned. M06 read KILLED once in round 2 by an rpc.hyperliquid.xyz invalid-block-height fork failure and SURVIVED on re-probe.",
       "Adversarial pass: no sender refusal on the contract path, chain id and code hash still checked, bind lands under the authority and not the caller, nothing broadcast; checked against the review finding and NatSpec; no candidate."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T00:10:00Z",
+    "commit": "8d48d11eb1d8763e7642e5fb269a06d9b9924047",
+    "testsAfterCommit": "8d48d11eb1d8763e7642e5fb269a06d9b9924047",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 223,
+    "scope": "PR #322 Marvin follow-up 2: src/lib/LibConfigRegistryRegister.sol simulateOnSelectedChain refusing a codeless authority (AuthorityHasNoCode) and planOnSelectedChain made view",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 8,
+      "behavioursProbed": 8,
+      "killedByExistingTests": 8,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: LibConfigRegistryRegisterTest, 45 tests, offline (the guard is reached without forks). Baseline green; 8/8 killed by mutation-probe: guard removed, inverted, reading the caller code, moved inside the bind branch, moved before the chain checks, error naming no network, error naming address(0), threshold <= 1.",
+      "testSimulateRefusesCodelessAuthority and the etched authority in the simulate tests were written in the same commit as the guard, so existing means present before the probe, not before the change. The probe did not record killing test names.",
+      "planOnSelectedChain becoming view is not a behaviour: solc rejects any state change in it.",
+      "Adversarial pass: a contract authority without code on a network is refused whether the name would be bound or skipped; the chain id and registry code hash are still checked first; no candidate."
+    ]
   }
 ]

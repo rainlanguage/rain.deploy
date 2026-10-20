@@ -241,7 +241,13 @@ contract RegisterConfigTest is Test {
         try script.run() {
             revert("run() did not revert");
         } catch (bytes memory reason) {
-            assertEq(bytes4(reason), bytes4(keccak256("CheatcodeError(string)")));
+            bytes memory expectedSelector = abi.encodeWithSignature("CheatcodeError(string)");
+            assertGe(reason.length, expectedSelector.length);
+            bytes memory selector = new bytes(expectedSelector.length);
+            for (uint256 i = 0; i < selector.length; i++) {
+                selector[i] = reason[i];
+            }
+            assertEq(selector, expectedSelector);
             bytes memory payload = new bytes(reason.length - 4);
             for (uint256 i = 0; i < payload.length; i++) {
                 payload[i] = reason[i + 4];
