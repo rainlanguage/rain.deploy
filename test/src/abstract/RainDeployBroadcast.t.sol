@@ -37,10 +37,12 @@ import {MockOriginRevertingOwner} from "../../concrete/MockOriginRevertingOwner.
 import {MockOriginOwnedCloneable} from "../../concrete/MockOriginOwnedCloneable.sol";
 import {MockChainOriginOwned} from "../../concrete/MockChainOriginOwned.sol";
 import {MockRawOwner} from "../../concrete/MockRawOwner.sol";
+import {OriginOwnedCloneDeploy} from "../../concrete/OriginOwnedCloneDeploy.sol";
 import {
     CLONE_ARTIFACT_PATH,
     CloneNetwork,
     CloneNetworks,
+    CloneTarget,
     LibRainDeployClone
 } from "../../../src/lib/LibRainDeployClone.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
@@ -835,5 +837,25 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
 
     function testBroadcastOfAnOwnerAnswerNamingTheDeployKeyInItsSecondWordReachesTheNetworkRefusal() external {
         expectRawOwnerReachesTheNetworkRefusal(abi.encodePacked(bytes32(0), abi.encode(vm.addr(1))));
+    }
+
+    function testBroadcastRefusesAReleaseWhoseCandidateAddsANetworkSeatingTheDeployKey() external {
+        OriginOwnedCloneDeploy deploy = new OriginOwnedCloneDeploy();
+        DeploySuite memory release = originOwnedCloneSuite(address(0xB0B), address(0xB0B));
+        CloneNetworks memory clones = abi.decode(release.mechanismData, (CloneNetworks));
+        CloneNetwork memory arbitrum = clones.networks[0];
+        clones.networks = new CloneNetwork[](1);
+        clones.networks[0] = arbitrum;
+        release.mechanismData = abi.encode(clones);
+        address seating = LibRainDeployClone.cloneDeployedAddress(
+            CloneTarget({
+                factory: clones.factory,
+                implementation: clones.implementation,
+                data: abi.encode(address(0)),
+                salt: clones.salt
+            })
+        );
+        vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, release.suite, seating));
+        deploy.externalBroadcastSuite(release, new string[](0), 1);
     }
 }
