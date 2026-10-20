@@ -922,7 +922,17 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         string[] memory parts = vm.split(record, "bytes constant RUNTIME_CODE =\n    hex\"");
         assertEq(parts.length, 2, "the record's runtime code is not where the generator writes it");
         string memory edited = string.concat(parts[0], "bytes constant RUNTIME_CODE =\n    hex\"00", parts[1]);
-        vm.expectPartialRevert(FrozenCodeRecordInconsistent.selector);
+        bytes32 recordedHash = vm.parseBytes32(vm.split(vm.split(record, "BYTECODE_HASH = bytes32(")[1], ")")[0]);
+        bytes memory runtimeCode = vm.parseBytes(string.concat("0x", vm.split(parts[1], "\"")[0]));
+        assertEq(keccak256(runtimeCode), recordedHash);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                FrozenCodeRecordInconsistent.selector,
+                "record.sol",
+                recordedHash,
+                keccak256(bytes.concat(hex"00", runtimeCode))
+            )
+        );
         this.externalCheckFrozenCodeRecord("record.sol", edited);
     }
 
@@ -1019,7 +1029,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// A bytecode hash outside one `bytes32(0x...);` of 32 bytes of hex is unreadable, never a raw parse error, even when
     /// it wraps the record's real hash.
     function testFrozenCodeRecordMalformedHashIsUnreadable() external {
-        string[] memory values = new string[](13);
+        string[] memory values = new string[](14);
         values[0] = "bytes32(0xzz00000000000000000000000000000000000000000000000000000000000000);";
         values[1] = "bytes32(0x00000000000000000000000000000000000000000000000000000000000001);";
         values[2] = "bytes32(0x000000000000000000000000000000000000000000000000000000000000000001);";
@@ -1035,6 +1045,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         // 64 hex digits `vm.parseBytes32` reads without `0x`, which solc reads as an identifier.
         values[11] = string.concat("bytes32(", vm.replace(hash, "0x", ""), ");");
         values[12] = string.concat("bytes32(", vm.replace(hash, "0x", "0X"), ");");
+        values[13] = string.concat("bytes32(", hash, ");bytes32(");
         for (uint256 i = 0; i < values.length; i++) {
             string memory edited = withLineRest(committedCodeRecord(), "bytes32 constant BYTECODE_HASH = ", values[i]);
             vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
@@ -1082,12 +1093,14 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         string memory record = committedCodeRecord();
         string[] memory parts = vm.split(record, "bytes constant RUNTIME_CODE =\n    hex\"");
         assertEq(parts.length, 2, "the record's runtime code is not where the generator writes it");
-        string[] memory variants = new string[](5);
+        string[] memory variants = new string[](7);
         variants[0] = "bytes constant RUNTIME_CODE =\n   hex\"";
         variants[1] = "bytes constant RUNTIME_CODE =\n     hex\"";
         variants[2] = "bytes constant RUNTIME_CODE =\n    x hex\"";
         variants[3] = "bytes constant RUNTIME_CODE =\n    xhex\"";
         variants[4] = "bytes constant RUNTIME_CODE =\nx    hex\"";
+        variants[5] = "bytes constant RUNTIME_CODE =\n   x hex\"";
+        variants[6] = "bytes constant RUNTIME_CODE =\n  x y hex\"";
         for (uint256 i = 0; i < variants.length; i++) {
             vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
             this.externalCheckFrozenCodeRecord("record.sol", string.concat(parts[0], variants[i], parts[1]));
@@ -1120,12 +1133,13 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         string[] memory declarations = new string[](2);
         declarations[0] = "bytes constant CREATION_CODE =\n    hex\"";
         declarations[1] = "bytes constant RUNTIME_CODE =\n    hex\"";
-        string[] memory endings = new string[](5);
+        string[] memory endings = new string[](6);
         endings[0] = "\"";
         endings[1] = "\";;";
         endings[2] = "\"x;";
         endings[3] = "\";\"";
         endings[4] = "";
+        endings[5] = "\";hex\"";
         for (uint256 i = 0; i < declarations.length; i++) {
             string[] memory parts = vm.split(committedCodeRecord(), declarations[i]);
             assertEq(parts.length, 2, "the record's code is not where the generator writes it");
@@ -1198,6 +1212,12 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
             this.externalCheckFrozenCodeRecord("record.sol", records[i]);
         }
+    }
+
+    /// `DEPLOYED_ADDRESS` on the record's last line, with no line break after it, is refused like any other line.
+    function testFrozenCodeRecordNamingDeployedAddressOnItsLastLineReverts() external {
+        vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
+        this.externalCheckFrozenCodeRecord("record.sol", string.concat(committedCodeRecord(), "// DEPLOYED_ADDRESS"));
     }
 
     /// A deploy record named as a code record is refused for its address, so a

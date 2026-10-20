@@ -8,6 +8,7 @@ import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
+import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
     BYTECODE_HASH as ADDRESS_REGISTRY_BYTECODE_HASH,
@@ -472,5 +473,33 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     function testChainIdEmptyRosterReverts() external {
         vm.expectRevert(LibRainDeploy.NoNetworks.selector);
         this.externalCheckNetworkChainIds(new SupportedNetwork[](0));
+    }
+
+    /// The matrix over both released suites on local forks.
+    function externalCheckOnLocalForks() external {
+        checkDeployedOnNetworks(
+            Vm(address(new LocalForkVm())), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), releasedSuites()
+        );
+    }
+
+    /// Each suite is held to its own derived code hash: both suites, with different code, pass on local forks.
+    function testLocalMatrixPassesEachSuiteAtItsOwnHash() external {
+        assertNotEq(keccak256(secondRuntimeCode()), ADDRESS_REGISTRY_BYTECODE_HASH);
+        this.externalCheckOnLocalForks();
+    }
+
+    /// The later suite holding other code is refused naming its own code hash, not the first suite's.
+    function testLocalMatrixRefusesALaterSuiteNamingItsOwnHash() external {
+        vm.etch(secondDeployedAddress(), hex"6001");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.CodeHashMismatchOnNetwork.selector,
+                supportedNetworks()[0],
+                secondDeployedAddress(),
+                keccak256(secondRuntimeCode()),
+                keccak256(hex"6001")
+            )
+        );
+        this.externalCheckOnLocalForks();
     }
 }

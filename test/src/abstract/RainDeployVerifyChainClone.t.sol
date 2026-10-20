@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
-import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
+import {DeployDependency, LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleCloneDeploys} from "../../abstract/ExampleCloneDeploys.sol";
 import {CloneTarget} from "../../../src/lib/LibRainDeployClone.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
@@ -104,5 +104,32 @@ contract RainDeployVerifyChainCloneTest is ExampleCloneDeploys, RainDeployVerify
             )
         );
         this.externalCheckOnLocalForks(forkVm);
+    }
+
+    /// A dependency only the SECOND suite declares, with no code on the first network, is refused there naming it.
+    function testMatrixRefusesALaterSuitesMissingDependency() external {
+        address missing = address(0xdEaD);
+        assertEq(missing.code.length, 0);
+        DeploySuite[] memory suites = new DeploySuite[](2);
+        suites[0] = releasedSuites()[0];
+        suites[1] = releasedSuites()[0];
+        DeployDependency[] memory dependencies = new DeployDependency[](suites[1].dependencies.length + 1);
+        for (uint256 i = 0; i < suites[1].dependencies.length; i++) {
+            dependencies[i] = suites[1].dependencies[i];
+        }
+        dependencies[dependencies.length - 1] = DeployDependency({deployedAddress: missing, runtimeCode: hex"6001"});
+        suites[1].dependencies = dependencies;
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, supportedNetworks()[0], missing)
+        );
+        this.externalCheckSuitesOnLocalForks(forkVm, suites);
+    }
+
+    /// The matrix on local forks over the given suites.
+    /// @param forkVm The local fork Vm.
+    /// @param suites The suites to check.
+    function externalCheckSuitesOnLocalForks(LocalForkVm forkVm, DeploySuite[] memory suites) external {
+        checkDeployedOnNetworks(Vm(address(forkVm)), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
     }
 }
