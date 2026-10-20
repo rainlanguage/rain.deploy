@@ -410,6 +410,7 @@ contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerif
     function testBeaconsOnEveryCheckedNetworkAreAccepted() external {
         supportOnly(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
         sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        sBeacons.declare(8453, declared("beacon-implementation@0_0_1", OWNER));
         this.externalCheckDeployedOnSupportedNetworks();
     }
 
@@ -648,5 +649,110 @@ contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerif
             abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, true, LibRainDeploy.zoltuAddress(""))
         );
         this.externalDeriveUnlessResolved(unset, arbitrum());
+    }
+
+    /// External wrapper for `checkBeaconsOnNetwork`, against the beacons resolved on `networks`, with no fork: the
+    /// subjects are local and persistent, and no fork is needed to read them.
+    /// @param networks The networks whose beacons to resolve.
+    /// @param networkIndex The index in `networks` of the network to check.
+    function externalCheckBeaconsOnNetwork(SupportedNetwork[] memory networks, uint256 networkIndex) external {
+        ResolvedBeacon[] memory resolved = resolveBeacons(networks);
+        checkBeaconsOnNetwork(networks[networkIndex], resolved);
+    }
+
+    function testAppliedMigrationExpectsItsTransitionOffline() external {
+        sBeacons.declare(42161, migrating("beacon-upgrade@0_0_1", NEW_OWNER));
+        applyMigration();
+        upgradeAndHandOver();
+        vm.etch(sImplementation, hex"");
+        this.externalCheckBeaconsOnNetwork(arbitrum(), 0);
+    }
+
+    function testAppliedUpgradeChecksTheUpgradedSuiteIsLiveOffline() external {
+        sBeacons.declare(42161, migrating("beacon-upgrade@0_0_1", NEW_OWNER));
+        applyMigration();
+        upgradeAndHandOver();
+        vm.etch(sUpgrade, hex"");
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.ARBITRUM_ONE, sUpgrade)
+        );
+        this.externalCheckBeaconsOnNetwork(arbitrum(), 0);
+    }
+
+    function testAppliedStatesDependencyIsCheckedOffline() external {
+        DeployBeacon memory beacon = migrating("beacon-implementation@0_0_1", OWNER);
+        beacon.initial.implementation = "beacon-upgrade@0_0_1";
+        sBeacons.declare(42161, beacon);
+        applyMigration();
+        vm.etch(DEPENDENCY, hex"");
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, DEPENDENCY)
+        );
+        this.externalCheckBeaconsOnNetwork(arbitrum(), 0);
+    }
+
+    function testAppliedUpgradeMissingFromTheChainIsRefusedOffline() external {
+        sBeacons.declare(42161, migrating("beacon-upgrade@0_0_1", OWNER));
+        applyMigration();
+        expectUnexpected(0, sUpgrade, sImplementation);
+        this.externalCheckBeaconsOnNetwork(arbitrum(), 0);
+    }
+
+    function testTransitionsAppliedInDeclaredOrderHoldTheLatestNotTheInitialStateOffline() external {
+        sBeacons.declare(42161, rollingBack());
+        applyMigration();
+        vm.warp(block.timestamp + 1);
+        applyMigration(ROLLBACK, MIGRATION);
+        expectUnexpected(1, NEW_OWNER, OWNER);
+        this.externalCheckBeaconsOnNetwork(arbitrum(), 0);
+    }
+
+    function testUnappliedMigrationExpectsTheInitialStateOffline() external {
+        sBeacons.declare(42161, migrating("beacon-upgrade@0_0_1", NEW_OWNER));
+        this.externalCheckBeaconsOnNetwork(arbitrum(), 0);
+    }
+
+    function testBeaconNamedBySuitePassesAtItsDerivedAddressOffline() external {
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", OWNER));
+        this.externalCheckBeaconsOnNetwork(arbitrum(), 0);
+    }
+
+    function testBeaconSuitesMissingDependencyIsRefusedOffline() external {
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", OWNER));
+        vm.etch(BEACON_DEPENDENCY, hex"");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, BEACON_DEPENDENCY
+            )
+        );
+        this.externalCheckBeaconsOnNetwork(arbitrum(), 0);
+    }
+
+    function testABeaconOnAnotherNetworkIsNotCheckedOnThisOneOffline() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", NEW_OWNER));
+        this.externalCheckBeaconsOnNetwork(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE), 1);
+        expectUnexpected(1, NEW_OWNER, OWNER);
+        this.externalCheckBeaconsOnNetwork(networksNamed(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE), 0);
+    }
+
+    function testEveryBeaconOnANetworkIsCheckedOffline() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        DeployBeacon memory missing = declared("beacon-implementation@0_0_1", OWNER);
+        missing.beacon = address(0xBEAC0);
+        sBeacons.declare(42161, missing);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.ARBITRUM_ONE, address(0xBEAC0)
+            )
+        );
+        this.externalCheckBeaconsOnNetwork(arbitrum(), 0);
+    }
+
+    function testBeaconSuiteResolvedByABeaconIsNotDerivedAgain() external {
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", OWNER));
+        // One derivation, one seated-state deploy.
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, beaconCreationCode(), 2);
+        DerivedDeploy memory derived = this.externalDeriveUnlessResolved(releasedSuites()[2], arbitrum());
+        assertEq(derived.bytecodeHash, sSuiteBeacon.codehash);
     }
 }

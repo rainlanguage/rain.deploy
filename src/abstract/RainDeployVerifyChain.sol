@@ -28,11 +28,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         // Nothing to check is not a reason to touch every RPC endpoint. Forking
         // to check nothing turns an outage into the failure of an assertion
         // that has no subject, which is the one failure this contract is
-        // supposed to be legible against.
-        if (suites.length == 0 && resolved.length == 0) {
-            return;
-        }
-        // For the same reason, with no suites only the networks a beacon is on are forked.
+        // supposed to be legible against. With no suites only the networks a
+        // beacon is on are forked, none when no beacon is on them.
         if (suites.length == 0) {
             networks = beaconNetworks(networks, resolved);
         }
@@ -62,10 +59,17 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             for (uint256 j = 0; j < suites.length; j++) {
                 checkSuiteOnNetwork(networks[i].name, suites[j], derived[j], addresses[i][j]);
             }
-            for (uint256 beaconIndex = 0; beaconIndex < resolved.length; beaconIndex++) {
-                if (resolved[beaconIndex].chainId == networks[i].chainId) {
-                    checkResolvedBeacon(networks[i].name, resolved[beaconIndex]);
-                }
+            checkBeaconsOnNetwork(networks[i], resolved);
+        }
+    }
+
+    /// Each beacon in `resolved` on `network` goes through `checkResolvedBeacon`, in order; the others are not read.
+    /// @param network The selected fork's network.
+    /// @param resolved The resolved beacons.
+    function checkBeaconsOnNetwork(SupportedNetwork memory network, ResolvedBeacon[] memory resolved) internal view {
+        for (uint256 beaconIndex = 0; beaconIndex < resolved.length; beaconIndex++) {
+            if (resolved[beaconIndex].chainId == network.chainId) {
+                checkResolvedBeacon(network.name, resolved[beaconIndex]);
             }
         }
     }
