@@ -10,10 +10,10 @@ import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.so
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
-    BYTECODE_HASH as ADDRESS_REGISTRY_BYTECODE_HASH,
-    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-    RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
-} from "../../../src/generated/candidate/AddressRegistry.sol";
+    BYTECODE_HASH as CONFIG_REGISTRY_BYTECODE_HASH,
+    DEPLOYED_ADDRESS as CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE
+} from "../../../src/generated/candidate/ConfigRegistry.sol";
 
 /// @title RainDeployVerifyChainTest
 /// @notice `RainDeployVerifyChain` inherited by a exemplar repo whose versions
@@ -41,10 +41,11 @@ import {
 /// "nothing is deployed at this address" from something the fixture arranged
 /// into a claim about the world. That claim is false here: the exemplar's
 /// addresses come from `src/generated/candidate/`, which is exactly what
-/// `Manual sol artifacts` broadcasts, and `AddressRegistry` is already live on
-/// supported networks. A negative case resting on it asserts nothing and
-/// reports `next call did not revert as expected` — a fixture that only worked
-/// while the repo had not yet done the thing it exists to do.
+/// `Manual sol artifacts` broadcasts, and the Zoltu factory lets anyone deploy
+/// the `ConfigRegistry` candidate there. A negative case resting on its absence
+/// asserts nothing once it lands and reports `next call did not revert as
+/// expected` — a fixture that only worked while the repo had not yet done the
+/// thing it exists to do.
 ///
 /// Pointing the fixture at a mock nobody deploys would move that dependency
 /// rather than remove it: the Zoltu factory is permissionless, so no address is
@@ -76,8 +77,8 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     /// inherited test then verifies. Persistent so it survives each
     /// `createSelectFork` inside the loop.
     function setUp() external {
-        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, ADDRESS_REGISTRY_RUNTIME_CODE);
-        vm.makePersistent(ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
+        vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, CONFIG_REGISTRY_RUNTIME_CODE);
+        vm.makePersistent(CONFIG_REGISTRY_DEPLOYED_ADDRESS);
         vm.etch(secondDeployedAddress(), secondRuntimeCode());
         vm.makePersistent(secondDeployedAddress());
     }
@@ -86,13 +87,13 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     function testChainNotDeployedReverts() external {
         // Emptied, and left persistent, so every fork carries an empty account
         // here rather than whatever the network holds.
-        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"");
+        vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, hex"");
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.NotDeployedOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                ADDRESS_REGISTRY_DEPLOYED_ADDRESS
+                CONFIG_REGISTRY_DEPLOYED_ADDRESS
             )
         );
         this.testSuitesLiveOnEverySupportedNetwork();
@@ -108,13 +109,13 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     /// The matrix never reached the last supported network, so a fork of it
     /// exists only if it was created up front.
     function testChainMatrixCreatesEveryForkFirst() external {
-        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"");
+        vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, hex"");
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.NotDeployedOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                ADDRESS_REGISTRY_DEPLOYED_ADDRESS
+                CONFIG_REGISTRY_DEPLOYED_ADDRESS
             )
         );
         this.testSuitesLiveOnEverySupportedNetwork();
@@ -181,7 +182,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     function testChainFailureEndsTheRunAtThatCell() external {
         // Emptied before anything forks, and left persistent, so every fork the
         // matrix creates carries an empty account here.
-        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"");
+        vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, hex"");
 
         string[] memory networks = LibRainDeploy.supportedNetworks();
 
@@ -197,7 +198,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             abi.encodeWithSelector(
                 LibRainDeploy.NotDeployedOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                ADDRESS_REGISTRY_DEPLOYED_ADDRESS
+                CONFIG_REGISTRY_DEPLOYED_ADDRESS
             )
         );
         this.testSuitesLiveOnEverySupportedNetwork();
@@ -215,7 +216,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         // check itself passes on all of them.
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = releasedSuites()[0];
-        assertEq(suites[0].storedDeployedAddress, ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
+        assertEq(suites[0].storedDeployedAddress, CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
         checkDeployedOnSupportedNetworks(suites);
 
@@ -235,14 +236,14 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     /// observed: the wrong code is etched at the address the check reads, so if
     /// the derivation took its expectation from there this would pass.
     function testChainCodeHashMismatchReverts() external {
-        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"6001");
+        vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, hex"6001");
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.CodeHashMismatchOnNetwork.selector,
                 LibRainDeploy.ARBITRUM_ONE,
-                ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-                ADDRESS_REGISTRY_BYTECODE_HASH,
+                CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+                CONFIG_REGISTRY_BYTECODE_HASH,
                 keccak256(hex"6001")
             )
         );
@@ -256,10 +257,10 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         return abi.decode(stepData, (address));
     }
 
-    /// Broadcasts the address registry over the declaration's networks through
+    /// Broadcasts the config registry over the declaration's networks through
     /// `codelessDeployStep`.
     /// @return The fork of each network.
-    function externalBroadcastAddressRegistry() external returns (uint256[] memory) {
+    function externalBroadcastConfigRegistry() external returns (uint256[] memory) {
         SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
         return LibRainDeploy.deployStepToNetworks(
             vm,
@@ -268,35 +269,35 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
             codelessDeployStep,
             LibRainDeploy.everyNetwork(
                 networks.length,
-                abi.encode(ADDRESS_REGISTRY_DEPLOYED_ADDRESS),
-                ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-                ADDRESS_REGISTRY_DEPLOYED_ADDRESS
+                abi.encode(CONFIG_REGISTRY_DEPLOYED_ADDRESS),
+                CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+                CONFIG_REGISTRY_DEPLOYED_ADDRESS
             ),
-            ADDRESS_REGISTRY_BYTECODE_HASH,
+            CONFIG_REGISTRY_BYTECODE_HASH,
             releasedSuites()[0].dependencies
         );
     }
 
     function testChainGroupAndBroadcastRefuseMissingCodeAlike() external {
-        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"");
+        vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, hex"");
         bytes memory refusal = abi.encodeWithSelector(
-            LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.ARBITRUM_ONE, ADDRESS_REGISTRY_DEPLOYED_ADDRESS
+            LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.ARBITRUM_ONE, CONFIG_REGISTRY_DEPLOYED_ADDRESS
         );
 
         vm.expectRevert(refusal);
         this.testSuitesLiveOnEverySupportedNetwork();
 
         vm.expectRevert(refusal);
-        this.externalBroadcastAddressRegistry();
+        this.externalBroadcastConfigRegistry();
     }
 
     function testChainGroupAndBroadcastRefuseAWrongHashAlike() external {
-        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"6001");
+        vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, hex"6001");
         bytes memory refusal = abi.encodeWithSelector(
             LibRainDeploy.CodeHashMismatchOnNetwork.selector,
             LibRainDeploy.ARBITRUM_ONE,
-            ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-            ADDRESS_REGISTRY_BYTECODE_HASH,
+            CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+            CONFIG_REGISTRY_BYTECODE_HASH,
             keccak256(hex"6001")
         );
 
@@ -304,7 +305,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         this.testSuitesLiveOnEverySupportedNetwork();
 
         vm.expectRevert(refusal);
-        this.externalBroadcastAddressRegistry();
+        this.externalBroadcastConfigRegistry();
     }
 
     /// Deriving MUST leave the derived address exactly as it found it. The
@@ -319,17 +320,17 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     /// "deployed over the top" — but a `CREATE2` deploy leaves the account at
     /// nonce 1, while a restored etch is at nonce 0.
     function testDerivationRestoresCodeAtDerivedAddress() external {
-        assertEq(ADDRESS_REGISTRY_DEPLOYED_ADDRESS.code, ADDRESS_REGISTRY_RUNTIME_CODE);
+        assertEq(CONFIG_REGISTRY_DEPLOYED_ADDRESS.code, CONFIG_REGISTRY_RUNTIME_CODE);
         assertEq(secondDeployedAddress().code, secondRuntimeCode());
-        assertEq(vm.getNonce(ADDRESS_REGISTRY_DEPLOYED_ADDRESS), 0);
+        assertEq(vm.getNonce(CONFIG_REGISTRY_DEPLOYED_ADDRESS), 0);
         assertEq(vm.getNonce(secondDeployedAddress()), 0);
 
         DerivedDeploy[] memory derived = deriveDeployments(allSuites());
         assertEq(derived.length, 4);
 
-        assertEq(ADDRESS_REGISTRY_DEPLOYED_ADDRESS.code, ADDRESS_REGISTRY_RUNTIME_CODE);
+        assertEq(CONFIG_REGISTRY_DEPLOYED_ADDRESS.code, CONFIG_REGISTRY_RUNTIME_CODE);
         assertEq(secondDeployedAddress().code, secondRuntimeCode());
-        assertEq(vm.getNonce(ADDRESS_REGISTRY_DEPLOYED_ADDRESS), 0);
+        assertEq(vm.getNonce(CONFIG_REGISTRY_DEPLOYED_ADDRESS), 0);
         assertEq(vm.getNonce(secondDeployedAddress()), 0);
     }
 
@@ -387,7 +388,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
 
     /// The chain group checks the chain id before any suite.
     function testChainGroupRefusesAMisboundEndpoint() external {
-        vm.etch(ADDRESS_REGISTRY_DEPLOYED_ADDRESS, hex"");
+        vm.etch(CONFIG_REGISTRY_DEPLOYED_ADDRESS, hex"");
         string[] memory names = new string[](1);
         names[0] = LibRainDeploy.ARBITRUM_ONE;
         SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(names);

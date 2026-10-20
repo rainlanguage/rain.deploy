@@ -1642,6 +1642,7 @@ library LibRainDeploySnapshot {
     /// @param spdxLicenseIdentifier The SPDX licence identifier the written lib declares.
     /// @param copyrightText The copyright text the written lib declares.
     /// @param template The candidate declaration the metadata comes from.
+    /// @param suitesImportPath The path the emitted lib reaches the suite types by.
     /// @return The path written.
     function writeReleasedSuitesLib(
         Vm vm,
@@ -1684,6 +1685,7 @@ library LibRainDeploySnapshot {
     /// @param contractName The contract the released lib is written for.
     /// @param template The suite the released entries take their key and
     /// artifact path from.
+    /// @param suitesImportPath The path the emitted lib reaches the suite types by.
     /// @return The path written.
     function writeReleasedSuitesLib(
         Vm vm,
@@ -1792,7 +1794,7 @@ library LibRainDeploySnapshot {
     }
 
     /// The library block of the generated aggregate lib: every per-contract
-    /// released lib read once and copied into one array, in declaration order.
+    /// released lib read once and copied into one array, in the order given.
     ///
     /// It emits the concatenation rather than computing one, because the
     /// entries are only known when the emitted source RUNS: a released lib
@@ -1836,18 +1838,18 @@ library LibRainDeploySnapshot {
             "/// @title ",
             RELEASED_SUITES_LIBRARY,
             "\n/// @notice Every frozen release this repo has cut, of every contract it\n",
-            "/// deploys: the per-contract released libs concatenated, in declaration\n",
-            "/// order.\n///\n",
+            "/// deploys: the per-contract released libs concatenated, in the order the\n",
+            "/// build script lists them.\n///\n",
             "/// There is one released lib per deployed contract because a release freezes\n",
             "/// every contract it names into a single tag directory, so a lib that took\n",
             "/// the record whole would give another contract's snapshot this contract's\n",
             "/// suite key and collide with its own entry for that tag. This is where\n",
-            "/// those libs meet, and it is emitted from the same list that wrote them --\n",
-            "/// so a contract that is generated, aliased and frozen cannot be missing\n",
-            "/// from the declaration, and a release missing from the declaration is a\n",
-            "/// release every check quietly stops asking about.\nlibrary ",
+            "/// those libs meet, and it is emitted from the build script's list -- so a\n",
+            "/// contract that is generated, aliased and frozen cannot be missing from\n",
+            "/// the declaration, and a release missing from the declaration is a release\n",
+            "/// every check quietly stops asking about.\nlibrary ",
             RELEASED_SUITES_LIBRARY,
-            " {\n    /// Every released suite, in declaration order.\n",
+            " {\n    /// Every released suite, in the order the build script lists them.\n",
             "    /// @return The released suites.\n",
             "    function releasedSuites() internal pure returns (DeploySuite[] memory) {\n",
             contractNames.length == 0
@@ -1876,8 +1878,7 @@ library LibRainDeploySnapshot {
     }
 
     /// Generate the ONE released-suites lib a repo's declaration reads: the
-    /// per-contract libs concatenated, emitted from the same list that wrote
-    /// them.
+    /// per-contract libs concatenated, in the order `contractNames` lists them.
     ///
     /// The concatenation is the LAST place a contract could be generated,
     /// aliased and frozen and still be absent from the declaration. Written by
@@ -1889,8 +1890,8 @@ library LibRainDeploySnapshot {
     /// release that first freezes that contract — at which point the record
     /// check fails the release job with the tag already pushed.
     ///
-    /// So it is emitted rather than written, from the one list everything else
-    /// reads, and there is no fourth place.
+    /// So it is emitted rather than written, from the names the caller passes,
+    /// in order.
     ///
     /// Written beside the libs it imports, which is what makes those imports
     /// sibling paths.
@@ -1913,6 +1914,7 @@ library LibRainDeploySnapshot {
     /// declares. The calling repo's, for the reason `writeSnapshot` gives.
     /// @param copyrightText The copyright text the written lib declares.
     /// @param contractNames The contracts whose released libs to aggregate.
+    /// @param suitesImportPath The path the emitted lib reaches `DeploySuite` by.
     /// @return The path written.
     function writeReleasedSuitesAggregate(
         Vm vm,
@@ -1944,6 +1946,7 @@ library LibRainDeploySnapshot {
     /// @param libDir The directory to write into, under the constraint the
     /// arity above states — `LIB_DIR` for a repo's real libs.
     /// @param contractNames The contracts whose released libs to aggregate.
+    /// @param suitesImportPath The path the emitted lib reaches `DeploySuite` by.
     /// @return The path written.
     function writeReleasedSuitesAggregate(
         Vm vm,

@@ -22,12 +22,14 @@ out = "out"
 libs = ["dependencies"]
 
 # This repo compiles a contract whose deterministic deploy address and code hash
-# are pinned in LibAddressRegistryDeploy, and both are a pure function of the
+# are pinned in LibConfigRegistryDeploy, and both are a pure function of the
 # creation code, which is a function of these settings. They are pinned exactly
 # rather than floated so the pins cannot move under a compiler or default-target
 # change, and they match the settings the org's other deploy repos use.
 solc = "0.8.25"
 optimizer = true
+# Repeated for ConfigRegistry and MigrationRegistry in compilation_restrictions
+# below; change all three.
 optimizer_runs = 100000
 evm_version = "cancun"
 cbor_metadata = false
@@ -40,6 +42,10 @@ bytecode_hash = "none"
 additional_compiler_profiles = [{ name = "timelock", optimizer_runs = 2000 }]
 compilation_restrictions = [
   { paths = "dependencies/@openzeppelin-contracts-5.7.0/governance/TimelockController.sol", optimizer_runs = 2000 },
+  # Pinned to the default runs, so a unit that mixes one with the timelock
+  # profile is a build error rather than a second registry bytecode.
+  { paths = "src/concrete/ConfigRegistry.sol", optimizer_runs = 100000 },
+  { paths = "src/concrete/MigrationRegistry.sol", optimizer_runs = 100000 },
 ]
 
 # GeneratedSnapshotShapeTest asserts the SHAPE of a generated deploy snapshot
@@ -82,6 +88,8 @@ fs_permissions = [
   { access = "read-write", path = "./fixture-lib" },
   # GeneratedSnapshotShapeTest reads the compiler's AST out of the artifact.
   { access = "read", path = "./out" },
+  # RegistryDeploySuitesTest holds the dispatch options to the candidate keys.
+  { access = "read", path = "./.github/workflows/manual-sol-artifacts.yaml" },
 ]
 
 [dependencies]

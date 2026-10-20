@@ -3,11 +3,17 @@
 pragma solidity ^0.8.25;
 
 import {console2} from "forge-std-1.17.0/src/console2.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DerivedDeploy, RainDeployVerifyBase, ResolvedBeacon} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {DeployBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
+
+/// Thrown when `requiresSuiteOn` requires a suite on none of the networks
+/// checked, which would pass the suite having checked it nowhere.
+/// @param suite The suite.
+error SuiteRequiredNowhere(string suite);
 
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the repo.
@@ -18,11 +24,23 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         checkDeployedOnNetworks(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
     }
 
-    /// Checks every suite and every beacon on the given networks against each, forking each network once, with
-    /// `resolveBeacons`'s refusals raised before forking. With no suites, only the networks a beacon is on are forked.
+
+    /// Checks every suite and every beacon on the given networks against each, forking with `vm`.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
     function checkDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) internal {
+        checkDeployedOnNetworks(vm, networks, suites);
+    }
+
+    /// Checks every suite and every beacon on the given networks against each, forking each network once with
+    /// `forkVm`, with `resolveBeacons`'s refusals raised before forking. With no suites, only the networks a beacon is
+    /// on are forked.
+    /// @param forkVm The Vm instance to fork with.
+    /// @param networks The catalogue entry of each network to check on.
+    /// @param suites The suites to check.
+    function checkDeployedOnNetworks(Vm forkVm, SupportedNetwork[] memory networks, DeploySuite[] memory suites)
+        internal
+    {
         ResolvedBeacon[] memory resolved = resolveBeacons(networks);
 
         // Nothing to check is not a reason to touch every RPC endpoint. Forking
@@ -32,6 +50,10 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         // beacon is on are forked, none when no beacon is on them.
         if (suites.length == 0) {
             networks = beaconNetworks(networks, resolved);
+        } else if (networks.length == 0) {
+            // With no networks every suite is required nowhere, which would
+            // name a suite for what is a fault of the roster.
+            revert LibRainDeploy.NoNetworks();
         }
 
         DeploySuite[] memory onNetworks = new DeploySuite[](suites.length);
@@ -39,6 +61,19 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             onNetworks[j] = onSupportedNetworks(suites[j]);
         }
         suites = onNetworks;
+
+        for (uint256 j = 0; j < suites.length; j++) {
+            bool requiredSomewhere = false;
+            for (uint256 i = 0; i < networks.length; i++) {
+                if (requiresSuiteOn(suites[j], networks[i].name)) {
+                    requiredSomewhere = true;
+                    break;
+                }
+            }
+            if (!requiredSomewhere) {
+                revert SuiteRequiredNowhere(suites[j].suite);
+            }
+        }
 
         DerivedDeploy[] memory derived = new DerivedDeploy[](suites.length);
         for (uint256 j = 0; j < suites.length; j++) {
@@ -52,11 +87,15 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             }
         }
 
-        uint256[] memory forkIds = LibRainDeploy.createForks(vm, LibRainDeploy.networkNames(networks));
+        uint256[] memory forkIds = LibRainDeploy.createForks(forkVm, LibRainDeploy.networkNames(networks));
         for (uint256 i = 0; i < networks.length; i++) {
-            vm.selectFork(forkIds[i]);
+            forkVm.selectFork(forkIds[i]);
             LibRainDeploy.checkNetworkChainId(networks[i]);
             for (uint256 j = 0; j < suites.length; j++) {
+                if (!requiresSuiteOn(suites[j], networks[i].name)) {
+                    console2.log("Not required on network:", derived[j].suite, networks[i].name);
+                    continue;
+                }
                 checkSuiteOnNetwork(networks[i].name, suites[j], derived[j], addresses[i][j]);
             }
             checkBeaconsOnNetwork(networks[i], resolved);
@@ -169,8 +208,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     }
 
     /// Every RELEASED suite MUST be live, with the code its creation code produces and its declared
-    /// dependencies under it, on every supported network, and every declared beacon MUST hold its applied
-    /// state there.
+    /// dependencies under it, on every supported network `requiresSuiteOn` requires it on, and every declared beacon
+    /// MUST hold its applied state there.
     function testSuitesLiveOnEverySupportedNetwork() external {
         checkDeployedOnSupportedNetworks(releasedSuites());
     }

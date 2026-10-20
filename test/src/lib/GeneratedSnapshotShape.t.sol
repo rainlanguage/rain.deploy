@@ -9,6 +9,19 @@ import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol"
 import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
 import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.2.0/src/lib/LibMemoryKV.sol";
 
+/// A rolling snapshot the released aggregate does not import.
+/// @param name The snapshot.
+error SnapshotNotInAggregate(string name);
+
+/// A contract the aggregate imports with neither a rolling snapshot nor a
+/// frozen record.
+/// @param name The contract.
+error DeclaredWithoutSnapshotOrRecord(string name);
+
+/// A contract the aggregate imports more than once.
+/// @param name The contract.
+error DuplicateAggregateDeclaration(string name);
+
 /// @title GeneratedSnapshotShapeTest
 /// @notice What a generated deploy snapshot must look like, asserted against
 /// the real generator's committed output.
@@ -37,6 +50,9 @@ import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.
 /// the declaration names, because a walk that found the wrong files is a loop
 /// that passes while asserting nothing about the contracts this repo deploys.
 contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
+    /// A committed record holding two releases of `AddressRegistry`.
+    string constant FIXTURE_RECORD_ROOT = "test/fixture-zoltu-record";
+
     using LibMemoryKV for MemoryKV;
 
     /// The generated-file header every snapshot carries.
@@ -49,7 +65,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// remembering to add it — which is the failure mode a shape spec is least
     /// able to notice, since a file nobody checks looks exactly like a file
     /// that passes.
-    /// @return One entry per snapshot, e.g. `AddressRegistry`.
+    /// @return One entry per snapshot, e.g. `ConfigRegistry`.
     function snapshotContractNames() internal view returns (string[] memory) {
         Vm.DirEntry[] memory entries = vm.readDir(LibRainDeploySnapshot.dirForSnapshot(LibRainDeploySnapshot.CANDIDATE));
 
@@ -67,7 +83,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// name. A snapshot shares its file name with the contract it describes, so
     /// forge disambiguates the two artifacts, and how it does that depends on
     /// what else compiles: a nested `out/candidate/` directory for
-    /// `AddressRegistry`, and a compiler-profile suffix inside the shared
+    /// `ConfigRegistry`, and a compiler-profile suffix inside the shared
     /// `out/TimelockController.sol/` for OpenZeppelin's `TimelockController`,
     /// whose 2000-runs build takes the unsuffixed name. Both directories are
     /// searched and the artifact whose AST is the snapshot's source is read.
@@ -266,7 +282,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     ///
     /// `vm.isFile` on the path half AS WELL, because `vm.getCode` resolves an
     /// artifact id by path SUFFIX while the printed command is run from the
-    /// repo root. `concrete/AddressRegistry.sol:AddressRegistry` resolves for
+    /// repo root. `concrete/ConfigRegistry.sol:ConfigRegistry` resolves for
     /// `vm.getCode` — uniquely, and to the right contract — and still names no
     /// file anybody can point `forge verify-contract` at. That is the one shape
     /// of wrong path nothing else in this repo goes red on.
@@ -295,9 +311,10 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
         }
     }
 
-    /// PROPERTY: the released aggregate declares exactly the contracts that
-    /// have a rolling deploy snapshot. A parameterised contract's code record
-    /// is not a release and is not in the aggregate.
+    /// PROPERTY: the released aggregate declares every contract with a rolling
+    /// deploy snapshot, plus retired contracts that have frozen records, each
+    /// exactly once. A parameterised contract's code record is not a release
+    /// and is not in the aggregate.
     ///
     /// `releasedSuites()` reads `src/lib/LibReleasedSuites.sol` and nothing
     /// else, so a contract missing from it has no declared release at all: its
@@ -321,21 +338,31 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// the declared candidates through the generator to what `releasedSuites()`
     /// returns.
     ///
-    /// Both directions and the count, for the reason the snapshot match gives:
-    /// an aggregate that imports one contract twice and another not at all has
-    /// the right number of imports, and a copied import line is how it happens.
+    /// Both directions and no duplicates, for the reason the snapshot match
+    /// gives: an aggregate that imports one contract twice and another not at
+    /// all has the right number of imports, and a copied import line is how it
+    /// happens.
     function testEverySnapshotIsInTheReleasedAggregate() external view {
-        string[] memory snapshots = deploySnapshotNames();
-        string[] memory declared = LibReleasedSuitesAggregate.declaredContractNames(
-            vm, vm.readFile(LibRainDeploySnapshot.pathForLib(LibRainDeploySnapshot.RELEASED_SUITES_LIBRARY))
+        this.checkReleasedAggregate(
+            LibReleasedSuitesAggregate.declaredContractNames(
+                vm, vm.readFile(LibRainDeploySnapshot.pathForLib(LibRainDeploySnapshot.RELEASED_SUITES_LIBRARY))
+            ),
+            deploySnapshotNames(),
+            LibRainDeploySnapshot.LIB_FS_ROOT
         );
+    }
 
-        assertEq(
-            declared.length,
-            snapshots.length,
-            "a rolling snapshot is missing from the released aggregate, or the aggregate names a contract with none"
-        );
-
+    /// The aggregate rule over any declaration, snapshot set and record root:
+    /// every snapshot is declared, a declared contract with no snapshot is a
+    /// retired one that has frozen records under `recordRoot`, and nothing is
+    /// declared twice. External so the refusals can be expected.
+    /// @param declared The contracts the aggregate imports.
+    /// @param snapshots The rolling deploy snapshots.
+    /// @param recordRoot The record root a retired contract's releases sit in.
+    function checkReleasedAggregate(string[] memory declared, string[] memory snapshots, string memory recordRoot)
+        external
+        view
+    {
         MemoryKV snapshotSet = MemoryKV.wrap(0);
         for (uint256 i = 0; i < snapshots.length; i++) {
             snapshotSet = snapshotSet.set(MemoryKVKey.wrap(keccak256(bytes(snapshots[i]))), MemoryKVVal.wrap(0));
@@ -343,22 +370,74 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
 
         MemoryKV declaredSet = MemoryKV.wrap(0);
         for (uint256 i = 0; i < declared.length; i++) {
+            if (declaredSet.has(MemoryKVKey.wrap(keccak256(bytes(declared[i]))))) {
+                revert DuplicateAggregateDeclaration(declared[i]);
+            }
             declaredSet = declaredSet.set(MemoryKVKey.wrap(keccak256(bytes(declared[i]))), MemoryKVVal.wrap(0));
         }
 
         for (uint256 i = 0; i < snapshots.length; i++) {
-            assertTrue(
-                declaredSet.has(MemoryKVKey.wrap(keccak256(bytes(snapshots[i])))),
-                string.concat("rolling snapshot is not in the released aggregate: ", snapshots[i])
-            );
+            if (!declaredSet.has(MemoryKVKey.wrap(keccak256(bytes(snapshots[i]))))) {
+                revert SnapshotNotInAggregate(snapshots[i]);
+            }
         }
 
         for (uint256 i = 0; i < declared.length; i++) {
-            assertTrue(
-                snapshotSet.has(MemoryKVKey.wrap(keccak256(bytes(declared[i])))),
-                string.concat("released aggregate names a contract with no rolling snapshot: ", declared[i])
-            );
+            if (!snapshotSet.has(MemoryKVKey.wrap(keccak256(bytes(declared[i]))))) {
+                if (LibRainDeploySnapshot.recordPathsForContract(vm, recordRoot, declared[i]).length == 0) {
+                    revert DeclaredWithoutSnapshotOrRecord(declared[i]);
+                }
+            }
         }
+    }
+
+    /// A retired contract with frozen records and a current one with a
+    /// snapshot are both accepted.
+    function testCheckReleasedAggregateAcceptsRetiredWithRecords() external view {
+        string[] memory declared = new string[](2);
+        declared[0] = "AddressRegistry";
+        declared[1] = "Current";
+        string[] memory snapshots = new string[](1);
+        snapshots[0] = "Current";
+        this.checkReleasedAggregate(declared, snapshots, FIXTURE_RECORD_ROOT);
+    }
+
+    /// A declared contract with neither a snapshot nor a record is refused.
+    function testCheckReleasedAggregateRefusesDeclaredWithNothing() external {
+        string[] memory declared = new string[](1);
+        declared[0] = "NoSuchContract";
+        vm.expectRevert(abi.encodeWithSelector(DeclaredWithoutSnapshotOrRecord.selector, "NoSuchContract"));
+        this.checkReleasedAggregate(declared, new string[](0), FIXTURE_RECORD_ROOT);
+    }
+
+    /// A snapshot the aggregate does not import is refused.
+    function testCheckReleasedAggregateRefusesAnUndeclaredSnapshot() external {
+        string[] memory snapshots = new string[](1);
+        snapshots[0] = "Current";
+        vm.expectRevert(abi.encodeWithSelector(SnapshotNotInAggregate.selector, "Current"));
+        this.checkReleasedAggregate(new string[](0), snapshots, FIXTURE_RECORD_ROOT);
+    }
+
+    /// A contract imported twice, as when one name is both retired and
+    /// generated, is refused.
+    function testCheckReleasedAggregateRefusesADuplicate() external {
+        string[] memory declared = new string[](2);
+        declared[0] = "Current";
+        declared[1] = "Current";
+        string[] memory snapshots = new string[](1);
+        snapshots[0] = "Current";
+        vm.expectRevert(abi.encodeWithSelector(DuplicateAggregateDeclaration.selector, "Current"));
+        this.checkReleasedAggregate(declared, snapshots, FIXTURE_RECORD_ROOT);
+    }
+
+    /// A retired contract imported twice is refused too, though each copy has
+    /// frozen records and the count would balance.
+    function testCheckReleasedAggregateRefusesADuplicateRetired() external {
+        string[] memory declared = new string[](2);
+        declared[0] = "AddressRegistry";
+        declared[1] = "AddressRegistry";
+        vm.expectRevert(abi.encodeWithSelector(DuplicateAggregateDeclaration.selector, "AddressRegistry"));
+        this.checkReleasedAggregate(declared, new string[](0), FIXTURE_RECORD_ROOT);
     }
 
     /// PROPERTY: every deploy snapshot declares exactly the five constants a deploy

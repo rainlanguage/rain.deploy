@@ -18,6 +18,7 @@ contract MockRevertingReadBeacon {
     /// @param beaconImplementation The implementation.
     /// @param initialOwner The owner.
     /// @param ownerReverts Whether `owner()` reverts, else `implementation()` does.
+    //forge-lint: disable-next-line(missing-zero-check)
     constructor(address beaconImplementation, address initialOwner, bool ownerReverts) {
         sImplementation = beaconImplementation;
         sOwner = initialOwner;

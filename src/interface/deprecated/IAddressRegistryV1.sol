@@ -9,6 +9,9 @@ pragma solidity ^0.8.25;
 /// bound. There is no removal, no upgrade and no authority beyond root, and an
 /// implementation MUST NOT add any.
 ///
+/// Deprecated: superseded by `IConfigRegistryV1`, which binds names to
+/// ABI-encoded values. Kept only for the frozen `AddressRegistry` releases.
+///
 /// Names are opaque 32-byte values. This interface says nothing about how a
 /// name is derived — hashed from a string, a raw ASCII literal, a counter — and
 /// an implementation MUST NOT constrain it. Two callers agreeing on a name is

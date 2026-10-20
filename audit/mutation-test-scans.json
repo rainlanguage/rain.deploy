@@ -379,6 +379,38 @@
     ]
   },
   {
+    "timestamp": "2026-10-19T06:51:00Z",
+    "commit": "4124f731e49ff1b68faaf4cd882648aa1d00cd32",
+    "testsAfterCommit": "391fe885eb27021ee232e65fcfa02c1f68400474",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 78,
+    "scope": "PR #315 (#313) round 4, the code changed on 1a2ae2f: src/lib/LibRainDeploy.sol checkResolvedValues, checkResolvedValuesOnForks, checkResolvedValuesOnNetworks (W), plus a re-probe of round 3 survivor N16 in src/lib/LibConfigRegistryRegister.sol registerOnNetworks",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 25,
+      "behavioursProbed": 25,
+      "killedByExistingTests": 23,
+      "gapsFilled": 2,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "The W functions are new on the scanned commit and their tests (test/src/lib/LibRainDeployResolvedValues.t.sol) were committed with them, so the existing suite here is those tests; nothing before the scanned commit could reach the code.",
+      "Baseline green at 51. 23 of 25 KILLED, N16 (round 3 survivor) now killed by the round 3 testRegisterOnEveryNetwork.",
+      "Gaps filled: W07 (a short non-empty answer treated as a failed read) testCheckResolvedValuesShortAnswerIsAnAnswer; W08 (read failure names index 0) testCheckResolvedValuesReadFailureNamesTheFailingRead. Both re-probed KILLED at baseline 53.",
+      "The killer lists under-report fuzz kills: the fail-pattern stops at the first ] inside a counterexample args=[...]. testRegisterOnEveryNetwork appears in several unrelated killer lists from fork transport noise; every such kill also names a W test.",
+      "The foundry.toml MigrationRegistry compilation_restrictions entry is build config, not suite-reachable, and was not probed."
+    ]
+  },
+  {
     "timestamp": "2026-10-19T07:52:39Z",
     "commit": "8dc450ced219a849cae6348de07ba0d20e0fb7b7",
     "testsAfterCommit": "8dc450ced219a849cae6348de07ba0d20e0fb7b7",
@@ -436,6 +468,36 @@
     ]
   },
   {
+    "timestamp": "2026-10-19T11:48:00Z",
+    "commit": "4451af3b1943660c363128142fad35236f9aeaf1",
+    "testsAfterCommit": "f901d23b77303e5853e3ccffb6338b22ab5a1df0",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 86,
+    "scope": "PR #315 (#313) round 5, the code changed since 4124f73: src/lib/LibConfigRegistryRegister.sol registerOnForks, registerOnNetworks and checkInputs (F01-F08); src/lib/LibRainDeploy.sol checkNetworkForks and its two call sites (F09-F13); src/lib/LibRainDeploySnapshot.sol aggregate emitted text (F14-F15)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 15,
+      "behavioursProbed": 15,
+      "killedByExistingTests": 14,
+      "gapsFilled": 1,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Baseline green at 196 on the full round suite. 14 of 15 KILLED by existing tests.",
+      "F04 (registerOnForks skipping the sender and value refusals) survived the register suite and is killed by the new testRegisterOnForksRefusesInputsBeforeSelecting, re-probed on a fork-free narrow suite (baseline 8) because public RPC failures turned the register suite's baseline red.",
+      "Killer attribution re-run on the register suite (baseline 39) and the snapshot suite (baseline 108) with fail-pattern '(?s)\\[FAIL.*?\\] (test\\w+)\\(': F03 testRegisterOnForksRefusesUnpairedForkIds; F06 testRegisterOnNetworksRefusesInputsInOrder, testWiring; F07 testWiring; F08 testCheckInputsRecordIsTheInputsSigned; F14-F15 testTheCommittedAggregateIsWhatTheGeneratorEmits and the aggregate block tests. testRegisterOnEveryNetwork also appears in fork-noisy killer lists; every such kill also names a non-fork test."
+    ]
+  },
+  {
     "timestamp": "2026-10-19T13:21:58Z",
     "commit": "306f369f8a53d89dc62c9a0a751d57d51c236d71",
     "testsAfterCommit": "5ebd709c2e2977631dec1e618b9cdf670fac9d5c",
@@ -466,6 +528,156 @@
       "Gaps filled at 5ebd709, all 8 killed by a re-probe whose suite was only the 8 added tests (offline; the full wrapper suite was withheld on 429s): F09 testBroadcastOfASuiteRevertingWithTheDeployKeyReachesTheNetworkRefusal (MockOriginRevertingOwner); F10 testSeatCheckLeavesNothingDeployed; V19 and V20 testBeaconSuiteSeatingItsInitialStateBeforeATransitionResolves; V21 testAReadThatRevertsSeatsNothing; V22 testAReadAnsweringNothingSeatsNothing; V24 testBeaconSuiteSeatingAnotherOwnerIsRefusedAtItsIndex; C01 testUnsetSuiteOfABeaconNamedByAddressIsNotReused (the unset suite is derived and refused with DeployFailed rather than reusing an empty derivation). The fail-pattern did not name the V19, V20 and V24 killers because forge renders the chain id in their revert reasons as 42161 [4.216e4]; those attributions are by elimination among the 8 tests (only the transition test declares a later state, only the index test reaches BeaconSeatedOwner).",
       "Handoff's predicted equivalents were not equivalent: V19/V20 differ once a suite beacon declares a transition to another owner or implementation, and C01 differs for the all-zero suite.",
       "Adversarial pass: no candidate bugs. The seat checks are lenient on a reverting or empty read by design (left to checkBeacon); the broadcast seat check reads owner() only, as ruled."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T13:53:18Z",
+    "commit": "72c6f96ea3cea31438f2de3a6a06ab89de7ea1e8",
+    "testsAfterCommit": "d41b6e9a3bb6deb812a23ed872a6b9f82dde3518",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 90,
+    "scope": "PR #315 (#313) round 6, the code changed since 4e23c12: src/lib/LibRainDeploy.sol checkNetworkForks pairing guard (M01-M02); src/lib/LibConfigRegistry.sol resolveSafe stamp and age comparisons (M03-M04); src/lib/LibConfigRegistryRegister.sol checkChain chain id read through vm, its two call sites and the registerOnSelectedChain record chain id (M05-M10)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 10,
+      "behavioursProbed": 10,
+      "killedByExistingTests": 9,
+      "gapsFilled": 1,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Offline suite: the six covering test contracts with the 56 tests that need a live fork excluded, every RPC pointed at a dead endpoint; baseline green at 122. 8 of 10 KILLED by existing tests.",
+      "M01 (pairing != to <) survived and is killed by the new testCheckResolvedValuesOnForksExtraForkIdsReverts and testCheckResolvedAddressesOnForksExtraForkIdsReverts (baseline 124).",
+      "M10 (checkChain dropped from checkRegisteredOnForks) survived offline only; on LibConfigRegistryRegisterOnForksTest against live RPC (baseline 7, -j 1) it is KILLED by testRegisterOnSubset, as are M05 and M07 by testRegisterOnNetworksAgainstLiveChains."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T14:50:56Z",
+    "commit": "df9c3b270de4b81cc9dfd0a263e4c45dfaf1c44e",
+    "testsAfterCommit": "3458b22c0a6c465d9ce9d8bf25f53ae91755d9cf",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 126,
+    "scope": "PR #315 (#313) round 7, the code changed since 156754c plus the review's survivors: src/lib/LibConfigRegistryRegister.sol checkRegisteredOnForks pairing guard (X01), value comparison (R22) and checkChain call (R23); script/RegisterConfig.sol network selection, signer and verify selection (S01-S03); src/lib/LibRainDeploy.sol checkResolvedValuesOnForks fork selection (D10)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 7,
+      "behavioursProbed": 7,
+      "killedByExistingTests": 6,
+      "gapsFilled": 1,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "The merge of origin/main changed only a doc comment in src/concrete/MigrationRegistry.sol on this side; it has no behaviour to probe.",
+      "Live RPC, -j 1. LibConfigRegistryRegister*.t.sol baseline green at 39: X01 (pairing != to <) SURVIVED; R22 KILLED by testRegisterOnEveryNetwork; R23 KILLED by testRegisterOnSubset, testRegisterOnForksBindsOnEachFork. RegisterConfig.t.sol baseline 1: S01-S03 KILLED by testWiring. LibRainDeployResolvedValues.t.sol baseline 20: D10 KILLED by testCheckResolvedValuesOnForksReachesEveryFork, testCheckResolvedValuesOnNetworksReachesEveryNetwork.",
+      "X01 is killed by the new testCheckRegisteredOnForksRefusesExtraForkIds, re-probed on the fork-free LibConfigRegistryRegister.t.sol (baseline 33) because public RPC failures turned the fork suite's baseline red on two of four runs.",
+      "R22, R23, S01-S03 and D10 are recorded in audit/known-false-positives.md as offline-only survivors."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T16:17:26Z",
+    "commit": "778ddc1d978ef687da12045e6de9dff6d6afb425",
+    "testsAfterCommit": "778ddc1d978ef687da12045e6de9dff6d6afb425",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 130,
+    "scope": "PR #315 (#313) round 8, the code changed since fae83a9: script/Build.sol retired released-lib regeneration, retiredContracts, retiredTemplate and retiredContractNames (B01-B08); src/abstract/RainDeploySuitesBase.sol requiresSuiteOn default and src/abstract/RainDeployVerifyChain.sol its skip (C01-C04); src/abstract/RegistryDeploySuites.sol registryRequiresSuiteOn and addressRegistryNetworks (R01-R07); src/lib/LibConfigRegistryRegister.sol DuplicateNetwork argument (D01)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 20,
+      "behavioursProbed": 20,
+      "killedByExistingTests": 20,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Live RPC, -j 2, six test contracts (Build, RegistryDeploySuites, RegistryDeployVerify, RainDeployVerifyChain, RainDeployVerifyChainNotRequired, LibConfigRegistryRegister); baseline green at 86. A first baseline at default parallelism was red on 16 fork tests from public RPC failures.",
+      "This round's tests were written from the review threads before probing, so the kills credit the suite at 778ddc1, which includes them, not a pre-round suite."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T17:46:31Z",
+    "commit": "0bfd3fb97c0368f9fe575b124dcf81341cc14119",
+    "testsAfterCommit": "0bfd3fb97c0368f9fe575b124dcf81341cc14119",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 132,
+    "scope": "PR #315 (#313) round 9, offline only: src/abstract/RainDeploySuitesBase.sol requiresSuiteOn default and src/abstract/RainDeployVerifyChain.sol its skip (C01-C07)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 7,
+      "behavioursProbed": 7,
+      "killedByExistingTests": 0,
+      "gapsFilled": 7,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Offline suite: RainDeploySuitesBaseTest, RegistryDeploySuitesTest, RegistryDeployVerifyTest, BuildScriptTest, with the inherited fork tests testSuitesLiveOnEverySupportedNetwork and testSupportedNetworkChainIdsAreBound excluded. Pre-existing pass: baseline 46, 0/7 killed. With RainDeploySuitesBaseRequiresSuiteOnTest and RainDeployVerifyChainNotRequiredLocalTest added: baseline 51, 7/7 killed.",
+      "The chain matrix takes its fork Vm as a parameter so LocalForkVm reaches the skip without an RPC."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T19:41:59Z",
+    "commit": "8cd373fb91312eefcc578d9e52f536468f512c51",
+    "testsAfterCommit": "a62c704abb79e09f6613bd71603ed7ddbe375343",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 134,
+    "scope": "PR #315 (#313) round 10: SuiteRequiredNowhere floor and skip log in src/abstract/RainDeployVerifyChain.sol checkDeployedOnNetworks (N01-N11); registerOnNetworks record return in src/lib/LibConfigRegistryRegister.sol, the per-network log in registerOnSelectedChain, and RegisterConfig.run (N12-N15)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 15,
+      "behavioursProbed": 15,
+      "killedByExistingTests": 7,
+      "gapsFilled": 4,
+      "equivalentMutants": 1,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Chain mutants N01-N11 on an offline suite (RainDeployVerifyChainNotRequiredLocalTest, RainDeploySuitesBase tests; inherited live-fork tests excluded), 9/11 killed at a62c704. N04, N05, N08 and N09 are killed only by tests added in a62c704 (testRequiredOnTheFirstNetworkAlonePasses, testRequiredOnTheLastNetworkAlonePasses, testSuiteRequiredNowhereRevertsAsTheLastSuite); N08 survived the 8cd373f suite, and the 8cd373f kills recorded for N04, N05 and N09 came from the flaky fork pass below, not from an attributable test.",
+      "Register mutants N12-N15 on the fork suite (LibConfigRegistryRegister*, RegisterConfigTest) against public RPCs, with a red run retried up to three times: a first unretried pass (all 15 on one fork suite) recorded kills of N04, N05, N10 and N13 by unrelated fork tests that were rate-limit failures, discarded. N12 and N15 killed.",
+      "Unkillable, in audit/known-false-positives.md: N10 (break, equivalent) and three console2.log removals N11, N13 (marvin R26), N14. forge answers console calls itself: vm.expectCall on the console address saw zero calls, so a log removal is unobservable; each logged record is pinned as a return value instead.",
+      "Tests for N01-N03, N06, N07 and N12 were written with the fix before probing, so those kills credit the suite at 8cd373f, not a pre-change suite."
     ]
   },
   {
@@ -501,6 +713,35 @@
     ]
   },
   {
+    "timestamp": "2026-10-20T07:01:49Z",
+    "commit": "4a56d2a1645ddca718bf0d125228d4b23a9f9d07",
+    "testsAfterCommit": "af326744ec7c9deacf5cfa667dfd7b632a745f54",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 139,
+    "scope": "PR #315 (#313) round 11, marvin review 5577445804: checkRegisteredOnSelectedChain in src/lib/LibConfigRegistryRegister.sol (C01-C08, offline), and the fork-only loops of registerOnForks, registerOnNetworks and checkRegisteredOnForks (K01-K03, with RPC)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 11,
+      "behavioursProbed": 11,
+      "killedByExistingTests": 3,
+      "gapsFilled": 8,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "C01-C08 on the offline suite (LibConfigRegistryRegisterTest, LibConfigRegistryTest): 0/8 killed by the suite at the scanned commit, 8/8 by the tests added in testsAfterCommit. The per-network check was extracted from checkRegisteredOnForks so these lines run on the local chain; marvin R22, R23, R29 and R33 sat on them as fork-only survivors.",
+      "K01-K03 on the fork suite (check11r.sh, public RPCs, 3x retry): 3/3 killed by existing fork tests. They cannot run offline and are listed in audit/known-false-positives.md with their killers."
+    ]
+  },
+  {
     "timestamp": "2026-10-20T07:12:55Z",
     "commit": "9d1104859a700e1ef8659cd08417cf0ce263ed92",
     "testsAfterCommit": "220783bcb506ad8e1de196acf29ff3e59467c660",
@@ -529,6 +770,35 @@
       "Pre-existing suite: 18 of 19 killed (S01-S18: per-network chain ids, supported fallback, loop bound, chain id, prank, stopPrank, per-target address, snapshot restore, answered/length/word/address checks, refusal payload, refusal and call presence). Survived S19 (seat check on the raw suite, not its onSupportedNetworks form): killed by testBroadcastRefusesAReleaseWhoseCandidateAddsANetworkSeatingTheDeployKey at 1206993.",
       "S20 (fallback reads deployNetworks() not supportedNetworks()) was killed only incidentally by testRunReachesSelectionPastAnUnanchorableCandidate; testBroadcastRefusesASuiteSeatingTheDeployKeyOnANetworkTheDispatchDoesNotReach added at 220783b kills it directly.",
       "Adversarial pass: no candidate bugs. A per-network suite is read on its own networks, so a supported network it lacks is not read here; the broadcast to it refuses CloneNetworkUndeclared regardless. An owner word whose upper 96 bits are dirty but whose address bits are the deploy key is refused, the fail-safe direction."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T08:12:16Z",
+    "commit": "e346fc851613ca3d1910340b4f63098c5bcdd8d1",
+    "testsAfterCommit": "cf1395b27cef7f3bdbe4656cd1600ff7c3312ae1",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 141,
+    "scope": "PR #315 (#313) round 12, marvin review on b0d4f53: the empty-roster NoNetworks guard in checkDeployedOnNetworks in src/abstract/RainDeployVerifyChain.sol (E01-E05, offline), and the two fork-only register survivors (F23, F29, with RPC)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 7,
+      "behavioursProbed": 7,
+      "killedByExistingTests": 3,
+      "gapsFilled": 4,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "E01-E05 on the offline suite (RainDeployVerifyChainNotRequiredLocalTest, RainDeployVerifyChainEmptyTest): 1/5 killed by the suite at the scanned commit (E03), 5/5 with testEmptyRosterIsNoNetworks and testNoSuitesOnEmptyRosterPasses from testsAfterCommit.",
+      "F23 (registerOnForks passes networks[0]) and F29 (registerOnNetworks returns an empty record) on the fork suite (check11r.sh, public RPCs, 3x retry): 2/2 killed by existing fork tests, F29 confirmed by testRegisterOnNetworksBindsEverySelected alone. Both listed in audit/known-false-positives.md with their killers."
     ]
   }
 ]

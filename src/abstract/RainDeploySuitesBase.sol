@@ -291,6 +291,19 @@ abstract contract RainDeploySuitesBase {
         return LibRainDeploy.supportedNetworks();
     }
 
+    /// Whether the chain group requires a suite to be live on a network. Every
+    /// suite on every supported network by default. A repo narrows it for a
+    /// release nothing can deploy any more, on networks it was never deployed
+    /// to. A suite it requires on none of the networks checked is refused with
+    /// `SuiteRequiredNowhere` rather than passed unchecked.
+    /// @param suite The suite.
+    /// @param network The network, as an `[rpc_endpoints]` alias.
+    /// @return True if the suite MUST be live on the network.
+    function requiresSuiteOn(DeploySuite memory suite, string memory network) internal view virtual returns (bool) {
+        (suite, network);
+        return true;
+    }
+
     /// A suite as it is broadcast and as it is checked on chain.
     /// @param suite The suite.
     /// @return The suite, with the networks its candidate adds.

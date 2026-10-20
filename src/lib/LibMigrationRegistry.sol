@@ -8,7 +8,7 @@ import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 /// @title LibMigrationRegistry
 /// @notice Reads and writes the `MigrationRegistry` deployed at a single
 /// deterministic address on every network, verifying the registry's code hash
-/// first, exactly as `LibAddressRegistry` does for the address registry and
+/// first, exactly as `LibConfigRegistry` does for the config registry and
 /// `LibRainDeploy` does for the Zoltu factory. An address alone says nothing on
 /// a chain the caller has not audited; the address plus the code hash says the
 /// caller is talking to the registry it compiled against.
