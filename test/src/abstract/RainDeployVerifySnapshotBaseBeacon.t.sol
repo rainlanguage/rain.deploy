@@ -39,6 +39,8 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
 
     address constant OWNER = address(0xB0B);
 
+    address constant DEPLOY_KEY = address(0xDE9107);
+
     /// The declarations `beacons()` returns.
     ChainBeacon[] internal sBeacons;
     /// The networks `supportedNetworks()` returns, every catalogue network when empty.
@@ -55,13 +57,15 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
 
     /// @inheritdoc RainDeploySuitesBase
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
-        DeploySuite[] memory released = new DeploySuite[](2);
+        DeploySuite[] memory released = new DeploySuite[](3);
         released[0] = implementation("implementation@0_0_1");
         address implementationAddress = released[0].storedDeployedAddress;
         released[1] = LibBeaconTest.beaconSuite("beacon@0_0_1", implementationAddress, OWNER);
         released[1].dependencies = new DeployDependency[](1);
         released[1].dependencies[0] =
             DeployDependency({deployedAddress: implementationAddress, runtimeCode: type(MockDeployable).runtimeCode});
+        released[2] = LibBeaconTest.beaconSuite("deploy-key-beacon@0_0_1", implementationAddress, DEPLOY_KEY);
+        released[2].dependencies = released[1].dependencies;
         return released;
     }
 
@@ -231,6 +235,23 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
 
     function testBeaconSuiteSeatingItsInitialStateResolvesOffline() external {
         redeclare(42161, bySuite(OWNER));
+        this.testBeaconDeclarationsResolve();
+        LibBeaconTest.assertNoFork(vm, "forked");
+    }
+
+    function testBeaconSuiteThatSeatedTheDeployKeyDeclaredByItsSuiteAfterHandoverIsRefusedOffline() external {
+        DeployBeacon memory beacon = bySuite(OWNER);
+        beacon.beaconSuite = "deploy-key-beacon@0_0_1";
+        redeclare(42161, beacon);
+        expectRefusedOffline(abi.encodeWithSelector(BeaconSeatedOwner.selector, 42161, 0, abi.encode(DEPLOY_KEY)));
+    }
+
+    function testBeaconSuiteThatSeatedTheDeployKeyDeclaredByAddressAfterHandoverResolvesOffline() external {
+        DeployBeacon memory beacon = valid();
+        DeploySuite memory seated = releasedSuites()[2];
+        beacon.beacon = seated.storedDeployedAddress;
+        beacon.beaconCodeHash = seated.storedBytecodeHash;
+        redeclare(42161, beacon);
         this.testBeaconDeclarationsResolve();
         LibBeaconTest.assertNoFork(vm, "forked");
     }

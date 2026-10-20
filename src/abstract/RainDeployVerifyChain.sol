@@ -24,7 +24,6 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         checkDeployedOnNetworks(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
     }
 
-
     /// Checks every suite and every beacon on the given networks against each, forking with `vm`.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.

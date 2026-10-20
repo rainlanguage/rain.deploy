@@ -80,9 +80,10 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         broadcastSuite(suite, deployNetworks(), deployerPrivateKey);
     }
 
-    /// Refuses `BeaconOwnedByDeployKey` and `checkSeatsNoDeployKey`'s refusals before reading any network, then
-    /// broadcasts the selected suite by ITS mechanism, through `LibRainDeployMechanism` — the same dispatch every
-    /// verification group derives through, so what is broadcast is what was verified.
+    /// Refuses `BeaconOwnedByDeployKey` and `checkSeatsNoDeployKey`'s refusals before reading any network (so the
+    /// suite's constructor MUST succeed locally, with only its declared dependencies etched, under each chain id that
+    /// check reads), then broadcasts the selected suite by ITS mechanism, through `LibRainDeployMechanism` — the same
+    /// dispatch every verification group derives through, so what is broadcast is what was verified.
     /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
     /// @param networks The networks to broadcast to, as `deployNetworks()` gave them.
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
