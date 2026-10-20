@@ -1202,11 +1202,13 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// A code record naming `DEPLOYED_ADDRESS` in a line comment is refused, its first line and its last among them.
     function testFrozenCodeRecordNamingDeployedAddressInALineCommentReverts() external {
         string[] memory records = new string[](2);
+        //REUSE-IgnoreStart
         records[0] = vm.replace(
             committedCodeRecord(),
             "// SPDX-License-Identifier: MIT\n",
             "// SPDX-License-Identifier: MIT DEPLOYED_ADDRESS\n"
         );
+        //REUSE-IgnoreEnd
         records[1] = string.concat(committedCodeRecord(), "// DEPLOYED_ADDRESS\n");
         for (uint256 i = 0; i < records.length; i++) {
             vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
