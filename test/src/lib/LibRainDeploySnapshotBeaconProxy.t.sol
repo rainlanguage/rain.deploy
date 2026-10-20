@@ -164,9 +164,23 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
         }
     }
 
+    /// The marker sharing the `MECHANISM_DATA` declaration's line is refused as unreadable, though solc
+    /// would read both declarations.
+    function testTheMarkerOnTheMechanismDataLineIsUnreadable() external {
+        checkRefused(
+            "marker-on-mechanism-data-line",
+            string.concat(
+                "bytes constant MECHANISM_DATA = hex\"01\"; bool constant BEACON_PROXY = true;\n",
+                everyNetworkLine(address(1))
+            ),
+            FrozenSnapshotUnreadable.selector
+        );
+    }
+
     /// Every mechanism's name is its enum member, and only the per-network ones record an address
     /// per network.
     function testMechanismNameAndPerNetworkKind() external pure {
+        assertEq(LibRainDeploySnapshot.mechanismName(DeployMechanism.Zoltu), "DeployMechanism.Zoltu");
         assertEq(LibRainDeploySnapshot.mechanismName(DeployMechanism.Clone), "DeployMechanism.Clone");
         assertEq(
             LibRainDeploySnapshot.mechanismName(DeployMechanism.ClonePerNetwork), "DeployMechanism.ClonePerNetwork"

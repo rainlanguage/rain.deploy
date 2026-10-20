@@ -1640,13 +1640,13 @@ library LibRainDeploySnapshot {
         uint256 markers = 0;
         bytes32 markerHash = keccak256(bytes(BEACON_PROXY_DECLARATION));
         for (uint256 i = 0; i < lines.length; i++) {
-            if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {
-                mechanismData++;
-            } else if (vm.contains(lines[i], MECHANISM_DATA_NAME)) {
-                revert FrozenSnapshotUnreadable(path);
-            } else if (keccak256(bytes(lines[i])) == markerHash) {
+            if (keccak256(bytes(lines[i])) == markerHash) {
                 markers++;
             } else if (vm.contains(lines[i], BEACON_PROXY_NAME)) {
+                revert FrozenSnapshotUnreadable(path);
+            } else if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {
+                mechanismData++;
+            } else if (vm.contains(lines[i], MECHANISM_DATA_NAME)) {
                 revert FrozenSnapshotUnreadable(path);
             }
         }
@@ -1677,9 +1677,12 @@ library LibRainDeploySnapshot {
         return kind == DeployMechanism.ClonePerNetwork || kind == DeployMechanism.BeaconProxyPerNetwork;
     }
 
-    /// @param kind A mechanism other than `Zoltu`.
+    /// @param kind A mechanism.
     /// @return Its name as a generated released-suites lib spells it.
     function mechanismName(DeployMechanism kind) internal pure returns (string memory) {
+        if (kind == DeployMechanism.Zoltu) {
+            return "DeployMechanism.Zoltu";
+        }
         if (kind == DeployMechanism.Clone) {
             return "DeployMechanism.Clone";
         }
