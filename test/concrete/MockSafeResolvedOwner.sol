@@ -15,8 +15,8 @@ contract MockSafeResolvedOwner {
     /// @param name The name to resolve, once.
     /// @param minAge The binding must have stood for longer than this for
     /// this contract to accept it.
-    // A zero authority is never stored: nothing binds under it, so the read
-    // reverts `NameNotRegistered(address(0), name)`.
+    // The authority is read through, never stored, and nothing is bound under
+    // a zero one, so the read refuses it as unbound.
     //forge-lint: disable-next-line(missing-zero-check)
     constructor(address authority, bytes32 name, uint256 minAge) {
         iOwner = abi.decode(LibConfigRegistry.resolveSafe(authority, name, minAge), (address));

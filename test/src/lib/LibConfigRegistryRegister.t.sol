@@ -391,8 +391,8 @@ contract LibConfigRegistryRegisterTest is Test {
         assertEq(this.externalCheckRegisteredOnSelectedChain(base(), name, value), time);
     }
 
-    /// Any other bound value is refused, naming the network, the name, the
-    /// value expected and the value bound, in that order.
+    /// Any other bound value is refused, naming the network, the authority,
+    /// the name, the value expected and the value bound, in that order.
     function testCheckRegisteredOnSelectedChainOtherValue(bytes32 name, bytes memory bound_, bytes memory value)
         external
     {
