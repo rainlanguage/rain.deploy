@@ -33,9 +33,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// Checks every suite against every given network, forking each network once with `forkVm` and checking every
     /// suite on it.
     /// A per-network suite is checked on the networks it records and those `extendedNetworks` declares for it. On any
-    /// other network it is refused before any network is forked: with `ExtendedNetworkUnfrozen`, naming the address its
-    /// candidate's init data derives there, whether or not anything is live at it, or with `CloneNetworkUndeclared` where
-    /// its candidate has no entry there.
+    /// other network it is required on it is refused before any network is forked: with `ExtendedNetworkUnfrozen`,
+    /// naming the address its candidate's init data derives there, whether or not anything is live at it, or with
+    /// `CloneNetworkUndeclared` where its candidate has no entry there.
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
@@ -83,9 +83,11 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             addresses[i] = new address[](suites.length);
             for (uint256 j = 0; j < suites.length; j++) {
                 addresses[i][j] = LibRainDeployMechanism.deployedAddress(suites[j], networks[i].chainId);
-                LibRainDeployMechanism.checkNetworkFrozen(
-                    frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]
-                );
+                if (requiresSuiteOn(suites[j], networks[i].name)) {
+                    LibRainDeployMechanism.checkNetworkFrozen(
+                        frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]
+                    );
+                }
             }
         }
 

@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
 import {RainDeployVerifyChain, SuiteRequiredNowhere} from "../../../src/abstract/RainDeployVerifyChain.sol";
@@ -17,6 +18,7 @@ import {
     perNetworkCloneReleaseAddress,
     perNetworkCloneReleaseAddresses
 } from "../../abstract/PerNetworkCloneDeploys.sol";
+import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 
 /// @title RainDeployVerifyChainClonePerNetworkUnrecordedTest
 /// @notice The chain matrix over a per-network clone release cut when the repo supported Arbitrum
@@ -25,9 +27,13 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
     /// Whether the release is required on no network.
     bool internal sRequiredNowhere;
 
+    /// Whether the release is not required on Polygon.
+    bool internal sNotRequiredOnPolygon;
+
     /// @inheritdoc RainDeploySuitesBase
-    function requiresSuiteOn(DeploySuite memory, string memory) internal view override returns (bool) {
-        return !sRequiredNowhere;
+    function requiresSuiteOn(DeploySuite memory, string memory network) internal view override returns (bool) {
+        return !sRequiredNowhere
+            && !(sNotRequiredOnPolygon && keccak256(bytes(network)) == keccak256(bytes(LibRainDeploy.POLYGON)));
     }
 
     /// @inheritdoc PerNetworkCloneDeploys
@@ -51,6 +57,14 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
     /// @param suites The suites to check.
     function externalCheckDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) external {
         checkDeployedOnNetworks(networks, suites);
+    }
+
+    /// `checkDeployedOnNetworks` over every supported network on local forks.
+    /// @param suites The suites to check.
+    function externalCheckOnLocalForks(DeploySuite[] memory suites) external {
+        checkDeployedOnNetworks(
+            Vm(address(new LocalForkVm())), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites
+        );
     }
 
     /// External wrapper for `checkDeployedOnSupportedNetworks`.
@@ -148,5 +162,25 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         sRequiredNowhere = true;
         vm.expectRevert(abi.encodeWithSelector(SuiteRequiredNowhere.selector, "per-network-clone@0_0_1"));
         this.externalCheckDeployedOnSupportedNetworks(arbitrumOnlyRelease());
+    }
+
+    /// A release not required on its unrecorded network is not refused there as unfrozen, and passes where it is
+    /// required and live.
+    function testUnrecordedNetworkNotRequiredIsNotRefusedAsUnfrozen() external {
+        sNotRequiredOnPolygon = true;
+        this.externalCheckOnLocalForks(arbitrumOnlyRelease());
+    }
+
+    /// A release not required on its unrecorded network is still checked where it is required.
+    function testUnrecordedNetworkNotRequiredLeavesTheRecordedNetworkChecked() external {
+        sNotRequiredOnPolygon = true;
+        address arbitrumAddress = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
+        vm.etch(arbitrumAddress, hex"");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.ARBITRUM_ONE, arbitrumAddress
+            )
+        );
+        this.externalCheckOnLocalForks(arbitrumOnlyRelease());
     }
 }
