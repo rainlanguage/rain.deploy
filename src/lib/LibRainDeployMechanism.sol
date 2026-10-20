@@ -512,6 +512,26 @@ library LibRainDeployMechanism {
             return deployed;
         }
 
+        CloneTarget[] memory targets = cloneTargets(suite);
+        bool beaconProxy = isBeaconProxy(suite);
+        checkCloneCreationCode(suite, beaconProxy, targets[0].implementation);
+        if (beaconProxy) {
+            // Every target shares the beacon.
+            etchBeaconProxyStandIns(vm, targets[0].implementation);
+        }
+        for (uint256 i = 0; i < targets.length; i++) {
+            if (deployedEarlier(deployed, i)) {
+                continue;
+            }
+            deployCloneTarget(vm, suite.suite, beaconProxy, targets[i], deployed[i]);
+        }
+        return deployed;
+    }
+
+    /// Every clone target of a clone or beacon proxy suite, in the suite's address order.
+    /// @param suite The suite to read.
+    /// @return The suite's single target, or one per network for a per-network suite.
+    function cloneTargets(DeploySuite memory suite) internal pure returns (CloneTarget[] memory) {
         CloneTarget[] memory targets;
         if (isPerNetwork(suite)) {
             CloneNetworks memory clones = cloneNetworks(suite);
@@ -523,55 +543,74 @@ library LibRainDeployMechanism {
             targets = new CloneTarget[](1);
             targets[0] = cloneTarget(suite);
         }
-        bool beaconProxy = isBeaconProxy(suite);
+        return targets;
+    }
+
+    /// Refuses with `CloneCreationCodeMismatch` a suite whose creation code is not the clone or beacon proxy creation
+    /// code over `implementation`.
+    /// @param suite The suite to check.
+    /// @param beaconProxy Whether the suite deploys beacon proxies.
+    /// @param implementation The implementation, or for a beacon proxy the beacon, its targets share.
+    function checkCloneCreationCode(DeploySuite memory suite, bool beaconProxy, address implementation) internal pure {
         if (
             keccak256(suite.creationCode)
                 != keccak256(
                     beaconProxy
-                        ? LibRainDeployBeaconProxy.beaconProxyCreationCode(targets[0].implementation)
-                        : LibRainDeployClone.cloneCreationCode(targets[0].implementation)
+                        ? LibRainDeployBeaconProxy.beaconProxyCreationCode(implementation)
+                        : LibRainDeployClone.cloneCreationCode(implementation)
                 )
         ) {
             revert CloneCreationCodeMismatch(suite.suite);
         }
-        if (beaconProxy) {
-            // Every target shares the beacon.
-            vm.etch(targets[0].implementation, type(BeaconProxyStandInBeacon).runtimeCode);
-            vm.etch(BEACON_PROXY_STAND_IN_IMPLEMENTATION, type(BeaconProxyStandInImplementation).runtimeCode);
+    }
+
+    /// Etches the stand-in beacon at `beacon` and the stand-in implementation it points at.
+    /// @param vm The Vm instance to etch with.
+    /// @param beacon The beacon the suite's beacon proxies share.
+    function etchBeaconProxyStandIns(Vm vm, address beacon) internal {
+        vm.etch(beacon, type(BeaconProxyStandInBeacon).runtimeCode);
+        vm.etch(BEACON_PROXY_STAND_IN_IMPLEMENTATION, type(BeaconProxyStandInImplementation).runtimeCode);
+    }
+
+    /// Deploys one clone target through its factory, under the storage-read check `deployLocally` documents.
+    /// A successful call returning any address but `expected` is refused with `CloneDerivationMismatch`.
+    /// @param vm The Vm instance to etch and record with.
+    /// @param suite The suite's name.
+    /// @param beaconProxy Whether the factory deploys a beacon proxy.
+    /// @param target The target to deploy.
+    /// @param expected Where the formula derives the target lands.
+    function deployCloneTarget(
+        Vm vm,
+        string memory suite,
+        bool beaconProxy,
+        CloneTarget memory target,
+        address expected
+    ) internal {
+        vm.etch(expected, hex"");
+        vm.resetNonce(expected);
+        bytes memory factoryCall = beaconProxy
+            ? abi.encodeCall(
+                ICloneableFactoryV5.beaconProxyDeterministicOpenSalt, (target.implementation, target.data, target.salt)
+            )
+            : abi.encodeCall(
+                ICloneableFactoryV4.cloneDeterministicOpenSalt, (target.implementation, target.data, target.salt)
+            );
+        vm.startStateDiffRecording();
+        // slither-disable-next-line low-level-calls
+        (bool success, bytes memory result) = target.factory.call(factoryCall);
+        Vm.AccountAccess[] memory accesses = vm.stopAndReturnStateDiff();
+        if (success) {
+            address cloneAddress = abi.decode(result, (address));
+            if (cloneAddress != expected) {
+                revert CloneDerivationMismatch(suite, expected, cloneAddress);
+            }
         }
-        for (uint256 i = 0; i < targets.length; i++) {
-            if (deployedEarlier(deployed, i)) {
-                continue;
-            }
-            vm.etch(deployed[i], hex"");
-            vm.resetNonce(deployed[i]);
-            bytes memory factoryCall = beaconProxy
-                ? abi.encodeCall(
-                    ICloneableFactoryV5.beaconProxyDeterministicOpenSalt,
-                    (targets[i].implementation, targets[i].data, targets[i].salt)
-                )
-                : abi.encodeCall(
-                    ICloneableFactoryV4.cloneDeterministicOpenSalt,
-                    (targets[i].implementation, targets[i].data, targets[i].salt)
-                );
-            vm.startStateDiffRecording();
-            // slither-disable-next-line low-level-calls
-            (bool success, bytes memory result) = targets[i].factory.call(factoryCall);
-            Vm.AccountAccess[] memory accesses = vm.stopAndReturnStateDiff();
-            if (success) {
-                address cloneAddress = abi.decode(result, (address));
-                if (cloneAddress != deployed[i]) {
-                    revert CloneDerivationMismatch(suite.suite, deployed[i], cloneAddress);
-                }
-            }
-            checkReadsOwnStorageOnly(suite.suite, deployed[i], accesses);
-            if (!success) {
-                assembly ("memory-safe") {
-                    revert(add(result, 0x20), mload(result))
-                }
+        checkReadsOwnStorageOnly(suite, expected, accesses);
+        if (!success) {
+            assembly ("memory-safe") {
+                revert(add(result, 0x20), mload(result))
             }
         }
-        return deployed;
     }
 
     /// Refuses a storage read, recorded while a clone was deployed, of any account but the clone and the accounts
