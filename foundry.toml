@@ -8,8 +8,9 @@
 name = "rain-deploy"
 # Deploy repo: this is the newest release cut into src/generated/<tag>/, not a
 # next-version slot. A normal PR does not bump it; only the release PR that cuts
-# that tag moves it, in lockstep with the record the cut writes. A version published before this lifecycle has no such record, so
-# src/generated/ holds no directory for it.
+# that tag moves it, in lockstep with the record the cut writes. A version
+# published before this lifecycle has no such record, so src/generated/ holds no
+# directory for it.
 version = "0.1.19"
 
 # SPDX-License-Identifier: LicenseRef-DCL-1.0
