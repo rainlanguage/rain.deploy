@@ -123,6 +123,13 @@ library LibConfigRegistryRegister {
     /// @param actual The value it is bound to.
     error UnexpectedBinding(string network, address authority, bytes32 name, bytes expected, bytes actual);
 
+    /// Thrown when a contract authority's dry run reaches a network where the
+    /// authority has no code. Nothing there can execute the bind it would
+    /// approve, and the address is whoever deploys to it first.
+    /// @param network The network simulated on.
+    /// @param authority The authority without code there.
+    error AuthorityHasNoCode(string network, address authority);
+
     /// The `bytes32` a consumer resolves for `name`, refusing a non-canonical
     /// name.
     /// @param name The name as a consumer writes it.
@@ -365,7 +372,7 @@ library LibConfigRegistryRegister {
         address authority,
         bytes32 name,
         bytes memory value
-    ) internal returns (bool, string memory) {
+    ) internal view returns (bool, string memory) {
         checkChain(vm, network);
         (bytes memory bound, uint256 registeredAt) = currentBinding(authority, name);
         string memory record = describeNetwork(vm, network.name, network.chainId, bound, registeredAt, value);
@@ -376,6 +383,8 @@ library LibConfigRegistryRegister {
     /// `registerOnSelectedChain` for a contract authority, which submits the
     /// bind through its own execution path rather than signing it here: the
     /// bind is made as `authority` by `vm.prank`, which forge never broadcasts.
+    /// Refuses a network where `authority` has no code, after the checks of
+    /// `planOnSelectedChain`.
     /// @param vm The Vm instance to prank with.
     /// @param network The catalogue entry of the selected chain.
     /// @param authority The authority bound under.
@@ -391,6 +400,7 @@ library LibConfigRegistryRegister {
         bytes memory value
     ) internal returns (bool, string memory) {
         (bool binds, string memory record) = planOnSelectedChain(vm, network, authority, name, value);
+        if (authority.code.length == 0) revert AuthorityHasNoCode(network.name, authority);
         if (binds) {
             vm.prank(authority);
             IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).registerV1(name, value);

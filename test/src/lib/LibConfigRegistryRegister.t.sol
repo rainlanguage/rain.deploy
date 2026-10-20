@@ -43,6 +43,12 @@ contract LibConfigRegistryRegisterTest is Test {
         return IConfigRegistryV1(registry);
     }
 
+    /// Gives the authority code, as a contract authority has on every network
+    /// it can execute on.
+    function etchAuthority() internal {
+        vm.etch(AUTHORITY, hex"00");
+    }
+
     /// One-element string list.
     function list(string memory only) internal pure returns (string[] memory) {
         string[] memory networks = new string[](1);
@@ -530,6 +536,7 @@ contract LibConfigRegistryRegisterTest is Test {
         assumeNotPrecompile(sender);
         assumeNotForgeAddress(sender);
         vm.assume(sender != AUTHORITY);
+        vm.assume(sender != address(this));
         IConfigRegistryV1 registry = deployRegistry();
         bytes32 name = keccak256("a");
         bytes memory value = abi.encode(address(1));
@@ -609,6 +616,7 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(value.length > 0);
         time = uint96(bound(time, 1, type(uint96).max));
         IConfigRegistryV1 registry = deployRegistry();
+        etchAuthority();
         vm.warp(time);
 
         uint64 nonce = vm.getNonce(AUTHORITY);
@@ -629,6 +637,7 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(value.length > 0);
         vm.assume(keccak256(previous) != keccak256(value));
         IConfigRegistryV1 registry = deployRegistry();
+        etchAuthority();
         vm.warp(1);
         vm.prank(AUTHORITY);
         registry.registerV1(name, previous);
@@ -647,6 +656,7 @@ contract LibConfigRegistryRegisterTest is Test {
     function testSimulateSkipsSameBinding(bytes32 name, bytes memory value) external {
         vm.assume(value.length > 0);
         IConfigRegistryV1 registry = deployRegistry();
+        etchAuthority();
         vm.warp(1);
         vm.prank(AUTHORITY);
         registry.registerV1(name, value);
@@ -656,6 +666,28 @@ contract LibConfigRegistryRegisterTest is Test {
         assertFalse(binds);
         assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, value, 1, value));
         assertEq(LibConfigRegistryRead.getMoment(registry, AUTHORITY, name), 1);
+    }
+
+    /// The simulation refuses an authority with no code on the network, on a
+    /// chain with the registry deployed, whether the name would be bound or
+    /// skipped, and simulates nothing.
+    function testSimulateRefusesCodelessAuthority(bytes32 name, bytes memory value) external {
+        vm.assume(value.length > 0);
+        IConfigRegistryV1 registry = deployRegistry();
+        vm.warp(1);
+        vm.expectRevert(
+            abi.encodeWithSelector(LibConfigRegistryRegister.AuthorityHasNoCode.selector, "base", AUTHORITY)
+        );
+        this.externalSimulateOnSelectedChain(base(), name, value);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, AUTHORITY, name));
+        registry.getV1(AUTHORITY, name);
+
+        vm.prank(AUTHORITY);
+        registry.registerV1(name, value);
+        vm.expectRevert(
+            abi.encodeWithSelector(LibConfigRegistryRegister.AuthorityHasNoCode.selector, "base", AUTHORITY)
+        );
+        this.externalSimulateOnSelectedChain(base(), name, value);
     }
 
     /// The simulation refuses a chain that is not the network's, and a

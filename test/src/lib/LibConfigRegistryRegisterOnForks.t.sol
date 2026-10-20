@@ -204,6 +204,8 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         vm.createSelectFork(networks[0]);
         LibConfigRegistryFork.ensureDeployed(vm);
         vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+        vm.etch(AUTHORITY, hex"00");
+        vm.makePersistent(AUTHORITY);
 
         (uint256[] memory forkIds, string memory record) = this.externalSimulateOnNetworks(networks, name, value);
         assertEq(forkIds.length, 2);
@@ -251,6 +253,8 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
             vm.selectFork(forkIds[i]);
             nonces[i] = vm.getNonce(AUTHORITY);
         }
+        vm.etch(AUTHORITY, hex"00");
+        vm.makePersistent(AUTHORITY);
 
         this.externalSimulateOnForks(networks, forkIds, name, value);
 
