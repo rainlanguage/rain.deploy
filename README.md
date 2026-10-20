@@ -880,9 +880,9 @@ Four separate steps, in this order. Nothing automatic ever broadcasts.
    it. It is idempotent — a network that already has the code is skipped — so a
    partial run is fixed by running it again rather than by unpicking anything.
 2. **Cut.** Run `forge script ./script/Build.sol --sig 'cutRelease()'` then
-   `./script/build.sh`, and open the release PR. Its CI checks the newly
-   released suites on chain, so merge it only once step 1 has landed on every
-   supported network.
+   `forge script ./script/Build.sol` FOLLOWED BY `./script/build.sh`, and open
+   the release PR. Its CI checks the newly released suites on chain, so merge it
+   only once step 1 has landed on every supported network.
 3. **Verify.** `RegistryDeployVerifyTest` passes only once every **released**
    suite is live on every supported network, with the code that release froze.
 4. **Tag.** Push a `sol-v*` tag, the sole release trigger. It verifies and
