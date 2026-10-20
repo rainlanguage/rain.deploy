@@ -5,7 +5,6 @@ pragma solidity ^0.8.25;
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
-import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// Thrown when the deploy address recorded for a version is not the address its own mechanism

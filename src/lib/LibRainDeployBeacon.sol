@@ -130,9 +130,9 @@ library LibRainDeployBeacon {
     }
 
     /// Whether `earlier` is reached from `later` through what each record was applied after, reading each record once.
-    /// Unbounded: one read when `later` was applied onto `earlier` or names it as a prerequisite, else every record
-    /// reachable from `later`, across lines, in fewer steps than `earlier`, and every record reachable from `later`
-    /// back to each line's genesis when `earlier` is not reached.
+    /// Unbounded: one read when `later` was applied onto `earlier` or names it as a prerequisite, else at most every
+    /// record reachable from `later`, across lines, in fewer steps than `earlier`, and every record reachable from
+    /// `later` back to each line's genesis when `earlier` is not reached.
     /// Reverts `LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash` when the registry is not deployed, and the
     /// registry's own refusal of a zero writer or namespace, or of a zero or genesis migration.
     /// @param earlier An applied migration.

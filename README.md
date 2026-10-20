@@ -340,9 +340,11 @@ by neither, or, without `beaconSuite`, by only one of `beacon` and
 `supportedNetworks()`, in the catalogue or not, is refused with
 `BeaconOnUncheckedNetwork`, and a second declaration of a beacon on its network
 with `BeaconDeclaredTwice`. A beacon named by `beaconSuite` is deployed locally
-at its address on its network and refused with `BeaconSeatedOwner` or
-`BeaconSeatedImplementation` when it answers `owner()` or `implementation()`
-with other than its initial state. These refusals, and
+at its address under its network's chain id, with only its suite's declared
+dependencies etched, so its constructor MUST succeed there, and is refused with
+`BeaconSeatedOwner` or `BeaconSeatedImplementation` when it answers `owner()` or
+`implementation()` with data other than its initial state; a read that reverts
+or answers nothing is left to the chain group. These refusals, and
 `BeaconTransitionMigrationRepeated` and `BeaconTransitionMigrationUnnamed`
 below, are raised offline for every beacon by the Beacons group
 (`testBeaconDeclarationsResolve`, inherited through
@@ -366,17 +368,17 @@ as `initial`, with no transition for the handover. A beacon named by
 deploy key is declared by `beacon` and `beaconCodeHash`. A broadcast is also
 refused before any network is read when its suite, deployed locally with the
 deploy key as sender and origin under each target's chain id, answers `owner()`
-with a first word whose low 160 bits are the deploy key (`SuiteSeatsDeployKey`);
-seat governance from the first state. For a per-network clone suite the targets
-are its own networks only (its candidate's added networks included), each
-deploying only that network's clone; for any other suite they are every
-supported network, the networks the broadcast does not reach included, then each
-network it reaches that is not supported. The suite's constructor runs on the
-local EVM with only its declared dependencies etched, so it MUST succeed there
-under each target's chain id: one that reverts locally refuses the broadcast to
-every network. That check reads `owner()` only: roles, pending owners, admin
-slots and contracts a constructor creates are not read, so assert those
-yourself.
+with a first word whose low 160 bits are the deploy key (`SuiteSeatsDeployKey`),
+so a suite seats its governance, not the deploy key, from its first state. For a
+per-network clone suite the targets are its own networks only (its candidate's
+added networks included), each deploying only that network's clone; for any
+other suite they are every supported network, the networks the broadcast does
+not reach included, then each network it reaches that is not supported. The
+suite's constructor runs on the local EVM with only its declared dependencies
+etched, so it MUST succeed there under each target's chain id: one that reverts
+locally refuses the broadcast to every network. That check reads `owner()` only:
+roles, pending owners, admin slots and contracts a constructor creates are not
+read, so assert those yourself.
 
 Declare transitions in the order their migrations are applied: each applied
 transition's record MUST reach the latest earlier-declared applied one through
@@ -390,15 +392,15 @@ in another line names the earlier one, or a record after it, as a prerequisite.
 The order walk is unbounded and costs a fork read per record it reaches: apply
 each transition onto the previous transition's migration as its line's head or,
 when it is written in another line, name it as a prerequisite, so the walk reads
-one record. Otherwise it reads every record reachable from the later transition,
-across lines, in fewer steps than the earlier one, and every reachable record
-back to each line's genesis when the earlier one is not reached. Apply a
-transition's migration in the same transaction as the beacon change it describes
-(one Safe batch: `upgradeTo` or `transferOwnership`, then `applyMigrationV3`;
-for an `Ownable2Step` beacon the handover's migration goes in the batch that
-calls `acceptOwnership`, as `owner()` moves only then). Between two separate
-transactions the chain group refuses the network, as the chain and the registry
-disagree.
+one record. Otherwise it reads at most every record reachable from the later
+transition, across lines, in fewer steps than the earlier one, and every
+reachable record back to each line's genesis when the earlier one is not
+reached. Apply a transition's migration in the same transaction as the beacon
+change it describes (one Safe batch: `upgradeTo` or `transferOwnership`, then
+`applyMigrationV3`; for an `Ownable2Step` beacon the handover's migration goes
+in the batch that calls `acceptOwnership`, as `owner()` moves only then).
+Between two separate transactions the chain group refuses the network, as the
+chain and the registry disagree.
 
 ## Deploy verification
 

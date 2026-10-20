@@ -122,8 +122,9 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         return derived;
     }
 
-    /// Refuses `BeaconOnUncheckedNetwork` for any of `beacons()` off `supportedNetworks()`, whether or not it is on
-    /// `networks`, before resolving any; then, for each beacon on `networks`, `resolveBeacon`'s refusals and
+    /// When a beacon is declared, refuses `LibRainDeploy.NetworkNotInCatalogue` for any of `supportedNetworks()` not in
+    /// the catalogue; then `BeaconOnUncheckedNetwork` for any of `beacons()` off `supportedNetworks()`, whether or not
+    /// it is on `networks`, before resolving any; then, for each beacon on `networks`, `resolveBeacon`'s refusals and
     /// `BeaconDeclaredTwice` for one at an address an earlier one on its network resolved to.
     /// @param networks The networks whose beacons to resolve.
     /// @return Each of `beacons()` on one of `networks`, resolved on it, in declaration order.
@@ -135,7 +136,8 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         return resolveBeaconsOn(chainBeacons, LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), networks);
     }
 
-    /// `resolveBeacons` on every one of `supportedNetworks()`, which it reads only when a beacon is declared.
+    /// `resolveBeacons` on every one of `supportedNetworks()`, which it reads only when a beacon is declared, with the
+    /// same refusals, `LibRainDeploy.NetworkNotInCatalogue` first.
     /// @return Each of `beacons()`, resolved on its network, in declaration order.
     function resolveSupportedBeacons() internal returns (ResolvedBeacon[] memory) {
         ChainBeacon[] memory chainBeacons = beacons();
