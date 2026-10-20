@@ -38,6 +38,7 @@ import {MockOriginOwnedCloneable} from "../../concrete/MockOriginOwnedCloneable.
 import {MockChainOriginOwned} from "../../concrete/MockChainOriginOwned.sol";
 import {MockRawOwner} from "../../concrete/MockRawOwner.sol";
 import {OriginOwnedCloneDeploy} from "../../concrete/OriginOwnedCloneDeploy.sol";
+import {SingleNetworkBeaconOwnerDeploy} from "../../concrete/SingleNetworkBeaconOwnerDeploy.sol";
 import {
     CLONE_ARTIFACT_PATH,
     CloneNetwork,
@@ -857,5 +858,12 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         );
         vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, release.suite, seating));
         deploy.externalBroadcastSuite(release, new string[](0), 1);
+    }
+
+    function testBroadcastRefusesASuiteSeatingTheDeployKeyOnANetworkTheDispatchDoesNotReach() external {
+        SingleNetworkBeaconOwnerDeploy deploy = new SingleNetworkBeaconOwnerDeploy();
+        DeploySuite memory suite = chainOriginOwnedSuite(4663);
+        vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, suite.storedDeployedAddress));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
     }
 }
