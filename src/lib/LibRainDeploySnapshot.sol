@@ -68,10 +68,11 @@ error SnapshotStateRevertFailed(string suite, uint256 snapshotId);
 
 /// Thrown when a file in the frozen record declares no deployed address, declares one as
 /// `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in decimal digits without a leading zero, names
-/// `DEPLOYED_ADDRESS` on a line not starting with the writer's declaration, declares one whose
-/// value is not `0x` and 40 hex digits, bare or in `address(...)`, then `;`, declares one outside the writer's format (`=` fourth of
-/// five space-separated tokens, or wrapped onto the next line at the writer's indent), or holds
-/// a line break other than `\n` that solc honours.
+/// `DEPLOYED_ADDRESS` or `MECHANISM_DATA` outside a block comment on a line not starting with the writer's
+/// declaration of it (a line comment, the SPDX header's licence identifier and copyright text included), declares
+/// one whose value is not `0x` and 40 hex digits, bare or in `address(...)`, then `;`, declares one outside the
+/// writer's format (`=` fourth of five space-separated tokens, or wrapped onto the next line at the writer's indent),
+/// or holds a line break other than `\n` that solc honours.
 /// @param path The record file that declares no deployed address, declares one it cannot read, or
 /// holds a line break other than `\n`.
 error FrozenSnapshotUnreadable(string path);
@@ -1335,6 +1336,10 @@ library LibRainDeploySnapshot {
     /// The indent the writer gives a declaration value wrapped onto its own line.
     string constant WRAPPED_INDENT = "    ";
 
+    /// The name of the mechanism data constant. A line holding it anywhere but at the start of the writer's declaration
+    /// is not the writer's.
+    string constant MECHANISM_DATA_NAME = "MECHANISM_DATA";
+
     string constant MECHANISM_DATA_DECLARATION = "bytes constant MECHANISM_DATA =";
 
     /// The addresses a frozen record declares as its deploy addresses, and the chain id each is
@@ -1603,6 +1608,8 @@ library LibRainDeploySnapshot {
         for (uint256 i = 0; i < lines.length; i++) {
             if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {
                 mechanismData++;
+            } else if (vm.contains(lines[i], MECHANISM_DATA_NAME)) {
+                revert FrozenSnapshotUnreadable(path);
             }
         }
         if (mechanismData > 1) {

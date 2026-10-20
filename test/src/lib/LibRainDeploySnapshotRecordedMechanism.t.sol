@@ -261,11 +261,6 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
             DeployMechanism.Zoltu
         );
         checkRead(
-            "line-commented",
-            string.concat(everyNetworkLine(address(1)), "// ", MECHANISM_DATA_LINE),
-            DeployMechanism.Zoltu
-        );
-        checkRead(
             "block-commented-second",
             string.concat(everyNetworkLine(address(1)), MECHANISM_DATA_LINE, "/*\n", MECHANISM_DATA_LINE, "*/\n"),
             DeployMechanism.Clone
@@ -319,6 +314,31 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
             "per-network",
             string.concat(perNetworkLine(137, address(2)), MECHANISM_DATA_LINE, perNetworkLine(42161, address(3))),
             DeployMechanism.ClonePerNetwork
+        );
+    }
+
+    /// A line naming `MECHANISM_DATA` that does not start with the writer's declaration is refused as unreadable,
+    /// whether solc would read it as a declaration or not.
+    function testMechanismDataOffTheWritersDeclarationIsUnreadable() external {
+        checkRefused(
+            "leading-space",
+            string.concat(everyNetworkLine(address(1)), " ", MECHANISM_DATA_LINE),
+            FrozenSnapshotUnreadable.selector
+        );
+        checkRefused(
+            "leading-tab",
+            string.concat(everyNetworkLine(address(1)), "\t", MECHANISM_DATA_LINE),
+            FrozenSnapshotUnreadable.selector
+        );
+        checkRefused(
+            "line-commented",
+            string.concat(everyNetworkLine(address(1)), "// ", MECHANISM_DATA_LINE),
+            FrozenSnapshotUnreadable.selector
+        );
+        checkRefused(
+            "line-commented-per-network",
+            string.concat(perNetworkLine(137, address(2)), MECHANISM_DATA_LINE, "// MECHANISM_DATA\n"),
+            FrozenSnapshotUnreadable.selector
         );
     }
 }
