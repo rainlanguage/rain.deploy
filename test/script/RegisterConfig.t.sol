@@ -36,12 +36,7 @@ contract RegisterConfigTest is Test {
         vm.setEnv("CONFIG_REGISTRY_AUTHORITY", "not-an-address");
         vm.setEnv("CONFIG_REGISTRY_NAME", name);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
-        vm.expectRevert(
-            bytes(
-                "vm.envAddress: failed parsing $CONFIG_REGISTRY_AUTHORITY as type `address`: parser error:\n$CONFIG_REGISTRY_AUTHORITY\n^\nexpected hex digits or the `0x` prefix for an empty hex string"
-            )
-        );
-        script.run();
+        assertEnvAddressRefused(script);
         vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(AUTHORITY));
 
         vm.setEnv("CONFIG_REGISTRY_NAME", "Not.Canonical");
@@ -185,6 +180,31 @@ contract RegisterConfigTest is Test {
                 ),
                 allValue
             );
+        }
+    }
+
+    /// `run()` stops on forge's own refusal to parse `CONFIG_REGISTRY_AUTHORITY`.
+    /// Forge raises it as `CheatcodeError(string)`, and only the prefix naming
+    /// the variable is pinned; the parser's wording
+    /// after it is forge's.
+    /// @param script The script.
+    function assertEnvAddressRefused(RegisterConfig script) internal {
+        try script.run() {
+            revert("run() did not revert");
+        } catch (bytes memory reason) {
+            assertEq(bytes4(reason), bytes4(keccak256("CheatcodeError(string)")));
+            bytes memory payload = new bytes(reason.length - 4);
+            for (uint256 i = 0; i < payload.length; i++) {
+                payload[i] = reason[i + 4];
+            }
+            bytes memory message = bytes(abi.decode(payload, (string)));
+            bytes memory prefix = bytes("vm.envAddress: failed parsing $CONFIG_REGISTRY_AUTHORITY");
+            assertGe(message.length, prefix.length);
+            bytes memory head = new bytes(prefix.length);
+            for (uint256 i = 0; i < head.length; i++) {
+                head[i] = message[i];
+            }
+            assertEq(string(head), string(prefix));
         }
     }
 

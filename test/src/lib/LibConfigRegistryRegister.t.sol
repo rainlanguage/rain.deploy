@@ -393,19 +393,19 @@ contract LibConfigRegistryRegisterTest is Test {
 
     /// Any other bound value is refused, naming the network, the authority,
     /// the name, the value expected and the value bound, in that order.
-    function testCheckRegisteredOnSelectedChainOtherValue(bytes32 name, bytes memory bound_, bytes memory value)
+    function testCheckRegisteredOnSelectedChainOtherValue(bytes32 name, bytes memory boundValue, bytes memory value)
         external
     {
-        vm.assume(bound_.length > 0);
-        vm.assume(keccak256(bound_) != keccak256(value));
+        vm.assume(boundValue.length > 0);
+        vm.assume(keccak256(boundValue) != keccak256(value));
         IConfigRegistryV1 registry = deployRegistry();
         vm.warp(1);
         vm.prank(AUTHORITY);
-        registry.registerV1(name, bound_);
+        registry.registerV1(name, boundValue);
 
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistryRegister.UnexpectedBinding.selector, "base", AUTHORITY, name, value, bound_
+                LibConfigRegistryRegister.UnexpectedBinding.selector, "base", AUTHORITY, name, value, boundValue
             )
         );
         this.externalCheckRegisteredOnSelectedChain(base(), name, value);
