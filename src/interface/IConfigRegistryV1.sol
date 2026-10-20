@@ -48,6 +48,13 @@ pragma solidity ^0.8.25;
 /// authority on. Every approved account would be one more key whose compromise
 /// rebinds the authority's names.
 ///
+/// A consumer resolves under one authority address on every chain, so it
+/// trusts whoever controls that address on each of them. An EOA is one key on
+/// every chain; a contract authority is not, because its address on a chain it
+/// has not been deployed to is claimable by whoever deploys there first. A
+/// Safe or timelock authority must be deployed at its address on a chain
+/// before any consumer there resolves under it.
+///
 /// Bindings are mutable because the configuration they name is. Rotating an
 /// owning multisig is ordinary business, and a binding that could never change
 /// would make it impossible: the name a consumer resolves is in that consumer's

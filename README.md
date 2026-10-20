@@ -593,6 +593,12 @@ land atomically beside it, so the authority can always make it itself, and an
 authority whose operators rotate is an account whose address survives the
 rotation — a Safe, a timelock — rather than a key that hands its authority on.
 
+A consumer resolves under one authority address on every network, so it trusts
+whoever controls that address on each. An EOA is one key everywhere; a Safe or
+timelock address is claimable on a network it has not been deployed to, so a
+contract authority must be deployed at its address on a network before any
+consumer there resolves under it.
+
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
 registry is deployed on a network, an authority binds each name its consumers
 resolve with `script/RegisterConfig.sol` (value
@@ -662,6 +668,12 @@ hand on the machine the Trezor is plugged into, never in CI: forge's own
 `--trezor` signer asks the device for each signature, and the key never leaves
 it.
 
+The script binds for an EOA authority only, since it broadcasts from the
+authority itself. A Safe or timelock authority submits
+`registerV1(keccak256("<org>.<name>"), value)` to the registry through its own
+execution path, then runs step 3 below (`verify`), which reads under any
+authority.
+
 **The name is the string consumers hash.** Consumers derive a name as
 `keccak256("<org>.<name>")` — st0x resolves its token-owner Safe as
 `keccak256("st0x.token-owner-safe")` — so the script takes that string and
@@ -688,7 +700,9 @@ networks, set `CONFIG_REGISTRY_NETWORKS` to those.
 
 - The Trezor: unlocked, with the passphrase of the authority's wallet if it has
   one, and Trezor Suite closed (it holds the USB connection).
-- Name the authority consumers resolve the name under:
+- Name the authority consumers resolve the name under, copied from the consuming
+  repo's source constant beside the name it resolves, never typed. The dry run's
+  authority line must match that constant:
 
   ```sh
   export CONFIG_REGISTRY_AUTHORITY=0x...

@@ -25,9 +25,9 @@ library LibConfigRegistryFork {
     }
 
     /// The revert a resolve of `name` under `authority` gives on the selected
-    /// chain when `authority` has bound `name` nowhere: the registry's own `NameNotRegistered` where the pinned
-    /// registry is deployed, and the code-hash refusal, naming what is there,
-    /// where it is not.
+    /// chain when `authority` has bound `name` nowhere: the registry's own
+    /// `NameNotRegistered` where the pinned registry is deployed, and the
+    /// code-hash refusal, naming what is there, where it is not.
     /// @param authority The authority read under.
     /// @param name The unbound name.
     /// @return The revert data.
