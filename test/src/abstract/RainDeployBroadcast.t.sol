@@ -71,7 +71,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
     /// unsets or restores it, and forge runs tests concurrently — so two tests
     /// holding two values for one variable is two tests racing over one
     /// variable, and this contract was exactly that until it was seen losing
-    /// the race: the unset case resolved the `address-registry` the other test
+    /// the race: the unset case resolved the `config-registry` the other test
     /// had written. Sequenced inside one test the values cannot interleave, and
     /// every `vm.setEnv` in this repo is one of the four below — with every
     /// write to `DEPLOYMENT_SUITE` after the only read that needs it absent, so
@@ -161,18 +161,18 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "",
-                "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
+                "config-registry@0_0_1, second-address, config-registry-candidate, second-address-candidate"
             )
         );
         sDeploy.run();
 
-        vm.setEnv("DEPLOYMENT_SUITE", "address-registry");
+        vm.setEnv("DEPLOYMENT_SUITE", "config-registry");
 
         vm.expectRevert(
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
-                "address-registry",
-                "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
+                "config-registry",
+                "config-registry@0_0_1, second-address, config-registry-candidate, second-address-candidate"
             )
         );
         sDeploy.run();
@@ -234,11 +234,10 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         // rather than some other entry of the registry, and it says it because
         // of which entry it is. `MockDeployableV2` is a mock that exists on no
         // supported chain, so this address has code only because this run put
-        // it there. The other address the declaration carries is
-        // `AddressRegistry`, which this repo really has deployed, so a `run()`
-        // that ignored the selection and broadcast that instead would take the
-        // already-deployed skip branch and SUCCEED — leaving this assertion the
-        // only thing between the two outcomes.
+        // it there. The other address the declaration carries is the
+        // `ConfigRegistry` candidate, so a `run()` that ignored the selection
+        // and broadcast that instead would also SUCCEED — leaving this
+        // assertion the only thing between the two outcomes.
         assertGt(expectedAddress.code.length, 0);
         assertEq(expectedAddress.codehash, expectedCodeHash);
 
@@ -533,12 +532,12 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
     /// make that comparison derived-against-derived.
     function testSelectedSuiteCarriesTheRecordedPins() external view {
         assertEq(
-            sDeploy.externalSuiteByName("address-registry@0_0_1").storedDeployedAddress,
-            LibRainDeploy.zoltuAddress(sDeploy.externalSuiteByName("address-registry@0_0_1").creationCode)
+            sDeploy.externalSuiteByName("config-registry@0_0_1").storedDeployedAddress,
+            LibRainDeploy.zoltuAddress(sDeploy.externalSuiteByName("config-registry@0_0_1").creationCode)
         );
         assertEq(
-            sDeploy.externalSuiteByName("address-registry@0_0_1").artifactPath,
-            "src/concrete/AddressRegistry.sol:AddressRegistry"
+            sDeploy.externalSuiteByName("config-registry@0_0_1").artifactPath,
+            "src/concrete/ConfigRegistry.sol:ConfigRegistry"
         );
     }
 

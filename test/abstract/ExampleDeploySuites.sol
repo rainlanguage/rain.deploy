@@ -9,20 +9,20 @@ import {
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
-import {AddressRegistry} from "../../src/concrete/AddressRegistry.sol";
+import {ConfigRegistry} from "../../src/concrete/ConfigRegistry.sol";
 import {
-    BYTECODE_HASH as ADDRESS_REGISTRY_BYTECODE_HASH,
-    CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE,
-    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-    RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
-} from "../../src/generated/candidate/AddressRegistry.sol";
+    BYTECODE_HASH as CONFIG_REGISTRY_BYTECODE_HASH,
+    CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE,
+    DEPLOYED_ADDRESS as CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE
+} from "../../src/generated/candidate/ConfigRegistry.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 
 /// @title ExampleDeploySuites
 /// @notice A deploy repo's suite declaration, as the verification abstracts see
-/// it: a released `AddressRegistry` and a candidate `AddressRegistry`, both
-/// reading the real `src/generated/candidate/AddressRegistry.sol` snapshot this
+/// it: a released `ConfigRegistry` and a candidate `ConfigRegistry`, both
+/// reading the real `src/generated/candidate/ConfigRegistry.sol` snapshot this
 /// repo generates.
 ///
 /// That pair is the configuration every consumer has, and it is what makes the
@@ -52,12 +52,12 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](2);
         suites[0] = DeploySuite({
-            suite: "address-registry@0_0_1",
-            creationCode: ADDRESS_REGISTRY_CREATION_CODE,
-            storedDeployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-            storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
-            storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
-            artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+            suite: "config-registry@0_0_1",
+            creationCode: CONFIG_REGISTRY_CREATION_CODE,
+            storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+            storedBytecodeHash: CONFIG_REGISTRY_BYTECODE_HASH,
+            storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
+            artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
@@ -87,12 +87,12 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
-                suite: "address-registry-candidate",
-                creationCode: ADDRESS_REGISTRY_CREATION_CODE,
-                storedDeployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-                storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
-                storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
-                artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+                suite: "config-registry-candidate",
+                creationCode: CONFIG_REGISTRY_CREATION_CODE,
+                storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+                storedBytecodeHash: CONFIG_REGISTRY_BYTECODE_HASH,
+                storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
+                artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""

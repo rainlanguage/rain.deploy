@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {DeployCandidate} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployCandidate, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 
@@ -36,7 +36,7 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     ///
     /// A dependency is an address that MUST already have code on a network
     /// before the suite is broadcast there, and both of these contracts are
-    /// declared to have none: `AddressRegistry` reads nothing and calls nothing
+    /// declared to have none: `ConfigRegistry` reads nothing and calls nothing
     /// at construction, and `MigrationRegistry` takes no constructor argument
     /// and resolves its namespace from `msg.sender` at call time. Neither can
     /// therefore be broken by what is or is not on chain when it lands, which
@@ -284,5 +284,75 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
             imported = imported || ids[i] == id;
         }
         assertTrue(imported, string.concat("candidate does not read the rolling snapshot for ", field));
+    }
+
+    /// The manual deploy workflow, whose `suite` input lists what can be
+    /// dispatched.
+    string constant MANUAL_DEPLOY_WORKFLOW = ".github/workflows/manual-sol-artifacts.yaml";
+
+    /// PROPERTY: the candidate suite keys are `config-registry` then
+    /// `migration-registry`, and the manual deploy offers exactly those, in
+    /// that order.
+    ///
+    /// A key is what `DEPLOYMENT_SUITE` selects, and the dispatch is a choice,
+    /// so an option no candidate declares reverts `UnknownDeploymentSuite` and
+    /// a candidate missing from the options cannot be deployed at all. Nothing
+    /// else reads either list against the other.
+    function testCandidateKeysAreTheDispatchOptions() external view {
+        DeployCandidate[] memory candidates = candidateSuites();
+        assertEq(candidates.length, 2);
+        assertEq(candidates[0].snapshot.suite, "config-registry");
+        assertEq(candidates[1].snapshot.suite, "migration-registry");
+
+        string memory options = "        options:\n";
+        for (uint256 i = 0; i < candidates.length; i++) {
+            options = string.concat(options, "          - ", candidates[i].snapshot.suite, "\n");
+        }
+        assertTrue(vm.contains(vm.readFile(MANUAL_DEPLOY_WORKFLOW), string.concat(options, "jobs:\n")));
+    }
+
+    /// A suite with only its key set, for `registryRequiresSuiteOn`.
+    /// @param key The suite key.
+    /// @return The suite.
+    function keyedSuite(string memory key) internal pure returns (DeploySuite memory) {
+        DeploySuite memory suite;
+        suite.suite = key;
+        return suite;
+    }
+
+    /// The retired releases are frozen to every network supported at
+    /// retirement, and to no network added since.
+    function testAddressRegistryNetworksAreTheSupportedNetworksAtRetirement() external pure {
+        string[] memory networks = addressRegistryNetworks();
+        assertEq(networks.length, 9);
+        assertEq(networks[0], "arbitrum");
+        assertEq(networks[1], "base");
+        assertEq(networks[2], "base_sepolia");
+        assertEq(networks[3], "bsc");
+        assertEq(networks[4], "ethereum");
+        assertEq(networks[5], "flare");
+        assertEq(networks[6], "hyperevm");
+        assertEq(networks[7], "polygon");
+        assertEq(networks[8], "robinhood");
+    }
+
+    /// A retired release is required on every network it was live on at
+    /// retirement.
+    function testRequiresRetiredReleaseOnItsNetworks() external pure {
+        string[] memory networks = addressRegistryNetworks();
+        for (uint256 i = 0; i < networks.length; i++) {
+            assertTrue(registryRequiresSuiteOn(keyedSuite("address-registry@0_1_18"), networks[i]));
+            assertTrue(registryRequiresSuiteOn(keyedSuite("address-registry@0_1_7"), networks[i]));
+        }
+    }
+
+    /// A retired release is not required on a network added after it was
+    /// retired, and the narrowing is keyed to the exact name half.
+    function testRetiredReleaseNotRequiredOnANewNetwork() external pure {
+        assertFalse(registryRequiresSuiteOn(keyedSuite("address-registry@0_1_18"), "new_network"));
+        assertFalse(registryRequiresSuiteOn(keyedSuite("address-registry"), "new_network"));
+        assertTrue(registryRequiresSuiteOn(keyedSuite("address-registry-v2@0_1_18"), "new_network"));
+        assertTrue(registryRequiresSuiteOn(keyedSuite("config-registry@0_1_19"), "new_network"));
+        assertTrue(registryRequiresSuiteOn(keyedSuite("migration-registry"), "new_network"));
     }
 }

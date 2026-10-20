@@ -36,10 +36,10 @@ Approach:
   and against the chain after: silent failures fail loudly.
 - Bytecode integrity checks post-deploy: `codehash` is compared against the
   recorded pin on every network by `RainDeployVerifyChain`, and before every
-  registry access by `LibAddressRegistry` and `LibMigrationRegistry`.
-- An address registry, read at run time rather than compiled into creation code,
-  and a post-deploy check that every target network's deployment took the
-  address it was supposed to.
+  registry access by `LibConfigRegistry` and `LibMigrationRegistry`.
+- A config registry binding names to ABI-encoded values, read at run time rather
+  than compiled into creation code, and a post-deploy check that every target
+  network's deployment took the value it was supposed to, of any type.
 - A migration registry, so operational scripts record what they applied and when
   it ran, each onto the head it is applying to, and tests assert the state that
   implies rather than branching on a deadline.
@@ -519,20 +519,30 @@ the text, and it is what `--verify` submits, so it sits in the chain group:
 passes everything that reads the file, and verifies a deployment against the
 wrong explorer.
 
-## Address registry
+## Config registry
 
-`AddressRegistry` binds an opaque `bytes32` name to an address. An immutable
-root authority binds a name, anyone reads a bound name, and reading an unbound
-name reverts rather than answering with the zero address. There is no removal,
-no upgrade and no authority besides root.
+`ConfigRegistry` binds an opaque `bytes32` name to ABI-encoded `bytes`: an
+address, a role id, a threshold, a list of accounts, anything a deployment would
+otherwise compile in. An immutable root authority binds a name, anyone reads a
+bound name, and reading an unbound name reverts rather than answering empty. The
+interface is `IConfigRegistryV1`. There is no removal, no upgrade and no
+authority besides root.
 
-`ADDRESS_REGISTRY_ROOT` in `src/concrete/AddressRegistry.sol` is the one place
+Bindings do not carry over from the deprecated `AddressRegistry`. Once the
+registry is deployed on a network, root binds each name a consumer resolves with
+`script/RegisterConfig.sol` (value `cast abi-encode "f(address)" <account>`, and
+`CONFIG_REGISTRY_NETWORKS` naming the networks it is deployed on until that is
+every declared one) before that consumer deploys against it. Which names those
+are is each consumer's to declare; until a name is bound, its
+`LibConfigRegistry.resolve` reverts.
+
+`CONFIG_REGISTRY_ROOT` in `src/concrete/ConfigRegistry.sol` is the one place
 root lives. It is welded into the creation code, so rotating it moves the deploy
 address, the code hash and the snapshot with it.
 
-Bindings are **mutable**, because the addresses they name are. Rotating an
+Bindings are **mutable**, because the configuration they name is. Rotating an
 owning multisig is ordinary business and has to be expressible without moving
-anybody's deterministic address — which a binding welded to one address forever
+anybody's deterministic address — which a binding welded to one value forever
 would make impossible, because the name is in the consumer's creation code, so a
 new name means new creation code and a new address. That is the problem the
 registry exists to remove, not a property worth keeping.
@@ -543,13 +553,14 @@ re-binding a name changes what the _next_ deployment resolves and nothing else,
 which makes a rotation a deliberate migration rather than a silent change to
 live contracts.
 
-`LibAddressRegistry.resolve` is the read, verifying the registry's code hash
+`LibConfigRegistry.resolve` is the read, verifying the registry's code hash
 first, the same way `LibRainDeploy` verifies the Zoltu factory's. It resolves a
-name to an address and stops there — what a consumer does with the address, and
-when, is the consumer's business.
+name to the bound bytes and never decodes them: only the consumer knows the type
+it expects, so the consumer decodes, as `abi.decode(value, (address))` for an
+address. What it does with the value, and when, is the consumer's business.
 
 `LibRainDeploy` carries the **post-deploy** verification: on every target
-network, the deployed contract must hold the address the deployment expected. It
+network, the deployed contract must hold the value the deployment expected. It
 runs after the deploy and before anything depends on it, against state the
 deployment has already settled, so nothing it reads can move underneath it. The
 same check run beforehand would be worth nothing against a mutable source. A
@@ -562,23 +573,27 @@ and records the transactions, which forge submits only once the script has
 returned. So for as long as the script runs, the deployment is on the deploy's
 own forks and nowhere else.
 
-- **Simulation verification** is `checkResolvedAddressesOnForks`, handed the
-  fork ids `deployToNetworks` returns. The only place a first-time deployment
-  can be verified in the run that deploys it.
-- **Confirmed-deployment verification** is `checkResolvedAddressesOnNetworks`, a
-  run of its own that forks each network fresh, once the transactions have been
-  submitted and mined. In the same script as the deploy it reads chains that
-  have no code at the address yet and takes the run down before forge broadcasts
-  anything.
+- **Simulation verification** is `checkResolvedAddressesOnForks`
+  (`checkResolvedValuesOnForks` for a value of any type), handed the fork ids
+  `deployToNetworks` returns. The only place a first-time deployment can be
+  verified in the run that deploys it.
+- **Confirmed-deployment verification** is `checkResolvedAddressesOnNetworks`
+  (`checkResolvedValuesOnNetworks` for a value of any type), a run of its own
+  that forks each network fresh, once the transactions have been submitted and
+  mined. In the same script as the deploy it reads chains that have no code at
+  the address yet and takes the run down before forge broadcasts anything.
 
 Only the consumer knows where it stored what it resolved, so the consumer
 supplies the reads (`abi.encodeCall(IERC5313.owner, ())` and the like) and this
-library supplies the fork loop and the comparison.
+library supplies the fork loop and the comparison. The address checks require
+each answer to be one address word; the value checks compare the exact return
+bytes, such as `abi.encode(uint256(3))` for a threshold or `abi.encode(signers)`
+for an `address[]`.
 
-## Managing the address registry
+## Managing the config registry
 
-Root binds a name with `script/RegisterAddress.sol`, signed on the Trezor that
-holds `ADDRESS_REGISTRY_ROOT`. It is run by hand on the machine the Trezor is
+Root binds a name with `script/RegisterConfig.sol`, signed on the Trezor that
+holds `CONFIG_REGISTRY_ROOT`. It is run by hand on the machine the Trezor is
 plugged into, never in CI: forge's own `--trezor` signer asks the device for
 each signature, and the key never leaves it.
 
@@ -592,23 +607,35 @@ after its `<org>`; anything else (a capital, a stray space or newline, an
 already-hashed `0x…`, a name with its `<org>.` dropped) is refused, because it
 is a near miss of a real name that no consumer resolves.
 
-It binds on every network the registry is deployed to, by default — one binding
-everywhere, as the deployment is the same everywhere — and a network already
-bound to the same account is skipped, so a run that stopped partway is fixed by
-running it again.
+**The value is ABI-encoded.** The script binds ABI-encoded values only and
+refuses one that is not a whole number of 32-byte words, though the registry
+itself binds any non-empty bytes.
+
+It binds on every declared network by default — one binding everywhere, as the
+deployment is the same everywhere — and a network already bound to the same
+value is skipped, so a run that stopped partway is fixed by running it again.
+The default needs the registry deployed on every declared network: it checks the
+registry's code hash on each and reverts `UnexpectedConfigRegistryCodeHash` on
+the first one without it, binding nothing. While the registry is on only some
+networks, set `CONFIG_REGISTRY_NETWORKS` to those.
 
 ### Before the first run
 
 - The Trezor: unlocked, with the passphrase of root's wallet if it has one, and
   Trezor Suite closed (it holds the USB connection).
-- Check the device answers as root (append `--mnemonic-derivation-path "<path>"`
-  if root is not the first Ethereum account in Trezor Suite, and the same path
-  as `--mnemonic-derivation-paths "<path>"` on the `forge script` commands
-  below):
+- Read root from the source:
 
   ```sh
-  nix develop -c cast wallet address --trezor
-  # must print 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c
+  export CONFIG_REGISTRY_ROOT=$(grep -oE "CONFIG_REGISTRY_ROOT = 0x[0-9a-fA-F]{40}" src/concrete/ConfigRegistry.sol | grep -oE "0x[0-9a-fA-F]{40}")
+  ```
+
+- Check the device answers as root (add `--mnemonic-derivation-path "<path>"`
+  after `--trezor` inside the `$(…)` if root is not the first Ethereum account
+  in Trezor Suite, and the same path as `--mnemonic-derivation-paths "<path>"`
+  on the `forge script` commands below):
+
+  ```sh
+  [ "$(nix develop -c cast wallet address --trezor)" = "${CONFIG_REGISTRY_ROOT:?}" ] && echo "root OK" || echo "NOT root"
   ```
 
 - Root needs native gas on every network it binds on.
@@ -618,24 +645,25 @@ running it again.
 ### Binding a name
 
 ```sh
-export ADDRESS_REGISTRY_NAME=st0x.token-owner-safe
-export ADDRESS_REGISTRY_ACCOUNT=0x...
+export CONFIG_REGISTRY_NAME=st0x.token-owner-safe
+# The value, as 0x hex of its ABI encoding. For an address:
+export CONFIG_REGISTRY_VALUE=$(nix develop -c cast abi-encode "f(address)" 0x...)
 # Optional, to bind on fewer networks than all of them:
-# export ADDRESS_REGISTRY_NETWORKS=base,arbitrum
+# export CONFIG_REGISTRY_NETWORKS=base,arbitrum
 
 # 1. Dry run. Executes every check and the bind itself on a fork of each
 #    network, and sends nothing.
-nix develop -c forge script script/RegisterAddress.sol:RegisterAddress \
-  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy
+nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
+  --sender "$CONFIG_REGISTRY_ROOT" --trezor --legacy
 
 # 2. The same command with --broadcast. The device asks once per network the
 #    dry run marked BIND or REBIND.
-nix develop -c forge script script/RegisterAddress.sol:RegisterAddress \
-  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy --broadcast
+nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
+  --sender "$CONFIG_REGISTRY_ROOT" --trezor --legacy --broadcast
 
 # 3. Once every transaction is mined: reads every network fresh and fails
-#    unless the name resolves to the account on each.
-nix develop -c forge script script/RegisterAddress.sol:RegisterAddress --sig "verify()"
+#    unless the name resolves to the value on each.
+nix develop -c forge script script/RegisterConfig.sol:RegisterConfig --sig "verify()"
 ```
 
 `--legacy` because HyperEVM's RPC rejects the fee-history ranges EIP-1559
@@ -643,27 +671,28 @@ estimation asks for. No `--rpc-url`: the script forks each network's alias
 itself.
 
 Before anything is signed the run refuses, with an error naming what is wrong: a
-non-canonical name, the zero account, a network the repo does not support or one
-named twice, a sender other than root, a network whose endpoint reports another
-chain id than the catalogue states for it, and a registry address that does not
-hold the pinned registry code. A refused run signs nothing.
+non-canonical name, an empty value, a value that is not a whole number of
+32-byte words (a bare 20-byte address, say, rather than its ABI encoding), a
+network the repo does not support or one named twice, a sender other than root,
+a network whose endpoint reports another chain id than the catalogue states for
+it, and a registry address that does not hold the pinned registry code. A
+refused run signs nothing.
 
-The dry run prints the name, its hash, the account, the registry address and the
+The dry run prints the name, its hash, the value, the registry address and the
 exact calldata, then for each network its chain id, the current binding
-(`unbound`, or the account and the moment it was bound) and what will happen:
+(`unbound`, or the value and the moment it was bound) and what will happen:
 `BIND`, `REBIND` (old → new) or `SKIP`. That is the record to approve against.
 For each transaction the device shows:
 
 - **Recipient**: the registry address the dry run printed
-  (`LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS`);
+  (`LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS`);
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
-- **Data**: the selector `0xd22057a9` (`register(bytes32,address)`) and its two
-  arguments: the name hash, and the account left-padded to 32 bytes — together
-  exactly the calldata the dry run printed. `register` is a call the device
-  cannot decode, so it shows the raw bytes; open the full data on the device to
-  compare them.
+- **Data**: exactly the `Calldata:` line the dry run printed: `registerV1`'s
+  selector, the name hash, the offset `0x40`, the value's length and the value
+  padded to a multiple of 32 bytes. The device cannot decode `registerV1`, so it
+  shows the raw bytes; open the full data on the device to compare them.
 
 Labels vary by firmware; whatever they are called, the recipient, amount, chain
 and raw calldata must each match the dry run. Reject on the device if any of
@@ -894,7 +923,7 @@ about one delegate at a time, so a consumer's prod tests assert `approvedV3` is
 false for every retired delegate beside the true answers for the live ones. A
 namespace is not an authority: it is the writer's to name, and a record in it is
 that writer's claim. A root would have to be welded into the creation code, the
-way `ADDRESS_REGISTRY_ROOT` is — and the account that applies a migration is a
+way `CONFIG_REGISTRY_ROOT` is — and the account that applies a migration is a
 different Safe, deployer or timelock for every consumer and every chain, so one
 root would have to be all of them, and baking each consumer's authority in would
 give each a different address for what is meant to be one shared registry. With

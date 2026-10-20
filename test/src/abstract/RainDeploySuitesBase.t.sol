@@ -60,9 +60,9 @@ contract RainDeploySuitesBaseTest is Test {
         DeploySuite[] memory suites = sSuites.externalAllSuites();
 
         assertEq(suites.length, 4);
-        assertEq(suites[0].suite, "address-registry@0_0_1");
+        assertEq(suites[0].suite, "config-registry@0_0_1");
         assertEq(suites[1].suite, "second-address");
-        assertEq(suites[2].suite, "address-registry-candidate");
+        assertEq(suites[2].suite, "config-registry-candidate");
         assertEq(suites[3].suite, "second-address-candidate");
     }
 
@@ -91,8 +91,8 @@ contract RainDeploySuitesBaseTest is Test {
     /// apart: they are separately deployable records, so the key is the only
     /// thing that distinguishes them.
     function testSuitesSharingCreationCodeSelectApart() external view {
-        DeploySuite memory released = sSuites.externalSuiteByName("address-registry@0_0_1");
-        DeploySuite memory candidate = sSuites.externalSuiteByName("address-registry-candidate");
+        DeploySuite memory released = sSuites.externalSuiteByName("config-registry@0_0_1");
+        DeploySuite memory candidate = sSuites.externalSuiteByName("config-registry-candidate");
 
         assertEq(keccak256(released.creationCode), keccak256(candidate.creationCode));
         assertEq(released.storedDeployedAddress, candidate.storedDeployedAddress);
@@ -107,7 +107,7 @@ contract RainDeploySuitesBaseTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "mock-deployable",
-                "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
+                "config-registry@0_0_1, second-address, config-registry-candidate, second-address-candidate"
             )
         );
         sSuites.externalSuiteByName("mock-deployable");
@@ -120,7 +120,7 @@ contract RainDeploySuitesBaseTest is Test {
             abi.encodeWithSelector(
                 UnknownDeploymentSuite.selector,
                 "",
-                "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
+                "config-registry@0_0_1, second-address, config-registry-candidate, second-address-candidate"
             )
         );
         sSuites.externalSuiteByName("");
@@ -169,7 +169,7 @@ contract RainDeploySuitesBaseTest is Test {
         // sibling entries quietly selectable out of a declaration nobody can
         // safely dispatch from.
         vm.expectRevert(abi.encodeWithSelector(InvalidDeploySuiteKey.selector, 1, ""));
-        empty.externalSuiteByName("address-registry@0_0_1");
+        empty.externalSuiteByName("config-registry@0_0_1");
     }
 
     /// A ONE BYTE key MUST be an ordinary key.
@@ -191,7 +191,7 @@ contract RainDeploySuitesBaseTest is Test {
         assertEq(shortest.externalSuiteNames(), "a, z");
 
         DeploySuite memory released = shortest.externalSuiteByName("a");
-        assertEq(released.artifactPath, "src/concrete/AddressRegistry.sol:AddressRegistry");
+        assertEq(released.artifactPath, "src/concrete/ConfigRegistry.sol:ConfigRegistry");
 
         DeploySuite memory candidate = shortest.externalSuiteByName("z");
         assertEq(candidate.artifactPath, "test/concrete/MockDeployableV2.sol:MockDeployableV2");
@@ -202,7 +202,7 @@ contract RainDeploySuitesBaseTest is Test {
     function testSuiteNamesIsTheRegistry() external view {
         assertEq(
             sSuites.externalSuiteNames(),
-            "address-registry@0_0_1, second-address, address-registry-candidate, second-address-candidate"
+            "config-registry@0_0_1, second-address, config-registry-candidate, second-address-candidate"
         );
     }
 
@@ -258,7 +258,7 @@ contract RainDeploySuitesBaseTest is Test {
         // cannot answer "no such suite" either, because it has no valid set to
         // report and the answer would send the reader after a typo.
         vm.expectRevert(abi.encodeWithSelector(NoDeployCandidates.selector));
-        none.externalSuiteByName("address-registry@0_0_1");
+        none.externalSuiteByName("config-registry@0_0_1");
 
         // And at the source of the refusal itself, which is what the
         // source-anchored check reads through — a loop over an empty list

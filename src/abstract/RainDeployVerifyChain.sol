@@ -9,6 +9,11 @@ import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 
+/// Thrown when `requiresSuiteOn` requires a suite on none of the networks
+/// checked, which would pass the suite having checked it nowhere.
+/// @param suite The suite.
+error SuiteRequiredNowhere(string suite);
+
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the repo.
 abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
@@ -45,6 +50,12 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             return;
         }
 
+        // With no networks every suite is required nowhere, which would name a
+        // suite for what is a fault of the roster.
+        if (networks.length == 0) {
+            revert LibRainDeploy.NoNetworks();
+        }
+
         uint256[] memory chainIds = LibRainDeploy.networkChainIds(networks);
         DeploySuite[] memory frozen = new DeploySuite[](suites.length);
         DeploySuite[] memory onNetworks = new DeploySuite[](suites.length);
@@ -53,6 +64,19 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             onNetworks[j] = onSupportedNetworks(frozen[j], chainIds);
         }
         suites = onNetworks;
+
+        for (uint256 j = 0; j < suites.length; j++) {
+            bool requiredSomewhere = false;
+            for (uint256 i = 0; i < networks.length; i++) {
+                if (requiresSuiteOn(suites[j], networks[i].name)) {
+                    requiredSomewhere = true;
+                    break;
+                }
+            }
+            if (!requiredSomewhere) {
+                revert SuiteRequiredNowhere(suites[j].suite);
+            }
+        }
 
         address[][] memory addresses = new address[][](networks.length);
         for (uint256 i = 0; i < networks.length; i++) {
@@ -71,6 +95,10 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             forkVm.selectFork(forkIds[i]);
             LibRainDeploy.checkNetworkChainId(networks[i]);
             for (uint256 j = 0; j < suites.length; j++) {
+                if (!requiresSuiteOn(suites[j], networks[i].name)) {
+                    console2.log("Not required on network:", derived[j].suite, networks[i].name);
+                    continue;
+                }
                 console2.log("Checking suite on network:", derived[j].suite, networks[i].name);
                 LibRainDeploy.checkDeclaredDependencies(networks[i].name, suites[j].dependencies);
                 LibRainDeploy.checkDeployedCode(networks[i].name, addresses[i][j], derived[j].bytecodeHash);
@@ -79,7 +107,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     }
 
     /// Every RELEASED suite MUST be live, with the code its creation code produces and its declared
-    /// dependencies under it, on every supported network.
+    /// dependencies under it, on every supported network `requiresSuiteOn` requires it on.
     function testSuitesLiveOnEverySupportedNetwork() external {
         checkDeployedOnSupportedNetworks(releasedSuites());
     }
