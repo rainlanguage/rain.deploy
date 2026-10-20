@@ -109,7 +109,9 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
     }
 
     /// Every code record under the root MUST be checked: a root holding two
-    /// valid generations reports exactly two.
+    /// valid generations reports exactly two, and with either one swapped to
+    /// deploy other code the walk refuses that one, so the record the walk
+    /// reaches second is deployed whichever order `readDir` lists them in.
     function testEveryCodeRecordUnderTheRootIsChecked() external {
         // A cheatcode write is not undone by a revert, so a failed run leaves
         // records under the root that this run would count.
@@ -118,18 +120,42 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
             vm.removeDir(COUNT_FIXTURE_ROOT, true);
         }
         string[2] memory tags = ["0_1_18", "0_1_19"];
+        string[2] memory paths;
+        string[2] memory records;
         for (uint256 i = 0; i < tags.length; i++) {
             string memory dir = string.concat(COUNT_FIXTURE_ROOT, "/", tags[i]);
+            paths[i] = string.concat(dir, "/TimelockController.sol");
+            records[i] = vm.readFile(string.concat("src/generated/", tags[i], "/TimelockController.sol"));
             //forge-lint: disable-next-line(unsafe-cheatcode)
             vm.createDir(dir, true);
             //forge-lint: disable-next-line(unsafe-cheatcode)
-            vm.writeFile(
-                string.concat(dir, "/TimelockController.sol"),
-                vm.readFile(string.concat("src/generated/", tags[i], "/TimelockController.sol"))
-            );
+            vm.writeFile(paths[i], records[i]);
         }
 
         assertEq(this.externalCheckFrozenCodeRecordsDeploy(COUNT_FIXTURE_ROOT), 2);
+
+        for (uint256 bad = 0; bad < tags.length; bad++) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.writeFile(
+                paths[bad],
+                vm.replace(
+                    records[bad],
+                    vm.replace(vm.toString(CREATION_CODE_0_1_19), "0x", ""),
+                    vm.replace(vm.toString(type(MockTimelockControllerGeneration).creationCode), "0x", "")
+                )
+            );
+            vm.expectRevert(
+                abi.encodeWithSelector(
+                    FrozenCodeRecordDeploysOtherCode.selector,
+                    paths[bad],
+                    BYTECODE_HASH_0_1_19,
+                    keccak256(type(MockTimelockControllerGeneration).runtimeCode)
+                )
+            );
+            this.externalCheckFrozenCodeRecordsDeploy(COUNT_FIXTURE_ROOT);
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.writeFile(paths[bad], records[bad]);
+        }
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(COUNT_FIXTURE_ROOT, true);

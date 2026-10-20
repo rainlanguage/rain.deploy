@@ -3324,7 +3324,22 @@ contract LibRainDeploySnapshotTest is Test {
     /// contract the release before it holds.
     /// @param recordRoot The record root to read the releases from.
     function externalCheckNoReleaseDropsAContract(string memory recordRoot) external view {
-        string[] memory paths = LibRainDeploySnapshot.frozenSnapshotPaths(vm, recordRoot);
+        checkNoReleaseDropsAContract(recordRoot, LibRainDeploySnapshot.frozenSnapshotPaths(vm, recordRoot));
+    }
+
+    /// External wrapper so `vm.expectRevert` lands at the right call depth.
+    /// @param recordRoot The record root the releases are frozen under.
+    /// @param paths The frozen record paths to walk, in the order given.
+    function externalCheckNoReleaseDropsAContractOver(string memory recordRoot, string[] memory paths) external view {
+        checkNoReleaseDropsAContract(recordRoot, paths);
+    }
+
+    /// Reverts unless every release among `paths` holds every contract the
+    /// release before it holds, comparing each release with the least frozen
+    /// tag following it whatever order `paths` is in.
+    /// @param recordRoot The record root the releases are frozen under.
+    /// @param paths The frozen record paths to walk.
+    function checkNoReleaseDropsAContract(string memory recordRoot, string[] memory paths) internal view {
         for (uint256 i = 0; i < paths.length; i++) {
             string memory tag = LibRainDeploySnapshot.tagForRecordPath(vm, paths[i]);
             // `next` is the least frozen tag strictly following `tag`, once `hasNext`.
@@ -3417,6 +3432,32 @@ contract LibRainDeploySnapshotTest is Test {
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(RESTORES_FIXTURE_ROOT, true);
+    }
+
+    /// The restores record walked in an order the test drives. See
+    /// `NEWEST_FIXTURE_ROOT`.
+    string constant PATH_ORDER_FIXTURE_ROOT = "test/generated-snapshot/restores-order";
+
+    /// The restores refusal MUST NOT depend on path order: walked with
+    /// `0_1_12` listed before `0_1_10`, and after it, `0_1_9` is still compared
+    /// with `0_1_10`, so `0_1_10` dropping `B` is refused both times.
+    function testReleaseDropIsFoundWhateverThePathOrder() external {
+        string[5] memory files = ["0_1_12/A.sol", "0_1_12/B.sol", "0_1_9/A.sol", "0_1_9/B.sol", "0_1_10/A.sol"];
+        string[] memory descending = new string[](files.length);
+        string[] memory ascending = new string[](files.length);
+        for (uint256 i = 0; i < files.length; i++) {
+            descending[i] = string.concat(PATH_ORDER_FIXTURE_ROOT, "/", files[i]);
+            ascending[(i + 3) % files.length] = descending[i];
+            writeFixture(descending[i]);
+        }
+
+        vm.expectRevert(abi.encodeWithSelector(ReleaseDropsContract.selector, "0_1_10", "B"));
+        this.externalCheckNoReleaseDropsAContractOver(PATH_ORDER_FIXTURE_ROOT, descending);
+        vm.expectRevert(abi.encodeWithSelector(ReleaseDropsContract.selector, "0_1_10", "B"));
+        this.externalCheckNoReleaseDropsAContractOver(PATH_ORDER_FIXTURE_ROOT, ascending);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(PATH_ORDER_FIXTURE_ROOT, true);
     }
 
     /// Over EVERY tag, against a record on disk, the guard MUST accept exactly
