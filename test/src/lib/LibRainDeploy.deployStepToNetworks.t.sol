@@ -76,7 +76,9 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
             Vm(address(sForkVm)),
             networks(deploys.expectedAddresses.length),
             address(this),
-            step == Step.Unreachable ? unreachableDeployStep : step == Step.Misreporting ? misreportingDeployStep : etchingDeployStep,
+            step == Step.Unreachable
+                ? unreachableDeployStep
+                : step == Step.Misreporting ? misreportingDeployStep : etchingDeployStep,
             deploys,
             keccak256(hex"00"),
             dependencies
@@ -92,7 +94,9 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdef))
         );
-        this.externalLoop(Step.Unreachable, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), dependencies);
+        this.externalLoop(
+            Step.Unreachable, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), dependencies
+        );
     }
 
     /// A step that reports an address other than the expected one MUST be refused, even when the expected address then holds the expected code.
@@ -102,7 +106,9 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
             abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, target, address(0xbad))
         );
         this.externalLoop(
-            Step.Misreporting, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), new DeployDependency[](0)
+            Step.Misreporting,
+            LibRainDeploy.everyNetwork(1, abi.encode(target), target, target),
+            new DeployDependency[](0)
         );
     }
 
@@ -118,7 +124,9 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
             )
         );
         this.externalLoop(
-            Step.Unreachable, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), new DeployDependency[](0)
+            Step.Unreachable,
+            LibRainDeploy.everyNetwork(1, abi.encode(target), target, target),
+            new DeployDependency[](0)
         );
     }
 
@@ -149,7 +157,9 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
             )
         );
         this.externalLoop(
-            Step.Unreachable, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), new DeployDependency[](0)
+            Step.Unreachable,
+            LibRainDeploy.everyNetwork(1, abi.encode(target), target, target),
+            new DeployDependency[](0)
         );
     }
 }
