@@ -372,28 +372,28 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
     }
 
     /// A value other than `0x` and 40 hex digits, bare or in `address(...)`, then `;` is unreadable, on the
-    /// declaration's line and wrapped, in both forms: 40 hex digits without `0x`, which names an identifier to solc,
-    /// other than 40 digits, or anything before, inside or after the value.
+    /// declaration's line in both forms and wrapped for the `address(...)` form: 40 hex digits without `0x`, which
+    /// names an identifier to solc, other than 40 digits, or anything before, inside or after the value.
     function testDeclarationValueOutsideTheWritersShapeIsUnreadable() external {
         string[] memory values = new string[](18);
-        values[16] = "x0x000000000000000000000000000000000000bEEF;";
-        values[17] = "(0x000000000000000000000000000000000000bEEF);";
-        values[13] = "0x000000000000000000000000000000000000bEEF;0x";
-        values[14] = "address(0x000000000000000000000000000000000000bEEF);0x";
-        values[15] = "address(0x000000000000000000000000000000000000bEEF);address(0x";
-        values[6] = "abcdefabcdefabcdefabcdefabcdefabcdefabcd;";
-        values[7] = "0x000000000000000000000000000000000000bEEF;;";
-        values[8] = "0x000000000000000000000000000000000000bEEF";
         values[0] = "address(abcdefabcdefabcdefabcdefabcdefabcdefabcd);";
         values[1] = "address(0x000000000000000000000000000000000000bEEF)";
         values[2] = "address(0x000000000000000000000000000000000000bEEF);;";
         values[3] = "address(0x000000000000000000000000000000000000bEEF));";
         values[4] = "xaddress(0x000000000000000000000000000000000000bEEF);";
         values[5] = "address(0x000000000000000000000000000000000000bEEF;);";
+        values[6] = "abcdefabcdefabcdefabcdefabcdefabcdefabcd;";
+        values[7] = "0x000000000000000000000000000000000000bEEF;;";
+        values[8] = "0x000000000000000000000000000000000000bEEF";
         values[9] = "0x00000000000000000000000000000000000bEEF;";
         values[10] = "0x0000000000000000000000000000000000000bEEF;";
         values[11] = "address(0x00000000000000000000000000000000000bEEF);";
         values[12] = "address(0x0000000000000000000000000000000000000bEEF);";
+        values[13] = "0x000000000000000000000000000000000000bEEF;0x";
+        values[14] = "address(0x000000000000000000000000000000000000bEEF);0x";
+        values[15] = "address(0x000000000000000000000000000000000000bEEF);address(0x";
+        values[16] = "x0x000000000000000000000000000000000000bEEF;";
+        values[17] = "(0x000000000000000000000000000000000000bEEF);";
         for (uint256 i = 0; i < values.length; i++) {
             vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
             this.externalRecordedDeployedAddresses(
