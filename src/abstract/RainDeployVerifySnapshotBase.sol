@@ -159,8 +159,8 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         return new string[](0);
     }
 
-    /// The index of the first of `codeRecordNames` that `path`'s file name is,
-    /// plus `.sol`.
+    /// The index of the first name in `codeRecordNames` that, plus `.sol`, is
+    /// `path`'s file name.
     /// @param path A frozen record file.
     /// @param codeRecordNames The code records' names.
     /// @return The index, or `codeRecordNames.length` when none matches.
