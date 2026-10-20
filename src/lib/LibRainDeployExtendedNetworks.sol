@@ -130,7 +130,7 @@ library LibRainDeployExtendedNetworks {
             revert ExtendedNetworksUnreadable(path);
         }
         checkExtendedNetworksHeader(vm, path, halves[0]);
-        string[] memory entries = vm.split(halves[1], "address constant DEPLOYED_ADDRESS_");
+        string[] memory entries = vm.split(halves[1], "DEPLOYED_ADDRESS_");
         CloneNetwork[] memory networks = new CloneNetwork[](entries.length - 1);
         for (uint256 i = 0; i < networks.length; i++) {
             networks[i] = recordedExtendedNetwork(vm, path, entries[i + 1]);
