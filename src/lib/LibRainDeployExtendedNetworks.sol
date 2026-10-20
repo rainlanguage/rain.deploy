@@ -28,11 +28,11 @@ error ExtendedNetworksUnreadable(string path);
 
 /// @title LibRainDeployExtendedNetworks
 /// @notice The generated, append-only record of the networks each per-network release is declared on beyond its
-/// frozen record: `<root>/extended/<tag>/<name>.sol` for the release keyed by name `<name>` and tag `<tag>`. The build writes it from
-/// `extendedNetworks`, refusing to drop or change an entry already written, and the broadcast and the chain group
-/// refuse a declaration that is not exactly what it holds. So a declaration computed from anything that later moves
-/// fails the build rather than moving the address, and the extension is published under the generated tree with the
-/// rest of the record.
+/// frozen record: `<root>/extended/<tag>/<name>.sol` for the release keyed by name `<name>` and tag `<tag>`. The
+/// build writes it from `extendedNetworks`, refusing to drop or change an entry already written, and the broadcast and
+/// the chain group refuse a declaration that is not exactly what it holds. So a declaration computed from anything
+/// that later moves fails the build rather than moving the address, and the extension is published under the
+/// generated tree with the rest of the record.
 /// Append-only against the record in the checkout, not against its history: a commit that edits or deletes the record
 /// and its declaration together passes the build, the broadcast and the chain group.
 library LibRainDeployExtendedNetworks {

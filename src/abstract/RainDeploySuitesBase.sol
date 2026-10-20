@@ -302,7 +302,7 @@ abstract contract RainDeploySuitesBase {
 
     /// A suite's candidate snapshot.
     /// @param suite The suite.
-    /// @return The snapshot of the candidate named as `suite` is, or `suite` when there is none.
+    /// @return The snapshot of the candidate whose key's name half is `suite`'s, or `suite` when none is.
     function candidateOf(DeploySuite memory suite) internal view returns (DeploySuite memory) {
         bytes32 name = keccak256(bytes(suiteKeyName(suite.suite)));
         DeployCandidate[] memory candidates = checkedCandidateSuites();

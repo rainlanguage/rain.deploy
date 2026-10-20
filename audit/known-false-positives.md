@@ -18,6 +18,6 @@
   `if (false)` (D08), and the same to
   `LibRainDeploySnapshot.declarationAddress`'s guard (N07). `declarationValue`
   returns an empty token for an unreadable declaration; `declaredBytes` and
-  `declaredBytes32` split it into one part and `declaredAddress` fails
-  `vm.parseAddress("")`, so each still raises the same
+  `declaredBytes32` split it into one part and `declaredAddress` refuses it at
+  its `0x` split, which also yields one part, so each still raises the same
   `FrozenCodeRecordUnreadable(path)` or `FrozenSnapshotUnreadable(path)`.

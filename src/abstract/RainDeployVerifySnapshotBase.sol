@@ -49,12 +49,12 @@ error FrozenSnapshotsOutnumberReleases(string path, address[] deployedAddresses,
 /// @param path The record file.
 error FrozenCodeRecordDeclaresDeployedAddress(string path);
 
-/// Thrown when a frozen code record does not declare one of the constants a
-/// code record is, `BYTECODE_HASH`, `CREATION_CODE` and `RUNTIME_CODE`, on a line starting with its declaration;
-/// declares one, on such a line, outside the writer's format (`=` fourth of five space-separated tokens, or wrapped onto the next line at a
-/// four-space indent); gives a `bytes` constant a value that is not one `hex"..."` literal of whole bytes, or the
-/// `bytes32` constant a value that is not one `bytes32(0x...)` of `0x` and 64 hex digits; or holds
-/// a line break other than `\n` that solc honours.
+/// Thrown when a frozen code record does not declare one of the constants a code record is, `BYTECODE_HASH`,
+/// `CREATION_CODE` and `RUNTIME_CODE`, on a line starting with its declaration; declares one, on such a line, outside
+/// the writer's format (`=` fourth of five space-separated tokens, or wrapped onto the next line at a four-space
+/// indent); gives a `bytes` constant a value that is not one `hex"..."` literal of whole bytes, or the `bytes32`
+/// constant a value that is not one `bytes32(0x...)` of `0x` and 64 hex digits; or holds a line break other than `\n`
+/// that solc honours.
 /// @param path The record file.
 error FrozenCodeRecordUnreadable(string path);
 
