@@ -1474,7 +1474,8 @@ library LibRainDeploySnapshot {
         if (closed.length != 2 || bytes(closed[1]).length != 0) {
             revert FrozenSnapshotUnreadable(path);
         }
-        try vm.parseAddress(string.concat("0x", closed[0])) returns (address declared) {
+        // `vm.parseAddress` reads the 40 digits with or without the `0x` the split removed.
+        try vm.parseAddress(closed[0]) returns (address declared) {
             return declared;
         } catch {
             revert FrozenSnapshotUnreadable(path);
