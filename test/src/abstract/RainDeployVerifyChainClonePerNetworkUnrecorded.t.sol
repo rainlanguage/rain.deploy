@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
-import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
+import {RainDeployVerifyChain, SuiteRequiredNowhere} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {CloneNetworks, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
@@ -22,6 +22,14 @@ import {
 /// @notice The chain matrix over a per-network clone release cut when the repo supported Arbitrum
 /// One alone, in a repo that now supports Polygon too.
 contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDeploys, RainDeployVerifyChain {
+    /// Whether the release is required on no network.
+    bool internal sRequiredNowhere;
+
+    /// @inheritdoc RainDeploySuitesBase
+    function requiresSuiteOn(DeploySuite memory, string memory) internal view override returns (bool) {
+        return !sRequiredNowhere;
+    }
+
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()
         internal
@@ -133,5 +141,12 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
 
         (bool forked,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", uint256(0)));
         assertFalse(forked, "the matrix forked a network before refusing the unfrozen one");
+    }
+
+    /// A release required nowhere is refused as such before its unrecorded network is refused as unfrozen.
+    function testSuiteRequiredNowherePrecedesTheFrozenCheck() external {
+        sRequiredNowhere = true;
+        vm.expectRevert(abi.encodeWithSelector(SuiteRequiredNowhere.selector, "per-network-clone@0_0_1"));
+        this.externalCheckDeployedOnSupportedNetworks(arbitrumOnlyRelease());
     }
 }
