@@ -833,5 +833,38 @@
       "a86f089 changed only NatSpec and a blank line in src (RainDeployBroadcast.broadcastSuite, RainDeployVerifyChain), so it adds no behaviour to probe.",
       "Adversarial pass on R17: the expected true comes from the registry graph the test applies (OTHER HANDOVER reaches THIRD UPGRADE only through OTHER ROLLBACK then THIRD HANDOVER), not from the walk."
     ]
+  },
+  {
+    "timestamp": "2026-10-20T16:31:54Z",
+    "commit": "98f8c376ff3ed163121cd851c85fe87eb29495d9",
+    "testsAfterCommit": "18524fa3afeccd2d873dc1db4e3727c9cb1cf3c2",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 206,
+    "scope": "PR #308 (#274) round 10: mutant V20 from rain-marvin at 98f8c37 (RainDeployVerifyBase.checkSeatedState calling deployLocally in place of deployLocallyOnChain), and the fixture added to kill it (test/concrete/MockChainRefusingCloneable.sol)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 6,
+      "behavioursProbed": 6,
+      "killedByExistingTests": 0,
+      "gapsFilled": 6,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 1,
+      "confirmed": 1,
+      "filed": [
+        320
+      ],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pre-existing suite at 98f8c37, offline (fork-reaching tests excluded by name, LibSafeForkTest and LibSafeTest by contract, 1093 tests): V20 SURVIVED.",
+      "At 18524fa (1098 tests) V20 is killed by testPerNetworkCloneBeaconSuiteResolvesOnBase; the Arbitrum twin pins that the fixed code resolves there too. Mock mutants K01-K05 (refusal inverted, never refuses, refusal argument, success value, owner) are killed by the beacon seat tests and MockChainRefusingCloneableTest.",
+      "The mock refuses only the chain id its data names, so it initializes under the local chain id that deriveDeployment runs every clone under; no chain id is hardcoded.",
+      "Adversarial pass: deriveDeployment initializes every per-network clone under the local chain id, so a clone init that accepts only its own chain id (MockChainGatedCloneable) reverts derivation; filed as #320 for triage."
+    ]
   }
 ]
