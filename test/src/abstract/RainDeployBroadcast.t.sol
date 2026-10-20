@@ -621,7 +621,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
             beaconSuite: "",
             beacon: address(0xBEAC0),
             beaconCodeHash: keccak256("beacon"),
-            initial: BeaconState({implementation: "address-registry@0_0_1", owner: initial}),
+            initial: BeaconState({implementation: "config-registry@0_0_1", owner: initial}),
             transitions: new BeaconTransition[](2)
         });
         for (uint256 i = 0; i < 2; i++) {
@@ -629,14 +629,14 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
                 migration: Prerequisite({
                     writer: address(0x5AFE), namespace: keccak256("beacons"), migration: keccak256(abi.encode(i))
                 }),
-                state: BeaconState({implementation: "address-registry@0_0_1", owner: i == 1 ? later : initial})
+                state: BeaconState({implementation: "config-registry@0_0_1", owner: i == 1 ? later : initial})
             });
         }
         return beacon;
     }
 
     function expectBroadcastRefused(BeaconOwnerDeploy deploy, bytes memory refusal) internal {
-        DeploySuite memory suite = deploy.externalSuiteByName("address-registry@0_0_1");
+        DeploySuite memory suite = deploy.externalSuiteByName("config-registry@0_0_1");
         vm.expectRevert(refusal);
         deploy.externalBroadcastSuite(suite, new string[](0), 1);
     }
