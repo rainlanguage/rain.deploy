@@ -27,7 +27,7 @@ contract RainDeployCloneSuitesBaseTest is Test {
     function testCandidatesAreTheCloneListDerived() external {
         ExampleCloneDeploy fixtureDeploy = new ExampleCloneDeploy();
 
-        uint256 clones = fixtureDeploy.externalCheckedCloneDeploysLength();
+        uint256 clones = fixtureDeploy.externalCloneDeploysLength();
         DeployCandidate[] memory candidates = fixtureDeploy.externalCheckedCandidateSuites();
 
         assertEq(candidates.length, clones, "one candidate per clone");
@@ -60,9 +60,6 @@ contract RainDeployCloneSuitesBaseTest is Test {
     /// it.
     function testNoCloneDeploysReverts() external {
         NoCloneDeploySuites empty = new NoCloneDeploySuites();
-
-        vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
-        empty.externalCheckedCloneDeploysLength();
 
         vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
         empty.externalCheckedCandidateSuites();

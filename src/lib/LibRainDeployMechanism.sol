@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {ICloneableFactoryV4} from "rain-factory-pr271-ab0fdca/src/interface/deprecated/ICloneableFactoryV4.sol";
+import {ICloneableFactoryV5} from "rain-factory-pr271-ab0fdca/src/interface/ICloneableFactoryV5.sol";
 
 import {DeployCandidate, DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy, NetworkDeploys, SupportedNetwork} from "./LibRainDeploy.sol";
@@ -17,6 +18,15 @@ import {
     CloneTarget,
     LibRainDeployClone
 } from "./LibRainDeployClone.sol";
+import {
+    BEACON_PROXY_ARTIFACT_PATH,
+    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
+    BEACON_PROXY_UNANCHORABLE_REASON,
+    BeaconProxyDeploy,
+    BeaconProxyStandInBeacon,
+    BeaconProxyStandInImplementation,
+    LibRainDeployBeaconProxy
+} from "./LibRainDeployBeaconProxy.sol";
 
 /// Thrown when the state snapshot taken around a local deploy could not be
 /// reverted. A local deploy plants code at the derived address, clears its
@@ -92,7 +102,7 @@ error ExtendedNetworkUnfrozen(string suite, string network, address deployedAddr
 /// @param slot The slot read.
 error CloneInitializeReadsStorage(string suite, address account, bytes32 slot);
 
-/// Emitted when a broadcast Zoltu entry under `CLONE_ARTIFACT_PATH` leaves its source to verify by hand.
+/// Emitted when a broadcast Zoltu entry under `CLONE_ARTIFACT_PATH` or `BEACON_PROXY_ARTIFACT_PATH` leaves its source to verify by hand.
 /// @param sender The deploy's `msg.sender`, not the broadcasting key.
 /// @param entryAddress Where the entry is deployed on every network.
 /// @param networks The networks it was broadcast to.
@@ -107,6 +117,38 @@ library LibRainDeployMechanism {
         if (suite.mechanismData.length != 0) {
             revert UnexpectedMechanismData(suite.suite);
         }
+    }
+
+    /// @param suite The suite.
+    /// @return Whether its mechanism data is a `CloneNetworks`, with init data and an address per network.
+    function isPerNetwork(DeploySuite memory suite) internal pure returns (bool) {
+        return
+            suite.mechanism == DeployMechanism.ClonePerNetwork
+                || suite.mechanism == DeployMechanism.BeaconProxyPerNetwork;
+    }
+
+    /// @param suite The suite.
+    /// @return Whether it is a beacon proxy, its `CloneTarget.implementation` the beacon.
+    function isBeaconProxy(DeploySuite memory suite) internal pure returns (bool) {
+        return
+            suite.mechanism == DeployMechanism.BeaconProxy || suite.mechanism == DeployMechanism.BeaconProxyPerNetwork;
+    }
+
+    /// The address a factory deploys a target of a clone or beacon proxy suite to.
+    /// @param suite The suite, whose mechanism says which factory derivation applies.
+    /// @param target The target.
+    /// @return The derived address.
+    function targetAddress(DeploySuite memory suite, CloneTarget memory target) internal pure returns (address) {
+        return targetAddress(isBeaconProxy(suite), target);
+    }
+
+    /// @param beaconProxy Whether the target is a beacon proxy rather than a clone.
+    /// @param target The target.
+    /// @return The address its factory derivation puts it at.
+    function targetAddress(bool beaconProxy, CloneTarget memory target) internal pure returns (address) {
+        return beaconProxy
+            ? LibRainDeployBeaconProxy.beaconProxyDeployedAddress(target)
+            : LibRainDeployClone.cloneDeployedAddress(target);
     }
 
     /// A clone suite's `CloneTarget`, with its factory and implementation held to being declared
@@ -137,7 +179,7 @@ library LibRainDeployMechanism {
     /// @param chainId The network's chain id.
     /// @return The target on that network.
     function cloneTargetOn(DeploySuite memory suite, uint256 chainId) internal pure returns (CloneTarget memory) {
-        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
+        if (isPerNetwork(suite)) {
             CloneNetworks memory clones = cloneNetworks(suite);
             return LibRainDeployClone.cloneNetworkTarget(clones, LibRainDeployClone.cloneNetworkIndex(clones, chainId));
         }
@@ -153,7 +195,7 @@ library LibRainDeployMechanism {
             checkZoltuMechanismData(suite);
             return LibRainDeploy.zoltuAddress(suite.creationCode);
         }
-        return LibRainDeployClone.cloneDeployedAddress(cloneTargetOn(suite, chainId));
+        return targetAddress(suite, cloneTargetOn(suite, chainId));
     }
 
     /// What a suite's mechanism step is handed on one network.
@@ -179,6 +221,9 @@ library LibRainDeployMechanism {
         if (suite.mechanism == DeployMechanism.Zoltu) {
             return LibRainDeploy.zoltuDeployStep;
         }
+        if (isBeaconProxy(suite)) {
+            return LibRainDeployBeaconProxy.beaconProxyDeployStep;
+        }
         return LibRainDeployClone.cloneDeployStep;
     }
 
@@ -186,12 +231,11 @@ library LibRainDeployMechanism {
     /// @param suite The suite.
     /// @return The derived addresses.
     function deployedAddresses(DeploySuite memory suite) internal pure returns (address[] memory) {
-        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
+        if (isPerNetwork(suite)) {
             CloneNetworks memory clones = cloneNetworks(suite);
             address[] memory perNetwork = new address[](clones.networks.length);
             for (uint256 i = 0; i < clones.networks.length; i++) {
-                perNetwork[i] =
-                    LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(clones, i));
+                perNetwork[i] = targetAddress(suite, LibRainDeployClone.cloneNetworkTarget(clones, i));
             }
             return perNetwork;
         }
@@ -204,7 +248,7 @@ library LibRainDeployMechanism {
     /// @param suite The suite.
     /// @return The recorded addresses.
     function recordedAddresses(DeploySuite memory suite) internal pure returns (address[] memory) {
-        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
+        if (isPerNetwork(suite)) {
             CloneNetworks memory clones = cloneNetworks(suite);
             address[] memory perNetwork = new address[](clones.networks.length);
             for (uint256 i = 0; i < clones.networks.length; i++) {
@@ -222,7 +266,7 @@ library LibRainDeployMechanism {
     /// @param chainId The network's chain id.
     /// @return The recorded address on that network.
     function recordedAddress(DeploySuite memory suite, uint256 chainId) internal pure returns (address) {
-        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
+        if (isPerNetwork(suite)) {
             CloneNetworks memory clones = cloneNetworks(suite);
             return clones.networks[LibRainDeployClone.cloneNetworkIndex(clones, chainId)].deployedAddress;
         }
@@ -233,7 +277,7 @@ library LibRainDeployMechanism {
     /// @param suite The suite.
     /// @return The chain ids.
     function addressChainIds(DeploySuite memory suite) internal pure returns (uint256[] memory) {
-        if (suite.mechanism != DeployMechanism.ClonePerNetwork) {
+        if (!isPerNetwork(suite)) {
             return new uint256[](0);
         }
         CloneNetworks memory clones = cloneNetworks(suite);
@@ -254,9 +298,7 @@ library LibRainDeployMechanism {
         pure
         returns (DeploySuite memory)
     {
-        if (
-            suite.mechanism != DeployMechanism.ClonePerNetwork || candidate.mechanism != DeployMechanism.ClonePerNetwork
-        ) {
+        if (!isPerNetwork(suite) || candidate.mechanism != suite.mechanism) {
             return suite;
         }
         CloneNetworks memory clones = cloneNetworks(suite);
@@ -280,8 +322,7 @@ library LibRainDeployMechanism {
             clones.networks[i] = networks[i];
         }
         for (uint256 i = recorded; i < count; i++) {
-            clones.networks[i].deployedAddress =
-                LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(clones, i));
+            clones.networks[i].deployedAddress = targetAddress(suite, LibRainDeployClone.cloneNetworkTarget(clones, i));
         }
         return withMechanismData(suite, abi.encode(clones));
     }
@@ -301,7 +342,7 @@ library LibRainDeployMechanism {
         if (extended.length == 0) {
             return suite;
         }
-        if (suite.mechanism != DeployMechanism.ClonePerNetwork) {
+        if (!isPerNetwork(suite)) {
             revert ExtendedNetworksUnexpected(suite.suite);
         }
         CloneNetworks memory clones = cloneNetworks(suite);
@@ -316,7 +357,7 @@ library LibRainDeployMechanism {
         clones.networks = networks;
         LibRainDeployClone.checkCloneNetworks(clones, suite.dependencies);
         for (uint256 i = recorded; i < networks.length; i++) {
-            address derived = LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(clones, i));
+            address derived = targetAddress(suite, LibRainDeployClone.cloneNetworkTarget(clones, i));
             if (derived != networks[i].deployedAddress) {
                 revert ExtendedNetworkAddressMismatch(
                     suite.suite, networks[i].chainId, derived, networks[i].deployedAddress
@@ -335,7 +376,7 @@ library LibRainDeployMechanism {
         internal
         pure
     {
-        if (frozen.mechanism != DeployMechanism.ClonePerNetwork) {
+        if (!isPerNetwork(frozen)) {
             return;
         }
         CloneNetworks memory clones = cloneNetworks(frozen);
@@ -355,7 +396,7 @@ library LibRainDeployMechanism {
         internal
         pure
     {
-        if (onNetworks.mechanism != DeployMechanism.ClonePerNetwork) {
+        if (!isPerNetwork(onNetworks)) {
             return;
         }
         SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
@@ -424,7 +465,7 @@ library LibRainDeployMechanism {
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy. Its `mechanismData` is restored before returning.
     function deployLocallyOnChain(Vm vm, DeploySuite memory suite) internal {
-        if (suite.mechanism != DeployMechanism.ClonePerNetwork) {
+        if (!isPerNetwork(suite)) {
             deployLocally(vm, suite);
             return;
         }
@@ -472,7 +513,7 @@ library LibRainDeployMechanism {
         }
 
         CloneTarget[] memory targets;
-        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
+        if (isPerNetwork(suite)) {
             CloneNetworks memory clones = cloneNetworks(suite);
             targets = new CloneTarget[](clones.networks.length);
             for (uint256 i = 0; i < targets.length; i++) {
@@ -482,9 +523,21 @@ library LibRainDeployMechanism {
             targets = new CloneTarget[](1);
             targets[0] = cloneTarget(suite);
         }
-        if (keccak256(suite.creationCode) != keccak256(LibRainDeployClone.cloneCreationCode(targets[0].implementation)))
-        {
+        bool beaconProxy = isBeaconProxy(suite);
+        if (
+            keccak256(suite.creationCode)
+                != keccak256(
+                    beaconProxy
+                        ? LibRainDeployBeaconProxy.beaconProxyCreationCode(targets[0].implementation)
+                        : LibRainDeployClone.cloneCreationCode(targets[0].implementation)
+                )
+        ) {
             revert CloneCreationCodeMismatch(suite.suite);
+        }
+        if (beaconProxy) {
+            // Every target shares the beacon.
+            vm.etch(targets[0].implementation, type(BeaconProxyStandInBeacon).runtimeCode);
+            vm.etch(BEACON_PROXY_STAND_IN_IMPLEMENTATION, type(BeaconProxyStandInImplementation).runtimeCode);
         }
         for (uint256 i = 0; i < targets.length; i++) {
             if (deployedEarlier(deployed, i)) {
@@ -492,15 +545,18 @@ library LibRainDeployMechanism {
             }
             vm.etch(deployed[i], hex"");
             vm.resetNonce(deployed[i]);
+            bytes memory factoryCall = beaconProxy
+                ? abi.encodeCall(
+                    ICloneableFactoryV5.beaconProxyDeterministicOpenSalt,
+                    (targets[i].implementation, targets[i].data, targets[i].salt)
+                )
+                : abi.encodeCall(
+                    ICloneableFactoryV4.cloneDeterministicOpenSalt,
+                    (targets[i].implementation, targets[i].data, targets[i].salt)
+                );
             vm.startStateDiffRecording();
             // slither-disable-next-line low-level-calls
-            (bool success, bytes memory result) = targets[i].factory
-                .call(
-                    abi.encodeCall(
-                        ICloneableFactoryV4.cloneDeterministicOpenSalt,
-                        (targets[i].implementation, targets[i].data, targets[i].salt)
-                    )
-                );
+            (bool success, bytes memory result) = targets[i].factory.call(factoryCall);
             Vm.AccountAccess[] memory accesses = vm.stopAndReturnStateDiff();
             if (success) {
                 address cloneAddress = abi.decode(result, (address));
@@ -634,7 +690,7 @@ library LibRainDeployMechanism {
             suite.dependencies
         );
         if (suite.mechanism == DeployMechanism.Zoltu) {
-            if (keccak256(bytes(suite.artifactPath)) != keccak256(bytes(CLONE_ARTIFACT_PATH))) {
+            if (!isProxyArtifactPath(suite.artifactPath)) {
                 LibRainDeploy.logVerifyCommands(vm, networks, deploys.expectedAddresses[0], suite.artifactPath);
             } else {
                 // slither-disable-next-line reentrancy-events
@@ -645,7 +701,7 @@ library LibRainDeployMechanism {
         return (deploys.expectedAddresses, forkIds);
     }
 
-    /// The notice that a Zoltu entry under `CLONE_ARTIFACT_PATH` names no compiled source to verify, so its source
+    /// The notice that a Zoltu entry under `CLONE_ARTIFACT_PATH` or `BEACON_PROXY_ARTIFACT_PATH` names no compiled source to verify, so its source
     /// needs verifying by hand on each network.
     /// @param vm The Vm instance to format the address with.
     /// @param networks The networks the entry is deployed on.
@@ -657,7 +713,7 @@ library LibRainDeployMechanism {
         returns (string memory)
     {
         string memory notice = string.concat(
-            "no verify command: the Zoltu entry carries the clone artifact path; verify the source at ",
+            "no verify command: the Zoltu entry carries a factory proxy artifact path; verify the source at ",
             vm.toString(where),
             " by hand on"
         );
@@ -665,6 +721,13 @@ library LibRainDeployMechanism {
             notice = string.concat(notice, " ", networks[i]);
         }
         return notice;
+    }
+
+    /// @param artifactPath A suite's artifact path.
+    /// @return Whether it is `CLONE_ARTIFACT_PATH` or `BEACON_PROXY_ARTIFACT_PATH`, which name no compiled source.
+    function isProxyArtifactPath(string memory artifactPath) internal pure returns (bool) {
+        bytes32 path = keccak256(bytes(artifactPath));
+        return path == keccak256(bytes(CLONE_ARTIFACT_PATH)) || path == keccak256(bytes(BEACON_PROXY_ARTIFACT_PATH));
     }
 
     /// A clone declaration as the `DeployCandidate` every other part of this package reads.
@@ -677,6 +740,45 @@ library LibRainDeployMechanism {
         view
         returns (DeployCandidate memory)
     {
+        return factoryCandidate(clone, chainIds, false);
+    }
+
+    /// A beacon proxy declaration as the `DeployCandidate` every other part of this package reads.
+    /// @param proxy The beacon proxy being declared.
+    /// @param chainIds The chain id of every network the repo supports, in its
+    /// `supportedNetworks()` order.
+    /// @return The candidate.
+    function beaconProxyCandidate(BeaconProxyDeploy memory proxy, uint256[] memory chainIds)
+        internal
+        view
+        returns (DeployCandidate memory)
+    {
+        return factoryCandidate(
+            CloneDeploy({
+                suite: proxy.suite,
+                factory: proxy.factory,
+                implementation: proxy.beacon,
+                data: proxy.data,
+                initDataPerNetwork: proxy.initDataPerNetwork,
+                initData: proxy.initData,
+                salt: proxy.salt,
+                dependencies: proxy.dependencies
+            }),
+            chainIds,
+            true
+        );
+    }
+
+    /// The candidate a factory declaration becomes, as a clone or as a beacon proxy.
+    /// @param clone The declaration, its `implementation` the beacon for a beacon proxy.
+    /// @param chainIds The chain id of every network the repo supports, in its `supportedNetworks()` order.
+    /// @param beaconProxy Whether the declaration is a beacon proxy.
+    /// @return The candidate.
+    function factoryCandidate(CloneDeploy memory clone, uint256[] memory chainIds, bool beaconProxy)
+        internal
+        view
+        returns (DeployCandidate memory)
+    {
         DeployMechanism mechanism;
         bytes memory mechanismData;
         address storedDeployedAddress = address(0);
@@ -684,9 +786,9 @@ library LibRainDeployMechanism {
             CloneTarget memory target = CloneTarget({
                 factory: clone.factory, implementation: clone.implementation, data: clone.data, salt: clone.salt
             });
-            mechanism = DeployMechanism.Clone;
+            mechanism = beaconProxy ? DeployMechanism.BeaconProxy : DeployMechanism.Clone;
             mechanismData = abi.encode(target);
-            storedDeployedAddress = LibRainDeployClone.cloneDeployedAddress(target);
+            storedDeployedAddress = targetAddress(beaconProxy, target);
         } else {
             if (clone.data.length != 0) {
                 revert CloneDataAmbiguous(clone.suite);
@@ -702,24 +804,35 @@ library LibRainDeployMechanism {
                     chainId: chainIds[i], data: clone.initData(chainIds[i]), deployedAddress: address(0)
                 });
                 clones.networks[i].deployedAddress =
-                    LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(clones, i));
+                    targetAddress(beaconProxy, LibRainDeployClone.cloneNetworkTarget(clones, i));
             }
-            mechanism = DeployMechanism.ClonePerNetwork;
+            mechanism = beaconProxy ? DeployMechanism.BeaconProxyPerNetwork : DeployMechanism.ClonePerNetwork;
             mechanismData = abi.encode(clones);
         }
+        DeploySuite memory snapshot = DeploySuite({
+            suite: clone.suite,
+            creationCode: "",
+            storedDeployedAddress: storedDeployedAddress,
+            storedBytecodeHash: 0,
+            storedRuntimeCode: "",
+            artifactPath: "",
+            dependencies: clone.dependencies,
+            mechanism: mechanism,
+            mechanismData: mechanismData
+        });
+        if (beaconProxy) {
+            snapshot.creationCode = LibRainDeployBeaconProxy.beaconProxyCreationCode(clone.implementation);
+            snapshot.storedRuntimeCode = LibRainDeployBeaconProxy.beaconProxyRuntimeCode(clone.implementation);
+            snapshot.artifactPath = BEACON_PROXY_ARTIFACT_PATH;
+        } else {
+            snapshot.creationCode = LibRainDeployClone.cloneCreationCode(clone.implementation);
+            snapshot.storedRuntimeCode = LibRainDeployClone.cloneRuntimeCode(clone.implementation);
+            snapshot.artifactPath = CLONE_ARTIFACT_PATH;
+        }
+        snapshot.storedBytecodeHash = keccak256(snapshot.storedRuntimeCode);
         return DeployCandidate({
-            snapshot: DeploySuite({
-                suite: clone.suite,
-                creationCode: LibRainDeployClone.cloneCreationCode(clone.implementation),
-                storedDeployedAddress: storedDeployedAddress,
-                storedBytecodeHash: LibRainDeployClone.cloneDeployedCodehash(clone.implementation),
-                storedRuntimeCode: LibRainDeployClone.cloneRuntimeCode(clone.implementation),
-                artifactPath: CLONE_ARTIFACT_PATH,
-                dependencies: clone.dependencies,
-                mechanism: mechanism,
-                mechanismData: mechanismData
-            }),
-            unanchorableReason: CLONE_UNANCHORABLE_REASON
+            snapshot: snapshot,
+            unanchorableReason: beaconProxy ? BEACON_PROXY_UNANCHORABLE_REASON : CLONE_UNANCHORABLE_REASON
         });
     }
 }

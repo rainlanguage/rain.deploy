@@ -15,6 +15,13 @@ import {DeployBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol"
 /// @param suite The suite.
 error SuiteRequiredNowhere(string suite);
 
+/// Thrown when a beacon proxy suite is required on a network where `beacons()` declares no beacon at the
+/// proxy's beacon, so nothing would check what the proxy delegates into there.
+/// @param suite The beacon proxy suite.
+/// @param network The network.
+/// @param beacon The proxy's beacon.
+error BeaconProxyBeaconUndeclared(string suite, string network, address beacon);
+
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the repo.
 abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
@@ -38,6 +45,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// other network it is required on it is refused before any network is forked: with `ExtendedNetworkUnfrozen`,
     /// naming the address its candidate's init data derives there, whether or not anything is live at it, or with
     /// `CloneNetworkUndeclared` where its candidate has no entry there.
+    /// A beacon proxy suite is refused `BeaconProxyBeaconUndeclared` before forking on a network it is required on where
+    /// `beacons()` declares no beacon at its beacon; the beacon's own checks then cover what the proxy delegates into.
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
@@ -90,6 +99,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
                     LibRainDeployMechanism.checkNetworkFrozen(
                         frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]
                     );
+                    checkBeaconProxyBeaconDeclared(suites[j], networks[i], resolved);
                 }
             }
         }
@@ -111,6 +121,28 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             }
             checkBeaconsOnNetwork(networks[i], resolved);
         }
+    }
+
+    /// Refuses `BeaconProxyBeaconUndeclared` when `suite` is a beacon proxy and no beacon in `resolved` is its beacon
+    /// on `network`.
+    /// @param suite The suite.
+    /// @param network The network it is required on.
+    /// @param resolved The resolved beacons.
+    function checkBeaconProxyBeaconDeclared(
+        DeploySuite memory suite,
+        SupportedNetwork memory network,
+        ResolvedBeacon[] memory resolved
+    ) internal pure {
+        if (!LibRainDeployMechanism.isBeaconProxy(suite)) {
+            return;
+        }
+        address beacon = LibRainDeployMechanism.cloneTargetOn(suite, network.chainId).implementation;
+        for (uint256 i = 0; i < resolved.length; i++) {
+            if (resolved[i].chainId == network.chainId && resolved[i].beacon.beacon == beacon) {
+                return;
+            }
+        }
+        revert BeaconProxyBeaconUndeclared(suite.suite, network.name, beacon);
     }
 
     /// Each beacon in `resolved` on `network` goes through `checkResolvedBeacon`, in order; the others are not read.

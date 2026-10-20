@@ -10,16 +10,16 @@ import {LibRainDeployMechanism} from "../../src/lib/LibRainDeployMechanism.sol";
 /// @notice The clone declaration's own readers, exposed externally so a plain `Test` contract can
 /// drive them and `vm.expectRevert` lands at the right call depth.
 abstract contract ExternalCloneDeploySuites is RainDeployCloneSuitesBase {
-    /// @return How many clones are declared, refusing an empty list.
-    function externalCheckedCloneDeploysLength() external pure returns (uint256) {
-        return checkedCloneDeploys().length;
+    /// @return How many clones are declared.
+    function externalCloneDeploysLength() external pure returns (uint256) {
+        return cloneDeploys().length;
     }
 
     /// @param index The clone's position in the declared list.
     /// @return The candidate `cloneCandidate` derives from that clone for the supported networks'
     /// chain ids.
     function externalCloneDeployCandidate(uint256 index) external view returns (DeployCandidate memory) {
-        return LibRainDeployMechanism.cloneCandidate(checkedCloneDeploys()[index], supportedChainIds());
+        return LibRainDeployMechanism.cloneCandidate(cloneDeploys()[index], supportedChainIds());
     }
 
     /// @return The chain id of every supported network, in order.

@@ -90,6 +90,14 @@ error FrozenSnapshotMechanismDataAmbiguous(string path);
 /// @param path The record file.
 error FrozenSnapshotMechanismDataMissing(string path);
 
+/// Thrown when a file in the frozen record carries the `BEACON_PROXY` marker more than once.
+/// @param path The record file.
+error FrozenSnapshotBeaconProxyMarkerAmbiguous(string path);
+
+/// Thrown when a file in the frozen record carries the `BEACON_PROXY` marker and declares no `MECHANISM_DATA`.
+/// @param path The record file.
+error FrozenSnapshotBeaconProxyMechanismDataMissing(string path);
+
 /// @title LibRainDeploySnapshot
 /// @notice Which release is being built, where its record lives, and how it is
 /// frozen. Release machinery, not code generation.
@@ -740,36 +748,48 @@ library LibRainDeploySnapshot {
         );
     }
 
-    /// The constants a CLONE snapshot declares below `BYTECODE_HASH`.
+    /// The constants a CLONE or BEACON_PROXY snapshot declares below `BYTECODE_HASH`. A beacon proxy's
+    /// record also carries the `BEACON_PROXY` marker, which is how `recordedMechanism` reads it back.
     /// @param vm The Vm instance for string operations.
-    /// @param deployed Where the local deploy put the clone, in the suite's address order.
-    /// @param suite The clone suite.
+    /// @param deployed Where the local deploy put the suite, in the suite's address order.
+    /// @param suite The clone or beacon proxy suite.
     /// @return The constants, as Solidity source.
     function cloneSnapshotConstants(Vm vm, address[] memory deployed, DeploySuite memory suite)
         internal
         view
         returns (string memory)
     {
+        bool beaconProxy = LibRainDeployMechanism.isBeaconProxy(suite);
         string memory addressConstants;
         string memory mechanismDataComment;
         bytes memory mechanismData;
-        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
+        if (LibRainDeployMechanism.isPerNetwork(suite)) {
             (addressConstants, mechanismData) = perNetworkAddressConstants(vm, deployed, suite);
-            mechanismDataComment = "/// @dev The clone factory call this release was cut with: the\n"
+            mechanismDataComment = beaconProxy
+                ? "/// @dev The beacon proxy factory call this release was cut with: the\n"
+                "/// `abi.encode`d `CloneNetworks` a released suite carries as its\n" "/// `mechanismData`."
+                : "/// @dev The clone factory call this release was cut with: the\n"
                 "/// `abi.encode`d `CloneNetworks` a released suite carries as its\n" "/// `mechanismData`.";
         } else {
             addressConstants = LibCodeGen.addressConstantString(
                 vm,
-                "/// @dev The deterministic deploy address of the EIP-1167 clone, through its\n"
-                "/// factory's open salt.",
+                beaconProxy
+                    ? "/// @dev The deterministic deploy address of the beacon proxy, through its\n"
+                    "/// factory's beacon-proxy open salt."
+                    : "/// @dev The deterministic deploy address of the EIP-1167 clone, through its\n"
+                    "/// factory's open salt.",
                 "DEPLOYED_ADDRESS",
                 deployed[0]
             );
             mechanismData = suite.mechanismData;
-            mechanismDataComment = "/// @dev The clone factory call this release was cut with: the\n"
+            mechanismDataComment = beaconProxy
+                ? "/// @dev The beacon proxy factory call this release was cut with: the\n"
+                "/// `abi.encode`d `CloneTarget` a released suite carries as its\n" "/// `mechanismData`."
+                : "/// @dev The clone factory call this release was cut with: the\n"
                 "/// `abi.encode`d `CloneTarget` a released suite carries as its\n" "/// `mechanismData`.";
         }
         return string.concat(
+            beaconProxy ? BEACON_PROXY_MARKER : "",
             addressConstants,
             LibCodeGen.bytesConstantString(
                 vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", suite.creationCode
@@ -813,7 +833,9 @@ library LibRainDeploySnapshot {
                 LibCodeGen.addressConstantString(
                     vm,
                     string.concat(
-                        "/// @dev The deterministic deploy address of the EIP-1167 clone on chain id\n/// ",
+                        LibRainDeployMechanism.isBeaconProxy(suite)
+                            ? "/// @dev The deterministic deploy address of the beacon proxy on chain id\n/// "
+                            : "/// @dev The deterministic deploy address of the EIP-1167 clone on chain id\n/// ",
                         chainId,
                         ", through its factory's open salt with that network's init data."
                     ),
@@ -1342,6 +1364,16 @@ library LibRainDeploySnapshot {
 
     string constant MECHANISM_DATA_DECLARATION = "bytes constant MECHANISM_DATA =";
 
+    /// The name of the beacon proxy marker. A line holding it anywhere but as the writer's declaration of it is not
+    /// the writer's.
+    string constant BEACON_PROXY_NAME = "BEACON_PROXY";
+
+    string constant BEACON_PROXY_DECLARATION = "bool constant BEACON_PROXY = true;";
+
+    /// The marker a beacon proxy record carries, as the writer emits it.
+    string constant BEACON_PROXY_MARKER = "\n/// @dev Marks a beacon proxy record: its factory call's `implementation` is the\n"
+        "/// beacon.\nbool constant BEACON_PROXY = true;\n";
+
     /// The addresses a frozen record declares as its deploy addresses, and the chain id each is
     /// for.
     /// @param vm The Vm instance for string operations.
@@ -1595,7 +1627,9 @@ library LibRainDeploySnapshot {
         return string(stripped);
     }
 
-    /// The mechanism a frozen record was cut with, read from the declarations the record carries:
+    /// The mechanism a frozen record was cut with, read from the declarations the record carries: `MECHANISM_DATA`
+    /// for a clone or beacon proxy, `DEPLOYED_ADDRESS_<chainId>` for one per network, and the `BEACON_PROXY` marker for
+    /// a beacon proxy.
     /// @param vm The Vm instance for file and string operations.
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
     /// @return The mechanism the record was cut with.
@@ -1603,23 +1637,59 @@ library LibRainDeploySnapshot {
         string[] memory lines = recordLines(vm, path, vm.readFile(path));
         (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, lines);
         uint256 mechanismData = 0;
+        uint256 markers = 0;
+        bytes32 markerHash = keccak256(bytes(BEACON_PROXY_DECLARATION));
         for (uint256 i = 0; i < lines.length; i++) {
             if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {
                 mechanismData++;
             } else if (vm.contains(lines[i], MECHANISM_DATA_NAME)) {
+                revert FrozenSnapshotUnreadable(path);
+            } else if (keccak256(bytes(lines[i])) == markerHash) {
+                markers++;
+            } else if (vm.contains(lines[i], BEACON_PROXY_NAME)) {
                 revert FrozenSnapshotUnreadable(path);
             }
         }
         if (mechanismData > 1) {
             revert FrozenSnapshotMechanismDataAmbiguous(path);
         }
+        if (markers > 1) {
+            revert FrozenSnapshotBeaconProxyMarkerAmbiguous(path);
+        }
         if (mechanismData == 0) {
+            if (markers != 0) {
+                revert FrozenSnapshotBeaconProxyMechanismDataMissing(path);
+            }
             if (chainIds.length != 0) {
                 revert FrozenSnapshotMechanismDataMissing(path);
             }
             return DeployMechanism.Zoltu;
         }
+        if (markers != 0) {
+            return chainIds.length == 0 ? DeployMechanism.BeaconProxy : DeployMechanism.BeaconProxyPerNetwork;
+        }
         return chainIds.length == 0 ? DeployMechanism.Clone : DeployMechanism.ClonePerNetwork;
+    }
+
+    /// @param kind A mechanism.
+    /// @return Whether a suite of it records an address per network.
+    function isPerNetworkKind(DeployMechanism kind) internal pure returns (bool) {
+        return kind == DeployMechanism.ClonePerNetwork || kind == DeployMechanism.BeaconProxyPerNetwork;
+    }
+
+    /// @param kind A mechanism other than `Zoltu`.
+    /// @return Its name as a generated released-suites lib spells it.
+    function mechanismName(DeployMechanism kind) internal pure returns (string memory) {
+        if (kind == DeployMechanism.Clone) {
+            return "DeployMechanism.Clone";
+        }
+        if (kind == DeployMechanism.ClonePerNetwork) {
+            return "DeployMechanism.ClonePerNetwork";
+        }
+        if (kind == DeployMechanism.BeaconProxy) {
+            return "DeployMechanism.BeaconProxy";
+        }
+        return "DeployMechanism.BeaconProxyPerNetwork";
     }
 
     /// The aliased import one record file contributes.
@@ -1630,7 +1700,7 @@ library LibRainDeploySnapshot {
         string memory prefix = releasedConstantPrefix(vm, path);
         DeployMechanism mechanism = recordedMechanism(vm, path);
         return string.concat(
-            mechanism == DeployMechanism.ClonePerNetwork
+            isPerNetworkKind(mechanism)
                 ? string("import {\n    ")
                 : string.concat("import {\n    DEPLOYED_ADDRESS as ", prefix, "_DEPLOYED_ADDRESS,\n    "),
             "BYTECODE_HASH as ",
@@ -1698,17 +1768,11 @@ library LibRainDeploySnapshot {
         string memory mechanism;
         {
             DeployMechanism kind = recordedMechanism(vm, path);
-            storedDeployedAddress = kind == DeployMechanism.ClonePerNetwork
-                ? string("address(0)")
-                : string.concat(prefix, "_DEPLOYED_ADDRESS");
+            storedDeployedAddress =
+                isPerNetworkKind(kind) ? string("address(0)") : string.concat(prefix, "_DEPLOYED_ADDRESS");
             mechanism = kind == DeployMechanism.Zoltu
                 ? string("DeployMechanism.Zoltu,\n            mechanismData: \"\"")
-                : string.concat(
-                    kind == DeployMechanism.Clone ? "DeployMechanism.Clone" : "DeployMechanism.ClonePerNetwork",
-                    ",\n            mechanismData: ",
-                    prefix,
-                    "_MECHANISM_DATA"
-                );
+                : string.concat(mechanismName(kind), ",\n            mechanismData: ", prefix, "_MECHANISM_DATA");
         }
         string memory head = string.concat(
             "        suites[",

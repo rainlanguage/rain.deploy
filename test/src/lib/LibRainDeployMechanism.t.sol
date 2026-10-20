@@ -869,7 +869,7 @@ contract LibRainDeployMechanismTest is Test {
         networks[1] = LibRainDeploy.ARBITRUM_ONE;
         assertEq(
             LibRainDeployMechanism.unverifiableSourceNotice(vm, networks, 0x1234567890AbcdEF1234567890aBcdef12345678),
-            "no verify command: the Zoltu entry carries the clone artifact path; verify the source at 0x1234567890AbcdEF1234567890aBcdef12345678 by hand on base arbitrum"
+            "no verify command: the Zoltu entry carries a factory proxy artifact path; verify the source at 0x1234567890AbcdEF1234567890aBcdef12345678 by hand on base arbitrum"
         );
     }
 

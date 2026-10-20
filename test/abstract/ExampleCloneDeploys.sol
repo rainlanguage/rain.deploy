@@ -84,7 +84,7 @@ abstract contract ExampleCloneDeploys is RainDeployCloneSuitesBase {
     }
 
     /// @inheritdoc RainDeployCloneSuitesBase
-    function cloneDeploys() internal pure override returns (CloneDeploy[] memory) {
+    function cloneDeploys() internal pure virtual override returns (CloneDeploy[] memory) {
         CloneDeploy[] memory clones = new CloneDeploy[](2);
         clones[0] = CloneDeploy({
             suite: "example-clone",
