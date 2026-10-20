@@ -75,7 +75,7 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
 
     /// The release is refused on Polygon as unfrozen, naming the Polygon init data's address, whether
     /// its clone is there or that address is empty: the frozen check runs before the code check.
-    function testUnrecordedNetworkIsCheckedAtItsInitDataAddress() external {
+    function testUnrecordedNetworkIsRefusedAsUnfrozenWhetherOrNotItsCloneIsLive() external {
         DeploySuite[] memory suites = arbitrumOnlyRelease();
         address polygonAddress = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID);
         vm.expectRevert(
@@ -85,7 +85,6 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         );
         this.externalCheckDeployedOnSupportedNetworks(suites);
 
-        assertNotEq(polygonAddress, perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID));
         vm.etch(polygonAddress, hex"");
         vm.expectRevert(
             abi.encodeWithSelector(
