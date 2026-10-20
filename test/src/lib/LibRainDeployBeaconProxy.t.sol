@@ -19,6 +19,7 @@ import {
 } from "../../../src/lib/LibRainDeployBeaconProxy.sol";
 import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
 import {MockCloneableV2} from "../../concrete/MockCloneableV2.sol";
+import {MockDirtyOwnerCloneable} from "../../concrete/MockDirtyOwnerCloneable.sol";
 import {MockMisansweringOwnerCloneable} from "../../concrete/MockMisansweringOwnerCloneable.sol";
 import {MockOriginOwnedCloneable} from "../../concrete/MockOriginOwnedCloneable.sol";
 
@@ -254,5 +255,22 @@ contract LibRainDeployBeaconProxyTest is Test {
         assertEq(answered, short);
         assertEq(owner.length, short ? 0x1f : 0x20);
         assertEq(owner, short ? owner : abi.encode(deployer));
+    }
+
+    /// A proxy whose `owner()` word holds the deploy key in its address bits is refused whatever bits sit above it.
+    function testBeaconProxyDeployStepRefusesTheDeployKeyUnderDirtyHighBits(uint96 high) external {
+        vm.assume(high != 0);
+        address deployer = address(0xD3910E8);
+        MockBeaconProxyFactory factory = new MockBeaconProxyFactory();
+        address beacon = address(new UpgradeableBeacon(address(new MockDirtyOwnerCloneable()), address(this)));
+        CloneTarget memory target =
+            CloneTarget({factory: address(factory), implementation: beacon, data: abi.encode(high), salt: TEST_SALT});
+        address expected = LibRainDeployBeaconProxy.beaconProxyDeployedAddress(target);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployBeaconProxy.BeaconProxySeatsDeployKey.selector, LibRainDeploy.ARBITRUM_ONE, expected
+            )
+        );
+        this.externalBeaconProxyDeployStep(LibRainDeploy.ARBITRUM_ONE, deployer, abi.encode(target));
     }
 }

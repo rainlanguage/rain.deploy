@@ -233,6 +233,20 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
         string memory record = vm.readFile(path);
         assertEq(occurrences(record, MARKER_LINE), 1);
         assertEq(uint256(this.externalRecordedMechanism(path)), uint256(DeployMechanism.BeaconProxy));
+        assertTrue(
+            vm.contains(
+                record,
+                "/// @dev The deterministic deploy address of the beacon proxy, through its\n/// factory's beacon-proxy open salt."
+            )
+        );
+        assertTrue(
+            vm.contains(
+                record,
+                "/// @dev The beacon proxy factory call this release was cut with: the\n/// `abi.encode`d `CloneTarget`"
+            )
+        );
+        assertFalse(vm.contains(record, "EIP-1167"));
+        assertFalse(vm.contains(record, "clone factory"));
 
         string memory imported = LibRainDeploySnapshot.releasedImport(vm, path);
         assertTrue(vm.contains(imported, "DEPLOYED_ADDRESS as BeaconProxyRecord_0_0_1_DEPLOYED_ADDRESS"));
@@ -255,6 +269,20 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
         string memory record = vm.readFile(path);
         assertEq(occurrences(record, MARKER_LINE), 1);
         assertEq(uint256(this.externalRecordedMechanism(path)), uint256(DeployMechanism.BeaconProxyPerNetwork));
+        assertTrue(
+            vm.contains(record, "/// @dev The deterministic deploy address of the beacon proxy on chain id\n/// 42161,")
+        );
+        assertTrue(
+            vm.contains(record, "/// @dev The deterministic deploy address of the beacon proxy on chain id\n/// 137,")
+        );
+        assertTrue(
+            vm.contains(
+                record,
+                "/// @dev The beacon proxy factory call this release was cut with: the\n/// `abi.encode`d `CloneNetworks`"
+            )
+        );
+        assertFalse(vm.contains(record, "EIP-1167"));
+        assertFalse(vm.contains(record, "clone factory"));
 
         string memory imported = LibRainDeploySnapshot.releasedImport(vm, path);
         assertFalse(vm.contains(imported, "DEPLOYED_ADDRESS as"));
