@@ -36,8 +36,11 @@ contract BeaconOwnerDeploy is ExampleDeploy {
     }
 
     /// @param suite The suite to check.
+    /// @param networks The networks the broadcast reaches.
     /// @param deployer The deploy key's address.
-    function externalCheckSeatsNoDeployKey(DeploySuite memory suite, address deployer) external {
-        checkSeatsNoDeployKey(suite, deployer);
+    function externalCheckSeatsNoDeployKey(DeploySuite memory suite, string[] memory networks, address deployer)
+        external
+    {
+        checkSeatsNoDeployKey(suite, networks, deployer);
     }
 }

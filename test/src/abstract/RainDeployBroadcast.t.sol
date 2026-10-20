@@ -37,7 +37,9 @@ import {MockOriginRevertingOwner} from "../../concrete/MockOriginRevertingOwner.
 import {MockOriginOwnedCloneable} from "../../concrete/MockOriginOwnedCloneable.sol";
 import {MockChainOriginOwned} from "../../concrete/MockChainOriginOwned.sol";
 import {MockRawOwner} from "../../concrete/MockRawOwner.sol";
-import {OriginOwnedCloneDeploy} from "../../concrete/OriginOwnedCloneDeploy.sol";
+import {OriginOwnedCloneDeploy, originOwnedCloneSetup} from "../../concrete/OriginOwnedCloneDeploy.sol";
+import {ArbitrumSupportedBeaconOwnerDeploy} from "../../concrete/ArbitrumSupportedBeaconOwnerDeploy.sol";
+import {MockChainGatedCall} from "../../concrete/MockChainGatedCall.sol";
 import {SingleNetworkBeaconOwnerDeploy} from "../../concrete/SingleNetworkBeaconOwnerDeploy.sol";
 import {
     CLONE_ARTIFACT_PATH,
@@ -677,14 +679,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
 
     function testBroadcastOfASuiteSeatingAnotherReachesTheNetworkRefusal() external {
         BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
-        bytes memory creationCode =
-            abi.encodePacked(type(UpgradeableBeacon).creationCode, abi.encode(address(deploy), address(0xB0B)));
-        DeploySuite memory suite = LibBeaconTest.zoltuSuite(
-            "beacon@0_0_1",
-            creationCode,
-            type(UpgradeableBeacon).runtimeCode,
-            "dependencies/@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon"
-        );
+        DeploySuite memory suite = LibBeaconTest.beaconSuite("beacon@0_0_1", address(deploy), address(0xB0B));
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         deploy.externalBroadcastSuite(suite, new string[](0), 1);
     }
@@ -703,17 +698,31 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
 
     function testSeatCheckLeavesNothingDeployed() external {
         BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
-        bytes memory creationCode =
-            abi.encodePacked(type(UpgradeableBeacon).creationCode, abi.encode(address(deploy), address(0xB0B)));
-        DeploySuite memory suite = LibBeaconTest.zoltuSuite(
-            "beacon@0_0_1",
-            creationCode,
-            type(UpgradeableBeacon).runtimeCode,
-            "dependencies/@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon"
-        );
-        deploy.externalCheckSeatsNoDeployKey(suite, vm.addr(1));
+        DeploySuite memory suite = LibBeaconTest.beaconSuite("beacon@0_0_1", address(deploy), address(0xB0B));
+        address dependency = address(0xDE9);
+        assertEq(dependency.code.length, 0);
+        suite.dependencies = new DeployDependency[](1);
+        suite.dependencies[0] = DeployDependency({deployedAddress: dependency, runtimeCode: hex"00"});
+        bytes32 factoryCodeHash = LibRainDeploy.ZOLTU_FACTORY.codehash;
+        deploy.externalCheckSeatsNoDeployKey(suite, new string[](0), vm.addr(1));
         assertEq(suite.storedDeployedAddress.code.length, 0);
+        assertEq(dependency.code.length, 0);
+        assertEq(LibRainDeploy.ZOLTU_FACTORY.codehash, factoryCodeHash);
         assertEq(block.chainid, 31337);
+    }
+
+    function testBroadcastRefusesASuiteWhoseConstructorRevertsLocallyUnderOneSupportedChainId() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = LibBeaconTest.zoltuSuite(
+            "chain-gated-call@0_0_1",
+            abi.encodePacked(type(MockChainGatedCall).creationCode, abi.encode(uint256(8453), address(0xC0FFEE))),
+            type(MockChainGatedCall).runtimeCode,
+            "test/concrete/MockChainGatedCall.sol:MockChainGatedCall"
+        );
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, false, address(0)));
+        deploy.externalBroadcastSuite(suite, networks, 1);
     }
 
     function originOwnedCloneSuite(address arbitrumOwner, address baseOwner)
@@ -721,13 +730,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         pure
         returns (DeploySuite memory)
     {
-        address factory = LibRainDeploy.zoltuAddress(type(MockCloneFactory).creationCode);
-        address implementation = LibRainDeploy.zoltuAddress(type(MockOriginOwnedCloneable).creationCode);
-        DeployDependency[] memory dependencies = new DeployDependency[](2);
-        dependencies[0] = DeployDependency({deployedAddress: factory, runtimeCode: type(MockCloneFactory).runtimeCode});
-        dependencies[1] = DeployDependency({
-            deployedAddress: implementation, runtimeCode: type(MockOriginOwnedCloneable).runtimeCode
-        });
+        (address factory, address implementation, DeployDependency[] memory dependencies) = originOwnedCloneSetup();
         CloneNetworks memory clones = CloneNetworks({
             factory: factory, implementation: implementation, salt: bytes32(uint256(7)), networks: new CloneNetwork[](2)
         });
@@ -863,7 +866,40 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
     function testBroadcastRefusesASuiteSeatingTheDeployKeyOnANetworkTheDispatchDoesNotReach() external {
         SingleNetworkBeaconOwnerDeploy deploy = new SingleNetworkBeaconOwnerDeploy();
         DeploySuite memory suite = chainOriginOwnedSuite(4663);
+        string[] memory networks = deploy.externalDeployNetworks();
         vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, suite.storedDeployedAddress));
+        deploy.externalBroadcastSuite(suite, networks, 1);
+    }
+
+    function testBroadcastRefusesASuiteSeatingTheDeployKeyOnADispatchedNetworkOutsideSupportedNetworks() external {
+        ArbitrumSupportedBeaconOwnerDeploy deploy = new ArbitrumSupportedBeaconOwnerDeploy();
+        DeploySuite memory suite = chainOriginOwnedSuite(8453);
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.BASE;
+        vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, suite.storedDeployedAddress));
+        deploy.externalBroadcastSuite(suite, networks, 1);
+    }
+
+    function testBroadcastOfASuiteSeatingTheDeployKeyOffItsSupportedAndDispatchedNetworksReachesTheNetworkRefusal()
+        external
+    {
+        ArbitrumSupportedBeaconOwnerDeploy deploy = new ArbitrumSupportedBeaconOwnerDeploy();
+        DeploySuite memory suite = chainOriginOwnedSuite(8453);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function testSeatCheckReadsAOneNetworkCloneSuiteOnlyUnderItsOwnNetwork() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = originOwnedCloneSuite(address(0xB0B), address(0xB0B));
+        CloneNetworks memory clones = abi.decode(suite.mechanismData, (CloneNetworks));
+        CloneNetwork memory arbitrum = clones.networks[0];
+        clones.networks = new CloneNetwork[](1);
+        clones.networks[0] = arbitrum;
+        suite.mechanismData = abi.encode(clones);
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        deploy.externalCheckSeatsNoDeployKey(suite, networks, vm.addr(1));
     }
 }

@@ -10,10 +10,12 @@ import {DerivationSnapshotRevertFailed, LibRainDeployMechanism} from "../lib/Lib
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {ChainBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
 
-/// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with the deploy key. Roles,
-/// pending owners, admin slots and contracts the suite's constructors create are not read.
+/// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with a first word whose low
+/// 160 bits are the deploy key. Roles, pending owners, admin slots and contracts the suite's constructors create are
+/// not read.
 /// @param suite The suite being broadcast.
-/// @param deployed The address, deployed locally as the deploy key would, that answers `owner()` with the deploy key.
+/// @param deployed The address, deployed locally as the deploy key would, that answers `owner()` with a first word
+/// whose low 160 bits are the deploy key.
 error SuiteSeatsDeployKey(string suite, address deployed);
 
 /// @notice The deploy key MUST NOT be a declared owner of any state of any beacon.
@@ -100,24 +102,42 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             }
         }
         DeploySuite memory broadcast = onSupportedNetworks(suite);
-        checkSeatsNoDeployKey(broadcast, deployer);
+        checkSeatsNoDeployKey(broadcast, networks, deployer);
         return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, broadcast);
     }
 
     /// Deploys `suite` locally with `deployer` as sender and origin, once under each target's chain id, and refuses
     /// `SuiteSeatsDeployKey` when the target deployed for that chain id answers `owner()` with a first word whose
     /// low 160 bits are `deployer`. The targets are a per-network clone suite's networks, otherwise every one of
-    /// `supportedNetworks()`, those this broadcast does not reach included, so one network seating the deploy key
-    /// refuses the broadcast to every network.
+    /// `supportedNetworks()`, those this broadcast does not reach included, then each of `networks` not among them,
+    /// so one network seating the deploy key refuses the broadcast to every network. The suite's constructor runs
+    /// on the local EVM with only its declared dependencies etched, so it MUST succeed there under each target's
+    /// chain id: one that reverts locally (say, by calling an undeclared contract under one chain id) refuses the
+    /// broadcast to every network with its revert.
     /// @param suite The suite to broadcast, in its `onSupportedNetworks` form.
+    /// @param networks The networks this broadcast reaches.
     /// @param deployer The deploy key's address.
-    function checkSeatsNoDeployKey(DeploySuite memory suite, address deployer) internal {
+    function checkSeatsNoDeployKey(DeploySuite memory suite, string[] memory networks, address deployer) internal {
         uint256[] memory chainIds = LibRainDeployMechanism.addressChainIds(suite);
         if (chainIds.length == 0) {
             SupportedNetwork[] memory supported = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
-            chainIds = new uint256[](supported.length);
+            SupportedNetwork[] memory dispatched = LibRainDeploy.declaredNetworkConfigs(networks);
+            uint256 count = supported.length;
+            for (uint256 i = 0; i < dispatched.length; i++) {
+                if (!LibRainDeploy.hasChainId(supported, dispatched[i].chainId)) {
+                    count++;
+                }
+            }
+            chainIds = new uint256[](count);
             for (uint256 i = 0; i < supported.length; i++) {
                 chainIds[i] = supported[i].chainId;
+            }
+            count = supported.length;
+            for (uint256 i = 0; i < dispatched.length; i++) {
+                if (!LibRainDeploy.hasChainId(supported, dispatched[i].chainId)) {
+                    chainIds[count] = dispatched[i].chainId;
+                    count++;
+                }
             }
         }
         for (uint256 i = 0; i < chainIds.length; i++) {

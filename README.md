@@ -333,8 +333,9 @@ beacon names MUST be released, refused otherwise with `BeaconSuiteNotReleased`:
 a candidate's address moves with its source. Name a beacon that is itself a
 released suite by its suite key in `beaconSuite`, and any other (one a
 set-deployer `new`s, nonce-deployed per chain, or one deployed elsewhere) by
-both `beacon` and `beaconCodeHash`; naming it both ways is refused with
-`BeaconNamedTwice`, and naming it by neither, or by only one of `beacon` and
+both `beacon` and `beaconCodeHash`; naming it by `beaconSuite` and by either
+`beacon` or `beaconCodeHash` is refused with `BeaconNamedTwice`, and naming it
+by neither, or, without `beaconSuite`, by only one of `beacon` and
 `beaconCodeHash`, with `BeaconUnnamed`. A beacon whose chain id is not one of
 `supportedNetworks()`, in the catalogue or not, is refused with
 `BeaconOnUncheckedNetwork`, and a second declaration of a beacon on its network
@@ -349,23 +350,31 @@ below, are raised offline for every beacon by the Beacons group
 forked, for the beacons on the networks it checks; `BeaconOnUncheckedNetwork`
 there covers every beacon. A beacon with transitions reads `MigrationRegistry`
 on its network, which MUST be deployed there. The chain group reads `owner()`,
-and refuses a beacon that answers `pendingOwner()` with anything but zero with
+and refuses a beacon that answers `pendingOwner()` with one nonzero word with
 `BeaconPendingOwner`, or with data that is not one word with
-`BeaconPendingOwnerUnreadable`: a two-step handover is red from
-`transferOwnership` until the batch that accepts it applies its migration.
-Assert any other authority a beacon exposes (roles) yourself, including that the
-deploy key holds none of it. The deploy key is never a declared owner of any
-state, past states included, and a broadcast whose key is one is refused with
-`BeaconOwnedByDeployKey` before any network is read. A beacon that was owned by
-a deploy key and has since been handed over declares its post-handover state as
-`initial`, with no transition for the handover. A broadcast is also refused
-before any network is read when its suite, deployed locally with the deploy key
-as sender and origin under each network's chain id, answers `owner()` with a
-first word naming the deploy key (`SuiteSeatsDeployKey`); seat governance from
-the first state. That check reads `owner()` only, on every supported network
-(every network's clone of a per-network suite), the networks the broadcast does
-not reach included: roles, pending owners, admin slots and contracts a
-constructor creates are not read, so assert those yourself.
+`BeaconPendingOwnerUnreadable`; a `pendingOwner()` that reverts or returns
+nothing passes. A two-step handover is red from `transferOwnership` until the
+batch that accepts it applies its migration. Assert any other authority a beacon
+exposes (roles) yourself, including that the deploy key holds none of it. The
+deploy key is never a declared owner of any state, past states included, and a
+broadcast whose key is one is refused with `BeaconOwnedByDeployKey` before any
+network is read. A beacon named by `beacon` and `beaconCodeHash` that was owned
+by a deploy key and has since been handed over declares its post-handover state
+as `initial`, with no transition for the handover. A beacon named by
+`beaconSuite` declares as `initial` the owner its suite seats
+(`BeaconSeatedOwner` holds it there), so a released beacon suite that seated the
+deploy key is declared by `beacon` and `beaconCodeHash`. A broadcast is also
+refused before any network is read when its suite, deployed locally with the
+deploy key as sender and origin under each target's chain id, answers `owner()`
+with a first word naming the deploy key (`SuiteSeatsDeployKey`); seat governance
+from the first state. The targets are each supported network, the networks the
+broadcast does not reach included, and each network it reaches that is not
+supported or, for a per-network clone suite, each of its own networks (its
+candidate's added networks included). The suite's constructor runs on the local
+EVM with only its declared dependencies etched, so it MUST succeed there under
+each target's chain id: one that reverts locally refuses the broadcast to every
+network. That check reads `owner()` only: roles, pending owners, admin slots and
+contracts a constructor creates are not read, so assert those yourself.
 
 Declare transitions in the order their migrations are applied: each applied
 transition's record MUST reach the latest earlier-declared applied one through
@@ -379,13 +388,15 @@ in another line names the earlier one, or a record after it, as a prerequisite.
 The order walk is unbounded and costs a fork read per record it reaches: apply
 each transition onto the previous transition's migration as its line's head or,
 when it is written in another line, name it as a prerequisite, so the walk reads
-one record; every migration applied between two transitions in one line is read.
-Apply a transition's migration in the same transaction as the beacon change it
-describes (one Safe batch: `upgradeTo` or `transferOwnership`, then
-`applyMigrationV3`; for an `Ownable2Step` beacon the handover's migration goes
-in the batch that calls `acceptOwnership`, as `owner()` moves only then).
-Between two separate transactions the chain group refuses the network, as the
-chain and the registry disagree.
+one record. Otherwise it reads every record reachable from the later transition,
+across lines, in fewer steps than the earlier one, and every reachable record
+back to each line's genesis when the earlier one is not reached. Apply a
+transition's migration in the same transaction as the beacon change it describes
+(one Safe batch: `upgradeTo` or `transferOwnership`, then `applyMigrationV3`;
+for an `Ownable2Step` beacon the handover's migration goes in the batch that
+calls `acceptOwnership`, as `owner()` moves only then). Between two separate
+transactions the chain group refuses the network, as the chain and the registry
+disagree.
 
 ## Deploy verification
 

@@ -10,6 +10,20 @@ import {DeployDependency, LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {MockCloneFactory} from "./MockCloneFactory.sol";
 import {MockOriginOwnedCloneable} from "./MockOriginOwnedCloneable.sol";
 
+/// The `origin-owned-clone` factory and implementation, each a declared dependency.
+/// @return The factory.
+/// @return The implementation.
+/// @return The factory and the implementation as dependencies, in that order.
+function originOwnedCloneSetup() pure returns (address, address, DeployDependency[] memory) {
+    address factory = LibRainDeploy.zoltuAddress(type(MockCloneFactory).creationCode);
+    address implementation = LibRainDeploy.zoltuAddress(type(MockOriginOwnedCloneable).creationCode);
+    DeployDependency[] memory dependencies = new DeployDependency[](2);
+    dependencies[0] = DeployDependency({deployedAddress: factory, runtimeCode: type(MockCloneFactory).runtimeCode});
+    dependencies[1] =
+        DeployDependency({deployedAddress: implementation, runtimeCode: type(MockOriginOwnedCloneable).runtimeCode});
+    return (factory, implementation, dependencies);
+}
+
 /// The init data of the `origin-owned-clone` candidate: Base's clone seats its initialization's origin, every
 /// other network's seats `0xB0B`.
 /// @param chainId The network's chain id.
@@ -37,13 +51,7 @@ contract OriginOwnedCloneDeploy is RainDeployCloneSuitesBase, RainDeployBroadcas
 
     /// @inheritdoc RainDeployCloneSuitesBase
     function cloneDeploys() internal pure override returns (CloneDeploy[] memory) {
-        address factory = LibRainDeploy.zoltuAddress(type(MockCloneFactory).creationCode);
-        address implementation = LibRainDeploy.zoltuAddress(type(MockOriginOwnedCloneable).creationCode);
-        DeployDependency[] memory dependencies = new DeployDependency[](2);
-        dependencies[0] = DeployDependency({deployedAddress: factory, runtimeCode: type(MockCloneFactory).runtimeCode});
-        dependencies[1] = DeployDependency({
-            deployedAddress: implementation, runtimeCode: type(MockOriginOwnedCloneable).runtimeCode
-        });
+        (address factory, address implementation, DeployDependency[] memory dependencies) = originOwnedCloneSetup();
         CloneDeploy[] memory clones = new CloneDeploy[](1);
         clones[0] = CloneDeploy({
             suite: "origin-owned-clone",

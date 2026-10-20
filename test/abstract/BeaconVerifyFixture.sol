@@ -73,11 +73,8 @@ abstract contract BeaconVerifyFixture is RainDeployVerifyBase {
             type(MockDeployable).runtimeCode,
             "test/concrete/MockDeployable.sol:MockDeployable"
         );
-        released[2] = LibBeaconTest.zoltuSuite(
-            "beacon@0_0_1",
-            beaconCreationCode(),
-            type(UpgradeableBeacon).runtimeCode,
-            "dependencies/@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon"
+        released[2] = LibBeaconTest.beaconSuite(
+            "beacon@0_0_1", LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode), OWNER
         );
         released[2].dependencies = new DeployDependency[](1);
         released[2].dependencies[0] =
@@ -102,10 +99,10 @@ abstract contract BeaconVerifyFixture is RainDeployVerifyBase {
 
     /// @return The `beacon@0_0_1` creation code: a beacon at the implementation suite, owned by `OWNER`.
     function beaconCreationCode() internal pure returns (bytes memory) {
-        return abi.encodePacked(
-            type(UpgradeableBeacon).creationCode,
-            abi.encode(LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode), OWNER)
-        );
+        return LibBeaconTest.beaconSuite(
+            "beacon@0_0_1", LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode), OWNER
+        )
+        .creationCode;
     }
 
     /// @inheritdoc RainDeploySuitesBase

@@ -2,7 +2,6 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {
     BeaconDeclaredTwice,
     BeaconNamedTwice,
@@ -59,12 +58,7 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
         DeploySuite[] memory released = new DeploySuite[](2);
         released[0] = implementation("implementation@0_0_1");
         address implementationAddress = released[0].storedDeployedAddress;
-        released[1] = LibBeaconTest.zoltuSuite(
-            "beacon@0_0_1",
-            abi.encodePacked(type(UpgradeableBeacon).creationCode, abi.encode(implementationAddress, OWNER)),
-            type(UpgradeableBeacon).runtimeCode,
-            "dependencies/@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol:UpgradeableBeacon"
-        );
+        released[1] = LibBeaconTest.beaconSuite("beacon@0_0_1", implementationAddress, OWNER);
         released[1].dependencies = new DeployDependency[](1);
         released[1].dependencies[0] =
             DeployDependency({deployedAddress: implementationAddress, runtimeCode: type(MockDeployable).runtimeCode});
