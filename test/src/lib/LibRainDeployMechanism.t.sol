@@ -1078,6 +1078,16 @@ contract LibRainDeployMechanismTest is Test {
         this.externalWithExtendedNetworks(release, polygonAt(TEST_DATA));
     }
 
+    /// An extended network the release already records is refused as a duplicate even at an address its init data
+    /// does not derive.
+    function testExtendedNetworkTheReleaseRecordsAtAnotherAddressIsRefusedAsADuplicate() external {
+        DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));
+        CloneNetwork[] memory extension = new CloneNetwork[](1);
+        extension[0] = CloneNetwork({chainId: 42161, data: TEST_DATA, deployedAddress: address(0xdead)});
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.DuplicateCloneNetwork.selector, uint256(42161)));
+        this.externalWithExtendedNetworks(release, extension);
+    }
+
     /// An extended network keeps its own init data when the candidate's for that network differs.
     function testExtendedNetworkIsNotTakenFromTheCandidate() external view {
         DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));

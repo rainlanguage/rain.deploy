@@ -62,8 +62,9 @@ error ExtendedNetworksUnexpected(string suite);
 /// @param extendedAddress The address it declares.
 error ExtendedNetworkAddressMismatch(string suite, uint256 chainId, address derivedAddress, address extendedAddress);
 
-/// Thrown when a per-network release is live, or about to be broadcast, on a network it neither records nor declares
-/// as extended, at the address its candidate's current init data derives.
+/// Thrown when a per-network release is checked on, or about to be broadcast to, a network it neither records nor
+/// declares as extended, whether or not anything is live at the address its candidate's current init data derives
+/// there.
 /// At broadcast that address is what the candidate's data derives now, not necessarily where the release is live: a
 /// release already broadcast there is declared with the init data it was broadcast with, from its `NewClone` event.
 /// @param suite The release's suite key.
@@ -301,6 +302,7 @@ library LibRainDeployMechanism {
             networks[recorded + i] = extended[i];
         }
         clones.networks = networks;
+        LibRainDeployClone.checkCloneNetworks(clones, suite.dependencies);
         for (uint256 i = recorded; i < networks.length; i++) {
             address derived = LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(clones, i));
             if (derived != networks[i].deployedAddress) {
@@ -309,7 +311,6 @@ library LibRainDeployMechanism {
                 );
             }
         }
-        LibRainDeployClone.checkCloneNetworks(clones, suite.dependencies);
         return withMechanismData(suite, abi.encode(clones));
     }
 
@@ -563,7 +564,8 @@ library LibRainDeployMechanism {
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param networks The networks to broadcast to.
     /// @param deployerPrivateKey The key to broadcast as.
-    /// @param frozen The release with its extended networks.
+    /// @param frozen The release with its extended networks. Their record is not read here: the caller holds them to it,
+    /// as `RainDeploySuitesBase.withExtendedNetworks` does.
     /// @param candidate The release's candidate, or `frozen` when it has none.
     /// @return Where the suite is on each network, positionally paired with `networks`.
     /// @return The fork each network was deployed on.
