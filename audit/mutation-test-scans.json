@@ -139,8 +139,7 @@
       ],
       "alreadyFiled": []
     }
-  }
-,
+  },
   {
     "timestamp": "2026-10-05T09:05:00Z",
     "commit": "f08ee42c6dbdb0f3daa82deae208e9ceccd37103",
@@ -162,8 +161,13 @@
       "nonTerminating": 0,
       "candidates": 3,
       "confirmed": 3,
-      "filed": [255, 256],
-      "alreadyFiled": [249]
+      "filed": [
+        255,
+        256
+      ],
+      "alreadyFiled": [
+        249
+      ]
     },
     "notes": [
       "Base attribution pass at f08ee42 probed 12 mutants over the pre-existing behaviours that are single-edit mutatable; 12/12 KILLED, every one by a test already on main, baseline green at 27. No pre-existing gap was found, so the tests this run added are additive rather than covering for main.",
@@ -195,7 +199,9 @@
       "candidates": 0,
       "confirmed": 0,
       "filed": [],
-      "alreadyFiled": [264]
+      "alreadyFiled": [
+        264
+      ]
     },
     "notes": [
       "Narrowed to the L01 fix, so commit and testsAfterCommit are the same tree: the tests are part of the change under test and the units did not exist before it. killedByExistingTests is 0 and gapsFilled is 0 for that reason, not because nothing was probed — 13 of 13 behaviours were probed and all 13 KILLED. The matrix establishes that each new test discriminates, not which pre-existing test covered what, and no attribution pass was possible.",
@@ -349,6 +355,30 @@
       "Fork tests need RPC URLs, which were not available: the tests failing at baseline on missing *_RPC_URL were excluded by name, and LibSafeTest (whose setUp forks) by contract. The name filter also drops one test that passes offline (testSuitesLiveOnEverySupportedNetwork in a contract that does not fork), so the probe suite is 863 rather than 864 at the scanned commit. CI on testsAfterCommit passes in full, testSuitesLiveOnEverySupportedNetwork included, so the V3 MigrationRegistry is live.",
       "testVersionAheadOfTheNewestFrozenReleaseIsRefused was also added at testsAfterCommit. It covers the test-code helper externalCheckVersionIsNewestRelease, which is outside the mutation targets because it is test code.",
       "Adversarial pass: codeRecordIndex was checked against its NatSpec (first whole-file-name match, else length), and the drop check against version order rather than text order (the keeps fixture runs 0_1_9 to 0_1_10 to 0_1_12); no candidate bug."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T11:09:04Z",
+    "commit": "49c65bfd215c8f1987c6c9fceda894fc1f453e1f",
+    "testsAfterCommit": "368ff22198d8546b135a6667a96acb0cbbabfddd",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 107,
+    "scope": "PR #317 (release 0.1.19), the two test-side release guards rain-marvin found weak at 49c65bf: the successor choice in LibRainDeploySnapshotTest.externalCheckNoReleaseDropsAContract, and RegistryDeployVerifyTest.checkFrozenCodeRecordsDeploy (factored out of testEveryFrozenCodeRecordDeploysItsRecordedHash at 368ff22)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behavioursProbed": 11,
+      "killedByExistingTests": 0,
+      "gapsFilled": 2,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "The pre-existing-suite pass is rain-marvin's audit of 49c65bf, which probed both guards and reported two survivors: the greatest-following-tag swap in externalCheckNoReleaseDropsAContract, and the tautology assertEq(deployed.codehash, keccak256(deployed.code)) in testEveryFrozenCodeRecordDeploysItsRecordedHash. They were not re-probed here at 49c65bf. Gaps filled at testsAfterCommit by LibRainDeploySnapshotTest.testReleaseDroppingAContractALaterReleaseRestoresIsRefused (0_1_9 {A,B}, 0_1_10 {A}, 0_1_12 {A,B} refused as ReleaseDropsContract(0_1_10, B)) and RegistryDeployVerifyTest.testFrozenCodeRecordDeployingOtherCodeIsRefused (the real 0_1_19 TimelockController record with only CREATION_CODE swapped for MockTimelockControllerGeneration's, consistent per checkFrozenCodeRecord, refused as FrozenCodeRecordDeploysOtherCode with the mock's runtime hash).",
+      "11 mutants probed with mutation-probe at testsAfterCommit against RegistryDeployVerifyTest and LibRainDeploySnapshotTest (baseline green at 107, fork tests excluded by name): 11/11 KILLED, including both survivors rain-marvin reported. These targets are test-code helpers; the oracles are the separate fixture tests, so no target co-mutates its expectation.",
+      "Adversarial pass: the deploy check now reverts on a codehash mismatch only; a failed create leaves address(0), whose codehash is 0 and never a recorded hash, so a non-deploying record is refused with deployed hash 0. No candidate bug."
     ]
   }
 ]
