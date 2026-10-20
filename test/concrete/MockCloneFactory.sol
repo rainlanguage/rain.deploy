@@ -12,6 +12,7 @@ contract MockCloneFactory is ICloneableFactoryV4 {
     /// @inheritdoc ICloneableFactoryV4
     function cloneDeterministicOpenSalt(address implementation, bytes calldata data, bytes32 salt)
         external
+        virtual
         returns (address)
     {
         return LibICloneableFactoryV4.cloneDeterministicOpenSalt(implementation, data, salt);
@@ -21,13 +22,18 @@ contract MockCloneFactory is ICloneableFactoryV4 {
     function predictDeterministicAddressOpenSalt(address implementation, bytes calldata data, bytes32 salt)
         external
         view
+        virtual
         returns (address)
     {
         return LibICloneableFactoryV4.predictDeterministicAddressOpenSalt(implementation, data, salt);
     }
 
     /// @inheritdoc ICloneableFactoryV3
-    function cloneDeterministic(address implementation, bytes calldata data, bytes32 salt) external returns (address) {
+    function cloneDeterministic(address implementation, bytes calldata data, bytes32 salt)
+        external
+        virtual
+        returns (address)
+    {
         return LibICloneableFactoryV4.cloneDeterministic(implementation, data, salt);
     }
 
@@ -35,6 +41,7 @@ contract MockCloneFactory is ICloneableFactoryV4 {
     function predictDeterministicAddress(address implementation, bytes32 salt, address deployer)
         external
         view
+        virtual
         returns (address)
     {
         return LibICloneableFactoryV4.predictDeterministicAddress(implementation, salt, deployer);
