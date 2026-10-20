@@ -44,10 +44,11 @@ the value the function returns.
   check never holds fewer than five tokens: an unwrapped line holding exactly
   four takes the wrapped branch, and a wrapped line's four-space prefix splits
   into four empty tokens before its value.
-- `RainDeployVerifySnapshotBase.declaredValue`'s `if (!readable)` guard made
-  `if (false)` (D08), and the same to
-  `LibRainDeploySnapshot.declarationAddress`'s guard (N07). `declarationValue`
-  returns an empty token for an unreadable declaration; `declaredBytes` and
-  `declaredBytes32` split it into one part and `declaredAddress` refuses it at
-  its `0x` split, which also yields one part, so each still raises the same
-  `FrozenCodeRecordUnreadable(path)` or `FrozenSnapshotUnreadable(path)`.
+- `RainDeployVerifySnapshotBase.declaredValue`'s and
+  `LibRainDeploySnapshot.declarationAddress`'s `if (!readable)` guards (D08,
+  N07): both guards removed as redundant.
+- `RainDeployBroadcast.broadcastSuite` passes `candidateOf(frozen)`;
+  `candidateOf(suite)` is equivalent (R03): `candidateOf` keys on `.suite`
+  alone, which `withExtendedNetworks` preserves, and in the no-candidate
+  fallback `withUnrecordedNetworks` appends nothing for either argument because
+  `suite`'s networks are a subset of `frozen`'s.
