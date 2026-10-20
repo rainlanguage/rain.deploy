@@ -546,5 +546,34 @@
       "C01-C08 on the offline suite (LibConfigRegistryRegisterTest, LibConfigRegistryTest): 0/8 killed by the suite at the scanned commit, 8/8 by the tests added in testsAfterCommit. The per-network check was extracted from checkRegisteredOnForks so these lines run on the local chain; marvin R22, R23, R29 and R33 sat on them as fork-only survivors.",
       "K01-K03 on the fork suite (check11r.sh, public RPCs, 3x retry): 3/3 killed by existing fork tests. They cannot run offline and are listed in audit/known-false-positives.md with their killers."
     ]
+  },
+  {
+    "timestamp": "2026-10-20T08:12:16Z",
+    "commit": "e346fc851613ca3d1910340b4f63098c5bcdd8d1",
+    "testsAfterCommit": "cf1395b27cef7f3bdbe4656cd1600ff7c3312ae1",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 141,
+    "scope": "PR #315 (#313) round 12, marvin review on b0d4f53: the empty-roster NoNetworks guard in checkDeployedOnNetworks in src/abstract/RainDeployVerifyChain.sol (E01-E05, offline), and the two fork-only register survivors (F23, F29, with RPC)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 7,
+      "behavioursProbed": 7,
+      "killedByExistingTests": 3,
+      "gapsFilled": 4,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "E01-E05 on the offline suite (RainDeployVerifyChainNotRequiredLocalTest, RainDeployVerifyChainEmptyTest): 1/5 killed by the suite at the scanned commit (E03), 5/5 with testEmptyRosterIsNoNetworks and testNoSuitesOnEmptyRosterPasses from testsAfterCommit.",
+      "F23 (registerOnForks passes networks[0]) and F29 (registerOnNetworks returns an empty record) on the fork suite (check11r.sh, public RPCs, 3x retry): 2/2 killed by existing fork tests, F29 confirmed by testRegisterOnNetworksBindsEverySelected alone. Both listed in audit/known-false-positives.md with their killers."
+    ]
   }
 ]
