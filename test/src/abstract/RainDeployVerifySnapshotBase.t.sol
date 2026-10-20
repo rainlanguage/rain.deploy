@@ -1150,7 +1150,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     }
 
     /// `CREATION_CODE`'s value is held to the writer's format even though the check hashes only `RUNTIME_CODE`.
-    function testFrozenCodeRecordUnreadableCreationCodeIsUnreadable() external {
+    function testFrozenCodeRecordCreationCodeOutsideTheWritersFormatIsUnreadable() external {
         string[] memory parts = vm.split(committedCodeRecord(), "bytes constant CREATION_CODE =\n    hex\"");
         assertEq(parts.length, 2, "the record's creation code is not where the generator writes it");
         string[] memory variants = new string[](3);
