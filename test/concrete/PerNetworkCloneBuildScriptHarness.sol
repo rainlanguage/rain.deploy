@@ -101,7 +101,7 @@ contract PerNetworkCloneBuildScriptHarness is PerNetworkCloneDeploys, BuildScrip
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    function extendedNetworks(string memory suite) internal view override returns (CloneNetwork[] memory) {
+    function extendedNetworks(string memory suite) internal view virtual override returns (CloneNetwork[] memory) {
         if (keccak256(bytes(suite)) != keccak256("per-network-clone@0_0_1")) {
             return new CloneNetwork[](0);
         }

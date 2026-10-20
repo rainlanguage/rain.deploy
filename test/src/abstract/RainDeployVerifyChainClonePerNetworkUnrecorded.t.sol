@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";
@@ -114,9 +115,12 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         assertFalse(forked, "the matrix forked a network before refusing the unrecorded one");
     }
 
-    /// An unrecorded network the release does not declare is refused as unfrozen before any network is forked.
+    /// An unrecorded network the release does not declare is refused as unfrozen before any network is forked or any
+    /// suite is derived.
     function testUnrecordedNetworkIsRefusedAsUnfrozenBeforeAnyFork() external {
         DeploySuite[] memory suites = arbitrumOnlyRelease();
+        address factory = abi.decode(suites[0].mechanismData, (CloneNetworks)).factory;
+        vm.expectCall(factory, abi.encodeWithSelector(ICloneableFactoryV4.cloneDeterministicOpenSalt.selector), 0);
         vm.expectRevert(
             abi.encodeWithSelector(
                 ExtendedNetworkUnfrozen.selector,

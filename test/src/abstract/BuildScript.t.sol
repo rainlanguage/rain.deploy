@@ -21,6 +21,10 @@ import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
 import {CloneBuildScriptHarness} from "../../concrete/CloneBuildScriptHarness.sol";
 import {PerNetworkCloneBuildScriptHarness} from "../../concrete/PerNetworkCloneBuildScriptHarness.sol";
 import {
+    SECOND_RELEASE_KEY,
+    TwoReleasePerNetworkCloneBuildScriptHarness
+} from "../../concrete/TwoReleasePerNetworkCloneBuildScriptHarness.sol";
+import {
     PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
     PER_NETWORK_CLONE_RECORD_CONTRACT,
     PER_NETWORK_CLONE_RECORD_ROOT,
@@ -370,6 +374,35 @@ contract BuildScriptTest is Test {
                 LibRainDeployExtendedNetworks.extendedNetworksBody(vm, networks)
             )
         );
+    }
+
+    /// PROPERTY: the build writes each release's record from that release's own declaration, under that release's
+    /// key.
+    function testRegenerateExtendedNetworksWritesEachReleasesOwnRecord() external {
+        string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-two-releases");
+        resetFixture(root);
+        TwoReleasePerNetworkCloneBuildScriptHarness harness =
+            new TwoReleasePerNetworkCloneBuildScriptHarness(root, root);
+        CloneNetwork[] memory first = new CloneNetwork[](1);
+        first[0] = extendedNetwork(8453, hex"00aa");
+        CloneNetwork[] memory second = new CloneNetwork[](1);
+        second[0] = extendedNetwork(1, hex"00bb");
+        harness.setExtendedNetworks(first);
+        harness.setSecondExtendedNetworks(second);
+
+        harness.externalRegenerateExtendedNetworks();
+        (,, string memory firstPath) =
+            LibRainDeployExtendedNetworks.extendedNetworksPath(root, "per-network-clone@0_0_1");
+        (,, string memory secondPath) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, SECOND_RELEASE_KEY);
+        string memory firstRecord = vm.readFile(firstPath);
+        string memory secondRecord = vm.readFile(secondPath);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
+
+        string memory prefix = LibCodeGen.filePrefix(RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT);
+        assertEq(firstRecord, string.concat(prefix, LibRainDeployExtendedNetworks.extendedNetworksBody(vm, first)));
+        assertEq(secondRecord, string.concat(prefix, LibRainDeployExtendedNetworks.extendedNetworksBody(vm, second)));
     }
 
     /// A network beyond the per-network release's record, at the address its init data derives under the release.
