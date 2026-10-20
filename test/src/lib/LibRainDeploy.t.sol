@@ -2583,4 +2583,15 @@ contract LibRainDeployTest is Test {
         );
         this.externalZoltuDeployStep(type(MockDeployable).creationCode);
     }
+
+    function testHasChainIdFindsEachNetworkAndNoOther() external pure {
+        string[] memory names = new string[](2);
+        names[0] = LibRainDeploy.ARBITRUM_ONE;
+        names[1] = LibRainDeploy.BASE;
+        SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(names);
+        assertTrue(LibRainDeploy.hasChainId(networks, LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID));
+        assertTrue(LibRainDeploy.hasChainId(networks, LibResolvedReadFixture.BASE_CHAIN_ID));
+        assertFalse(LibRainDeploy.hasChainId(networks, 1));
+        assertFalse(LibRainDeploy.hasChainId(new SupportedNetwork[](0), LibResolvedReadFixture.BASE_CHAIN_ID));
+    }
 }

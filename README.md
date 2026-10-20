@@ -343,6 +343,105 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   implementation it delegates to, so the right code hash at its address over a
   missing or changed implementation does not work.
 
+### Upgradeable beacons
+
+Declare every beacon with its network's chain id, naming implementations by
+suite key and moving them through `MigrationRegistry` migrations:
+
+```solidity
+function beacons() internal view override returns (ChainBeacon[] memory) {
+    ChainBeacon[] memory chainBeacons = new ChainBeacon[](1);
+    chainBeacons[0].chainId = ARBITRUM_ONE_CHAIN_ID;
+    DeployBeacon memory beacon = chainBeacons[0].beacon;
+    beacon.beaconSuite = "vault-beacon@0_1_0";
+    beacon.initial = BeaconState({implementation: "vault@0_1_1", owner: ARBITRUM_TIMELOCK});
+    beacon.transitions = new BeaconTransition[](1);
+    beacon.transitions[0] = BeaconTransition({
+        migration: Prerequisite({writer: SAFE, namespace: NAMESPACE, migration: UPGRADE_0_2_0}),
+        state: BeaconState({implementation: "vault@0_2_0", owner: ARBITRUM_TIMELOCK})
+    });
+    return chainBeacons;
+}
+```
+
+On each network's fork the chain group expects the state of the latest
+transition the network's registry reports `appliedV3`, else `initial`: the
+beacon at its code hash, `implementation()` at that suite's address on the
+network, `owner()` at that owner, and the beacon's own suite, when it names one,
+and that state's implementation suite live there as any suite is. A suite a
+beacon names MUST be released, refused otherwise with `BeaconSuiteNotReleased`:
+a candidate's address moves with its source. Name a beacon that is itself a
+released suite by its suite key in `beaconSuite`, and any other (one a
+set-deployer `new`s, nonce-deployed per chain, or one deployed elsewhere) by
+both `beacon` and `beaconCodeHash`; naming it by `beaconSuite` and by either
+`beacon` or `beaconCodeHash` is refused with `BeaconNamedTwice`, and naming it
+by neither, or, without `beaconSuite`, by only one of `beacon` and
+`beaconCodeHash`, with `BeaconUnnamed`. A beacon whose chain id is not one of
+`supportedNetworks()`, in the catalogue or not, is refused with
+`BeaconOnUncheckedNetwork`, and a second declaration of a beacon on its network
+with `BeaconDeclaredTwice`. A beacon named by `beaconSuite` is deployed locally
+at its address under its network's chain id, with only its suite's declared
+dependencies etched, so its constructor MUST succeed there, and is refused with
+`BeaconSeatedOwner` or `BeaconSeatedImplementation` when it answers `owner()` or
+`implementation()` with data other than its initial state; a read that reverts
+or answers nothing is left to the chain group. These refusals, and
+`BeaconTransitionMigrationRepeated` and `BeaconTransitionMigrationUnnamed`
+below, are raised offline for every beacon by the Beacons group
+(`testBeaconDeclarationsResolve`, inherited through
+`RainDeployVerifySnapshotBase`), and by the chain group, before any network is
+forked, for the beacons on the networks it checks; `BeaconOnUncheckedNetwork`
+there covers every beacon. A beacon with transitions reads `MigrationRegistry`
+on its network, which MUST be deployed there. The chain group reads `owner()`,
+and refuses a beacon that answers `pendingOwner()` with one nonzero word with
+`BeaconPendingOwner`, or with data that is not one word with
+`BeaconPendingOwnerUnreadable`; a `pendingOwner()` that reverts or returns
+nothing passes. A two-step handover is red from `transferOwnership` until the
+batch that accepts it applies its migration. Assert any other authority a beacon
+exposes (roles) yourself, including that the deploy key holds none of it. The
+deploy key is never a declared owner of any state, past states included, and a
+broadcast whose key is one is refused with `BeaconOwnedByDeployKey` before any
+network is read. A beacon named by `beacon` and `beaconCodeHash` that was owned
+by a deploy key and has since been handed over declares its post-handover state
+as `initial`, with no transition for the handover. A beacon named by
+`beaconSuite` declares as `initial` the owner its suite seats
+(`BeaconSeatedOwner` holds it there), so a released beacon suite that seated the
+deploy key is declared by `beacon` and `beaconCodeHash`. A broadcast is also
+refused before any network is read when its suite, deployed locally with the
+deploy key as sender and origin under each target's chain id, answers `owner()`
+with a first word whose low 160 bits are the deploy key (`SuiteSeatsDeployKey`),
+so a suite seats its governance, not the deploy key, from its first state. For a
+per-network clone suite the targets are its own networks only (its candidate's
+added networks included), each deploying only that network's clone; for any
+other suite they are every supported network, the networks the broadcast does
+not reach included, then each network it reaches that is not supported. The
+suite's constructor runs on the local EVM with only its declared dependencies
+etched, so it MUST succeed there under each target's chain id: one that reverts
+locally refuses the broadcast to every network. That check reads `owner()` only:
+roles, pending owners, admin slots and contracts a constructor creates are not
+read, so assert those yourself.
+
+Declare transitions in the order their migrations are applied: each applied
+transition's record MUST reach the latest earlier-declared applied one through
+`appliedAfterV3` (its line's head, then its prerequisites), refused otherwise
+with `BeaconTransitionsOutOfOrder`; moments are never compared. Each transition
+names a distinct migration, refused otherwise with
+`BeaconTransitionMigrationRepeated`, and one the registry can record (nonzero
+writer and namespace, a migration neither zero nor `MIGRATION_HEAD_GENESIS`),
+refused otherwise with `BeaconTransitionMigrationUnnamed`. A transition written
+in another line names the earlier one, or a record after it, as a prerequisite.
+The order walk is unbounded and costs a fork read per record it reaches: apply
+each transition onto the previous transition's migration as its line's head or,
+when it is written in another line, name it as a prerequisite, so the walk reads
+one record. Otherwise it reads at most every record reachable from the later
+transition, across lines, in fewer steps than the earlier one, and every
+reachable record back to each line's genesis when the earlier one is not
+reached. Apply a transition's migration in the same transaction as the beacon
+change it describes (one Safe batch: `upgradeTo` or `transferOwnership`, then
+`applyMigrationV3`; for an `Ownable2Step` beacon the handover's migration goes
+in the batch that calls `acceptOwnership`, as `owner()` moves only then).
+Between two separate transactions the chain group refuses the network, as the
+chain and the registry disagree.
+
 ## Deploy verification
 
 **The creation code is the only input.** The Zoltu factory is `CREATE2` over its
@@ -369,15 +468,16 @@ to put there. The dependencies are etched first, then the derived address is
 cleared, then the factory is planted, so a declaration can reach neither the
 subject's address nor the factory's.
 
-Four groups, sorted by what each is anchored to and therefore by what each can
+Five groups, sorted by what each is anchored to and therefore by what each can
 catch:
 
-| Group    | Anchored to                | Catches                                            | Cannot catch                     |
-| -------- | -------------------------- | -------------------------------------------------- | -------------------------------- |
-| Internal | the recorded set           | an inconsistently generated set                    | a snapshot of the wrong contract |
-| Source   | `vm.getCode(artifactPath)` | a snapshot of the wrong contract                   | anything about any chain         |
-| Record   | the frozen record          | a release the declaration missed                   | what a declared suite records    |
-| Chain    | the networks               | a missing deployment, or an alias on another chain | anything about a candidate       |
+| Group    | Anchored to                | Catches                                                                                                                                         | Cannot catch                     |
+| -------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| Internal | the recorded set           | an inconsistently generated set                                                                                                                 | a snapshot of the wrong contract |
+| Source   | `vm.getCode(artifactPath)` | a snapshot of the wrong contract                                                                                                                | anything about any chain         |
+| Record   | the frozen record          | a release the declaration missed                                                                                                                | what a declared suite records    |
+| Beacons  | the beacon declarations    | a beacon misnamed, unreleased, off the supported networks, declared twice, seating other than its initial state, or with a malformed transition | what any beacon holds on chain   |
+| Chain    | the networks               | a missing deployment, an alias on another chain, or a beacon off its declared state                                                             | anything about a candidate       |
 
 The internal group's blind spot is not a gap to close there: every check in it
 asks the recorded bytes to agree with each other, and the wrong contract's bytes

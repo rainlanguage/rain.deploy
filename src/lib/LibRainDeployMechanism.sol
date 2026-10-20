@@ -18,6 +18,18 @@ import {
     LibRainDeployClone
 } from "./LibRainDeployClone.sol";
 
+/// Thrown when the state snapshot taken around a local deploy could not be
+/// reverted. A local deploy plants code at the derived address, clears its
+/// nonce and etches the suite's declared dependencies; if that cannot be
+/// undone, every later local deploy reads state this one created, and the
+/// chain-anchored checks compare a locally planted deployment against itself,
+/// and the broadcast seat check reads a deployment planted under an earlier
+/// target's chain id.
+/// There is no safe way to continue.
+/// @param suite The suite deployed locally when the revert failed.
+/// @param snapshotId The snapshot that could not be reverted.
+error DerivationSnapshotRevertFailed(string suite, uint256 snapshotId);
+
 /// Thrown when the pure `LibRainDeploy.zoltuAddress` formula and an actual deploy through the
 /// etched Zoltu factory bytecode disagree about where a creation code lands.
 /// @param suite The suite whose creation code was being derived.
@@ -404,6 +416,26 @@ library LibRainDeployMechanism {
             }
         }
         return false;
+    }
+
+    /// `deployLocally` as the deploy to the network of `block.chainid` runs it: a per-network clone deploys only
+    /// that network's clone, so no other network's init data runs under its chain id.
+    /// A per-network clone with no entry for `block.chainid` is refused with `CloneNetworkUndeclared`.
+    /// @param vm The Vm instance to etch with.
+    /// @param suite The suite to deploy. Its `mechanismData` is restored before returning.
+    function deployLocallyOnChain(Vm vm, DeploySuite memory suite) internal {
+        if (suite.mechanism != DeployMechanism.ClonePerNetwork) {
+            deployLocally(vm, suite);
+            return;
+        }
+        bytes memory mechanismData = suite.mechanismData;
+        CloneNetworks memory clones = cloneNetworks(suite);
+        CloneNetwork[] memory own = new CloneNetwork[](1);
+        own[0] = clones.networks[LibRainDeployClone.cloneNetworkIndex(clones, block.chainid)];
+        clones.networks = own;
+        suite.mechanismData = abi.encode(clones);
+        deployLocally(vm, suite);
+        suite.mechanismData = mechanismData;
     }
 
     /// Runs a suite's mechanism on the local EVM and returns where it landed, each address

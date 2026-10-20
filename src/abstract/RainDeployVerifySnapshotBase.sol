@@ -319,6 +319,13 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         }
     }
 
+    /// Every declared beacon MUST resolve offline: released suite keys, named once, on a supported network, declared
+    /// once on its network, a beacon suite seating its initial state, and each transition naming a distinct, recordable
+    /// migration. Reads `supportedNetworks()` only when a beacon is declared.
+    function testBeaconDeclarationsResolve() external {
+        resolveSupportedBeacons();
+    }
+
     /// Every declared suite MUST be internally consistent.
     function testSnapshotInternallyConsistent() external {
         DeploySuite[] memory suites = allSuites();

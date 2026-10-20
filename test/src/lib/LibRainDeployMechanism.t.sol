@@ -592,6 +592,31 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(MockCloneable(deployed[1]).sInitData(), abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN));
     }
 
+    /// @param suite The suite to deploy locally under `block.chainid`.
+    function externalDeployLocallyOnChain(DeploySuite memory suite) external {
+        LibRainDeployMechanism.deployLocallyOnChain(vm, suite);
+    }
+
+    function testPerNetworkSuiteDeploysLocallyOnChainOnlyThatNetworksClone() external {
+        DeploySuite memory suite = perNetworkSuite();
+        bytes memory mechanismData = suite.mechanismData;
+        address arbitrumAddress = exampleCloneAddress(abi.encode(PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN));
+        address polygonAddress = exampleCloneAddress(abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN));
+        vm.chainId(137);
+        LibRainDeployMechanism.deployLocallyOnChain(vm, suite);
+        assertEq(suite.mechanismData, mechanismData);
+        assertEq(polygonAddress.code, suite.storedRuntimeCode);
+        assertEq(MockCloneable(polygonAddress).sInitData(), abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN));
+        assertEq(arbitrumAddress.code.length, 0);
+    }
+
+    function testPerNetworkSuiteDeployLocallyOnAnUndeclaredChainIsRefused() external {
+        DeploySuite memory suite = perNetworkSuite();
+        vm.chainId(8453);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneNetworkUndeclared.selector, 8453));
+        this.externalDeployLocallyOnChain(suite);
+    }
+
     /// Networks sharing init data share an address, and that clone is deployed once without skipping a later network's own clone.
     function testPerNetworkSuiteSharingDataDeploysTheSharedCloneOnce() external {
         CloneDeploy memory clone = perNetworkClone("per-network", TEST_SALT);

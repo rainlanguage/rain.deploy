@@ -283,6 +283,102 @@
     ]
   },
   {
+    "timestamp": "2026-10-18T20:18:20Z",
+    "commit": "e31110332d7fe98a85bc08b738612d7b859c564f",
+    "testsAfterCommit": "cfb6209c86697b7976585a678db09247492cc251",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 88,
+    "scope": "PR #308 (#274), upgradeable beacons: src/abstract/RainDeployVerifyChain.sol checkDeployedOnNetworks/checkResolvedBeacon/resolveBeacons/resolveBeacon/resolveReleased (V), src/lib/LibRainDeployBeacon.sol (B), src/lib/LibRainDeploy.sol hasChainId (H), src/abstract/RainDeploySuitesBase.sol beacons/suiteByName/suiteIndex (S)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 64,
+      "behavioursProbed": 64,
+      "killedByExistingTests": 60,
+      "gapsFilled": 2,
+      "equivalentMutants": 2,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "64 mutants (V 34, B 22, H 2, S 6) probed with mutation-probe against the suite at the scanned commit, which already carries this round's audit-finding tests (shared declaration across two chains, declaration left unwritten, two-word pendingOwner, no fork after the unchecked-network refusals, hasChainId, suiteIndex not found, stateAt out of range). Those tests are counted as existing: V01 (declaration not copied) is killed by testOneDeclarationSharedByTwoChainsResolvesOnEach and testResolvingABeaconLeavesItsDeclarationUnwritten, B18 (pending guard length >= 0x20) by testBeaconAnsweringPendingOwnerWithTwoWordsPasses.",
+      "Harness: a transport-aware wrapper around forge test (a red tally of only transport failures is retried after 60s and withheld after three attempts, scoring NO-RUN). Narrow suite: contracts matching Beacon|RainDeploySuitesBaseTest plus LibRainDeployTest testHasChainId, baseline 119. Wide suite, used for the narrow survivors: adds RainDeployVerifyChain*, RainDeployVerify*, RegistryDeployVerify*, baseline 257 then 259. Killers the fail-pattern could not name (V04, V20, V23, V24, B18) were read from the retained run logs: testBeaconNamedBySuiteAndAddressIsRefused, testBeaconNamedTwiceBehindAValidBeaconReportsItsIndex, testBeaconNamedByAddressAloneIsRefused, testUnnamedBeaconIsRefused, testBeaconAnsweringPendingOwnerWithTwoWordsPasses.",
+      "Narrow-suite survivors killed by the wide pre-existing suite: V06 (empty return ignoring suites) by testUndeclaredNetworkIsRefusedBeforeAnyFork; S06 (default beacons() non-empty) by testChainMatrixForksOnlyTheDeclaredNetworks.",
+      "Gaps filled at cfb6209, each passing at baseline and failing under its mutant (read from the run logs): V16 (resolveBeacons write index not advanced, every beacon resolved into slot 0, so only the last beacon was checked) by testABeaconBeforeAValidOneOnItsNetworkIsChecked; B19 (pendingOwner guard dropping success) by testBeaconRevertingPendingOwnerWithAWordPasses, a beacon whose pendingOwner() reverts with one nonzero word.",
+      "Equivalent mutant S05: suiteIndex returning the last match instead of the first changes nothing while keys are unique, and they are: allSuites() refuses a duplicate with DuplicateDeploySuite, suiteByName searches allSuites() itself, and the released suites resolveReleased searches are among those testSnapshotInternallyConsistent holds to allSuites().",
+      "Equivalent mutant B14: doubled copying from index 1 instead of 0. Index 0 is always later, read before anything else is reached. A record names only records that exist when it is written (PrerequisiteNotApplied) and is never rewritten (MigrationAlreadyApplied), so no walk reaches later again and dropping its record and key changes nothing.",
+      "Adversarial pass: no candidate bugs. The resolveBeacon copy shares initial and transitions with the declaration, which nothing writes; a reverting or non-one-word pendingOwner answer is treated as no pending owner, per the NatSpec."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T05:46:21Z",
+    "commit": "0f34914e426d54161b3185a7108d833a716b1971",
+    "testsAfterCommit": "75a5ba63541be5340a254697de67502735f3a8e2",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 91,
+    "scope": "PR #308 (#274) re-audit round: the mutants named by the open rain-marvin threads in src/lib/LibRainDeployBeacon.sol checkBeacon (pendingOwner guard) and src/abstract/RainDeployVerifyChain.sol resolveBeacons/resolveBeacon",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 6,
+      "behavioursProbed": 6,
+      "killedByExistingTests": 3,
+      "gapsFilled": 3,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|RainDeploySuitesBaseTest, baseline 120 at the scanned commit, 124 after. Pre-existing suite probed in a fresh clone at the scanned commit before any new test.",
+      "Killed by the pre-existing suite: pending guard length >= 0x20 (testBeaconAnsweringPendingOwnerWithTwoWordsPasses), pending guard dropping success (testBeaconRevertingPendingOwnerWithAWordPasses), resolveBeacon writing the declaration (testOneDeclarationSharedByTwoChainsResolvesOnEach, testResolvingABeaconLeavesItsDeclarationUnwritten).",
+      "Gaps filled: pendingOwner != 0 to > 1 by testBeaconWithTheSmallestPendingOwnerIsRefused; BeaconOnUncheckedNetwork skipped for a checked network by testBeaconOnACheckedNetworkOffTheSupportedNetworksIsRefused; beaconSuite address at a fixed chain id by testBeaconNamedBySuiteIsAtItsNetworksClone (both per-network clone beacon contracts).",
+      "Adversarial pass: no candidate bugs. The only source change this round is NatSpec naming each resolve refusal."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T06:38:14Z",
+    "commit": "d532e52233e1fae5ac852533ece8021e4fd54821",
+    "testsAfterCommit": "4d0619780bb9ba123a94195053fb6aeb7f644d39",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 93,
+    "scope": "PR #308 (#274) re-audit round: src/lib/LibRainDeployBeacon.sol checkBeacon pendingOwner refusal of a one-word answer with bits above 160 set, named by the open rain-marvin thread",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 4,
+      "behavioursProbed": 4,
+      "killedByExistingTests": 0,
+      "gapsFilled": 4,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|RainDeploySuitesBaseTest, baseline 124 at the scanned commit, 125 after. Pre-existing suite probed with the test file at the scanned commit before the new test.",
+      "All 4 survived the pre-existing suite: pending check truncated to uint160, pending check refusing only words <= type(uint160).max, pending check masking off bits above 160, reported word truncated to uint160.",
+      "All 4 killed by testBeaconAnsweringPendingOwnerWithADirtyWordIsRefused (MockDirtyWordFallbackBeacon answers 1 << 160); the fail-pattern did not name the killer of the truncated-report mutant, which is the only test added.",
+      "Adversarial pass: no candidate bugs. BeaconPendingOwner NatSpec says a word with dirty upper bits is not an address and is reported raw, so it is refused; the code does so."
+    ]
+  },
+  {
     "timestamp": "2026-10-19T06:51:00Z",
     "commit": "4124f731e49ff1b68faaf4cd882648aa1d00cd32",
     "testsAfterCommit": "391fe885eb27021ee232e65fcfa02c1f68400474",
@@ -312,6 +408,39 @@
       "Gaps filled: W07 (a short non-empty answer treated as a failed read) testCheckResolvedValuesShortAnswerIsAnAnswer; W08 (read failure names index 0) testCheckResolvedValuesReadFailureNamesTheFailingRead. Both re-probed KILLED at baseline 53.",
       "The killer lists under-report fuzz kills: the fail-pattern stops at the first ] inside a counterexample args=[...]. testRegisterOnEveryNetwork appears in several unrelated killer lists from fork transport noise; every such kill also names a W test.",
       "The foundry.toml MigrationRegistry compilation_restrictions entry is build config, not suite-reachable, and was not probed."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T07:52:39Z",
+    "commit": "8dc450ced219a849cae6348de07ba0d20e0fb7b7",
+    "testsAfterCommit": "8dc450ced219a849cae6348de07ba0d20e0fb7b7",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 95,
+    "scope": "PR #308 (#274) re-audit round: changed code in 8dc450c: LibRainDeployBeacon.checkDistinctMigrations and its calls from appliedState and RainDeployVerifyChain.resolveBeacon, and the checkBeacon pendingOwner refusal of a non-empty answer that is not one word (BeaconPendingOwnerUnreadable)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 23,
+      "behavioursProbed": 23,
+      "killedByExistingTests": 10,
+      "gapsFilled": 0,
+      "unattributed": 13,
+      "attributionSplit": false,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|RainDeploySuitesBaseTest plus LibRainDeployTest testHasChainId via the transport-retrying check script; baseline 130 passed.",
+      "23/23 killed, 0 survived, 0 no-run.",
+      "Attribution not split: this round's tests (two distinct-id tests proposed by rain-marvin, two resolve-time repeat tests, the short-answer test, and the two-word test inverted to expect BeaconPendingOwnerUnreadable) were written before the probe, so the pre-existing suite was not probed alone. Kills by tests present at f8620d3: E04-E11 (repeat tests, updated for the chainId error signature), E15 (silent fallback), E16 (reverting word). Kills needing this round's tests: E01-E03 (distinct writer/namespace), E12-E14 (resolve-time), E17/E19 (short answer).",
+      "Adversarial pass: no candidate bugs. Distinct means distinct (writer, namespace, migration) triple, pinned both ways; an echoing fallback (4-byte answer) is now refused rather than read as no pending owner."
     ]
   },
   {
@@ -366,6 +495,39 @@
       "Baseline green at 196 on the full round suite. 14 of 15 KILLED by existing tests.",
       "F04 (registerOnForks skipping the sender and value refusals) survived the register suite and is killed by the new testRegisterOnForksRefusesInputsBeforeSelecting, re-probed on a fork-free narrow suite (baseline 8) because public RPC failures turned the register suite's baseline red.",
       "Killer attribution re-run on the register suite (baseline 39) and the snapshot suite (baseline 108) with fail-pattern '(?s)\\[FAIL.*?\\] (test\\w+)\\(': F03 testRegisterOnForksRefusesUnpairedForkIds; F06 testRegisterOnNetworksRefusesInputsInOrder, testWiring; F07 testWiring; F08 testCheckInputsRecordIsTheInputsSigned; F14-F15 testTheCommittedAggregateIsWhatTheGeneratorEmits and the aggregate block tests. testRegisterOnEveryNetwork also appears in fork-noisy killer lists; every such kill also names a non-fork test."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T13:21:58Z",
+    "commit": "306f369f8a53d89dc62c9a0a751d57d51c236d71",
+    "testsAfterCommit": "5ebd709c2e2977631dec1e618b9cdf670fac9d5c",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 102,
+    "scope": "PR #308 (#274) round 6: code changed since 8dc450c: RainDeployBroadcast.broadcastSuite (BeaconOwnedByDeployKey) and checkSeatsNoDeployKey (SuiteSeatsDeployKey); RainDeployVerifySnapshotBase.testBeaconDeclarationsResolve; LibRainDeployBeacon.checkTransitionMigrations (BeaconTransitionMigrationUnnamed); RainDeployVerifyBase.resolveBeacons/resolveBeacon/checkSeatedState/seatsOther/resolveReleased; RainDeployVerifyChain.deriveUnlessResolved",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 6,
+      "behaviours": 54,
+      "behavioursProbed": 54,
+      "killedByExistingTests": 46,
+      "gapsFilled": 8,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|RainDeploySuitesBaseTest|RainDeployVerifyChain|RainDeployVerify|RegistryDeployVerify|RainDeployBroadcast (excluding testRunReachesSelectionPastAnUnanchorableCandidate, a pre-existing setEnv race) plus LibRainDeployTest testHasChainId, via a wrapper that retries an all-transport red tally and withholds it after three attempts (NO-RUN); baseline 329 passed at the scanned commit.",
+      "Pre-existing suite, before any new test: 46 killed (45 in the first pass, C02 on re-probe); survived F09 (seat check ignoring whether owner() answered), F10 (seat check state not reverted), V19 (seated owner held to the latest state), V20 (seated implementation held to the latest state), V24 (BeaconSeatedOwner index forced 0), C01 (derivation reuse ignoring whether a beacon names a suite).",
+      "V21 (seatsOther ignoring whether the read answered) and V22 (seatsOther refusing an empty answer) were NO-RUN in three probes: every failure each time was a public-RPC 429 or HyperEVM invalid-block-height fork error, no non-transport failure. Treated as uncredited survivors.",
+      "Gaps filled at 5ebd709, all 8 killed by a re-probe whose suite was only the 8 added tests (offline; the full wrapper suite was withheld on 429s): F09 testBroadcastOfASuiteRevertingWithTheDeployKeyReachesTheNetworkRefusal (MockOriginRevertingOwner); F10 testSeatCheckLeavesNothingDeployed; V19 and V20 testBeaconSuiteSeatingItsInitialStateBeforeATransitionResolves; V21 testAReadThatRevertsSeatsNothing; V22 testAReadAnsweringNothingSeatsNothing; V24 testBeaconSuiteSeatingAnotherOwnerIsRefusedAtItsIndex; C01 testUnsetSuiteOfABeaconNamedByAddressIsNotReused (the unset suite is derived and refused with DeployFailed rather than reusing an empty derivation). The fail-pattern did not name the V19, V20 and V24 killers because forge renders the chain id in their revert reasons as 42161 [4.216e4]; those attributions are by elimination among the 8 tests (only the transition test declares a later state, only the index test reaches BeaconSeatedOwner).",
+      "Handoff's predicted equivalents were not equivalent: V19/V20 differ once a suite beacon declares a transition to another owner or implementation, and C01 differs for the all-zero suite.",
+      "Adversarial pass: no candidate bugs. The seat checks are lenient on a reverting or empty read by design (left to checkBeacon); the broadcast seat check reads owner() only, as ruled."
     ]
   },
   {
@@ -519,6 +681,38 @@
     ]
   },
   {
+    "timestamp": "2026-10-19T20:09:16Z",
+    "commit": "20d2ab89f5c9411425a90a390fc9920bf02a182b",
+    "testsAfterCommit": "117d6897a52f7fe9bd0bcfc119349a05b9e0c702",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 138,
+    "scope": "PR #308 (#274) round 7: code changed in 20d2ab8: RainDeployVerifyBase.checkSeatedState (deploys under the beacon's chain id); RainDeployVerifyChain.checkDeployedOnNetworks no-suite narrowing and beaconNetworks",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 12,
+      "behavioursProbed": 12,
+      "killedByExistingTests": 8,
+      "gapsFilled": 3,
+      "equivalentMutants": 1,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|^RainDeployVerifyChainTest$ via a wrapper that retries an all-transport red tally and withholds it after three attempts. Pre-existing suite = that suite with the five tests added in 20d2ab8 excluded (--no-match-test NetworksOwner|RestoresTheChainId|WithoutSuitesForksOnly|BeaconNetworksKeeps), baseline 167 passed; with them, 172 passed.",
+      "Pre-existing suite: 8 killed (C2 narrowing applied with suites; B1-B7 in beaconNetworks: kept never set, either count not advanced, no break, match negated, every network copied, kept network not copied); survived S1 (seat check under the local chain id), S2 (chain id never restored), S3 (chain id set after the deploy), C1 (no-suite narrowing skipped).",
+      "With the 20d2ab8 tests: C1 killed by testChainGroupWithoutSuitesForksOnlyTheBeaconsNetworks; S1 and S3 killed (the fail-pattern names no killer: forge renders the chain id in the revert reason as 42161 [4.216e4]); a re-probe at testsAfterCommit whose suite is testBeaconSuiteSeatingItsNetworksOwnerResolves alone kills both.",
+      "S2 survived testSeatedStateCheckRestoresTheChainId: vm.revertToState restores the chain id with the state, and the only path skipping it reverts DerivationSnapshotRevertFailed. Equivalent; the redundant vm.chainId(localChainId) was removed at testsAfterCommit.",
+      "Adversarial pass: no candidate bugs. beaconNetworks draws from the networks resolveBeacons resolved on, so narrowing a no-suite run never empties it while a beacon resolved."
+    ]
+  },
+  {
     "timestamp": "2026-10-20T07:01:49Z",
     "commit": "4a56d2a1645ddca718bf0d125228d4b23a9f9d07",
     "testsAfterCommit": "af326744ec7c9deacf5cfa667dfd7b632a745f54",
@@ -548,6 +742,37 @@
     ]
   },
   {
+    "timestamp": "2026-10-20T07:12:55Z",
+    "commit": "9d1104859a700e1ef8659cd08417cf0ce263ed92",
+    "testsAfterCommit": "220783bcb506ad8e1de196acf29ff3e59467c660",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 141,
+    "scope": "PR #308 (#274) round 8: code changed in 9d11048: RainDeployBroadcast.checkSeatsNoDeployKey (one local deploy per target under its chain id; owner word matched on its address bits) and its call in broadcastSuite",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 20,
+      "behavioursProbed": 20,
+      "killedByExistingTests": 18,
+      "gapsFilled": 2,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --match-path test/src/abstract/RainDeployBroadcast*.t.sol (offline), baseline 32 passed at the scanned commit, 34 at testsAfterCommit. Pre-existing suite = the tests at 9d11048, which include the tests written with the fix (the Marvin round-7 HIGH finding asked for them).",
+      "Pre-existing suite: 18 of 19 killed (S01-S18: per-network chain ids, supported fallback, loop bound, chain id, prank, stopPrank, per-target address, snapshot restore, answered/length/word/address checks, refusal payload, refusal and call presence). Survived S19 (seat check on the raw suite, not its onSupportedNetworks form): killed by testBroadcastRefusesAReleaseWhoseCandidateAddsANetworkSeatingTheDeployKey at 1206993.",
+      "S20 (fallback reads deployNetworks() not supportedNetworks()) was killed only incidentally by testRunReachesSelectionPastAnUnanchorableCandidate; testBroadcastRefusesASuiteSeatingTheDeployKeyOnANetworkTheDispatchDoesNotReach added at 220783b kills it directly.",
+      "Adversarial pass: no candidate bugs. A per-network suite is read on its own networks, so a supported network it lacks is not read here; the broadcast to it refuses CloneNetworkUndeclared regardless. An owner word whose upper 96 bits are dirty but whose address bits are the deploy key is refused, the fail-safe direction."
+    ]
+  },
+  {
     "timestamp": "2026-10-20T08:12:16Z",
     "commit": "e346fc851613ca3d1910340b4f63098c5bcdd8d1",
     "testsAfterCommit": "cf1395b27cef7f3bdbe4656cd1600ff7c3312ae1",
@@ -574,6 +799,72 @@
     "notes": [
       "E01-E05 on the offline suite (RainDeployVerifyChainNotRequiredLocalTest, RainDeployVerifyChainEmptyTest): 1/5 killed by the suite at the scanned commit (E03), 5/5 with testEmptyRosterIsNoNetworks and testNoSuitesOnEmptyRosterPasses from testsAfterCommit.",
       "F23 (registerOnForks passes networks[0]) and F29 (registerOnNetworks returns an empty record) on the fork suite (check11r.sh, public RPCs, 3x retry): 2/2 killed by existing fork tests, F29 confirmed by testRegisterOnNetworksBindsEverySelected alone. Both listed in audit/known-false-positives.md with their killers."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T14:23:48Z",
+    "commit": "fb7c1a2f185cb5d250ace15001b110181fddd262",
+    "testsAfterCommit": "670e05bdeeba9801669d9d2b1e41a2c7415eb3e7",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 204,
+    "scope": "PR #308 (#274) round 9: the PR's changed source at fb7c1a2 in src/abstract/RainDeployVerifyChain.sol, RainDeploySuitesBase.sol, RainDeployVerifySnapshotBase.sol, RainDeployVerifyBase.sol, RainDeployBroadcast.sol and src/lib/LibRainDeployMechanism.sol, LibRainDeployBeacon.sol, LibRainDeploy.sol (batches C, S, V, R, B, offline), then the code changed since in 9996bde..a86f089",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 8,
+      "behaviours": 279,
+      "behavioursProbed": 279,
+      "killedByExistingTests": 261,
+      "gapsFilled": 13,
+      "equivalentMutants": 2,
+      "unkillableDefensiveGuards": 2,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pre-existing suite at fb7c1a2, offline (dead RPC endpoints, fork-reaching tests excluded by name): C 38/44, S 16/18, V 62/66, R 49/54, B 96/97 killed.",
+      "Survivors killed by tests at testsAfterCommit (re-probe at 8a18332, plus R17 at 670e05b): M05, M07 by the LocalForkVm chain-group twins; M06 by testNotRequiredNetworksAreSkipped and testRequiredSuiteIsStillCheckedEverywhere; M31 by testImplementationSuiteMustHaveItsDerivedCodeOffline; M22 by testBeaconSuiteWithAResolvedKeyButOtherCodeIsDerivedAfresh; S12 by testSuiteIndexIsTheFirstOfARepeatedKey; M42, M48 by the reverting-read beacon seat tests; M49 at a later index; B16, B19 by testBroadcastRefusesASuiteSeatingTheDeployKeyOnASupportedNetworkBesideAnOutsideDispatch; B29 by testSeatCheckLeavesNoPrank; R17 (a reached record ends the order walk) by testOrderWalkReadsPastAReachedRecordToTheEarlier.",
+      "Equivalent, redundant code removed in 9996bde rather than exempted: B06 (testBeaconDeclarationsResolve now calls resolveSupportedBeacons) and L09 (deployLocallyOnChain reads block.chainid, which every caller sets).",
+      "Unkillable, in audit/known-false-positives.md: M64 and B44 (DerivationSnapshotRevertFailed arguments; revertToState never fails here) and M32 (a console2.log removal, unobservable).",
+      "a86f089 changed only NatSpec and a blank line in src (RainDeployBroadcast.broadcastSuite, RainDeployVerifyChain), so it adds no behaviour to probe.",
+      "Adversarial pass on R17: the expected true comes from the registry graph the test applies (OTHER HANDOVER reaches THIRD UPGRADE only through OTHER ROLLBACK then THIRD HANDOVER), not from the walk."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T16:31:54Z",
+    "commit": "98f8c376ff3ed163121cd851c85fe87eb29495d9",
+    "testsAfterCommit": "18524fa3afeccd2d873dc1db4e3727c9cb1cf3c2",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 206,
+    "scope": "PR #308 (#274) round 10: mutant V20 from rain-marvin at 98f8c37 (RainDeployVerifyBase.checkSeatedState calling deployLocally in place of deployLocallyOnChain), and the fixture added to kill it (test/concrete/MockChainRefusingCloneable.sol)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 6,
+      "behavioursProbed": 6,
+      "killedByExistingTests": 0,
+      "gapsFilled": 6,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 1,
+      "confirmed": 1,
+      "filed": [
+        320
+      ],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pre-existing suite at 98f8c37, offline (fork-reaching tests excluded by name, LibSafeForkTest and LibSafeTest by contract, 1093 tests): V20 SURVIVED.",
+      "At 18524fa (1098 tests) V20 is killed by testPerNetworkCloneBeaconSuiteResolvesOnBase; the Arbitrum twin pins that the fixed code resolves there too. Mock mutants K01-K05 (refusal inverted, never refuses, refusal argument, success value, owner) are killed by the beacon seat tests and MockChainRefusingCloneableTest.",
+      "The mock refuses only the chain id its data names, so it initializes under the local chain id that deriveDeployment runs every clone under; no chain id is hardcoded.",
+      "Adversarial pass: deriveDeployment initializes every per-network clone under the local chain id, so a clone init that accepts only its own chain id (MockChainGatedCloneable) reverts derivation; filed as #320 for triage."
     ]
   },
   {
