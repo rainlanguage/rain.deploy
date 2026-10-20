@@ -201,4 +201,34 @@ contract RainDeployVerifyBaseBeaconTest is BeaconVerifyFixture {
         assertTrue(seatsOther(true, abi.encode(NEW_OWNER), OWNER));
         assertFalse(seatsOther(true, abi.encode(OWNER), OWNER));
     }
+
+    function testAReadAnsweringTheExpectedWordAndMoreSeatsOther() external pure {
+        assertTrue(seatsOther(true, abi.encodePacked(abi.encode(OWNER), bytes32(0)), OWNER));
+        assertTrue(seatsOther(true, abi.encodePacked(abi.encode(OWNER), bytes1(0)), OWNER));
+    }
+
+    function testAReadAnsweringTheExpectedAddressUnderDirtyUpperBitsSeatsOther() external pure {
+        assertTrue(seatsOther(true, abi.encode(uint256(uint160(OWNER)) | (uint256(1) << 160)), OWNER));
+        assertTrue(seatsOther(true, abi.encode(uint256(uint160(OWNER)) | (uint256(1) << 255)), OWNER));
+    }
+
+    function testAReadAnsweringLessThanAWordSeatsOther() external pure {
+        assertTrue(seatsOther(true, abi.encodePacked(OWNER), OWNER));
+        assertTrue(seatsOther(true, hex"00", address(0)));
+    }
+
+    function testFuzzAReadAnsweringAnyOtherWordSeatsOther(uint256 word, address expected) external pure {
+        vm.assume(word != uint256(uint160(expected)));
+        assertTrue(seatsOther(true, abi.encode(word), expected));
+        assertFalse(seatsOther(false, abi.encode(word), expected));
+    }
+
+    function testFuzzAReadAnsweringTheExpectedWordWithASuffixSeatsOther(address expected, bytes memory suffix)
+        external
+        pure
+    {
+        vm.assume(suffix.length != 0);
+        assertTrue(seatsOther(true, abi.encodePacked(abi.encode(expected), suffix), expected));
+        assertFalse(seatsOther(true, abi.encode(expected), expected));
+    }
 }

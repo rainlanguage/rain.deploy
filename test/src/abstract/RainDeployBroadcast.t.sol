@@ -920,4 +920,47 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
             DeployDependency({deployedAddress: implementation, runtimeCode: type(MockChainGatedCloneable).runtimeCode});
         deploy.externalCheckSeatsNoDeployKey(suite, new string[](0), vm.addr(1));
     }
+
+    function singleOriginOwnedCloneSuite(address named) internal pure returns (DeploySuite memory) {
+        (address factory, address implementation, DeployDependency[] memory dependencies) = originOwnedCloneSetup();
+        CloneTarget memory target = CloneTarget({
+            factory: factory, implementation: implementation, data: abi.encode(named), salt: bytes32(uint256(7))
+        });
+        bytes memory runtimeCode = LibRainDeployClone.cloneRuntimeCode(implementation);
+        return DeploySuite({
+            suite: "origin-owned-single-clone@0_0_1",
+            creationCode: LibRainDeployClone.cloneCreationCode(implementation),
+            storedDeployedAddress: LibRainDeployClone.cloneDeployedAddress(target),
+            storedBytecodeHash: keccak256(runtimeCode),
+            storedRuntimeCode: runtimeCode,
+            artifactPath: CLONE_ARTIFACT_PATH,
+            dependencies: dependencies,
+            mechanism: DeployMechanism.Clone,
+            mechanismData: abi.encode(target)
+        });
+    }
+
+    function testBroadcastRefusesASingleCloneSuiteThatSeatsTheDeployKey() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = singleOriginOwnedCloneSuite(address(0));
+        vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, suite.storedDeployedAddress));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function testBroadcastOfASingleCloneSuiteSeatingAnotherReachesTheNetworkRefusal() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = singleOriginOwnedCloneSuite(address(0xB0B));
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function testSeatCheckOfASingleCloneSuiteLeavesNothingDeployed() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = singleOriginOwnedCloneSuite(address(0xB0B));
+        deploy.externalCheckSeatsNoDeployKey(suite, new string[](0), vm.addr(1));
+        assertEq(suite.storedDeployedAddress.code.length, 0);
+        assertEq(suite.dependencies[0].deployedAddress.code.length, 0);
+        assertEq(suite.dependencies[1].deployedAddress.code.length, 0);
+        assertEq(block.chainid, 31337);
+    }
 }
