@@ -139,8 +139,7 @@
       ],
       "alreadyFiled": []
     }
-  }
-,
+  },
   {
     "timestamp": "2026-10-05T09:05:00Z",
     "commit": "f08ee42c6dbdb0f3daa82deae208e9ceccd37103",
@@ -162,8 +161,13 @@
       "nonTerminating": 0,
       "candidates": 3,
       "confirmed": 3,
-      "filed": [255, 256],
-      "alreadyFiled": [249]
+      "filed": [
+        255,
+        256
+      ],
+      "alreadyFiled": [
+        249
+      ]
     },
     "notes": [
       "Base attribution pass at f08ee42 probed 12 mutants over the pre-existing behaviours that are single-edit mutatable; 12/12 KILLED, every one by a test already on main, baseline green at 27. No pre-existing gap was found, so the tests this run added are additive rather than covering for main.",
@@ -195,7 +199,9 @@
       "candidates": 0,
       "confirmed": 0,
       "filed": [],
-      "alreadyFiled": [264]
+      "alreadyFiled": [
+        264
+      ]
     },
     "notes": [
       "Narrowed to the L01 fix, so commit and testsAfterCommit are the same tree: the tests are part of the change under test and the units did not exist before it. killedByExistingTests is 0 and gapsFilled is 0 for that reason, not because nothing was probed — 13 of 13 behaviours were probed and all 13 KILLED. The matrix establishes that each new test discriminates, not which pre-existing test covered what, and no attribution pass was possible.",
@@ -298,6 +304,31 @@
       "77 mutants (R 48, L 29), probed with mutation-probe against the pre-existing suite at the scanned commit; 77 KILLED, 0 survived, 0 no-run, 0 harness errors. No tests were added, so testsAfterCommit equals commit.",
       "Registry mutants ran against test/src/concrete/MigrationRegistry*.t.sol only (baseline green at 195): the library suites pin the candidate code hash, which would kill any registry bytecode change for the wrong reason. Library mutants ran against test/src/lib/LibMigrationRegistry*.t.sol.",
       "Adversarial pass: delegation scope, writer-keyed head and timestamp bounds, refusal order against the IMigrationRegistryV3 MUST clauses, and sender-first events were checked against the interface NatSpec and issue #312; no candidate bug."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T08:06:58Z",
+    "commit": "d5803b30c5dd64532952350c563d9f29faccd402",
+    "testsAfterCommit": "6d5ec114d2c591fca7c1db79d6825c94752a6bf2",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 97,
+    "scope": "PR #317 (release 0.1.19), the changed lines only: foundry.toml [external.package].version, src/generated/0_1_19/{AddressRegistry,MigrationRegistry,TimelockController}.sol constants, and the suites[9] entries and array lengths in src/lib/LibAddressRegistryReleased.sol and src/lib/LibMigrationRegistryReleased.sol",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behavioursProbed": 20,
+      "killedByExistingTests": 16,
+      "gapsFilled": 4,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "20 mutants probed with mutation-probe against the pre-existing suite at the scanned commit (fresh clone, baseline green at 856): 16 KILLED, 4 SURVIVED (version set back to 0.1.18, version set ahead to 0.1.20, a TimelockController 0_1_19 CREATION_CODE runtime-tail byte, and a constructor-only CREATION_CODE byte).",
+      "Gaps filled: RegistryDeployVerifyTest.testEveryFrozenCodeRecordDeploysItsRecordedHash deploys every frozen code record with its declaration referenceConstructorArgs and compares the code hash to BYTECODE_HASH; LibTimelockControllerTest.testFrozen0119CodeDerivesProductionTimelocks derives the ST0x production timelocks from the 0_1_19 generation; LibRainDeploySnapshotTest.testVersionIsTheNewestFrozenRelease and testVersionBehindTheNewestFrozenReleaseIsRefused hold the version to the newest frozen tag. Re-probe at testsAfterCommit (baseline green at 860): 20/20 KILLED.",
+      "Fork tests need RPC URLs, which were not available: the 169 tests failing at baseline on missing *_RPC_URL (and LibSafeTest, whose setUp forks) were excluded by name from the probe suite. CI on testsAfterCommit fails only RegistryDeployVerifyTest.testSuitesLiveOnEverySupportedNetwork (NotDeployedOnNetwork arbitrum, V3 MigrationRegistry not yet deployed).",
+      "Adversarial pass: the frozen records were checked against the candidate (byte-identical) and the timelock generation against the production timelock addresses; no candidate bug."
     ]
   }
 ]
