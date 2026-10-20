@@ -51,6 +51,10 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
     /// contract reads or clears it, and the record check reads `src/generated`.
     string constant DEPLOYS_OTHER_FIXTURE_ROOT = "test/generated-deploy-verify";
 
+    /// Where the record-count fixture is written. Its own tree, apart from the
+    /// deploys-other-code fixture, because forge runs the two in parallel.
+    string constant COUNT_FIXTURE_ROOT = "test/generated-deploy-verify-count";
+
     /// @inheritdoc RainDeployVerifySnapshotBase
     function frozenCodeRecordNames() internal pure override returns (string[] memory) {
         return parameterisedContractNames();
@@ -101,6 +105,27 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
     /// change MUST keep them valid for every frozen record.
     function testEveryFrozenCodeRecordDeploysItsRecordedHash() external {
         assertGt(this.externalCheckFrozenCodeRecordsDeploy(LibRainDeploySnapshot.LIB_FS_ROOT), 0);
+    }
+
+    /// Every code record under the root MUST be checked: a root holding two
+    /// valid generations reports exactly two.
+    function testEveryCodeRecordUnderTheRootIsChecked() external {
+        string[2] memory tags = ["0_1_18", "0_1_19"];
+        for (uint256 i = 0; i < tags.length; i++) {
+            string memory dir = string.concat(COUNT_FIXTURE_ROOT, "/", tags[i]);
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.createDir(dir, true);
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.writeFile(
+                string.concat(dir, "/TimelockController.sol"),
+                vm.readFile(string.concat("src/generated/", tags[i], "/TimelockController.sol"))
+            );
+        }
+
+        assertEq(this.externalCheckFrozenCodeRecordsDeploy(COUNT_FIXTURE_ROOT), 2);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(COUNT_FIXTURE_ROOT, true);
     }
 
     /// A code record whose `RUNTIME_CODE` and `BYTECODE_HASH` agree but whose
