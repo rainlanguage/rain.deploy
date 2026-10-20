@@ -278,6 +278,22 @@ contract LibRainDeployBeaconTest is Test {
         assertFalse(this.externalRecordedBefore(record(THIRD, HANDOVER), record(OTHER, HANDOVER)));
     }
 
+    /// `OTHER ROLLBACK` lists the already-reached `NAMESPACE INTERIM` before `THIRD HANDOVER`, the only way to
+    /// `THIRD UPGRADE`.
+    function testOrderWalkReadsPastAReachedRecordToTheEarlier() external {
+        deployRegistry();
+        applyIn(THIRD, UPGRADE, onto(THIRD, MIGRATION_HEAD_GENESIS));
+        applyIn(THIRD, HANDOVER, onto(THIRD, UPGRADE));
+        applyMigration(INTERIM, MIGRATION_HEAD_GENESIS);
+        applyIn(
+            OTHER,
+            ROLLBACK,
+            andAfter(andAfter(onto(OTHER, MIGRATION_HEAD_GENESIS), NAMESPACE, INTERIM), THIRD, HANDOVER)
+        );
+        applyIn(OTHER, HANDOVER, andAfter(onto(OTHER, ROLLBACK), NAMESPACE, INTERIM));
+        assertTrue(this.externalRecordedBefore(record(THIRD, UPGRADE), record(OTHER, HANDOVER)));
+    }
+
     function upgradeHandoverRollback() internal pure returns (BeaconTransition[] memory) {
         BeaconTransition[] memory transitions = new BeaconTransition[](3);
         transitions[0] = transition(UPGRADE, "upgraded", address(0xB0B));
