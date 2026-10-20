@@ -4,6 +4,8 @@ pragma solidity =0.8.25;
 
 import {
     CandidateSourceMismatch,
+    DeployDependency,
+    DeployMechanism,
     DeploySuite,
     UnknownDeploymentSuite
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
@@ -32,6 +34,15 @@ import {Prerequisite} from "../../../src/interface/IMigrationRegistryV3.sol";
 import {BeaconOwnerDeploy} from "../../concrete/BeaconOwnerDeploy.sol";
 import {MockOriginOwned} from "../../concrete/MockOriginOwned.sol";
 import {MockOriginRevertingOwner} from "../../concrete/MockOriginRevertingOwner.sol";
+import {MockOriginOwnedCloneable} from "../../concrete/MockOriginOwnedCloneable.sol";
+import {MockChainOriginOwned} from "../../concrete/MockChainOriginOwned.sol";
+import {MockRawOwner} from "../../concrete/MockRawOwner.sol";
+import {
+    CLONE_ARTIFACT_PATH,
+    CloneNetwork,
+    CloneNetworks,
+    LibRainDeployClone
+} from "../../../src/lib/LibRainDeployClone.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
 
@@ -650,7 +661,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
             "origin-owned@0_0_1",
             type(MockOriginOwned).creationCode,
             type(MockOriginOwned).runtimeCode,
-            "MockOriginOwned.sol:MockOriginOwned"
+            "test/concrete/MockOriginOwned.sol:MockOriginOwned"
         );
     }
 
@@ -659,7 +670,6 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         DeploySuite memory suite = originOwnedSuite();
         vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, suite.storedDeployedAddress));
         deploy.externalBroadcastSuite(suite, new string[](0), 1);
-        assertEq(suite.storedDeployedAddress.code.length, 0);
     }
 
     function testBroadcastOfASuiteSeatingAnotherReachesTheNetworkRefusal() external {
@@ -682,7 +692,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
             "origin-reverting-owner@0_0_1",
             type(MockOriginRevertingOwner).creationCode,
             type(MockOriginRevertingOwner).runtimeCode,
-            "MockOriginRevertingOwner.sol:MockOriginRevertingOwner"
+            "test/concrete/MockOriginRevertingOwner.sol:MockOriginRevertingOwner"
         );
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         deploy.externalBroadcastSuite(suite, new string[](0), 1);
@@ -700,5 +710,130 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         );
         deploy.externalCheckSeatsNoDeployKey(suite, vm.addr(1));
         assertEq(suite.storedDeployedAddress.code.length, 0);
+        assertEq(block.chainid, 31337);
+    }
+
+    function originOwnedCloneSuite(address arbitrumOwner, address baseOwner)
+        internal
+        pure
+        returns (DeploySuite memory)
+    {
+        address factory = LibRainDeploy.zoltuAddress(type(MockCloneFactory).creationCode);
+        address implementation = LibRainDeploy.zoltuAddress(type(MockOriginOwnedCloneable).creationCode);
+        DeployDependency[] memory dependencies = new DeployDependency[](2);
+        dependencies[0] = DeployDependency({deployedAddress: factory, runtimeCode: type(MockCloneFactory).runtimeCode});
+        dependencies[1] = DeployDependency({
+            deployedAddress: implementation, runtimeCode: type(MockOriginOwnedCloneable).runtimeCode
+        });
+        CloneNetworks memory clones = CloneNetworks({
+            factory: factory, implementation: implementation, salt: bytes32(uint256(7)), networks: new CloneNetwork[](2)
+        });
+        clones.networks[0] =
+            CloneNetwork({chainId: 42161, data: abi.encode(arbitrumOwner), deployedAddress: address(0)});
+        clones.networks[1] = CloneNetwork({chainId: 8453, data: abi.encode(baseOwner), deployedAddress: address(0)});
+        bytes memory runtimeCode = LibRainDeployClone.cloneRuntimeCode(implementation);
+        return DeploySuite({
+            suite: "origin-owned-clone@0_0_1",
+            creationCode: LibRainDeployClone.cloneCreationCode(implementation),
+            storedDeployedAddress: address(0),
+            storedBytecodeHash: keccak256(runtimeCode),
+            storedRuntimeCode: runtimeCode,
+            artifactPath: CLONE_ARTIFACT_PATH,
+            dependencies: dependencies,
+            mechanism: DeployMechanism.ClonePerNetwork,
+            mechanismData: abi.encode(clones)
+        });
+    }
+
+    function testBroadcastRefusesAPerNetworkSuiteWhoseSecondCloneSeatsTheDeployKey() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = originOwnedCloneSuite(address(0xB0B), address(0));
+        address seating = LibRainDeployMechanism.deployedAddress(suite, 8453);
+        vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, seating));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function testBroadcastRefusesAPerNetworkSuiteWhoseFirstCloneSeatsTheDeployKey() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = originOwnedCloneSuite(address(0), address(0xB0B));
+        address seating = LibRainDeployMechanism.deployedAddress(suite, 42161);
+        vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, seating));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function testBroadcastOfAPerNetworkSuiteSeatingOthersReachesTheNetworkRefusal() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = originOwnedCloneSuite(address(0xB0B), address(0xCAFE));
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function chainOriginOwnedSuite(uint256 chainId) internal pure returns (DeploySuite memory) {
+        return LibBeaconTest.zoltuSuite(
+            "chain-origin-owned@0_0_1",
+            abi.encodePacked(type(MockChainOriginOwned).creationCode, abi.encode(chainId)),
+            type(MockChainOriginOwned).runtimeCode,
+            "test/concrete/MockChainOriginOwned.sol:MockChainOriginOwned"
+        );
+    }
+
+    function testBroadcastRefusesASuiteSeatingTheDeployKeyOnlyUnderTheFirstNetworksChainId() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = chainOriginOwnedSuite(42161);
+        vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, suite.storedDeployedAddress));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function testBroadcastRefusesASuiteSeatingTheDeployKeyOnlyUnderTheLastNetworksChainId() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = chainOriginOwnedSuite(4663);
+        vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, suite.storedDeployedAddress));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function testBroadcastOfASuiteSeatingTheDeployKeyOnlyOffEveryNetworkReachesTheNetworkRefusal() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = chainOriginOwnedSuite(31337);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function rawOwnerSuite(bytes memory answer) internal pure returns (DeploySuite memory) {
+        return LibBeaconTest.zoltuSuite(
+            "raw-owner@0_0_1",
+            abi.encodePacked(type(MockRawOwner).creationCode, abi.encode(answer)),
+            type(MockRawOwner).runtimeCode,
+            "test/concrete/MockRawOwner.sol:MockRawOwner"
+        );
+    }
+
+    function expectRawOwnerRefused(bytes memory answer) internal {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = rawOwnerSuite(answer);
+        vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, suite.storedDeployedAddress));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function expectRawOwnerReachesTheNetworkRefusal(bytes memory answer) internal {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = rawOwnerSuite(answer);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    function testBroadcastRefusesAnOwnerAnswerLongerThanAWordNamingTheDeployKey() external {
+        expectRawOwnerRefused(abi.encodePacked(abi.encode(vm.addr(1)), bytes32(uint256(1))));
+    }
+
+    function testBroadcastRefusesAnOwnerAnswerNamingTheDeployKeyUnderDirtyUpperBits() external {
+        expectRawOwnerRefused(abi.encodePacked(uint256(uint160(vm.addr(1))) | (uint256(1) << 160)));
+    }
+
+    function testBroadcastOfAnOwnerAnswerShorterThanAWordReachesTheNetworkRefusal() external {
+        expectRawOwnerReachesTheNetworkRefusal(abi.encodePacked(vm.addr(1)));
+    }
+
+    function testBroadcastOfAnOwnerAnswerNamingTheDeployKeyInItsSecondWordReachesTheNetworkRefusal() external {
+        expectRawOwnerReachesTheNetworkRefusal(abi.encodePacked(bytes32(0), abi.encode(vm.addr(1))));
     }
 }

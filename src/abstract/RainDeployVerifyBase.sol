@@ -7,19 +7,13 @@ import {IBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/IBeacon.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
 
 import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
-import {LibRainDeployMechanism, ZoltuDerivationMismatch} from "../lib/LibRainDeployMechanism.sol";
+import {
+    DerivationSnapshotRevertFailed,
+    LibRainDeployMechanism,
+    ZoltuDerivationMismatch
+} from "../lib/LibRainDeployMechanism.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {ChainBeacon, DeployBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
-
-/// Thrown when the state snapshot taken around a derivation could not be
-/// reverted. The derivation plants code at the derived address, clears its
-/// nonce and etches the suite's declared dependencies; if that cannot be
-/// undone, every later derivation reads state this one created, and the
-/// chain-anchored checks compare a locally planted deployment against itself.
-/// There is no safe way to continue.
-/// @param suite The suite being derived when the revert failed.
-/// @param snapshotId The snapshot that could not be reverted.
-error DerivationSnapshotRevertFailed(string suite, uint256 snapshotId);
 
 /// What a suite derives, by itself, through its own mechanism.
 struct DerivedDeploy {
@@ -171,9 +165,9 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     }
 
     /// Refuses `BeaconNamedTwice` and `BeaconUnnamed`, `BeaconSuiteNotReleased` through `resolveReleased`,
-    /// `LibRainDeployBeacon.checkTransitionMigrations`'s refusals, and those of `LibRainDeployMechanism.deployedAddress`
-    /// and `deriveDeployment` for each suite it names on `chainId`, and `checkSeatedState`'s for a beacon named by
-    /// `beaconSuite`.
+    /// `LibRainDeployBeacon.checkTransitionMigrations`'s refusals, and those of
+    /// `LibRainDeployMechanism.deployedAddress` and `deriveDeployment` for each suite it names on `chainId`, and
+    /// `checkSeatedState`'s for a beacon named by `beaconSuite`.
     /// @param declaration The beacon, left unwritten so one declaration can be resolved on several networks.
     /// @param chainId The beacon's network.
     /// @param beaconIndex The beacon's index in `beacons()`, for the refusal.
@@ -230,8 +224,8 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
 
     /// Deploys the beacon's suite locally, as `deriveDeployment` does but under the beacon's chain id, and refuses
     /// `BeaconSeatedOwner` or `BeaconSeatedImplementation` when the deployment at the beacon's address answers
-    /// `owner()` or `implementation()` other than the initial state. A read that reverts or answers nothing is left to the chain
-    /// group's `LibRainDeployBeacon.checkBeacon`.
+    /// `owner()` or `implementation()` other than the initial state. A read that reverts or answers nothing is left
+    /// to the chain group's `LibRainDeployBeacon.checkBeacon`.
     /// @param resolved The beacon, resolved and named by `beaconSuite`.
     /// @param beaconIndex The beacon's index in `beacons()`, for the refusal.
     function checkSeatedState(ResolvedBeacon memory resolved, uint256 beaconIndex) internal {

@@ -17,6 +17,16 @@ import {
     LibRainDeployClone
 } from "./LibRainDeployClone.sol";
 
+/// Thrown when the state snapshot taken around a local deploy could not be
+/// reverted. A local deploy plants code at the derived address, clears its
+/// nonce and etches the suite's declared dependencies; if that cannot be
+/// undone, every later local deploy reads state this one created, and the
+/// chain-anchored checks compare a locally planted deployment against itself.
+/// There is no safe way to continue.
+/// @param suite The suite deployed locally when the revert failed.
+/// @param snapshotId The snapshot that could not be reverted.
+error DerivationSnapshotRevertFailed(string suite, uint256 snapshotId);
+
 /// Thrown when the pure `LibRainDeploy.zoltuAddress` formula and an actual deploy through the
 /// etched Zoltu factory bytecode disagree about where a creation code lands.
 /// @param suite The suite whose creation code was being derived.

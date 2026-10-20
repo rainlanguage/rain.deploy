@@ -214,8 +214,8 @@ library LibRainDeployBeacon {
     /// `LibRainDeploy.ResolvedAddressReadFailed` and `LibRainDeploy.UnexpectedResolvedAddress` on `implementation()`
     /// or `owner()`, and `BeaconPendingOwnerUnreadable` and `BeaconPendingOwner` on `pendingOwner()`.
     /// @param network The network's name, for the refusal.
-    /// @param beacon The beacon, resolved: `beacon` and `beaconCodeHash` set, as `RainDeployVerifyBase.resolveBeacon` sets
-    /// them.
+    /// @param beacon The beacon, resolved: `beacon` and `beaconCodeHash` set, as `RainDeployVerifyBase.resolveBeacon`
+    /// sets them.
     /// @param implementation The address `implementation()` MUST return.
     /// @param owner The address `owner()` MUST return; roles and any other authority are not read.
     function checkBeacon(string memory network, DeployBeacon memory beacon, address implementation, address owner)

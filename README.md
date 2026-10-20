@@ -343,24 +343,29 @@ at its address on its network and refused with `BeaconSeatedOwner` or
 `BeaconSeatedImplementation` when it answers `owner()` or `implementation()`
 with other than its initial state. These refusals, and
 `BeaconTransitionMigrationRepeated` and `BeaconTransitionMigrationUnnamed`
-below, are raised offline by the snapshot group for every beacon, and by the
-chain group, before any network is forked, for the beacons on the networks it
-checks; `BeaconOnUncheckedNetwork` there covers every beacon. A beacon with
-transitions reads `MigrationRegistry` on its network, which MUST be deployed
-there. The chain group reads `owner()`, and refuses a beacon that answers
-`pendingOwner()` with anything but zero with `BeaconPendingOwner`, or with data
-that is not one word with `BeaconPendingOwnerUnreadable`: a two-step handover is
-red from `transferOwnership` until the batch that accepts it applies its
-migration. Assert any other authority a beacon exposes (roles) yourself,
-including that the deploy key holds none of it. The deploy key is never a
-declared owner of any state, and a broadcast whose key is one is refused with
-`BeaconOwnedByDeployKey` before any network is read, as is a broadcast of a
-suite that, deployed locally with the deploy key as sender and origin, answers
-`owner()` with the deploy key (`SuiteSeatsDeployKey`); seat governance from the
-first state. That check reads `owner()` only, on every network's clone of a
-per-network suite, the networks the broadcast does not reach included: roles,
-pending owners, admin slots and contracts a constructor creates are not read, so
-assert those yourself.
+below, are raised offline for every beacon by the Beacons group
+(`testBeaconDeclarationsResolve`, inherited through
+`RainDeployVerifySnapshotBase`), and by the chain group, before any network is
+forked, for the beacons on the networks it checks; `BeaconOnUncheckedNetwork`
+there covers every beacon. A beacon with transitions reads `MigrationRegistry`
+on its network, which MUST be deployed there. The chain group reads `owner()`,
+and refuses a beacon that answers `pendingOwner()` with anything but zero with
+`BeaconPendingOwner`, or with data that is not one word with
+`BeaconPendingOwnerUnreadable`: a two-step handover is red from
+`transferOwnership` until the batch that accepts it applies its migration.
+Assert any other authority a beacon exposes (roles) yourself, including that the
+deploy key holds none of it. The deploy key is never a declared owner of any
+state, past states included, and a broadcast whose key is one is refused with
+`BeaconOwnedByDeployKey` before any network is read. A beacon that was owned by
+a deploy key and has since been handed over declares its post-handover state as
+`initial`, with no transition for the handover. A broadcast is also refused
+before any network is read when its suite, deployed locally with the deploy key
+as sender and origin under each network's chain id, answers `owner()` with a
+first word naming the deploy key (`SuiteSeatsDeployKey`); seat governance from
+the first state. That check reads `owner()` only, on every supported network
+(every network's clone of a per-network suite), the networks the broadcast does
+not reach included: roles, pending owners, admin slots and contracts a
+constructor creates are not read, so assert those yourself.
 
 Declare transitions in the order their migrations are applied: each applied
 transition's record MUST reach the latest earlier-declared applied one through

@@ -6,8 +6,8 @@ import {Script} from "forge-std-1.17.0/src/Script.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
 
 import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
-import {DerivationSnapshotRevertFailed} from "./RainDeployVerifyBase.sol";
-import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
+import {DerivationSnapshotRevertFailed, LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
+import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {ChainBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
 
 /// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with the deploy key. Roles,
@@ -78,10 +78,9 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         broadcastSuite(suite, deployNetworks(), deployerPrivateKey);
     }
 
-    /// Refuses `BeaconOwnedByDeployKey` and `checkSeatsNoDeployKey`'s refusals before reading any network, then broadcasts the selected suite by ITS
-    /// mechanism, through `LibRainDeployMechanism` — the same
-    /// dispatch every verification group derives through, so what is broadcast is what was
-    /// verified.
+    /// Refuses `BeaconOwnedByDeployKey` and `checkSeatsNoDeployKey`'s refusals before reading any network, then
+    /// broadcasts the selected suite by ITS mechanism, through `LibRainDeployMechanism` — the same dispatch every
+    /// verification group derives through, so what is broadcast is what was verified.
     /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
     /// @param networks The networks to broadcast to, as `deployNetworks()` gave them.
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
@@ -105,27 +104,38 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, broadcast);
     }
 
-    /// Deploys `suite` locally with `deployer` as sender and origin, and refuses `SuiteSeatsDeployKey` for any
-    /// deployed address answering `owner()` with `deployer`. Every target of `suite` is deployed and read, those of
-    /// networks this broadcast does not reach included, so one network's clone seating the deploy key refuses the
-    /// broadcast to every network.
+    /// Deploys `suite` locally with `deployer` as sender and origin, once under each target's chain id, and refuses
+    /// `SuiteSeatsDeployKey` when the target deployed for that chain id answers `owner()` with a first word whose
+    /// low 160 bits are `deployer`. The targets are a per-network clone suite's networks, otherwise every one of
+    /// `supportedNetworks()`, those this broadcast does not reach included, so one network seating the deploy key
+    /// refuses the broadcast to every network.
     /// @param suite The suite to broadcast, in its `onSupportedNetworks` form.
     /// @param deployer The deploy key's address.
     function checkSeatsNoDeployKey(DeploySuite memory suite, address deployer) internal {
-        uint256 snapshotId = vm.snapshotState();
-        vm.startPrank(deployer, deployer);
-        address[] memory deployed = LibRainDeployMechanism.deployLocally(vm, suite);
-        vm.stopPrank();
-        bytes32 seated = keccak256(abi.encode(deployer));
-        for (uint256 i = 0; i < deployed.length; i++) {
-            // slither-disable-next-line low-level-calls
-            (bool answered, bytes memory owner) = deployed[i].staticcall(abi.encodeCall(IERC5313.owner, ()));
-            if (answered && keccak256(owner) == seated) {
-                revert SuiteSeatsDeployKey(suite.suite, deployed[i]);
+        uint256[] memory chainIds = LibRainDeployMechanism.addressChainIds(suite);
+        if (chainIds.length == 0) {
+            SupportedNetwork[] memory supported = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
+            chainIds = new uint256[](supported.length);
+            for (uint256 i = 0; i < supported.length; i++) {
+                chainIds[i] = supported[i].chainId;
             }
         }
-        if (!vm.revertToState(snapshotId)) {
-            revert DerivationSnapshotRevertFailed(suite.suite, snapshotId);
+        for (uint256 i = 0; i < chainIds.length; i++) {
+            uint256 snapshotId = vm.snapshotState();
+            vm.chainId(chainIds[i]);
+            vm.startPrank(deployer, deployer);
+            LibRainDeployMechanism.deployLocally(vm, suite);
+            vm.stopPrank();
+            address deployed = LibRainDeployMechanism.deployedAddress(suite, chainIds[i]);
+            // slither-disable-next-line low-level-calls
+            (bool answered, bytes memory owner) = deployed.staticcall(abi.encodeCall(IERC5313.owner, ()));
+            // Restores the chain id with the state.
+            if (!vm.revertToState(snapshotId)) {
+                revert DerivationSnapshotRevertFailed(suite.suite, snapshotId);
+            }
+            if (answered && owner.length >= 0x20 && address(uint160(abi.decode(owner, (uint256)))) == deployer) {
+                revert SuiteSeatsDeployKey(suite.suite, deployed);
+            }
         }
     }
 }
