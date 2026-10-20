@@ -755,4 +755,33 @@ contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerif
         DerivedDeploy memory derived = this.externalDeriveUnlessResolved(releasedSuites()[2], arbitrum());
         assertEq(derived.bytecodeHash, sSuiteBeacon.codehash);
     }
+
+    function testBeaconSuiteWithAResolvedKeyButOtherCodeIsDerivedAfresh() external {
+        sBeacons.declare(42161, bySuite("beacon@0_0_1", OWNER));
+        DeploySuite memory other = LibBeaconTest.zoltuSuite(
+            "beacon@0_0_1",
+            type(MockDeployable).creationCode,
+            type(MockDeployable).runtimeCode,
+            "test/concrete/MockDeployable.sol:MockDeployable"
+        );
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployable).creationCode, 1);
+        DerivedDeploy memory derived = this.externalDeriveUnlessResolved(other, arbitrum());
+        assertEq(derived.bytecodeHash, keccak256(type(MockDeployable).runtimeCode));
+    }
+
+    function testImplementationSuiteMustHaveItsDerivedCodeOffline() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        bytes32 derived = sImplementation.codehash;
+        vm.etch(sImplementation, type(MockDeployable).runtimeCode);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.CodeHashMismatchOnNetwork.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                sImplementation,
+                derived,
+                sUpgrade.codehash
+            )
+        );
+        this.externalCheckBeaconsOnNetwork(arbitrum(), 0);
+    }
 }

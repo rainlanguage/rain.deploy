@@ -287,9 +287,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// once on its network, a beacon suite seating its initial state, and each transition naming a distinct, recordable
     /// migration. Reads `supportedNetworks()` only when a beacon is declared.
     function testBeaconDeclarationsResolve() external {
-        if (beacons().length != 0) {
-            resolveBeacons(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()));
-        }
+        resolveSupportedBeacons();
     }
 
     /// Every declared suite MUST be internally consistent.

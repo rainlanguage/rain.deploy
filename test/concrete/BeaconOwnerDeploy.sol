@@ -6,6 +6,7 @@ import {DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySu
 import {ChainBeacon, DeployBeacon} from "../../src/lib/LibRainDeployBeacon.sol";
 import {LibBeaconDeclarations} from "../lib/LibBeaconDeclarations.sol";
 import {ExampleDeploy} from "./ExampleDeploy.sol";
+import {MockOriginOwned} from "./MockOriginOwned.sol";
 
 /// @title BeaconOwnerDeploy
 /// @notice `ExampleDeploy` with the beacons a test declares, and `broadcastSuite` exposed.
@@ -42,5 +43,18 @@ contract BeaconOwnerDeploy is ExampleDeploy {
         external
     {
         checkSeatsNoDeployKey(suite, networks, deployer);
+    }
+
+    /// @param suite The suite to check.
+    /// @param networks The networks the broadcast reaches.
+    /// @param deployer The deploy key's address.
+    /// @return The origin of a contract this deploy creates once the check returns.
+    function externalCheckSeatsNoDeployKeyThenOrigin(
+        DeploySuite memory suite,
+        string[] memory networks,
+        address deployer
+    ) external returns (address) {
+        checkSeatsNoDeployKey(suite, networks, deployer);
+        return new MockOriginOwned().owner();
     }
 }

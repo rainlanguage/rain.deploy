@@ -132,7 +132,30 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         if (chainBeacons.length == 0) {
             return new ResolvedBeacon[](0);
         }
+        return resolveBeaconsOn(chainBeacons, LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), networks);
+    }
+
+    /// `resolveBeacons` on every one of `supportedNetworks()`, which it reads only when a beacon is declared.
+    /// @return Each of `beacons()`, resolved on its network, in declaration order.
+    function resolveSupportedBeacons() internal returns (ResolvedBeacon[] memory) {
+        ChainBeacon[] memory chainBeacons = beacons();
+        if (chainBeacons.length == 0) {
+            return new ResolvedBeacon[](0);
+        }
         SupportedNetwork[] memory supported = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
+        return resolveBeaconsOn(chainBeacons, supported, supported);
+    }
+
+    /// `resolveBeacons`'s refusals and resolution, over declarations already read.
+    /// @param chainBeacons `beacons()`.
+    /// @param supported `supportedNetworks()`'s catalogue entries.
+    /// @param networks The networks whose beacons to resolve.
+    /// @return Each of `chainBeacons` on one of `networks`, resolved on it, in declaration order.
+    function resolveBeaconsOn(
+        ChainBeacon[] memory chainBeacons,
+        SupportedNetwork[] memory supported,
+        SupportedNetwork[] memory networks
+    ) internal returns (ResolvedBeacon[] memory) {
         uint256 onNetworks = 0;
         for (uint256 beaconIndex = 0; beaconIndex < chainBeacons.length; beaconIndex++) {
             uint256 chainId = chainBeacons[beaconIndex].chainId;
@@ -232,7 +255,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     function checkSeatedState(ResolvedBeacon memory resolved, uint256 beaconIndex) internal {
         uint256 snapshotId = vm.snapshotState();
         vm.chainId(resolved.chainId);
-        LibRainDeployMechanism.deployLocallyOn(vm, resolved.suite, resolved.chainId);
+        LibRainDeployMechanism.deployLocallyOnChain(vm, resolved.suite);
         // slither-disable-next-line low-level-calls
         (bool ownerAnswered, bytes memory owner) = resolved.beacon.beacon.staticcall(abi.encodeCall(IERC5313.owner, ()));
         // slither-disable-next-line low-level-calls

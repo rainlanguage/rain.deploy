@@ -963,4 +963,19 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         assertEq(suite.dependencies[1].deployedAddress.code.length, 0);
         assertEq(block.chainid, 31337);
     }
+
+    function testBroadcastRefusesASuiteSeatingTheDeployKeyOnASupportedNetworkBesideAnOutsideDispatch() external {
+        ArbitrumSupportedBeaconOwnerDeploy deploy = new ArbitrumSupportedBeaconOwnerDeploy();
+        DeploySuite memory suite = chainOriginOwnedSuite(42161);
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.BASE;
+        vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, suite.storedDeployedAddress));
+        deploy.externalBroadcastSuite(suite, networks, 1);
+    }
+
+    function testSeatCheckLeavesNoPrank() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = LibBeaconTest.beaconSuite("beacon@0_0_1", address(deploy), address(0xB0B));
+        assertEq(deploy.externalCheckSeatsNoDeployKeyThenOrigin(suite, new string[](0), vm.addr(1)), tx.origin);
+    }
 }

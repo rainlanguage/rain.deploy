@@ -231,4 +231,15 @@ contract RainDeployVerifyBaseBeaconTest is BeaconVerifyFixture {
         assertTrue(seatsOther(true, abi.encodePacked(abi.encode(expected), suffix), expected));
         assertFalse(seatsOther(true, abi.encode(expected), expected));
     }
+
+    function testBeaconSuiteSeatingAnotherImplementationIsRefusedAtItsIndex() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        DeployBeacon memory beacon = bySuite("beacon@0_0_1", OWNER);
+        beacon.initial.implementation = "beacon-upgrade@0_0_1";
+        sBeacons.declare(42161, beacon);
+        vm.expectRevert(
+            abi.encodeWithSelector(BeaconSeatedImplementation.selector, 42161, 1, abi.encode(sImplementation))
+        );
+        this.externalResolveBeacons(arbitrum());
+    }
 }

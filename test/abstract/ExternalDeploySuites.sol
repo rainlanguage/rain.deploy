@@ -36,6 +36,17 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
         return suiteIndex(allSuites(), requested);
     }
 
+    /// @param suites The suites to search.
+    /// @param requested The suite key to select.
+    /// @return The index of the suite `requested` selects in `suites`, its length if none.
+    function externalSuiteIndexIn(DeploySuite[] memory suites, string memory requested)
+        external
+        pure
+        returns (uint256)
+    {
+        return suiteIndex(suites, requested);
+    }
+
     /// @return The declared keys, comma separated.
     function externalSuiteNames() external view returns (string memory) {
         return suiteNames();
