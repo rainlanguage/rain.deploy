@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {
@@ -16,6 +17,7 @@ import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.so
 import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../../../src/interface/IMigrationRegistryV3.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
+import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {LibBeaconDeclarations} from "../../lib/LibBeaconDeclarations.sol";
 import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
 import {BeaconVerifyFixture} from "../../abstract/BeaconVerifyFixture.sol";
@@ -783,5 +785,32 @@ contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerif
             )
         );
         this.externalCheckBeaconsOnNetwork(arbitrum(), 0);
+    }
+
+    /// External wrapper for `checkDeployedOnNetworks` on the local fork seam.
+    /// @param networks The networks to check.
+    /// @param suites The suites to check.
+    function externalCheckLocallyOn(SupportedNetwork[] memory networks, DeploySuite[] memory suites) external {
+        checkDeployedOnNetworks(Vm(address(new LocalForkVm())), networks, suites);
+    }
+
+    function testReleasedSuiteABeaconImplementsIsDerivedOnceInTheLocalChainCheck() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", OWNER));
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployableV2).creationCode, 1);
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, type(MockDeployable).creationCode, 1);
+        vm.expectCall(LibRainDeploy.ZOLTU_FACTORY, beaconCreationCode(), 1);
+        this.externalCheckLocallyOn(arbitrum(), releasedSuites());
+    }
+
+    function testLocalChainGroupChecksABeaconsOwnerWithoutSuites() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", NEW_OWNER));
+        expectUnexpected(1, NEW_OWNER, OWNER);
+        this.externalCheckLocallyOn(arbitrum(), new DeploySuite[](0));
+    }
+
+    function testLocalChainGroupChecksABeaconsOwnerBesideSuites() external {
+        sBeacons.declare(42161, declared("beacon-implementation@0_0_1", NEW_OWNER));
+        expectUnexpected(1, NEW_OWNER, OWNER);
+        this.externalCheckLocallyOn(arbitrum(), releasedSuites());
     }
 }
