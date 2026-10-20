@@ -120,7 +120,8 @@ contract LibRainDeployBeaconProxyTest is Test {
     function testBeaconProxyAddressMatchesARealFactory(bytes32 salt, bytes memory data) external {
         MockBeaconProxyFactory factory = new MockBeaconProxyFactory();
         address beacon = realBeacon();
-        CloneTarget memory target = CloneTarget({factory: address(factory), implementation: beacon, data: data, salt: salt});
+        CloneTarget memory target =
+            CloneTarget({factory: address(factory), implementation: beacon, data: data, salt: salt});
         address expected = LibRainDeployBeaconProxy.beaconProxyDeployedAddress(target);
         assertEq(factory.predictBeaconProxyAddressOpenSalt(beacon, data, salt), expected);
         assertEq(factory.beaconProxyDeterministicOpenSalt(beacon, data, salt), expected);
