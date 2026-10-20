@@ -10,7 +10,7 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 
 /// @title RegistryDeployVerifyTest
 /// @notice This repo's own registry declaration bound to `RainDeployVerify` —
-/// the same single line a consumer writes, so a check that reaches this
+/// the same inheritance a consumer writes, so a check that reaches this
 /// contract reaches every consumer that has bumped, and one that does not reach
 /// it never shipped.
 ///

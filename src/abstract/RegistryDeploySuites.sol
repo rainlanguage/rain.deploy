@@ -102,7 +102,10 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// `requiresSuiteOn` for this declaration: an `AddressRegistry` release
     /// only on `addressRegistryNetworks()`, everything else everywhere. Not an
     /// override, so the contracts that only broadcast from this declaration
-    /// need none; `RegistryDeployVerifyTest` binds it.
+    /// need none. Every contract that runs the chain group over this
+    /// declaration MUST override `requiresSuiteOn` with it; the one that does
+    /// is `RegistryDeployVerifyTest`, and a verify contract added without the
+    /// override requires every `AddressRegistry` release on every network.
     /// @param suite The suite.
     /// @param network The network, as an `[rpc_endpoints]` alias.
     /// @return True if the suite MUST be live on the network.

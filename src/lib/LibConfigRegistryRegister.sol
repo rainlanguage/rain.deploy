@@ -458,13 +458,30 @@ library LibConfigRegistryRegister {
         }
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
-            checkChain(vm, networks[i]);
-            (bytes memory actual, uint256 registeredAt) = LibConfigRegistry.resolve(hashed);
-            if (keccak256(actual) != keccak256(value)) {
-                revert UnexpectedBinding(networks[i].name, hashed, value, actual);
-            }
+            uint256 registeredAt = checkRegisteredOnSelectedChain(vm, networks[i], hashed, value);
             console2.log(string.concat("Bound on ", networks[i].name, " at ", vm.toString(registeredAt)));
         }
+    }
+
+    /// Reverts unless the selected chain is the network's and its registry
+    /// binds `name` to `value`, read through `LibConfigRegistry.resolve`
+    /// exactly as a consumer reads it.
+    /// @param vm The Vm the chain id is read through.
+    /// @param network The catalogue entry of the selected chain.
+    /// @param name The hashed name.
+    /// @param value The value it must be bound to.
+    /// @return The moment it was bound.
+    function checkRegisteredOnSelectedChain(Vm vm, SupportedNetwork memory network, bytes32 name, bytes memory value)
+        internal
+        view
+        returns (uint256)
+    {
+        checkChain(vm, network);
+        (bytes memory actual, uint256 registeredAt) = LibConfigRegistry.resolve(name);
+        if (keccak256(actual) != keccak256(value)) {
+            revert UnexpectedBinding(network.name, name, value, actual);
+        }
+        return registeredAt;
     }
 
     /// `checkRegisteredOnForks` on a fresh fork of every selected network: the
