@@ -2,7 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
+import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
 
 import {DeployCandidate, DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
@@ -61,6 +62,41 @@ error UnexpectedStoredDeployedAddress(string suite, address storedDeployedAddres
 /// network.
 /// @param suite The declaration's suite key.
 error CloneDataAmbiguous(string suite);
+
+/// Thrown when a suite that is not a per-network clone is given extended networks.
+/// @param suite The suite's key.
+error ExtendedNetworksUnexpected(string suite);
+
+/// Thrown when an extended network's address is not the one its init data derives under the release.
+/// @param suite The release's suite key.
+/// @param chainId The extended network's chain id.
+/// @param derivedAddress The address its init data derives.
+/// @param extendedAddress The address it declares.
+error ExtendedNetworkAddressMismatch(string suite, uint256 chainId, address derivedAddress, address extendedAddress);
+
+/// Thrown when a per-network release is checked on, or about to be broadcast to, a network it neither records nor
+/// declares as extended, whether or not anything is live at the address its candidate's current init data derives
+/// there.
+/// At broadcast that address is what the candidate's data derives now, not necessarily where the release is live: a
+/// release already broadcast there is declared with the init data it was broadcast with, from its `NewClone` event.
+/// @param suite The release's suite key.
+/// @param network The network.
+/// @param deployedAddress The address checked or to be broadcast there.
+error ExtendedNetworkUnfrozen(string suite, string network, address deployedAddress);
+
+/// Thrown when a storage slot of any account but the clone and the accounts created under it is read while the clone
+/// is deployed locally: the factory call and the clone's `initialize`. A full-slot write is not refused; a write to
+/// part of a slot reads the slot first and is refused like a read.
+/// @param suite The suite being deployed.
+/// @param account The account whose storage was read.
+/// @param slot The slot read.
+error CloneInitializeReadsStorage(string suite, address account, bytes32 slot);
+
+/// Emitted when a broadcast Zoltu entry under `CLONE_ARTIFACT_PATH` leaves its source to verify by hand.
+/// @param sender The deploy's `msg.sender`, not the broadcasting key.
+/// @param entryAddress Where the entry is deployed on every network.
+/// @param networks The networks it was broadcast to.
+event UnverifiableSource(address indexed sender, address indexed entryAddress, string[] networks);
 
 /// @title LibRainDeployMechanism
 /// @notice The one place anything dispatches on a suite's `DeployMechanism`.
@@ -208,11 +244,12 @@ library LibRainDeployMechanism {
         return chainIds;
     }
 
-    /// A per-network clone suite with an entry for every network its candidate has one for.
+    /// A per-network clone suite with an entry for every network in play its candidate has one for.
     /// @param suite The suite.
     /// @param candidate The candidate whose init data the suite's unrecorded networks take.
-    /// @return The suite, with the candidate's networks it lacks.
-    function withUnrecordedNetworks(DeploySuite memory suite, DeploySuite memory candidate)
+    /// @param chainIds The chain ids in play; a candidate network on any other chain is not added.
+    /// @return The suite, with the candidate's networks in play it lacks.
+    function withUnrecordedNetworks(DeploySuite memory suite, DeploySuite memory candidate, uint256[] memory chainIds)
         internal
         pure
         returns (DeploySuite memory)
@@ -231,7 +268,8 @@ library LibRainDeployMechanism {
         }
         uint256 count = recorded;
         for (uint256 i = 0; i < declared.length; i++) {
-            if (!hasChainId(networks, recorded, declared[i].chainId)) {
+            if (!hasChainId(networks, recorded, declared[i].chainId) && containsChainId(chainIds, declared[i].chainId))
+            {
                 networks[count] =
                     CloneNetwork({chainId: declared[i].chainId, data: declared[i].data, deployedAddress: address(0)});
                 count++;
@@ -245,6 +283,114 @@ library LibRainDeployMechanism {
             clones.networks[i].deployedAddress =
                 LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(clones, i));
         }
+        return withMechanismData(suite, abi.encode(clones));
+    }
+
+    /// A per-network release with the networks declared for it beyond those it records appended, each held to the
+    /// address its init data derives under the release.
+    /// Reverts with `ExtendedNetworksUnexpected` on a suite that is not per network, `ExtendedNetworkAddressMismatch` on
+    /// an entry at an address its init data does not derive, and `DuplicateCloneNetwork` on a network named twice.
+    /// @param suite The release.
+    /// @param extended The networks declared for it, each as it is or will be broadcast.
+    /// @return The release with them.
+    function withExtendedNetworks(DeploySuite memory suite, CloneNetwork[] memory extended)
+        internal
+        pure
+        returns (DeploySuite memory)
+    {
+        if (extended.length == 0) {
+            return suite;
+        }
+        if (suite.mechanism != DeployMechanism.ClonePerNetwork) {
+            revert ExtendedNetworksUnexpected(suite.suite);
+        }
+        CloneNetworks memory clones = cloneNetworks(suite);
+        uint256 recorded = clones.networks.length;
+        CloneNetwork[] memory networks = new CloneNetwork[](recorded + extended.length);
+        for (uint256 i = 0; i < recorded; i++) {
+            networks[i] = clones.networks[i];
+        }
+        for (uint256 i = 0; i < extended.length; i++) {
+            networks[recorded + i] = extended[i];
+        }
+        clones.networks = networks;
+        LibRainDeployClone.checkCloneNetworks(clones, suite.dependencies);
+        for (uint256 i = recorded; i < networks.length; i++) {
+            address derived = LibRainDeployClone.cloneDeployedAddress(LibRainDeployClone.cloneNetworkTarget(clones, i));
+            if (derived != networks[i].deployedAddress) {
+                revert ExtendedNetworkAddressMismatch(
+                    suite.suite, networks[i].chainId, derived, networks[i].deployedAddress
+                );
+            }
+        }
+        return withMechanismData(suite, abi.encode(clones));
+    }
+
+    /// Refuses a per-network release on a network that `frozen` neither records nor declares as extended.
+    /// @param frozen The release with its extended networks.
+    /// @param network The network's name.
+    /// @param chainId The network's chain id.
+    /// @param where The address checked on it.
+    function checkNetworkFrozen(DeploySuite memory frozen, string memory network, uint256 chainId, address where)
+        internal
+        pure
+    {
+        if (frozen.mechanism != DeployMechanism.ClonePerNetwork) {
+            return;
+        }
+        CloneNetworks memory clones = cloneNetworks(frozen);
+        if (!hasChainId(clones.networks, clones.networks.length, chainId)) {
+            revert ExtendedNetworkUnfrozen(frozen.suite, network, where);
+        }
+    }
+
+    /// Refuses to broadcast a per-network release to a network it neither records nor declares as extended, so an
+    /// unrecorded network's address is frozen before it exists on chain.
+    /// A network `onNetworks` has no entry for is not checked here; `deployAndBroadcast` refuses it with
+    /// `CloneNetworkUndeclared`.
+    /// @param frozen The release with its extended networks.
+    /// @param onNetworks The release as it would be broadcast, with its candidate's unrecorded networks.
+    /// @param networks The networks to broadcast to.
+    function checkNetworksFrozen(DeploySuite memory frozen, DeploySuite memory onNetworks, string[] memory networks)
+        internal
+        pure
+    {
+        if (onNetworks.mechanism != DeployMechanism.ClonePerNetwork) {
+            return;
+        }
+        SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
+        CloneNetwork[] memory clones = cloneNetworks(onNetworks).networks;
+        for (uint256 i = 0; i < configs.length; i++) {
+            for (uint256 j = 0; j < clones.length; j++) {
+                if (clones[j].chainId == configs[i].chainId) {
+                    checkNetworkFrozen(frozen, networks[i], configs[i].chainId, clones[j].deployedAddress);
+                }
+            }
+        }
+    }
+
+    /// Whether a list of chain ids holds a chain id.
+    /// @param chainIds The list.
+    /// @param chainId The chain id looked for.
+    /// @return Whether it is in the list.
+    function containsChainId(uint256[] memory chainIds, uint256 chainId) internal pure returns (bool) {
+        for (uint256 i = 0; i < chainIds.length; i++) {
+            if (chainIds[i] == chainId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
+    /// A suite with its mechanism data replaced.
+    /// @param suite The suite.
+    /// @param mechanismData The mechanism data it takes.
+    /// @return The suite with that mechanism data.
+    function withMechanismData(DeploySuite memory suite, bytes memory mechanismData)
+        internal
+        pure
+        returns (DeploySuite memory)
+    {
         return DeploySuite({
             suite: suite.suite,
             creationCode: suite.creationCode,
@@ -254,7 +400,7 @@ library LibRainDeployMechanism {
             artifactPath: suite.artifactPath,
             dependencies: suite.dependencies,
             mechanism: suite.mechanism,
-            mechanismData: abi.encode(clones)
+            mechanismData: mechanismData
         });
     }
 
@@ -294,6 +440,16 @@ library LibRainDeployMechanism {
 
     /// Runs a suite's mechanism on the local EVM and returns where it landed, each address
     /// cross-checked against the formula's.
+    /// A storage read during the factory call of any account but the clone and the accounts created under it is
+    /// refused with `CloneInitializeReadsStorage`, even when the call then reverts: locally that storage is empty,
+    /// while the clone and what it creates are empty on chain too. An account created by one that predates the call,
+    /// such as a factory, may already exist on chain, so it is not exempt. A call that reverts without one reverts
+    /// unchanged.
+    /// Only storage reads are checked: a balance or code read of another account is not refused. A write to part of a
+    /// slot reads the slot first, so it is refused like a read.
+    /// The clone MUST NOT have been deployed earlier in the same EVM without its state reverted since: a `Create` that
+    /// collides with an account already there is recorded as creating it, so reads of that account are exempt.
+    /// Each clone is deployed under a state-diff recording, which ends any recording the caller started.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy.
     /// @return Where the mechanism deployed it, in the suite's address order — the derived
@@ -336,13 +492,90 @@ library LibRainDeployMechanism {
             }
             vm.etch(deployed[i], hex"");
             vm.resetNonce(deployed[i]);
-            address cloneAddress = ICloneableFactoryV4(targets[i].factory)
-                .cloneDeterministicOpenSalt(targets[i].implementation, targets[i].data, targets[i].salt);
-            if (cloneAddress != deployed[i]) {
-                revert CloneDerivationMismatch(suite.suite, deployed[i], cloneAddress);
+            vm.startStateDiffRecording();
+            // slither-disable-next-line low-level-calls
+            (bool success, bytes memory result) = targets[i].factory
+                .call(
+                    abi.encodeCall(
+                        ICloneableFactoryV4.cloneDeterministicOpenSalt,
+                        (targets[i].implementation, targets[i].data, targets[i].salt)
+                    )
+                );
+            Vm.AccountAccess[] memory accesses = vm.stopAndReturnStateDiff();
+            if (success) {
+                address cloneAddress = abi.decode(result, (address));
+                if (cloneAddress != deployed[i]) {
+                    revert CloneDerivationMismatch(suite.suite, deployed[i], cloneAddress);
+                }
+            }
+            checkReadsOwnStorageOnly(suite.suite, deployed[i], accesses);
+            if (!success) {
+                assembly ("memory-safe") {
+                    revert(add(result, 0x20), mload(result))
+                }
             }
         }
         return deployed;
+    }
+
+    /// Refuses a storage read, recorded while a clone was deployed, of any account but the clone and the accounts
+    /// created under it: those are empty on chain too, while an account a pre-existing one creates may already exist
+    /// there. Only storage reads are checked: a balance or code read of another account is not refused.
+    /// @param suite The suite being deployed.
+    /// @param clone The clone's address.
+    /// @param accesses What was recorded.
+    function checkReadsOwnStorageOnly(string memory suite, address clone, Vm.AccountAccess[] memory accesses)
+        internal
+        pure
+    {
+        for (uint256 i = 0; i < accesses.length; i++) {
+            for (uint256 j = 0; j < accesses[i].storageAccesses.length; j++) {
+                Vm.StorageAccess memory access = accesses[i].storageAccesses[j];
+                if (!access.isWrite && !createdUnder(access.account, clone, accesses)) {
+                    revert CloneInitializeReadsStorage(suite, access.account, access.slot);
+                }
+            }
+        }
+    }
+
+    /// Whether an account is the clone or was created, in a recording, by an account that is.
+    /// Each step follows a distinct `Create` access to its creator, so a chain longer than the recording is a cycle
+    /// and is not the clone's.
+    /// @param account The account.
+    /// @param clone The clone's address.
+    /// @param accesses What was recorded.
+    /// @return Whether `account` is `clone` or its chain of creators reaches `clone`.
+    function createdUnder(address account, address clone, Vm.AccountAccess[] memory accesses)
+        internal
+        pure
+        returns (bool)
+    {
+        for (uint256 hops = 0; hops <= accesses.length; hops++) {
+            if (account == clone) {
+                return true;
+            }
+            (bool created, address creator) = creatorIn(account, accesses);
+            if (!created) {
+                return false;
+            }
+            account = creator;
+        }
+        return false;
+    }
+
+    /// The account that created an account in a recording.
+    /// @param account The account.
+    /// @param accesses What was recorded.
+    /// @return Whether some access created `account`.
+    /// @return The creating access's accessor, zero when none did.
+    function creatorIn(address account, Vm.AccountAccess[] memory accesses) internal pure returns (bool, address) {
+        bool created = false;
+        address creator = address(0);
+        for (uint256 k = 0; k < accesses.length && !created; k++) {
+            created = accesses[k].kind == VmSafe.AccountAccessKind.Create && accesses[k].account == account;
+            creator = created ? accesses[k].accessor : address(0);
+        }
+        return (created, creator);
     }
 
     /// Whether an address appears in a list before a given position.
@@ -358,21 +591,29 @@ library LibRainDeployMechanism {
         return false;
     }
 
-    /// Broadcasts a suite by its mechanism, to each network, as the given key.
+    /// Broadcasts a suite by its mechanism, to each network, as the given key: `frozen` with `candidate`'s networks it
+    /// lacks among `networks`, after `checkNetworksFrozen` refuses any of those `frozen` does not declare.
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param networks The networks to broadcast to.
     /// @param deployerPrivateKey The key to broadcast as.
-    /// @param suite The suite to broadcast.
+    /// @param frozen The release with its extended networks. Their record is not read here: the caller holds them to it,
+    /// as `RainDeploySuitesBase.withExtendedNetworks` does.
+    /// @param candidate The release's candidate, or `frozen` when it has none.
     /// @return Where the suite is on each network, positionally paired with `networks`.
     /// @return The fork each network was deployed on.
-    function deployAndBroadcast(Vm vm, string[] memory networks, uint256 deployerPrivateKey, DeploySuite memory suite)
-        internal
-        returns (address[] memory, uint256[] memory)
-    {
+    function deployAndBroadcast(
+        Vm vm,
+        string[] memory networks,
+        uint256 deployerPrivateKey,
+        DeploySuite memory frozen,
+        DeploySuite memory candidate
+    ) internal returns (address[] memory, uint256[] memory) {
         if (networks.length == 0) {
             revert LibRainDeploy.NoNetworks();
         }
         SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
+        DeploySuite memory suite = withUnrecordedNetworks(frozen, candidate, LibRainDeploy.networkChainIds(configs));
+        checkNetworksFrozen(frozen, suite, networks);
         NetworkDeploys memory deploys = NetworkDeploys({
             deployStepData: new bytes[](configs.length),
             expectedAddresses: new address[](configs.length),
@@ -393,9 +634,37 @@ library LibRainDeployMechanism {
             suite.dependencies
         );
         if (suite.mechanism == DeployMechanism.Zoltu) {
-            LibRainDeploy.logVerifyCommands(vm, networks, deploys.expectedAddresses[0], suite.artifactPath);
+            if (keccak256(bytes(suite.artifactPath)) != keccak256(bytes(CLONE_ARTIFACT_PATH))) {
+                LibRainDeploy.logVerifyCommands(vm, networks, deploys.expectedAddresses[0], suite.artifactPath);
+            } else {
+                // slither-disable-next-line reentrancy-events
+                emit UnverifiableSource(msg.sender, deploys.expectedAddresses[0], networks);
+                console2.log(unverifiableSourceNotice(vm, networks, deploys.expectedAddresses[0]));
+            }
         }
         return (deploys.expectedAddresses, forkIds);
+    }
+
+    /// The notice that a Zoltu entry under `CLONE_ARTIFACT_PATH` names no compiled source to verify, so its source
+    /// needs verifying by hand on each network.
+    /// @param vm The Vm instance to format the address with.
+    /// @param networks The networks the entry is deployed on.
+    /// @param where Where it is deployed on every one of them.
+    /// @return The notice.
+    function unverifiableSourceNotice(Vm vm, string[] memory networks, address where)
+        internal
+        pure
+        returns (string memory)
+    {
+        string memory notice = string.concat(
+            "no verify command: the Zoltu entry carries the clone artifact path; verify the source at ",
+            vm.toString(where),
+            " by hand on"
+        );
+        for (uint256 i = 0; i < networks.length; i++) {
+            notice = string.concat(notice, " ", networks[i]);
+        }
+        return notice;
     }
 
     /// A clone declaration as the `DeployCandidate` every other part of this package reads.

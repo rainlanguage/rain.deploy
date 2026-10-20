@@ -84,6 +84,11 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// suite's constructor MUST succeed locally, with only its declared dependencies etched, under each chain id that
     /// check reads), then broadcasts the selected suite by ITS mechanism, through `LibRainDeployMechanism` — the same
     /// dispatch every verification group derives through, so what is broadcast is what was verified.
+    /// The seat check reads a per-network release with its extended networks and every network its candidate adds.
+    /// A per-network release is broadcast to a network it does not record only once `extendedNetworks` declares it
+    /// there. Before any fork, such a network is refused with `ExtendedNetworkUnfrozen`, naming the address its
+    /// candidate's init data derives there to declare, or with `CloneNetworkUndeclared` where its candidate has no
+    /// entry there.
     /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
     /// @param networks The networks to broadcast to, as `deployNetworks()` gave them.
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
@@ -102,9 +107,16 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
                 }
             }
         }
-        DeploySuite memory broadcast = onSupportedNetworks(suite);
-        checkSeatsNoDeployKey(broadcast, networks, deployer);
-        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, broadcast);
+        DeploySuite memory frozen = withExtendedNetworks(suite);
+        DeploySuite memory candidate = candidateOf(frozen);
+        checkSeatsNoDeployKey(
+            LibRainDeployMechanism.withUnrecordedNetworks(
+                frozen, candidate, LibRainDeployMechanism.addressChainIds(candidate)
+            ),
+            networks,
+            deployer
+        );
+        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, frozen, candidate);
     }
 
     /// Deploys `suite` locally with `deployer` as sender and origin, once under each target's chain id (a per-network
@@ -116,7 +128,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// on the local EVM with only its declared dependencies etched, so it MUST succeed there under each target's
     /// chain id: one that reverts locally (say, by calling an undeclared contract under one chain id) refuses the
     /// broadcast to every network with its revert.
-    /// @param suite The suite to broadcast, in its `onSupportedNetworks` form.
+    /// @param suite The suite to broadcast, with its extended networks and every network its candidate adds.
     /// @param networks The networks this broadcast reaches.
     /// @param deployer The deploy key's address.
     function checkSeatsNoDeployKey(DeploySuite memory suite, string[] memory networks, address deployer) internal {

@@ -32,3 +32,26 @@ the value the function returns.
 | M32: chain suite log removed                       | `src/abstract/RainDeployVerifyChain.sol` `console2.log("Checking suite on network:", ...)` in `checkSuiteOnNetwork`                      | Console output. The check it announces is pinned by `RainDeployVerifyChainNotRequiredLocalTest.testRequiredSuiteIsStillCheckedEverywhere`.                        |
 | M64: seated-state revert-failure names no suite    | `src/abstract/RainDeployVerifyBase.sol` `revert DerivationSnapshotRevertFailed(resolved.suite.suite, snapshotId);` in `checkSeatedState` | Unreachable: `vm.revertToState` of a snapshot taken in the same call, with no revert or other snapshot between, returns true, so the guard never fires.           |
 | B44: seat-check revert-failure arguments changed   | `src/abstract/RainDeployBroadcast.sol` `revert DerivationSnapshotRevertFailed(suite.suite, snapshotId);` in `checkSeatsNoDeployKey`      | Unreachable: `vm.revertToState` of a snapshot taken in the same loop iteration, with no revert or other snapshot between, returns true, so the guard never fires. |
+
+## Equivalent mutants
+
+- `LibRainDeployMechanism.deployAndBroadcast`: `UnverifiableSource`'s entry
+  address read from `deploys.derivedAddresses[0]` instead of
+  `deploys.expectedAddresses[0]` (Z7). `deployStepToNetworks` refuses any
+  network whose derived address differs from its expected one before the event,
+  so the two are equal there.
+- `LibRainDeploySnapshot.declarationValue`: the value read as
+  `tokens[tokens.length - 1]` instead of `tokens[4]` (D7), or the final
+  `tokens.length == 5` relaxed to `tokens.length <= 5` (T5G, D4). The count is
+  already pinned to exactly 5 when the value is read, and a line reaching that
+  check never holds fewer than five tokens: an unwrapped line holding exactly
+  four takes the wrapped branch, and a wrapped line's four-space prefix splits
+  into four empty tokens before its value.
+- `RainDeployVerifySnapshotBase.declaredValue`'s and
+  `LibRainDeploySnapshot.declarationAddress`'s `if (!readable)` guards (D08,
+  N07): both guards removed as redundant.
+- `RainDeployBroadcast.broadcastSuite` passes `candidateOf(frozen)`;
+  `candidateOf(suite)` is equivalent (R03): `candidateOf` keys on `.suite`
+  alone, which `withExtendedNetworks` preserves, and in the no-candidate
+  fallback `withUnrecordedNetworks` appends nothing for either argument because
+  `suite`'s networks are a subset of `frozen`'s.

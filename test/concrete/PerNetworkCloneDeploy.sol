@@ -2,20 +2,14 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
-import {DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {CloneNetwork} from "../../src/lib/LibRainDeployClone.sol";
+import {PerNetworkCloneDeployBase} from "../abstract/PerNetworkCloneDeployBase.sol";
 import {PerNetworkCloneDeploys} from "../abstract/PerNetworkCloneDeploys.sol";
-import {ExternalCloneDeploySuites} from "../abstract/ExternalCloneDeploySuites.sol";
-import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 
-/// @title PerNetworkCloneDeploy A per-network clone deploy repo's whole script: the declaration
-/// plus `RainDeployBroadcast`, with external wrappers so a plain `Test` contract can drive it.
-contract PerNetworkCloneDeploy is
-    PerNetworkCloneDeploys,
-    ExternalCloneDeploySuites,
-    ExternalDeploySuites,
-    RainDeployBroadcast
-{
+/// @title PerNetworkCloneDeploy
+/// @notice `PerNetworkCloneDeploys` under `PerNetworkCloneDeployBase`.
+contract PerNetworkCloneDeploy is PerNetworkCloneDeploys, PerNetworkCloneDeployBase {
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()
         internal
@@ -26,16 +20,23 @@ contract PerNetworkCloneDeploy is
         return PerNetworkCloneDeploys.supportedNetworks();
     }
 
-    /// External wrapper for `broadcastSuite`.
-    /// @param suite The suite to broadcast.
-    /// @param networks The networks to broadcast to.
-    /// @param deployerPrivateKey The key to broadcast as.
-    /// @return Where the suite is on each network.
-    /// @return The fork each network was deployed on.
-    function externalBroadcastSuite(DeploySuite memory suite, string[] memory networks, uint256 deployerPrivateKey)
-        external
-        returns (address[] memory, uint256[] memory)
+    /// @inheritdoc PerNetworkCloneDeployBase
+    function extendedNetworks(string memory suite)
+        internal
+        view
+        override(PerNetworkCloneDeployBase, RainDeploySuitesBase)
+        returns (CloneNetwork[] memory)
     {
-        return broadcastSuite(suite, networks, deployerPrivateKey);
+        return PerNetworkCloneDeployBase.extendedNetworks(suite);
+    }
+
+    /// @inheritdoc PerNetworkCloneDeployBase
+    function extendedNetworksRoot()
+        internal
+        view
+        override(PerNetworkCloneDeployBase, RainDeploySuitesBase)
+        returns (string memory)
+    {
+        return PerNetworkCloneDeployBase.extendedNetworksRoot();
     }
 }

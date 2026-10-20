@@ -160,18 +160,14 @@ Releases follow the normal lifecycle. `BuildScript` regenerates the clone's
 snapshot through `writeSnapshot(DeploySuite)`, which records `MECHANISM_DATA`
 beside the usual constants; `cutRelease()` freezes it under
 `src/generated/<tag>/`; and the generated `Lib<Contract>Released` entry carries
-the mechanism and that `MECHANISM_DATA`. The mechanism DATA comes from the
-record, but the mechanism KIND comes from the CURRENT declaration — the template
-every regeneration reads — not from the declaration the release was cut from. So
-a suite cannot change mechanism in place: a clone template over a record that
-has no `MECHANISM_DATA` does not compile, and a Zoltu template over a clone
-record emits a Zoltu entry that the record group refuses, because its Zoltu
-address is not the clone address the record holds. A mechanism change is a new
-suite. From there the frozen clone is checked like any frozen suite: the record
-group holds it to its released entry at the CLONE address, the chain group
-requires its code at that address, and its declared factory and implementation
-with their declared code, on every supported network, and it is selectable by
-key for broadcast.
+the mechanism and that `MECHANISM_DATA`. Both the mechanism kind and its data
+come from each frozen record: no `MECHANISM_DATA` is Zoltu; with it,
+`DEPLOYED_ADDRESS` is Clone and `DEPLOYED_ADDRESS_<chainId>` is ClonePerNetwork.
+So a suite can change mechanism between releases. From there the frozen clone is
+checked like any frozen suite: the record group holds it to its released entry
+at the CLONE address, the chain group requires its code at that address, and its
+declared factory and implementation with their declared code, on every supported
+network, and it is selectable by key for broadcast.
 
 A clone is **unanchorable** — no compiler produces a proxy assembled from an
 address — so the candidate carries `unanchorableReason` and a constant
@@ -270,16 +266,55 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   is created; each fork whose `block.chainid` is not its catalogue entry's is
   refused with `NetworkChainIdMismatch`, for every mechanism.
 - **Unrecorded networks.** A release records the networks it was cut for. At
-  broadcast and in the chain group, a per-network release first takes an entry
-  for each network its candidate — the candidate whose key is the release key
+  broadcast and in the chain group, a per-network release first takes its
+  extended networks (below), then an entry for each network in play (broadcast
+  to or checked on) its candidate — the candidate whose key is the release key
   before its `@` — has and it lacks, through
   `LibRainDeployMechanism.withUnrecordedNetworks`: that network's init data from
   the current declaration, and the address it derives under the RELEASE's
-  factory, implementation and salt. So a network added to `supportedNetworks()`
-  after the cut is deployable and checked, as it is for a Zoltu or `Clone`
-  release. Recorded entries are kept exactly as recorded, so a recorded network
-  keeps its recorded address and the refusal of a stale one. The record group
-  does not do this: it matches the record against what the release was cut for.
+  factory, implementation and salt. That entry is never broadcast or checked: it
+  is the address `ExtendedNetworkUnfrozen` names when a network added to
+  `supportedNetworks()` after the cut is broadcast to or checked on before it is
+  declared as an extended network (below), and a network the candidate has no
+  entry for is refused with `CloneNetworkUndeclared`. Once declared, the network
+  is broadcast and checked at its declared entry. Recorded entries are kept
+  exactly as recorded, so a recorded network keeps its recorded address and the
+  refusal of a stale one. The record group does not do this: it matches the
+  record against what the release was cut for.
+- **Extended networks.** The candidate's init data can change after a release is
+  broadcast to an unrecorded network, which would move that network's address.
+  So an unrecorded network is declared, then broadcast: override
+  `RainDeploySuitesBase.extendedNetworks` to return it, for the release's key,
+  as a `CloneNetwork`: its chain id, the init data it is broadcast with and its
+  address. The broadcast refuses an unrecorded network not yet declared with
+  `ExtendedNetworkUnfrozen`, before any fork, naming the address the candidate's
+  current init data derives. That is the address to declare only for a network
+  the release is not yet live on: a release already broadcast there is declared
+  with the init data it was broadcast with, from its `NewClone` event, or a
+  second clone is deployed and the live one orphaned. A declared entry is used
+  in place of the candidate's, held to the address its init data derives under
+  the release (`ExtendedNetworkAddressMismatch`), and is refused on a network
+  the release records (`DuplicateCloneNetwork`) or on a suite that is not per
+  network (`ExtendedNetworksUnexpected`). The chain group refuses a per-network
+  suite on a network it neither records nor declares with
+  `ExtendedNetworkUnfrozen` before checking any code there, naming the address
+  the candidate's current init data derives, whether or not anything is live at
+  it. Both the init data and the address are literals copied from the broadcast:
+  the build (`BuildScript.run()`, through `regenerateExtendedNetworks`) writes
+  them to the release's append-only record,
+  `src/generated/extended/<tag>/<name>.sol`, as `DEPLOYED_ADDRESS_<chain id>`
+  and `INIT_DATA_<chain id>`. It first refuses a declaration the broadcast would
+  refuse, with the errors above, and it refuses to drop, change or reorder an
+  entry the record in the checkout holds (`ExtendedNetworksRewritten`). The
+  broadcast and the chain group refuse a declaration that is not exactly what
+  the record holds (`ExtendedNetworksUnrecorded`) or a record that is not
+  exactly what the writer writes (`ExtendedNetworksUnreadable`). Append-only
+  holds against the checked out record, not against history: a commit that edits
+  or deletes the record and its declaration together passes all three.
+  `Git is clean` fails on an entry appended to a committed record, but not on a
+  record never committed, which is an untracked file. The record is published
+  with the rest of `src/generated/`; the generated `Lib<Contract>Released` does
+  not carry it.
 - **Undeclared networks.** A network the suite still has no entry for — no
   candidate is named by its key, or the candidate has no entry either — is
   refused with `CloneNetworkUndeclared`, before any fork, at broadcast and in
@@ -291,7 +326,12 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   local deploy rather than from the addresses the suite claims. The generated
   `Lib<Contract>Released` entry imports no `DEPLOYED_ADDRESS`, stores
   `address(0)`, and carries `DeployMechanism.ClonePerNetwork` and that
-  `MECHANISM_DATA`.
+  `MECHANISM_DATA`. A storage read during the local deploy of any account but
+  the clone and the accounts created under it is refused with
+  `CloneInitializeReadsStorage`: locally that storage is empty, while the clone
+  and what it creates are empty on chain too. An account created by one that
+  predates the deploy, such as a factory, may already exist on chain, so it is
+  not exempt.
 - **Verification.** The record group holds each network's recorded address to
   its derivation and matches a frozen record to its release by chain id AND
   address, so a record whose per-network labels were swapped matches no release.
@@ -477,6 +517,14 @@ previously only produced a `forge verify-contract` line a human read after the
 deploy. On a candidate that declares itself unanchorable it is the other way
 round: resolving to nothing is the state being declared, and resolving to an
 artifact is what refuses the declaration.
+
+A Zoltu suite whose `artifactPath` is `CLONE_ARTIFACT_PATH` (a historical entry
+generated under a clone template) names no compiled source, so its broadcast
+prints no verify command. It emits
+`UnverifiableSource(sender, entryAddress, networks)`, a file-level event
+imported from `LibRainDeployMechanism.sol`, and logs a notice naming the address
+and each network, whose source must be verified by hand. Both appear only in the
+script run's local trace: neither is part of a broadcast transaction.
 
 Uniqueness is not something `vm.getCode` reports. It resolves a BARE contract
 name to whichever same-named artifact comes first, and answers rather than
@@ -1147,21 +1195,24 @@ Via [soldeer](https://soldeer.xyz):
 forge soldeer install rain-deploy~<version>
 ```
 
-**You also need `forge-std` 1.17.0 and `rain-sol-codegen` 0.1.39**, remapped as
-`forge-std-1.17.0/` and `rain-sol-codegen-0.1.39/`. The published package ships
-`src/`, `script/` and the licence and README files — no `test/`, no
-`foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no `dependencies/` — so
-a consumer resolves both itself. The requirement is transitive rather than
-incidental: the deployed contract imports nothing outside this package, but
-every abstract a consumer inherits pulls them in — `Script` via
-`RainDeployBroadcast`, `Test` via `RainDeployVerifyBase`, `Vm` via
-`LibRainDeploy` beneath both, and `LibCodeGen`/`LibFs` via
-`LibRainDeploySnapshot`, which `RainDeployVerifySnapshot` imports:
+**You also need `forge-std` 1.17.0, `rain-sol-codegen` 0.1.39 and `rain-factory`
+0.1.30**, remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
+`rain-factory-0.1.30/`. The published package ships `src/`, `script/` and the
+licence and README files — no `test/`, no `foundry.toml`, no `remappings.txt`,
+no `soldeer.lock`, no `dependencies/` — so a consumer resolves all three itself.
+The requirement is transitive rather than incidental: the deployed contract
+imports nothing outside this package, but every abstract a consumer inherits
+pulls them in — `Script` via `RainDeployBroadcast`, `Test` via
+`RainDeployVerifyBase`, `Vm` via `LibRainDeploy` beneath both,
+`ICloneableFactoryV4` via `LibRainDeployMechanism` beneath both, and
+`LibCodeGen`/`LibFs` via `LibRainDeploySnapshot`, which
+`RainDeployVerifySnapshot` imports:
 
 ```toml
 [dependencies]
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
+rain-factory = "0.1.30"
 rain-deploy = "<version>"
 ```
 
@@ -1242,6 +1293,104 @@ catalogue's own facts. Whether a network HAS an Etherscan deployment is one of
 them rather than anything about the repo — Robinhood (4663) is not indexed by
 Etherscan v2, so its entry carries its Blockscout url and the deployment is
 verified through Sourcify.
+
+### Upgrading from 0.1.18
+
+`DeploySuite` gains `mechanism` and `mechanismData`, so a consumer's generated
+`Lib<Contract>Released` stops compiling before its `BuildScript` can regenerate
+it. In order:
+
+1. Add `mechanism: DeployMechanism.Zoltu, mechanismData: ""` to every entry of
+   the generated released libs, and import `DeployMechanism` beside
+   `DeploySuite`.
+2. Add `rain-factory` 0.1.30 and its remapping, as above.
+3. Make `view` every function of yours that calls `checkedCandidateSuites`,
+   `allSuites`, `suiteNames`, `suiteByName` or `candidateSuites`, which are
+   `view` now. A `pure` override of `candidateSuites` still compiles.
+4. Update the moved errors. `NetworkChainIdMismatch`, `NotDeployedOnNetwork` and
+   `CodeHashMismatchOnNetwork` are members of `LibRainDeploy`: refer to them as
+   `LibRainDeploy.NotDeployedOnNetwork.selector` and so on, and drop their
+   imports. `NotDeployedOnNetwork` and `CodeHashMismatchOnNetwork` no longer
+   carry the suite. Import `ZoltuDerivationMismatch` from
+   `LibRainDeployMechanism`, and `FrozenSnapshotUnreadable` and
+   `FrozenSnapshotAmbiguous` from `LibRainDeploySnapshot`.
+   `FrozenSnapshotsOutnumberReleases` carries an `address[]`. A code hash
+   mismatch in `deployToNetworks` reverts `CodeHashMismatchOnNetwork`, or
+   `NotDeployedOnNetwork` when the address holds no code, where it reverted
+   `UnexpectedDeployedCodeHash`.
+5. Replace the removed or re-signed internal functions and members:
+   - `DerivedDeploy.deployedAddress` is `address[] deployedAddresses`, one per
+     address the suite's mechanism deploys to, in the suite's address order.
+   - `RainDeployVerifySnapshotBase.DEPLOYED_ADDRESS_DECLARATION` is
+     `LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION`.
+   - `RainDeployVerifyChain.checkDeployedOnNetwork(string, DerivedDeploy)` is
+     removed: call `LibRainDeploy.checkDeclaredDependencies` and
+     `LibRainDeploy.checkDeployedCode` on the selected fork, or run the whole
+     matrix with `checkDeployedOnNetworks(SupportedNetwork[], DeploySuite[])`.
+   - `RainDeployVerifyChain.checkDeployedOnSupportedNetworks` takes
+     `DeploySuite[]`, not `DerivedDeploy[]`.
+   - `RainDeployVerifyChain.checkNetworkChainId(string, uint256, uint256)` is
+     `LibRainDeploy.checkNetworkChainId(SupportedNetwork)`, which reads the
+     selected fork's chain id.
+   - `RainDeployVerifySnapshotBase.recordedDeployedAddress(string, string)` is
+     `LibRainDeploySnapshot.recordedDeployedAddresses(Vm, string, string)`,
+     returning the chain id and address of every declaration.
+   - `RainDeployVerifySnapshotBase.withoutBlockComments` is
+     `LibRainDeploySnapshot.withoutBlockComments(string)`, which takes no `Vm`.
+   - `LibRainDeploy.checkDeployRequirements` is
+     `LibRainDeploy.checkDeclaredDependencies`, with the same parameters.
+   - `LibTimelockController.timelockInitCode` and `expectedTimelockAddress` take
+     the timelock's `bytes creationCode` first, and `assertTimelockState` its
+     `bytes32 bytecodeHash` first. `LibTimelockControllerDeploy.deployTimelock`
+     takes both after `deployer`.
+   - `LibRainDeploySnapshot.releasedImport`, `releasedImportBlock` and
+     `releasedLibraryBlock` are `view`.
+6. For each per-network release broadcast, or to be broadcast, to a network it
+   does not record, override `extendedNetworks` to return that network as
+   broadcast: declare, then broadcast. Without it the broadcast and the chain
+   group refuse the release there with `ExtendedNetworkUnfrozen`. The address
+   that refusal names at broadcast is what the candidate's current init data
+   derives: a release already live on that network is declared with the init
+   data it was broadcast with, from its `NewClone` event, not with that address.
+   Then run the build and commit the record it writes under
+   `src/generated/extended/` (override `extendedNetworksSpdxLicenseIdentifier`
+   and `extendedNetworksCopyrightText` for a licence other than this org's): the
+   broadcast and the chain group refuse a declaration it does not hold with
+   `ExtendedNetworksUnrecorded`.
+7. A clone whose `initialize` reads storage of any account but the clone and the
+   accounts created under it is refused by the local deploy with
+   `CloneInitializeReadsStorage`. An account created through a dependency that
+   predates the call, such as a factory, is not exempt: it may already exist on
+   chain. Only storage reads are checked: a balance or code read of another
+   account is not refused. A write to part of a slot reads the slot first, so it
+   is refused like a read. The local deploy records each clone's state diff,
+   which ends any state-diff recording the caller started.
+8. Move to the V3 migration registry. `LibMigrationRegistry.applied`,
+   `appliedOnto`, `appliedAfter` and `head` are `appliedV3`, `appliedOntoV3`,
+   `appliedAfterV3` and `headV3`. `applyMigration` and `applyMigrationHistory`
+   are `applyMigrationV3` and `applyMigrationHistoryV3`, and take the
+   `address writer` first; `applyMigrationCall` and `applyMigrationHistoryCall`
+   are `applyMigrationV3Call` and `applyMigrationHistoryV3Call`, likewise.
+   Import `Prerequisite` from `src/interface/IMigrationRegistryV3.sol`;
+   `IMigrationRegistryV1` and `IMigrationRegistryV2` moved to
+   `src/interface/deprecated/`. The registry has a new address, so migrations
+   recorded in the 0.1.18 registry stay there and read as unapplied in V3: apply
+   them again, with `applyMigrationHistoryV3` for one that already ran.
+9. Regenerate: `forge script ./script/Build.sol` followed by
+   `./script/build.sh`.
+
+`LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,
+`RainDeployBroadcast.broadcastSuite` and
+`RainDeployVerifyChain.checkDeployedOnSupportedNetworks` take catalogue aliases
+only (`NetworkNotInCatalogue`), refuse a fork reporting another chain id
+(`NetworkChainIdMismatch`), and check the declared dependencies on every
+network, including one the suite is already deployed on.
+`RainDeployVerifyChain.checkDeployedOnNetworks` takes `SupportedNetwork` entries
+as given, with no catalogue lookup, and holds each fork's chain id to its
+entry's `chainId`, checking the declared dependencies likewise.
+`LibRainDeploy.createForks`, `checkResolvedAddressesOnNetworks` and
+`checkResolvedAddressesOnForks` take raw `[rpc_endpoints]` aliases, with no
+catalogue lookup and no chain id check.
 
 ## Develop
 

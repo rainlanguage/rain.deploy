@@ -33,6 +33,7 @@ import {VersionQualifiedArtifactPathDeploySuites} from "../../concrete/VersionQu
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 
 /// @title RainDeploySuitesBaseTest
 /// @notice The registry itself: one declaration, keyed lookup, and the two ways
@@ -63,6 +64,12 @@ contract RainDeploySuitesBaseTest is Test {
         assertEq(suites[1].suite, "second-address");
         assertEq(suites[2].suite, "config-registry-candidate");
         assertEq(suites[3].suite, "second-address-candidate");
+    }
+
+    /// A repo that does not override `extendedNetworksRoot` reads and writes its extended networks records under its
+    /// own record, the one its frozen snapshots are under.
+    function testExtendedNetworksRootDefaultsToTheRepoRecord() external view {
+        assertEq(sSuites.externalExtendedNetworksRoot(), LibRainDeploySnapshot.LIB_FS_ROOT);
     }
 
     /// Every declared key MUST select its own suite. A deploy is dispatched per
