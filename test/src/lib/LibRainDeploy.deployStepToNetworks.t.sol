@@ -10,6 +10,13 @@ import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 /// @title LibRainDeployDeployStepToNetworksTest
 /// @notice The shared per-network loop's guards, on local forks.
 contract LibRainDeployDeployStepToNetworksTest is Test {
+    /// The step `externalLoop` hands the loop.
+    enum Step {
+        Unreachable,
+        Misreporting,
+        Etching
+    }
+
     /// Thrown when a step the loop must not reach is reached.
     error DeployStepWasReached();
 
@@ -57,11 +64,11 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
     }
 
     /// External wrapper for `LibRainDeploy.deployStepToNetworks` over the local fork Vm.
-    /// @param step 0 for the unreachable step, 1 for the misreporting step, else the etching step.
+    /// @param step The step the loop runs.
     /// @param deploys The expected addresses and their deploy data.
     /// @param dependencies The declared dependencies.
     /// @return The fork of each network.
-    function externalLoop(uint256 step, NetworkDeploys memory deploys, DeployDependency[] memory dependencies)
+    function externalLoop(Step step, NetworkDeploys memory deploys, DeployDependency[] memory dependencies)
         external
         returns (uint256[] memory)
     {
@@ -69,7 +76,7 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
             Vm(address(sForkVm)),
             networks(deploys.expectedAddresses.length),
             address(this),
-            step == 0 ? unreachableDeployStep : step == 1 ? misreportingDeployStep : etchingDeployStep,
+            step == Step.Unreachable ? unreachableDeployStep : step == Step.Misreporting ? misreportingDeployStep : etchingDeployStep,
             deploys,
             keccak256(hex"00"),
             dependencies
@@ -85,7 +92,7 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.ARBITRUM_ONE, address(0xdef))
         );
-        this.externalLoop(0, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), dependencies);
+        this.externalLoop(Step.Unreachable, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), dependencies);
     }
 
     /// A step that reports an address other than the expected one MUST be refused, even when the expected address then holds the expected code.
@@ -95,7 +102,7 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
             abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, target, address(0xbad))
         );
         this.externalLoop(
-            1, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), new DeployDependency[](0)
+            Step.Misreporting, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), new DeployDependency[](0)
         );
     }
 
@@ -111,7 +118,7 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
             )
         );
         this.externalLoop(
-            0, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), new DeployDependency[](0)
+            Step.Unreachable, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), new DeployDependency[](0)
         );
     }
 
@@ -124,7 +131,7 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
         deploys.deployStepData[1] = abi.encode(second);
         deploys.expectedAddresses[1] = second;
         deploys.derivedAddresses[1] = second;
-        this.externalLoop(2, deploys, new DeployDependency[](0));
+        this.externalLoop(Step.Etching, deploys, new DeployDependency[](0));
         assertEq(second.code, hex"00");
     }
 
@@ -142,7 +149,7 @@ contract LibRainDeployDeployStepToNetworksTest is Test {
             )
         );
         this.externalLoop(
-            0, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), new DeployDependency[](0)
+            Step.Unreachable, LibRainDeploy.everyNetwork(1, abi.encode(target), target, target), new DeployDependency[](0)
         );
     }
 }
