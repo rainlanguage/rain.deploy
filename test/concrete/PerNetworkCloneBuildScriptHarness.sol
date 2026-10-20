@@ -53,6 +53,12 @@ contract PerNetworkCloneBuildScriptHarness is PerNetworkCloneDeploys, BuildScrip
     }
 
     /// @inheritdoc BuildScript
+    /// @dev The fixture root, so a `run()` here stages no config over the repo's own.
+    function configRoot() internal view override returns (string memory) {
+        return sRoot;
+    }
+
+    /// @inheritdoc BuildScript
     function snapshotContractNames() internal pure override returns (string[] memory) {
         string[] memory names = new string[](1);
         names[0] = PER_NETWORK_CLONE_RECORD_CONTRACT;

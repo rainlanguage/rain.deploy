@@ -347,6 +347,31 @@ contract BuildScriptTest is Test {
         );
     }
 
+    /// PROPERTY: `run()` writes each release's declared extended networks to its record.
+    function testRunWritesTheExtendedNetworksRecord() external {
+        string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-run");
+        resetFixture(root);
+        new BuildScriptHarness(root, FIXTURE_CONTRACT).seedConfig();
+        PerNetworkCloneBuildScriptHarness harness = new PerNetworkCloneBuildScriptHarness(root, root);
+        CloneNetwork[] memory networks = new CloneNetwork[](1);
+        networks[0] = extendedNetwork(8453, hex"00aa");
+        harness.setExtendedNetworks(networks);
+        harness.run();
+
+        (,, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, "per-network-clone@0_0_1");
+        string memory written = vm.readFile(path);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
+
+        assertEq(
+            written,
+            string.concat(
+                LibCodeGen.filePrefix(RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT),
+                LibRainDeployExtendedNetworks.extendedNetworksBody(vm, networks)
+            )
+        );
+    }
+
     /// A network beyond the per-network release's record, at the address its init data derives under the release.
     /// @param chainId The network's chain id.
     /// @param data The init data.
