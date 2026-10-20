@@ -674,10 +674,15 @@ hand on the machine the Trezor is plugged into, never in CI: forge's own
 `--trezor` signer asks the device for each signature, and the key never leaves
 it.
 
-The script binds for an EOA authority only, since it broadcasts from the
-authority itself. A Safe or timelock authority submits
-`registerV1(keccak256("<org>.<name>"), value)` to the registry through its own
-execution path, then runs step 3 below (`verify`), which reads under any
+`run()` binds for an EOA authority only, since it broadcasts from the authority
+itself. A Safe or timelock authority submits the bind through its own execution
+path, and dry-runs it first with `--sig "simulateContractAuthority()"` (no
+`--sender`, no `--trezor`; it signs and broadcasts nothing). That makes every
+check `run()` makes except the signer's, prints the same record, and simulates
+the bind as the authority on every selected network. Its `Calldata:` line is the
+transaction data to submit to the registry address it prints, and its
+`BIND`/`REBIND`/`SKIP` lines are what the signers approve against. Once the
+transaction is executed, run step 3 below (`verify`), which reads under any
 authority.
 
 **The name is the string consumers hash.** Consumers derive a name as

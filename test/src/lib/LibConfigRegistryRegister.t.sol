@@ -100,6 +100,22 @@ contract LibConfigRegistryRegisterTest is Test {
         return LibConfigRegistryRegister.registerOnSelectedChain(vm, network, sender, name, value);
     }
 
+    function externalSimulateOnSelectedChain(SupportedNetwork memory network, bytes32 name, bytes memory value)
+        external
+        returns (bool, string memory)
+    {
+        return LibConfigRegistryRegister.simulateOnSelectedChain(vm, network, AUTHORITY, name, value);
+    }
+
+    function externalSimulateOnNetworks(
+        string[] memory selected,
+        string[] memory declared,
+        string memory name,
+        bytes memory value
+    ) external returns (uint256[] memory, string memory) {
+        return LibConfigRegistryRegister.simulateOnNetworks(vm, selected, declared, AUTHORITY, name, value);
+    }
+
     function externalRegisterOnNetworks(
         string[] memory selected,
         string[] memory declared,
@@ -581,6 +597,107 @@ contract LibConfigRegistryRegisterTest is Test {
         (bytes memory boundValue, uint256 registeredAt) = registry.getV1(AUTHORITY, name);
         assertEq(boundValue, value);
         assertEq(registeredAt, 1);
+    }
+
+    /// A contract authority's simulation binds an unbound name under the
+    /// authority, not under the caller, at the chain's moment.
+    function testSimulateUnbound(bytes32 name, bytes memory value, uint96 time) external {
+        vm.assume(value.length > 0);
+        time = uint96(bound(time, 1, type(uint96).max));
+        IConfigRegistryV1 registry = deployRegistry();
+        vm.warp(time);
+
+        (bool binds, string memory record) = this.externalSimulateOnSelectedChain(base(), name, value);
+        assertTrue(binds);
+        assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, "", 0, value));
+        (bytes memory boundValue, uint256 registeredAt) = registry.getV1(AUTHORITY, name);
+        assertEq(boundValue, value);
+        assertEq(registeredAt, time);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, address(this), name));
+        registry.getV1(address(this), name);
+    }
+
+    /// A name bound to another value is re-bound by the simulation.
+    function testSimulateRebinds(bytes32 name, bytes memory previous, bytes memory value) external {
+        vm.assume(previous.length > 0);
+        vm.assume(value.length > 0);
+        vm.assume(keccak256(previous) != keccak256(value));
+        IConfigRegistryV1 registry = deployRegistry();
+        vm.warp(1);
+        vm.prank(AUTHORITY);
+        registry.registerV1(name, previous);
+        vm.warp(2);
+
+        (bool binds, string memory record) = this.externalSimulateOnSelectedChain(base(), name, value);
+        assertTrue(binds);
+        assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, previous, 1, value));
+        (bytes memory boundValue, uint256 registeredAt) = registry.getV1(AUTHORITY, name);
+        assertEq(boundValue, value);
+        assertEq(registeredAt, 2);
+    }
+
+    /// A name already bound to the value is skipped by the simulation: no
+    /// call, so the moment stays the original bind's.
+    function testSimulateSkipsSameBinding(bytes32 name, bytes memory value) external {
+        vm.assume(value.length > 0);
+        IConfigRegistryV1 registry = deployRegistry();
+        vm.warp(1);
+        vm.prank(AUTHORITY);
+        registry.registerV1(name, value);
+        vm.warp(2);
+
+        (bool binds, string memory record) = this.externalSimulateOnSelectedChain(base(), name, value);
+        assertFalse(binds);
+        assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, value, 1, value));
+        assertEq(LibConfigRegistryRead.getMoment(registry, AUTHORITY, name), 1);
+    }
+
+    /// The simulation refuses a chain that is not the network's, and a
+    /// registry address without the pinned code.
+    function testSimulateChecksTheChain(uint64 chainId) external {
+        vm.assume(chainId != base().chainId);
+        vm.chainId(base().chainId);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
+                LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
+                bytes32(0)
+            )
+        );
+        this.externalSimulateOnSelectedChain(base(), keccak256("a"), abi.encode(address(1)));
+
+        deployRegistry();
+        vm.chainId(chainId);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.UnexpectedChainId.selector, "base", base().chainId, uint256(chainId)
+            )
+        );
+        this.externalSimulateOnSelectedChain(base(), keccak256("a"), abi.encode(address(1)));
+    }
+
+    /// The simulation over networks refuses its inputs before anything is
+    /// forked, in the order `registerOnNetworks` does, with no sender to
+    /// refuse: a non-canonical name, an empty value, a bare 20-byte address,
+    /// no networks and an undeclared one.
+    function testSimulateOnNetworksRefusesInputsInOrder() external {
+        string[] memory declared = LibRainDeploy.supportedNetworks();
+
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "A"));
+        this.externalSimulateOnNetworks(new string[](0), declared, "A", "");
+
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, keccak256("a.b")));
+        this.externalSimulateOnNetworks(new string[](0), declared, "a.b", "");
+
+        bytes memory bare = abi.encodePacked(address(0xdEaD));
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, bare));
+        this.externalSimulateOnNetworks(new string[](0), declared, "a.b", bare);
+
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        this.externalSimulateOnNetworks(new string[](0), declared, "a.b", abi.encode(address(1)));
+
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
+        this.externalSimulateOnNetworks(list("nowhere"), declared, "a.b", abi.encode(address(1)));
     }
 
     /// An unbound name reads as an empty value and a zero moment; a bound one

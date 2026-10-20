@@ -67,6 +67,24 @@ contract RegisterConfig is RegistryDeploySuites, Script {
         return forkIds;
     }
 
+    /// The dry run for a contract authority, which submits the bind through
+    /// its own execution path: every guard of `run()` but the signer's, the
+    /// record whose `Calldata:` line is the transaction data to submit, and
+    /// the bind simulated as the authority on every selected network. Signs
+    /// and broadcasts nothing.
+    /// @return The fork each selected network was simulated on.
+    /// @return The inputs record.
+    function simulateContractAuthority() external returns (uint256[] memory, string memory) {
+        return LibConfigRegistryRegister.simulateOnNetworks(
+            vm,
+            selectedNetworks(),
+            supportedNetworks(),
+            vm.envAddress(AUTHORITY_VAR),
+            vm.envString(NAME_VAR),
+            vm.envBytes(VALUE_VAR)
+        );
+    }
+
     /// Reads every selected network fresh and reverts unless the name resolves
     /// to the value under the authority on each.
     function verify() external {

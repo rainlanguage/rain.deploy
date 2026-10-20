@@ -149,6 +149,55 @@ contract RegisterConfigTest is Test {
             .getV1(AUTHORITY, keccak256(bytes(rotateName)));
         assertEq(bound, rotateValue);
         assertEq(registeredAt, block.timestamp);
+
+        assertSimulatesContractAuthority(script, string.concat(name, "-safe"));
+    }
+
+    /// `simulateContractAuthority()`, called by this test rather than the
+    /// authority, binds under the authority on exactly the selected network
+    /// and returns the inputs record, whose `Calldata:` line is exactly the
+    /// bind's calldata; it refuses a non-canonical name and a bare 20-byte
+    /// value as `run()` does.
+    /// @param script The script.
+    /// @param name A name bound nowhere.
+    function assertSimulatesContractAuthority(RegisterConfig script, string memory name) internal {
+        bytes memory value = abi.encode(address(6));
+        vm.setEnv("CONFIG_REGISTRY_NAME", name);
+        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(value));
+        (uint256[] memory forkIds, string memory record) = script.simulateContractAuthority();
+        assertEq(forkIds.length, 1);
+        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, name, value, AUTHORITY));
+        assertTrue(
+            vm.contains(
+                record,
+                string.concat(
+                    "\nCalldata: ",
+                    vm.toString(
+                        LibConfigRegistryRegister.registerCalldata(LibConfigRegistryRegister.nameHash(name), value)
+                    )
+                )
+            )
+        );
+        vm.selectFork(forkIds[0]);
+        assertEq(block.chainid, LibRainDeploy.declaredNetworkConfigs(LibRainDeploy.supportedNetworks())[0].chainId);
+        assertEq(
+            LibConfigRegistryRead.getValue(
+                IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
+                AUTHORITY,
+                keccak256(bytes(name))
+            ),
+            value
+        );
+
+        vm.setEnv("CONFIG_REGISTRY_NAME", "Not.Canonical");
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
+        script.simulateContractAuthority();
+
+        bytes memory bare = abi.encodePacked(address(6));
+        vm.setEnv("CONFIG_REGISTRY_NAME", name);
+        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(bare));
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, bare));
+        script.simulateContractAuthority();
     }
 
     /// Runs as the authority with networks unset, which forks every supported network in

@@ -183,6 +183,51 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
     }
 
+    function externalSimulateOnNetworks(string[] memory networks, string memory name, bytes memory value)
+        external
+        returns (uint256[] memory, string memory)
+    {
+        return LibConfigRegistryRegister.simulateOnNetworks(vm, networks, networks, AUTHORITY, name, value);
+    }
+
+    /// A contract authority's simulation, called by an account that is not
+    /// the authority, forks every selected network in declaration order and
+    /// binds under the authority on each; the persistent registry carries the
+    /// first fork's bind to the rest, which skip. Its record is the inputs
+    /// record, whose `Calldata:` line is exactly the bind's calldata.
+    function testSimulateOnNetworksBindsEverySelected() external {
+        (string memory name, bytes32 hashed, bytes memory value) = fresh();
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.BASE;
+        networks[1] = LibRainDeploy.ARBITRUM_ONE;
+
+        vm.createSelectFork(networks[0]);
+        LibConfigRegistryFork.ensureDeployed(vm);
+        vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+
+        (uint256[] memory forkIds, string memory record) = this.externalSimulateOnNetworks(networks, name, value);
+        assertEq(forkIds.length, 2);
+        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, name, value, AUTHORITY));
+        assertTrue(
+            vm.contains(
+                record,
+                string.concat(
+                    "\nCalldata: ",
+                    vm.toString(
+                        LibConfigRegistryRegister.registerCalldata(LibConfigRegistryRegister.nameHash(name), value)
+                    )
+                )
+            )
+        );
+        for (uint256 i = 0; i < forkIds.length; i++) {
+            vm.selectFork(forkIds[i]);
+            assertEq(vm.getChainId(), LibRainDeploy.declaredNetworkConfigs(networks)[i].chainId);
+        }
+        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, address(this), hashed));
+        IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(address(this), hashed);
+    }
+
     /// `registerOnForks` binds on every given fork's own registry, with
     /// nothing persistent: one `Register` log per network, and each fork's
     /// registry holds the value bound at that fork's own moment.
