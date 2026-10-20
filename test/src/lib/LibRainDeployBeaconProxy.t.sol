@@ -19,6 +19,7 @@ import {
 } from "../../../src/lib/LibRainDeployBeaconProxy.sol";
 import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
 import {MockCloneableV2} from "../../concrete/MockCloneableV2.sol";
+import {MockMisansweringOwnerCloneable} from "../../concrete/MockMisansweringOwnerCloneable.sol";
 import {MockOriginOwnedCloneable} from "../../concrete/MockOriginOwnedCloneable.sol";
 
 /// @title LibRainDeployBeaconProxyTest Tests for `LibRainDeployBeaconProxy`'s derivations and its
@@ -237,5 +238,21 @@ contract LibRainDeployBeaconProxyTest is Test {
             CloneTarget({factory: address(factory), implementation: beacon, data: abi.encode(owner), salt: TEST_SALT});
         address deployed = this.externalBeaconProxyDeployStep(LibRainDeploy.ARBITRUM_ONE, deployer, abi.encode(target));
         assertEq(MockOriginOwnedCloneable(deployed).owner(), owner);
+    }
+
+    /// A proxy whose `owner()` reverts with the deploy key as its whole revert data, or returns fewer than 32 bytes,
+    /// has not answered an owner, so it passes.
+    function testBeaconProxyDeployStepAcceptsAnOwnerThatDoesNotAnswer(bool short) external {
+        address deployer = address(0xD3910E8);
+        MockBeaconProxyFactory factory = new MockBeaconProxyFactory();
+        address beacon = address(new UpgradeableBeacon(address(new MockMisansweringOwnerCloneable()), address(this)));
+        CloneTarget memory target =
+            CloneTarget({factory: address(factory), implementation: beacon, data: abi.encode(short), salt: TEST_SALT});
+        address deployed = this.externalBeaconProxyDeployStep(LibRainDeploy.ARBITRUM_ONE, deployer, abi.encode(target));
+        assertEq(deployed, LibRainDeployBeaconProxy.beaconProxyDeployedAddress(target));
+        (bool answered, bytes memory owner) = deployed.staticcall(abi.encodeWithSignature("owner()"));
+        assertEq(answered, short);
+        assertEq(owner.length, short ? 0x1f : 0x20);
+        assertEq(owner, short ? owner : abi.encode(deployer));
     }
 }
