@@ -139,8 +139,7 @@
       ],
       "alreadyFiled": []
     }
-  }
-,
+  },
   {
     "timestamp": "2026-10-05T09:05:00Z",
     "commit": "f08ee42c6dbdb0f3daa82deae208e9ceccd37103",
@@ -162,8 +161,13 @@
       "nonTerminating": 0,
       "candidates": 3,
       "confirmed": 3,
-      "filed": [255, 256],
-      "alreadyFiled": [249]
+      "filed": [
+        255,
+        256
+      ],
+      "alreadyFiled": [
+        249
+      ]
     },
     "notes": [
       "Base attribution pass at f08ee42 probed 12 mutants over the pre-existing behaviours that are single-edit mutatable; 12/12 KILLED, every one by a test already on main, baseline green at 27. No pre-existing gap was found, so the tests this run added are additive rather than covering for main.",
@@ -195,7 +199,9 @@
       "candidates": 0,
       "confirmed": 0,
       "filed": [],
-      "alreadyFiled": [264]
+      "alreadyFiled": [
+        264
+      ]
     },
     "notes": [
       "Narrowed to the L01 fix, so commit and testsAfterCommit are the same tree: the tests are part of the change under test and the units did not exist before it. killedByExistingTests is 0 and gapsFilled is 0 for that reason, not because nothing was probed — 13 of 13 behaviours were probed and all 13 KILLED. The matrix establishes that each new test discriminates, not which pre-existing test covered what, and no attribution pass was possible.",
@@ -492,6 +498,37 @@
       "With the 20d2ab8 tests: C1 killed by testChainGroupWithoutSuitesForksOnlyTheBeaconsNetworks; S1 and S3 killed (the fail-pattern names no killer: forge renders the chain id in the revert reason as 42161 [4.216e4]); a re-probe at testsAfterCommit whose suite is testBeaconSuiteSeatingItsNetworksOwnerResolves alone kills both.",
       "S2 survived testSeatedStateCheckRestoresTheChainId: vm.revertToState restores the chain id with the state, and the only path skipping it reverts DerivationSnapshotRevertFailed. Equivalent; the redundant vm.chainId(localChainId) was removed at testsAfterCommit.",
       "Adversarial pass: no candidate bugs. beaconNetworks draws from the networks resolveBeacons resolved on, so narrowing a no-suite run never empties it while a beacon resolved."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T07:12:55Z",
+    "commit": "9d1104859a700e1ef8659cd08417cf0ce263ed92",
+    "testsAfterCommit": "220783bcb506ad8e1de196acf29ff3e59467c660",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 141,
+    "scope": "PR #308 (#274) round 8: code changed in 9d11048: RainDeployBroadcast.checkSeatsNoDeployKey (one local deploy per target under its chain id; owner word matched on its address bits) and its call in broadcastSuite",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 20,
+      "behavioursProbed": 20,
+      "killedByExistingTests": 18,
+      "gapsFilled": 2,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --match-path test/src/abstract/RainDeployBroadcast*.t.sol (offline), baseline 32 passed at the scanned commit, 34 at testsAfterCommit. Pre-existing suite = the tests at 9d11048, which include the tests written with the fix (the Marvin round-7 HIGH finding asked for them).",
+      "Pre-existing suite: 18 of 19 killed (S01-S18: per-network chain ids, supported fallback, loop bound, chain id, prank, stopPrank, per-target address, snapshot restore, answered/length/word/address checks, refusal payload, refusal and call presence). Survived S19 (seat check on the raw suite, not its onSupportedNetworks form): killed by testBroadcastRefusesAReleaseWhoseCandidateAddsANetworkSeatingTheDeployKey at 1206993.",
+      "S20 (fallback reads deployNetworks() not supportedNetworks()) was killed only incidentally by testRunReachesSelectionPastAnUnanchorableCandidate; testBroadcastRefusesASuiteSeatingTheDeployKeyOnANetworkTheDispatchDoesNotReach added at 220783b kills it directly.",
+      "Adversarial pass: no candidate bugs. A per-network suite is read on its own networks, so a supported network it lacks is not read here; the broadcast to it refuses CloneNetworkUndeclared regardless. An owner word whose upper 96 bits are dirty but whose address bits are the deploy key is refused, the fail-safe direction."
     ]
   }
 ]
