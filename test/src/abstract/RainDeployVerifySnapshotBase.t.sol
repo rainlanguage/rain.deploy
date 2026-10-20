@@ -157,6 +157,18 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         return partitionFrozenRecords(paths, codeRecordNames);
     }
 
+    /// External wrapper for `codeRecordIndex`.
+    /// @param path A frozen record file.
+    /// @param codeRecordNames The code records' names.
+    /// @return The index.
+    function externalCodeRecordIndex(string memory path, string[] memory codeRecordNames)
+        external
+        pure
+        returns (uint256)
+    {
+        return codeRecordIndex(path, codeRecordNames);
+    }
+
     /// The real generated snapshot, standing in for a frozen record. It is the
     /// same file a freeze copies into `src/generated/<tag>/`, and the exemplar's
     /// first released suite is declared from it, so the pair below is a real
@@ -981,6 +993,20 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         assertEq(codeRecords.length, 2);
         assertEq(codeRecords[0], paths[1]);
         assertEq(codeRecords[1], paths[3]);
+    }
+
+    /// The index is the first name whose `.sol` file is the path's whole file
+    /// name, and the names' length when none is.
+    function testCodeRecordIndexIsTheFirstMatchingName() external view {
+        string[] memory names = new string[](3);
+        names[0] = "AddressRegistry";
+        names[1] = "TimelockController";
+        names[2] = "TimelockController";
+        assertEq(this.externalCodeRecordIndex("src/generated/0_1_18/AddressRegistry.sol", names), 0);
+        assertEq(this.externalCodeRecordIndex("src/generated/0_1_18/TimelockController.sol", names), 1);
+        assertEq(this.externalCodeRecordIndex("TimelockController.sol", names), 1);
+        assertEq(this.externalCodeRecordIndex("src/generated/0_1_18/MigrationRegistry.sol", names), 3);
+        assertEq(this.externalCodeRecordIndex("src/generated/0_1_18/XTimelockController.sol", names), 3);
     }
 
     /// With no names, every path is a deploy record: the default leaves a repo

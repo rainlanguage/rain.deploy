@@ -881,15 +881,18 @@ Four separate steps, in this order. Nothing automatic ever broadcasts.
    partial run is fixed by running it again rather than by unpicking anything.
 2. **Cut.** Set `[external.package].version` in `foundry.toml` to the release
    version first, because `cutRelease()` freezes under that version's tag. Then
-   run `forge script ./script/Build.sol --sig 'cutRelease()'`, then
-   `forge script ./script/Build.sol` FOLLOWED BY `./script/build.sh`, and open
-   the release PR. Its CI checks the newly released suites on chain, so merge it
-   only once step 1 has landed on every supported network.
+   run `nix develop -c forge script ./script/Build.sol --sig 'cutRelease()'`,
+   then `nix develop -c forge script ./script/Build.sol` FOLLOWED BY
+   `nix develop -c ./script/build.sh`, and open the release PR. Its CI checks
+   the newly released suites on chain, so merge it only once step 1 has landed
+   on every supported network.
 3. **Verify.** `RegistryDeployVerifyTest` passes only once every **released**
    suite is live on every supported network, with the code that release froze.
-4. **Tag.** Push a `sol-v*` tag, the sole release trigger. It verifies and
-   publishes but never broadcasts, which is exactly why step 1 cannot be folded
-   into it. The release mechanics are `rainix-tag-release`'s.
+4. **Tag.** Push a `sol-v*` tag on the release PR's merge commit, the sole
+   release trigger; a later commit whose candidate has moved fails the tag's
+   frozen-equals-regenerated check. It verifies and publishes but never
+   broadcasts, which is exactly why step 1 cannot be folded into it. The release
+   mechanics are `rainix-tag-release`'s.
 
 This is a deploy repo: it carries deployed concretes whose addresses and
 codehashes consumers pin, so releases are **manual `sol-v*` tags**, not merges.

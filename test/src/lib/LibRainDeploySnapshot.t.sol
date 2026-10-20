@@ -3304,6 +3304,21 @@ contract LibRainDeploySnapshotTest is Test {
         vm.removeDir(AHEAD_FIXTURE_ROOT, true);
     }
 
+    /// The record frozen one release behind the version.
+    string constant BUMPED_FIXTURE_ROOT = "test/generated-snapshot/bumped";
+
+    /// A version ahead of the newest frozen release, bumped without a cut,
+    /// MUST be refused.
+    function testVersionAheadOfTheNewestFrozenReleaseIsRefused() external {
+        writeFixture(string.concat(BUMPED_FIXTURE_ROOT, "/0_1_19/", FIXTURE_CONTRACT, ".sol"));
+
+        vm.expectRevert(abi.encodeWithSelector(VersionNotNewestRelease.selector, "0_1_20", "0_1_19"));
+        this.externalCheckVersionIsNewestRelease(BUMPED_FIXTURE_ROOT, "0_1_20");
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(BUMPED_FIXTURE_ROOT, true);
+    }
+
     /// External wrapper so `vm.expectRevert` lands at the right call depth.
     /// Reverts unless every release frozen under `recordRoot` holds every
     /// contract the release before it holds.

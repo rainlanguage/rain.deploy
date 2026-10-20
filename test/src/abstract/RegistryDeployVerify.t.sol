@@ -9,9 +9,8 @@ import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol"
 
 /// @title RegistryDeployVerifyTest
 /// @notice This repo's own registry declaration bound to `RainDeployVerify` —
-/// the same single line a consumer writes, so a check that reaches this
-/// contract reaches every consumer that has bumped, and one that does not reach
-/// it never shipped.
+/// the same single line a consumer writes, so every inherited check that
+/// reaches this contract reaches every consumer that has bumped.
 ///
 /// `RegistryDeploySuites` says which registries and which releases exist and
 /// `RainDeployVerify` says what is true of them. The one override names the
@@ -22,8 +21,8 @@ import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol"
 /// declaration carries.
 ///
 /// The chain half is red until every release declared here is live on every
-/// supported network, which is why the deploy is dispatched before the tag is
-/// pushed. That is the check working: "nothing is deployed at the address
+/// supported network, which is why the deploy is dispatched before the release
+/// PR merges. That is the check working: "nothing is deployed at the address
 /// `LibAddressRegistry` reads" is the single most important fact about these
 /// pins, and no snapshot assertion can discover it — a perfectly consistent set
 /// of pins for a contract that exists nowhere passes every one of them.
@@ -43,7 +42,9 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
 
     /// Every frozen code record's `CREATION_CODE`, deployed with its
     /// declaration's `referenceConstructorArgs`, MUST deploy runtime code
-    /// hashing to the record's `BYTECODE_HASH`.
+    /// hashing to the record's `BYTECODE_HASH`. The args are today's
+    /// declaration's, applied to every frozen generation, so a declaration
+    /// change MUST keep them valid for every frozen record.
     function testEveryFrozenCodeRecordDeploysItsRecordedHash() external {
         (, string[] memory codeRecords) =
             partitionFrozenRecords(LibRainDeploySnapshot.frozenSnapshotPaths(vm), frozenCodeRecordNames());
