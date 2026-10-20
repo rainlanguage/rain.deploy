@@ -115,4 +115,21 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         (bool forked,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", uint256(0)));
         assertFalse(forked, "the matrix forked a network before refusing the unrecorded one");
     }
+
+    /// An unrecorded network the release does not declare is refused as unfrozen before any network is forked.
+    function testUnrecordedNetworkIsRefusedAsUnfrozenBeforeAnyFork() external {
+        DeploySuite[] memory suites = arbitrumOnlyRelease();
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ExtendedNetworkUnfrozen.selector,
+                "per-network-clone@0_0_1",
+                LibRainDeploy.POLYGON,
+                perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID)
+            )
+        );
+        this.externalCheckDeployedOnSupportedNetworks(suites);
+
+        (bool forked,) = address(vm).call(abi.encodeWithSignature("selectFork(uint256)", uint256(0)));
+        assertFalse(forked, "the matrix forked a network before refusing the unfrozen one");
+    }
 }

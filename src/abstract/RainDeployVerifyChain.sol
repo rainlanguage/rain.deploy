@@ -27,10 +27,10 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
 
     /// Checks every suite against every given network, forking each network once with `forkVm` and checking every
     /// suite on it.
-    /// Each suite is checked as `onSupportedNetworks` gives it, with its candidate's unrecorded networks, and a
-    /// per-network suite on a network it neither records nor declares in `extendedNetworks` is refused with
-    /// `ExtendedNetworkUnfrozen` before its dependencies or code there are checked, whether or not anything is live
-    /// at the address checked.
+    /// A per-network suite is checked on the networks it records and those `extendedNetworks` declares for it. On any
+    /// other network it is refused before any network is forked: with `ExtendedNetworkUnfrozen`, naming the address its
+    /// candidate's init data derives there, whether or not anything is live at it, or with `CloneNetworkUndeclared` where
+    /// its candidate has no entry there.
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
@@ -54,24 +54,24 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         }
         suites = onNetworks;
 
-        DerivedDeploy[] memory derived = deriveDeployments(suites);
         address[][] memory addresses = new address[][](networks.length);
         for (uint256 i = 0; i < networks.length; i++) {
             addresses[i] = new address[](suites.length);
             for (uint256 j = 0; j < suites.length; j++) {
                 addresses[i][j] = LibRainDeployMechanism.deployedAddress(suites[j], networks[i].chainId);
+                LibRainDeployMechanism.checkNetworkFrozen(
+                    frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]
+                );
             }
         }
 
+        DerivedDeploy[] memory derived = deriveDeployments(suites);
         uint256[] memory forkIds = LibRainDeploy.createForks(forkVm, LibRainDeploy.networkNames(networks));
         for (uint256 i = 0; i < networks.length; i++) {
             forkVm.selectFork(forkIds[i]);
             LibRainDeploy.checkNetworkChainId(networks[i]);
             for (uint256 j = 0; j < suites.length; j++) {
                 console2.log("Checking suite on network:", derived[j].suite, networks[i].name);
-                LibRainDeployMechanism.checkNetworkFrozen(
-                    frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]
-                );
                 LibRainDeploy.checkDeclaredDependencies(networks[i].name, suites[j].dependencies);
                 LibRainDeploy.checkDeployedCode(networks[i].name, addresses[i][j], derived[j].bytecodeHash);
             }
