@@ -289,13 +289,18 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
     }
 
     /// A record holding a carriage return, vertical tab, form feed, NEL, LS or PS is refused before any mechanism is
-    /// read from it.
+    /// read from it, wherever the break sits.
     function testRecordHoldingAnotherLineBreakIsUnreadable() external {
         string[] memory breaks = LibForeignLineBreaks.foreignLineBreaks();
         for (uint256 i = 0; i < breaks.length; i++) {
             checkRefused(
                 string.concat("line-break-", vm.toString(i)),
                 string.concat(everyNetworkLine(address(1)), "// note", breaks[i], MECHANISM_DATA_LINE),
+                FrozenSnapshotUnreadable.selector
+            );
+            checkRefused(
+                string.concat("trailing-line-break-", vm.toString(i)),
+                string.concat(everyNetworkLine(address(1)), "// note", breaks[i], "\n"),
                 FrozenSnapshotUnreadable.selector
             );
         }
