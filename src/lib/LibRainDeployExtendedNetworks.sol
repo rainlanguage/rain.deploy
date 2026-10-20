@@ -171,7 +171,8 @@ library LibRainDeployExtendedNetworks {
         }
     }
 
-    /// One network of an extended networks record, read from what follows its `DEPLOYED_ADDRESS_`. Read leniently:
+    /// One network of an extended networks record, read from what follows its `DEPLOYED_ADDRESS_`. Reverts with
+    /// `ExtendedNetworksUnreadable` on a chain id, address or init data that does not parse. Otherwise read leniently:
     /// `recordedExtendedNetworks` holds the whole body to what the writer writes for what is read here.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file, for the error only.

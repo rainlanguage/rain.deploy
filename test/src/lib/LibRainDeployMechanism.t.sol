@@ -1150,6 +1150,23 @@ contract LibRainDeployMechanismTest is Test {
         this.externalCheckNetworksFrozen(full, full, twoNetworks(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON));
     }
 
+    /// The broadcast release's first entry is checked like every other: a release recording Arbitrum One alone is
+    /// refused a broadcast whose only entry is Polygon, naming Polygon and the address it would be broadcast at.
+    function testBroadcastReleasesFirstEntryIsChecked() external {
+        DeploySuite memory release = perNetworkSuiteAt(TEST_SALT, onlyChainId(42161));
+        DeploySuite memory onNetworks = perNetworkSuiteAt(TEST_SALT, onlyChainId(137));
+        address polygonAddress = abi.decode(onNetworks.mechanismData, (CloneNetworks)).networks[0].deployedAddress;
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.POLYGON;
+
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ExtendedNetworkUnfrozen.selector, release.suite, LibRainDeploy.POLYGON, polygonAddress
+            )
+        );
+        this.externalCheckNetworksFrozen(release, onNetworks, networks);
+    }
+
     /// A suite that is not per network is never checked.
     function testBroadcastOfAOneDataSuiteIsNotChecked() external view {
         DeploySuite memory oneData = exampleCloneSuite();

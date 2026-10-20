@@ -396,10 +396,16 @@ contract BuildScriptTest is Test {
         (,, string memory secondPath) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, SECOND_RELEASE_KEY);
         string memory firstRecord = vm.readFile(firstPath);
         string memory secondRecord = vm.readFile(secondPath);
+        bytes memory firstRead =
+            abi.encode(LibRainDeployExtendedNetworks.recordedExtendedNetworks(vm, root, "per-network-clone@0_0_1"));
+        bytes memory secondRead =
+            abi.encode(LibRainDeployExtendedNetworks.recordedExtendedNetworks(vm, root, SECOND_RELEASE_KEY));
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(root, true);
 
+        assertEq(firstRead, abi.encode(first));
+        assertEq(secondRead, abi.encode(second));
         string memory prefix = LibCodeGen.filePrefix(RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT);
         assertEq(firstRecord, string.concat(prefix, LibRainDeployExtendedNetworks.extendedNetworksBody(vm, first)));
         assertEq(secondRecord, string.concat(prefix, LibRainDeployExtendedNetworks.extendedNetworksBody(vm, second)));

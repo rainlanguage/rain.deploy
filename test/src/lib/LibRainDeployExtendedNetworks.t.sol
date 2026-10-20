@@ -371,6 +371,39 @@ contract LibRainDeployExtendedNetworksTest is Test {
         expectUnreadable("bad-hex", editedRecord("hex\"00aa\"", "hex\"00zz\""));
     }
 
+    /// External wrapper for `recordedExtendedNetwork`.
+    /// @param path The record file, for the error only.
+    /// @param entry The entry.
+    /// @return The network.
+    function externalRecordedNetwork(string memory path, string memory entry)
+        external
+        pure
+        returns (CloneNetwork memory)
+    {
+        return LibRainDeployExtendedNetworks.recordedExtendedNetwork(vm, path, entry);
+    }
+
+    /// One entry read on its own refuses a chain id, address or init data that does not parse, rather than reading it
+    /// as zero or empty, and reads the writer's entry as the network written.
+    function testEntryWithAnUnparsableValueIsUnreadable() external {
+        string memory entry = vm.split(
+            LibRainDeployExtendedNetworks.extendedNetworksBody(vm, twoNetworks()), "address constant DEPLOYED_ADDRESS_"
+        )[1];
+        assertEq(abi.encode(this.externalRecordedNetwork("entry.sol", entry)), abi.encode(twoNetworks()[0]));
+
+        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnreadable.selector, "entry.sol"));
+        this.externalRecordedNetwork("entry.sol", vm.replace(entry, "137 =", "x137 ="));
+        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnreadable.selector, "entry.sol"));
+        this.externalRecordedNetwork(
+            "entry.sol",
+            vm.replace(
+                entry, "0x1111111111111111111111111111111111111111", "0x11111111111111111111111111111111111111zz"
+            )
+        );
+        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnreadable.selector, "entry.sol"));
+        this.externalRecordedNetwork("entry.sol", vm.replace(entry, "hex\"00aa\"", "hex\"00zz\""));
+    }
+
     /// An entry without its address wrapper, or with other than one hex literal, is unreadable.
     function testMisshapenEntriesAreUnreadable() external {
         expectUnreadable(
