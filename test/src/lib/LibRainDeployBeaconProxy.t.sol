@@ -12,11 +12,13 @@ import {
     BEACON_PROXY_ARTIFACT_PATH,
     BEACON_PROXY_BEACON_IMMUTABLE_OFFSET,
     BEACON_PROXY_RUNTIME_OFFSET,
-    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
-    BeaconProxyStandInBeacon,
-    BeaconProxyStandInImplementation,
     LibRainDeployBeaconProxy
 } from "../../../src/lib/LibRainDeployBeaconProxy.sol";
+import {
+    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
+    BeaconProxyStandInBeacon
+} from "../../../src/concrete/BeaconProxyStandInBeacon.sol";
+import {BeaconProxyStandInImplementation} from "../../../src/concrete/BeaconProxyStandInImplementation.sol";
 import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
 import {MockCloneableV2} from "../../concrete/MockCloneableV2.sol";
 import {MockDirtyOwnerCloneable} from "../../concrete/MockDirtyOwnerCloneable.sol";
@@ -164,17 +166,6 @@ contract LibRainDeployBeaconProxyTest is Test {
     /// @return Its creation code.
     function externalGetCode(string memory path) external view returns (bytes memory) {
         return vm.getCode(path);
-    }
-
-    /// The stand-in implementation initializes to the `ICloneableV2` success value with any data.
-    function testStandInImplementationInitializes(bytes memory data) external {
-        BeaconProxyStandInImplementation standIn = new BeaconProxyStandInImplementation();
-        assertEq(standIn.initialize(data), keccak256("ICloneableV2.initialize"));
-    }
-
-    /// The stand-in beacon serves the stand-in implementation.
-    function testStandInBeaconServesTheStandInImplementation() external {
-        assertEq(new BeaconProxyStandInBeacon().implementation(), BEACON_PROXY_STAND_IN_IMPLEMENTATION);
     }
 
     /// The step deploys where the package derives, broadcast as the deployer.

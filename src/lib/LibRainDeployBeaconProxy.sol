@@ -6,7 +6,6 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
 import {ICloneableFactoryV5} from "rain-factory-pr271-0477c05/src/interface/ICloneableFactoryV5.sol";
-import {ICLONEABLE_V2_SUCCESS} from "rain-factory-pr271-0477c05/src/interface/ICloneableV2.sol";
 import {BEACON_PROXY_CREATION_CODE} from "rain-factory-pr271-0477c05/src/generated/BeaconProxy.sol";
 import {LibICloneableFactoryV5} from "rain-factory-pr271-0477c05/src/lib/LibICloneableFactoryV5.sol";
 
@@ -29,10 +28,6 @@ string constant BEACON_PROXY_UNANCHORABLE_REASON = "An OpenZeppelin BeaconProxy,
     "serves, are the anchored contracts, and because the beacon address is embedded in the proxy's runtime the "
     "recorded code hash is what says which beacon this proxy reads.";
 
-/// @dev The implementation the stand-in beacon serves during a local deploy.
-address constant BEACON_PROXY_STAND_IN_IMPLEMENTATION =
-    address(uint160(uint256(keccak256("rain.deploy.beaconproxy.standin.implementation"))));
-
 /// One contract a repo deploys as a beacon proxy, as a beacon proxy repo declares it.
 struct BeaconProxyDeploy {
     /// The suite key, held to the key alphabet and to uniqueness like any other.
@@ -53,26 +48,6 @@ struct BeaconProxyDeploy {
     /// What MUST already be on a network, with exactly this code, before the proxy is broadcast
     /// there. MUST include the factory and the beacon.
     DeployDependency[] dependencies;
-}
-
-/// @title BeaconProxyStandInImplementation
-/// @notice What the stand-in beacon serves during a local deploy: initializes to success with any
-/// data and reads no storage.
-contract BeaconProxyStandInImplementation {
-    /// @return The `ICloneableV2` success value.
-    function initialize(bytes calldata) external pure returns (bytes32) {
-        return ICLONEABLE_V2_SUCCESS;
-    }
-}
-
-/// @title BeaconProxyStandInBeacon
-/// @notice Etched over a beacon proxy's beacon during a local deploy, so the proxy initializes
-/// without the beacon's real implementation, which may read storage that is empty locally.
-contract BeaconProxyStandInBeacon {
-    /// @return `BEACON_PROXY_STAND_IN_IMPLEMENTATION`.
-    function implementation() external pure returns (address) {
-        return BEACON_PROXY_STAND_IN_IMPLEMENTATION;
-    }
 }
 
 /// @title LibRainDeployBeaconProxy

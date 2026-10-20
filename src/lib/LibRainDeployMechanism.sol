@@ -20,13 +20,12 @@ import {
 } from "./LibRainDeployClone.sol";
 import {
     BEACON_PROXY_ARTIFACT_PATH,
-    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
     BEACON_PROXY_UNANCHORABLE_REASON,
     BeaconProxyDeploy,
-    BeaconProxyStandInBeacon,
-    BeaconProxyStandInImplementation,
     LibRainDeployBeaconProxy
 } from "./LibRainDeployBeaconProxy.sol";
+import {BEACON_PROXY_STAND_IN_IMPLEMENTATION, BeaconProxyStandInBeacon} from "../concrete/BeaconProxyStandInBeacon.sol";
+import {BeaconProxyStandInImplementation} from "../concrete/BeaconProxyStandInImplementation.sol";
 
 /// Thrown when the state snapshot taken around a local deploy could not be
 /// reverted. A local deploy plants code at the derived address, clears its

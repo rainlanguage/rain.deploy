@@ -15,12 +15,14 @@ import {
 } from "../../../src/lib/LibRainDeployClone.sol";
 import {
     BEACON_PROXY_ARTIFACT_PATH,
-    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
     BEACON_PROXY_UNANCHORABLE_REASON,
     BeaconProxyDeploy,
-    BeaconProxyStandInBeacon,
     LibRainDeployBeaconProxy
 } from "../../../src/lib/LibRainDeployBeaconProxy.sol";
+import {
+    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
+    BeaconProxyStandInBeacon
+} from "../../../src/concrete/BeaconProxyStandInBeacon.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {
     CloneCreationCodeMismatch,
