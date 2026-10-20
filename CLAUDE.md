@@ -21,7 +21,10 @@ relocated.
   not bump it.
 - **`src/generated/<tag>/` is an append-only record.** `cutRelease()` writes a
   tag directory once. A cut tag can never be un-cut and consumers pin what it
-  holds, so a frozen record is never edited, renamed or deleted.
+  holds, so a frozen record is never edited, renamed or deleted. A release
+  freezes every contract the release before it froze unless
+  `Build.retiredContracts()` lists it; dropping one from `generatedContracts()`
+  alone fails `testNoReleaseDropsAContract`.
 - **`CONFIG_REGISTRY_ROOT` is welded into the creation code.** Rotating it moves
   the deploy address, the code hash and the snapshot together, as an ordinary
   source change; the registry at the old address stays where it is.

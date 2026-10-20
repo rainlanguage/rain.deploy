@@ -703,5 +703,30 @@
       "These targets are test-code helpers; the oracles are the separate fixture tests, so no target co-mutates its expectation. Mutants of the new tests' own fixture order were not probed: they mutate the oracle.",
       "Adversarial pass: the intent (each release compared with the least frozen tag strictly following it, every code record deployed) was re-derived from the NatSpec. Q02 (greatest following tag) and Q03 (any non-preceding tag, including its own) are both refused, so only the least following tag satisfies the tests. No candidate bug."
     ]
+  },
+  {
+    "timestamp": "2026-10-20T15:59:04Z",
+    "commit": "799a7b60c5f9d2798d394aef8744426afbadbe17",
+    "testsAfterCommit": "799a7b60c5f9d2798d394aef8744426afbadbe17",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 165,
+    "scope": "PR #317 after merging main and re-cutting 0_1_19, narrowed by user ruling to the lines the merge and re-cut change: the src/generated/0_1_19/{ConfigRegistry,MigrationRegistry,TimelockController}.sol records, the regenerated LibConfigRegistryReleased, LibMigrationRegistryReleased and LibAddressRegistryReleased entries and lengths, the requiresSuiteOn override kept in the RegistryDeployVerify.t.sol merge resolution, and checkNoReleaseDropsAContract in test/src/lib/LibRainDeploySnapshot.t.sol (retired-contract exemption and the outer walk)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behavioursProbed": 19,
+      "killedByExistingTests": 19,
+      "gapsFilled": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "19 mutants probed with mutation-probe at commit against RegistryDeployVerifyTest, LibRainDeploySnapshotTest, GeneratedSnapshotShapeTest, RegistryDeploySuitesTest, BuildTest, LibTimelockControllerTest and RainDeployVerifySnapshotBaseTest, fork tests excluded by name (baseline green at 215): 19/19 KILLED. R01 and R03 first came back NO-RUN because their replacement addresses failed the checksum; re-probed with checksummed addresses, both KILLED by testEveryFrozenSnapshotIsReleased and testSnapshotInternallyConsistent.",
+      "The drop-check tests were written in the scanned commit, before the probe, because the merge needed them: under main, 0_1_19 drops the retired AddressRegistry and the old check refused it. So the D mutants credit tests that are new in this commit, not pre-existing ones. D01 (outer walk from i = 1), reported surviving by rain-marvin at a51d48f, is KILLED by testReleaseDropIsFoundWhateverThePathOrder through the new witness-first ordering. D02, D05 and D08 are KILLED by testNoReleaseDropsAContract on the real record, which reads Build.retiredContracts(). D04 and D06 are KILLED by the fixtures that put another retired name first or second.",
+      "These targets are test-code helpers; the oracles are the separate fixture tests, so no target co-mutates its expectation.",
+      "Adversarial pass: the oracle is the retirement rule main defines (Build.retiredContracts(): contracts no longer built, whose record cannot grow). The re-cut 0_1_19 ConfigRegistry and MigrationRegistry records are byte-identical to src/generated/candidate/, and MigrationRegistry and TimelockController are byte-identical to the first 0_1_19 cut. A later release could in principle restore a retired contract without the drop check objecting, but Build cannot freeze a contract that is absent from generatedContracts(), so there is no path to it. No candidate bug."
+    ]
   }
 ]

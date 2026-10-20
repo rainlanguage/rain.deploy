@@ -914,7 +914,11 @@ Four separate steps, in this order. Nothing automatic ever broadcasts.
    then `nix develop -c forge script ./script/Build.sol` FOLLOWED BY
    `nix develop -c ./script/build.sh`, and open the release PR. Its CI checks
    the newly released suites on chain, so merge it only once step 1 has landed
-   on every supported network.
+   on every supported network. A release freezes every contract the release
+   before it froze, unless `Build.retiredContracts()` lists it:
+   `testNoReleaseDropsAContract` refuses any other drop. Retiring a contract is
+   moving it from `generatedContracts()` to `retiredContracts()`, as
+   `AddressRegistry` was.
 3. **Verify.** `RegistryDeployVerifyTest` passes only once every **released**
    suite is live on every supported network, with the code that release froze.
 4. **Tag.** Push a `sol-v*` tag on the release PR's merge commit, the sole
