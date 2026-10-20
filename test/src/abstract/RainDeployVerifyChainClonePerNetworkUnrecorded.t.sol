@@ -30,9 +30,13 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
     /// Whether the release is not required on Polygon.
     bool internal sNotRequiredOnPolygon;
 
+    /// Whether the suite other than the release is required on no network.
+    bool internal sOtherRequiredNowhere;
+
     /// @inheritdoc RainDeploySuitesBase
-    function requiresSuiteOn(DeploySuite memory, string memory network) internal view override returns (bool) {
+    function requiresSuiteOn(DeploySuite memory suite, string memory network) internal view override returns (bool) {
         return !sRequiredNowhere
+            && !(sOtherRequiredNowhere && keccak256(bytes(suite.suite)) == keccak256(bytes("other-clone@0_0_1")))
             && !(sNotRequiredOnPolygon && keccak256(bytes(network)) == keccak256(bytes(LibRainDeploy.POLYGON)));
     }
 
@@ -157,11 +161,21 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         assertFalse(forked, "the matrix forked a network before refusing the unfrozen one");
     }
 
-    /// A release required nowhere is refused as such before its unrecorded network is refused as unfrozen.
+    /// A release required nowhere is refused as such before its unrecorded network is refused as unfrozen, and so is a
+    /// suite required nowhere checked after a release required on its unrecorded network.
     function testSuiteRequiredNowherePrecedesTheFrozenCheck() external {
         sRequiredNowhere = true;
         vm.expectRevert(abi.encodeWithSelector(SuiteRequiredNowhere.selector, "per-network-clone@0_0_1"));
         this.externalCheckDeployedOnSupportedNetworks(arbitrumOnlyRelease());
+
+        sRequiredNowhere = false;
+        sOtherRequiredNowhere = true;
+        DeploySuite[] memory suites = new DeploySuite[](2);
+        suites[0] = arbitrumOnlyRelease()[0];
+        suites[1] = arbitrumOnlyRelease()[0];
+        suites[1].suite = "other-clone@0_0_1";
+        vm.expectRevert(abi.encodeWithSelector(SuiteRequiredNowhere.selector, "other-clone@0_0_1"));
+        this.externalCheckDeployedOnSupportedNetworks(suites);
     }
 
     /// A release required nowhere is refused as such before an address is derived on a network its candidate has no
