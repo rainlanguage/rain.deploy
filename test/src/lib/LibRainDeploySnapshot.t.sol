@@ -3397,6 +3397,28 @@ contract LibRainDeploySnapshotTest is Test {
         vm.removeDir(DROPS_FIXTURE_ROOT, true);
     }
 
+    /// A record where a later release restores a contract a release dropped.
+    /// See `NEWEST_FIXTURE_ROOT`.
+    string constant RESTORES_FIXTURE_ROOT = "test/generated-snapshot/restores";
+
+    /// A release that drops a contract MUST be refused even when a later
+    /// release holds it again: `0_1_10` drops the `B` that `0_1_9` holds. Each
+    /// release is compared with the LEAST release following it, so `0_1_9`
+    /// is compared with `0_1_10`, not with `0_1_12`.
+    function testReleaseDroppingAContractALaterReleaseRestoresIsRefused() external {
+        writeFixture(string.concat(RESTORES_FIXTURE_ROOT, "/0_1_9/A.sol"));
+        writeFixture(string.concat(RESTORES_FIXTURE_ROOT, "/0_1_9/B.sol"));
+        writeFixture(string.concat(RESTORES_FIXTURE_ROOT, "/0_1_10/A.sol"));
+        writeFixture(string.concat(RESTORES_FIXTURE_ROOT, "/0_1_12/A.sol"));
+        writeFixture(string.concat(RESTORES_FIXTURE_ROOT, "/0_1_12/B.sol"));
+
+        vm.expectRevert(abi.encodeWithSelector(ReleaseDropsContract.selector, "0_1_10", "B"));
+        this.externalCheckNoReleaseDropsAContract(RESTORES_FIXTURE_ROOT);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(RESTORES_FIXTURE_ROOT, true);
+    }
+
     /// Over EVERY tag, against a record on disk, the guard MUST accept exactly
     /// the tags that strictly follow the newest release and refuse every other
     /// one, naming both tags when it does.
