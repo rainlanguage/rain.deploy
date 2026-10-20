@@ -23,6 +23,7 @@ import {
     perNetworkCloneReleaseAddress
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
+import {LibExtendedNetworksFixture} from "../../lib/LibExtendedNetworksFixture.sol";
 
 /// @dev Polygon's admin after the candidate moved it.
 address constant MOVED_POLYGON_ADMIN = address(0xC4c4c4C4C4c4C4c4c4C4c4c4c4c4c4C4c4c4c4C4);
@@ -112,12 +113,8 @@ contract RainDeployVerifyChainClonePerNetworkExtendedTest is PerNetworkCloneDepl
     /// removing whatever an earlier run left there.
     /// @param label The fixture root's directory under `fixture-lib/extended-networks`, one per test.
     function record(string memory label) internal {
-        sExtendedRoot = string.concat("fixture-lib/extended-networks/", label);
-        (,, string memory path) =
-            LibRainDeployExtendedNetworks.extendedNetworksPath(sExtendedRoot, "per-network-clone@0_0_1");
-        if (vm.exists(path)) {
-            vm.removeFile(path);
-        }
+        sExtendedRoot =
+            LibExtendedNetworksFixture.freshRoot(vm, "fixture-lib/extended-networks", label, "per-network-clone@0_0_1");
         LibRainDeployExtendedNetworks.writeExtendedNetworks(
             vm, sExtendedRoot, "per-network-clone@0_0_1", extendedNetworks("per-network-clone@0_0_1")
         );

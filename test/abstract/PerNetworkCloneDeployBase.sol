@@ -8,6 +8,7 @@ import {DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {CloneNetwork} from "../../src/lib/LibRainDeployClone.sol";
 import {LibRainDeployExtendedNetworks} from "../../src/lib/LibRainDeployExtendedNetworks.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
+import {LibExtendedNetworksFixture} from "../lib/LibExtendedNetworksFixture.sol";
 import {ExternalCloneDeploySuites} from "./ExternalCloneDeploySuites.sol";
 import {ExternalDeploySuites} from "./ExternalDeploySuites.sol";
 
@@ -30,11 +31,8 @@ abstract contract PerNetworkCloneDeployBase is ExternalCloneDeploySuites, Extern
     /// @param suite The release's suite key.
     /// @param networks The networks it declares for that release.
     function setExtendedNetworks(string memory label, string memory suite, CloneNetwork[] memory networks) external {
-        sExtendedRoot = string.concat("fixture-lib/extended-networks/", label);
-        (,, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(sExtendedRoot, suite);
-        if (StdConstants.VM.exists(path)) {
-            StdConstants.VM.removeFile(path);
-        }
+        sExtendedRoot =
+            LibExtendedNetworksFixture.freshRoot(StdConstants.VM, "fixture-lib/extended-networks", label, suite);
         LibRainDeployExtendedNetworks.writeExtendedNetworks(StdConstants.VM, sExtendedRoot, suite, networks);
         sExtendedSuite = suite;
         delete sExtendedNetworks;

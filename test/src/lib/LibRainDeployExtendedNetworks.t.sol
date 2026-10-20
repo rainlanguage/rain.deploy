@@ -16,6 +16,7 @@ import {
     LibRainDeployExtendedNetworks
 } from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
 import {InvalidRecordRoot} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {LibExtendedNetworksFixture} from "../../lib/LibExtendedNetworksFixture.sol";
 
 /// @title LibRainDeployExtendedNetworksTest
 /// @notice The extended networks record: where it lives, what the writer writes, what the reader accepts, and the
@@ -28,12 +29,7 @@ contract LibRainDeployExtendedNetworksTest is Test {
     /// @param label The test's directory under `fixture-lib/extended-networks-lib`.
     /// @return The root.
     function freshRoot(string memory label) internal returns (string memory) {
-        string memory root = string.concat("fixture-lib/extended-networks-lib/", label);
-        (,, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, SUITE);
-        if (vm.exists(path)) {
-            vm.removeFile(path);
-        }
-        return root;
+        return LibExtendedNetworksFixture.freshRoot(vm, "fixture-lib/extended-networks-lib", label, SUITE);
     }
 
     /// A network with the given fields.
