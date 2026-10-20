@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain, SuiteRequiredNowhere} from "../../../src/abstract/RainDeployVerifyChain.sol";
-import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
@@ -64,6 +64,29 @@ contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainD
         checkDeployedOnNetworks(
             Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), releasedSuites()
         );
+    }
+
+    /// The released suites against `networks` on the local seam.
+    /// @param networks The roster to check on.
+    function checkOn(SupportedNetwork[] memory networks) external {
+        checkDeployedOnNetworks(Vm(address(sForkVm)), networks, releasedSuites());
+    }
+
+    /// No suites against `networks` on the local seam.
+    /// @param networks The roster to check on.
+    function checkNothingOn(SupportedNetwork[] memory networks) external {
+        checkDeployedOnNetworks(Vm(address(sForkVm)), networks, new DeploySuite[](0));
+    }
+
+    /// An empty roster is refused as no networks, not as a suite required nowhere.
+    function testEmptyRosterIsNoNetworks() external {
+        vm.expectRevert(LibRainDeploy.NoNetworks.selector);
+        this.checkOn(new SupportedNetwork[](0));
+    }
+
+    /// No suites against an empty roster is still nothing to check.
+    function testNoSuitesOnEmptyRosterPasses() external {
+        this.checkNothingOn(new SupportedNetwork[](0));
     }
 
     /// The fixture is only meaningful if base is not the first network walked.
