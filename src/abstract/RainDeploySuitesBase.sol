@@ -287,7 +287,8 @@ abstract contract RainDeploySuitesBase {
         return LibRainDeploy.supportedNetworks();
     }
 
-    /// A suite as it is broadcast and as it is checked on chain.
+    /// A suite as the chain group checks it. The broadcast takes its candidate's networks in `deployAndBroadcast`
+    /// instead, among the networks it broadcasts to.
     /// @param frozen The suite, with its extended networks, as `withExtendedNetworks` gives it.
     /// @param chainIds The chain ids in play.
     /// @return The suite, with its extended networks and the networks in play its candidate adds.

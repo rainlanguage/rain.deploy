@@ -6,7 +6,6 @@ import {Script} from "forge-std-1.17.0/src/Script.sol";
 
 import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
-import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 
 /// @title RainDeployBroadcast
 /// @notice The broadcast, inherited rather than rewritten per repo.
@@ -66,9 +65,10 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
 
     /// Broadcasts the selected suite by ITS mechanism, through `LibRainDeployMechanism` — the same
     /// dispatch every verification group derives through, so what is broadcast is what was
-    /// verified. A per-network release takes its candidate's unrecorded networks only among `networks`, and is
-    /// broadcast to a network it does not record only once `extendedNetworks` declares it there, else
-    /// `ExtendedNetworkUnfrozen` names the address to declare.
+    /// verified. A per-network release is broadcast to a network it does not record only once `extendedNetworks`
+    /// declares it there. Before any fork, such a network is refused with `ExtendedNetworkUnfrozen`, naming the address
+    /// its candidate's init data derives there to declare, or with `CloneNetworkUndeclared` where its candidate has no
+    /// entry there.
     /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
     /// @param networks The networks to broadcast to, as `deployNetworks()` gave them.
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.

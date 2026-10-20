@@ -43,8 +43,9 @@ error FrozenSnapshotNotReleased(string path);
 /// @param released The released suites whose mechanism derives them.
 error FrozenSnapshotsOutnumberReleases(string path, address[] deployedAddresses, uint256 records, uint256 released);
 /// Thrown when a frozen code record — a parameterised contract's snapshot, which records code and
-/// no deploy — names `DEPLOYED_ADDRESS` on any line, as `DEPLOYED_ADDRESS`, a per-network
-/// `DEPLOYED_ADDRESS_<chainId>` or any other spelling.
+/// no deploy — names `DEPLOYED_ADDRESS` on any line outside a block comment, as `DEPLOYED_ADDRESS`, a per-network
+/// `DEPLOYED_ADDRESS_<chainId>` or any other spelling. Line comments count, the SPDX header's among them, so a
+/// licence identifier or copyright text naming `DEPLOYED_ADDRESS` is refused too.
 /// @param path The record file.
 error FrozenCodeRecordDeclaresDeployedAddress(string path);
 

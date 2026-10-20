@@ -272,9 +272,12 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   before its `@` — has and it lacks, through
   `LibRainDeployMechanism.withUnrecordedNetworks`: that network's init data from
   the current declaration, and the address it derives under the RELEASE's
-  factory, implementation and salt. So a network added to `supportedNetworks()`
-  after the cut is deployable, once declared as an extended network (below), and
-  checked, as it is for a Zoltu or `Clone` release. Recorded entries are kept
+  factory, implementation and salt. That entry is never broadcast or checked: it
+  is the address `ExtendedNetworkUnfrozen` names when a network added to
+  `supportedNetworks()` after the cut is broadcast to or checked on before it is
+  declared as an extended network (below), and a network the candidate has no
+  entry for is refused with `CloneNetworkUndeclared`. Once declared, the network
+  is broadcast and checked at its declared entry. Recorded entries are kept
   exactly as recorded, so a recorded network keeps its recorded address and the
   refusal of a stale one. The record group does not do this: it matches the
   record against what the release was cut for.

@@ -158,12 +158,12 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         assertFalse(anyForkExists(), "a network was forked before the stale address was refused");
     }
 
-    /// A release cut when the repo supported Arbitrum One alone, broadcast to Arbitrum One and
-    /// Polygon.
-    function testBroadcastsAnUnrecordedNetworkAtItsInitDataAddress() external {
+    /// A release cut when the repo supported Arbitrum One alone, with Polygon declared as an extended network,
+    /// broadcast to Arbitrum One and Polygon, lands on each at its own address.
+    function testBroadcastsADeclaredExtendedNetworkAtItsDeclaredAddress() external {
         PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
         deploy.setExtendedNetworks(
-            "testBroadcastsAnUnrecordedNetworkAtItsInitDataAddress", "per-network-clone@0_0_1", declaredPolygon()
+            "testBroadcastsADeclaredExtendedNetworkAtItsDeclaredAddress", "per-network-clone@0_0_1", declaredPolygon()
         );
         vm.makePersistent(address(this));
         vm.makePersistent(address(deploy));
@@ -207,13 +207,13 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         assertEq(arbitrumAddress.code.length, 0);
     }
 
-    /// A release recording Arbitrum One alone, broadcast to both networks by a repo whose candidate
-    /// has since moved to another factory, implementation and salt, puts Polygon's clone where the
-    /// RELEASE's factory, implementation and salt derive it with the candidate's Polygon init data.
-    function testBroadcastsAnUnrecordedNetworkUnderTheReleasesFactoryAndImplementation() external {
+    /// A release recording Arbitrum One alone, with Polygon declared as an extended network, broadcast to both
+    /// networks by a repo whose candidate has since moved to another factory, implementation and salt, puts Polygon's
+    /// clone at its declared address, under the RELEASE's factory, implementation and salt.
+    function testBroadcastsADeclaredExtendedNetworkUnderTheReleasesFactoryAndImplementation() external {
         UpgradedPerNetworkCloneDeploy deploy = new UpgradedPerNetworkCloneDeploy();
         deploy.setExtendedNetworks(
-            "testBroadcastsAnUnrecordedNetworkUnderTheReleasesFactoryAndImplementation",
+            "testBroadcastsADeclaredExtendedNetworkUnderTheReleasesFactoryAndImplementation",
             "per-network-clone@0_0_1",
             declaredPolygon()
         );
