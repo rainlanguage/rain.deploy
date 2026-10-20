@@ -407,5 +407,31 @@
       "The fixture lines are test code that mutate the oracle itself; they were probed to show that each fixture step is load-bearing for the count, not to establish coverage of src.",
       "Adversarial pass: the intent (every code record under the root is checked, and the count says so) was re-derived from the NatSpec. The count comes from partitionFrozenRecords, which keeps only paths whose file name matches frozenCodeRecordNames(); N05 (a non-code file name) gives 0 records and is refused. No candidate bug."
     ]
+  },
+  {
+    "timestamp": "2026-10-20T13:30:00Z",
+    "commit": "f9644765cc2c7ab74203b4ce54f24a7ebc8540a5",
+    "testsAfterCommit": "1ac3817821b8b074e047eef96d91c0e541e80939",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 112,
+    "scope": "PR #317 (release 0.1.19): RegistryDeployVerifyTest.checkFrozenCodeRecordsDeploy's record walk and LibRainDeploySnapshotTest's no-release-drops walk (both rain-marvin MEDIUMs on f964476), and every line 1ac3817 changes in testEveryCodeRecordUnderTheRootIsChecked, checkNoReleaseDropsAContract and testReleaseDropIsFoundWhateverThePathOrder",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behavioursProbed": 11,
+      "killedByExistingTests": 8,
+      "gapsFilled": 2,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "Pre-existing-suite pass at commit with mutation-probe against RegistryDeployVerifyTest and LibRainDeploySnapshotTest (baseline green at 108, fork tests excluded by name): 8/10 KILLED. Both rain-marvin survivors reproduced: P01 (deploy walk checks only the first record, i < codeRecords.length && i < 1) and Q01 (drop check takes the first following tag in path order, && !hasNext) SURVIVED.",
+      "Gaps filled at testsAfterCommit: testEveryCodeRecordUnderTheRootIsChecked keeps the count of 2, then swaps each record in turn to MockTimelockControllerGeneration's creation code and expects FrozenCodeRecordDeploysOtherCode naming that record, so one of the two cases makes the record the walk reaches second the bad one whatever readDir order is. checkNoReleaseDropsAContract is split from the directory read; testReleaseDropIsFoundWhateverThePathOrder walks the restores record with 0_1_12 listed before 0_1_10 and after it, and expects ReleaseDropsContract(0_1_10, B) both times.",
+      "11 mutants probed at testsAfterCommit (baseline green at 109): 11/11 KILLED. P01 by testEveryCodeRecordUnderTheRootIsChecked, Q01 by testReleaseDropIsFoundWhateverThePathOrder; Q07 (the path-taking wrapper walks nothing) by the new test; Q06 (the readDir wrapper walks nothing) by the readDir-driven drop tests.",
+      "These targets are test-code helpers; the oracles are the separate fixture tests, so no target co-mutates its expectation. Mutants of the new tests' own fixture order were not probed: they mutate the oracle.",
+      "Adversarial pass: the intent (each release compared with the least frozen tag strictly following it, every code record deployed) was re-derived from the NatSpec. Q02 (greatest following tag) and Q03 (any non-preceding tag, including its own) are both refused, so only the least following tag satisfies the tests. No candidate bug."
+    ]
   }
 ]
