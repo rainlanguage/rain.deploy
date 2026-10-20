@@ -71,7 +71,8 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     ///
     /// Overridable so a `cutRelease()` can be exercised against a record other
     /// than the repo's own, which is append-only and cannot hold a test's
-    /// release.
+    /// release. Independent of `extendedNetworksRoot()`, which such a build
+    /// overrides too.
     /// @return The record root.
     function recordRoot() internal view virtual returns (string memory) {
         return LibRainDeploySnapshot.LIB_FS_ROOT;

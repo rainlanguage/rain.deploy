@@ -315,7 +315,9 @@ abstract contract RainDeploySuitesBase {
     }
 
     /// A suite with the networks `extendedNetworks` declares for it. Reverts with `ExtendedNetworksUnrecorded` unless
-    /// they are exactly the ones its extended networks record under `extendedNetworksRoot()` holds.
+    /// they are exactly the ones its extended networks record under `extendedNetworksRoot()` holds, and with the
+    /// refusals of `LibRainDeployExtendedNetworks.checkExtendedNetworksRecorded` and
+    /// `LibRainDeployMechanism.withExtendedNetworks`.
     /// @param suite The suite.
     /// @return The suite, with its extended networks.
     function withExtendedNetworks(DeploySuite memory suite) internal view returns (DeploySuite memory) {
@@ -328,16 +330,17 @@ abstract contract RainDeploySuitesBase {
 
     /// The record root the extended networks records are read from and written under.
     /// Overridable so a test can declare extended networks against a record other than the repo's own, which is
-    /// append-only.
+    /// append-only. Independent of `BuildScript.recordRoot()`: a build pointed at a fixture record overrides both, or
+    /// its extended networks records are still written to and read from the repo's own.
     /// @return The record root.
     function extendedNetworksRoot() internal view virtual returns (string memory) {
         return LibRainDeploySnapshot.LIB_FS_ROOT;
     }
 
     /// The networks a per-network release takes beyond those it records, each declared before it is broadcast there:
-    /// its chain id, the init data it is broadcast with and the address that derives. The broadcast refuses an
-    /// unrecorded network not named here, and the chain group a release live on one, so an unrecorded network's
-    /// address is frozen before it exists on chain.
+    /// its chain id, the init data it is broadcast with and the address that derives. The broadcast and the
+    /// chain group refuse an unrecorded network not named here, whether or not anything is live there, so an unrecorded
+    /// network's address is frozen before it exists on chain.
     /// The init data and the address MUST be literals copied from the broadcast: the build writes them to the
     /// release's append-only extended networks record (`LibRainDeployExtendedNetworks`), refuses to change an entry
     /// already written, and `withExtendedNetworks` refuses a declaration that is not exactly what the record holds.
