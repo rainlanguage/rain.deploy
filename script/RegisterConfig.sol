@@ -8,21 +8,27 @@ import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibConfigRegistryRegister} from "../src/lib/LibConfigRegistryRegister.sol";
 
 /// @title RegisterConfig
-/// @notice Binds `CONFIG_REGISTRY_NAME` to `CONFIG_REGISTRY_VALUE` in the
-/// `ConfigRegistry` on every network the declaration supports, or on the
-/// comma-separated subset `CONFIG_REGISTRY_NETWORKS` names, signed by
-/// `CONFIG_REGISTRY_ROOT` on a Trezor.
+/// @notice Binds `CONFIG_REGISTRY_NAME` to `CONFIG_REGISTRY_VALUE` under
+/// `CONFIG_REGISTRY_AUTHORITY` in the `ConfigRegistry` on every network the
+/// declaration supports, or on the comma-separated subset
+/// `CONFIG_REGISTRY_NETWORKS` names, signed by that authority on a Trezor.
 ///
-/// Local only. Root is a hardware wallet, so nothing in CI can sign this, and
-/// nothing in CI runs it. The README's "Managing the config registry" section
-/// carries the commands and what the device shows.
+/// Local only. The authority this is written for is a hardware wallet, so
+/// nothing in CI can sign this, and nothing in CI runs it. The README's
+/// "Managing the config registry" section carries the commands and what the
+/// device shows.
 ///
 /// `run()` binds, and is a dry run on forks unless forge is given
 /// `--broadcast`. `verify()` is the confirmed check, a run of its own once the
 /// binds are mined. The signer is forge's `--sender`, which is what a script's
-/// `msg.sender` is; `--trezor` is what makes the device that account's wallet.
-/// `LibConfigRegistryRegister` carries every guard.
+/// `msg.sender` is, and it must be the authority; `--trezor` is what makes the
+/// device that account's wallet. `LibConfigRegistryRegister` carries every
+/// guard.
 contract RegisterConfig is RegistryDeploySuites, Script {
+    /// The environment variable holding the authority to bind under and read
+    /// under: the account consumers resolve the name under.
+    string constant AUTHORITY_VAR = "CONFIG_REGISTRY_AUTHORITY";
+
     /// The environment variable holding the name, as a consumer writes it
     /// before hashing.
     string constant NAME_VAR = "CONFIG_REGISTRY_NAME";
@@ -45,21 +51,32 @@ contract RegisterConfig is RegistryDeploySuites, Script {
         return vm.envOr(NETWORKS_VAR, ",", supportedNetworks());
     }
 
-    /// Binds the name on every selected network where it is not already bound
-    /// to the value.
+    /// Binds the name under the authority on every selected network where it
+    /// is not already bound to the value.
     /// @return The fork each selected network was simulated on.
     function run() external returns (uint256[] memory) {
         (uint256[] memory forkIds,) = LibConfigRegistryRegister.registerOnNetworks(
-            vm, selectedNetworks(), supportedNetworks(), msg.sender, vm.envString(NAME_VAR), vm.envBytes(VALUE_VAR)
+            vm,
+            selectedNetworks(),
+            supportedNetworks(),
+            msg.sender,
+            vm.envAddress(AUTHORITY_VAR),
+            vm.envString(NAME_VAR),
+            vm.envBytes(VALUE_VAR)
         );
         return forkIds;
     }
 
     /// Reads every selected network fresh and reverts unless the name resolves
-    /// to the value on each.
+    /// to the value under the authority on each.
     function verify() external {
         LibConfigRegistryRegister.checkRegisteredOnNetworks(
-            vm, selectedNetworks(), supportedNetworks(), vm.envString(NAME_VAR), vm.envBytes(VALUE_VAR)
+            vm,
+            selectedNetworks(),
+            supportedNetworks(),
+            vm.envAddress(AUTHORITY_VAR),
+            vm.envString(NAME_VAR),
+            vm.envBytes(VALUE_VAR)
         );
     }
 }

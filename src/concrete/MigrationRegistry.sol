@@ -29,20 +29,18 @@ struct MigrationRecord {
 /// account wrote it, or where that line has got to.
 ///
 /// There is deliberately nothing else. No removal, no upgrade, no pause, and no
-/// authority but each writer's over its own lines — which is the difference
-/// from `ConfigRegistry`, and the reason nothing here is CONFIGURED at
-/// compile time. `MIGRATION_HEAD_GENESIS` is a compile-time constant, but it is
-/// the same value for every consumer on every chain and names nobody, so it is
-/// part of what this contract IS rather than a choice welded into it.
+/// authority but each writer's over its own lines — the reason nothing here is
+/// CONFIGURED at compile time. `MIGRATION_HEAD_GENESIS` is a compile-time
+/// constant, but it is the same value for every consumer on every chain and
+/// names nobody, so it is part of what this contract IS rather than a choice
+/// welded into it.
 ///
-/// `ConfigRegistry` has a root, and a root has to be welded into the creation
-/// code so it cannot be rotated, which puts it in the deterministic address.
-/// That is workable there because there is one registry of names for the whole
-/// organisation. It is not workable here: the account that applies a migration
-/// is a different Safe, deployer or timelock for every consumer and every
-/// chain, so one root would have to be all of them at once, and baking each
-/// consumer's authority into the creation code would give each a different
-/// address for what is meant to be one shared registry.
+/// A root would have to be welded into the creation code so it cannot be
+/// rotated, which puts it in the deterministic address. The account that
+/// applies a migration is a different Safe, deployer or timelock for every
+/// consumer and every chain, so one root would have to be all of them at once,
+/// and baking each consumer's authority into the creation code would give each
+/// a different address for what is meant to be one shared registry.
 ///
 /// Keying by the writer removes the authority instead of choosing one. Anyone
 /// may write, but only under themselves or a writer that approved them, so a
