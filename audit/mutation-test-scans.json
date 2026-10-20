@@ -728,5 +728,31 @@
       "These targets are test-code helpers; the oracles are the separate fixture tests, so no target co-mutates its expectation.",
       "Adversarial pass: the oracle is the retirement rule main defines (Build.retiredContracts(): contracts no longer built, whose record cannot grow). The re-cut 0_1_19 ConfigRegistry and MigrationRegistry records are byte-identical to src/generated/candidate/, and MigrationRegistry and TimelockController are byte-identical to the first 0_1_19 cut. A later release could in principle restore a retired contract without the drop check objecting, but Build cannot freeze a contract that is absent from generatedContracts(), so there is no path to it. No candidate bug."
     ]
+  },
+  {
+    "timestamp": "2026-10-20T16:47:47Z",
+    "commit": "41404a27224caa94e4fab588a711d23daf3862ee",
+    "testsAfterCommit": "0f555be11d93e25b3db68dd730a3e7874506917d",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 166,
+    "scope": "PR #317, narrowed to checkFrozenCodeRecordsDeploy in test/src/abstract/RegistryDeployVerify.t.sol and its external wrappers, to kill rain-marvin's survivors M49, M53 and M54 from the audit at 41404a2",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behavioursProbed": 8,
+      "killedByExistingTests": 4,
+      "gapsFilled": 3,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "Pre-existing-suite pass at commit with mutation-probe against RegistryDeployVerifyTest, fork tests excluded by name (baseline green at 8): 4/7 KILLED. All three rain-marvin survivors reproduced: F01 (M49, recorded hash read as keccak256(RUNTIME_CODE)), F02 (M53, assertLt(matched, declared.length, path) dropped) and F03 (M54, declared[0] for declared[matched]) SURVIVED.",
+      "Gaps filled at testsAfterCommit. M49: testFrozenCodeRecordDeployingOtherThanItsHashIsRefused writes the real 0_1_19 TimelockController record with only its BYTECODE_HASH swapped for MockTimelockControllerGeneration's runtime hash, and expects FrozenCodeRecordDeploysOtherCode(path, that hash, the real hash). M54: checkFrozenCodeRecordsDeploy now takes the parameterised contracts it checks; testEachCodeRecordDeploysWithItsOwnDeclaration declares TimelockController and then MockTimelockControllerImmutableGeneration (minDelay 7, held in an immutable), asserts the first declaration's args deploy the mock to other code, and expects both records checked. M53: the code record names are now derived from the declarations passed in, so every matched index is below declared.length by construction and the assertLt was removed as redundant rather than exempted.",
+      "8 mutants probed at testsAfterCommit (baseline green at 10): 8/8 KILLED. G01 (M49) by testFrozenCodeRecordDeployingOtherThanItsHashIsRefused; G02 (M54) and G03 (names all taken from the first declaration) by testEachCodeRecordDeploysWithItsOwnDeclaration; G08 (root-only wrapper passes no declarations) by every real-record test.",
+      "These targets are test-code helpers; the oracles are the separate fixture tests, so no target co-mutates its expectation.",
+      "Adversarial pass: the intent (each frozen code record's CREATION_CODE, deployed with its own declaration's referenceConstructorArgs, hashes to its declared BYTECODE_HASH) was re-derived from the NatSpec. A failed create is reported as FrozenCodeRecordDeploysOtherCode with a zero hash; it fails closed and rain-marvin already raised it as INFO, so it is not a new candidate. No candidate bug."
+    ]
   }
 ]
