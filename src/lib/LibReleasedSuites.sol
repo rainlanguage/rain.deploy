@@ -8,28 +8,31 @@ import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 
 import {LibAddressRegistryReleased} from "./LibAddressRegistryReleased.sol";
 
+import {LibConfigRegistryReleased} from "./LibConfigRegistryReleased.sol";
+
 import {LibMigrationRegistryReleased} from "./LibMigrationRegistryReleased.sol";
 
 /// @title LibReleasedSuites
 /// @notice Every frozen release this repo has cut, of every contract it
-/// deploys: the per-contract released libs concatenated, in declaration
-/// order.
+/// deploys: the per-contract released libs concatenated, in the order the
+/// build script lists them.
 ///
 /// There is one released lib per deployed contract because a release freezes
 /// every contract it names into a single tag directory, so a lib that took
 /// the record whole would give another contract's snapshot this contract's
 /// suite key and collide with its own entry for that tag. This is where
-/// those libs meet, and it is emitted from the same list that wrote them --
-/// so a contract that is generated, aliased and frozen cannot be missing
-/// from the declaration, and a release missing from the declaration is a
-/// release every check quietly stops asking about.
+/// those libs meet, and it is emitted from the build script's list -- so a
+/// contract that is generated, aliased and frozen cannot be missing from
+/// the declaration, and a release missing from the declaration is a release
+/// every check quietly stops asking about.
 library LibReleasedSuites {
-    /// Every released suite, in declaration order.
+    /// Every released suite, in the order the build script lists them.
     /// @return The released suites.
     function releasedSuites() internal pure returns (DeploySuite[] memory) {
-        DeploySuite[][] memory released = new DeploySuite[][](2);
+        DeploySuite[][] memory released = new DeploySuite[][](3);
         released[0] = LibAddressRegistryReleased.releasedSuites();
-        released[1] = LibMigrationRegistryReleased.releasedSuites();
+        released[1] = LibConfigRegistryReleased.releasedSuites();
+        released[2] = LibMigrationRegistryReleased.releasedSuites();
 
         uint256 total = 0;
         for (uint256 i = 0; i < released.length; i++) {

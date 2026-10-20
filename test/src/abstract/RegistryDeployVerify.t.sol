@@ -2,9 +2,11 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerify} from "../../../src/abstract/RainDeployVerify.sol";
 import {RainDeployVerifySnapshotBase} from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {RegistryDeploySuites, ParameterisedContract} from "../../../src/abstract/RegistryDeploySuites.sol";
+import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {
     BYTECODE_HASH as BYTECODE_HASH_0_1_19,
@@ -21,11 +23,13 @@ error FrozenCodeRecordDeploysOtherCode(string path, bytes32 recorded, bytes32 de
 
 /// @title RegistryDeployVerifyTest
 /// @notice This repo's own registry declaration bound to `RainDeployVerify` —
-/// the same single line a consumer writes, so every inherited check that
-/// reaches this contract reaches every consumer that has bumped.
+/// the same inheritance a consumer writes, so a check that reaches this
+/// contract reaches every consumer that has bumped, and one that does not reach
+/// it never shipped.
 ///
+/// Everything is inherited but two overrides, which is the point:
 /// `RegistryDeploySuites` says which registries and which releases exist and
-/// `RainDeployVerify` says what is true of them. The one override names the
+/// `RainDeployVerify` says what is true of them. The first names the
 /// code records a release freezes beside the suites' — the parameterised
 /// contracts — so the frozen-record walk reads them as code and not as deploys.
 /// Its own tests deploy each frozen code record's creation code with its
@@ -33,10 +37,13 @@ error FrozenCodeRecordDeploysOtherCode(string path, bytes32 recorded, bytes32 de
 /// carries, and pin against fixtures that the check walks every code record
 /// under its root and refuses a record whose creation code deploys other code.
 ///
+/// The second binds `registryRequiresSuiteOn`, so the retired `AddressRegistry`
+/// releases are required only on the networks they were live on at retirement.
+///
 /// The chain half is red until every release declared here is live on every
-/// supported network, which is why the deploy is dispatched before the release
-/// PR merges. That is the check working: "nothing is deployed at the address
-/// `LibAddressRegistry` reads" is the single most important fact about these
+/// supported network, which is why the deploy is dispatched before the tag is
+/// pushed. That is the check working: "nothing is deployed at the address
+/// `LibConfigRegistry` reads" is the single most important fact about these
 /// pins, and no snapshot assertion can discover it — a perfectly consistent set
 /// of pins for a contract that exists nowhere passes every one of them.
 ///
@@ -191,5 +198,20 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(DEPLOYS_OTHER_FIXTURE_ROOT, true);
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    function requiresSuiteOn(DeploySuite memory suite, string memory network) internal pure override returns (bool) {
+        return registryRequiresSuiteOn(suite, network);
+    }
+
+    /// The chain group reads the declaration's narrowing.
+    function testRequiresSuiteOnIsTheRegistryNarrowing() external pure {
+        DeploySuite memory suite;
+        suite.suite = "address-registry@0_1_18";
+        assertFalse(requiresSuiteOn(suite, "new_network"));
+        assertTrue(requiresSuiteOn(suite, LibRainDeploy.BASE));
+        suite.suite = "config-registry";
+        assertTrue(requiresSuiteOn(suite, "new_network"));
     }
 }

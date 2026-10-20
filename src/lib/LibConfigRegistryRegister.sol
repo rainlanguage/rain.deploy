@@ -5,17 +5,24 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 
-import {ADDRESS_REGISTRY_ROOT} from "../concrete/AddressRegistry.sol";
-import {IAddressRegistryV1} from "../interface/IAddressRegistryV1.sol";
-import {LibAddressRegistry} from "./LibAddressRegistry.sol";
-import {LibAddressRegistryDeploy} from "./LibAddressRegistryDeploy.sol";
+import {CONFIG_REGISTRY_ROOT} from "../concrete/ConfigRegistry.sol";
+import {IConfigRegistryV1} from "../interface/IConfigRegistryV1.sol";
+import {LibConfigRegistry} from "./LibConfigRegistry.sol";
+import {LibConfigRegistryDeploy} from "./LibConfigRegistryDeploy.sol";
 import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 
-/// @title LibAddressRegistryRegister
-/// @notice Root's side of `AddressRegistry`: binds one name to one account on
-/// every network it is given, from `ADDRESS_REGISTRY_ROOT`, and reads the
-/// binding back. `script/RegisterAddress.sol` is the entry point and says how
-/// it is run; everything with behaviour is here.
+/// @title LibConfigRegistryRegister
+/// @notice Root's side of `ConfigRegistry`: binds one name to one ABI-encoded
+/// value on every network it is given, from `CONFIG_REGISTRY_ROOT`, and reads
+/// the binding back. `script/RegisterConfig.sol` is the entry point and says
+/// how it is run; everything with behaviour is here.
+///
+/// ## The value
+///
+/// Taken as the bytes the registry stores, already ABI-encoded, and compared
+/// byte for byte. Nothing here decodes it, because nothing here knows the type
+/// a consumer decodes it as; an address is `abi.encode(account)`, which is
+/// `cast abi-encode "f(address)" <account>`.
 ///
 /// ## The name
 ///
@@ -41,27 +48,44 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// signs what a script recorded only once the script has returned. Per network,
 /// the chain id is the one the catalogue states for the alias, and the
 /// registry at the pinned address holds the pinned code hash — the check
-/// `LibAddressRegistry.resolve` makes before every read, so the binding written
-/// is in the registry consumers read. The inputs are checked once, before any
-/// fork: the name is canonical, the account is not zero, the networks are a
-/// non-empty, duplicate-free subset of the declared ones, and the sender is
-/// root.
+/// `LibConfigRegistry.resolve` makes before every read, so the binding written
+/// is in the registry consumers read. `checkInputs` checks the inputs before
+/// any fork: the name is canonical, the value is not empty and is a
+/// whole number of 32-byte words, the networks are a non-empty,
+/// duplicate-free subset of the declared ones, and the sender is root.
+/// `registerOnNetworks` runs it and logs the inputs record before creating
+/// the forks; `registerOnForks` runs it again for a caller with its own forks,
+/// and logs no record.
 ///
 /// ## Simulation and confirmation
 ///
-/// The same split as `LibRainDeploy.checkResolvedAddressesOnForks` and
-/// `checkResolvedAddressesOnNetworks`. `registerOnNetworks` returns the forks
+/// The same split as `LibRainDeploy`'s `checkResolved*OnForks` and
+/// `checkResolved*OnNetworks` pairs. `registerOnNetworks` returns the forks
 /// it simulated on, and `checkRegisteredOnForks` reads those; nothing is mined
 /// while the script that registers is running, so the binding exists there and
 /// nowhere else. `checkRegisteredOnNetworks` forks every network fresh, as a
 /// run of its own once the transactions have been mined, and is the check that
 /// the binding is on chain.
-library LibAddressRegistryRegister {
+library LibConfigRegistryRegister {
     /// Thrown when a name is outside the alphabet consumers write names in.
     /// @param name The name as given.
     error NonCanonicalName(string name);
 
-    /// Thrown when the account that would sign is not `ADDRESS_REGISTRY_ROOT`.
+    /// Thrown when a value is not a whole number of 32-byte words, which every
+    /// `abi.encode` output is: a bare 20-byte address pasted in place of its
+    /// ABI encoding, most likely. The registry binds any non-empty value; this
+    /// refuses it before a device is asked to sign a value that is not the
+    /// output of any `abi.encode`. This script binds ABI-encoded values only.
+    ///
+    /// It is the only check on what a value holds. Its type is agreed between
+    /// root and the name's consumers, and any whole-word value can be correct
+    /// for some name: a zero word is a threshold or delay of 0. Checking that
+    /// the bytes encode what consumers decode is on whoever builds them, and
+    /// `checkRegisteredOnNetworks` proves only that the chain holds those bytes.
+    /// @param value The value as given.
+    error NonCanonicalValue(bytes value);
+
+    /// Thrown when the account that would sign is not `CONFIG_REGISTRY_ROOT`.
     /// The registry would refuse it with `NotRoot`; this says so before a
     /// device is asked to sign something that can only revert.
     /// @param sender The account that would sign.
@@ -86,13 +110,13 @@ library LibAddressRegistryRegister {
     /// @param actual The chain id the fork reports.
     error UnexpectedChainId(string network, uint256 expected, uint256 actual);
 
-    /// Thrown when a network's registry binds the name to an account other than
-    /// the one expected.
+    /// Thrown when a network's registry binds the name to a value other than the
+    /// one expected.
     /// @param network The network read.
     /// @param name The hashed name.
-    /// @param expected The account it should be bound to.
-    /// @param actual The account it is bound to.
-    error UnexpectedBinding(string network, bytes32 name, address expected, address actual);
+    /// @param expected The value it should be bound to.
+    /// @param actual The value it is bound to.
+    error UnexpectedBinding(string network, bytes32 name, bytes expected, bytes actual);
 
     /// The `bytes32` a consumer resolves for `name`, refusing a non-canonical
     /// name.
@@ -175,41 +199,45 @@ library LibAddressRegistryRegister {
         return LibRainDeploy.declaredNetworkConfigs(selected);
     }
 
-    /// Reverts `SenderNotRoot` unless `sender` is `ADDRESS_REGISTRY_ROOT`.
+    /// Reverts `SenderNotRoot` unless `sender` is `CONFIG_REGISTRY_ROOT`.
     /// @param sender The account that would sign.
     function checkSender(address sender) internal pure {
-        if (sender != ADDRESS_REGISTRY_ROOT) {
-            revert SenderNotRoot(sender, ADDRESS_REGISTRY_ROOT);
+        if (sender != CONFIG_REGISTRY_ROOT) {
+            revert SenderNotRoot(sender, CONFIG_REGISTRY_ROOT);
         }
     }
 
     /// Reverts unless the selected chain is the network's and its registry is
     /// the pinned one.
+    /// @param vm The Vm the chain id is read through, so the read follows the
+    /// selected fork.
     /// @param network The catalogue entry of the selected chain.
-    function checkChain(SupportedNetwork memory network) internal view {
-        if (block.chainid != network.chainId) {
-            revert UnexpectedChainId(network.name, network.chainId, block.chainid);
+    function checkChain(Vm vm, SupportedNetwork memory network) internal view {
+        uint256 chainId = vm.getChainId();
+        if (chainId != network.chainId) {
+            revert UnexpectedChainId(network.name, network.chainId, chainId);
         }
-        LibAddressRegistry.checkCodeHash();
+        LibConfigRegistry.checkCodeHash();
     }
 
-    /// The selected chain's current binding of `name`, the zero address and
-    /// moment when it is unbound. Only the registry's own `NameNotRegistered`
-    /// for this name reads as unbound; any other revert is re-raised.
+    /// The selected chain's current binding of `name`, an empty value and a
+    /// moment of zero when it is unbound. Only the registry's own
+    /// `NameNotRegistered` for this name reads as unbound; any other revert is
+    /// re-raised.
     /// @param name The hashed name.
-    /// @return The bound account, or zero.
+    /// @return The bound value, or empty.
     /// @return The moment it was bound, or zero.
-    function currentBinding(bytes32 name) internal view returns (address, uint256) {
-        try IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).get(name) returns (
-            address account, uint256 registeredAt
+    function currentBinding(bytes32 name) internal view returns (bytes memory, uint256) {
+        try IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(name) returns (
+            bytes memory value, uint256 registeredAt
         ) {
-            return (account, registeredAt);
+            return (value, registeredAt);
         } catch (bytes memory reason) {
             if (
                 keccak256(reason)
-                    == keccak256(abi.encodeWithSelector(IAddressRegistryV1.NameNotRegistered.selector, name))
+                    == keccak256(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name))
             ) {
-                return (address(0), 0);
+                return ("", 0);
             }
             assembly ("memory-safe") {
                 revert(add(reason, 0x20), mload(reason))
@@ -217,23 +245,23 @@ library LibAddressRegistryRegister {
         }
     }
 
-    /// The calldata of the bind of `name` to `account`: what the device signs,
+    /// The calldata of the bind of `name` to `value`: what the device signs,
     /// and what `registerOnSelectedChain` sends.
     /// @param name The hashed name.
-    /// @param account The account to bind it to.
-    /// @return The `register` calldata.
-    function registerCalldata(bytes32 name, address account) internal pure returns (bytes memory) {
-        return abi.encodeCall(IAddressRegistryV1.register, (name, account));
+    /// @param value The ABI-encoded value to bind it to.
+    /// @return The `registerV1` calldata.
+    function registerCalldata(bytes32 name, bytes memory value) internal pure returns (bytes memory) {
+        return abi.encodeCall(IConfigRegistryV1.registerV1, (name, value));
     }
 
     /// The record of a run's inputs, printed before any network: everything the
     /// device is asked to sign, exactly as it will be signed.
     /// @param vm The Vm instance to format with.
     /// @param name The name as a consumer writes it.
-    /// @param account The account to bind it to.
+    /// @param value The ABI-encoded value to bind it to.
     /// @param sender The account that signs.
     /// @return The record, one field per line.
-    function describeInputs(Vm vm, string memory name, address account, address sender)
+    function describeInputs(Vm vm, string memory name, bytes memory value, address sender)
         internal
         pure
         returns (string memory)
@@ -244,133 +272,184 @@ library LibAddressRegistryRegister {
             name,
             "\nName hash (keccak256 of the name): ",
             vm.toString(hashed),
-            "\nAccount: ",
-            vm.toString(account),
+            "\nValue: ",
+            vm.toString(value),
             "\nSender (root): ",
             vm.toString(sender),
             "\nRegistry: ",
-            vm.toString(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS),
+            vm.toString(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
             "\nCalldata: ",
-            vm.toString(registerCalldata(hashed, account))
+            vm.toString(registerCalldata(hashed, value))
         );
     }
 
     /// The record of one network: its chain id, the current binding, and what
-    /// the run does to it — `SKIP` when it is bound to `account` already,
-    /// `BIND` when it is unbound, `REBIND` otherwise.
+    /// the run does to it — `SKIP` when it is bound to `value` already, `BIND`
+    /// when it is unbound, `REBIND` otherwise.
     /// @param vm The Vm instance to format with.
     /// @param network The network's name.
     /// @param chainId The chain the network forked.
-    /// @param bound The account the name is bound to, or zero.
+    /// @param bound The value the name is bound to, or empty.
     /// @param registeredAt The moment it was bound, or zero.
-    /// @param account The account to bind it to.
+    /// @param value The value to bind it to.
     /// @return The record, one field per line.
     function describeNetwork(
         Vm vm,
         string memory network,
         uint256 chainId,
-        address bound,
+        bytes memory bound,
         uint256 registeredAt,
-        address account
+        bytes memory value
     ) internal pure returns (string memory) {
-        string memory current = bound == address(0)
+        string memory current = bound.length == 0
             ? "unbound"
             : string.concat(vm.toString(bound), " (bound at ", vm.toString(registeredAt), ")");
         string memory action;
-        if (bound == account) {
-            action = string.concat("SKIP: already bound to ", vm.toString(account));
+        if (keccak256(bound) == keccak256(value)) {
+            action = string.concat("SKIP: already bound to ", vm.toString(value));
         } else {
-            action = string.concat(bound == address(0) ? "BIND" : "REBIND", ": -> ", vm.toString(account));
+            action = string.concat(bound.length == 0 ? "BIND" : "REBIND", ": -> ", vm.toString(value));
         }
         return string.concat(
             "Network: ", network, "\n  chain id: ", vm.toString(chainId), "\n  current: ", current, "\n  ", action
         );
     }
 
-    /// Binds `name` to `account` on the selected chain from `sender`, unless it
-    /// is bound to `account` already. Logs the current binding and what is
-    /// about to happen to it.
+    /// Binds `name` to `value` on the selected chain from `sender`, unless it
+    /// is bound to `value` already. Logs the current binding and what is about
+    /// to happen to it.
     /// @param vm The Vm instance to broadcast with.
     /// @param network The catalogue entry of the selected chain.
     /// @param sender The account that signs.
     /// @param name The hashed name.
-    /// @param account The account to bind it to.
+    /// @param value The ABI-encoded value to bind it to.
     /// @return Whether a bind was broadcast.
+    /// @return The record logged.
     function registerOnSelectedChain(
         Vm vm,
         SupportedNetwork memory network,
         address sender,
         bytes32 name,
-        address account
-    ) internal returns (bool) {
-        checkChain(network);
-        (address bound, uint256 registeredAt) = currentBinding(name);
+        bytes memory value
+    ) internal returns (bool, string memory) {
+        checkChain(vm, network);
+        (bytes memory bound, uint256 registeredAt) = currentBinding(name);
 
-        console2.log(describeNetwork(vm, network.name, block.chainid, bound, registeredAt, account));
-        if (bound == account) {
-            return false;
+        string memory record = describeNetwork(vm, network.name, network.chainId, bound, registeredAt, value);
+        console2.log(record);
+        bool binds = keccak256(bound) != keccak256(value);
+        if (binds) {
+            vm.startBroadcast(sender);
+            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).registerV1(name, value);
+            vm.stopBroadcast();
         }
-
-        vm.startBroadcast(sender);
-        IAddressRegistryV1(LibAddressRegistryDeploy.ADDRESS_REGISTRY_DEPLOYED_ADDRESS).register(name, account);
-        vm.stopBroadcast();
-        return true;
+        return (binds, record);
     }
 
-    /// Binds `name` to `account` on every selected network from `sender`.
+    /// Every input refusal of `registerOnNetworks`, in order — the name, the
+    /// value, the networks, then the sender — and the inputs record it logs.
+    /// @param vm The Vm instance to format with.
+    /// @param selected The networks to bind on.
+    /// @param declared The networks the declaration supports.
+    /// @param sender The account that signs. MUST be `CONFIG_REGISTRY_ROOT`.
+    /// @param name The name as a consumer writes it.
+    /// @param value The ABI-encoded value to bind it to.
+    /// @return The hashed name.
+    /// @return The selected networks' catalogue entries.
+    /// @return The `describeInputs` record of the inputs.
+    function checkInputs(
+        Vm vm,
+        string[] memory selected,
+        string[] memory declared,
+        address sender,
+        string memory name,
+        bytes memory value
+    ) internal pure returns (bytes32, SupportedNetwork[] memory, string memory) {
+        bytes32 hashed = nameHash(name);
+        if (value.length == 0) {
+            revert IConfigRegistryV1.EmptyValue(hashed);
+        }
+        if (value.length % 32 != 0) {
+            revert NonCanonicalValue(value);
+        }
+        SupportedNetwork[] memory networks = selectNetworks(selected, declared);
+        checkSender(sender);
+        return (hashed, networks, describeInputs(vm, name, value, sender));
+    }
+
+    /// Binds `name` to `value` on every selected network from `sender`.
     ///
-    /// Every input refusal comes before the first fork — the name, the account,
-    /// the networks, then the sender — and every network is forked before any
-    /// is selected, as `LibRainDeploy.createForks` requires.
+    /// Every input refusal comes before the first fork, and every network is
+    /// forked before any is selected, as `LibRainDeploy.createForks` requires.
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param selected The networks to bind on.
     /// @param declared The networks the declaration supports.
-    /// @param sender The account that signs. MUST be `ADDRESS_REGISTRY_ROOT`.
+    /// @param sender The account that signs. MUST be `CONFIG_REGISTRY_ROOT`.
     /// @param name The name as a consumer writes it.
-    /// @param account The account to bind it to.
+    /// @param value The ABI-encoded value to bind it to.
     /// @return The fork each selected network was simulated on, for
     /// `checkRegisteredOnForks`.
+    /// @return The `describeInputs` record logged.
     function registerOnNetworks(
         Vm vm,
         string[] memory selected,
         string[] memory declared,
         address sender,
         string memory name,
-        address account
-    ) internal returns (uint256[] memory) {
-        bytes32 hashed = nameHash(name);
-        if (account == address(0)) {
-            revert IAddressRegistryV1.ZeroAccount(hashed);
-        }
-        SupportedNetwork[] memory networks = selectNetworks(selected, declared);
-        checkSender(sender);
-
-        console2.log(describeInputs(vm, name, account, sender));
+        bytes memory value
+    ) internal returns (uint256[] memory, string memory) {
+        (,, string memory record) = checkInputs(vm, selected, declared, sender, name, value);
+        console2.log(record);
 
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, selected);
-        for (uint256 i = 0; i < networks.length; i++) {
-            vm.selectFork(forkIds[i]);
-            registerOnSelectedChain(vm, networks[i], sender, hashed, account);
-        }
-        return forkIds;
+        registerOnForks(vm, selected, declared, forkIds, sender, name, value);
+        return (forkIds, record);
     }
 
-    /// Reverts unless every given fork's registry binds `name` to `account`,
-    /// read through `LibAddressRegistry.resolve` exactly as a consumer reads
-    /// it, logging the moment each was bound.
+    /// Binds `name` to `value` from `sender` on every given fork, after the
+    /// input refusals of `checkInputs`.
+    /// @param vm The Vm instance to select forks and broadcast with.
+    /// @param selected The networks the forks are of.
+    /// @param declared The networks the declaration supports.
+    /// @param forkIds The fork of each selected network, positionally paired.
+    /// @param sender The account that signs. MUST be `CONFIG_REGISTRY_ROOT`.
+    /// @param name The name as a consumer writes it.
+    /// @param value The ABI-encoded value to bind it to.
+    function registerOnForks(
+        Vm vm,
+        string[] memory selected,
+        string[] memory declared,
+        uint256[] memory forkIds,
+        address sender,
+        string memory name,
+        bytes memory value
+    ) internal {
+        (bytes32 hashed, SupportedNetwork[] memory networks,) = checkInputs(vm, selected, declared, sender, name, value);
+        if (forkIds.length != networks.length) {
+            revert LibRainDeploy.ForkIdsLengthMismatch(networks.length, forkIds.length);
+        }
+        for (uint256 i = 0; i < networks.length; i++) {
+            vm.selectFork(forkIds[i]);
+            registerOnSelectedChain(vm, networks[i], sender, hashed, value);
+        }
+    }
+
+    /// Reverts unless every given fork's registry binds `name` to `value`, read
+    /// through `LibConfigRegistry.resolve` exactly as a consumer reads it,
+    /// logging the moment each was bound.
     /// @param vm The Vm instance to select forks with.
     /// @param selected The networks the forks are of.
     /// @param declared The networks the declaration supports.
     /// @param forkIds The fork of each selected network, positionally paired.
     /// @param name The name as a consumer writes it.
-    /// @param account The account it must be bound to.
+    /// @param value The value it must be bound to.
     function checkRegisteredOnForks(
         Vm vm,
         string[] memory selected,
         string[] memory declared,
         uint256[] memory forkIds,
         string memory name,
-        address account
+        bytes memory value
     ) internal {
         bytes32 hashed = nameHash(name);
         SupportedNetwork[] memory networks = selectNetworks(selected, declared);
@@ -379,13 +458,30 @@ library LibAddressRegistryRegister {
         }
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
-            checkChain(networks[i]);
-            (address actual, uint256 registeredAt) = LibAddressRegistry.resolve(hashed);
-            if (actual != account) {
-                revert UnexpectedBinding(networks[i].name, hashed, account, actual);
-            }
+            uint256 registeredAt = checkRegisteredOnSelectedChain(vm, networks[i], hashed, value);
             console2.log(string.concat("Bound on ", networks[i].name, " at ", vm.toString(registeredAt)));
         }
+    }
+
+    /// Reverts unless the selected chain is the network's and its registry
+    /// binds `name` to `value`, read through `LibConfigRegistry.resolve`
+    /// exactly as a consumer reads it.
+    /// @param vm The Vm the chain id is read through.
+    /// @param network The catalogue entry of the selected chain.
+    /// @param name The hashed name.
+    /// @param value The value it must be bound to.
+    /// @return The moment it was bound.
+    function checkRegisteredOnSelectedChain(Vm vm, SupportedNetwork memory network, bytes32 name, bytes memory value)
+        internal
+        view
+        returns (uint256)
+    {
+        checkChain(vm, network);
+        (bytes memory actual, uint256 registeredAt) = LibConfigRegistry.resolve(name);
+        if (keccak256(actual) != keccak256(value)) {
+            revert UnexpectedBinding(network.name, name, value, actual);
+        }
+        return registeredAt;
     }
 
     /// `checkRegisteredOnForks` on a fresh fork of every selected network: the
@@ -394,17 +490,17 @@ library LibAddressRegistryRegister {
     /// @param selected The networks to check.
     /// @param declared The networks the declaration supports.
     /// @param name The name as a consumer writes it.
-    /// @param account The account it must be bound to.
+    /// @param value The value it must be bound to.
     function checkRegisteredOnNetworks(
         Vm vm,
         string[] memory selected,
         string[] memory declared,
         string memory name,
-        address account
+        bytes memory value
     ) internal {
         // Refused before anything is forked.
         nameHash(name);
         selectNetworks(selected, declared);
-        checkRegisteredOnForks(vm, selected, declared, LibRainDeploy.createForks(vm, selected), name, account);
+        checkRegisteredOnForks(vm, selected, declared, LibRainDeploy.createForks(vm, selected), name, value);
     }
 }

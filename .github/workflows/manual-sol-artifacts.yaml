@@ -1,6 +1,6 @@
 name: Manual sol artifacts
 # The on-chain deploy, run by hand. This repo carries deployed concretes
-# (`AddressRegistry`, `MigrationRegistry`) whose address + codehash consumers
+# (`ConfigRegistry`, `MigrationRegistry`) whose address + codehash consumers
 # pin, and `package-release.yaml` cuts a release for a deployment that ALREADY
 # exists — rainix-tag-release verifies the live chains against freshly generated
 # pins and never broadcasts. So the deploy has to happen first, and separately,
@@ -27,7 +27,7 @@ on:
           script still refuses one, naming the valid keys, if this list falls
           behind the declaration.
         options:
-          - address-registry
+          - config-registry
           - migration-registry
 jobs:
   deploy:

@@ -10,15 +10,15 @@ import {
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
-import {AddressRegistry} from "../../src/concrete/AddressRegistry.sol";
+import {ConfigRegistry} from "../../src/concrete/ConfigRegistry.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {
-    BYTECODE_HASH as ADDRESS_REGISTRY_BYTECODE_HASH,
-    CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE,
-    DEPLOYED_ADDRESS as ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-    RUNTIME_CODE as ADDRESS_REGISTRY_RUNTIME_CODE
-} from "../../src/generated/candidate/AddressRegistry.sol";
+    BYTECODE_HASH as CONFIG_REGISTRY_BYTECODE_HASH,
+    CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE,
+    DEPLOYED_ADDRESS as CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+    RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE
+} from "../../src/generated/candidate/ConfigRegistry.sol";
 
 /// @title CollidingCandidateDeploySuites
 /// A declaration with no releases at all and TWO candidates under one key.
@@ -45,11 +45,11 @@ contract CollidingCandidateDeploySuites is ExternalDeploySuites {
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
                 suite: "collides",
-                creationCode: ADDRESS_REGISTRY_CREATION_CODE,
-                storedDeployedAddress: ADDRESS_REGISTRY_DEPLOYED_ADDRESS,
-                storedBytecodeHash: ADDRESS_REGISTRY_BYTECODE_HASH,
-                storedRuntimeCode: ADDRESS_REGISTRY_RUNTIME_CODE,
-                artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
+                creationCode: CONFIG_REGISTRY_CREATION_CODE,
+                storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
+                storedBytecodeHash: CONFIG_REGISTRY_BYTECODE_HASH,
+                storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
+                artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
