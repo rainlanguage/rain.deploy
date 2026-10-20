@@ -148,21 +148,26 @@ library LibRainDeployExtendedNetworks {
     /// @param path The record file, for the error only.
     /// @param header The text before `HEADER_END`.
     function checkExtendedNetworksHeader(Vm vm, string memory path, string memory header) internal pure {
+        // The writer's header is four lines then the empty text before `HEADER_END`.
         string[] memory lines = vm.split(header, "\n");
-        if (lines.length != 5) {
+        if (lines.length != 5 || bytes(lines[4]).length != 0) {
             revert ExtendedNetworksUnreadable(path);
         }
         //REUSE-IgnoreStart
-        string[] memory licence = vm.split(lines[0], "// SPDX-License-Identifier: ");
-        string[] memory copyright = vm.split(lines[1], "// SPDX-FileCopyrightText: ");
+        string memory licence = vm.replace(lines[0], "// SPDX-License-Identifier: ", "");
+        string memory copyright = vm.replace(lines[1], "// SPDX-FileCopyrightText: ", "");
         //REUSE-IgnoreEnd
-        if (
-            licence.length != 2 || copyright.length != 2 || !LibCodeGen.isSingleLine(licence[1])
-                || !LibCodeGen.isSingleLine(copyright[1])
-                || keccak256(bytes(string.concat(header, HEADER_END)))
-                    != keccak256(bytes(LibCodeGen.filePrefix(licence[1], copyright[1])))
-        ) {
+        // Neither holds a line break, as `lines` is split on `\n` and the record holds no other, so empty is the one
+        // value `filePrefix` would refuse.
+        if (bytes(licence).length == 0 || bytes(copyright).length == 0) {
             revert ExtendedNetworksUnreadable(path);
+        }
+        // Each of the four lines must be the writer's for the licence and copyright text read from it.
+        string[] memory written = vm.split(LibCodeGen.filePrefix(licence, copyright), "\n");
+        for (uint256 i = 0; i < 4; i++) {
+            if (keccak256(bytes(lines[i])) != keccak256(bytes(written[i]))) {
+                revert ExtendedNetworksUnreadable(path);
+            }
         }
     }
 

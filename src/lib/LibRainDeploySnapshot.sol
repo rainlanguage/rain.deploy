@@ -1460,16 +1460,15 @@ library LibRainDeploySnapshot {
     /// @param value The declaration's last token, from the line after it when the writer wrapped it.
     /// @return The address.
     function declaredAddress(Vm vm, string memory path, string memory value) internal pure returns (address) {
-        string[] memory opened = vm.split(value, "address(0x");
-        string memory tail = ");";
+        string[] memory opened = vm.split(value, "0x");
         if (opened.length != 2) {
-            opened = vm.split(value, "0x");
-            tail = ";";
-        }
-        if (opened.length != 2 || bytes(opened[0]).length != 0) {
             revert FrozenSnapshotUnreadable(path);
         }
-        string[] memory closed = vm.split(opened[1], tail);
+        bool wrapped = keccak256(bytes(opened[0])) == keccak256("address(");
+        if (!wrapped && bytes(opened[0]).length != 0) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        string[] memory closed = vm.split(opened[1], wrapped ? ");" : ";");
         if (closed.length != 2 || bytes(closed[1]).length != 0) {
             revert FrozenSnapshotUnreadable(path);
         }

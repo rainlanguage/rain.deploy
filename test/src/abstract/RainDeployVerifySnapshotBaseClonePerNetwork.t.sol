@@ -374,7 +374,10 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
     /// declaration's line and wrapped, in both forms: 40 hex digits without `0x`, which names an identifier to solc,
     /// other than 40 digits, or anything before, inside or after the value.
     function testDeclarationValueOutsideTheWritersShapeIsUnreadable() external {
-        string[] memory values = new string[](13);
+        string[] memory values = new string[](16);
+        values[13] = "0x000000000000000000000000000000000000bEEF;0x";
+        values[14] = "address(0x000000000000000000000000000000000000bEEF);0x";
+        values[15] = "address(0x000000000000000000000000000000000000bEEF);address(0x";
         values[6] = "abcdefabcdefabcdefabcdefabcdefabcdefabcd;";
         values[7] = "0x000000000000000000000000000000000000bEEF;;";
         values[8] = "0x000000000000000000000000000000000000bEEF";

@@ -400,6 +400,19 @@ contract LibRainDeployExtendedNetworksTest is Test {
             )
         );
         expectUnreadable("header-no-pragma", editedRecord("pragma solidity ^0.8.25;\n", "\n"));
+        expectUnreadable(
+            "header-blank-line-added", editedRecord("pragma solidity ^0.8.25;\n\n", "pragma solidity ^0.8.25;\n\n\n")
+        );
+        expectUnreadable(
+            "header-blank-line-dropped", editedRecord("pragma solidity ^0.8.25;\n\n", "pragma solidity ^0.8.25;\n")
+        );
+        expectUnreadable(
+            "header-text-in-blank-line", editedRecord("pragma solidity ^0.8.25;\n\n", "pragma solidity ^0.8.25;\nx\n")
+        );
+        expectUnreadable(
+            "header-text-before-note", editedRecord("pragma solidity ^0.8.25;\n\n", "pragma solidity ^0.8.25;\n\nx")
+        );
+        expectUnreadable("header-text-before-licence", string.concat("x", writtenRecord()));
         expectUnreadable("header-pragma-moved", editedRecord("pragma solidity ^0.8.25;", "pragma solidity ^0.8.24;"));
         expectUnreadable(
             "header-no-licence-tag", editedRecord("// SPDX-License-Identifier: ", "// SPDX-Licence-Identifier: ")

@@ -170,6 +170,32 @@ contract RainDeployVerifyChainClonePerNetworkExtendedTest is PerNetworkCloneDepl
         this.externalCheckOnLocalForks();
     }
 
+    /// The matrix on local forks over Polygon alone, over the release recording Arbitrum One alone.
+    function externalCheckPolygonOnLocalForks() external {
+        DeploySuite[] memory suites = new DeploySuite[](1);
+        suites[0] = onlyFirstRecordedNetwork(releasedSuites()[0]);
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.POLYGON;
+        checkDeployedOnNetworks(Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(networks), suites);
+    }
+
+    /// Unfrozen, Polygon is refused as unfrozen even when a dependency is missing there: what the network lacks is a
+    /// declaration, and the dependency check would describe a release the matrix cannot place on it.
+    function testUnfrozenNetworkMissingADependencyIsRefusedAsUnfrozen() external {
+        DeploySuite memory release = releasedSuites()[0];
+        assertGt(release.dependencies.length, 0);
+        vm.etch(release.dependencies[0].deployedAddress, hex"");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                ExtendedNetworkUnfrozen.selector,
+                "per-network-clone@0_0_1",
+                LibRainDeploy.POLYGON,
+                movedReleaseAddress()
+            )
+        );
+        this.externalCheckPolygonOnLocalForks();
+    }
+
     /// Frozen, Polygon is checked at the address it was broadcast to, whatever the candidate's init data now is.
     function testFrozenNetworkIsCheckedAtItsFrozenAddress() external {
         sFrozen = true;
