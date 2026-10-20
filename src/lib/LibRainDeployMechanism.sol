@@ -4,8 +4,8 @@ pragma solidity ^0.8.25;
 
 import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
-import {ICloneableFactoryV4} from "rain-factory-pr271-ab0fdca/src/interface/deprecated/ICloneableFactoryV4.sol";
-import {ICloneableFactoryV5} from "rain-factory-pr271-ab0fdca/src/interface/ICloneableFactoryV5.sol";
+import {ICloneableFactoryV4} from "rain-factory-pr271-4379965/src/interface/deprecated/ICloneableFactoryV4.sol";
+import {ICloneableFactoryV5} from "rain-factory-pr271-4379965/src/interface/ICloneableFactoryV5.sol";
 
 import {DeployCandidate, DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy, NetworkDeploys, SupportedNetwork} from "./LibRainDeploy.sol";

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {ICloneableV2, ICLONEABLE_V2_SUCCESS} from "rain-factory-pr271-ab0fdca/src/interface/ICloneableV2.sol";
+import {ICloneableV2, ICLONEABLE_V2_SUCCESS} from "rain-factory-pr271-4379965/src/interface/ICloneableV2.sol";
 
 /// Thrown when a clone is initialized under the chain id its init data refuses.
 /// @param refused The chain id the init data refuses.

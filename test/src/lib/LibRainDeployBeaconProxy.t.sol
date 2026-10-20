@@ -4,8 +4,8 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
-import {ICloneableFactoryV5} from "rain-factory-pr271-ab0fdca/src/interface/ICloneableFactoryV5.sol";
-import {BEACON_PROXY_CREATION_CODE} from "rain-factory-pr271-ab0fdca/src/generated/BeaconProxy.sol";
+import {ICloneableFactoryV5} from "rain-factory-pr271-4379965/src/interface/ICloneableFactoryV5.sol";
+import {BEACON_PROXY_CREATION_CODE} from "rain-factory-pr271-4379965/src/generated/BeaconProxy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {CloneTarget} from "../../../src/lib/LibRainDeployClone.sol";
 import {

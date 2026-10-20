@@ -1196,9 +1196,9 @@ forge soldeer install rain-deploy~<version>
 ```
 
 **You also need `forge-std` 1.17.0, `rain-sol-codegen` 0.1.39 and `rain-factory`
-at git rev `ab0fdca` (rain.factory#271, which adds `ICloneableFactoryV5`)**,
+at git rev `4379965` (rain.factory#271, which adds `ICloneableFactoryV5`)**,
 remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
-`rain-factory-pr271-ab0fdca/`. The published package ships `src/`, `script/` and
+`rain-factory-pr271-4379965/`. The published package ships `src/`, `script/` and
 the licence and README files — no `test/`, no `foundry.toml`, no
 `remappings.txt`, no `soldeer.lock`, no `dependencies/` — so a consumer resolves
 all three itself. The requirement is transitive rather than incidental: the
@@ -1213,7 +1213,7 @@ consumer inherits pulls them in — `Script` via `RainDeployBroadcast`, `Test` v
 [dependencies]
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
-rain-factory = { version = "pr271-ab0fdca", git = "https://github.com/rainlanguage/rain.factory.git", rev = "ab0fdca7305e1bef384c885eabe1a531ca4631ec" }
+rain-factory = { version = "pr271-4379965", git = "https://github.com/rainlanguage/rain.factory.git", rev = "4379965d8b308aee05d325b8de7ecf7b8edab72a" }
 rain-deploy = "<version>"
 ```
 
@@ -1304,7 +1304,7 @@ it. In order:
 1. Add `mechanism: DeployMechanism.Zoltu, mechanismData: ""` to every entry of
    the generated released libs, and import `DeployMechanism` beside
    `DeploySuite`.
-2. Add `rain-factory` at rev `ab0fdca` and its remapping, as above.
+2. Add `rain-factory` at rev `4379965` and its remapping, as above.
 3. Make `view` every function of yours that calls `checkedCandidateSuites`,
    `allSuites`, `suiteNames`, `suiteByName` or `candidateSuites`, which are
    `view` now. A `pure` override of `candidateSuites` still compiles.

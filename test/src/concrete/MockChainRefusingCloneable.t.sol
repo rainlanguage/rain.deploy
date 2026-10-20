@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
-import {ICLONEABLE_V2_SUCCESS} from "rain-factory-pr271-ab0fdca/src/interface/ICloneableV2.sol";
+import {ICLONEABLE_V2_SUCCESS} from "rain-factory-pr271-4379965/src/interface/ICloneableV2.sol";
 import {
     MockChainRefusingCloneable,
     MockChainRefusingCloneableRefusedChain

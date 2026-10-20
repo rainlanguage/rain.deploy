@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {ICloneableFactoryV4} from "rain-factory-pr271-ab0fdca/src/interface/deprecated/ICloneableFactoryV4.sol";
-import {ICloneableFactoryV3} from "rain-factory-pr271-ab0fdca/src/interface/deprecated/ICloneableFactoryV3.sol";
+import {ICloneableFactoryV4} from "rain-factory-pr271-4379965/src/interface/deprecated/ICloneableFactoryV4.sol";
+import {ICloneableFactoryV3} from "rain-factory-pr271-4379965/src/interface/deprecated/ICloneableFactoryV3.sol";
 import {MockMispredictingCloneFactory} from "./MockMispredictingCloneFactory.sol";
 
 /// @title MockUncloneableMispredictingCloneFactory
