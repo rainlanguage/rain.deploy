@@ -31,9 +31,17 @@ abstract contract PerNetworkCloneDeployBase is ExternalCloneDeploySuites, Extern
     /// @param suite The release's suite key.
     /// @param networks The networks it declares for that release.
     function setExtendedNetworks(string memory label, string memory suite, CloneNetwork[] memory networks) external {
+        declareExtendedNetworks(label, suite, networks);
+        LibRainDeployExtendedNetworks.writeExtendedNetworks(StdConstants.VM, sExtendedRoot, suite, networks);
+    }
+
+    /// `setExtendedNetworks` without the record: the fixture root holds none.
+    /// @param label The fixture root's directory under `fixture-lib/extended-networks`, one per test.
+    /// @param suite The release's suite key.
+    /// @param networks The networks it declares for that release.
+    function declareExtendedNetworks(string memory label, string memory suite, CloneNetwork[] memory networks) public {
         sExtendedRoot =
             LibExtendedNetworksFixture.freshRoot(StdConstants.VM, "fixture-lib/extended-networks", label, suite);
-        LibRainDeployExtendedNetworks.writeExtendedNetworks(StdConstants.VM, sExtendedRoot, suite, networks);
         sExtendedSuite = suite;
         delete sExtendedNetworks;
         for (uint256 i = 0; i < networks.length; i++) {

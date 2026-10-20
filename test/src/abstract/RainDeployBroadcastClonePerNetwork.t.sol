@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {ExtendedNetworksUnrecorded} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
 import {ExtendedNetworkAddressMismatch, ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {
     CloneDeploy,
@@ -302,6 +303,22 @@ contract RainDeployBroadcastClonePerNetworkTest is ZoltuDeployOrAdopt {
         );
         deploy.externalBroadcastSuite(release, bothNetworks(), 1);
         assertFalse(anyForkExists(), "a network was forked before the misdeclared one was refused");
+    }
+
+    /// A release recording Arbitrum One alone, with Polygon declared but absent from its extended networks record, is
+    /// refused before any network is forked.
+    function testBroadcastRefusesADeclarationTheRecordDoesNotHoldBeforeAnyFork() external {
+        PerNetworkCloneDeploy deploy = new PerNetworkCloneDeploy();
+        deploy.declareExtendedNetworks(
+            "testBroadcastRefusesADeclarationTheRecordDoesNotHoldBeforeAnyFork",
+            "per-network-clone@0_0_1",
+            declaredPolygon()
+        );
+        DeploySuite memory release = onlyFirstRecordedNetwork(deploy.externalSuiteByName("per-network-clone@0_0_1"));
+
+        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnrecorded.selector, "per-network-clone@0_0_1"));
+        deploy.externalBroadcastSuite(release, bothNetworks(), 1);
+        assertFalse(anyForkExists(), "a network was forked before the unrecorded declaration was refused");
     }
 
     /// A release recording Arbitrum One alone is refused a broadcast to Polygon, which it does not declare, before any
