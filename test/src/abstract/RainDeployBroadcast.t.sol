@@ -40,6 +40,7 @@ import {MockRawOwner} from "../../concrete/MockRawOwner.sol";
 import {OriginOwnedCloneDeploy, originOwnedCloneSetup} from "../../concrete/OriginOwnedCloneDeploy.sol";
 import {ArbitrumSupportedBeaconOwnerDeploy} from "../../concrete/ArbitrumSupportedBeaconOwnerDeploy.sol";
 import {MockChainGatedCall} from "../../concrete/MockChainGatedCall.sol";
+import {MockChainGatedCloneable} from "../../concrete/MockChainGatedCloneable.sol";
 import {SingleNetworkBeaconOwnerDeploy} from "../../concrete/SingleNetworkBeaconOwnerDeploy.sol";
 import {
     CLONE_ARTIFACT_PATH,
@@ -901,5 +902,22 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         string[] memory networks = new string[](1);
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         deploy.externalCheckSeatsNoDeployKey(suite, networks, vm.addr(1));
+    }
+
+    function testSeatCheckInitializesEachPerNetworkCloneOnlyUnderItsOwnChainId() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        DeploySuite memory suite = originOwnedCloneSuite(address(0xB0B), address(0xB0B));
+        CloneNetworks memory clones = abi.decode(suite.mechanismData, (CloneNetworks));
+        address implementation = LibRainDeploy.zoltuAddress(type(MockChainGatedCloneable).creationCode);
+        clones.implementation = implementation;
+        clones.networks[0].data = abi.encode(uint256(42161));
+        clones.networks[1].data = abi.encode(uint256(8453));
+        suite.mechanismData = abi.encode(clones);
+        suite.creationCode = LibRainDeployClone.cloneCreationCode(implementation);
+        suite.storedRuntimeCode = LibRainDeployClone.cloneRuntimeCode(implementation);
+        suite.storedBytecodeHash = keccak256(suite.storedRuntimeCode);
+        suite.dependencies[1] =
+            DeployDependency({deployedAddress: implementation, runtimeCode: type(MockChainGatedCloneable).runtimeCode});
+        deploy.externalCheckSeatsNoDeployKey(suite, new string[](0), vm.addr(1));
     }
 }

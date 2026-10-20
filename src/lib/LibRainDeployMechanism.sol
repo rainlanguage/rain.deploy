@@ -270,6 +270,27 @@ library LibRainDeployMechanism {
         return false;
     }
 
+    /// `deployLocally` as the deploy to one network runs it: a per-network clone deploys only
+    /// that network's clone, so no other network's init data runs under its chain id.
+    /// @param vm The Vm instance to etch with.
+    /// @param suite The suite to deploy. Its `mechanismData` is restored before returning.
+    /// @param chainId The network's chain id. A per-network clone with no entry for it is
+    /// refused with `CloneNetworkUndeclared`.
+    function deployLocallyOn(Vm vm, DeploySuite memory suite, uint256 chainId) internal {
+        if (suite.mechanism != DeployMechanism.ClonePerNetwork) {
+            deployLocally(vm, suite);
+            return;
+        }
+        bytes memory mechanismData = suite.mechanismData;
+        CloneNetworks memory clones = cloneNetworks(suite);
+        CloneNetwork[] memory own = new CloneNetwork[](1);
+        own[0] = clones.networks[LibRainDeployClone.cloneNetworkIndex(clones, chainId)];
+        clones.networks = own;
+        suite.mechanismData = abi.encode(clones);
+        deployLocally(vm, suite);
+        suite.mechanismData = mechanismData;
+    }
+
     /// Runs a suite's mechanism on the local EVM and returns where it landed, each address
     /// cross-checked against the formula's.
     /// @param vm The Vm instance to etch with.

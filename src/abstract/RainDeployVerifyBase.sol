@@ -222,7 +222,8 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         return resolved;
     }
 
-    /// Deploys the beacon's suite locally, as `deriveDeployment` does but under the beacon's chain id, and refuses
+    /// Deploys the beacon's suite locally, as `deriveDeployment` does but under the beacon's chain id and, for a
+    /// per-network clone suite, only that network's clone, and refuses
     /// `BeaconSeatedOwner` or `BeaconSeatedImplementation` when the deployment at the beacon's address answers
     /// `owner()` or `implementation()` other than the initial state. A read that reverts or answers nothing is left
     /// to the chain group's `LibRainDeployBeacon.checkBeacon`.
@@ -231,7 +232,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     function checkSeatedState(ResolvedBeacon memory resolved, uint256 beaconIndex) internal {
         uint256 snapshotId = vm.snapshotState();
         vm.chainId(resolved.chainId);
-        LibRainDeployMechanism.deployLocally(vm, resolved.suite);
+        LibRainDeployMechanism.deployLocallyOn(vm, resolved.suite, resolved.chainId);
         // slither-disable-next-line low-level-calls
         (bool ownerAnswered, bytes memory owner) = resolved.beacon.beacon.staticcall(abi.encodeCall(IERC5313.owner, ()));
         // slither-disable-next-line low-level-calls

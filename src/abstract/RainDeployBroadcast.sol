@@ -106,7 +106,8 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, broadcast);
     }
 
-    /// Deploys `suite` locally with `deployer` as sender and origin, once under each target's chain id, and refuses
+    /// Deploys `suite` locally with `deployer` as sender and origin, once under each target's chain id (a per-network
+    /// clone suite only that network's clone), and refuses
     /// `SuiteSeatsDeployKey` when the target deployed for that chain id answers `owner()` with a first word whose
     /// low 160 bits are `deployer`. The targets are a per-network clone suite's networks, otherwise every one of
     /// `supportedNetworks()`, those this broadcast does not reach included, then each of `networks` not among them,
@@ -144,7 +145,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             uint256 snapshotId = vm.snapshotState();
             vm.chainId(chainIds[i]);
             vm.startPrank(deployer, deployer);
-            LibRainDeployMechanism.deployLocally(vm, suite);
+            LibRainDeployMechanism.deployLocallyOn(vm, suite, chainIds[i]);
             vm.stopPrank();
             address deployed = LibRainDeployMechanism.deployedAddress(suite, chainIds[i]);
             // slither-disable-next-line low-level-calls

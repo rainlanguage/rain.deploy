@@ -366,15 +366,17 @@ as `initial`, with no transition for the handover. A beacon named by
 deploy key is declared by `beacon` and `beaconCodeHash`. A broadcast is also
 refused before any network is read when its suite, deployed locally with the
 deploy key as sender and origin under each target's chain id, answers `owner()`
-with a first word naming the deploy key (`SuiteSeatsDeployKey`); seat governance
-from the first state. The targets are each supported network, the networks the
-broadcast does not reach included, and each network it reaches that is not
-supported or, for a per-network clone suite, each of its own networks (its
-candidate's added networks included). The suite's constructor runs on the local
-EVM with only its declared dependencies etched, so it MUST succeed there under
-each target's chain id: one that reverts locally refuses the broadcast to every
-network. That check reads `owner()` only: roles, pending owners, admin slots and
-contracts a constructor creates are not read, so assert those yourself.
+with a first word whose low 160 bits are the deploy key (`SuiteSeatsDeployKey`);
+seat governance from the first state. For a per-network clone suite the targets
+are its own networks only (its candidate's added networks included), each
+deploying only that network's clone; for any other suite they are every
+supported network, the networks the broadcast does not reach included, then each
+network it reaches that is not supported. The suite's constructor runs on the
+local EVM with only its declared dependencies etched, so it MUST succeed there
+under each target's chain id: one that reverts locally refuses the broadcast to
+every network. That check reads `owner()` only: roles, pending owners, admin
+slots and contracts a constructor creates are not read, so assert those
+yourself.
 
 Declare transitions in the order their migrations are applied: each applied
 transition's record MUST reach the latest earlier-declared applied one through
