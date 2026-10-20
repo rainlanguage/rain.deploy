@@ -1061,8 +1061,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         }
     }
 
-    /// A declaration line holding fewer than the writer's tokens, or no `=` as its fourth, is unreadable.
-    function testFrozenCodeRecordDeclarationWithoutASpacedEqualsIsUnreadable() external {
+    /// A declaration line holding fewer or more than the writer's five tokens is unreadable.
+    function testFrozenCodeRecordDeclarationOutsideTheWritersTokensIsUnreadable() external {
         string memory record = committedCodeRecord();
         string[] memory parts = vm.split(record, "bytes32 constant BYTECODE_HASH = ");
         assertEq(parts.length, 2, "the record's bytecode hash is not where the generator writes it");
