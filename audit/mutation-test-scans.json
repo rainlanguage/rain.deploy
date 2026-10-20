@@ -324,5 +324,31 @@
       "Fork tests need RPC URLs, which were not available: the 169 tests failing at baseline on missing *_RPC_URL (and LibSafeTest, whose setUp forks) were excluded by name from the probe suite. CI on testsAfterCommit fails only RegistryDeployVerifyTest.testSuitesLiveOnEverySupportedNetwork (NotDeployedOnNetwork arbitrum, V3 MigrationRegistry not yet deployed).",
       "Adversarial pass: the frozen records were checked against the candidate (byte-identical) and the timelock generation against the production timelock addresses; no candidate bug."
     ]
+  },
+  {
+    "timestamp": "2026-10-20T10:28:06Z",
+    "commit": "467df7bd7c79b522642b52544365c68064202346",
+    "testsAfterCommit": "3531943fb34e8d0d7be37153788f608fb1d3f4d3",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 105,
+    "scope": "PR #317 (release 0.1.19) as of 467df7b: codeRecordIndex, partitionFrozenRecords, declaredBytecodeHash and checkFrozenCodeRecord in src/abstract/RainDeployVerifySnapshotBase.sol; the suites[9] entries and array lengths in src/lib/LibAddressRegistryReleased.sol and src/lib/LibMigrationRegistryReleased.sol; foundry.toml [external.package].version; the src/generated/0_1_19/ constants; and deleting a 0_1_19 record",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behavioursProbed": 27,
+      "killedByExistingTests": 26,
+      "gapsFilled": 1,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "25 mutants probed with mutation-probe against the suite at the scanned commit (baseline green at 863): 24 KILLED, 1 SURVIVED (codeRecordIndex returning 0 on a match, which no test distinguished because every caller passed one name or checked only the miss). Gap filled at testsAfterCommit by RainDeployVerifySnapshotBaseTest.testCodeRecordIndexIsTheFirstMatchingName; re-probe there (baseline green at 865): 25/25 KILLED.",
+      "The two deletion mutants (remove src/generated/0_1_19/AddressRegistry.sol or MigrationRegistry.sol and regenerate the Released lib to 9 entries) span a record file plus a regeneration, so they cannot be a single-file mutant. They were run by hand in a fresh clone at the scanned commit with both records removed (git rm, then forge script ./script/Build.sol and ./script/build.sh): 862 passed, 1 failed, the failure being LibRainDeploySnapshotTest.testNoReleaseDropsAContract with ReleaseDropsContract(\"0_1_19\", \"AddressRegistry\"). Recorded as 2 behaviours killed by an existing test.",
+      "Fork tests need RPC URLs, which were not available: the tests failing at baseline on missing *_RPC_URL were excluded by name, and LibSafeTest (whose setUp forks) by contract. The name filter also drops one test that passes offline (testSuitesLiveOnEverySupportedNetwork in a contract that does not fork), so the probe suite is 863 rather than 864 at the scanned commit. CI on testsAfterCommit passes in full, testSuitesLiveOnEverySupportedNetwork included, so the V3 MigrationRegistry is live.",
+      "testVersionAheadOfTheNewestFrozenReleaseIsRefused was also added at testsAfterCommit. It covers the test-code helper externalCheckVersionIsNewestRelease, which is outside the mutation targets because it is test code.",
+      "Adversarial pass: codeRecordIndex was checked against its NatSpec (first whole-file-name match, else length), and the drop check against version order rather than text order (the keeps fixture runs 0_1_9 to 0_1_10 to 0_1_12); no candidate bug."
+    ]
   }
 ]
