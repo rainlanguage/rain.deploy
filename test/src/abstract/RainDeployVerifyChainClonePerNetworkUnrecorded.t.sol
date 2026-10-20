@@ -49,9 +49,7 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
     /// External wrapper for `checkDeployedOnNetworks`.
     /// @param networks The networks to check on.
     /// @param suites The suites to check.
-    function externalCheckDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites)
-        external
-    {
+    function externalCheckDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) external {
         checkDeployedOnNetworks(networks, suites);
     }
 
