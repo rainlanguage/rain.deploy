@@ -517,5 +517,34 @@
       "Unkillable, in audit/known-false-positives.md: N10 (break, equivalent) and three console2.log removals N11, N13 (marvin R26), N14. forge answers console calls itself: vm.expectCall on the console address saw zero calls, so a log removal is unobservable; each logged record is pinned as a return value instead.",
       "Tests for N01-N03, N06, N07 and N12 were written with the fix before probing, so those kills credit the suite at 8cd373f, not a pre-change suite."
     ]
+  },
+  {
+    "timestamp": "2026-10-20T07:01:49Z",
+    "commit": "4a56d2a1645ddca718bf0d125228d4b23a9f9d07",
+    "testsAfterCommit": "af326744ec7c9deacf5cfa667dfd7b632a745f54",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 139,
+    "scope": "PR #315 (#313) round 11, marvin review 5577445804: checkRegisteredOnSelectedChain in src/lib/LibConfigRegistryRegister.sol (C01-C08, offline), and the fork-only loops of registerOnForks, registerOnNetworks and checkRegisteredOnForks (K01-K03, with RPC)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 11,
+      "behavioursProbed": 11,
+      "killedByExistingTests": 3,
+      "gapsFilled": 8,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "C01-C08 on the offline suite (LibConfigRegistryRegisterTest, LibConfigRegistryTest): 0/8 killed by the suite at the scanned commit, 8/8 by the tests added in testsAfterCommit. The per-network check was extracted from checkRegisteredOnForks so these lines run on the local chain; marvin R22, R23, R29 and R33 sat on them as fork-only survivors.",
+      "K01-K03 on the fork suite (check11r.sh, public RPCs, 3x retry): 3/3 killed by existing fork tests. They cannot run offline and are listed in audit/known-false-positives.md with their killers."
+    ]
   }
 ]
