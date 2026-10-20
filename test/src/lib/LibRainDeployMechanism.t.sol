@@ -1167,6 +1167,27 @@ contract LibRainDeployMechanismTest is Test {
         this.externalCheckNetworksFrozen(release, onNetworks, networks);
     }
 
+    /// External wrapper for `LibRainDeployMechanism.withMechanismData`.
+    /// @param suite The suite.
+    /// @param mechanismData The mechanism data it takes.
+    /// @return The suite with that mechanism data.
+    function externalWithMechanismData(DeploySuite memory suite, bytes memory mechanismData)
+        external
+        pure
+        returns (DeploySuite memory)
+    {
+        return LibRainDeployMechanism.withMechanismData(suite, mechanismData);
+    }
+
+    /// Replacing a suite's mechanism data keeps every other field, its stored address among them.
+    function testWithMechanismDataKeepsEveryOtherField() external view {
+        DeploySuite memory suite = zoltuMockDeployableSuite("zoltu");
+        assertNotEq(suite.storedDeployedAddress, address(0));
+        DeploySuite memory replaced = this.externalWithMechanismData(suite, hex"beef");
+        suite.mechanismData = hex"beef";
+        assertEq(abi.encode(replaced), abi.encode(suite));
+    }
+
     /// A suite that is not per network is never checked.
     function testBroadcastOfAOneDataSuiteIsNotChecked() external view {
         DeploySuite memory oneData = exampleCloneSuite();
