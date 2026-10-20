@@ -969,18 +969,16 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// A `bytes` literal is read from the declaration's own line only as the token after `=`, the fifth of exactly
     /// five, never from a trailing comment the compiler ignores, while the compiled value is on the next line.
     function testFrozenCodeRecordRuntimeCodeInATrailingCommentIsUnreadable() external {
-        string memory record = committedCodeRecord();
-        string[] memory parts = vm.split(record, "bytes constant RUNTIME_CODE =\n    hex\"");
+        string memory marker = "bytes constant RUNTIME_CODE =\n    hex\"";
+        string[] memory parts = vm.split(committedCodeRecord(), marker);
         assertEq(parts.length, 2, "the record's runtime code is not where the generator writes it");
+        string memory record =
+            withLineRest(committedCodeRecord(), marker, string.concat(vm.split(parts[1], "\n")[0], "\n    hex\"00\";"));
         string[] memory variants = new string[](2);
         variants[0] = "bytes constant RUNTIME_CODE = // hex\"";
         variants[1] = "bytes constant RUNTIME_CODE =//hex\"";
         for (uint256 i = 0; i < variants.length; i++) {
-            string[] memory rest = vm.split(parts[1], "\n");
-            string memory edited = string.concat(parts[0], variants[i], rest[0], "\n    hex\"00\";");
-            for (uint256 j = 1; j < rest.length; j++) {
-                edited = string.concat(edited, "\n", rest[j]);
-            }
+            string memory edited = vm.replace(record, marker, variants[i]);
             vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
             this.externalCheckFrozenCodeRecord("record.sol", edited);
         }
@@ -1112,14 +1110,11 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// A value token holding a second `hex"` literal, which the compiler concatenates, is unreadable rather than read
     /// as its first literal.
     function testFrozenCodeRecordConcatenatedLiteralIsUnreadable() external {
-        string memory record = committedCodeRecord();
-        string[] memory parts = vm.split(record, "bytes constant RUNTIME_CODE =\n    hex\"");
+        string memory marker = "bytes constant RUNTIME_CODE =\n    hex\"";
+        string[] memory parts = vm.split(committedCodeRecord(), marker);
         assertEq(parts.length, 2, "the record's runtime code is not where the generator writes it");
-        string[] memory rest = vm.split(parts[1], "\"");
-        string memory edited = string.concat(parts[0], "bytes constant RUNTIME_CODE =\n    hex\"", rest[0], "\"hex\"00");
-        for (uint256 j = 1; j < rest.length; j++) {
-            edited = string.concat(edited, "\"", rest[j]);
-        }
+        string memory edited =
+            withLineRest(committedCodeRecord(), marker, string.concat(vm.split(parts[1], "\"")[0], "\"hex\"00\";"));
         vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
         this.externalCheckFrozenCodeRecord("record.sol", edited);
     }
