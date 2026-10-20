@@ -1424,11 +1424,8 @@ library LibRainDeploySnapshot {
         pure
         returns (address)
     {
-        (bool readable, string memory value) =
-            declarationValue(vm, lines, line, string.concat(WRAPPED_INDENT, "address("));
-        if (!readable) {
-            revert FrozenSnapshotUnreadable(path);
-        }
+        // An unreadable declaration's value is empty, which `declaredAddress` refuses at its `0x` split.
+        (, string memory value) = declarationValue(vm, lines, line, string.concat(WRAPPED_INDENT, "address("));
         return declaredAddress(vm, path, value);
     }
 
