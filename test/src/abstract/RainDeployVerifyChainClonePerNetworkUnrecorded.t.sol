@@ -20,6 +20,11 @@ import {
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 
+/// Thrown by the test's `requiresSuiteOn` when asked about a suite on a network it refuses to be asked about.
+/// @param suite The suite asked about.
+/// @param network The network asked about.
+error RequiresSuiteOnAsked(string suite, string network);
+
 /// @title RainDeployVerifyChainClonePerNetworkUnrecordedTest
 /// @notice The chain matrix over a per-network clone release cut when the repo supported Arbitrum
 /// One alone, in a repo that now supports Polygon too.
@@ -33,8 +38,17 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
     /// Whether the suite other than the release is required on no network.
     bool internal sOtherRequiredNowhere;
 
+    /// Whether asking if the release is required on Polygon reverts.
+    bool internal sReleaseOnPolygonReverts;
+
     /// @inheritdoc RainDeploySuitesBase
     function requiresSuiteOn(DeploySuite memory suite, string memory network) internal view override returns (bool) {
+        if (
+            sReleaseOnPolygonReverts && keccak256(bytes(suite.suite)) == keccak256(bytes("per-network-clone@0_0_1"))
+                && keccak256(bytes(network)) == keccak256(bytes(LibRainDeploy.POLYGON))
+        ) {
+            revert RequiresSuiteOnAsked(suite.suite, network);
+        }
         return !sRequiredNowhere
             && !(sOtherRequiredNowhere && keccak256(bytes(suite.suite)) == keccak256(bytes("other-clone@0_0_1")))
             && !(sNotRequiredOnPolygon && keccak256(bytes(network)) == keccak256(bytes(LibRainDeploy.POLYGON)));
@@ -175,6 +189,25 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         suites[1] = arbitrumOnlyRelease()[0];
         suites[1].suite = "other-clone@0_0_1";
         vm.expectRevert(abi.encodeWithSelector(SuiteRequiredNowhere.selector, "other-clone@0_0_1"));
+        this.externalCheckDeployedOnSupportedNetworks(suites);
+    }
+
+    /// The required-nowhere scan asks no further about a suite once a network requires it: a later suite required
+    /// nowhere is refused as such, not with what asking about the release on Polygon, after Arbitrum One, would throw.
+    function testSuiteRequiredNowhereScanStopsAtTheFirstRequiringNetwork() external {
+        sOtherRequiredNowhere = true;
+        sReleaseOnPolygonReverts = true;
+        DeploySuite[] memory suites = new DeploySuite[](2);
+        suites[0] = arbitrumOnlyRelease()[0];
+        suites[1] = arbitrumOnlyRelease()[0];
+        suites[1].suite = "other-clone@0_0_1";
+        vm.expectRevert(abi.encodeWithSelector(SuiteRequiredNowhere.selector, "other-clone@0_0_1"));
+        this.externalCheckDeployedOnSupportedNetworks(suites);
+
+        sOtherRequiredNowhere = false;
+        vm.expectRevert(
+            abi.encodeWithSelector(RequiresSuiteOnAsked.selector, "per-network-clone@0_0_1", LibRainDeploy.POLYGON)
+        );
         this.externalCheckDeployedOnSupportedNetworks(suites);
     }
 
