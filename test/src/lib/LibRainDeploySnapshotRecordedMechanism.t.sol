@@ -29,6 +29,7 @@ import {
     MECHANISM_DATA as PER_NETWORK_MECHANISM_DATA
 } from "../../fixture-mechanism-change/generated/0_0_3/MockCloneable.sol";
 import {LibMockCloneableReleased} from "../../fixture-mechanism-change/lib/LibMockCloneableReleased.sol";
+import {LibForeignLineBreaks} from "../../lib/LibForeignLineBreaks.sol";
 
 /// @title LibRainDeploySnapshotRecordedMechanismTest
 /// @notice Each release's mechanism is read from its own record.
@@ -290,13 +291,7 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
     /// A record holding a carriage return, vertical tab, form feed, NEL, LS or PS is refused before any mechanism is
     /// read from it.
     function testRecordHoldingAnotherLineBreakIsUnreadable() external {
-        string[] memory breaks = new string[](6);
-        breaks[0] = "\r";
-        breaks[1] = "\x0b";
-        breaks[2] = "\x0c";
-        breaks[3] = "\xc2\x85";
-        breaks[4] = "\xe2\x80\xa8";
-        breaks[5] = "\xe2\x80\xa9";
+        string[] memory breaks = LibForeignLineBreaks.foreignLineBreaks();
         for (uint256 i = 0; i < breaks.length; i++) {
             checkRefused(
                 string.concat("line-break-", vm.toString(i)),

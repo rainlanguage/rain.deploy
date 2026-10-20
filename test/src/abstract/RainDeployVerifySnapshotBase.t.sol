@@ -33,6 +33,7 @@ import {PER_NETWORK_CLONE_RECORD_ROOT} from "../../abstract/PerNetworkCloneDeplo
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
+import {LibForeignLineBreaks} from "../../lib/LibForeignLineBreaks.sol";
 import {
     BYTECODE_HASH as ADDRESS_REGISTRY_BYTECODE_HASH,
     CREATION_CODE as ADDRESS_REGISTRY_CREATION_CODE,
@@ -940,13 +941,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// A code record holding a carriage return, vertical tab, form feed, NEL, LS or PS is an unreadable code record, so
     /// no code is read from it.
     function testFrozenCodeRecordHoldingAnotherLineBreakIsUnreadable() external {
-        string[] memory breaks = new string[](6);
-        breaks[0] = "\r";
-        breaks[1] = "\x0b";
-        breaks[2] = "\x0c";
-        breaks[3] = "\xc2\x85";
-        breaks[4] = "\xe2\x80\xa8";
-        breaks[5] = "\xe2\x80\xa9";
+        string[] memory breaks = LibForeignLineBreaks.foreignLineBreaks();
         for (uint256 i = 0; i < breaks.length; i++) {
             string memory record = string.concat("// note", breaks[i], committedCodeRecord());
             vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
