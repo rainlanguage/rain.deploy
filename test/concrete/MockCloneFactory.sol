@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {ICloneableFactoryV4} from "rain-factory-pr271-4379965/src/interface/deprecated/ICloneableFactoryV4.sol";
-import {ICloneableFactoryV3} from "rain-factory-pr271-4379965/src/interface/deprecated/ICloneableFactoryV3.sol";
-import {LibICloneableFactoryV4} from "rain-factory-pr271-4379965/src/lib/LibICloneableFactoryV4.sol";
+import {ICloneableFactoryV4} from "rain-factory-pr271-0477c05/src/interface/deprecated/ICloneableFactoryV4.sol";
+import {ICloneableFactoryV3} from "rain-factory-pr271-0477c05/src/interface/deprecated/ICloneableFactoryV3.sol";
+import {LibICloneableFactoryV4} from "rain-factory-pr271-0477c05/src/lib/LibICloneableFactoryV4.sol";
 
 /// @title MockCloneFactory
 /// @notice A real `ICloneableFactoryV4`, not a stub.
