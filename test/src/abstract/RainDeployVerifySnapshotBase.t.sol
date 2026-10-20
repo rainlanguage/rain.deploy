@@ -1176,7 +1176,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
 
     /// A code record naming `DEPLOYED_ADDRESS` anywhere on a line, a declaration indented or spaced otherwise than
     /// the writer's among them, is refused for its address: solc compiles each of these as the constant.
-    function testFrozenCodeRecordWithAnIndentedDeployedAddressReverts() external {
+    function testFrozenCodeRecordWithAnOtherwiseSpacedDeployedAddressReverts() external {
         string[] memory declarations = new string[](3);
         declarations[0] = " address constant DEPLOYED_ADDRESS = address(0x000000000000000000000000000000000000dEaD);";
         declarations[1] =
