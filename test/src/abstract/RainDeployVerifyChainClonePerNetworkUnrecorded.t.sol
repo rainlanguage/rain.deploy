@@ -164,6 +164,16 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         this.externalCheckDeployedOnSupportedNetworks(arbitrumOnlyRelease());
     }
 
+    /// A release required nowhere is refused as such before an address is derived on a network its candidate has no
+    /// entry for.
+    function testSuiteRequiredNowherePrecedesTheAddressDerivation() external {
+        sRequiredNowhere = true;
+        DeploySuite[] memory suites = arbitrumOnlyRelease();
+        suites[0].suite = "other-clone@0_0_1";
+        vm.expectRevert(abi.encodeWithSelector(SuiteRequiredNowhere.selector, "other-clone@0_0_1"));
+        this.externalCheckDeployedOnSupportedNetworks(suites);
+    }
+
     /// A release not required on its unrecorded network is not refused there as unfrozen, and passes where it is
     /// required and live.
     function testUnrecordedNetworkNotRequiredIsNotRefusedAsUnfrozen() external {
