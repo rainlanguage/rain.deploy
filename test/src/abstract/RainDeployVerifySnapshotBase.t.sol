@@ -966,8 +966,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         this.externalCheckFrozenCodeRecord("record.sol", edited);
     }
 
-    /// A `bytes` literal is read from the declaration's own line only as the fourth token after `=`, never from a
-    /// trailing comment the compiler ignores, while the compiled value is on the next line.
+    /// A `bytes` literal is read from the declaration's own line only as the token after `=`, the fifth of exactly
+    /// five, never from a trailing comment the compiler ignores, while the compiled value is on the next line.
     function testFrozenCodeRecordRuntimeCodeInATrailingCommentIsUnreadable() external {
         string memory record = committedCodeRecord();
         string[] memory parts = vm.split(record, "bytes constant RUNTIME_CODE =\n    hex\"");
@@ -986,8 +986,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         }
     }
 
-    /// The bytecode hash is read only as the fourth token after `=`, never from a trailing comment the compiler
-    /// ignores, with or without spaces around the comment.
+    /// The bytecode hash is read only as the token after `=`, the fifth of exactly five, never from a trailing comment
+    /// the compiler ignores, with or without spaces around the comment.
     function testFrozenCodeRecordHashInATrailingCommentIsUnreadable() external {
         string memory record = committedCodeRecord();
         string[] memory parts = vm.split(record, "bytes32 constant BYTECODE_HASH = ");
