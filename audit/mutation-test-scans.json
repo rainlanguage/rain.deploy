@@ -380,5 +380,32 @@
       "11 mutants probed with mutation-probe at testsAfterCommit against RegistryDeployVerifyTest and LibRainDeploySnapshotTest (baseline green at 107, fork tests excluded by name): 11/11 KILLED, including both survivors rain-marvin reported. These targets are test-code helpers; the oracles are the separate fixture tests, so no target co-mutates its expectation.",
       "Adversarial pass: the deploy check now reverts on a codehash mismatch only; a failed create leaves address(0), whose codehash is 0 and never a recorded hash, so a non-deploying record is refused with deployed hash 0. No candidate bug."
     ]
+  },
+  {
+    "timestamp": "2026-10-20T11:57:00Z",
+    "commit": "01b0331bd7fbc54fa19bee8747d7bfc02071e6bf",
+    "testsAfterCommit": "b1d0f9abe3ae5ab781bc04715d2e3278b2a2795f",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 109,
+    "scope": "PR #317 (release 0.1.19): the count checkFrozenCodeRecordsDeploy returns (rain-marvin MEDIUM on 01b0331), and every line d198881 and b1d0f9a add to RegistryDeployVerifyTest.testEveryCodeRecordUnderTheRootIsChecked",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behavioursProbed": 12,
+      "killedByExistingTests": 1,
+      "gapsFilled": 3,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "Pre-existing-suite pass at 01b0331 with mutation-probe against RegistryDeployVerifyTest and LibRainDeploySnapshotTest (baseline green at 107, fork tests excluded by name): return codeRecords.length -> 1 SURVIVED (rain-marvin's MEDIUM), -> length + 1 SURVIVED, -> 0 KILLED by testEveryFrozenCodeRecordDeploysItsRecordedHash. checkFrozenCodeRecordsDeploy is internal to RegistryDeployVerifyTest and nothing inherits it, so that contract holds every possible killer.",
+      "Gaps filled at testsAfterCommit: testEveryCodeRecordUnderTheRootIsChecked (d198881) writes the real 0_1_18 and 0_1_19 TimelockController records under its own root and asserts the count is 2; it kills -> 1, -> 0 and -> length + 1.",
+      "A first pass at d198881 showed N01 (tags 0_1_19 twice) SURVIVED for a different reason: a failed run leaves its records on disk, because a cheatcode write is not undone by a revert, and the next run counted the stale 0_1_18. Every verdict after the first killed mutant in that pass was contaminated and is discarded. b1d0f9a clears the root before writing it, and the full pass was re-run there.",
+      "12 mutants probed at testsAfterCommit (baseline green at 108): 9/12 KILLED, all by testEveryCodeRecordUnderTheRootIsChecked (M13 also by testEveryFrozenCodeRecordDeploysItsRecordedHash). N01 is killed even with a stale 0_1_18 left by M14. Three survivors are equivalent mutants: N06 (read 0_1_19 for both) is a no-op because src/generated/0_1_18/TimelockController.sol and 0_1_19 are byte-identical; N08 (drop the end-of-test removeDir) only skips cleanup that no assertion reads; N09 (skip the start-of-test clear) only matters when a different fixture left the root stale, because a failed run of this test leaves the same two records, which it overwrites.",
+      "The fixture lines are test code that mutate the oracle itself; they were probed to show that each fixture step is load-bearing for the count, not to establish coverage of src.",
+      "Adversarial pass: the intent (every code record under the root is checked, and the count says so) was re-derived from the NatSpec. The count comes from partitionFrozenRecords, which keeps only paths whose file name matches frozenCodeRecordNames(); N05 (a non-code file name) gives 0 records and is refused. No candidate bug."
+    ]
   }
 ]
