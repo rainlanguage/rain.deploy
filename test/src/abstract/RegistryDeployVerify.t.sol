@@ -28,9 +28,10 @@ error FrozenCodeRecordDeploysOtherCode(string path, bytes32 recorded, bytes32 de
 /// `RainDeployVerify` says what is true of them. The one override names the
 /// code records a release freezes beside the suites' — the parameterised
 /// contracts — so the frozen-record walk reads them as code and not as deploys.
-/// The one test of its own deploys each frozen code record's creation code
-/// with its declaration's reference arguments, which only this repo's
-/// declaration carries.
+/// Its own tests deploy each frozen code record's creation code with its
+/// declaration's reference arguments, which only this repo's declaration
+/// carries, and pin against fixtures that the check walks every code record
+/// under its root and refuses a record whose creation code deploys other code.
 ///
 /// The chain half is red until every release declared here is live on every
 /// supported network, which is why the deploy is dispatched before the release
@@ -110,6 +111,12 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
     /// Every code record under the root MUST be checked: a root holding two
     /// valid generations reports exactly two.
     function testEveryCodeRecordUnderTheRootIsChecked() external {
+        // A cheatcode write is not undone by a revert, so a failed run leaves
+        // records under the root that this run would count.
+        if (vm.exists(COUNT_FIXTURE_ROOT)) {
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.removeDir(COUNT_FIXTURE_ROOT, true);
+        }
         string[2] memory tags = ["0_1_18", "0_1_19"];
         for (uint256 i = 0; i < tags.length; i++) {
             string memory dir = string.concat(COUNT_FIXTURE_ROOT, "/", tags[i]);
