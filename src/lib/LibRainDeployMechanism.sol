@@ -414,6 +414,8 @@ library LibRainDeployMechanism {
     /// unchanged.
     /// Only storage reads are checked: a balance or code read of another account is not refused. A write to part of a
     /// slot reads the slot first, so it is refused like a read.
+    /// The clone MUST NOT have been deployed earlier in the same EVM without its state reverted since: a `Create` that
+    /// collides with an account already there is recorded as creating it, so reads of that account are exempt.
     /// Each clone is deployed under a state-diff recording, which ends any recording the caller started.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy.

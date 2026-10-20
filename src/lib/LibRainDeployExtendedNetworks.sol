@@ -21,7 +21,8 @@ error ExtendedNetworksRewritten(string suite, uint256 index);
 /// @param suite The release's suite key.
 error ExtendedNetworksUnrecorded(string suite);
 
-/// Thrown when an extended networks record is not exactly what the writer writes for the networks it holds.
+/// Thrown when an extended networks record is not exactly what the writer writes for the networks it holds, header
+/// included, or holds no network, which the writer never writes.
 /// @param path The record file.
 error ExtendedNetworksUnreadable(string path);
 
@@ -32,6 +33,8 @@ error ExtendedNetworksUnreadable(string path);
 /// refuse a declaration that is not exactly what it holds. So a declaration computed from anything that later moves
 /// fails the build rather than moving the address, and the extension is published under the generated tree with the
 /// rest of the record.
+/// Append-only against the record in the checkout, not against its history: a commit that edits or deletes the record
+/// and its declaration together passes the build, the broadcast and the chain group.
 library LibRainDeployExtendedNetworks {
     /// The directory under the record root that holds the extended networks records.
     string constant EXTENDED_DIR = "extended";
@@ -121,19 +124,46 @@ library LibRainDeployExtendedNetworks {
         if (!tagged || !vm.exists(path)) {
             return new CloneNetwork[](0);
         }
-        string[] memory halves = vm.split(vm.readFile(path), HEADER_END);
-        if (halves.length != 2) {
+        string memory record = vm.readFile(path);
+        string[] memory halves = vm.split(record, HEADER_END);
+        if (halves.length != 2 || LibRainDeploySnapshot.hasForeignLineBreak(vm, record)) {
             revert ExtendedNetworksUnreadable(path);
         }
-        string[] memory entries = vm.split(halves[1], "\naddress constant DEPLOYED_ADDRESS_");
+        checkExtendedNetworksHeader(vm, path, halves[0]);
+        string[] memory entries = vm.split(halves[1], "address constant DEPLOYED_ADDRESS_");
         CloneNetwork[] memory networks = new CloneNetwork[](entries.length - 1);
         for (uint256 i = 0; i < networks.length; i++) {
             networks[i] = recordedExtendedNetwork(vm, path, entries[i + 1]);
         }
-        if (keccak256(bytes(halves[1])) != keccak256(bytes(extendedNetworksBody(vm, networks)))) {
+        if (networks.length == 0 || keccak256(bytes(halves[1])) != keccak256(bytes(extendedNetworksBody(vm, networks))))
+        {
             revert ExtendedNetworksUnreadable(path);
         }
         return networks;
+    }
+
+    /// Refuses an extended networks record's header, the text before `HEADER_END`, unless it is the writer's
+    /// `LibCodeGen.filePrefix` for the licence and the copyright text its first two lines name.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file, for the error only.
+    /// @param header The text before `HEADER_END`.
+    function checkExtendedNetworksHeader(Vm vm, string memory path, string memory header) internal pure {
+        string[] memory lines = vm.split(header, "\n");
+        if (lines.length != 5) {
+            revert ExtendedNetworksUnreadable(path);
+        }
+        //REUSE-IgnoreStart
+        string[] memory licence = vm.split(lines[0], "// SPDX-License-Identifier: ");
+        string[] memory copyright = vm.split(lines[1], "// SPDX-FileCopyrightText: ");
+        //REUSE-IgnoreEnd
+        if (
+            licence.length != 2 || copyright.length != 2 || !LibCodeGen.isSingleLine(licence[1])
+                || !LibCodeGen.isSingleLine(copyright[1])
+                || keccak256(bytes(string.concat(header, HEADER_END)))
+                    != keccak256(bytes(LibCodeGen.filePrefix(licence[1], copyright[1])))
+        ) {
+            revert ExtendedNetworksUnreadable(path);
+        }
     }
 
     /// One network of an extended networks record, read from what follows its `DEPLOYED_ADDRESS_`. Read leniently:

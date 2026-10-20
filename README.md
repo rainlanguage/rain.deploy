@@ -293,18 +293,25 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   the release (`ExtendedNetworkAddressMismatch`), and is refused on a network
   the release records (`DuplicateCloneNetwork`) or on a suite that is not per
   network (`ExtendedNetworksUnexpected`). The chain group refuses a per-network
-  suite live on a network it neither records nor declares with
-  `ExtendedNetworkUnfrozen`, naming the address to freeze. Both the init data
-  and the address are literals copied from the broadcast: the build
-  (`BuildScript.run()`, through `regenerateExtendedNetworks`) writes them to the
-  release's append-only record, `src/generated/extended/<tag>/<name>.sol`, as
-  `DEPLOYED_ADDRESS_<chain id>` and `INIT_DATA_<chain id>`. It refuses to drop,
-  change or reorder an entry already written (`ExtendedNetworksRewritten`), and
-  the broadcast and the chain group refuse a declaration that is not exactly
-  what the record holds (`ExtendedNetworksUnrecorded`) or a record that is not
-  exactly what the writer writes (`ExtendedNetworksUnreadable`). The record is
-  published with the rest of `src/generated/`; the generated
-  `Lib<Contract>Released` does not carry it.
+  suite on a network it neither records nor declares with
+  `ExtendedNetworkUnfrozen` before checking any code there, naming the address
+  the candidate's current init data derives, whether or not anything is live at
+  it. Both the init data and the address are literals copied from the broadcast:
+  the build (`BuildScript.run()`, through `regenerateExtendedNetworks`) writes
+  them to the release's append-only record,
+  `src/generated/extended/<tag>/<name>.sol`, as `DEPLOYED_ADDRESS_<chain id>`
+  and `INIT_DATA_<chain id>`. It first refuses a declaration the broadcast would
+  refuse, with the errors above, and it refuses to drop, change or reorder an
+  entry the record in the checkout holds (`ExtendedNetworksRewritten`). The
+  broadcast and the chain group refuse a declaration that is not exactly what
+  the record holds (`ExtendedNetworksUnrecorded`) or a record that is not
+  exactly what the writer writes (`ExtendedNetworksUnreadable`). Append-only
+  holds against the checked out record, not against history: a commit that edits
+  or deletes the record and its declaration together passes all three.
+  `Git is clean` fails on an entry appended to a committed record, but not on a
+  record never committed, which is an untracked file. The record is published
+  with the rest of `src/generated/`; the generated `Lib<Contract>Released` does
+  not carry it.
 - **Undeclared networks.** A network the suite still has no entry for — no
   candidate is named by its key, or the candidate has no entry either — is
   refused with `CloneNetworkUndeclared`, before any fork, at broadcast and in
@@ -316,10 +323,12 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   local deploy rather than from the addresses the suite claims. The generated
   `Lib<Contract>Released` entry imports no `DEPLOYED_ADDRESS`, stores
   `address(0)`, and carries `DeployMechanism.ClonePerNetwork` and that
-  `MECHANISM_DATA`. A storage read during the local deploy of any account it did
-  not create is refused with `CloneInitializeReadsStorage`: locally that storage
-  is empty, while an account the deploy creates, the clone among them, is empty
-  on chain too.
+  `MECHANISM_DATA`. A storage read during the local deploy of any account but
+  the clone and the accounts created under it is refused with
+  `CloneInitializeReadsStorage`: locally that storage is empty, while the clone
+  and what it creates are empty on chain too. An account created by one that
+  predates the deploy, such as a factory, may already exist on chain, so it is
+  not exempt.
 - **Verification.** The record group holds each network's recorded address to
   its derivation and matches a frozen record to its release by chain id AND
   address, so a record whose per-network labels were swapped matches no release.

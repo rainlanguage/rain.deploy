@@ -1265,6 +1265,43 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(creator, address(0xC1));
     }
 
+    /// A `Create` access in a synthetic recording.
+    /// @param account The account created.
+    /// @param accessor Its creator.
+    /// @return The access.
+    function createAccess(address account, address accessor) internal pure returns (Vm.AccountAccess memory) {
+        Vm.AccountAccess memory access;
+        access.kind = VmSafe.AccountAccessKind.Create;
+        access.account = account;
+        access.accessor = accessor;
+        return access;
+    }
+
+    /// The clone is under itself in an empty recording, and a chain of creators as long as the recording reaches it:
+    /// the walk takes one step more than the recording has accesses.
+    function testCreatedUnderWalksAsManyStepsAsTheRecordHasAccesses() external pure {
+        address clone = address(0xC10);
+        assertTrue(LibRainDeployMechanism.createdUnder(clone, clone, new Vm.AccountAccess[](0)));
+
+        Vm.AccountAccess[] memory accesses = new Vm.AccountAccess[](1);
+        accesses[0] = createAccess(address(0xA1), clone);
+        assertTrue(LibRainDeployMechanism.createdUnder(address(0xA1), clone, accesses));
+
+        accesses = new Vm.AccountAccess[](2);
+        accesses[0] = createAccess(address(0xA1), clone);
+        accesses[1] = createAccess(address(0xA2), address(0xA1));
+        assertTrue(LibRainDeployMechanism.createdUnder(address(0xA2), clone, accesses));
+        assertFalse(LibRainDeployMechanism.createdUnder(address(0xA3), clone, accesses));
+    }
+
+    /// A cycle of creators that never reaches the clone is not under it, and the walk ends.
+    function testCreatedUnderACycleIsNotTheClones() external pure {
+        Vm.AccountAccess[] memory accesses = new Vm.AccountAccess[](2);
+        accesses[0] = createAccess(address(0xA1), address(0xA2));
+        accesses[1] = createAccess(address(0xA2), address(0xA1));
+        assertFalse(LibRainDeployMechanism.createdUnder(address(0xA1), address(0xC10), accesses));
+    }
+
     /// An `initialize` that reads the storage of an account it creates, or of one such an account creates, deploys,
     /// while a read of an account that predates the call is still refused.
     function testCloneInitializeReadingAnAccountItCreatesDeploys() external {

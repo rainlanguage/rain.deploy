@@ -67,7 +67,8 @@ error InvalidRecordRoot(string root);
 error SnapshotStateRevertFailed(string suite, uint256 snapshotId);
 
 /// Thrown when a file in the frozen record declares no deployed address, declares one as
-/// `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in decimal digits, declares one whose
+/// `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in decimal digits without a leading zero, names
+/// `DEPLOYED_ADDRESS` on a line not starting with the writer's declaration, declares one whose
 /// value is not `0x` and 40 hex digits, bare or in `address(...)`, then `;`, declares one outside the writer's format (`=` fourth of
 /// five space-separated tokens, or wrapped onto the next line at the writer's indent), or holds
 /// a line break other than `\n` that solc honours.
@@ -1323,6 +1324,10 @@ library LibRainDeploySnapshot {
         return string.concat("Lib", contractName, "Released");
     }
 
+    /// The name every deployed address constant starts with. A line holding it anywhere but at the start of the
+    /// writer's declaration is not the writer's.
+    string constant DEPLOYED_ADDRESS_NAME = "DEPLOYED_ADDRESS";
+
     string constant DEPLOYED_ADDRESS_DECLARATION = "address constant DEPLOYED_ADDRESS =";
 
     string constant DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX = "address constant DEPLOYED_ADDRESS_";
@@ -1366,6 +1371,9 @@ library LibRainDeploySnapshot {
         for (uint256 i = 0; i < lines.length; i++) {
             bool isEveryNetwork = vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) == 0;
             if (!isEveryNetwork && vm.indexOf(lines[i], DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX) != 0) {
+                if (vm.contains(lines[i], DEPLOYED_ADDRESS_NAME)) {
+                    revert FrozenSnapshotUnreadable(path);
+                }
                 continue;
             }
             if (everyNetwork || (isEveryNetwork && perNetwork != 0)) {
@@ -1454,7 +1462,7 @@ library LibRainDeploySnapshot {
     function declaredAddress(Vm vm, string memory path, string memory value) internal pure returns (address) {
         string[] memory opened = vm.split(value, "address(0x");
         string memory tail = ");";
-        if (opened.length != 2 || bytes(opened[0]).length != 0) {
+        if (opened.length != 2) {
             opened = vm.split(value, "0x");
             tail = ";";
         }
@@ -1493,7 +1501,7 @@ library LibRainDeploySnapshot {
             chainId = chainId * 10 + digit;
             end++;
         }
-        if (end == start) {
+        if (end == start || (end - start > 1 && text[start] == "0")) {
             revert FrozenSnapshotUnreadable(path);
         }
         return chainId;

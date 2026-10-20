@@ -260,6 +260,47 @@ contract RainDeployVerifySnapshotBaseClonePerNetworkTest is PerNetworkCloneDeplo
         }
     }
 
+    /// A chain id of more than one digit with a leading zero is unreadable: `vm.toString` never writes one, and
+    /// solc reads `DEPLOYED_ADDRESS_0137` as a name other than `DEPLOYED_ADDRESS_137`. Chain id 0 alone reads.
+    function testPerNetworkDeclarationWithALeadingZeroIsUnreadable() external {
+        string[] memory suffixes = new string[](3);
+        suffixes[0] = "0137";
+        suffixes[1] = "00";
+        suffixes[2] = "01";
+        for (uint256 i = 0; i < suffixes.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol", string.concat(perNetworkLine(42161, address(0xbeef)), suffixedLine(suffixes[i]))
+            );
+        }
+        (uint256[] memory chainIds, address[] memory addresses) = this.externalRecordedDeployedAddresses(
+            "record.sol", string.concat(perNetworkLine(42161, address(0xbeef)), suffixedLine("0"))
+        );
+        assertEq(chainIds.length, 2);
+        assertEq(chainIds[1], 0);
+        assertEq(addresses[1], address(0xcafe));
+    }
+
+    /// A line naming `DEPLOYED_ADDRESS` anywhere but at the start of the writer's declaration is unreadable rather
+    /// than skipped: solc compiles an indented or otherwise spaced declaration as the constant, which the reader would
+    /// otherwise hold to nothing.
+    function testDeployedAddressOutsideTheWritersDeclarationIsUnreadable() external {
+        string memory value = string.concat("address(", vm.toString(address(0xcafe)), ");\n");
+        string[] memory lines = new string[](6);
+        lines[0] = string.concat(" address constant DEPLOYED_ADDRESS_137 = ", value);
+        lines[1] = string.concat("\taddress constant DEPLOYED_ADDRESS_137 = ", value);
+        lines[2] = string.concat("address  constant DEPLOYED_ADDRESS_137 = ", value);
+        lines[3] = string.concat("address\tconstant DEPLOYED_ADDRESS_137 = ", value);
+        lines[4] = string.concat(" address constant DEPLOYED_ADDRESS = ", value);
+        lines[5] = "// DEPLOYED_ADDRESS_137\n";
+        for (uint256 i = 0; i < lines.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+            this.externalRecordedDeployedAddresses(
+                "record.sol", string.concat(perNetworkLine(42161, address(0xbeef)), lines[i])
+            );
+        }
+    }
+
     /// The largest chain id a `uint256` holds, in the declaration the writer emits for it, reads as itself.
     function testPerNetworkDeclarationWithTheLargestChainIdReads() external view {
         DeploySuite memory suite = releasedSuites()[0];

@@ -20,6 +20,10 @@ relocated.
 - **`src/generated/<tag>/` is an append-only record.** `cutRelease()` writes a
   tag directory once. A cut tag can never be un-cut and consumers pin what it
   holds, so a frozen record is never edited, renamed or deleted.
+- **`src/generated/extended/` is append-only too.** `run()` appends to it, and
+  `ExtendedNetworksRewritten` means a declaration would drop, change or reorder
+  a recorded network. Never delete or edit the file to get past it: fix the
+  declaration. CI does not notice a deleted or uncommitted record.
 - **`ADDRESS_REGISTRY_ROOT` is welded into the creation code.** Rotating it
   moves the deploy address, the code hash and the snapshot together, as an
   ordinary source change; the registry at the old address stays where it is.

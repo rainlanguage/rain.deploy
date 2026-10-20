@@ -7,7 +7,9 @@ import {RAIN_COPYRIGHT_TEXT, RAIN_SPDX_LICENSE_IDENTIFIER} from "rain-sol-codege
 import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../lib/LibRainDeployConfig.sol";
+import {CloneNetwork} from "../lib/LibRainDeployClone.sol";
 import {LibRainDeployExtendedNetworks} from "../lib/LibRainDeployExtendedNetworks.sol";
+import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// @title BuildScript
@@ -124,17 +126,21 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     }
 
     /// Writes each release's extended networks record from `extendedNetworks`, under `extendedNetworksRoot()`.
-    /// Append-only: reverts with `ExtendedNetworksRewritten` on a declaration that drops, changes or reorders a
-    /// network a record already holds. Run by `run()`, which `Git is clean` calls, so a declaration nothing recorded
-    /// fails there.
+    /// Append-only against the record in the checkout: reverts with `ExtendedNetworksRewritten` on a declaration
+    /// that drops, changes or reorders a network that record holds. Before writing, refuses a declaration the
+    /// broadcast and the chain group would refuse, as `LibRainDeployMechanism.withExtendedNetworks` does.
+    /// Run by `run()`, which `Git is clean` calls, so an entry appended to a committed record fails there. A record
+    /// never committed is an untracked file, which `git diff` does not see.
     function regenerateExtendedNetworks() internal {
         DeploySuite[] memory released = releasedSuites();
         string memory root = extendedNetworksRoot();
         string memory spdxLicenseIdentifier = extendedNetworksSpdxLicenseIdentifier();
         string memory copyrightText = extendedNetworksCopyrightText();
         for (uint256 i = 0; i < released.length; i++) {
+            CloneNetwork[] memory declared = extendedNetworks(released[i].suite);
+            LibRainDeployMechanism.withExtendedNetworks(released[i], declared);
             LibRainDeployExtendedNetworks.writeExtendedNetworks(
-                vm, root, released[i].suite, extendedNetworks(released[i].suite), spdxLicenseIdentifier, copyrightText
+                vm, root, released[i].suite, declared, spdxLicenseIdentifier, copyrightText
             );
         }
     }

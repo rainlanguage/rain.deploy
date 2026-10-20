@@ -386,4 +386,72 @@ contract LibRainDeployExtendedNetworksTest is Test {
         expectUnreadable("no-hex", editedRecord("hex\"00aa\"", "\"00aa\""));
         expectUnreadable("two-hex", editedRecord("hex\"00aa\"", "hex\"00aa\" hex\"\""));
     }
+
+    /// A header other than the writer's for the licence and copyright text it names is unreadable: an extra line, a
+    /// missing pragma, a licence or copyright line without its tag or with an empty value, or a line break solc honours
+    /// inside a header line, which would end the comment and let the rest of the line be code.
+    function testMisshapenHeaderIsUnreadable() external {
+        //REUSE-IgnoreStart
+        expectUnreadable(
+            "header-extra-constant",
+            editedRecord(
+                "pragma solidity ^0.8.25;\n",
+                "pragma solidity ^0.8.25;\naddress constant DEPLOYED_ADDRESS_8453 = address(0x1111111111111111111111111111111111111111);\n"
+            )
+        );
+        expectUnreadable("header-no-pragma", editedRecord("pragma solidity ^0.8.25;\n", "\n"));
+        expectUnreadable("header-pragma-moved", editedRecord("pragma solidity ^0.8.25;", "pragma solidity ^0.8.24;"));
+        expectUnreadable(
+            "header-no-licence-tag", editedRecord("// SPDX-License-Identifier: ", "// SPDX-Licence-Identifier: ")
+        );
+        expectUnreadable(
+            "header-no-copyright-tag", editedRecord("// SPDX-FileCopyrightText: ", "// SPDX-FileCopyright: ")
+        );
+        expectUnreadable(
+            "header-empty-licence",
+            editedRecord(
+                string.concat("// SPDX-License-Identifier: ", RAIN_SPDX_LICENSE_IDENTIFIER),
+                "// SPDX-License-Identifier: "
+            )
+        );
+        expectUnreadable(
+            "header-empty-copyright",
+            editedRecord(
+                string.concat("// SPDX-FileCopyrightText: ", RAIN_COPYRIGHT_TEXT), "// SPDX-FileCopyrightText: "
+            )
+        );
+        expectUnreadable(
+            "header-licence-line-break",
+            editedRecord(
+                RAIN_SPDX_LICENSE_IDENTIFIER,
+                string.concat(
+                    RAIN_SPDX_LICENSE_IDENTIFIER,
+                    "\x0baddress constant DEPLOYED_ADDRESS_8453 = address(0x1111111111111111111111111111111111111111);"
+                )
+            )
+        );
+        //REUSE-IgnoreEnd
+    }
+
+    /// A record holding the header alone declares no network, which the writer never writes, so it is unreadable.
+    function testHeaderOnlyRecordIsUnreadable() external {
+        expectUnreadable("header-only", LibCodeGen.filePrefix(RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT));
+    }
+
+    /// A header the writer writes for another licence and copyright text reads as the networks the body holds.
+    function testHeaderOfAnotherLicenceIsRead() external {
+        string memory root = freshRoot("header-other-licence");
+        (, string memory dir, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, SUITE);
+        vm.createDir(dir, true);
+        vm.writeFile(
+            path,
+            string.concat(
+                LibCodeGen.filePrefix("MIT", "Copyright (c) Someone"),
+                LibRainDeployExtendedNetworks.extendedNetworksBody(vm, twoNetworks())
+            )
+        );
+        CloneNetwork[] memory recorded = this.externalRecorded(root, SUITE);
+        assertEq(recorded.length, 2);
+        this.externalCheck(root, SUITE, twoNetworks());
+    }
 }

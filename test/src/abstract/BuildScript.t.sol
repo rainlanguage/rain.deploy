@@ -6,7 +6,8 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
-import {CloneNetwork} from "../../../src/lib/LibRainDeployClone.sol";
+import {CloneDeploy, CloneNetwork, CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
+import {ExtendedNetworkAddressMismatch, ExtendedNetworksUnexpected} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {
     ExtendedNetworksRewritten,
     LibRainDeployExtendedNetworks
@@ -20,9 +21,12 @@ import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
 import {CloneBuildScriptHarness} from "../../concrete/CloneBuildScriptHarness.sol";
 import {PerNetworkCloneBuildScriptHarness} from "../../concrete/PerNetworkCloneBuildScriptHarness.sol";
 import {
+    PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
     PER_NETWORK_CLONE_RECORD_CONTRACT,
     PER_NETWORK_CLONE_RECORD_ROOT,
-    PER_NETWORK_CLONE_RELEASE_TAG
+    PER_NETWORK_CLONE_RELEASE_TAG,
+    perNetworkCloneInitData,
+    perNetworkCloneRelease
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {
     EXAMPLE_CLONE_RECORD_CONTRACT,
@@ -307,12 +311,8 @@ contract BuildScriptTest is Test {
         assertFalse(vm.exists(path), "a release declaring nothing has no record");
 
         CloneNetwork[] memory networks = new CloneNetwork[](2);
-        networks[0] = CloneNetwork({
-            chainId: 137, data: hex"00aa", deployedAddress: address(0x1111111111111111111111111111111111111111)
-        });
-        networks[1] = CloneNetwork({
-            chainId: 8453, data: hex"", deployedAddress: address(0x2222222222222222222222222222222222222222)
-        });
+        networks[0] = extendedNetwork(8453, hex"00aa");
+        networks[1] = extendedNetwork(1, hex"");
         CloneNetwork[] memory first = new CloneNetwork[](1);
         first[0] = networks[0];
         harness.setExtendedNetworks(first);
@@ -345,6 +345,99 @@ contract BuildScriptTest is Test {
                 LibRainDeployExtendedNetworks.extendedNetworksBody(vm, networks)
             )
         );
+    }
+
+    /// A network beyond the per-network release's record, at the address its init data derives under the release.
+    /// @param chainId The network's chain id.
+    /// @param data The init data.
+    /// @return The network.
+    function extendedNetwork(uint256 chainId, bytes memory data) internal pure returns (CloneNetwork memory) {
+        CloneDeploy memory release = perNetworkCloneRelease();
+        return CloneNetwork({
+            chainId: chainId,
+            data: data,
+            deployedAddress: LibRainDeployClone.cloneDeployedAddress(
+                CloneTarget({
+                    factory: release.factory, implementation: release.implementation, data: data, salt: release.salt
+                })
+            )
+        });
+    }
+
+    /// Runs the build over a fresh per-network harness declaring `networks`, expecting `err`, and checks that
+    /// nothing was written under its extended networks root.
+    /// @param label The fixture root's suffix, one per test.
+    /// @param networks The networks declared.
+    /// @param err The revert expected.
+    function checkExtendedNetworksRefused(string memory label, CloneNetwork[] memory networks, bytes memory err)
+        internal
+    {
+        string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-", label);
+        resetFixture(root);
+        PerNetworkCloneBuildScriptHarness harness = new PerNetworkCloneBuildScriptHarness(root, root);
+        harness.setExtendedNetworks(networks);
+        vm.expectRevert(err);
+        harness.externalRegenerateExtendedNetworks();
+        assertFalse(vm.exists(string.concat(root, "/extended")), "a refused declaration wrote a record");
+    }
+
+    /// PROPERTY: the build refuses, before writing, an extended network at an address its init data does not derive.
+    function testRegenerateExtendedNetworksRefusesAMisderivedAddress() external {
+        CloneNetwork[] memory networks = new CloneNetwork[](1);
+        networks[0] = extendedNetwork(8453, hex"00aa");
+        address derived = networks[0].deployedAddress;
+        networks[0].deployedAddress = address(0x1111111111111111111111111111111111111111);
+        checkExtendedNetworksRefused(
+            "misderived",
+            networks,
+            abi.encodeWithSelector(
+                ExtendedNetworkAddressMismatch.selector,
+                "per-network-clone@0_0_1",
+                8453,
+                derived,
+                address(0x1111111111111111111111111111111111111111)
+            )
+        );
+    }
+
+    /// PROPERTY: the build refuses, before writing, an extended network the release records.
+    function testRegenerateExtendedNetworksRefusesARecordedNetwork() external {
+        CloneNetwork[] memory networks = new CloneNetwork[](1);
+        networks[0] = extendedNetwork(
+            PER_NETWORK_CLONE_POLYGON_CHAIN_ID, perNetworkCloneInitData(PER_NETWORK_CLONE_POLYGON_CHAIN_ID)
+        );
+        checkExtendedNetworksRefused(
+            "recorded",
+            networks,
+            abi.encodeWithSelector(
+                LibRainDeployClone.DuplicateCloneNetwork.selector, PER_NETWORK_CLONE_POLYGON_CHAIN_ID
+            )
+        );
+    }
+
+    /// PROPERTY: the build refuses, before writing, an extended network declared twice, which would write a record
+    /// declaring one constant twice.
+    function testRegenerateExtendedNetworksRefusesANetworkTwice() external {
+        CloneNetwork[] memory networks = new CloneNetwork[](2);
+        networks[0] = extendedNetwork(8453, hex"00aa");
+        networks[1] = extendedNetwork(8453, hex"00bb");
+        checkExtendedNetworksRefused(
+            "twice", networks, abi.encodeWithSelector(LibRainDeployClone.DuplicateCloneNetwork.selector, 8453)
+        );
+    }
+
+    /// PROPERTY: the build refuses, before writing, an extended network declared for a release that is not per
+    /// network.
+    function testRegenerateExtendedNetworksRefusesANonPerNetworkRelease() external {
+        string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-not-per-network");
+        resetFixture(root);
+        CloneBuildScriptHarness harness = new CloneBuildScriptHarness(root, root);
+        CloneNetwork[] memory networks = new CloneNetwork[](1);
+        networks[0] = extendedNetwork(8453, hex"00aa");
+        harness.setExtendedNetworks(networks);
+        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnexpected.selector, "example-clone@0_0_1"));
+        harness.externalRegenerateExtendedNetworks();
+        assertFalse(vm.exists(string.concat(root, "/extended")), "a refused declaration wrote a record");
     }
 
     function testRunStagesTheNetworkConfig() external {

@@ -28,8 +28,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// Checks every suite against every given network, forking each network once with `forkVm` and checking every
     /// suite on it.
     /// Each suite is checked as `onSupportedNetworks` gives it, with its candidate's unrecorded networks, and a
-    /// per-network suite live on a network it neither records nor declares in `extendedNetworks` is refused with
-    /// `ExtendedNetworkUnfrozen`.
+    /// per-network suite on a network it neither records nor declares in `extendedNetworks` is refused with
+    /// `ExtendedNetworkUnfrozen` before its dependencies or code there are checked, whether or not anything is live
+    /// at the address checked.
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
@@ -68,11 +69,11 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             LibRainDeploy.checkNetworkChainId(networks[i]);
             for (uint256 j = 0; j < suites.length; j++) {
                 console2.log("Checking suite on network:", derived[j].suite, networks[i].name);
-                LibRainDeploy.checkDeclaredDependencies(networks[i].name, suites[j].dependencies);
-                LibRainDeploy.checkDeployedCode(networks[i].name, addresses[i][j], derived[j].bytecodeHash);
                 LibRainDeployMechanism.checkNetworkFrozen(
                     frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]
                 );
+                LibRainDeploy.checkDeclaredDependencies(networks[i].name, suites[j].dependencies);
+                LibRainDeploy.checkDeployedCode(networks[i].name, addresses[i][j], derived[j].bytecodeHash);
             }
         }
     }

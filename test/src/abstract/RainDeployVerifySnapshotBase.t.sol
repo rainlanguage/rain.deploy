@@ -360,8 +360,9 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// something else — the file would then match a released suite while
     /// declaring an address no suite derives, which is precisely the hand edit
     /// this group exists to catch. The parser cannot be the thing that swallows
-    /// it.
-    function testFrozenSnapshotIgnoresACommentedOutDeclaration() external view {
+    /// it, so a line naming `DEPLOYED_ADDRESS` other than the writer's
+    /// declaration, a line comment among them, makes the record unreadable.
+    function testFrozenSnapshotRefusesALineCommentedDeclaration() external {
         address released = LibRainDeploy.zoltuAddress(releasedSuites()[0].creationCode);
         assertEq(released, ADDRESS_REGISTRY_DEPLOYED_ADDRESS);
 
@@ -371,7 +372,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         assertTrue(vm.contains(record, string.concat("// ", LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION)));
         assertTrue(vm.contains(record, vm.toString(released)));
 
-        assertEq(this.externalRecordedDeployedAddress("record.sol", record), address(0xdead));
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddress("record.sol", record);
     }
 
     /// A record in the generated shape whose real declaration is preceded by a
@@ -1175,6 +1177,22 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         );
         vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
         this.externalCheckFrozenCodeRecord("record.sol", record);
+    }
+
+    /// A code record naming `DEPLOYED_ADDRESS` anywhere on a line, a declaration indented or spaced otherwise than
+    /// the writer's among them, is refused for its address: solc compiles each of these as the constant.
+    function testFrozenCodeRecordWithAnIndentedDeployedAddressReverts() external {
+        string[] memory declarations = new string[](3);
+        declarations[0] = " address constant DEPLOYED_ADDRESS = address(0x000000000000000000000000000000000000dEaD);";
+        declarations[1] =
+        "address\tconstant DEPLOYED_ADDRESS_137 = address(0x000000000000000000000000000000000000dEaD);";
+        declarations[2] = "address  constant DEPLOYED_ADDRESS=address(0x000000000000000000000000000000000000dEaD);";
+        for (uint256 i = 0; i < declarations.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord(
+                "record.sol", string.concat(committedCodeRecord(), "\n", declarations[i], "\n")
+            );
+        }
     }
 
     /// A deploy record named as a code record is refused for its address, so a

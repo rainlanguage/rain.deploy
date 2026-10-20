@@ -148,13 +148,16 @@ contract RainDeployVerifyChainClonePerNetworkExtendedTest is PerNetworkCloneDepl
         checkDeployedOnNetworks(Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
     }
 
-    /// Unfrozen, Polygon takes the candidate's moved init data, and once a clone is live there it is refused as
-    /// unfrozen, naming the address.
+    /// Unfrozen, Polygon takes the candidate's moved init data and is refused as unfrozen, naming the address, whether
+    /// or not a clone is live there: nothing is at the moved address while the release is live at its broadcast one.
     function testUnfrozenNetworkLiveAtTheCandidatesDataIsRefused() external {
         address moved = movedReleaseAddress();
         assertNotEq(moved, sFrozenAddress);
+        assertEq(moved.code.length, 0);
         vm.expectRevert(
-            abi.encodeWithSelector(LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, moved)
+            abi.encodeWithSelector(
+                ExtendedNetworkUnfrozen.selector, "per-network-clone@0_0_1", LibRainDeploy.POLYGON, moved
+            )
         );
         this.externalCheckOnLocalForks();
 
