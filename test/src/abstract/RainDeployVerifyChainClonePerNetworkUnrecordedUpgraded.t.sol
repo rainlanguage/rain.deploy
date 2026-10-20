@@ -81,7 +81,7 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedUpgradedTest is
     /// The release is refused on Polygon as unfrozen, naming the release-derived Polygon address,
     /// whether its clone is there or that address is empty: the frozen check runs before the code
     /// check.
-    function testUnrecordedNetworkIsCheckedUnderTheReleasesFactoryAndImplementation() external {
+    function testUnrecordedNetworkIsRefusedAsUnfrozenAtTheReleaseDerivedAddress() external {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = onlyFirstRecordedNetwork(releasedSuites()[0]);
         CloneNetworks memory release = abi.decode(suites[0].mechanismData, (CloneNetworks));
