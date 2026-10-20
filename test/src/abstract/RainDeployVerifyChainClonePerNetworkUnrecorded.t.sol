@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
-import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {CloneNetworks, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
 import {
@@ -44,6 +44,15 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
             vm.etch(addresses[i], release.storedRuntimeCode);
             vm.makePersistent(addresses[i]);
         }
+    }
+
+    /// External wrapper for `checkDeployedOnNetworks`.
+    /// @param networks The networks to check on.
+    /// @param suites The suites to check.
+    function externalCheckDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites)
+        external
+    {
+        checkDeployedOnNetworks(networks, suites);
     }
 
     /// External wrapper for `checkDeployedOnSupportedNetworks`.
@@ -88,17 +97,19 @@ contract RainDeployVerifyChainClonePerNetworkUnrecordedTest is PerNetworkCloneDe
         this.externalCheckDeployedOnSupportedNetworks(suites);
     }
 
-    /// The recorded network is still checked at its recorded address.
+    /// The recorded network, checked alone, is still checked at its recorded address.
     function testRecordedNetworkIsStillCheckedAtItsRecordedAddress() external {
         DeploySuite[] memory suites = arbitrumOnlyRelease();
         address arbitrumAddress = perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID);
         vm.etch(arbitrumAddress, hex"");
+        string[] memory arbitrum = new string[](1);
+        arbitrum[0] = LibRainDeploy.ARBITRUM_ONE;
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.ARBITRUM_ONE, arbitrumAddress
             )
         );
-        this.externalCheckDeployedOnSupportedNetworks(suites);
+        this.externalCheckDeployedOnNetworks(LibRainDeploy.declaredNetworkConfigs(arbitrum), suites);
     }
 
     /// A release no candidate is named by takes no network from one.
