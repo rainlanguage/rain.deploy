@@ -14,10 +14,9 @@ integrity = "fa706c8a7caf3426c90f75e6aafa3224b0a6c899b490800cf6944e4ec42f9344"
 
 [[dependencies]]
 name = "rain-factory"
-version = "0.1.30"
-url = "https://soldeer-revisions.s3.amazonaws.com/rain-factory/0_1_30_21-09-2026_12:10:56_rain.zip"
-checksum = "fb058ca8cc5153090a49d4885f76031b2291a87310d06417d631a2a78a105049"
-integrity = "e782d94d46b3a1a762ff3fffaad11463e571a59b19df5549f575425ce3a0a3fd"
+version = "pr271-ab0fdca"
+git = "https://github.com/rainlanguage/rain.factory.git"
+rev = "ab0fdca7305e1bef384c885eabe1a531ca4631ec"
 
 [[dependencies]]
 name = "rain-lib-memkv"
