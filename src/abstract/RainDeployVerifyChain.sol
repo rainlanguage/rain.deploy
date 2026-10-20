@@ -46,6 +46,12 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             return;
         }
 
+        // With no networks every suite is required nowhere, which would name a
+        // suite for what is a fault of the roster.
+        if (networks.length == 0) {
+            revert LibRainDeploy.NoNetworks();
+        }
+
         DeploySuite[] memory onNetworks = new DeploySuite[](suites.length);
         for (uint256 j = 0; j < suites.length; j++) {
             onNetworks[j] = onSupportedNetworks(suites[j]);
