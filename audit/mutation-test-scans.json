@@ -562,5 +562,38 @@
       "Adversarial: extendedNetworksPath took the tag and name from the key unchecked, so a key such as x@../y named a record outside the root that writeExtendedNetworks would write. It now refuses with InvalidRecordRoot unless <tag>/<name> is a path of record root segments. New code in this PR, fixed on it in 6b99dfeee43c78bd82195f3e5ebea685efd1bae2 rather than filed.",
       "CI static then refused two shapes in this round's code: slither uninitialized-local on recordedExtendedNetwork (fixed in 7aee0fa7f111a02d2edeedf1ca796a96f04e9008), and forge lint boolean-cst on the constant booleans extendedNetworksPath and creatorIn returned (fixed in c6a47d60ab9a43479cbf202b12b6a16d22cbfb31). Those rewrites were re-probed at c6a47d60ab9a43479cbf202b12b6a16d22cbfb31 with 966 green at baseline: 7/8 killed. P01-P05 (the at sign scan, the tag and name copies and the untagged return) and C01, C03 (the creator scan stopping at its match, the Create kind) were killed by existing tests. C02 (creatorIn returns the last accessor when nothing matched) survived and is killed at 880eeea417ff1baaeee0d7212c65bf939d0b814e by new testCreatorInOfAnAccountNothingCreatedIsAbsentAndZero, 967 green at baseline."
     ]
+  },
+  {
+    "timestamp": "2026-10-20T08:02:37Z",
+    "commit": "5af4797d94555762aced0fb1b92f403c379e8714",
+    "testsAfterCommit": "08d4d58fe8f6c85a03afa29ff7534cedefce9d09",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 153,
+    "scope": "pr:310, its code changed in round 13 (marvin review at 651e73c): BuildScript.regenerateExtendedNetworks validating before writing; RainDeployVerifyChain's checkNetworkFrozen order; RainDeployVerifySnapshotBase.checkFrozenCodeRecord and LibRainDeploySnapshot.recordedDeployedAddresses refusing DEPLOYED_ADDRESS outside the writer's declaration; declaredChainId's leading zero; declaredAddress; LibRainDeployExtendedNetworks.checkExtendedNetworksHeader and the record's line-break and zero-network refusals; the createdUnder bound",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 6,
+      "behaviours": 40,
+      "behavioursProbed": 40,
+      "killedByExistingTests": 19,
+      "gapsFilled": 2,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 1,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pass at 5af4797d94555762aced0fb1b92f403c379e8714 with mutation-probe over the offline suite (forge test minus the RPC-dependent tests), 979 green at baseline: 22 mutants, 19 KILLED. The round's tests were written with the fix, before the probe, so kills are not attributable to the suite before round 13.",
+      "Survivors: V02 (checkNetworkFrozen between the dependency and code checks), X04 (the header line count != 5 relaxed to < 5) and L05 (declaredAddress's first split count != 2 relaxed to < 2). X04 and L05 survived because a later check subsumed the mutated one: the whole-header equality refused any other line count, and the second split count refused what the first let through.",
+      "Fixed at bbcb0f1aa4b78638108f66c791cb044ea5fec011: new testUnfrozenNetworkMissingADependencyIsRefusedAsUnfrozen for V02. checkExtendedNetworksHeader now holds the header line by line (count 5, last line empty, licence and copyright read by stripping their tags, non-empty, then lines 0-3 equal to filePrefix's), so each check is the only one refusing its case. declaredAddress now splits once on 0x and takes the address( opening or none. testMisshapenHeaderIsUnreadable and testDeclarationValueOutsideTheWritersShapeIsUnreadable gained the inputs each check alone refuses.",
+      "Re-probe at bbcb0f1aa4b78638108f66c791cb044ea5fec011, 980 green at baseline: 19 mutants, 18 KILLED (V02, A01, A03-A06, H01-H12). A02 (text before a bare 0x accepted) SURVIVED and is KILLED at 08d4d58fe8f6c85a03afa29ff7534cedefce9d09 by testDeclarationValueOutsideTheWritersShapeIsUnreadable with x0x... and (0x...) values, 980 green at baseline.",
+      "Adversarial candidate, not filed: a licence or copyright text that itself contains its SPDX tag is written by the writer (filePrefix only requires a non-empty single line) but refused by the reader, since the tag is stripped everywhere and the line no longer matches. Such a header carries the tag twice on one line, which REUSE would read ambiguously; left for triage."
+    ]
   }
 ]
