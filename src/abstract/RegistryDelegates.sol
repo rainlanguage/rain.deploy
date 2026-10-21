@@ -2,14 +2,23 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
+import {ZeroDelegate} from "../error/ErrRegistryDelegates.sol";
+
 /// @title RegistryDelegates
 /// @notice The delegation `ConfigRegistry` and `MigrationRegistry` share: an
 /// account approves delegates to write under it within a scope, and only the
-/// account or a delegate it approved for that scope writes there. Each registry
-/// checks its own keys and emits and reverts with its own interface's events
-/// and errors.
+/// account or a delegate it approved for that scope writes there. The zero delegate is refused here; each registry checks its own other
+/// keys and emits and reverts with its own interface's events and errors.
 abstract contract RegistryDelegates {
     mapping(address account => mapping(bytes32 scope => mapping(address delegate => bool))) internal sApproved;
+
+    /// Refuses the zero delegate with `ZeroDelegate`.
+    /// @param delegate The delegate.
+    function checkDelegateKey(address delegate) internal pure {
+        if (delegate == address(0)) {
+            revert ZeroDelegate();
+        }
+    }
 
     /// Sets whether `delegate` writes under the caller within `scope`.
     /// @param scope The scope under the caller.

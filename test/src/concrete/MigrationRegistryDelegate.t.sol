@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {ZeroDelegate} from "../../../src/error/ErrRegistryDelegates.sol";
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {
@@ -139,11 +140,11 @@ contract MigrationRegistryDelegateTest is Test {
         vm.startPrank(WRITER);
         vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
         sRegistry.approveV3(bytes32(0), DELEGATE);
-        vm.expectRevert(IMigrationRegistryV3.ZeroDelegate.selector);
+        vm.expectRevert(ZeroDelegate.selector);
         sRegistry.approveV3(NAMESPACE, address(0));
         vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
         sRegistry.revokeV3(bytes32(0), DELEGATE);
-        vm.expectRevert(IMigrationRegistryV3.ZeroDelegate.selector);
+        vm.expectRevert(ZeroDelegate.selector);
         sRegistry.revokeV3(NAMESPACE, address(0));
         vm.stopPrank();
     }
@@ -154,7 +155,7 @@ contract MigrationRegistryDelegateTest is Test {
         sRegistry.approvedV3(address(0), NAMESPACE, DELEGATE);
         vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
         sRegistry.approvedV3(WRITER, bytes32(0), DELEGATE);
-        vm.expectRevert(IMigrationRegistryV3.ZeroDelegate.selector);
+        vm.expectRevert(ZeroDelegate.selector);
         sRegistry.approvedV3(WRITER, NAMESPACE, address(0));
     }
 

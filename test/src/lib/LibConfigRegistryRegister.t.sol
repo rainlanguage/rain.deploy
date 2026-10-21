@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {ZeroDelegate} from "../../../src/error/ErrRegistryDelegates.sol";
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
@@ -755,7 +756,7 @@ contract LibConfigRegistryRegisterTest is Test {
         IConfigRegistryV1 registry = deployRegistry();
         bytes32 name = keccak256("a");
         vm.warp(1);
-        vm.expectRevert(IConfigRegistryV1.ZeroDelegate.selector);
+        vm.expectRevert(ZeroDelegate.selector);
         this.externalRegisterOnSelectedChain(base(), address(0), AUTHORITY, name, abi.encode(address(1)));
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, AUTHORITY, name));
         registry.getV1(AUTHORITY, name);

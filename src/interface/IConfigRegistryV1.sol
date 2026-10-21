@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
+import {ZeroDelegate} from "../error/ErrRegistryDelegates.sol";
+
 /// @title IConfigRegistryV1
 /// @notice A registry of `bytes32` names to ABI-encoded values, keyed by the
 /// authority that bound them. A write names the authority it binds under, and
@@ -148,11 +150,6 @@ interface IConfigRegistryV1 {
     /// @param registeredAt The moment the name carries under the authority.
     /// Zero when unbound.
     error TimestampNotAfterBinding(bytes32 name, uint256 timestamp, uint256 registeredAt);
-
-    /// Thrown when `approveV1`, `revokeV1` or `approvedV1` is given the zero
-    /// delegate, which nothing can call from and which is what an
-    /// uninitialised `address` reads as.
-    error ZeroDelegate();
 
     /// Thrown when `registerV1`'s caller is neither `authority` nor approved by
     /// it for `name`.

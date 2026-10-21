@@ -154,9 +154,7 @@ contract MigrationRegistry is IMigrationRegistryV3, RegistryDelegates {
     /// @param delegate The delegate.
     function checkApprovalKey(address writer, bytes32 namespace, address delegate) internal pure {
         checkLineKey(writer, namespace);
-        if (delegate == address(0)) {
-            revert ZeroDelegate();
-        }
+        checkDelegateKey(delegate);
     }
 
     /// Refuses a write whose caller is neither `writer` nor approved by it for

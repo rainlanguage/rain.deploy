@@ -83,31 +83,22 @@ contract ConfigRegistry is IConfigRegistryV1, RegistryDelegates {
 
     /// @inheritdoc IConfigRegistryV1
     function approveV1(bytes32 name, address delegate) external {
-        checkDelegate(delegate);
+        checkDelegateKey(delegate);
         setApproval(name, delegate, true);
         emit Approved(msg.sender, name, delegate);
     }
 
     /// @inheritdoc IConfigRegistryV1
     function revokeV1(bytes32 name, address delegate) external {
-        checkDelegate(delegate);
+        checkDelegateKey(delegate);
         setApproval(name, delegate, false);
         emit Revoked(msg.sender, name, delegate);
     }
 
     /// @inheritdoc IConfigRegistryV1
     function approvedV1(address authority, bytes32 name, address delegate) external view returns (bool) {
-        checkDelegate(delegate);
+        checkDelegateKey(delegate);
         return isApproved(authority, name, delegate);
-    }
-
-    /// Refuses the zero delegate: nothing calls from it, so no approval of it
-    /// is one anybody can use.
-    /// @param delegate The delegate.
-    function checkDelegate(address delegate) internal pure {
-        if (delegate == address(0)) {
-            revert ZeroDelegate();
-        }
     }
 
     /// @inheritdoc IConfigRegistryV1

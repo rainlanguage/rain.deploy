@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {ZeroDelegate} from "../../../src/error/ErrRegistryDelegates.sol";
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
@@ -118,14 +119,14 @@ contract ConfigRegistryDelegateTest is Test {
     /// and a refused approve or revoke emits nothing.
     function testApprovalRefusesZeroDelegate(address caller, address authority) external {
         vm.recordLogs();
-        vm.expectRevert(IConfigRegistryV1.ZeroDelegate.selector);
+        vm.expectRevert(ZeroDelegate.selector);
         vm.prank(caller);
         sRegistry.approveV1(NAME, address(0));
-        vm.expectRevert(IConfigRegistryV1.ZeroDelegate.selector);
+        vm.expectRevert(ZeroDelegate.selector);
         vm.prank(caller);
         sRegistry.revokeV1(NAME, address(0));
         assertEq(vm.getRecordedLogs().length, 0);
-        vm.expectRevert(IConfigRegistryV1.ZeroDelegate.selector);
+        vm.expectRevert(ZeroDelegate.selector);
         sRegistry.approvedV1(authority, NAME, address(0));
     }
 

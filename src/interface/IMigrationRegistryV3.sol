@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
+import {ZeroDelegate} from "../error/ErrRegistryDelegates.sol";
+
 /// @dev The head of a line that has never applied a migration. The first
 /// migration applied in a line names this, and every later one names the
 /// migration before it.
@@ -518,11 +520,6 @@ interface IMigrationRegistryV3 {
     /// other lines and are not refused here.
     /// @param migration The own migration named after the head.
     error OwnPrerequisite(bytes32 migration);
-
-    /// Thrown when `approveV3`, `revokeV3` or `approvedV3` is given the zero
-    /// delegate, which nothing can call from and which is what an
-    /// uninitialised `address` reads as.
-    error ZeroDelegate();
 
     /// Thrown when a write's caller is neither `writer` nor approved by it for
     /// `namespace`.
