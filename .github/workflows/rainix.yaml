@@ -29,6 +29,8 @@ jobs:
   # version requirement under `--use`.
   abstracts-float:
     runs-on: ubuntu-latest
+    permissions:
+      contents: read
     steps:
       - uses: rainlanguage/rainix/.github/actions/nix-cachix-setup@main
         with:
