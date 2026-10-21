@@ -21,9 +21,12 @@ import {LibConfigRegistryRegister} from "../src/lib/LibConfigRegistryRegister.so
 ///
 /// `run()` binds, and is a dry run on forks unless forge is given
 /// `--broadcast`. `verify()` is the confirmed check, a run of its own once the
-/// binds are mined. The signer is forge's `--sender`, which is what a script's
-/// `msg.sender` is, and `run()` refuses it first unless it is the authority;
-/// `--trezor` is what makes the device that account's wallet.
+/// binds are mined. `run()` broadcasts from the authority and reads no
+/// `msg.sender`: forge's `--broadcast` refuses, before sending anything, a
+/// broadcast from an account none of its signers is, so a Trezor answering as
+/// any other account signs nothing (`BundledState::broadcast` in
+/// foundry-rs/foundry `crates/script/src/broadcast.rs`).
+/// `--trezor` is what makes the device a signer.
 /// `LibConfigRegistryRegister` carries every other guard.
 contract RegisterConfig is RegistryDeploySuites, Script {
     /// The environment variable holding the authority to bind under and read
@@ -59,14 +62,16 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     }
 
     /// Binds the name under the authority on every selected network where it
-    /// is not already bound to the value, refusing a sender other than the
-    /// authority before anything else.
+    /// is not already bound to the value, broadcasting from the authority.
     /// @return The fork each selected network was simulated on.
     function run() external returns (uint256[] memory) {
-        address authority = vm.envAddress(AUTHORITY_VAR);
-        LibConfigRegistryRegister.checkSender(msg.sender, authority);
         (uint256[] memory forkIds,) = LibConfigRegistryRegister.registerOnNetworks(
-            forkVm(), selectedNetworks(), supportedNetworks(), authority, vm.envString(NAME_VAR), vm.envBytes(VALUE_VAR)
+            forkVm(),
+            selectedNetworks(),
+            supportedNetworks(),
+            vm.envAddress(AUTHORITY_VAR),
+            vm.envString(NAME_VAR),
+            vm.envBytes(VALUE_VAR)
         );
         return forkIds;
     }

@@ -58,10 +58,13 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// and logs no record.
 ///
 /// Nothing here reads `msg.sender`. Every bind is broadcast from the
-/// `authority` it is given, and forge signs a broadcast only with a key it
-/// holds for that account. A script whose signer is its `--sender` refuses any
-/// other sender with `checkSender` at its entry point, as
-/// `RegisterConfig.run()` does.
+/// `authority` it is given, and forge sends a broadcast only from an account
+/// it holds a signer for: `forge script --broadcast`, without `--unlocked`
+/// (which leaves signing to the RPC node), stops with
+/// `No associated wallet for addresses: [...]` before sending on any chain
+/// when no key, Trezor or Ledger it was given is the authority
+/// (`BundledState::broadcast` in foundry-rs/foundry
+/// `crates/script/src/broadcast.rs`). A dry run sends nothing either way.
 ///
 /// ## Simulation and confirmation
 ///
@@ -91,15 +94,6 @@ library LibConfigRegistryRegister {
     /// holds those bytes.
     /// @param value The value as given.
     error NonCanonicalValue(bytes value);
-
-    /// Thrown when the account that would sign is not the authority the run
-    /// binds under. The registry binds under whoever signs, so this is a
-    /// binding under an account no consumer of the authority reads, refused
-    /// before a device is asked to sign it: a wrong derivation path, most
-    /// likely.
-    /// @param sender The account that would sign.
-    /// @param authority The authority the run binds under.
-    error SenderNotAuthority(address sender, address authority);
 
     /// Thrown when a selected network is not one the declaration supports.
     /// @param network The selected name.
@@ -207,15 +201,6 @@ library LibConfigRegistryRegister {
             }
         }
         return LibRainDeploy.declaredNetworkConfigs(selected);
-    }
-
-    /// Reverts `SenderNotAuthority` unless `sender` is `authority`.
-    /// @param sender The account that would sign.
-    /// @param authority The authority the run binds under.
-    function checkSender(address sender, address authority) internal pure {
-        if (sender != authority) {
-            revert SenderNotAuthority(sender, authority);
-        }
     }
 
     /// Reverts unless the selected chain is the network's and its registry is

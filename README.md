@@ -698,11 +698,10 @@ for an `address[]`.
 ## Managing the config registry
 
 An authority binds a name with `script/RegisterConfig.sol`, signed on the Trezor
-that holds it: the script binds under `CONFIG_REGISTRY_AUTHORITY` and refuses
-any other signer, since the registry binds under whoever signs. It is run by
-hand on the machine the Trezor is plugged into, never in CI: forge's own
-`--trezor` signer asks the device for each signature, and the key never leaves
-it.
+that holds it: the script binds under `CONFIG_REGISTRY_AUTHORITY` and broadcasts
+from it, since the registry binds under whoever signs. It is run by hand on the
+machine the Trezor is plugged into, never in CI: forge's own `--trezor` signer
+asks the device for each signature, and the key never leaves it.
 
 The script binds for an EOA authority only, since it broadcasts from the
 authority itself. A Safe or timelock authority submits
@@ -789,10 +788,12 @@ itself.
 Before anything is signed the run refuses, with an error naming what is wrong: a
 non-canonical name, an empty value, a value that is not a whole number of
 32-byte words (a bare 20-byte address, say, rather than its ABI encoding), a
-network the repo does not support or one named twice, a sender other than the
-authority, a network whose endpoint reports another chain id than the catalogue
-states for it, and a registry address that does not hold the pinned registry
-code. A refused run signs nothing.
+network the repo does not support or one named twice, a network whose endpoint
+reports another chain id than the catalogue states for it, and a registry
+address that does not hold the pinned registry code. With `--broadcast`, forge
+itself then refuses a device that is not the authority, with
+`No associated wallet for addresses: [<authority>]`, before sending on any
+network. A refused run signs nothing.
 
 The dry run prints the name, its hash, the value, the authority, the registry
 address and the exact calldata, then for each network its chain id, the
