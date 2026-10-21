@@ -73,6 +73,11 @@ contract BuildScriptHarness is BuildScript {
         return recordRoot();
     }
 
+    /// @return The paths `run()` declares.
+    function externalGeneratedPaths() external view returns (string[] memory) {
+        return generatedPaths();
+    }
+
     /// @inheritdoc BuildScript
     /// @dev The fixture root, never the repo's own. A `run()` here would
     /// otherwise read the committed config and stage a spliced copy of it,

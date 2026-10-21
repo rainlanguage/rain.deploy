@@ -126,7 +126,9 @@ and binds the same broadcast as any other repo:
 ```solidity
 // src/abstract/MyCloneDeploys.sol
 abstract contract MyCloneDeploys is RainDeployCloneSuitesBase {
-    function cloneDeploys() internal pure override returns (CloneDeploy[] memory);
+    // `cloneDeploys()` has a default body, so it is implemented here, not redeclared.
+    // A repo of beacon proxies overrides `beaconProxyDeploys()` the same way.
+    function cloneDeploys() internal pure override returns (CloneDeploy[] memory) { ... }
     function releasedSuites() internal pure override returns (DeploySuite[] memory);
 }
 
@@ -160,18 +162,14 @@ Releases follow the normal lifecycle. `BuildScript` regenerates the clone's
 snapshot through `writeSnapshot(DeploySuite)`, which records `MECHANISM_DATA`
 beside the usual constants; `cutRelease()` freezes it under
 `src/generated/<tag>/`; and the generated `Lib<Contract>Released` entry carries
-the mechanism and that `MECHANISM_DATA`. The mechanism DATA comes from the
-record, but the mechanism KIND comes from the CURRENT declaration — the template
-every regeneration reads — not from the declaration the release was cut from. So
-a suite cannot change mechanism in place: a clone template over a record that
-has no `MECHANISM_DATA` does not compile, and a Zoltu template over a clone
-record emits a Zoltu entry that the record group refuses, because its Zoltu
-address is not the clone address the record holds. A mechanism change is a new
-suite. From there the frozen clone is checked like any frozen suite: the record
-group holds it to its released entry at the CLONE address, the chain group
-requires its code at that address, and its declared factory and implementation
-with their declared code, on every supported network, and it is selectable by
-key for broadcast.
+the mechanism and that `MECHANISM_DATA`. Both the mechanism kind and its data
+come from each frozen record: no `MECHANISM_DATA` is Zoltu; with it,
+`DEPLOYED_ADDRESS` is Clone and `DEPLOYED_ADDRESS_<chainId>` is ClonePerNetwork.
+So a suite can change mechanism between releases. From there the frozen clone is
+checked like any frozen suite: the record group holds it to its released entry
+at the CLONE address, the chain group requires its code at that address, and its
+declared factory and implementation with their declared code, on every supported
+network, and it is selectable by key for broadcast.
 
 A clone is **unanchorable** — no compiler produces a proxy assembled from an
 address — so the candidate carries `unanchorableReason` and a constant
@@ -270,16 +268,55 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   is created; each fork whose `block.chainid` is not its catalogue entry's is
   refused with `NetworkChainIdMismatch`, for every mechanism.
 - **Unrecorded networks.** A release records the networks it was cut for. At
-  broadcast and in the chain group, a per-network release first takes an entry
-  for each network its candidate — the candidate whose key is the release key
+  broadcast and in the chain group, a per-network release first takes its
+  extended networks (below), then an entry for each network in play (broadcast
+  to or checked on) its candidate — the candidate whose key is the release key
   before its `@` — has and it lacks, through
   `LibRainDeployMechanism.withUnrecordedNetworks`: that network's init data from
   the current declaration, and the address it derives under the RELEASE's
-  factory, implementation and salt. So a network added to `supportedNetworks()`
-  after the cut is deployable and checked, as it is for a Zoltu or `Clone`
-  release. Recorded entries are kept exactly as recorded, so a recorded network
-  keeps its recorded address and the refusal of a stale one. The record group
-  does not do this: it matches the record against what the release was cut for.
+  factory, implementation and salt. That entry is never broadcast or checked: it
+  is the address `ExtendedNetworkUnfrozen` names when a network added to
+  `supportedNetworks()` after the cut is broadcast to or checked on before it is
+  declared as an extended network (below), and a network the candidate has no
+  entry for is refused with `CloneNetworkUndeclared`. Once declared, the network
+  is broadcast and checked at its declared entry. Recorded entries are kept
+  exactly as recorded, so a recorded network keeps its recorded address and the
+  refusal of a stale one. The record group does not do this: it matches the
+  record against what the release was cut for.
+- **Extended networks.** The candidate's init data can change after a release is
+  broadcast to an unrecorded network, which would move that network's address.
+  So an unrecorded network is declared, then broadcast: override
+  `RainDeploySuitesBase.extendedNetworks` to return it, for the release's key,
+  as a `CloneNetwork`: its chain id, the init data it is broadcast with and its
+  address. The broadcast refuses an unrecorded network not yet declared with
+  `ExtendedNetworkUnfrozen`, before any fork, naming the address the candidate's
+  current init data derives. That is the address to declare only for a network
+  the release is not yet live on: a release already broadcast there is declared
+  with the init data it was broadcast with, from its `NewClone` event, or a
+  second clone is deployed and the live one orphaned. A declared entry is used
+  in place of the candidate's, held to the address its init data derives under
+  the release (`ExtendedNetworkAddressMismatch`), and is refused on a network
+  the release records (`DuplicateCloneNetwork`) or on a suite that is not per
+  network (`ExtendedNetworksUnexpected`). The chain group refuses a per-network
+  suite on a network it neither records nor declares with
+  `ExtendedNetworkUnfrozen` before checking any code there, naming the address
+  the candidate's current init data derives, whether or not anything is live at
+  it. Both the init data and the address are literals copied from the broadcast:
+  the build (`BuildScript.run()`, through `regenerateExtendedNetworks`) writes
+  them to the release's append-only record,
+  `src/generated/extended/<tag>/<name>.sol`, as `DEPLOYED_ADDRESS_<chain id>`
+  and `INIT_DATA_<chain id>`. It first refuses a declaration the broadcast would
+  refuse, with the errors above, and it refuses to drop, change or reorder an
+  entry the record in the checkout holds (`ExtendedNetworksRewritten`). The
+  broadcast and the chain group refuse a declaration that is not exactly what
+  the record holds (`ExtendedNetworksUnrecorded`) or a record that is not
+  exactly what the writer writes (`ExtendedNetworksUnreadable`). Append-only
+  holds against the checked out record, not against history: a commit that edits
+  or deletes the record and its declaration together passes all three.
+  `Git is clean` fails on an entry appended to a committed record, but not on a
+  record never committed, which is an untracked file. The record is published
+  with the rest of `src/generated/`; the generated `Lib<Contract>Released` does
+  not carry it.
 - **Undeclared networks.** A network the suite still has no entry for — no
   candidate is named by its key, or the candidate has no entry either — is
   refused with `CloneNetworkUndeclared`, before any fork, at broadcast and in
@@ -291,7 +328,12 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   local deploy rather than from the addresses the suite claims. The generated
   `Lib<Contract>Released` entry imports no `DEPLOYED_ADDRESS`, stores
   `address(0)`, and carries `DeployMechanism.ClonePerNetwork` and that
-  `MECHANISM_DATA`.
+  `MECHANISM_DATA`. A storage read during the local deploy of any account but
+  the clone and the accounts created under it is refused with
+  `CloneInitializeReadsStorage`: locally that storage is empty, while the clone
+  and what it creates are empty on chain too. An account created by one that
+  predates the deploy, such as a factory, may already exist on chain, so it is
+  not exempt.
 - **Verification.** The record group holds each network's recorded address to
   its derivation and matches a frozen record to its release by chain id AND
   address, so a record whose per-network labels were swapped matches no release.
@@ -302,6 +344,181 @@ networks: one address for Zoltu and `Clone`, one per declared network for
   code with `DependencyChanged`. A clone's runtime code says only which
   implementation it delegates to, so the right code hash at its address over a
   missing or changed implementation does not work.
+
+#### Beacon proxies
+
+A repo whose deployment is an OpenZeppelin `BeaconProxy` over an upgradeable
+beacon, deployed by an `ICloneableFactoryV5` factory, declares it in
+`beaconProxyDeploys()` beside, or instead of, `cloneDeploys()`. Both default to
+empty, `candidateSuites()` is the clones' candidates then the beacon proxies',
+and only both empty is refused with `NoFactoryDeploys`. A `BeaconProxyDeploy`
+has the fields of a `CloneDeploy`, with `beacon` in place of `implementation`,
+and its dependencies MUST name the factory and the beacon, refused otherwise
+with `CloneDependencyUndeclared`. Because `cloneDeploys()` now has a default
+body, a contract that inherits it from an abstract of its own as well as from
+`RainDeployCloneSuitesBase` names both in its override:
+`override(MyCloneDeploys, RainDeployCloneSuitesBase)`.
+
+The candidate is built by `LibRainDeployMechanism.beaconProxyCandidate`. Its
+mechanism is `DeployMechanism.BeaconProxy`, or `BeaconProxyPerNetwork` with init
+data per network, and its `mechanismData` is the same `CloneTarget` or
+`CloneNetworks` a clone's is, with the beacon in the `implementation` field. The
+address is the factory's open-salt beacon proxy derivation
+(`LibICloneableFactoryV5`), and the runtime code is `BeaconProxy`'s with the
+beacon written into its one immutable, so the recorded code hash says which
+beacon the proxy reads. The proxy is unanchorable like a clone: it carries
+`BEACON_PROXY_UNANCHORABLE_REASON` and `BEACON_PROXY_ARTIFACT_PATH`.
+
+A beacon proxy's snapshot declares a clone's constants, with comments naming the
+beacon proxy and its factory, and one more, `bool constant BEACON_PROXY = true;`
+under its own `@dev` comment, which is how a frozen record is read back as a
+beacon proxy rather than a clone. A record with the marker and no
+`MECHANISM_DATA` is refused with
+`FrozenSnapshotBeaconProxyMechanismDataMissing`, and one with the marker twice
+with `FrozenSnapshotBeaconProxyMarkerAmbiguous`.
+
+A beacon proxy suite carries its runtime code as a generated constant. In the
+repo's `script/Build.sol`, `LibRainDeployBeaconProxy.beaconProxyRuntimeCode`
+deploys a real `UpgradeableBeacon` serving the real implementation at the
+beacon's address, then rain-factory's `BeaconProxy` creation code with empty
+constructor data, so no `initialize` runs, and returns the deployed code to
+write into `src/generated/`. The `Git is clean` job checks it, as it does a
+Zoltu suite's runtime code. The local derivation places that code at the derived
+address rather than deploying through the factory. A suite whose creation code
+is not the beacon proxy's over its beacon is refused with
+`CloneCreationCodeMismatch`.
+
+The broadcast step asks the factory where it would put the proxy and refuses
+`BeaconProxyFactoryPredictionMismatch` if it disagrees with the derivation. It
+then calls `beaconProxyDeterministicOpenSalt` and refuses
+`BeaconProxySeatsDeployKey` if the proxy answers `owner()` with the deploy key.
+That is the beacon proxy's only real seat check: the pre-fork
+`SuiteSeatsDeployKey` one cannot read a placed proxy's `owner()`. It reads
+`owner()` only. Roles, `AccessControl` admins, pending owners and admin slots
+the implementation's `initialize` grants to `tx.origin` are not read, and the
+deploy key keeps any of them on every network it broadcasts to. Keeping that
+authority off the deploy key is the declaring repo's job: its implementation's
+`initialize` MUST NOT grant the origin anything, or its own tests MUST assert
+the grant away.
+
+The chain group checks the proxy's code at its address and its dependencies as
+for a clone. The code says nothing about what the beacon serves, so on every
+network the proxy is required on, `beacons()` MUST declare its beacon, refused
+before any fork with `BeaconProxyBeaconUndeclared`. The beacon's own checks then
+hold its implementation and owner. The broadcast does not yet check the beacon
+before deploying a proxy over it.
+
+A proxy's address commits to its factory, beacon, salt and init data, not to the
+implementation that runs `initialize(data)`. Anyone can deploy it, at any time,
+and its initial state is whatever the beacon served then. `ICloneableFactoryV5`
+puts this on the beacon owner: every implementation the beacon serves while the
+proxy is undeployed MUST give the same `initialize(data)` result, or revert.
+Nothing here checks that. A broadcast that finds code at the proxy's address
+skips it, so neither the per-network seat check nor anything else reads how that
+proxy was initialized, and the chain group checks only its code, its
+dependencies and the beacon's current state.
+
+### Upgradeable beacons
+
+Declare every beacon with its network's chain id, naming implementations by
+suite key and moving them through `MigrationRegistry` migrations:
+
+```solidity
+function beacons() internal view override returns (ChainBeacon[] memory) {
+    ChainBeacon[] memory chainBeacons = new ChainBeacon[](1);
+    chainBeacons[0].chainId = ARBITRUM_ONE_CHAIN_ID;
+    DeployBeacon memory beacon = chainBeacons[0].beacon;
+    beacon.beaconSuite = "vault-beacon@0_1_0";
+    beacon.initial = BeaconState({implementation: "vault@0_1_1", owner: ARBITRUM_TIMELOCK});
+    beacon.transitions = new BeaconTransition[](1);
+    beacon.transitions[0] = BeaconTransition({
+        migration: Prerequisite({writer: SAFE, namespace: NAMESPACE, migration: UPGRADE_0_2_0}),
+        state: BeaconState({implementation: "vault@0_2_0", owner: ARBITRUM_TIMELOCK})
+    });
+    return chainBeacons;
+}
+```
+
+On each network's fork the chain group expects the state of the latest
+transition the network's registry reports `appliedV3`, else `initial`: the
+beacon at its code hash, `implementation()` at that suite's address on the
+network, `owner()` at that owner, and the beacon's own suite, when it names one,
+and that state's implementation suite live there as any suite is. A suite a
+beacon names MUST be released, refused otherwise with `BeaconSuiteNotReleased`:
+a candidate's address moves with its source. Name a beacon that is itself a
+released suite by its suite key in `beaconSuite`, and any other (one a
+set-deployer `new`s, nonce-deployed per chain, or one deployed elsewhere) by
+both `beacon` and `beaconCodeHash`; naming it by `beaconSuite` and by either
+`beacon` or `beaconCodeHash` is refused with `BeaconNamedTwice`, and naming it
+by neither, or, without `beaconSuite`, by only one of `beacon` and
+`beaconCodeHash`, with `BeaconUnnamed`. A beacon whose chain id is not one of
+`supportedNetworks()`, in the catalogue or not, is refused with
+`BeaconOnUncheckedNetwork`, and a second declaration of a beacon on its network
+with `BeaconDeclaredTwice`. A beacon named by `beaconSuite` is deployed locally
+at its address under its network's chain id, with only its suite's declared
+dependencies etched, so its constructor MUST succeed there, and is refused with
+`BeaconSeatedOwner` or `BeaconSeatedImplementation` when it answers `owner()` or
+`implementation()` with data other than its initial state; a read that reverts
+or answers nothing is left to the chain group. These refusals, and
+`BeaconTransitionMigrationRepeated` and `BeaconTransitionMigrationUnnamed`
+below, are raised offline for every beacon by the Beacons group
+(`testBeaconDeclarationsResolve`, inherited through
+`RainDeployVerifySnapshotBase`), and by the chain group, before any network is
+forked, for the beacons on the networks it checks; `BeaconOnUncheckedNetwork`
+there covers every beacon. A beacon with transitions reads `MigrationRegistry`
+on its network, which MUST be deployed there. The chain group reads `owner()`,
+and refuses a beacon that answers `pendingOwner()` with one nonzero word with
+`BeaconPendingOwner`, or with data that is not one word with
+`BeaconPendingOwnerUnreadable`; a `pendingOwner()` that reverts or returns
+nothing passes. A two-step handover is red from `transferOwnership` until the
+batch that accepts it applies its migration. Assert any other authority a beacon
+exposes (roles) yourself, including that the deploy key holds none of it. The
+deploy key is never a declared owner of any state, past states included, and a
+broadcast whose key is one is refused with `BeaconOwnedByDeployKey` before any
+network is read. A beacon named by `beacon` and `beaconCodeHash` that was owned
+by a deploy key and has since been handed over declares its post-handover state
+as `initial`, with no transition for the handover. A beacon named by
+`beaconSuite` declares as `initial` the owner its suite seats
+(`BeaconSeatedOwner` holds it there), so a released beacon suite that seated the
+deploy key is declared by `beacon` and `beaconCodeHash`. A broadcast is also
+refused before any network is read when its suite, deployed locally with the
+deploy key as sender and origin under each target's chain id, answers `owner()`
+with a first word whose low 160 bits are the deploy key (`SuiteSeatsDeployKey`),
+so a suite seats its governance, not the deploy key, from its first state. For a
+per-network clone suite the targets are its own networks only (its candidate's
+added networks included), each deploying only that network's clone; for any
+other suite they are every supported network, the networks the broadcast does
+not reach included, then each network it reaches that is not supported. The
+suite's constructor runs on the local EVM with only its declared dependencies
+etched, so it MUST succeed there under each target's chain id: one that reverts
+locally refuses the broadcast to every network. That check reads `owner()` only:
+roles, pending owners, admin slots and contracts a constructor creates are not
+read, so assert those yourself. A beacon proxy suite is the exception: locally
+it is placed, not deployed, so its seat check is the per-network one in the
+broadcast step (`BeaconProxySeatsDeployKey`), on each network's fork, not this
+pre-fork one.
+
+Declare transitions in the order their migrations are applied: each applied
+transition's record MUST reach the latest earlier-declared applied one through
+`appliedAfterV3` (its line's head, then its prerequisites), refused otherwise
+with `BeaconTransitionsOutOfOrder`; moments are never compared. Each transition
+names a distinct migration, refused otherwise with
+`BeaconTransitionMigrationRepeated`, and one the registry can record (nonzero
+writer and namespace, a migration neither zero nor `MIGRATION_HEAD_GENESIS`),
+refused otherwise with `BeaconTransitionMigrationUnnamed`. A transition written
+in another line names the earlier one, or a record after it, as a prerequisite.
+The order walk is unbounded and costs a fork read per record it reaches: apply
+each transition onto the previous transition's migration as its line's head or,
+when it is written in another line, name it as a prerequisite, so the walk reads
+one record. Otherwise it reads at most every record reachable from the later
+transition, across lines, in fewer steps than the earlier one, and every
+reachable record back to each line's genesis when the earlier one is not
+reached. Apply a transition's migration in the same transaction as the beacon
+change it describes (one Safe batch: `upgradeTo` or `transferOwnership`, then
+`applyMigrationV3`; for an `Ownable2Step` beacon the handover's migration goes
+in the batch that calls `acceptOwnership`, as `owner()` moves only then).
+Between two separate transactions the chain group refuses the network, as the
+chain and the registry disagree.
 
 ## Deploy verification
 
@@ -329,15 +546,16 @@ to put there. The dependencies are etched first, then the derived address is
 cleared, then the factory is planted, so a declaration can reach neither the
 subject's address nor the factory's.
 
-Four groups, sorted by what each is anchored to and therefore by what each can
+Five groups, sorted by what each is anchored to and therefore by what each can
 catch:
 
-| Group    | Anchored to                | Catches                                            | Cannot catch                     |
-| -------- | -------------------------- | -------------------------------------------------- | -------------------------------- |
-| Internal | the recorded set           | an inconsistently generated set                    | a snapshot of the wrong contract |
-| Source   | `vm.getCode(artifactPath)` | a snapshot of the wrong contract                   | anything about any chain         |
-| Record   | the frozen record          | a release the declaration missed                   | what a declared suite records    |
-| Chain    | the networks               | a missing deployment, or an alias on another chain | anything about a candidate       |
+| Group    | Anchored to                | Catches                                                                                                                                         | Cannot catch                     |
+| -------- | -------------------------- | ----------------------------------------------------------------------------------------------------------------------------------------------- | -------------------------------- |
+| Internal | the recorded set           | an inconsistently generated set                                                                                                                 | a snapshot of the wrong contract |
+| Source   | `vm.getCode(artifactPath)` | a snapshot of the wrong contract                                                                                                                | anything about any chain         |
+| Record   | the frozen record          | a release the declaration missed                                                                                                                | what a declared suite records    |
+| Beacons  | the beacon declarations    | a beacon misnamed, unreleased, off the supported networks, declared twice, seating other than its initial state, or with a malformed transition | what any beacon holds on chain   |
+| Chain    | the networks               | a missing deployment, an alias on another chain, or a beacon off its declared state                                                             | anything about a candidate       |
 
 The internal group's blind spot is not a gap to close there: every check in it
 asks the recorded bytes to agree with each other, and the wrong contract's bytes
@@ -377,6 +595,14 @@ previously only produced a `forge verify-contract` line a human read after the
 deploy. On a candidate that declares itself unanchorable it is the other way
 round: resolving to nothing is the state being declared, and resolving to an
 artifact is what refuses the declaration.
+
+A Zoltu suite whose `artifactPath` is `CLONE_ARTIFACT_PATH` (a historical entry
+generated under a clone template) names no compiled source, so its broadcast
+prints no verify command. It emits
+`UnverifiableSource(sender, entryAddress, networks)`, a file-level event
+imported from `LibRainDeployMechanism.sol`, and logs a notice naming the address
+and each network, whose source must be verified by hand. Both appear only in the
+script run's local trace: neither is part of a broadcast transaction.
 
 Uniqueness is not something `vm.getCode` reports. It resolves a BARE contract
 name to whichever same-named artifact comes first, and answers rather than
@@ -1061,21 +1287,27 @@ Via [soldeer](https://soldeer.xyz):
 forge soldeer install rain-deploy~<version>
 ```
 
-**You also need `forge-std` 1.17.0 and `rain-sol-codegen` 0.1.39**, remapped as
-`forge-std-1.17.0/` and `rain-sol-codegen-0.1.39/`. The published package ships
-`src/`, `script/` and the licence and README files — no `test/`, no
-`foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no `dependencies/` — so
-a consumer resolves both itself. The requirement is transitive rather than
-incidental: the deployed contract imports nothing outside this package, but
-every abstract a consumer inherits pulls them in — `Script` via
-`RainDeployBroadcast`, `Test` via `RainDeployVerifyBase`, `Vm` via
-`LibRainDeploy` beneath both, and `LibCodeGen`/`LibFs` via
-`LibRainDeploySnapshot`, which `RainDeployVerifySnapshot` imports:
+**You also need `forge-std` 1.17.0, `rain-sol-codegen` 0.1.39 and `rain-factory`
+at git rev `976cd62` (rain.factory#271, which adds `ICloneableFactoryV5`)**,
+remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
+`rain-factory-0.2.0/`. The published package ships `src/`, `script/` and the
+licence and README files — no `test/`, no `foundry.toml`, no `remappings.txt`,
+no `soldeer.lock`, no `dependencies/` — so a consumer resolves all three itself.
+The requirement is transitive rather than incidental: the deployed contract
+imports nothing outside this package, but every abstract a consumer inherits
+pulls them in — `Script` via `RainDeployBroadcast`, `Test` via
+`RainDeployVerifyBase`, `Vm` via `LibRainDeploy` beneath both,
+`ICloneableFactoryV4` and `ICloneableFactoryV5` via `LibRainDeployMechanism`
+beneath both, `LibICloneableFactoryV5` and the generated
+`BEACON_PROXY_CREATION_CODE` via `LibRainDeployBeaconProxy` beneath both, and
+`LibCodeGen`/`LibFs` via `LibRainDeploySnapshot`, which
+`RainDeployVerifySnapshot` imports:
 
 ```toml
 [dependencies]
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
+rain-factory = { version = "pr271-976cd62", git = "https://github.com/rainlanguage/rain.factory.git", rev = "976cd6216ad1ba15c270a266d64a654259a5b3f1" }
 rain-deploy = "<version>"
 ```
 
@@ -1156,6 +1388,104 @@ catalogue's own facts. Whether a network HAS an Etherscan deployment is one of
 them rather than anything about the repo — Robinhood (4663) is not indexed by
 Etherscan v2, so its entry carries its Blockscout url and the deployment is
 verified through Sourcify.
+
+### Upgrading from 0.1.18
+
+`DeploySuite` gains `mechanism` and `mechanismData`, so a consumer's generated
+`Lib<Contract>Released` stops compiling before its `BuildScript` can regenerate
+it. In order:
+
+1. Add `mechanism: DeployMechanism.Zoltu, mechanismData: ""` to every entry of
+   the generated released libs, and import `DeployMechanism` beside
+   `DeploySuite`.
+2. Add `rain-factory` at rev `976cd62` and its remapping, as above.
+3. Make `view` every function of yours that calls `checkedCandidateSuites`,
+   `allSuites`, `suiteNames`, `suiteByName` or `candidateSuites`, which are
+   `view` now. A `pure` override of `candidateSuites` still compiles.
+4. Update the moved errors. `NetworkChainIdMismatch`, `NotDeployedOnNetwork` and
+   `CodeHashMismatchOnNetwork` are members of `LibRainDeploy`: refer to them as
+   `LibRainDeploy.NotDeployedOnNetwork.selector` and so on, and drop their
+   imports. `NotDeployedOnNetwork` and `CodeHashMismatchOnNetwork` no longer
+   carry the suite. Import `ZoltuDerivationMismatch` from
+   `LibRainDeployMechanism`, and `FrozenSnapshotUnreadable` and
+   `FrozenSnapshotAmbiguous` from `LibRainDeploySnapshot`.
+   `FrozenSnapshotsOutnumberReleases` carries an `address[]`. A code hash
+   mismatch in `deployToNetworks` reverts `CodeHashMismatchOnNetwork`, or
+   `NotDeployedOnNetwork` when the address holds no code, where it reverted
+   `UnexpectedDeployedCodeHash`.
+5. Replace the removed or re-signed internal functions and members:
+   - `DerivedDeploy.deployedAddress` is `address[] deployedAddresses`, one per
+     address the suite's mechanism deploys to, in the suite's address order.
+   - `RainDeployVerifySnapshotBase.DEPLOYED_ADDRESS_DECLARATION` is
+     `LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION`.
+   - `RainDeployVerifyChain.checkDeployedOnNetwork(string, DerivedDeploy)` is
+     removed: call `LibRainDeploy.checkDeclaredDependencies` and
+     `LibRainDeploy.checkDeployedCode` on the selected fork, or run the whole
+     matrix with `checkDeployedOnNetworks(SupportedNetwork[], DeploySuite[])`.
+   - `RainDeployVerifyChain.checkDeployedOnSupportedNetworks` takes
+     `DeploySuite[]`, not `DerivedDeploy[]`.
+   - `RainDeployVerifyChain.checkNetworkChainId(string, uint256, uint256)` is
+     `LibRainDeploy.checkNetworkChainId(SupportedNetwork)`, which reads the
+     selected fork's chain id.
+   - `RainDeployVerifySnapshotBase.recordedDeployedAddress(string, string)` is
+     `LibRainDeploySnapshot.recordedDeployedAddresses(Vm, string, string)`,
+     returning the chain id and address of every declaration.
+   - `RainDeployVerifySnapshotBase.withoutBlockComments` is
+     `LibRainDeploySnapshot.withoutBlockComments(string)`, which takes no `Vm`.
+   - `LibRainDeploy.checkDeployRequirements` is
+     `LibRainDeploy.checkDeclaredDependencies`, with the same parameters.
+   - `LibTimelockController.timelockInitCode` and `expectedTimelockAddress` take
+     the timelock's `bytes creationCode` first, and `assertTimelockState` its
+     `bytes32 bytecodeHash` first. `LibTimelockControllerDeploy.deployTimelock`
+     takes both after `deployer`.
+   - `LibRainDeploySnapshot.releasedImport`, `releasedImportBlock` and
+     `releasedLibraryBlock` are `view`.
+6. For each per-network release broadcast, or to be broadcast, to a network it
+   does not record, override `extendedNetworks` to return that network as
+   broadcast: declare, then broadcast. Without it the broadcast and the chain
+   group refuse the release there with `ExtendedNetworkUnfrozen`. The address
+   that refusal names at broadcast is what the candidate's current init data
+   derives: a release already live on that network is declared with the init
+   data it was broadcast with, from its `NewClone` event, not with that address.
+   Then run the build and commit the record it writes under
+   `src/generated/extended/` (override `extendedNetworksSpdxLicenseIdentifier`
+   and `extendedNetworksCopyrightText` for a licence other than this org's): the
+   broadcast and the chain group refuse a declaration it does not hold with
+   `ExtendedNetworksUnrecorded`.
+7. A clone whose `initialize` reads storage of any account but the clone and the
+   accounts created under it is refused by the local deploy with
+   `CloneInitializeReadsStorage`. An account created through a dependency that
+   predates the call, such as a factory, is not exempt: it may already exist on
+   chain. Only storage reads are checked: a balance or code read of another
+   account is not refused. A write to part of a slot reads the slot first, so it
+   is refused like a read. The local deploy records each clone's state diff,
+   which ends any state-diff recording the caller started.
+8. Move to the V3 migration registry. `LibMigrationRegistry.applied`,
+   `appliedOnto`, `appliedAfter` and `head` are `appliedV3`, `appliedOntoV3`,
+   `appliedAfterV3` and `headV3`. `applyMigration` and `applyMigrationHistory`
+   are `applyMigrationV3` and `applyMigrationHistoryV3`, and take the
+   `address writer` first; `applyMigrationCall` and `applyMigrationHistoryCall`
+   are `applyMigrationV3Call` and `applyMigrationHistoryV3Call`, likewise.
+   Import `Prerequisite` from `src/interface/IMigrationRegistryV3.sol`;
+   `IMigrationRegistryV1` and `IMigrationRegistryV2` moved to
+   `src/interface/deprecated/`. The registry has a new address, so migrations
+   recorded in the 0.1.18 registry stay there and read as unapplied in V3: apply
+   them again, with `applyMigrationHistoryV3` for one that already ran.
+9. Regenerate: `forge script ./script/Build.sol` followed by
+   `./script/build.sh`.
+
+`LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,
+`RainDeployBroadcast.broadcastSuite` and
+`RainDeployVerifyChain.checkDeployedOnSupportedNetworks` take catalogue aliases
+only (`NetworkNotInCatalogue`), refuse a fork reporting another chain id
+(`NetworkChainIdMismatch`), and check the declared dependencies on every
+network, including one the suite is already deployed on.
+`RainDeployVerifyChain.checkDeployedOnNetworks` takes `SupportedNetwork` entries
+as given, with no catalogue lookup, and holds each fork's chain id to its
+entry's `chainId`, checking the declared dependencies likewise.
+`LibRainDeploy.createForks`, `checkResolvedAddressesOnNetworks` and
+`checkResolvedAddressesOnForks` take raw `[rpc_endpoints]` aliases, with no
+catalogue lookup and no chain id check.
 
 ## Develop
 

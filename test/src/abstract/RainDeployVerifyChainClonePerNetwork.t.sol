@@ -6,7 +6,7 @@ import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeplo
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
-import {PerNetworkCloneDeploys} from "../../abstract/PerNetworkCloneDeploys.sol";
+import {PerNetworkCloneDeploys, etchPerNetworkCloneRelease} from "../../abstract/PerNetworkCloneDeploys.sol";
 
 /// @title RainDeployVerifyChainClonePerNetworkTest
 /// @notice The chain matrix over a per-network clone release, which is at a different address on
@@ -26,15 +26,7 @@ contract RainDeployVerifyChainClonePerNetworkTest is PerNetworkCloneDeploys, Rai
     /// fork.
     function setUp() external {
         DeploySuite memory release = releasedSuites()[0];
-        for (uint256 i = 0; i < release.dependencies.length; i++) {
-            vm.etch(release.dependencies[i].deployedAddress, release.dependencies[i].runtimeCode);
-            vm.makePersistent(release.dependencies[i].deployedAddress);
-        }
-        address[] memory addresses = LibRainDeployMechanism.deployedAddresses(release);
-        for (uint256 i = 0; i < addresses.length; i++) {
-            vm.etch(addresses[i], release.storedRuntimeCode);
-            vm.makePersistent(addresses[i]);
-        }
+        etchPerNetworkCloneRelease(vm, release, LibRainDeployMechanism.deployedAddresses(release));
     }
 
     /// Without Polygon's clone, the matrix refuses on Polygon at Polygon's address, having passed

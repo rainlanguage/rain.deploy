@@ -29,6 +29,7 @@ import {
     MECHANISM_DATA as PER_NETWORK_MECHANISM_DATA
 } from "../../fixture-mechanism-change/generated/0_0_3/MockCloneable.sol";
 import {LibMockCloneableReleased} from "../../fixture-mechanism-change/lib/LibMockCloneableReleased.sol";
+import {LibForeignLineBreaks} from "../../lib/LibForeignLineBreaks.sol";
 
 /// @title LibRainDeploySnapshotRecordedMechanismTest
 /// @notice Each release's mechanism is read from its own record.
@@ -41,11 +42,11 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
 
     /// Where `testTheCommittedLibIsWhatTheGeneratorEmits` writes its fresh generation, removed once
     /// read.
-    string constant FRESH_LIB_DIR = "test/fixture-mechanism-change/fresh-lib";
+    string constant FRESH_LIB_DIR = "fixture-lib/recorded-mechanism-libs";
 
     /// Where the refusal tests write the records they read, one directory per test, each removed
     /// once read.
-    string constant REFUSAL_ROOT = "test/generated-recorded-mechanism";
+    string constant REFUSAL_ROOT = "fixture-lib/recorded-mechanism";
 
     string constant RECORD_CONTRACT = "MockCloneable";
 
@@ -261,15 +262,48 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
             DeployMechanism.Zoltu
         );
         checkRead(
-            "line-commented",
-            string.concat(everyNetworkLine(address(1)), "// ", MECHANISM_DATA_LINE),
-            DeployMechanism.Zoltu
-        );
-        checkRead(
             "block-commented-second",
             string.concat(everyNetworkLine(address(1)), MECHANISM_DATA_LINE, "/*\n", MECHANISM_DATA_LINE, "*/\n"),
             DeployMechanism.Clone
         );
+        checkRead(
+            "nested-opener",
+            string.concat(everyNetworkLine(address(1)), "/* a /* b */\n", MECHANISM_DATA_LINE),
+            DeployMechanism.Clone
+        );
+        checkRead(
+            "opener-in-line-comment",
+            string.concat(everyNetworkLine(address(1)), "// /*\n", MECHANISM_DATA_LINE, "// */\n"),
+            DeployMechanism.Clone
+        );
+        checkRead(
+            "line-comment-backslash",
+            string.concat(everyNetworkLine(address(1)), "// \\\n/*\n", MECHANISM_DATA_LINE, "*/\n"),
+            DeployMechanism.Zoltu
+        );
+        checkRead(
+            "lone-slash",
+            string.concat(everyNetworkLine(address(1)), "// a / b\n/ /*\n", MECHANISM_DATA_LINE, "*/\n"),
+            DeployMechanism.Zoltu
+        );
+    }
+
+    /// A record holding a carriage return, vertical tab, form feed, NEL, LS or PS is refused before any mechanism is
+    /// read from it, wherever the break sits.
+    function testRecordHoldingAnotherLineBreakIsUnreadable() external {
+        string[] memory breaks = LibForeignLineBreaks.foreignLineBreaks();
+        for (uint256 i = 0; i < breaks.length; i++) {
+            checkRefused(
+                string.concat("line-break-", vm.toString(i)),
+                string.concat(everyNetworkLine(address(1)), "// note", breaks[i], MECHANISM_DATA_LINE),
+                FrozenSnapshotUnreadable.selector
+            );
+            checkRefused(
+                string.concat("trailing-line-break-", vm.toString(i)),
+                string.concat(everyNetworkLine(address(1)), "// note", breaks[i], "\n"),
+                FrozenSnapshotUnreadable.selector
+            );
+        }
     }
 
     /// The three readings, from minimal records.
@@ -280,6 +314,31 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
             "per-network",
             string.concat(perNetworkLine(137, address(2)), MECHANISM_DATA_LINE, perNetworkLine(42161, address(3))),
             DeployMechanism.ClonePerNetwork
+        );
+    }
+
+    /// A line naming `MECHANISM_DATA` that does not start with the writer's declaration is refused as unreadable,
+    /// whether solc would read it as a declaration or not.
+    function testMechanismDataOffTheWritersDeclarationIsUnreadable() external {
+        checkRefused(
+            "leading-space",
+            string.concat(everyNetworkLine(address(1)), " ", MECHANISM_DATA_LINE),
+            FrozenSnapshotUnreadable.selector
+        );
+        checkRefused(
+            "leading-tab",
+            string.concat(everyNetworkLine(address(1)), "\t", MECHANISM_DATA_LINE),
+            FrozenSnapshotUnreadable.selector
+        );
+        checkRefused(
+            "line-commented",
+            string.concat(everyNetworkLine(address(1)), "// ", MECHANISM_DATA_LINE),
+            FrozenSnapshotUnreadable.selector
+        );
+        checkRefused(
+            "line-commented-per-network",
+            string.concat(perNetworkLine(137, address(2)), MECHANISM_DATA_LINE, "// MECHANISM_DATA\n"),
+            FrozenSnapshotUnreadable.selector
         );
     }
 }

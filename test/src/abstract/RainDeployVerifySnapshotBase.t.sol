@@ -33,6 +33,7 @@ import {PER_NETWORK_CLONE_RECORD_ROOT} from "../../abstract/PerNetworkCloneDeplo
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
+import {LibForeignLineBreaks} from "../../lib/LibForeignLineBreaks.sol";
 import {
     BYTECODE_HASH as CONFIG_REGISTRY_BYTECODE_HASH,
     CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE,
@@ -372,8 +373,9 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// something else — the file would then match a released suite while
     /// declaring an address no suite derives, which is precisely the hand edit
     /// this group exists to catch. The parser cannot be the thing that swallows
-    /// it.
-    function testFrozenSnapshotIgnoresACommentedOutDeclaration() external view {
+    /// it, so a line naming `DEPLOYED_ADDRESS` other than the writer's
+    /// declaration, a line comment among them, makes the record unreadable.
+    function testFrozenSnapshotRefusesALineCommentedDeclaration() external {
         address released = LibRainDeploy.zoltuAddress(releasedSuites()[0].creationCode);
         assertEq(released, CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
@@ -383,7 +385,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         assertTrue(vm.contains(record, string.concat("// ", LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION)));
         assertTrue(vm.contains(record, vm.toString(released)));
 
-        assertEq(this.externalRecordedDeployedAddress("record.sol", record), address(0xdead));
+        vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, "record.sol"));
+        this.externalRecordedDeployedAddress("record.sol", record);
     }
 
     /// A record in the generated shape whose real declaration is preceded by a
@@ -914,6 +917,16 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         this.externalCheckFrozenCodeRecord("record.sol", committedCodeRecord());
     }
 
+    /// A declaration inside a block comment is not one the compiler reads, so it neither marks a code record as a deploy record nor makes its code constants ambiguous.
+    function testFrozenCodeRecordIgnoresBlockCommentedDeclarations() external view {
+        string memory record = string.concat(
+            committedCodeRecord(),
+            "/*\naddress constant DEPLOYED_ADDRESS = address(0x000000000000000000000000000000000000dEaD);\n",
+            "bytes32 constant BYTECODE_HASH = bytes32(0x0000000000000000000000000000000000000000000000000000000000000001);\n*/\n"
+        );
+        this.externalCheckFrozenCodeRecord("record.sol", record);
+    }
+
     /// A code record whose runtime code was edited no longer hashes to its
     /// recorded hash, and is refused naming both hashes.
     function testFrozenCodeRecordRuntimeEditedReverts() external {
@@ -921,8 +934,254 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         string[] memory parts = vm.split(record, "bytes constant RUNTIME_CODE =\n    hex\"");
         assertEq(parts.length, 2, "the record's runtime code is not where the generator writes it");
         string memory edited = string.concat(parts[0], "bytes constant RUNTIME_CODE =\n    hex\"00", parts[1]);
-        vm.expectPartialRevert(FrozenCodeRecordInconsistent.selector);
+        bytes32 recordedHash = vm.parseBytes32(vm.split(vm.split(record, "BYTECODE_HASH = bytes32(")[1], ")")[0]);
+        bytes memory runtimeCode = vm.parseBytes(string.concat("0x", vm.split(parts[1], "\"")[0]));
+        assertEq(keccak256(runtimeCode), recordedHash);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                FrozenCodeRecordInconsistent.selector,
+                "record.sol",
+                recordedHash,
+                keccak256(bytes.concat(hex"00", runtimeCode))
+            )
+        );
         this.externalCheckFrozenCodeRecord("record.sol", edited);
+    }
+
+    /// A wrapped `bytes` declaration takes its literal only from a line in the writer's wrapped format, never from
+    /// another declaration's line, even one carrying the right code.
+    function testFrozenCodeRecordWrappedOntoAnotherDeclarationIsUnreadable() external {
+        string memory record = committedCodeRecord();
+        string[] memory parts = vm.split(record, "bytes constant RUNTIME_CODE =\n    hex\"");
+        assertEq(parts.length, 2, "the record's runtime code is not where the generator writes it");
+        string memory edited =
+            string.concat(parts[0], "bytes constant RUNTIME_CODE =\nbytes constant OTHER_CODE = hex\"", parts[1]);
+        vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+        this.externalCheckFrozenCodeRecord("record.sol", edited);
+    }
+
+    /// A code record holding a carriage return, vertical tab, form feed, NEL, LS or PS is an unreadable code record, so
+    /// no code is read from it.
+    function testFrozenCodeRecordHoldingAnotherLineBreakIsUnreadable() external {
+        string[] memory breaks = LibForeignLineBreaks.foreignLineBreaks();
+        for (uint256 i = 0; i < breaks.length; i++) {
+            string memory record = string.concat("// note", breaks[i], committedCodeRecord());
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord("record.sol", record);
+        }
+    }
+
+    /// A wrapped `bytes` literal is read only from a line that starts with the writer's indent and `hex"`, never from
+    /// a comment line that holds the same text further along.
+    function testFrozenCodeRecordWrappedOntoACommentIsUnreadable() external {
+        string memory record = committedCodeRecord();
+        string[] memory parts = vm.split(record, "bytes constant RUNTIME_CODE =\n    hex\"");
+        assertEq(parts.length, 2, "the record's runtime code is not where the generator writes it");
+        string memory edited =
+            string.concat(parts[0], "bytes constant RUNTIME_CODE =\n    //    hex\"00\";\n    hex\"", parts[1]);
+        vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+        this.externalCheckFrozenCodeRecord("record.sol", edited);
+    }
+
+    /// A `bytes` literal is read from the declaration's own line only as the token after `=`, the fifth of exactly
+    /// five, never from a trailing comment the compiler ignores, while the compiled value is on the next line.
+    function testFrozenCodeRecordRuntimeCodeInATrailingCommentIsUnreadable() external {
+        string memory marker = "bytes constant RUNTIME_CODE =\n    hex\"";
+        string[] memory parts = vm.split(committedCodeRecord(), marker);
+        assertEq(parts.length, 2, "the record's runtime code is not where the generator writes it");
+        string memory record =
+            withLineRest(committedCodeRecord(), marker, string.concat(vm.split(parts[1], "\n")[0], "\n    hex\"00\";"));
+        string[] memory variants = new string[](2);
+        variants[0] = "bytes constant RUNTIME_CODE = // hex\"";
+        variants[1] = "bytes constant RUNTIME_CODE =//hex\"";
+        for (uint256 i = 0; i < variants.length; i++) {
+            string memory edited = vm.replace(record, marker, variants[i]);
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord("record.sol", edited);
+        }
+    }
+
+    /// The bytecode hash is read only as the token after `=`, the fifth of exactly five, never from a trailing comment
+    /// the compiler ignores, with or without spaces around the comment.
+    function testFrozenCodeRecordHashInATrailingCommentIsUnreadable() external {
+        string memory record = committedCodeRecord();
+        string[] memory parts = vm.split(record, "bytes32 constant BYTECODE_HASH = ");
+        assertEq(parts.length, 2, "the record's bytecode hash is not where the generator writes it");
+        string[] memory variants = new string[](2);
+        variants[0] =
+            "bytes32 constant BYTECODE_HASH = bytes32(0x0000000000000000000000000000000000000000000000000000000000000001); // ";
+        variants[1] =
+            "bytes32 constant BYTECODE_HASH =bytes32(0x0000000000000000000000000000000000000000000000000000000000000001);// ";
+        for (uint256 i = 0; i < variants.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord("record.sol", string.concat(parts[0], variants[i], parts[1]));
+        }
+    }
+
+    /// Replaces the rest of the line `marker` ends with `value`.
+    /// @param record The record.
+    /// @param marker Text that occurs once in the record.
+    /// @param value The line's new rest.
+    /// @return The edited record.
+    function withLineRest(string memory record, string memory marker, string memory value)
+        internal
+        pure
+        returns (string memory)
+    {
+        string[] memory parts = vm.split(record, marker);
+        assertEq(parts.length, 2, "the marker is not where the generator writes it");
+        string[] memory rest = vm.split(parts[1], "\n");
+        string memory edited = string.concat(parts[0], marker, value);
+        for (uint256 j = 1; j < rest.length; j++) {
+            edited = string.concat(edited, "\n", rest[j]);
+        }
+        return edited;
+    }
+
+    /// A bytecode hash outside one `bytes32(0x...);` of 32 bytes of hex is unreadable, never a raw parse error, even when
+    /// it wraps the record's real hash.
+    function testFrozenCodeRecordMalformedHashIsUnreadable() external {
+        string[] memory values = new string[](14);
+        values[0] = "bytes32(0xzz00000000000000000000000000000000000000000000000000000000000000);";
+        values[1] = "bytes32(0x00000000000000000000000000000000000000000000000000000000000001);";
+        values[2] = "bytes32(0x000000000000000000000000000000000000000000000000000000000000000001);";
+        values[3] = "0x0000000000000000000000000000000000000000000000000000000000000001;";
+        values[4] = "bytes32(0x0000000000000000000000000000000000000000000000000000000000000001;)";
+        values[5] = "bytes32((0x00000000000000000000000000000000000000000000000000000000000001));";
+        string memory hash = vm.split(vm.split(committedCodeRecord(), "BYTECODE_HASH = bytes32(")[1], ")")[0];
+        values[6] = string.concat("x", "bytes32(", hash, ");");
+        values[7] = string.concat("bytes32(", hash, ")");
+        values[8] = string.concat("bytes32(", hash, ");)");
+        values[9] = string.concat("bytes32(", hash, ";");
+        values[10] = string.concat("bytes32(", hash, "));");
+        // 64 hex digits `vm.parseBytes32` reads without `0x`, which solc reads as an identifier.
+        values[11] = string.concat("bytes32(", vm.replace(hash, "0x", ""), ");");
+        values[12] = string.concat("bytes32(", vm.replace(hash, "0x", "0X"), ");");
+        values[13] = string.concat("bytes32(", hash, ");bytes32(");
+        for (uint256 i = 0; i < values.length; i++) {
+            string memory edited = withLineRest(committedCodeRecord(), "bytes32 constant BYTECODE_HASH = ", values[i]);
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord("record.sol", edited);
+        }
+    }
+
+    /// A `bytes` literal holding a non-hex digit or an odd number of digits is unreadable, never a raw parse error.
+    function testFrozenCodeRecordMalformedBytesIsUnreadable() external {
+        string[] memory values = new string[](2);
+        values[0] = "hex\"zz\";";
+        values[1] = "hex\"abc\";";
+        for (uint256 i = 0; i < values.length; i++) {
+            string memory edited = withLineRest(committedCodeRecord(), "bytes constant RUNTIME_CODE =\n    ", values[i]);
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord("record.sol", edited);
+        }
+    }
+
+    /// A declaration line holding fewer or more than the writer's five tokens is unreadable.
+    function testFrozenCodeRecordDeclarationOutsideTheWritersTokensIsUnreadable() external {
+        string memory record = committedCodeRecord();
+        string[] memory parts = vm.split(record, "bytes32 constant BYTECODE_HASH = ");
+        assertEq(parts.length, 2, "the record's bytecode hash is not where the generator writes it");
+        string[] memory variants = new string[](2);
+        variants[0] = "bytes32 constant BYTECODE_HASH =";
+        variants[1] = "bytes32 constant BYTECODE_HASH =  ";
+        for (uint256 i = 0; i < variants.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord("record.sol", string.concat(parts[0], variants[i], parts[1]));
+        }
+    }
+
+    /// A declaration wrapped after its `=` takes its value from a following line of exactly the writer's indent and
+    /// one token, and an unwrapped `bytes` literal is read from the declaration's own line: both forms compile and pass.
+    function testFrozenCodeRecordWrappedHashAndUnwrappedCodePass() external view {
+        string memory record = committedCodeRecord();
+        record = vm.replace(record, "bytes32 constant BYTECODE_HASH = ", "bytes32 constant BYTECODE_HASH =\n    ");
+        record = vm.replace(record, "bytes constant RUNTIME_CODE =\n    hex\"", "bytes constant RUNTIME_CODE = hex\"");
+        this.externalCheckFrozenCodeRecord("record.sol", record);
+    }
+
+    /// A wrapped value line with another indent, or more than one token, is unreadable.
+    function testFrozenCodeRecordWrappedOntoAnotherFormatIsUnreadable() external {
+        string memory record = committedCodeRecord();
+        string[] memory parts = vm.split(record, "bytes constant RUNTIME_CODE =\n    hex\"");
+        assertEq(parts.length, 2, "the record's runtime code is not where the generator writes it");
+        string[] memory variants = new string[](7);
+        variants[0] = "bytes constant RUNTIME_CODE =\n   hex\"";
+        variants[1] = "bytes constant RUNTIME_CODE =\n     hex\"";
+        variants[2] = "bytes constant RUNTIME_CODE =\n    x hex\"";
+        variants[3] = "bytes constant RUNTIME_CODE =\n    xhex\"";
+        variants[4] = "bytes constant RUNTIME_CODE =\nx    hex\"";
+        variants[5] = "bytes constant RUNTIME_CODE =\n   x hex\"";
+        variants[6] = "bytes constant RUNTIME_CODE =\n  x y hex\"";
+        for (uint256 i = 0; i < variants.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord("record.sol", string.concat(parts[0], variants[i], parts[1]));
+        }
+    }
+
+    /// A `bytes` declaration wrapped after its `=` on the record's last line has no value, and is unreadable.
+    function testFrozenCodeRecordWrappedAtTheEndOfTheRecordIsUnreadable() external {
+        string[] memory parts = vm.split(committedCodeRecord(), "bytes constant RUNTIME_CODE =\n    hex\"");
+        assertEq(parts.length, 2, "the record's runtime code is not where the generator writes it");
+        vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+        this.externalCheckFrozenCodeRecord("record.sol", string.concat(parts[0], "bytes constant RUNTIME_CODE ="));
+    }
+
+    /// A value token holding a second `hex"` literal, which the compiler concatenates, is unreadable rather than read
+    /// as its first literal.
+    function testFrozenCodeRecordConcatenatedLiteralIsUnreadable() external {
+        string memory marker = "bytes constant RUNTIME_CODE =\n    hex\"";
+        string[] memory parts = vm.split(committedCodeRecord(), marker);
+        assertEq(parts.length, 2, "the record's runtime code is not where the generator writes it");
+        string memory edited =
+            withLineRest(committedCodeRecord(), marker, string.concat(vm.split(parts[1], "\"")[0], "\"hex\"00\";"));
+        vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+        this.externalCheckFrozenCodeRecord("record.sol", edited);
+    }
+
+    /// A `bytes` literal followed by anything but the writer's `;`, or with no closing quote, is unreadable, for
+    /// `CREATION_CODE` and `RUNTIME_CODE` alike.
+    function testFrozenCodeRecordLiteralNotEndingInTheWritersSemicolonIsUnreadable() external {
+        string[] memory declarations = new string[](2);
+        declarations[0] = "bytes constant CREATION_CODE =\n    hex\"";
+        declarations[1] = "bytes constant RUNTIME_CODE =\n    hex\"";
+        string[] memory endings = new string[](6);
+        endings[0] = "\"";
+        endings[1] = "\";;";
+        endings[2] = "\"x;";
+        endings[3] = "\";\"";
+        endings[4] = "";
+        endings[5] = "\";hex\"";
+        for (uint256 i = 0; i < declarations.length; i++) {
+            string[] memory parts = vm.split(committedCodeRecord(), declarations[i]);
+            assertEq(parts.length, 2, "the record's code is not where the generator writes it");
+            string[] memory rest = vm.split(parts[1], "\";");
+            assertGt(rest.length, 1, "the record's literal does not end where the generator ends it");
+            string memory tail = rest[1];
+            for (uint256 k = 2; k < rest.length; k++) {
+                tail = string.concat(tail, "\";", rest[k]);
+            }
+            assertEq(string.concat(parts[0], declarations[i], rest[0], "\";", tail), committedCodeRecord());
+            for (uint256 j = 0; j < endings.length; j++) {
+                string memory edited = string.concat(parts[0], declarations[i], rest[0], endings[j], tail);
+                vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+                this.externalCheckFrozenCodeRecord("record.sol", edited);
+            }
+        }
+    }
+
+    /// `CREATION_CODE`'s value is held to the writer's format even though the check hashes only `RUNTIME_CODE`.
+    function testFrozenCodeRecordCreationCodeOutsideTheWritersFormatIsUnreadable() external {
+        string[] memory parts = vm.split(committedCodeRecord(), "bytes constant CREATION_CODE =\n    hex\"");
+        assertEq(parts.length, 2, "the record's creation code is not where the generator writes it");
+        string[] memory variants = new string[](3);
+        variants[0] = "bytes constant CREATION_CODE =\n   hex\"";
+        variants[1] = "bytes constant CREATION_CODE = // hex\"";
+        variants[2] = "bytes constant CREATION_CODE =\n    x\"";
+        for (uint256 i = 0; i < variants.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordUnreadable.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord("record.sol", string.concat(parts[0], variants[i], parts[1]));
+        }
     }
 
     /// A code record that declares a deploy address is a deploy record under a
@@ -934,6 +1193,45 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         );
         vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
         this.externalCheckFrozenCodeRecord("record.sol", record);
+    }
+
+    /// A code record naming `DEPLOYED_ADDRESS` anywhere on a line, a declaration indented or spaced otherwise than
+    /// the writer's among them, is refused for its address: solc compiles each of these as the constant.
+    function testFrozenCodeRecordWithAnOtherwiseSpacedDeployedAddressReverts() external {
+        string[] memory declarations = new string[](3);
+        declarations[0] = " address constant DEPLOYED_ADDRESS = address(0x000000000000000000000000000000000000dEaD);";
+        declarations[1] =
+        "address\tconstant DEPLOYED_ADDRESS_137 = address(0x000000000000000000000000000000000000dEaD);";
+        declarations[2] = "address  constant DEPLOYED_ADDRESS=address(0x000000000000000000000000000000000000dEaD);";
+        for (uint256 i = 0; i < declarations.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord(
+                "record.sol", string.concat(committedCodeRecord(), "\n", declarations[i], "\n")
+            );
+        }
+    }
+
+    /// A code record naming `DEPLOYED_ADDRESS` in a line comment is refused, its first line and its last among them.
+    function testFrozenCodeRecordNamingDeployedAddressInALineCommentReverts() external {
+        string[] memory records = new string[](2);
+        //REUSE-IgnoreStart
+        records[0] = vm.replace(
+            committedCodeRecord(),
+            "// SPDX-License-Identifier: MIT\n",
+            "// SPDX-License-Identifier: MIT DEPLOYED_ADDRESS\n"
+        );
+        //REUSE-IgnoreEnd
+        records[1] = string.concat(committedCodeRecord(), "// DEPLOYED_ADDRESS\n");
+        for (uint256 i = 0; i < records.length; i++) {
+            vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
+            this.externalCheckFrozenCodeRecord("record.sol", records[i]);
+        }
+    }
+
+    /// `DEPLOYED_ADDRESS` on the record's last line, with no line break after it, is refused like any other line.
+    function testFrozenCodeRecordNamingDeployedAddressOnItsLastLineReverts() external {
+        vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
+        this.externalCheckFrozenCodeRecord("record.sol", string.concat(committedCodeRecord(), "// DEPLOYED_ADDRESS"));
     }
 
     /// A deploy record named as a code record is refused for its address, so a

@@ -6,7 +6,8 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 
 /// @title LocalForkVm
-/// @notice Forks each catalogue alias as the local EVM at its catalogue chain id, or at `sReportedChainId` once set, and formats addresses as the cheatcodes do.
+/// @notice Forks each catalogue alias as the local EVM at its catalogue chain id, or at `sReportedChainId` once set,
+/// and formats addresses as the cheatcodes do.
 contract LocalForkVm {
     /// The cheatcodes this stands in front of.
     Vm internal constant VM = Vm(address(uint160(uint256(keccak256("hevm cheat code")))));

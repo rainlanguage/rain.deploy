@@ -25,6 +25,11 @@ relocated.
   freezes every contract the release before it froze unless
   `Build.retiredContracts()` lists it; dropping one from `generatedContracts()`
   alone fails `testNoReleaseDropsAContract`.
+- **`src/generated/extended/` is append-only too.** `run()` appends to it, and
+  `ExtendedNetworksRewritten` means a declaration would drop, change or reorder
+  a recorded network. Never delete or edit the file to get past it: fix the
+  declaration. CI does not notice a record deleted or edited together with its
+  declaration, nor one never committed.
 - **`CONFIG_REGISTRY_ROOT` is welded into the creation code.** Rotating it moves
   the deploy address, the code hash and the snapshot together, as an ordinary
   source change; the registry at the old address stays where it is.
@@ -37,12 +42,15 @@ relocated.
   the `src/abstract/` prefix.** Keep it that way when adding an abstract: a
   prefix filter would silently exempt a deployable file added there later.
 - **A `vm.createFork` or `vm.createSelectFork` failure is not a missing
-  deployment.** It is an unreachable or rate-limited endpoint. Only
-  `NotDeployedOnNetwork`, `MissingDependency` and `DependencyChanged`, from a
-  network that forked, say anything about the deployment. The deploy and the
-  chain matrix create every fork before selecting any, so such a failure takes
-  the whole run before any network is checked rather than stopping partway down
-  the list.
+  deployment.** It is an unreachable or rate-limited endpoint. A typed refusal
+  raised after a network forked, other than `NetworkChainIdMismatch` (which
+  describes the endpoint bound to the alias), describes the deployment
+  (`NotDeployedOnNetwork`, `CodeHashMismatchOnNetwork`, `MissingDependency`,
+  `DependencyChanged`, ...). The deploy and the chain matrix create every fork
+  before selecting any, so a `createFork` failure takes the whole run before any
+  network is checked rather than stopping partway down the list. Forks load
+  state lazily, so a backend or fetch error raised while reading forked state is
+  also the endpoint, and it can stop the run partway down the list.
 - **Foundry REFUSES a cheatcode write to the project root's own
   `foundry.toml`.** "access to `foundry.toml` is not allowed", from a guard on
   the path — no `fs_permissions` grant and no spelling of the path gets past it,

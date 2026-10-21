@@ -30,6 +30,23 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
         return suiteByName(requested);
     }
 
+    /// @param requested The suite key to select.
+    /// @return The index of the suite `requested` selects in `allSuites()`, its length if none.
+    function externalSuiteIndex(string memory requested) external view returns (uint256) {
+        return suiteIndex(allSuites(), requested);
+    }
+
+    /// @param suites The suites to search.
+    /// @param requested The suite key to select.
+    /// @return The index of the suite `requested` selects in `suites`, its length if none.
+    function externalSuiteIndexIn(DeploySuite[] memory suites, string memory requested)
+        external
+        pure
+        returns (uint256)
+    {
+        return suiteIndex(suites, requested);
+    }
+
     /// @return The declared keys, comma separated.
     function externalSuiteNames() external view returns (string memory) {
         return suiteNames();
@@ -47,6 +64,11 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
     /// @return The declared candidates, refusing an empty list.
     function externalCheckedCandidateSuites() external view returns (DeployCandidate[] memory) {
         return checkedCandidateSuites();
+    }
+
+    /// @return The record root the extended networks records are read from.
+    function externalExtendedNetworksRoot() external view returns (string memory) {
+        return extendedNetworksRoot();
     }
 
     /// Runs the source anchor over the fixture's own declaration.

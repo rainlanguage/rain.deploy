@@ -6,6 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {
     InvalidIdentifier,
+    NEWLINE_DUE_TO_MAX_LENGTH,
     RAIN_COPYRIGHT_TEXT,
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
@@ -236,6 +237,11 @@ contract LibRainDeploySnapshotTest is Test {
         writeFixture(path);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeLine(path, "address constant DEPLOYED_ADDRESS = address(0x0000000000000000000000000000000000000001);");
+    }
+
+    /// The wrapped-value indent the reader holds a record to is the one `LibCodeGen` writes.
+    function testWrappedIndentIsTheWritersLineWrap() external pure {
+        assertEq(string.concat("\n", LibRainDeploySnapshot.WRAPPED_INDENT), NEWLINE_DUE_TO_MAX_LENGTH);
     }
 
     /// A release tag is what `tagForVersion` produces and nothing else, so
@@ -3917,5 +3923,99 @@ contract LibRainDeploySnapshotTest is Test {
         );
         assertTrue(vm.contains(emitted, EXPECTED_PER_NETWORK_ENTRY));
         assertFalse(vm.contains(emitted, "DEPLOYED_ADDRESS"));
+    }
+
+    /// A block comment ends at its first `*/`, unterminated it runs to the end, and `/*` inside a line comment or a string opens none.
+    function testWithoutBlockCommentsReadsAsTheCompilerDoes() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/* b /* c */d"), "ad");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("left/* comment */middle*/right"), "leftmiddle*/right");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/*/b*/c"), "ac");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/* b"), "a");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a// /* b\nc/* d */e"), "a// /* b\nce");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"/*\"b/* c */d"), "a\"/*\"bd");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a'/*'b/**/c"), "a'/*'bc");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"\\\"/*\"b/**/c"), "a\"\\\"/*\"bc");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"/**/\"'/**/'"), "a\"/**/\"'/**/'");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/b/* c */d"), "a/bd");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("x = 1 / 2; /*\nz\n*/y"), "x = 1 / 2; \n\ny");
+    }
+
+    /// A quote of the other kind inside a string, or any quote inside a line comment, closes nothing.
+    function testWithoutBlockCommentsOtherQuotesCloseNothing() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"'/*\"b/**/c"), "a\"'/*\"bc");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a'\"/*'b/**/c"), "a'\"/*'bc");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("// it's /* x\ny"), "// it's /* x\ny");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("// a \"/* x\ny"), "// a \"/* x\ny");
+        assertEq(
+            LibRainDeploySnapshot.withoutBlockComments(
+                "string constant S = \"it's /* x\";\nbytes32 constant MECHANISM_DATA = 0;\n"
+            ),
+            "string constant S = \"it's /* x\";\nbytes32 constant MECHANISM_DATA = 0;\n"
+        );
+        assertEq(
+            LibRainDeploySnapshot.withoutBlockComments(
+                "/// it's /* not a comment\nbytes32 constant MECHANISM_DATA = 0;\n"
+            ),
+            "/// it's /* not a comment\nbytes32 constant MECHANISM_DATA = 0;\n"
+        );
+    }
+
+    /// A `//` comment runs to the next `\n` and no other byte, so what follows a carriage return in one is still
+    /// comment to the scanner.
+    function testWithoutBlockCommentsLineCommentEndsAtNewlineOnly() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("// c\rx/* y */z\n/* w */"), "// c\rx/* y */z\n");
+    }
+
+    /// A text ending mid-token is read to its last byte without reading past it.
+    function testWithoutBlockCommentsStopsAtTheLastByte() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/"), "a/");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a/* b*"), "a");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a\"\\"), "a\"\\");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("/"), "/");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("/*"), "");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments(""), "");
+    }
+
+    /// A line comment ends at its newline even after a backslash, so a block comment on the next line is still removed.
+    function testWithoutBlockCommentsLineCommentHasNoEscape() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a// x\\\nb/* c */d"), "a// x\\\nbd");
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("// \\\n/*\nz\n*/y"), "// \\\n\n\ny");
+    }
+
+    /// A block comment keeps its line breaks, so what follows a multi-line comment starts a line as the compiler reads it.
+    function testWithoutBlockCommentsKeepsLineBreaks() external pure {
+        assertEq(LibRainDeploySnapshot.withoutBlockComments("a; /* c\n*/b"), "a; \nb");
+    }
+
+    /// The paths a build declares: each candidate snapshot, each released-suites lib, then the aggregate.
+    function testGeneratedPathsAreEachCandidateEachReleasedLibAndTheAggregate() external pure {
+        string[] memory recordNames = new string[](2);
+        recordNames[0] = "Alpha";
+        recordNames[1] = "Beta";
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = "Alpha";
+
+        string[] memory paths = LibRainDeploySnapshot.generatedPaths(
+            "test/libs-declared", "test/generated-declared", recordNames, contractNames
+        );
+
+        assertEq(paths.length, 4);
+        assertEq(paths[0], "test/generated-declared/candidate/Alpha.sol");
+        assertEq(paths[1], "test/generated-declared/candidate/Beta.sol");
+        assertEq(paths[2], "test/libs-declared/LibAlphaReleased.sol");
+        assertEq(paths[3], "test/libs-declared/LibReleasedSuites.sol");
+    }
+
+    /// One `rainix-codegen owns` line per path, which is what `rainix-copy-artifacts` reads.
+    function testCodegenDeclarationIsOneOwnsLinePerPath() external pure {
+        string[] memory paths = new string[](2);
+        paths[0] = "src/generated/candidate/Alpha.sol";
+        paths[1] = "src/lib/LibReleasedSuites.sol";
+
+        string[] memory lines = LibRainDeploySnapshot.codegenDeclaration(paths);
+
+        assertEq(lines.length, 2);
+        assertEq(lines[0], "rainix-codegen owns src/generated/candidate/Alpha.sol");
+        assertEq(lines[1], "rainix-codegen owns src/lib/LibReleasedSuites.sol");
     }
 }

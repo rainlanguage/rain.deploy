@@ -7,13 +7,13 @@ import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// @title RainDeployVerifySnapshot
 /// @notice What a deploy repo inherits: every assertion that needs no network,
-/// bound to that repo. `RainDeployVerifySnapshotBase` is where the three
+/// bound to that repo. `RainDeployVerifySnapshotBase` is where the offline
 /// deploy-pin groups are defined and documented; this adds the test whose
 /// subject is the repo's own state on disk — its frozen record — rather than
 /// anything the inheriting contract declares.
 ///
 /// The split is which contract carries that test, and nothing else. A consumer
-/// inherits this and gets all three groups, exactly as it does when they are
+/// inherits this and gets all of them, exactly as it does when they are
 /// one contract. The base is for a contract whose declaration is a FIXTURE —
 /// the record is not its subject, and see the base for why asking it about the
 /// record asserts something false.

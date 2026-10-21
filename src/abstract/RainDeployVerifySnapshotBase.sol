@@ -43,13 +43,18 @@ error FrozenSnapshotNotReleased(string path);
 /// @param released The released suites whose mechanism derives them.
 error FrozenSnapshotsOutnumberReleases(string path, address[] deployedAddresses, uint256 records, uint256 released);
 /// Thrown when a frozen code record — a parameterised contract's snapshot, which records code and
-/// no deploy — declares a deployed address, either `DEPLOYED_ADDRESS` or a per-network
-/// `DEPLOYED_ADDRESS_<chainId>`.
+/// no deploy — names `DEPLOYED_ADDRESS` on any line outside a block comment, as `DEPLOYED_ADDRESS`, a per-network
+/// `DEPLOYED_ADDRESS_<chainId>` or any other spelling. Line comments count, the SPDX header's among them, so a
+/// licence identifier or copyright text naming `DEPLOYED_ADDRESS` is refused too.
 /// @param path The record file.
 error FrozenCodeRecordDeclaresDeployedAddress(string path);
 
-/// Thrown when a frozen code record does not declare one of the constants a
-/// code record is: `BYTECODE_HASH`, `CREATION_CODE` and `RUNTIME_CODE`.
+/// Thrown when a frozen code record does not declare one of the constants a code record is, `BYTECODE_HASH`,
+/// `CREATION_CODE` and `RUNTIME_CODE`, on a line starting with its declaration; declares one, on such a line, outside
+/// the writer's format (`=` fourth of five space-separated tokens, or wrapped onto the next line at a four-space
+/// indent); gives a `bytes` constant a value that is not one `hex"..."` literal of whole bytes, or the `bytes32`
+/// constant a value that is not one `bytes32(0x...)` of `0x` and 64 hex digits; or holds a line break other than `\n`
+/// that solc honours.
 /// @param path The record file.
 error FrozenCodeRecordUnreadable(string path);
 
@@ -239,9 +244,20 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         return index;
     }
 
-    /// The value of a `bytes` constant a code record declares: the `hex"..."`
-    /// literal on the declaration's line, or on the line after it when the
-    /// generator wrapped the declaration.
+    /// The value a code record's declaration on `lines[line]` gives, read by `LibRainDeploySnapshot.declarationValue`
+    /// at the writer's `LibRainDeploySnapshot.WRAPPED_INDENT`. An unreadable declaration gives an empty token, which
+    /// splits into one part, so `declaredBytes` and `declaredBytes32` refuse it at their opened-count check.
+    /// @param lines The record's lines, block comments removed.
+    /// @param line The declaration's line.
+    /// @return The value's token, empty when not readable.
+    function declaredValue(string[] memory lines, uint256 line) internal pure returns (string memory) {
+        (, string memory value) =
+            LibRainDeploySnapshot.declarationValue(vm, lines, line, LibRainDeploySnapshot.WRAPPED_INDENT);
+        return value;
+    }
+
+    /// The value of a `bytes` constant a code record declares: its `hex"..."` literal, read by `declaredValue`, with
+    /// nothing after the closing quote but the writer's `;`.
     /// @param path The record file, for the error only.
     /// @param lines The record's lines, block comments removed.
     /// @param line The declaration's line.
@@ -251,55 +267,74 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         pure
         returns (bytes memory)
     {
-        string memory literal = lines[line];
-        if (vm.indexOf(literal, "hex\"") == type(uint256).max) {
-            if (line + 1 >= lines.length) {
-                revert FrozenCodeRecordUnreadable(path);
-            }
-            literal = lines[line + 1];
-        }
-        string[] memory opened = vm.split(literal, "hex\"");
-        if (opened.length != 2) {
+        string[] memory opened = vm.split(declaredValue(lines, line), "hex\"");
+        if (opened.length != 2 || bytes(opened[0]).length != 0) {
             revert FrozenCodeRecordUnreadable(path);
         }
         string[] memory closed = vm.split(opened[1], "\"");
-        return vm.parseBytes(string.concat("0x", closed[0]));
+        if (closed.length != 2 || keccak256(bytes(closed[1])) != keccak256(";")) {
+            revert FrozenCodeRecordUnreadable(path);
+        }
+        try vm.parseBytes(string.concat("0x", closed[0])) returns (bytes memory declared) {
+            return declared;
+        } catch {
+            revert FrozenCodeRecordUnreadable(path);
+        }
     }
 
-    /// The value of the `BYTECODE_HASH` a code record declares: the
-    /// `bytes32(0x...)` literal ending the declaration's line.
+    /// The value of the `bytes32` constant a code record declares: its `bytes32(0x...)` wrapper, read by
+    /// `declaredValue`, holding `0x` and exactly 64 hex digits, with nothing after the closing parenthesis but the
+    /// writer's `;`. `vm.parseBytes32` refuses any other digit count but reads digits without `0x`, so only the
+    /// prefix is checked here.
+    /// @param path The record file, for the error only.
     /// @param lines The record's lines, block comments removed.
     /// @param line The declaration's line.
-    /// @return The hash.
-    function declaredBytecodeHash(string[] memory lines, uint256 line) internal pure returns (bytes32) {
-        string[] memory tokens = vm.split(lines[line], " ");
-        return vm.parseBytes32(
-            vm.replace(vm.replace(vm.replace(tokens[tokens.length - 1], "bytes32(", ""), ")", ""), ";", "")
-        );
+    /// @return The bytes32.
+    function declaredBytes32(string memory path, string[] memory lines, uint256 line) internal pure returns (bytes32) {
+        string[] memory opened = vm.split(declaredValue(lines, line), "bytes32(");
+        if (opened.length != 2 || bytes(opened[0]).length != 0) {
+            revert FrozenCodeRecordUnreadable(path);
+        }
+        string[] memory closed = vm.split(opened[1], ")");
+        if (closed.length != 2 || keccak256(bytes(closed[1])) != keccak256(";") || vm.indexOf(closed[0], "0x") != 0) {
+            revert FrozenCodeRecordUnreadable(path);
+        }
+        try vm.parseBytes32(closed[0]) returns (bytes32 declared) {
+            return declared;
+        } catch {
+            revert FrozenCodeRecordUnreadable(path);
+        }
     }
 
     /// Checks one frozen code record against itself.
     /// @param path The record file, for the error only.
     /// @param record The record file's contents.
     function checkFrozenCodeRecord(string memory path, string memory record) internal pure {
-        string[] memory lines = vm.split(LibRainDeploySnapshot.withoutBlockComments(vm, record), "\n");
+        if (LibRainDeploySnapshot.hasForeignLineBreak(vm, record)) {
+            revert FrozenCodeRecordUnreadable(path);
+        }
+        string[] memory lines = LibRainDeploySnapshot.splitRecordLines(vm, record);
         for (uint256 i = 0; i < lines.length; i++) {
-            if (
-                vm.indexOf(lines[i], LibRainDeploySnapshot.DEPLOYED_ADDRESS_DECLARATION) == 0
-                    || vm.indexOf(lines[i], LibRainDeploySnapshot.DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX) == 0
-            ) {
+            if (vm.contains(lines[i], LibRainDeploySnapshot.DEPLOYED_ADDRESS_NAME)) {
                 revert FrozenCodeRecordDeclaresDeployedAddress(path);
             }
         }
         uint256 hashLine = declarationLine(path, lines, BYTECODE_HASH_DECLARATION);
-        declarationLine(path, lines, CREATION_CODE_DECLARATION);
+        declaredBytes(path, lines, declarationLine(path, lines, CREATION_CODE_DECLARATION));
         uint256 runtimeLine = declarationLine(path, lines, RUNTIME_CODE_DECLARATION);
 
-        bytes32 storedBytecodeHash = declaredBytecodeHash(lines, hashLine);
+        bytes32 storedBytecodeHash = declaredBytes32(path, lines, hashLine);
         bytes32 runtimeCodeHash = keccak256(declaredBytes(path, lines, runtimeLine));
         if (runtimeCodeHash != storedBytecodeHash) {
             revert FrozenCodeRecordInconsistent(path, storedBytecodeHash, runtimeCodeHash);
         }
+    }
+
+    /// Every declared beacon MUST resolve offline: released suite keys, named once, on a supported network, declared
+    /// once on its network, a beacon suite seating its initial state, and each transition naming a distinct, recordable
+    /// migration. Reads `supportedNetworks()` only when a beacon is declared.
+    function testBeaconDeclarationsResolve() external {
+        resolveSupportedBeacons();
     }
 
     /// Every declared suite MUST be internally consistent.

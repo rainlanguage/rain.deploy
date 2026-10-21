@@ -179,6 +179,21 @@ contract LibRainDeployTest is Test {
         assertEq(configs[8].chainId, 4663);
     }
 
+    /// `networkChainIds` gives each network's chain id in the networks' order, repeats included, and none for none.
+    function testNetworkChainIdsFollowTheNetworks() external pure {
+        SupportedNetwork[] memory networks = new SupportedNetwork[](3);
+        networks[0] = SupportedNetwork({name: "b", chainId: 7, explorerUrl: "", defaultRpcUrl: ""});
+        networks[1] = SupportedNetwork({name: "a", chainId: 3, explorerUrl: "", defaultRpcUrl: ""});
+        networks[2] = SupportedNetwork({name: "c", chainId: 7, explorerUrl: "", defaultRpcUrl: ""});
+        uint256[] memory chainIds = LibRainDeploy.networkChainIds(networks);
+        assertEq(chainIds.length, 3);
+        assertEq(chainIds[0], 7);
+        assertEq(chainIds[1], 3);
+        assertEq(chainIds[2], 7);
+
+        assertEq(LibRainDeploy.networkChainIds(new SupportedNetwork[](0)).length, 0);
+    }
+
     /// Only Robinhood Chain states an explorer url, because it is the only
     /// supported network Etherscan V2 does not index.
     ///
@@ -2522,5 +2537,61 @@ contract LibRainDeployTest is Test {
         // live factory on a fork.
         assertEq(deployedWord, uint256(uint160(0x7DA611e4146dCf0107407Bb331599acC53E8B62c)));
         assertEq(deployed.codehash, mockDeployableCodeHash());
+    }
+
+    /// External wrapper for `checkDeployedCode`.
+    /// @param deployedAddress The address checked.
+    /// @param expectedCodeHash The code hash it must hold.
+    function externalCheckDeployedCode(address deployedAddress, bytes32 expectedCodeHash) external view {
+        LibRainDeploy.checkDeployedCode(LibRainDeploy.ARBITRUM_ONE, deployedAddress, expectedCodeHash);
+    }
+
+    /// Code at the address that hashes to anything but the expected hash MUST be refused.
+    function testCheckDeployedCodeRefusesOtherCode() external {
+        address deployedAddress = address(0xabc);
+        vm.etch(deployedAddress, hex"00");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.CodeHashMismatchOnNetwork.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                deployedAddress,
+                keccak256(hex"01"),
+                keccak256(hex"00")
+            )
+        );
+        this.externalCheckDeployedCode(deployedAddress, keccak256(hex"01"));
+    }
+
+    /// External wrapper for `zoltuDeployStep`.
+    /// @param creationCode The step data.
+    /// @return The address the step reports.
+    function externalZoltuDeployStep(bytes memory creationCode) external returns (address) {
+        return LibRainDeploy.zoltuDeployStep(vm, LibRainDeploy.ARBITRUM_ONE, address(this), creationCode);
+    }
+
+    /// The Zoltu step MUST refuse a factory whose code is not the pinned factory's before calling it.
+    function testZoltuDeployStepRefusesChangedFactory() external {
+        vm.etch(LibRainDeploy.ZOLTU_FACTORY, hex"00");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.DependencyChanged.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                LibRainDeploy.ZOLTU_FACTORY,
+                LibRainDeploy.ZOLTU_FACTORY_CODEHASH,
+                keccak256(hex"00")
+            )
+        );
+        this.externalZoltuDeployStep(type(MockDeployable).creationCode);
+    }
+
+    function testHasChainIdFindsEachNetworkAndNoOther() external pure {
+        string[] memory names = new string[](2);
+        names[0] = LibRainDeploy.ARBITRUM_ONE;
+        names[1] = LibRainDeploy.BASE;
+        SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(names);
+        assertTrue(LibRainDeploy.hasChainId(networks, LibResolvedReadFixture.ARBITRUM_ONE_CHAIN_ID));
+        assertTrue(LibRainDeploy.hasChainId(networks, LibResolvedReadFixture.BASE_CHAIN_ID));
+        assertFalse(LibRainDeploy.hasChainId(networks, 1));
+        assertFalse(LibRainDeploy.hasChainId(new SupportedNetwork[](0), LibResolvedReadFixture.BASE_CHAIN_ID));
     }
 }

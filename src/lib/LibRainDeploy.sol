@@ -452,6 +452,29 @@ library LibRainDeploy {
         return names;
     }
 
+    /// The chain id of each network, in order.
+    /// @param networks The networks.
+    /// @return Each network's chain id, positionally paired with `networks`.
+    function networkChainIds(SupportedNetwork[] memory networks) internal pure returns (uint256[] memory) {
+        uint256[] memory chainIds = new uint256[](networks.length);
+        for (uint256 i = 0; i < networks.length; i++) {
+            chainIds[i] = networks[i].chainId;
+        }
+        return chainIds;
+    }
+
+    /// @param networks The networks.
+    /// @param chainId The chain id.
+    /// @return Whether one of `networks` has `chainId`.
+    function hasChainId(SupportedNetwork[] memory networks, uint256 chainId) internal pure returns (bool) {
+        for (uint256 i = 0; i < networks.length; i++) {
+            if (networks[i].chainId == chainId) {
+                return true;
+            }
+        }
+        return false;
+    }
+
     /// Requires the currently selected fork to report the chain id a network's catalogue entry
     /// declares.
     /// @param network The catalogue entry of the network the selected fork is meant to be.

@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {CloneDeploy} from "../../src/lib/LibRainDeployClone.sol";
+import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ExampleCloneDeploys} from "../abstract/ExampleCloneDeploys.sol";
@@ -21,6 +23,16 @@ contract ExampleCloneDeploy is
     ExternalDeploySuites,
     RainDeployBroadcast
 {
+    /// @inheritdoc ExampleCloneDeploys
+    function cloneDeploys()
+        internal
+        pure
+        override(ExampleCloneDeploys, RainDeployCloneSuitesBase)
+        returns (CloneDeploy[] memory)
+    {
+        return ExampleCloneDeploys.cloneDeploys();
+    }
+
     /// @return The networks a broadcast would go to.
     function externalDeployNetworks() external view returns (string[] memory) {
         return deployNetworks();

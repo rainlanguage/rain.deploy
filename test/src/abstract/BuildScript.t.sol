@@ -6,13 +6,31 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {CloneDeploy, CloneNetwork, CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
+import {ExtendedNetworkAddressMismatch, ExtendedNetworksUnexpected} from "../../../src/lib/LibRainDeployMechanism.sol";
+import {
+    ExtendedNetworksRewritten,
+    LibRainDeployExtendedNetworks
+} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {
+    LibCodeGen,
+    RAIN_COPYRIGHT_TEXT,
+    RAIN_SPDX_LICENSE_IDENTIFIER
+} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
 import {CloneBuildScriptHarness} from "../../concrete/CloneBuildScriptHarness.sol";
 import {PerNetworkCloneBuildScriptHarness} from "../../concrete/PerNetworkCloneBuildScriptHarness.sol";
 import {
+    SECOND_RELEASE_KEY,
+    TwoReleasePerNetworkCloneBuildScriptHarness
+} from "../../concrete/TwoReleasePerNetworkCloneBuildScriptHarness.sol";
+import {
+    PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
     PER_NETWORK_CLONE_RECORD_CONTRACT,
     PER_NETWORK_CLONE_RECORD_ROOT,
-    PER_NETWORK_CLONE_RELEASE_TAG
+    PER_NETWORK_CLONE_RELEASE_TAG,
+    perNetworkCloneInitData,
+    perNetworkCloneRelease
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {
     EXAMPLE_CLONE_RECORD_CONTRACT,
@@ -74,6 +92,9 @@ contract BuildScriptTest is Test {
     /// `fixture-lib` for the reason `CLONE_CUT_LIB_DIR` is.
     string constant PER_NETWORK_CLONE_CUT_LIB_DIR = "fixture-lib/buildscript-per-network-clone-cut";
 
+    /// Where the extended networks fixture's records are written. Under `fixture-lib`, which nothing compiles.
+    string constant EXTENDED_NETWORKS_FIXTURE_ROOT = "fixture-lib/buildscript-extended-networks";
+
     /// Carries its AST because `foundry.toml` sets `ast = true`.
     string constant BASE_ARTIFACT = "out/BuildScript.sol/BuildScript.json";
 
@@ -123,6 +144,21 @@ contract BuildScriptTest is Test {
         assertEq(libs, harness.libsMarker(0, true));
         assertEq(record.length, 0);
         assertFalse(frozenExists);
+    }
+
+    /// PROPERTY: `run()` declares the rolling snapshot its hook writes, the
+    /// contract's released-suites lib and the aggregate.
+    function testRunDeclaresTheRollingSnapshotAndTheReleasedLibs() external {
+        BuildScriptHarness harness = new BuildScriptHarness(RUN_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        string[] memory paths = harness.externalGeneratedPaths();
+
+        assertEq(paths.length, 5);
+        assertEq(paths[0], harness.rollingPath());
+        assertEq(paths[0], "test/generated-buildscript-run/candidate/Fixture.sol");
+        assertEq(paths[1], "src/lib/LibFixtureReleased.sol");
+        assertEq(paths[2], "src/lib/LibReleasedSuites.sol");
+        assertEq(paths[3], "foundry.toml");
+        assertEq(paths[4], ".env.example");
     }
 
     /// PROPERTY: `cutRelease()` freezes the snapshot its OWN regeneration
@@ -278,6 +314,241 @@ contract BuildScriptTest is Test {
             vm.contains(lib, string.concat("mechanismData: ", prefix, "_MECHANISM_DATA")),
             "and is the release's mechanism data"
         );
+    }
+
+    /// PROPERTY: the build writes each release's declared extended networks to its record under the declared
+    /// licence, writes nothing for a release declaring none, and refuses a declaration that drops a recorded network.
+    function testRegenerateExtendedNetworksWritesTheRecord() external {
+        resetFixture(EXTENDED_NETWORKS_FIXTURE_ROOT);
+        PerNetworkCloneBuildScriptHarness harness =
+            new PerNetworkCloneBuildScriptHarness(EXTENDED_NETWORKS_FIXTURE_ROOT, EXTENDED_NETWORKS_FIXTURE_ROOT);
+        (,, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(
+            EXTENDED_NETWORKS_FIXTURE_ROOT, "per-network-clone@0_0_1"
+        );
+
+        harness.externalRegenerateExtendedNetworks();
+        assertFalse(vm.exists(path), "a release declaring nothing has no record");
+
+        CloneNetwork[] memory networks = new CloneNetwork[](2);
+        networks[0] = extendedNetwork(8453, hex"00aa");
+        networks[1] = extendedNetwork(1, hex"");
+        CloneNetwork[] memory first = new CloneNetwork[](1);
+        first[0] = networks[0];
+        harness.setExtendedNetworks(first);
+        harness.externalRegenerateExtendedNetworks();
+        string memory rainRecord = vm.readFile(path);
+
+        harness.setExtendedNetworksLicence("MIT", "Copyright (c) Someone");
+        harness.setExtendedNetworks(networks);
+        harness.externalRegenerateExtendedNetworks();
+        string memory mitRecord = vm.readFile(path);
+
+        harness.setExtendedNetworks(new CloneNetwork[](0));
+        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksRewritten.selector, "per-network-clone@0_0_1", 0));
+        harness.externalRegenerateExtendedNetworks();
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(EXTENDED_NETWORKS_FIXTURE_ROOT, true);
+
+        assertEq(
+            rainRecord,
+            string.concat(
+                LibCodeGen.filePrefix(RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT),
+                LibRainDeployExtendedNetworks.extendedNetworksBody(vm, first)
+            )
+        );
+        assertEq(
+            mitRecord,
+            string.concat(
+                LibCodeGen.filePrefix("MIT", "Copyright (c) Someone"),
+                LibRainDeployExtendedNetworks.extendedNetworksBody(vm, networks)
+            )
+        );
+    }
+
+    /// PROPERTY: `run()` writes each release's declared extended networks to its record.
+    function testRunWritesTheExtendedNetworksRecord() external {
+        string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-run");
+        resetFixture(root);
+        new BuildScriptHarness(root, FIXTURE_CONTRACT).seedConfig();
+        PerNetworkCloneBuildScriptHarness harness = new PerNetworkCloneBuildScriptHarness(root, root);
+        CloneNetwork[] memory networks = new CloneNetwork[](1);
+        networks[0] = extendedNetwork(8453, hex"00aa");
+        harness.setExtendedNetworks(networks);
+        harness.run();
+
+        (,, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, "per-network-clone@0_0_1");
+        string memory written = vm.readFile(path);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
+
+        assertEq(
+            written,
+            string.concat(
+                LibCodeGen.filePrefix(RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT),
+                LibRainDeployExtendedNetworks.extendedNetworksBody(vm, networks)
+            )
+        );
+    }
+
+    /// PROPERTY: `run()` declares the extended networks record of each release that declares extended networks,
+    /// and only those, and writes the one it declares.
+    function testRunDeclaresTheExtendedNetworksRecordsItWrites() external {
+        string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-run-declared");
+        resetFixture(root);
+        new BuildScriptHarness(root, FIXTURE_CONTRACT).seedConfig();
+        TwoReleasePerNetworkCloneBuildScriptHarness harness =
+            new TwoReleasePerNetworkCloneBuildScriptHarness(root, root);
+        CloneNetwork[] memory second = new CloneNetwork[](1);
+        second[0] = extendedNetwork(1, hex"00bb");
+        harness.setSecondExtendedNetworks(second);
+
+        string[] memory undeclared = new PerNetworkCloneBuildScriptHarness(root, root).externalGeneratedPaths();
+        string[] memory paths = harness.externalGeneratedPaths();
+        harness.run();
+        (,, string memory firstPath) =
+            LibRainDeployExtendedNetworks.extendedNetworksPath(root, "per-network-clone@0_0_1");
+        (,, string memory secondPath) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, SECOND_RELEASE_KEY);
+        bool firstWritten = vm.exists(firstPath);
+        bool secondWritten = vm.exists(secondPath);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
+
+        assertEq(paths.length, undeclared.length + 1);
+        for (uint256 i = 0; i < undeclared.length; i++) {
+            assertEq(paths[i], undeclared[i]);
+        }
+        assertEq(paths[paths.length - 1], secondPath);
+        assertTrue(secondWritten);
+        assertFalse(firstWritten);
+    }
+
+    /// PROPERTY: the build writes each release's record from that release's own declaration, under that release's
+    /// key.
+    function testRegenerateExtendedNetworksWritesEachReleasesOwnRecord() external {
+        string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-two-releases");
+        resetFixture(root);
+        TwoReleasePerNetworkCloneBuildScriptHarness harness =
+            new TwoReleasePerNetworkCloneBuildScriptHarness(root, root);
+        CloneNetwork[] memory first = new CloneNetwork[](1);
+        first[0] = extendedNetwork(8453, hex"00aa");
+        CloneNetwork[] memory second = new CloneNetwork[](1);
+        second[0] = extendedNetwork(1, hex"00bb");
+        harness.setExtendedNetworks(first);
+        harness.setSecondExtendedNetworks(second);
+
+        harness.externalRegenerateExtendedNetworks();
+        (,, string memory firstPath) =
+            LibRainDeployExtendedNetworks.extendedNetworksPath(root, "per-network-clone@0_0_1");
+        (,, string memory secondPath) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, SECOND_RELEASE_KEY);
+        string memory firstRecord = vm.readFile(firstPath);
+        string memory secondRecord = vm.readFile(secondPath);
+        bytes memory firstRead =
+            abi.encode(LibRainDeployExtendedNetworks.recordedExtendedNetworks(vm, root, "per-network-clone@0_0_1"));
+        bytes memory secondRead =
+            abi.encode(LibRainDeployExtendedNetworks.recordedExtendedNetworks(vm, root, SECOND_RELEASE_KEY));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
+
+        assertEq(firstRead, abi.encode(first));
+        assertEq(secondRead, abi.encode(second));
+        string memory prefix = LibCodeGen.filePrefix(RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT);
+        assertEq(firstRecord, string.concat(prefix, LibRainDeployExtendedNetworks.extendedNetworksBody(vm, first)));
+        assertEq(secondRecord, string.concat(prefix, LibRainDeployExtendedNetworks.extendedNetworksBody(vm, second)));
+    }
+
+    /// A network beyond the per-network release's record, at the address its init data derives under the release.
+    /// @param chainId The network's chain id.
+    /// @param data The init data.
+    /// @return The network.
+    function extendedNetwork(uint256 chainId, bytes memory data) internal pure returns (CloneNetwork memory) {
+        CloneDeploy memory release = perNetworkCloneRelease();
+        return CloneNetwork({
+            chainId: chainId,
+            data: data,
+            deployedAddress: LibRainDeployClone.cloneDeployedAddress(
+                CloneTarget({
+                    factory: release.factory, implementation: release.implementation, data: data, salt: release.salt
+                })
+            )
+        });
+    }
+
+    /// Runs the build over a fresh per-network harness declaring `networks`, expecting `err`, and checks that
+    /// nothing was written under its extended networks root.
+    /// @param label The fixture root's suffix, one per test.
+    /// @param networks The networks declared.
+    /// @param err The revert expected.
+    function checkExtendedNetworksRefused(string memory label, CloneNetwork[] memory networks, bytes memory err)
+        internal
+    {
+        string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-", label);
+        resetFixture(root);
+        PerNetworkCloneBuildScriptHarness harness = new PerNetworkCloneBuildScriptHarness(root, root);
+        harness.setExtendedNetworks(networks);
+        vm.expectRevert(err);
+        harness.externalRegenerateExtendedNetworks();
+        assertFalse(vm.exists(string.concat(root, "/extended")), "a refused declaration wrote a record");
+    }
+
+    /// PROPERTY: the build refuses, before writing, an extended network at an address its init data does not derive.
+    function testRegenerateExtendedNetworksRefusesAMisderivedAddress() external {
+        CloneNetwork[] memory networks = new CloneNetwork[](1);
+        networks[0] = extendedNetwork(8453, hex"00aa");
+        address derived = networks[0].deployedAddress;
+        networks[0].deployedAddress = address(0x1111111111111111111111111111111111111111);
+        checkExtendedNetworksRefused(
+            "misderived",
+            networks,
+            abi.encodeWithSelector(
+                ExtendedNetworkAddressMismatch.selector,
+                "per-network-clone@0_0_1",
+                8453,
+                derived,
+                address(0x1111111111111111111111111111111111111111)
+            )
+        );
+    }
+
+    /// PROPERTY: the build refuses, before writing, an extended network the release records.
+    function testRegenerateExtendedNetworksRefusesARecordedNetwork() external {
+        CloneNetwork[] memory networks = new CloneNetwork[](1);
+        networks[0] = extendedNetwork(
+            PER_NETWORK_CLONE_POLYGON_CHAIN_ID, perNetworkCloneInitData(PER_NETWORK_CLONE_POLYGON_CHAIN_ID)
+        );
+        checkExtendedNetworksRefused(
+            "recorded",
+            networks,
+            abi.encodeWithSelector(
+                LibRainDeployClone.DuplicateCloneNetwork.selector, PER_NETWORK_CLONE_POLYGON_CHAIN_ID
+            )
+        );
+    }
+
+    /// PROPERTY: the build refuses, before writing, an extended network declared twice, which would write a record
+    /// declaring one constant twice.
+    function testRegenerateExtendedNetworksRefusesANetworkTwice() external {
+        CloneNetwork[] memory networks = new CloneNetwork[](2);
+        networks[0] = extendedNetwork(8453, hex"00aa");
+        networks[1] = extendedNetwork(8453, hex"00bb");
+        checkExtendedNetworksRefused(
+            "twice", networks, abi.encodeWithSelector(LibRainDeployClone.DuplicateCloneNetwork.selector, 8453)
+        );
+    }
+
+    /// PROPERTY: the build refuses, before writing, an extended network declared for a release that is not per
+    /// network.
+    function testRegenerateExtendedNetworksRefusesANonPerNetworkRelease() external {
+        string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-not-per-network");
+        resetFixture(root);
+        CloneBuildScriptHarness harness = new CloneBuildScriptHarness(root, root);
+        CloneNetwork[] memory networks = new CloneNetwork[](1);
+        networks[0] = extendedNetwork(8453, hex"00aa");
+        harness.setExtendedNetworks(networks);
+        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnexpected.selector, "example-clone@0_0_1"));
+        harness.externalRegenerateExtendedNetworks();
+        assertFalse(vm.exists(string.concat(root, "/extended")), "a refused declaration wrote a record");
     }
 
     function testRunStagesTheNetworkConfig() external {
@@ -445,8 +716,15 @@ contract BuildScriptTest is Test {
             );
         }
 
+        assertTrue(
+            referencesId(called, declarationId(json, namedFunctionPath(json, members, "declareGeneratedPaths"))),
+            "run() does not declare its generated paths"
+        );
+
         assertGt(generators, 0, "the base declares no generator");
-        assertEq(called.length, generators, "run() holds a call that is not one of those generators");
+        assertEq(
+            called.length, generators + 1, "run() holds a call that is not one of those generators or the declaration"
+        );
     }
 
     /// PROPERTY: every hook the base declares is reached from an entry point.
@@ -722,6 +1000,12 @@ contract BuildScriptTest is Test {
         for (uint256 i = 0; i < keys.length; i++) {
             string memory child = string.concat(path, ".", keys[i]);
             collectReferences(json, child, references);
+            // An object child is a node, walked above; only an array child is indexed. JSONPath indexes an object
+            // as well, so indexing a node such as a `for` loop's `initializationExpression` would select its
+            // fields rather than array elements.
+            if (vm.keyExistsJson(json, string.concat(child, ".nodeType"))) {
+                continue;
+            }
             for (uint256 j = 0; vm.keyExistsJson(json, string.concat(child, "[", vm.toString(j), "].nodeType")); j++) {
                 collectReferences(json, string.concat(child, "[", vm.toString(j), "]"), references);
             }

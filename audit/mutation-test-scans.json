@@ -283,6 +283,102 @@
     ]
   },
   {
+    "timestamp": "2026-10-18T20:18:20Z",
+    "commit": "e31110332d7fe98a85bc08b738612d7b859c564f",
+    "testsAfterCommit": "cfb6209c86697b7976585a678db09247492cc251",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 88,
+    "scope": "PR #308 (#274), upgradeable beacons: src/abstract/RainDeployVerifyChain.sol checkDeployedOnNetworks/checkResolvedBeacon/resolveBeacons/resolveBeacon/resolveReleased (V), src/lib/LibRainDeployBeacon.sol (B), src/lib/LibRainDeploy.sol hasChainId (H), src/abstract/RainDeploySuitesBase.sol beacons/suiteByName/suiteIndex (S)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 64,
+      "behavioursProbed": 64,
+      "killedByExistingTests": 60,
+      "gapsFilled": 2,
+      "equivalentMutants": 2,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "64 mutants (V 34, B 22, H 2, S 6) probed with mutation-probe against the suite at the scanned commit, which already carries this round's audit-finding tests (shared declaration across two chains, declaration left unwritten, two-word pendingOwner, no fork after the unchecked-network refusals, hasChainId, suiteIndex not found, stateAt out of range). Those tests are counted as existing: V01 (declaration not copied) is killed by testOneDeclarationSharedByTwoChainsResolvesOnEach and testResolvingABeaconLeavesItsDeclarationUnwritten, B18 (pending guard length >= 0x20) by testBeaconAnsweringPendingOwnerWithTwoWordsPasses.",
+      "Harness: a transport-aware wrapper around forge test (a red tally of only transport failures is retried after 60s and withheld after three attempts, scoring NO-RUN). Narrow suite: contracts matching Beacon|RainDeploySuitesBaseTest plus LibRainDeployTest testHasChainId, baseline 119. Wide suite, used for the narrow survivors: adds RainDeployVerifyChain*, RainDeployVerify*, RegistryDeployVerify*, baseline 257 then 259. Killers the fail-pattern could not name (V04, V20, V23, V24, B18) were read from the retained run logs: testBeaconNamedBySuiteAndAddressIsRefused, testBeaconNamedTwiceBehindAValidBeaconReportsItsIndex, testBeaconNamedByAddressAloneIsRefused, testUnnamedBeaconIsRefused, testBeaconAnsweringPendingOwnerWithTwoWordsPasses.",
+      "Narrow-suite survivors killed by the wide pre-existing suite: V06 (empty return ignoring suites) by testUndeclaredNetworkIsRefusedBeforeAnyFork; S06 (default beacons() non-empty) by testChainMatrixForksOnlyTheDeclaredNetworks.",
+      "Gaps filled at cfb6209, each passing at baseline and failing under its mutant (read from the run logs): V16 (resolveBeacons write index not advanced, every beacon resolved into slot 0, so only the last beacon was checked) by testABeaconBeforeAValidOneOnItsNetworkIsChecked; B19 (pendingOwner guard dropping success) by testBeaconRevertingPendingOwnerWithAWordPasses, a beacon whose pendingOwner() reverts with one nonzero word.",
+      "Equivalent mutant S05: suiteIndex returning the last match instead of the first changes nothing while keys are unique, and they are: allSuites() refuses a duplicate with DuplicateDeploySuite, suiteByName searches allSuites() itself, and the released suites resolveReleased searches are among those testSnapshotInternallyConsistent holds to allSuites().",
+      "Equivalent mutant B14: doubled copying from index 1 instead of 0. Index 0 is always later, read before anything else is reached. A record names only records that exist when it is written (PrerequisiteNotApplied) and is never rewritten (MigrationAlreadyApplied), so no walk reaches later again and dropping its record and key changes nothing.",
+      "Adversarial pass: no candidate bugs. The resolveBeacon copy shares initial and transitions with the declaration, which nothing writes; a reverting or non-one-word pendingOwner answer is treated as no pending owner, per the NatSpec."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T05:46:21Z",
+    "commit": "0f34914e426d54161b3185a7108d833a716b1971",
+    "testsAfterCommit": "75a5ba63541be5340a254697de67502735f3a8e2",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 91,
+    "scope": "PR #308 (#274) re-audit round: the mutants named by the open rain-marvin threads in src/lib/LibRainDeployBeacon.sol checkBeacon (pendingOwner guard) and src/abstract/RainDeployVerifyChain.sol resolveBeacons/resolveBeacon",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 6,
+      "behavioursProbed": 6,
+      "killedByExistingTests": 3,
+      "gapsFilled": 3,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|RainDeploySuitesBaseTest, baseline 120 at the scanned commit, 124 after. Pre-existing suite probed in a fresh clone at the scanned commit before any new test.",
+      "Killed by the pre-existing suite: pending guard length >= 0x20 (testBeaconAnsweringPendingOwnerWithTwoWordsPasses), pending guard dropping success (testBeaconRevertingPendingOwnerWithAWordPasses), resolveBeacon writing the declaration (testOneDeclarationSharedByTwoChainsResolvesOnEach, testResolvingABeaconLeavesItsDeclarationUnwritten).",
+      "Gaps filled: pendingOwner != 0 to > 1 by testBeaconWithTheSmallestPendingOwnerIsRefused; BeaconOnUncheckedNetwork skipped for a checked network by testBeaconOnACheckedNetworkOffTheSupportedNetworksIsRefused; beaconSuite address at a fixed chain id by testBeaconNamedBySuiteIsAtItsNetworksClone (both per-network clone beacon contracts).",
+      "Adversarial pass: no candidate bugs. The only source change this round is NatSpec naming each resolve refusal."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T06:38:14Z",
+    "commit": "d532e52233e1fae5ac852533ece8021e4fd54821",
+    "testsAfterCommit": "4d0619780bb9ba123a94195053fb6aeb7f644d39",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 93,
+    "scope": "PR #308 (#274) re-audit round: src/lib/LibRainDeployBeacon.sol checkBeacon pendingOwner refusal of a one-word answer with bits above 160 set, named by the open rain-marvin thread",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 4,
+      "behavioursProbed": 4,
+      "killedByExistingTests": 0,
+      "gapsFilled": 4,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|RainDeploySuitesBaseTest, baseline 124 at the scanned commit, 125 after. Pre-existing suite probed with the test file at the scanned commit before the new test.",
+      "All 4 survived the pre-existing suite: pending check truncated to uint160, pending check refusing only words <= type(uint160).max, pending check masking off bits above 160, reported word truncated to uint160.",
+      "All 4 killed by testBeaconAnsweringPendingOwnerWithADirtyWordIsRefused (MockDirtyWordFallbackBeacon answers 1 << 160); the fail-pattern did not name the killer of the truncated-report mutant, which is the only test added.",
+      "Adversarial pass: no candidate bugs. BeaconPendingOwner NatSpec says a word with dirty upper bits is not an address and is reported raw, so it is refused; the code does so."
+    ]
+  },
+  {
     "timestamp": "2026-10-19T06:51:00Z",
     "commit": "4124f731e49ff1b68faaf4cd882648aa1d00cd32",
     "testsAfterCommit": "391fe885eb27021ee232e65fcfa02c1f68400474",
@@ -312,6 +408,39 @@
       "Gaps filled: W07 (a short non-empty answer treated as a failed read) testCheckResolvedValuesShortAnswerIsAnAnswer; W08 (read failure names index 0) testCheckResolvedValuesReadFailureNamesTheFailingRead. Both re-probed KILLED at baseline 53.",
       "The killer lists under-report fuzz kills: the fail-pattern stops at the first ] inside a counterexample args=[...]. testRegisterOnEveryNetwork appears in several unrelated killer lists from fork transport noise; every such kill also names a W test.",
       "The foundry.toml MigrationRegistry compilation_restrictions entry is build config, not suite-reachable, and was not probed."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T07:52:39Z",
+    "commit": "8dc450ced219a849cae6348de07ba0d20e0fb7b7",
+    "testsAfterCommit": "8dc450ced219a849cae6348de07ba0d20e0fb7b7",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 95,
+    "scope": "PR #308 (#274) re-audit round: changed code in 8dc450c: LibRainDeployBeacon.checkDistinctMigrations and its calls from appliedState and RainDeployVerifyChain.resolveBeacon, and the checkBeacon pendingOwner refusal of a non-empty answer that is not one word (BeaconPendingOwnerUnreadable)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 23,
+      "behavioursProbed": 23,
+      "killedByExistingTests": 10,
+      "gapsFilled": 0,
+      "unattributed": 13,
+      "attributionSplit": false,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|RainDeploySuitesBaseTest plus LibRainDeployTest testHasChainId via the transport-retrying check script; baseline 130 passed.",
+      "23/23 killed, 0 survived, 0 no-run.",
+      "Attribution not split: this round's tests (two distinct-id tests proposed by rain-marvin, two resolve-time repeat tests, the short-answer test, and the two-word test inverted to expect BeaconPendingOwnerUnreadable) were written before the probe, so the pre-existing suite was not probed alone. Kills by tests present at f8620d3: E04-E11 (repeat tests, updated for the chainId error signature), E15 (silent fallback), E16 (reverting word). Kills needing this round's tests: E01-E03 (distinct writer/namespace), E12-E14 (resolve-time), E17/E19 (short answer).",
+      "Adversarial pass: no candidate bugs. Distinct means distinct (writer, namespace, migration) triple, pinned both ways; an echoing fallback (4-byte answer) is now refused rather than read as no pending owner."
     ]
   },
   {
@@ -366,6 +495,39 @@
       "Baseline green at 196 on the full round suite. 14 of 15 KILLED by existing tests.",
       "F04 (registerOnForks skipping the sender and value refusals) survived the register suite and is killed by the new testRegisterOnForksRefusesInputsBeforeSelecting, re-probed on a fork-free narrow suite (baseline 8) because public RPC failures turned the register suite's baseline red.",
       "Killer attribution re-run on the register suite (baseline 39) and the snapshot suite (baseline 108) with fail-pattern '(?s)\\[FAIL.*?\\] (test\\w+)\\(': F03 testRegisterOnForksRefusesUnpairedForkIds; F06 testRegisterOnNetworksRefusesInputsInOrder, testWiring; F07 testWiring; F08 testCheckInputsRecordIsTheInputsSigned; F14-F15 testTheCommittedAggregateIsWhatTheGeneratorEmits and the aggregate block tests. testRegisterOnEveryNetwork also appears in fork-noisy killer lists; every such kill also names a non-fork test."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T13:21:58Z",
+    "commit": "306f369f8a53d89dc62c9a0a751d57d51c236d71",
+    "testsAfterCommit": "5ebd709c2e2977631dec1e618b9cdf670fac9d5c",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 102,
+    "scope": "PR #308 (#274) round 6: code changed since 8dc450c: RainDeployBroadcast.broadcastSuite (BeaconOwnedByDeployKey) and checkSeatsNoDeployKey (SuiteSeatsDeployKey); RainDeployVerifySnapshotBase.testBeaconDeclarationsResolve; LibRainDeployBeacon.checkTransitionMigrations (BeaconTransitionMigrationUnnamed); RainDeployVerifyBase.resolveBeacons/resolveBeacon/checkSeatedState/seatsOther/resolveReleased; RainDeployVerifyChain.deriveUnlessResolved",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 6,
+      "behaviours": 54,
+      "behavioursProbed": 54,
+      "killedByExistingTests": 46,
+      "gapsFilled": 8,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|RainDeploySuitesBaseTest|RainDeployVerifyChain|RainDeployVerify|RegistryDeployVerify|RainDeployBroadcast (excluding testRunReachesSelectionPastAnUnanchorableCandidate, a pre-existing setEnv race) plus LibRainDeployTest testHasChainId, via a wrapper that retries an all-transport red tally and withholds it after three attempts (NO-RUN); baseline 329 passed at the scanned commit.",
+      "Pre-existing suite, before any new test: 46 killed (45 in the first pass, C02 on re-probe); survived F09 (seat check ignoring whether owner() answered), F10 (seat check state not reverted), V19 (seated owner held to the latest state), V20 (seated implementation held to the latest state), V24 (BeaconSeatedOwner index forced 0), C01 (derivation reuse ignoring whether a beacon names a suite).",
+      "V21 (seatsOther ignoring whether the read answered) and V22 (seatsOther refusing an empty answer) were NO-RUN in three probes: every failure each time was a public-RPC 429 or HyperEVM invalid-block-height fork error, no non-transport failure. Treated as uncredited survivors.",
+      "Gaps filled at 5ebd709, all 8 killed by a re-probe whose suite was only the 8 added tests (offline; the full wrapper suite was withheld on 429s): F09 testBroadcastOfASuiteRevertingWithTheDeployKeyReachesTheNetworkRefusal (MockOriginRevertingOwner); F10 testSeatCheckLeavesNothingDeployed; V19 and V20 testBeaconSuiteSeatingItsInitialStateBeforeATransitionResolves; V21 testAReadThatRevertsSeatsNothing; V22 testAReadAnsweringNothingSeatsNothing; V24 testBeaconSuiteSeatingAnotherOwnerIsRefusedAtItsIndex; C01 testUnsetSuiteOfABeaconNamedByAddressIsNotReused (the unset suite is derived and refused with DeployFailed rather than reusing an empty derivation). The fail-pattern did not name the V19, V20 and V24 killers because forge renders the chain id in their revert reasons as 42161 [4.216e4]; those attributions are by elimination among the 8 tests (only the transition test declares a later state, only the index test reaches BeaconSeatedOwner).",
+      "Handoff's predicted equivalents were not equivalent: V19/V20 differ once a suite beacon declares a transition to another owner or implementation, and C01 differs for the all-zero suite.",
+      "Adversarial pass: no candidate bugs. The seat checks are lenient on a reverting or empty read by design (left to checkBeacon); the broadcast seat check reads owner() only, as ruled."
     ]
   },
   {
@@ -519,6 +681,38 @@
     ]
   },
   {
+    "timestamp": "2026-10-19T20:09:16Z",
+    "commit": "20d2ab89f5c9411425a90a390fc9920bf02a182b",
+    "testsAfterCommit": "117d6897a52f7fe9bd0bcfc119349a05b9e0c702",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 138,
+    "scope": "PR #308 (#274) round 7: code changed in 20d2ab8: RainDeployVerifyBase.checkSeatedState (deploys under the beacon's chain id); RainDeployVerifyChain.checkDeployedOnNetworks no-suite narrowing and beaconNetworks",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 12,
+      "behavioursProbed": 12,
+      "killedByExistingTests": 8,
+      "gapsFilled": 3,
+      "equivalentMutants": 1,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc Beacon|^RainDeployVerifyChainTest$ via a wrapper that retries an all-transport red tally and withholds it after three attempts. Pre-existing suite = that suite with the five tests added in 20d2ab8 excluded (--no-match-test NetworksOwner|RestoresTheChainId|WithoutSuitesForksOnly|BeaconNetworksKeeps), baseline 167 passed; with them, 172 passed.",
+      "Pre-existing suite: 8 killed (C2 narrowing applied with suites; B1-B7 in beaconNetworks: kept never set, either count not advanced, no break, match negated, every network copied, kept network not copied); survived S1 (seat check under the local chain id), S2 (chain id never restored), S3 (chain id set after the deploy), C1 (no-suite narrowing skipped).",
+      "With the 20d2ab8 tests: C1 killed by testChainGroupWithoutSuitesForksOnlyTheBeaconsNetworks; S1 and S3 killed (the fail-pattern names no killer: forge renders the chain id in the revert reason as 42161 [4.216e4]); a re-probe at testsAfterCommit whose suite is testBeaconSuiteSeatingItsNetworksOwnerResolves alone kills both.",
+      "S2 survived testSeatedStateCheckRestoresTheChainId: vm.revertToState restores the chain id with the state, and the only path skipping it reverts DerivationSnapshotRevertFailed. Equivalent; the redundant vm.chainId(localChainId) was removed at testsAfterCommit.",
+      "Adversarial pass: no candidate bugs. beaconNetworks draws from the networks resolveBeacons resolved on, so narrowing a no-suite run never empties it while a beacon resolved."
+    ]
+  },
+  {
     "timestamp": "2026-10-20T07:01:49Z",
     "commit": "4a56d2a1645ddca718bf0d125228d4b23a9f9d07",
     "testsAfterCommit": "af326744ec7c9deacf5cfa667dfd7b632a745f54",
@@ -548,28 +742,34 @@
     ]
   },
   {
-    "timestamp": "2026-10-20T08:06:58Z",
-    "commit": "d5803b30c5dd64532952350c563d9f29faccd402",
-    "testsAfterCommit": "6d5ec114d2c591fca7c1db79d6825c94752a6bf2",
+    "timestamp": "2026-10-20T07:12:55Z",
+    "commit": "9d1104859a700e1ef8659cd08417cf0ce263ed92",
+    "testsAfterCommit": "220783bcb506ad8e1de196acf29ff3e59467c660",
     "publishedTag": "sol-v0.1.18",
-    "commitsAheadOfTag": 97,
-    "scope": "PR #317 (release 0.1.19), the changed lines only: foundry.toml [external.package].version, src/generated/0_1_19/{AddressRegistry,MigrationRegistry,TimelockController}.sol constants, and the suites[9] entries and array lengths in src/lib/LibAddressRegistryReleased.sol and src/lib/LibMigrationRegistryReleased.sol",
+    "commitsAheadOfTag": 141,
+    "scope": "PR #308 (#274) round 8: code changed in 9d11048: RainDeployBroadcast.checkSeatsNoDeployKey (one local deploy per target under its chain id; owner word matched on its address bits) and its call in broadcastSuite",
     "tool": "adversarial-mutation-test",
     "skillVersion": "0.35.0",
     "summary": {
-      "units": 3,
+      "units": 1,
+      "behaviours": 20,
       "behavioursProbed": 20,
-      "killedByExistingTests": 16,
-      "gapsFilled": 4,
+      "killedByExistingTests": 18,
+      "gapsFilled": 2,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
       "candidates": 0,
       "confirmed": 0,
-      "filed": []
+      "filed": [],
+      "alreadyFiled": []
     },
     "notes": [
-      "20 mutants probed with mutation-probe against the pre-existing suite at the scanned commit (fresh clone, baseline green at 856): 16 KILLED, 4 SURVIVED (version set back to 0.1.18, version set ahead to 0.1.20, a TimelockController 0_1_19 CREATION_CODE runtime-tail byte, and a constructor-only CREATION_CODE byte).",
-      "Gaps filled: RegistryDeployVerifyTest.testEveryFrozenCodeRecordDeploysItsRecordedHash deploys every frozen code record with its declaration referenceConstructorArgs and compares the code hash to BYTECODE_HASH; LibTimelockControllerTest.testFrozen0119CodeDerivesProductionTimelocks derives the ST0x production timelocks from the 0_1_19 generation; LibRainDeploySnapshotTest.testVersionIsTheNewestFrozenRelease and testVersionBehindTheNewestFrozenReleaseIsRefused hold the version to the newest frozen tag. Re-probe at testsAfterCommit (baseline green at 860): 20/20 KILLED.",
-      "Fork tests need RPC URLs, which were not available: the 169 tests failing at baseline on missing *_RPC_URL (and LibSafeTest, whose setUp forks) were excluded by name from the probe suite. CI on testsAfterCommit fails only RegistryDeployVerifyTest.testSuitesLiveOnEverySupportedNetwork (NotDeployedOnNetwork arbitrum, V3 MigrationRegistry not yet deployed).",
-      "Adversarial pass: the frozen records were checked against the candidate (byte-identical) and the timelock generation against the production timelock addresses; no candidate bug."
+      "Suite: forge test --match-path test/src/abstract/RainDeployBroadcast*.t.sol (offline), baseline 32 passed at the scanned commit, 34 at testsAfterCommit. Pre-existing suite = the tests at 9d11048, which include the tests written with the fix (the Marvin round-7 HIGH finding asked for them).",
+      "Pre-existing suite: 18 of 19 killed (S01-S18: per-network chain ids, supported fallback, loop bound, chain id, prank, stopPrank, per-target address, snapshot restore, answered/length/word/address checks, refusal payload, refusal and call presence). Survived S19 (seat check on the raw suite, not its onSupportedNetworks form): killed by testBroadcastRefusesAReleaseWhoseCandidateAddsANetworkSeatingTheDeployKey at 1206993.",
+      "S20 (fallback reads deployNetworks() not supportedNetworks()) was killed only incidentally by testRunReachesSelectionPastAnUnanchorableCandidate; testBroadcastRefusesASuiteSeatingTheDeployKeyOnANetworkTheDispatchDoesNotReach added at 220783b kills it directly.",
+      "Adversarial pass: no candidate bugs. A per-network suite is read on its own networks, so a supported network it lacks is not read here; the broadcast to it refuses CloneNetworkUndeclared regardless. An owner word whose upper 96 bits are dirty but whose address bits are the deploy key is refused, the fail-safe direction."
     ]
   },
   {
@@ -599,6 +799,449 @@
     "notes": [
       "E01-E05 on the offline suite (RainDeployVerifyChainNotRequiredLocalTest, RainDeployVerifyChainEmptyTest): 1/5 killed by the suite at the scanned commit (E03), 5/5 with testEmptyRosterIsNoNetworks and testNoSuitesOnEmptyRosterPasses from testsAfterCommit.",
       "F23 (registerOnForks passes networks[0]) and F29 (registerOnNetworks returns an empty record) on the fork suite (check11r.sh, public RPCs, 3x retry): 2/2 killed by existing fork tests, F29 confirmed by testRegisterOnNetworksBindsEverySelected alone. Both listed in audit/known-false-positives.md with their killers."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T14:23:48Z",
+    "commit": "fb7c1a2f185cb5d250ace15001b110181fddd262",
+    "testsAfterCommit": "670e05bdeeba9801669d9d2b1e41a2c7415eb3e7",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 204,
+    "scope": "PR #308 (#274) round 9: the PR's changed source at fb7c1a2 in src/abstract/RainDeployVerifyChain.sol, RainDeploySuitesBase.sol, RainDeployVerifySnapshotBase.sol, RainDeployVerifyBase.sol, RainDeployBroadcast.sol and src/lib/LibRainDeployMechanism.sol, LibRainDeployBeacon.sol, LibRainDeploy.sol (batches C, S, V, R, B, offline), then the code changed since in 9996bde..a86f089",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 8,
+      "behaviours": 279,
+      "behavioursProbed": 279,
+      "killedByExistingTests": 261,
+      "gapsFilled": 13,
+      "equivalentMutants": 2,
+      "unkillableDefensiveGuards": 2,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pre-existing suite at fb7c1a2, offline (dead RPC endpoints, fork-reaching tests excluded by name): C 38/44, S 16/18, V 62/66, R 49/54, B 96/97 killed.",
+      "Survivors killed by tests at testsAfterCommit (re-probe at 8a18332, plus R17 at 670e05b): M05, M07 by the LocalForkVm chain-group twins; M06 by testNotRequiredNetworksAreSkipped and testRequiredSuiteIsStillCheckedEverywhere; M31 by testImplementationSuiteMustHaveItsDerivedCodeOffline; M22 by testBeaconSuiteWithAResolvedKeyButOtherCodeIsDerivedAfresh; S12 by testSuiteIndexIsTheFirstOfARepeatedKey; M42, M48 by the reverting-read beacon seat tests; M49 at a later index; B16, B19 by testBroadcastRefusesASuiteSeatingTheDeployKeyOnASupportedNetworkBesideAnOutsideDispatch; B29 by testSeatCheckLeavesNoPrank; R17 (a reached record ends the order walk) by testOrderWalkReadsPastAReachedRecordToTheEarlier.",
+      "Equivalent, redundant code removed in 9996bde rather than exempted: B06 (testBeaconDeclarationsResolve now calls resolveSupportedBeacons) and L09 (deployLocallyOnChain reads block.chainid, which every caller sets).",
+      "Unkillable, in audit/known-false-positives.md: M64 and B44 (DerivationSnapshotRevertFailed arguments; revertToState never fails here) and M32 (a console2.log removal, unobservable).",
+      "a86f089 changed only NatSpec and a blank line in src (RainDeployBroadcast.broadcastSuite, RainDeployVerifyChain), so it adds no behaviour to probe.",
+      "Adversarial pass on R17: the expected true comes from the registry graph the test applies (OTHER HANDOVER reaches THIRD UPGRADE only through OTHER ROLLBACK then THIRD HANDOVER), not from the walk."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T16:31:54Z",
+    "commit": "98f8c376ff3ed163121cd851c85fe87eb29495d9",
+    "testsAfterCommit": "18524fa3afeccd2d873dc1db4e3727c9cb1cf3c2",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 206,
+    "scope": "PR #308 (#274) round 10: mutant V20 from rain-marvin at 98f8c37 (RainDeployVerifyBase.checkSeatedState calling deployLocally in place of deployLocallyOnChain), and the fixture added to kill it (test/concrete/MockChainRefusingCloneable.sol)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 6,
+      "behavioursProbed": 6,
+      "killedByExistingTests": 0,
+      "gapsFilled": 6,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 1,
+      "confirmed": 1,
+      "filed": [
+        320
+      ],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pre-existing suite at 98f8c37, offline (fork-reaching tests excluded by name, LibSafeForkTest and LibSafeTest by contract, 1093 tests): V20 SURVIVED.",
+      "At 18524fa (1098 tests) V20 is killed by testPerNetworkCloneBeaconSuiteResolvesOnBase; the Arbitrum twin pins that the fixed code resolves there too. Mock mutants K01-K05 (refusal inverted, never refuses, refusal argument, success value, owner) are killed by the beacon seat tests and MockChainRefusingCloneableTest.",
+      "The mock refuses only the chain id its data names, so it initializes under the local chain id that deriveDeployment runs every clone under; no chain id is hardcoded.",
+      "Adversarial pass: deriveDeployment initializes every per-network clone under the local chain id, so a clone init that accepts only its own chain id (MockChainGatedCloneable) reverts derivation; filed as #320 for triage."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T06:34:44Z",
+    "commit": "d5e3acd34471afa9a880b75726d70ca04f8ba35c",
+    "testsAfterCommit": "d5e3acd34471afa9a880b75726d70ca04f8ba35c",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 78,
+    "scope": "pr:310, its changed code only: src/lib/LibRainDeploySnapshot.sol recordLines, hasForeignLineBreak, withoutBlockComments, declarationAddress (S); src/abstract/RainDeployVerifySnapshotBase.sol declaredValue, declaredBytes, checkFrozenCodeRecord (B); src/lib/LibRainDeployMechanism.sol deployAndBroadcast verify/notice branch, UnverifiableSource, unverifiableSourceNotice, withUnrecordedNetworks reader check, readsInitData (M); src/abstract/RainDeploySuitesBase.sol initDataReaders hook (U); src/abstract/RainDeployVerifyChain.sol checkDeployedOnNetworks forkVm (C)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 5,
+      "behaviours": 51,
+      "behavioursProbed": 51,
+      "killedByExistingTests": 48,
+      "gapsFilled": 0,
+      "equivalentMutants": 2,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 1,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "51 mutants (S 24, B 9, M 13, U 2, C 3) probed with mutation-probe over the offline suite: forge test with only the 169 tests that fail at the unmutated baseline for want of RPC env vars left out of the tally, named per suite and test (baseline green at 863). The PR's tests were written before the probe, so kills are credited to the suite at the scanned commit, not to the pre-PR suite.",
+      "48 KILLED. C01 (the matrix forks on the global vm) first scored SURVIVED under a wrapper that dropped any failure mentioning a missing RPC env var; the global vm makes the offline testMatrixPassesLiveSuitesOnLocalForks fail exactly that way. Re-probed under the per-test baseline exclusion: KILLED.",
+      "Equivalent: S24 (declarationAddress's final tokens.length != 5 as > 5) and B06 (the same in declaredValue). A line reaching that check holds at least 5 tokens: fewer than 4 (or no = fourth) is refused first, and exactly 4 takes the wrapped branch, whose line starts with four spaces and so splits into at least 5.",
+      "Not observable by the suite: M04 (console2.log of unverifiableSourceNotice dropped). A console call is invisible to vm.expectCall on the console address (0 calls recorded on unmutated code, checked). The notice's text is pinned by testUnverifiableSourceNoticeNamesTheAddressAndEachNetwork (M05, M06) and its occurrence by the UnverifiableSource event (M02, M03)."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T08:09:43Z",
+    "commit": "cfa953ad698da400927c1f6d2250e1df87e1281f",
+    "testsAfterCommit": "cfa953ad698da400927c1f6d2250e1df87e1281f",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 82,
+    "scope": "pr:310, its changed code only: src/lib/LibRainDeploySnapshot.sol recordLines, hasForeignLineBreak, withoutBlockComments, declarationAddress (S); src/abstract/RainDeployVerifySnapshotBase.sol declaredValue, declaredBytes, checkFrozenCodeRecord (B); src/lib/LibRainDeployMechanism.sol deployAndBroadcast verify/notice branch, UnverifiableSource, unverifiableSourceNotice, withUnrecordedNetworks reader check, readsInitData (M); src/abstract/RainDeploySuitesBase.sol initDataReaders hook (U); src/abstract/RainDeployVerifyChain.sol checkDeployedOnNetworks forkVm (C); plus UnverifiableSource sender, entry address and networks",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 5,
+      "behaviours": 55,
+      "behavioursProbed": 55,
+      "killedByExistingTests": 51,
+      "gapsFilled": 1,
+      "equivalentMutants": 2,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 1,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "The previous entry's 51 mutants re-probed at this commit with mutation-probe over the same offline suite, plus 4 on the UnverifiableSource emit: sender as address(this) (rain-marvin's M10), sender as tx.origin, entry address as address(0), networks as an empty array. 55 probed, 52 KILLED, 3 SURVIVED.",
+      "Gap filled: rain-marvin reported sender as address(this) SURVIVED at a6c3375, where testZoltuBroadcastUnderTheCloneArtifactPathPrintsAManualVerificationNotice called as the test contract, so msg.sender and address(this) matched. That test now pranks a separate caller before calling; all four new mutants are KILLED by it. This run did not re-probe the mutant at a6c3375; the survival is rain-marvin's result.",
+      "Survivors unchanged from the previous entry: S24 and B06 equivalent, M04 (console2.log dropped) not observable by the suite."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T12:26:34Z",
+    "commit": "8114ae2967f321e67a3020ba9b0b639a20e57e1c",
+    "testsAfterCommit": "00a6f8adc1b5ca6e7f98d5396a9d696423c48455",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 99,
+    "scope": "pr:310, its code changed since d5e3acd: src/lib/LibRainDeployMechanism.sol withExtendedNetworks, checkNetworkFrozen, checkNetworksFrozen, withUnrecordedNetworks chain ids in play, containsChainId, checkReadsOwnStorageOnly in deployLocally (R); src/abstract/RainDeployBroadcast.sol broadcastSuite, src/abstract/RainDeployVerifyChain.sol checkDeployedOnNetworks, src/abstract/RainDeploySuitesBase.sol onSupportedNetworks, LibRainDeploy.networkChainIds (B); src/lib/LibRainDeploySnapshot.sol declarationValue (S); plus src/abstract/RainDeployVerifySnapshotBase.sol declaredBytes and declaredBytes32 parse refusals added at 00a6f8adc1b5ca6e7f98d5396a9d696423c48455 (C)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 5,
+      "behaviours": 43,
+      "behavioursProbed": 43,
+      "killedByExistingTests": 35,
+      "gapsFilled": 5,
+      "equivalentMutants": 1,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "37 mutants (R 21, B 10, S 6) probed at 8114ae2 with mutation-probe over the offline suite (forge test minus the RPC-dependent tests, 894 green at baseline). 35 KILLED by tests already in the suite; B02 and B06 SURVIVED.",
+      "B06 (matrix chain ids in play from supportedNetworks()) filled by testSubsetTakesNoOutOfPlayCandidateNetwork, which now expects no factory call with Polygon's init data, so an out-of-play network is never deployed locally.",
+      "B02 (broadcast chain ids in play from supportedNetworks()) is unobservable while the candidate declares only supported networks: the extra entries are never read by a broadcast to a subset. Filled by testBroadcastTakesCandidateNetworksAmongTheBroadcastNetworks with WideCandidatePerNetworkCloneDeploy, a hand-written candidateSuites declaring a network beyond supportedNetworks(): broadcasting there is refused with ExtendedNetworkUnfrozen at the release's address before any fork. Offline, no RPC.",
+      "6 mutants (C) on the round-6 fix in declaredBytes and declaredBytes32, probed at cac86802f7cd0261a1b0bb8ccb2fc9b34f5e2dc5 (897 green at baseline): C01 and C02 (parse failure escaping as a raw cheatcode error) KILLED by the tests added with the fix (the harness did not attribute a killer). C03 (32-byte length check dropped) equivalent, since vm.parseBytes32 refuses a short or long value; the check was removed at 00a6f8adc1b5ca6e7f98d5396a9d696423c48455. C04 (the ); tail), C05 (the bytes32( prefix) and C06 (a single closing parenthesis) SURVIVED for want of a value wrapping the record's real hash; testFrozenCodeRecordMalformedHashIsUnreadable gained five, and all three are KILLED at 00a6f8adc1b5ca6e7f98d5396a9d696423c48455."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T13:23:56Z",
+    "commit": "1808fd446737427b65fc4c3f8587f4c1bf5f9a8d",
+    "testsAfterCommit": "1808fd446737427b65fc4c3f8587f4c1bf5f9a8d",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 103,
+    "scope": "pr:310, its code changed in round 7: src/lib/LibRainDeployMechanism.sol deployAndBroadcast deriving the broadcast suite from frozen and candidate; src/abstract/RainDeployBroadcast.sol broadcastSuite; src/abstract/RainDeploySuitesBase.sol candidateOf and onSupportedNetworks",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 11,
+      "behavioursProbed": 11,
+      "killedByExistingTests": 9,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "11 mutants (R801-R811) probed at 1808fd446737427b65fc4c3f8587f4c1bf5f9a8d with mutation-probe over the offline suite (forge test minus the RPC-dependent tests, 899 green at baseline). All 11 KILLED.",
+      "The fix landed with its tests before the probe, so attribution is mixed: R801 (frozen and candidate swapped) and R803 (candidate broadcast as is) were killed by testBroadcastsAnExtendedNetworkAtItsDeclaredDataOffline, added in the same commit as the offline twin of the RPC test testBroadcastsAnExtendedNetworkAtItsDeclaredData. The other 9 were killed by tests that predate the round."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T14:30:17Z",
+    "commit": "b65934ef3779a4f5fce162c907ce9fa3919c21a1",
+    "testsAfterCommit": "b65934ef3779a4f5fce162c907ce9fa3919c21a1",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 138,
+    "scope": "pr:310, its code changed in round 8: src/lib/LibRainDeployMechanism.sol checkReadsOwnStorageOnly exempting accounts created during the factory call (createdIn) and its call site in deployLocally",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 9,
+      "behavioursProbed": 9,
+      "killedByExistingTests": 2,
+      "gapsFilled": 0,
+      "equivalentMutants": 1,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 1,
+      "confirmed": 0,
+      "filed": [
+        316
+      ],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "9 mutants (R901-R909) probed at b65934ef3779a4f5fce162c907ce9fa3919c21a1 with mutation-probe over the offline suite (940 green at baseline). 8 KILLED, 1 equivalent.",
+      "The fix landed with its test before the probe, so attribution is mixed. R901 (writes refused too) was killed by testCloneInitializeWritingAnotherAccountsStorageDeploys and R902 (no created exemption) by testSubsetTakesNoOutOfPlayCandidateNetwork; both tests predate the round. The probe named testCloneInitializeReadingAnAccountItCreatesDeploys, added in the same commit, as the killer of R903-R907 and R909.",
+      "R908 (the created search starts at the second access) is equivalent: the first recorded access is always the top-level call to the factory, never a Create.",
+      "Adversarial candidate #316 (the created search is not order-aware) was filed before its repro was verified. It was then closed as unreachable: a storage read of an account runs that account's own code, and CREATE succeeds only at a codeless address, so no read of an account can come before its creation."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T15:36:18Z",
+    "commit": "6a610309f02a68ef8ab94e7631c21a806b21ec2c",
+    "testsAfterCommit": "3c31b1f9207ee875305730dbfcf6ee545a9b7574",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 139,
+    "scope": "pr:310, its code changed in round 9: the string and line-comment exit in LibRainDeploySnapshot.withoutBlockComments (marvin N17); the other changes are NatSpec and audit docs",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 3,
+      "behavioursProbed": 3,
+      "killedByExistingTests": 0,
+      "gapsFilled": 3,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "3 mutants (S01-S03: any quote, an apostrophe, or a double quote ends a string or line comment) probed with mutation-probe over the offline suite. Pre-existing pass: run at 3c31b1f9207ee875305730dbfcf6ee545a9b7574 with testWithoutBlockCommentsOtherQuotesCloseNothing excluded, 940 green at baseline, so it holds the 6a610309f02a68ef8ab94e7631c21a806b21ec2c suite: 0/3 killed.",
+      "Full pass at 3c31b1f9207ee875305730dbfcf6ee545a9b7574, 941 green at baseline: 3/3 killed by testWithoutBlockCommentsOtherQuotesCloseNothing.",
+      "Adversarial: solc ends a string only at its own unescaped quote and a line comment only at a line break; the new expectations are the input unchanged, read from that rule, not from the scanner."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T17:22:23Z",
+    "commit": "88fb7f091100631a81e90e9efc7671b8a9d8ee49",
+    "testsAfterCommit": "15b15b57984378b359fcb4b6633a00a976a315f2",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 141,
+    "scope": "pr:310, its code touched in round 10: the access and frame iteration of LibRainDeployMechanism.checkReadsOwnStorageOnly (marvin M30); the other changes are README and audit docs",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 5,
+      "behavioursProbed": 5,
+      "killedByExistingTests": 1,
+      "gapsFilled": 4,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "5 mutants probed with mutation-probe over the offline suite: R1101 only the first storage access of a frame checked (M30), R1102 the access loop stops after one, R1103 every other access skipped, R1104 only the first frame checked, R1105 the first (factory) frame skipped.",
+      "Pre-existing pass: run at 15b15b57984378b359fcb4b6633a00a976a315f2 with testCloneInitializeReadingAfterAWriteIsRefused and testCloneFactoryReadingItsOwnStorageIsRefused excluded, 941 green at baseline, so it holds the 88fb7f091100631a81e90e9efc7671b8a9d8ee49 suite: 1/5 killed (R1104 by testCloneInitializeReadingAnAccountItCreatesDeploys).",
+      "Full pass at 15b15b57984378b359fcb4b6633a00a976a315f2, 943 green at baseline: 5/5 killed, R1101-R1104 by testCloneInitializeReadingAfterAWriteIsRefused, R1105 by testCloneFactoryReadingItsOwnStorageIsRefused.",
+      "Adversarial: the guard refuses a storage read of any account the call did not create, so each expected revert names the read account and the slot its storage layout puts the read at (MockStorageSource.sValue at 1, MockStorageReadingCloneFactory.sSaltShift at 0), not values read from the guard."
+    ]
+  },
+  {
+    "timestamp": "2026-10-19T20:45:35Z",
+    "commit": "d5a97a56ef4ecf91555a48979e2867186eb145a0",
+    "testsAfterCommit": "880eeea417ff1baaeee0d7212c65bf939d0b814e",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 146,
+    "scope": "pr:310, its code changed in rounds 11 and 12: the extended networks record (LibRainDeployExtendedNetworks, RainDeploySuitesBase.withExtendedNetworks/extendedNetworksRoot, BuildScript.regenerateExtendedNetworks and its licence hooks), declaredBytes32, declaredAddress and the createdUnder creator-chain walk",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 5,
+      "behaviours": 56,
+      "behavioursProbed": 56,
+      "killedByExistingTests": 44,
+      "gapsFilled": 9,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 1,
+      "confirmed": 1,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Round 12 pass: 43 mutants with mutation-probe over the offline suite at d5a97a56ef4ecf91555a48979e2867186eb145a0, 963 green at baseline: 35/43 killed. The suite at that commit already held the tests written with the extended networks record, so these kills are not attributable to the suite before round 11.",
+      "Survivors: E08 (an entry with two hex literals), S01 (withExtendedNetworks unchecked), S02 (default root), B03 (build writes another key's declaration), V01 (bytes32 length), V02 (bytes32 0x prefix), M02 (one-hop creator walk), N03 (address length).",
+      "S01 killed by new testDeclaredNetworkWithoutARecordIsRefused; S02 by new testExtendedNetworksRootDefaultsToTheRepoRecord; B03 by testRegenerateExtendedNetworksWritesTheRecord once PerNetworkCloneBuildScriptHarness declares its networks for its release key only; M02 by testCloneInitializeReadingAnAccountItCreatesDeploys, strengthened with SourceUse.ReadGrandchild.",
+      "V01, N03 and E08 checked what other code already refuses: vm.parseBytes32 and vm.parseAddress refuse any other digit count, and recordedExtendedNetworks holds the whole body to the writer's. The redundant checks were removed, leaving the 0x prefix check (vm.parseBytes32 reads unprefixed digits) and the indexing guard opened.length < 2. testDeclarationValueOutsideTheWritersShapeIsUnreadable gained 39- and 41-digit addresses, bare and wrapped.",
+      "Re-probe at 6b99dfeee43c78bd82195f3e5ebea685efd1bae2, 966 green at baseline: 10/10 killed, E01 S01 S02 B03 M02 as above; G01-G03 (the tag/name guard removed, tag only, name only) by new testExtendedNetworksPathRefusesATagOrNameOutsideTheRoot; E08b (no hex literal indexed) by testMisshapenEntriesAreUnreadable; V02b (bytes32 prefix unchecked) by testFrozenCodeRecordMalformedHashIsUnreadable.",
+      "Adversarial: extendedNetworksPath took the tag and name from the key unchecked, so a key such as x@../y named a record outside the root that writeExtendedNetworks would write. It now refuses with InvalidRecordRoot unless <tag>/<name> is a path of record root segments. New code in this PR, fixed on it in 6b99dfeee43c78bd82195f3e5ebea685efd1bae2 rather than filed.",
+      "CI static then refused two shapes in this round's code: slither uninitialized-local on recordedExtendedNetwork (fixed in 7aee0fa7f111a02d2edeedf1ca796a96f04e9008), and forge lint boolean-cst on the constant booleans extendedNetworksPath and creatorIn returned (fixed in c6a47d60ab9a43479cbf202b12b6a16d22cbfb31). Those rewrites were re-probed at c6a47d60ab9a43479cbf202b12b6a16d22cbfb31 with 966 green at baseline: 7/8 killed. P01-P05 (the at sign scan, the tag and name copies and the untagged return) and C01, C03 (the creator scan stopping at its match, the Create kind) were killed by existing tests. C02 (creatorIn returns the last accessor when nothing matched) survived and is killed at 880eeea417ff1baaeee0d7212c65bf939d0b814e by new testCreatorInOfAnAccountNothingCreatedIsAbsentAndZero, 967 green at baseline."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T08:02:37Z",
+    "commit": "5af4797d94555762aced0fb1b92f403c379e8714",
+    "testsAfterCommit": "08d4d58fe8f6c85a03afa29ff7534cedefce9d09",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 153,
+    "scope": "pr:310, its code changed in round 13 (marvin review at 651e73c): BuildScript.regenerateExtendedNetworks validating before writing; RainDeployVerifyChain's checkNetworkFrozen order; RainDeployVerifySnapshotBase.checkFrozenCodeRecord and LibRainDeploySnapshot.recordedDeployedAddresses refusing DEPLOYED_ADDRESS outside the writer's declaration; declaredChainId's leading zero; declaredAddress; LibRainDeployExtendedNetworks.checkExtendedNetworksHeader and the record's line-break and zero-network refusals; the createdUnder bound",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 6,
+      "behaviours": 40,
+      "behavioursProbed": 40,
+      "killedByExistingTests": 19,
+      "gapsFilled": 2,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 1,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pass at 5af4797d94555762aced0fb1b92f403c379e8714 with mutation-probe over the offline suite (forge test minus the RPC-dependent tests), 979 green at baseline: 22 mutants, 19 KILLED. The round's tests were written with the fix, before the probe, so kills are not attributable to the suite before round 13.",
+      "Survivors: V02 (checkNetworkFrozen between the dependency and code checks), X04 (the header line count != 5 relaxed to < 5) and L05 (declaredAddress's first split count != 2 relaxed to < 2). X04 and L05 survived because a later check subsumed the mutated one: the whole-header equality refused any other line count, and the second split count refused what the first let through.",
+      "Fixed at bbcb0f1aa4b78638108f66c791cb044ea5fec011: new testUnfrozenNetworkMissingADependencyIsRefusedAsUnfrozen for V02. checkExtendedNetworksHeader now holds the header line by line (count 5, last line empty, licence and copyright read by stripping their tags, non-empty, then lines 0-3 equal to filePrefix's), so each check is the only one refusing its case. declaredAddress now splits once on 0x and takes the address( opening or none. testMisshapenHeaderIsUnreadable and testDeclarationValueOutsideTheWritersShapeIsUnreadable gained the inputs each check alone refuses.",
+      "Re-probe at bbcb0f1aa4b78638108f66c791cb044ea5fec011, 980 green at baseline: 19 mutants, 18 KILLED (V02, A01, A03-A06, H01-H12). A02 (text before a bare 0x accepted) SURVIVED and is KILLED at 08d4d58fe8f6c85a03afa29ff7534cedefce9d09 by testDeclarationValueOutsideTheWritersShapeIsUnreadable with x0x... and (0x...) values, 980 green at baseline.",
+      "Adversarial candidate, not filed: a licence or copyright text that itself contains its SPDX tag is written by the writer (filePrefix only requires a non-empty single line) but refused by the reader, since the tag is stripped everywhere and the line no longer matches. Such a header carries the tag twice on one line, which REUSE would read ambiguously; left for triage."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T01:26:00Z",
+    "commit": "e94188a08be847e0f19544cf3efe8c34e4bd1b0a",
+    "testsAfterCommit": "e94188a08be847e0f19544cf3efe8c34e4bd1b0a",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 340,
+    "scope": "pr:323, its code changed after the re-run audit (ff2e9ce): the per-network address comment of a beacon proxy record (S13, P04 retargeted onto the local beaconProxy), mechanismName (P03, G04, G05), deployStep's clone arm and its UnknownDeployMechanism guard (G01-G03), isPerNetworkMechanism and its released-lib callers (N01-N05)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 13,
+      "behavioursProbed": 13,
+      "killedByExistingTests": 11,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 2,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pass at e94188a08be847e0f19544cf3efe8c34e4bd1b0a with mutation-probe over the offline suite (forge test minus the RPC-dependent tests), 1309 green at baseline: 13 mutants, 11 KILLED, all by tests present before the probe.",
+      "Survivors: G03 (deployStep's final revert UnknownDeployMechanism removed) and G05 (mechanismName's final revert replaced by an empty return). Both guards are reached only by a DeployMechanism member added to the enum without an arm; every current member has one, and a value outside the enum panics (0x21) when read, before either guard. No test can drive them at this commit.",
+      "Earlier rounds on this PR (M01-M34, B01-B13, S01-S14, C01-C03, V01-V05, P01-P02) were probed before this record and are summarised in the PR body; they have no scan record of their own."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T02:18:54Z",
+    "commit": "72a4f335acaa3e39a899fe6ca7f9a6a8f39168e5",
+    "testsAfterCommit": "72a4f335acaa3e39a899fe6ca7f9a6a8f39168e5",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 342,
+    "scope": "pr:323, the two survivors of the previous entry (G03 deployStep UnknownDeployMechanism revert, G05 mechanismName UnknownDeployMechanism revert) and the per-member tables that replace both if-chains (G06-G17)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 12,
+      "behavioursProbed": 12,
+      "killedByExistingTests": 12,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "G03 and G05 could not be reached: an out-of-range DeployMechanism written with assembly into the stack variable (mechanismName) and into the DeploySuite field in memory (deployStep) panics 0x21 on its first read, before either guard. testDeployStepPanicsOnAMechanismOutsideTheEnum and testMechanismNamePanicsOnAMechanismOutsideTheEnum pin that panic for every value from 5 to 255.",
+      "Both if-chains became per-member tables indexed by the member value, so the reverts and the UnknownDeployMechanism error (added on this PR, never released) are gone and G03/G05 have no target. A member added without a table entry fails with an index panic (0x32). testDeployMechanismHasFiveMembers pins the member count the tables are sized for.",
+      "Pass at 72a4f335acaa3e39a899fe6ca7f9a6a8f39168e5 with mutation-probe over the offline suite (forge test minus the RPC-dependent tests), 1312 green at baseline: 12 mutants (every table entry and both indexes), 12 KILLED, all by tests present before this commit."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T08:06:58Z",
+    "commit": "d5803b30c5dd64532952350c563d9f29faccd402",
+    "testsAfterCommit": "6d5ec114d2c591fca7c1db79d6825c94752a6bf2",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 97,
+    "scope": "PR #317 (release 0.1.19), the changed lines only: foundry.toml [external.package].version, src/generated/0_1_19/{AddressRegistry,MigrationRegistry,TimelockController}.sol constants, and the suites[9] entries and array lengths in src/lib/LibAddressRegistryReleased.sol and src/lib/LibMigrationRegistryReleased.sol",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behavioursProbed": 20,
+      "killedByExistingTests": 16,
+      "gapsFilled": 4,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "20 mutants probed with mutation-probe against the pre-existing suite at the scanned commit (fresh clone, baseline green at 856): 16 KILLED, 4 SURVIVED (version set back to 0.1.18, version set ahead to 0.1.20, a TimelockController 0_1_19 CREATION_CODE runtime-tail byte, and a constructor-only CREATION_CODE byte).",
+      "Gaps filled: RegistryDeployVerifyTest.testEveryFrozenCodeRecordDeploysItsRecordedHash deploys every frozen code record with its declaration referenceConstructorArgs and compares the code hash to BYTECODE_HASH; LibTimelockControllerTest.testFrozen0119CodeDerivesProductionTimelocks derives the ST0x production timelocks from the 0_1_19 generation; LibRainDeploySnapshotTest.testVersionIsTheNewestFrozenRelease and testVersionBehindTheNewestFrozenReleaseIsRefused hold the version to the newest frozen tag. Re-probe at testsAfterCommit (baseline green at 860): 20/20 KILLED.",
+      "Fork tests need RPC URLs, which were not available: the 169 tests failing at baseline on missing *_RPC_URL (and LibSafeTest, whose setUp forks) were excluded by name from the probe suite. CI on testsAfterCommit fails only RegistryDeployVerifyTest.testSuitesLiveOnEverySupportedNetwork (NotDeployedOnNetwork arbitrum, V3 MigrationRegistry not yet deployed).",
+      "Adversarial pass: the frozen records were checked against the candidate (byte-identical) and the timelock generation against the production timelock addresses; no candidate bug."
     ]
   },
   {

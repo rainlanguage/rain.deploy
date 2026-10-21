@@ -10,6 +10,10 @@ import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 // what holds a declared pair to a chain.
 import {DeployDependency, LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
+import {CloneNetwork} from "../lib/LibRainDeployClone.sol";
+import {LibRainDeployExtendedNetworks} from "../lib/LibRainDeployExtendedNetworks.sol";
+import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
+import {ChainBeacon} from "../lib/LibRainDeployBeacon.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
@@ -128,7 +132,12 @@ enum DeployMechanism {
     Clone,
     /// An EIP-1167 clone through an `ICloneableFactoryV4` at its open salt, with init data — and
     /// therefore an address — per network.
-    ClonePerNetwork
+    ClonePerNetwork,
+    /// An OpenZeppelin `BeaconProxy` through an `ICloneableFactoryV5` at its beacon-proxy open
+    /// salt. Its `CloneTarget.implementation` is the beacon.
+    BeaconProxy,
+    /// `BeaconProxy` with init data — and therefore an address — per network.
+    BeaconProxyPerNetwork
 }
 
 /// One deployable unit.
@@ -267,6 +276,12 @@ abstract contract RainDeploySuitesBase {
     /// @return The candidates.
     function candidateSuites() internal view virtual returns (DeployCandidate[] memory);
 
+    /// The beacons that MUST hold their declared state, each on the one of `supportedNetworks()` with its chain id.
+    /// @return The beacons; one with transitions reads `MigrationRegistry`, which MUST be deployed on its network.
+    function beacons() internal view virtual returns (ChainBeacon[] memory) {
+        return new ChainBeacon[](0);
+    }
+
     /// Every network this repo deals with: what a broadcast targets, the set
     /// every network-scoped assertion is made over, and the set the network
     /// config is generated from. Defaults to all of Rain's.
@@ -297,18 +312,69 @@ abstract contract RainDeploySuitesBase {
         return true;
     }
 
-    /// A suite as it is broadcast and as it is checked on chain.
+    /// A suite as the chain group checks it. The broadcast takes its candidate's networks in `deployAndBroadcast`
+    /// instead, among the networks it broadcasts to.
+    /// @param frozen The suite, with its extended networks, as `withExtendedNetworks` gives it.
+    /// @param chainIds The chain ids in play.
+    /// @return The suite, with its extended networks and the networks in play its candidate adds.
+    function onSupportedNetworks(DeploySuite memory frozen, uint256[] memory chainIds)
+        internal
+        view
+        returns (DeploySuite memory)
+    {
+        return LibRainDeployMechanism.withUnrecordedNetworks(frozen, candidateOf(frozen), chainIds);
+    }
+
+    /// A suite's candidate snapshot.
     /// @param suite The suite.
-    /// @return The suite, with the networks its candidate adds.
-    function onSupportedNetworks(DeploySuite memory suite) internal view returns (DeploySuite memory) {
+    /// @return The snapshot of the candidate whose key's name half is `suite`'s, or `suite` when none is.
+    function candidateOf(DeploySuite memory suite) internal view returns (DeploySuite memory) {
         bytes32 name = keccak256(bytes(suiteKeyName(suite.suite)));
         DeployCandidate[] memory candidates = checkedCandidateSuites();
         for (uint256 i = 0; i < candidates.length; i++) {
             if (keccak256(bytes(candidates[i].snapshot.suite)) == name) {
-                return LibRainDeployMechanism.withUnrecordedNetworks(suite, candidates[i].snapshot);
+                return candidates[i].snapshot;
             }
         }
         return suite;
+    }
+
+    /// A suite with the networks `extendedNetworks` declares for it. Reverts with `ExtendedNetworksUnrecorded` unless
+    /// they are exactly the ones its extended networks record under `extendedNetworksRoot()` holds, and with the
+    /// refusals of `LibRainDeployExtendedNetworks.checkExtendedNetworksRecorded` and
+    /// `LibRainDeployMechanism.withExtendedNetworks`.
+    /// @param suite The suite.
+    /// @return The suite, with its extended networks.
+    function withExtendedNetworks(DeploySuite memory suite) internal view returns (DeploySuite memory) {
+        CloneNetwork[] memory declared = extendedNetworks(suite.suite);
+        LibRainDeployExtendedNetworks.checkExtendedNetworksRecorded(
+            StdConstants.VM, extendedNetworksRoot(), suite.suite, declared
+        );
+        return LibRainDeployMechanism.withExtendedNetworks(suite, declared);
+    }
+
+    /// The record root the extended networks records are read from and written under.
+    /// Overridable so a test can declare extended networks against a record other than the repo's own, which is
+    /// append-only. Independent of `BuildScript.recordRoot()`: a build pointed at a fixture record overrides both, or
+    /// its extended networks records are still written to and read from the repo's own.
+    /// @return The record root.
+    function extendedNetworksRoot() internal view virtual returns (string memory) {
+        return LibRainDeploySnapshot.LIB_FS_ROOT;
+    }
+
+    /// The networks a per-network release takes beyond those it records, each declared before it is broadcast there:
+    /// its chain id, the init data it is broadcast with and the address that derives. The broadcast and the
+    /// chain group refuse an unrecorded network not named here, whether or not anything is live there, so an unrecorded
+    /// network's address is frozen before it exists on chain.
+    /// The init data and the address MUST be literals copied from the broadcast: the build writes them to the
+    /// release's append-only extended networks record (`LibRainDeployExtendedNetworks`), refuses to change an entry
+    /// already written, and `withExtendedNetworks` refuses a declaration that is not exactly what the record holds.
+    /// Empty by default.
+    /// @param suite The release's suite key.
+    /// @return The networks.
+    function extendedNetworks(string memory suite) internal view virtual returns (CloneNetwork[] memory) {
+        (suite);
+        return new CloneNetwork[](0);
     }
 
     /// The name half of a suite key.
@@ -541,12 +607,23 @@ abstract contract RainDeploySuitesBase {
     /// @return The selected suite.
     function suiteByName(string memory requested) internal view returns (DeploySuite memory) {
         DeploySuite[] memory suites = allSuites();
+        uint256 index = suiteIndex(suites, requested);
+        if (index == suites.length) {
+            revert UnknownDeploymentSuite(requested, suiteNames());
+        }
+        return suites[index];
+    }
+
+    /// @param suites The suites to search.
+    /// @param requested The key to select.
+    /// @return The index in `suites` of the suite `requested` selects, `suites.length` if none.
+    function suiteIndex(DeploySuite[] memory suites, string memory requested) internal pure returns (uint256) {
         bytes32 requestedHash = keccak256(bytes(requested));
         for (uint256 i = 0; i < suites.length; i++) {
             if (keccak256(bytes(suites[i].suite)) == requestedHash) {
-                return suites[i];
+                return i;
             }
         }
-        revert UnknownDeploymentSuite(requested, suiteNames());
+        return suites.length;
     }
 }

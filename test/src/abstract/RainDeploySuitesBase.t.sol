@@ -33,6 +33,7 @@ import {VersionQualifiedArtifactPathDeploySuites} from "../../concrete/VersionQu
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 
 /// @title RainDeploySuitesBaseTest
 /// @notice The registry itself: one declaration, keyed lookup, and the two ways
@@ -63,6 +64,12 @@ contract RainDeploySuitesBaseTest is Test {
         assertEq(suites[1].suite, "second-address");
         assertEq(suites[2].suite, "config-registry-candidate");
         assertEq(suites[3].suite, "second-address-candidate");
+    }
+
+    /// A repo that does not override `extendedNetworksRoot` reads and writes its extended networks records under its
+    /// own record, the one its frozen snapshots are under.
+    function testExtendedNetworksRootDefaultsToTheRepoRecord() external view {
+        assertEq(sSuites.externalExtendedNetworksRoot(), LibRainDeploySnapshot.LIB_FS_ROOT);
     }
 
     /// Every declared key MUST select its own suite. A deploy is dispatched per
@@ -104,6 +111,26 @@ contract RainDeploySuitesBaseTest is Test {
             )
         );
         sSuites.externalSuiteByName("mock-deployable");
+    }
+
+    function testSuiteIndexIsEachKeysPositionAndTheLengthForAnUnknownKey() external view {
+        DeploySuite[] memory suites = sSuites.externalAllSuites();
+        for (uint256 i = 0; i < suites.length; i++) {
+            assertEq(sSuites.externalSuiteIndex(suites[i].suite), i);
+        }
+        assertEq(sSuites.externalSuiteIndex("mock-deployable"), suites.length);
+        assertEq(sSuites.externalSuiteIndex(""), suites.length);
+    }
+
+    /// `resolveReleased` searches `releasedSuites()` as declared, where nothing has refused a repeated key yet.
+    function testSuiteIndexIsTheFirstOfARepeatedKey() external view {
+        DeploySuite[] memory declared = sSuites.externalAllSuites();
+        DeploySuite[] memory suites = new DeploySuite[](3);
+        suites[0] = declared[0];
+        suites[1] = declared[1];
+        suites[2] = declared[0];
+        assertEq(sSuites.externalSuiteIndexIn(suites, declared[0].suite), 0);
+        assertEq(sSuites.externalSuiteIndexIn(suites, declared[1].suite), 1);
     }
 
     /// An empty key is just another unknown key, so an unset `DEPLOYMENT_SUITE`

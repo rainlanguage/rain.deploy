@@ -3,16 +3,17 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {
     LibCodeGen,
     RAIN_COPYRIGHT_TEXT,
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
-import {DeployDependency, DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
-import {LibRainDeploy} from "./LibRainDeploy.sol";
+import {DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
 import {CloneNetworks} from "./LibRainDeployClone.sol";
-import {LibRainDeployMechanism} from "./LibRainDeployMechanism.sol";
+import {LibRainDeployMechanism, UnknownDeployMechanism} from "./LibRainDeployMechanism.sol";
 
 /// Thrown when `[external.package].version` is not strict `X.Y.Z`. A version
 /// like `0.1.7-rc1` maps to the directory `0_1_7-rc1`, which the append-only
@@ -67,11 +68,14 @@ error InvalidRecordRoot(string root);
 error SnapshotStateRevertFailed(string suite, uint256 snapshotId);
 
 /// Thrown when a file in the frozen record declares no deployed address, declares one as
-/// `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in decimal digits, or declares one whose
-/// value does not read as an address.
-/// @param path The record file with no `DEPLOYED_ADDRESS` or `DEPLOYED_ADDRESS_<chainId>`
-/// declaration, with a `DEPLOYED_ADDRESS_<x>` whose `<x>` is not decimal, or with a declared value
-/// that is not an address.
+/// `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in decimal digits without a leading zero, names
+/// `DEPLOYED_ADDRESS` or `MECHANISM_DATA` outside a block comment on a line not starting with the writer's
+/// declaration of it (a line comment, the SPDX header's licence identifier and copyright text included), declares
+/// one whose value is not `0x` and 40 hex digits, bare or in `address(...)`, then `;`, declares one outside the
+/// writer's format (`=` fourth of five space-separated tokens, or wrapped onto the next line at the writer's indent),
+/// or holds a line break other than `\n` that solc honours.
+/// @param path The record file that declares no deployed address, declares one it cannot read, or
+/// holds a line break other than `\n`.
 error FrozenSnapshotUnreadable(string path);
 
 /// Thrown when a file in the frozen record declares its deployed address more than once.
@@ -86,6 +90,14 @@ error FrozenSnapshotMechanismDataAmbiguous(string path);
 /// `DEPLOYED_ADDRESS_<chainId>`, and declares no `MECHANISM_DATA`.
 /// @param path The record file.
 error FrozenSnapshotMechanismDataMissing(string path);
+
+/// Thrown when a file in the frozen record carries the `BEACON_PROXY` marker more than once.
+/// @param path The record file.
+error FrozenSnapshotBeaconProxyMarkerAmbiguous(string path);
+
+/// Thrown when a file in the frozen record carries the `BEACON_PROXY` marker and declares no `MECHANISM_DATA`.
+/// @param path The record file.
+error FrozenSnapshotBeaconProxyMechanismDataMissing(string path);
 
 /// @title LibRainDeploySnapshot
 /// @notice Which release is being built, where its record lives, and how it is
@@ -507,6 +519,55 @@ library LibRainDeploySnapshot {
         return pathForLib(LIB_DIR, libraryName);
     }
 
+    /// The stdout line `rainix-copy-artifacts` reads a generated path from. It
+    /// fails the job on a declared path the run did not write.
+    string constant CODEGEN_OWNS_PREFIX = "rainix-codegen owns ";
+
+    /// Every path a `BuildScript.run()` must rewrite: each candidate snapshot,
+    /// each contract's released-suites lib and the aggregate. Computed from the
+    /// names rather than from the writers, so a dropped writer call is visible.
+    /// @param libDir The directory the libs are written into.
+    /// @param recordRoot The record root the candidate snapshots are written under.
+    /// @param recordNames The snapshots a release freezes.
+    /// @param contractNames The contracts with a released-suites lib.
+    /// @return The paths.
+    function generatedPaths(
+        string memory libDir,
+        string memory recordRoot,
+        string[] memory recordNames,
+        string[] memory contractNames
+    ) internal pure returns (string[] memory) {
+        string[] memory paths = new string[](recordNames.length + contractNames.length + 1);
+        for (uint256 i = 0; i < recordNames.length; i++) {
+            paths[i] = pathForSnapshot(recordRoot, CANDIDATE, recordNames[i]);
+        }
+        for (uint256 i = 0; i < contractNames.length; i++) {
+            paths[recordNames.length + i] = pathForLib(libDir, releasedLibraryName(contractNames[i]));
+        }
+        paths[paths.length - 1] = pathForLib(libDir, RELEASED_SUITES_LIBRARY);
+        return paths;
+    }
+
+    /// The declaration lines for `paths`.
+    /// @param paths The generated paths.
+    /// @return The lines.
+    function codegenDeclaration(string[] memory paths) internal pure returns (string[] memory) {
+        string[] memory lines = new string[](paths.length);
+        for (uint256 i = 0; i < paths.length; i++) {
+            lines[i] = string.concat(CODEGEN_OWNS_PREFIX, paths[i]);
+        }
+        return lines;
+    }
+
+    /// Prints `codegenDeclaration(paths)`, one line each.
+    /// @param paths The generated paths.
+    function declareGenerated(string[] memory paths) internal pure {
+        string[] memory lines = codegenDeclaration(paths);
+        for (uint256 i = 0; i < lines.length; i++) {
+            console2.log(lines[i]);
+        }
+    }
+
     /// Every file in the FROZEN record: everything inside a release-tag
     /// directory under `root`.
     ///
@@ -737,36 +798,48 @@ library LibRainDeploySnapshot {
         );
     }
 
-    /// The constants a CLONE snapshot declares below `BYTECODE_HASH`.
+    /// The constants a CLONE or BEACON_PROXY snapshot declares below `BYTECODE_HASH`. A beacon proxy's
+    /// record also carries the `BEACON_PROXY` marker, which is how `recordedMechanism` reads it back.
     /// @param vm The Vm instance for string operations.
-    /// @param deployed Where the local deploy put the clone, in the suite's address order.
-    /// @param suite The clone suite.
+    /// @param deployed Where the local deploy put the suite, in the suite's address order.
+    /// @param suite The clone or beacon proxy suite.
     /// @return The constants, as Solidity source.
     function cloneSnapshotConstants(Vm vm, address[] memory deployed, DeploySuite memory suite)
         internal
         view
         returns (string memory)
     {
+        bool beaconProxy = LibRainDeployMechanism.isBeaconProxy(suite);
         string memory addressConstants;
         string memory mechanismDataComment;
         bytes memory mechanismData;
-        if (suite.mechanism == DeployMechanism.ClonePerNetwork) {
+        if (LibRainDeployMechanism.isPerNetwork(suite)) {
             (addressConstants, mechanismData) = perNetworkAddressConstants(vm, deployed, suite);
-            mechanismDataComment = "/// @dev The clone factory call this release was cut with: the\n"
+            mechanismDataComment = beaconProxy
+                ? "/// @dev The beacon proxy factory call this release was cut with: the\n"
+                "/// `abi.encode`d `CloneNetworks` a released suite carries as its\n" "/// `mechanismData`."
+                : "/// @dev The clone factory call this release was cut with: the\n"
                 "/// `abi.encode`d `CloneNetworks` a released suite carries as its\n" "/// `mechanismData`.";
         } else {
             addressConstants = LibCodeGen.addressConstantString(
                 vm,
-                "/// @dev The deterministic deploy address of the EIP-1167 clone, through its\n"
-                "/// factory's open salt.",
+                beaconProxy
+                    ? "/// @dev The deterministic deploy address of the beacon proxy, through its\n"
+                    "/// factory's beacon-proxy open salt."
+                    : "/// @dev The deterministic deploy address of the EIP-1167 clone, through its\n"
+                    "/// factory's open salt.",
                 "DEPLOYED_ADDRESS",
                 deployed[0]
             );
             mechanismData = suite.mechanismData;
-            mechanismDataComment = "/// @dev The clone factory call this release was cut with: the\n"
+            mechanismDataComment = beaconProxy
+                ? "/// @dev The beacon proxy factory call this release was cut with: the\n"
+                "/// `abi.encode`d `CloneTarget` a released suite carries as its\n" "/// `mechanismData`."
+                : "/// @dev The clone factory call this release was cut with: the\n"
                 "/// `abi.encode`d `CloneTarget` a released suite carries as its\n" "/// `mechanismData`.";
         }
         return string.concat(
+            beaconProxy ? BEACON_PROXY_MARKER : "",
             addressConstants,
             LibCodeGen.bytesConstantString(
                 vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", suite.creationCode
@@ -802,6 +875,7 @@ library LibRainDeploySnapshot {
     {
         CloneNetworks memory clones = LibRainDeployMechanism.cloneNetworks(suite);
         string memory addressConstants = "";
+        bool beaconProxy = LibRainDeployMechanism.isBeaconProxy(suite);
         for (uint256 i = 0; i < clones.networks.length; i++) {
             clones.networks[i].deployedAddress = deployed[i];
             string memory chainId = vm.toString(clones.networks[i].chainId);
@@ -810,9 +884,13 @@ library LibRainDeploySnapshot {
                 LibCodeGen.addressConstantString(
                     vm,
                     string.concat(
-                        "/// @dev The deterministic deploy address of the EIP-1167 clone on chain id\n/// ",
+                        beaconProxy
+                            ? "/// @dev The deterministic deploy address of the beacon proxy on chain id\n/// "
+                            : "/// @dev The deterministic deploy address of the EIP-1167 clone on chain id\n/// ",
                         chainId,
-                        ", through its factory's open salt with that network's init data."
+                        beaconProxy
+                            ? ", through its factory's beacon-proxy open salt with that network's init data."
+                            : ", through its factory's open salt with that network's init data."
                     ),
                     string.concat("DEPLOYED_ADDRESS_", chainId),
                     deployed[i]
@@ -1114,7 +1192,7 @@ library LibRainDeploySnapshot {
         string memory spdxLicenseIdentifier,
         string memory copyrightText
     ) internal returns (string memory) {
-        string memory libraryName = string.concat("Lib", contractName, "Deploy");
+        string memory libraryName = aliasLibraryName(contractName);
         string memory path = pathForLib(libDir, libraryName);
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
@@ -1309,6 +1387,13 @@ library LibRainDeploySnapshot {
         return sortedRecordPaths(vm, selected);
     }
 
+    /// The name of the alias lib that re-exports ONE contract's candidate pins.
+    /// @param contractName The contract the alias lib describes.
+    /// @return The library name, e.g. `LibConfigRegistryDeploy`.
+    function aliasLibraryName(string memory contractName) internal pure returns (string memory) {
+        return string.concat("Lib", contractName, "Deploy");
+    }
+
     /// The name of the generated lib that declares ONE contract's releases.
     ///
     /// Spelled once because two emitters have to agree on it: the writer that
@@ -1322,11 +1407,32 @@ library LibRainDeploySnapshot {
         return string.concat("Lib", contractName, "Released");
     }
 
+    /// The name every deployed address constant starts with. A line holding it anywhere but at the start of the
+    /// writer's declaration is not the writer's.
+    string constant DEPLOYED_ADDRESS_NAME = "DEPLOYED_ADDRESS";
+
     string constant DEPLOYED_ADDRESS_DECLARATION = "address constant DEPLOYED_ADDRESS =";
 
     string constant DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX = "address constant DEPLOYED_ADDRESS_";
 
+    /// The indent the writer gives a declaration value wrapped onto its own line.
+    string constant WRAPPED_INDENT = "    ";
+
+    /// The name of the mechanism data constant. A line holding it anywhere but at the start of the writer's declaration
+    /// is not the writer's.
+    string constant MECHANISM_DATA_NAME = "MECHANISM_DATA";
+
     string constant MECHANISM_DATA_DECLARATION = "bytes constant MECHANISM_DATA =";
+
+    /// The name of the beacon proxy marker. A line holding it anywhere but as the writer's declaration of it is not
+    /// the writer's.
+    string constant BEACON_PROXY_NAME = "BEACON_PROXY";
+
+    string constant BEACON_PROXY_DECLARATION = "bool constant BEACON_PROXY = true;";
+
+    /// The marker a beacon proxy record carries, as the writer emits it.
+    string constant BEACON_PROXY_MARKER = "\n/// @dev Marks a beacon proxy record: its factory call's `implementation` is the\n"
+        "/// beacon.\nbool constant BEACON_PROXY = true;\n";
 
     /// The addresses a frozen record declares as its deploy addresses, and the chain id each is
     /// for.
@@ -1340,7 +1446,21 @@ library LibRainDeploySnapshot {
         pure
         returns (uint256[] memory, address[] memory)
     {
-        string[] memory lines = vm.split(withoutBlockComments(vm, record), "\n");
+        return recordedDeployedAddresses(vm, path, recordLines(vm, path, record));
+    }
+
+    /// The addresses a frozen record declares as its deploy addresses, and the chain id each is
+    /// for, from the record's lines.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file, for the error only.
+    /// @param lines The record's lines, as `recordLines` returns them.
+    /// @return The chain id each address is for.
+    /// @return The addresses the record declares, in file order.
+    function recordedDeployedAddresses(Vm vm, string memory path, string[] memory lines)
+        internal
+        pure
+        returns (uint256[] memory, address[] memory)
+    {
         uint256[] memory chainIds = new uint256[](lines.length);
         address[] memory addresses = new address[](lines.length);
         uint256 perNetwork = 0;
@@ -1348,13 +1468,15 @@ library LibRainDeploySnapshot {
         for (uint256 i = 0; i < lines.length; i++) {
             bool isEveryNetwork = vm.indexOf(lines[i], DEPLOYED_ADDRESS_DECLARATION) == 0;
             if (!isEveryNetwork && vm.indexOf(lines[i], DEPLOYED_ADDRESS_CHAIN_DECLARATION_PREFIX) != 0) {
+                if (vm.contains(lines[i], DEPLOYED_ADDRESS_NAME)) {
+                    revert FrozenSnapshotUnreadable(path);
+                }
                 continue;
             }
             if (everyNetwork || (isEveryNetwork && perNetwork != 0)) {
                 revert FrozenSnapshotAmbiguous(path);
             }
-            string[] memory tokens = vm.split(lines[i], " ");
-            address declared = declaredAddress(vm, path, tokens[tokens.length - 1]);
+            address declared = declarationAddress(vm, path, lines, i);
             if (isEveryNetwork) {
                 everyNetwork = true;
                 addresses[0] = declared;
@@ -1382,14 +1504,70 @@ library LibRainDeploySnapshot {
         return (chainIds, addresses);
     }
 
-    /// The address a declaration line's value names.
+    /// The address the declaration on `lines[line]` names, read by `declarationValue` with `address(` at the
+    /// writer's `WRAPPED_INDENT`.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file, for the error only.
-    /// @param value The declaration line's last token.
+    /// @param lines The record's lines, block comments removed.
+    /// @param line The declaration's line.
+    /// @return The address.
+    function declarationAddress(Vm vm, string memory path, string[] memory lines, uint256 line)
+        internal
+        pure
+        returns (address)
+    {
+        // An unreadable declaration's value is empty, which `declaredAddress` refuses at its `0x` split.
+        (, string memory value) = declarationValue(vm, lines, line, string.concat(WRAPPED_INDENT, "address("));
+        return declaredAddress(vm, path, value);
+    }
+
+    /// The value the declaration on `lines[line]` gives, held to the writer's format: the last of exactly five
+    /// space-separated tokens, on the declaration's own line with `=` fourth, or on the next line when the declaration
+    /// ends at its `=` and that line starts with `wrappedPrefix`.
+    /// @param vm The Vm instance for string operations.
+    /// @param lines The record's lines, block comments removed.
+    /// @param line The declaration's line.
+    /// @param wrappedPrefix The start the writer gives a wrapped value's line.
+    /// @return Whether the declaration is in the writer's format.
+    /// @return The value's token, empty when not readable.
+    function declarationValue(Vm vm, string[] memory lines, uint256 line, string memory wrappedPrefix)
+        internal
+        pure
+        returns (bool, string memory)
+    {
+        string[] memory tokens = vm.split(lines[line], " ");
+        bool readable = tokens.length >= 4 && keccak256(bytes(tokens[3])) == keccak256("=");
+        if (readable && tokens.length == 4) {
+            readable = line + 1 < lines.length && vm.indexOf(lines[line + 1], wrappedPrefix) == 0;
+            if (readable) {
+                tokens = vm.split(lines[line + 1], " ");
+            }
+        }
+        readable = readable && tokens.length == 5;
+        return (readable, readable ? tokens[4] : "");
+    }
+
+    /// The address a declaration line's value names: `0x` and 40 hex digits, wrapped in the writer's `address(` and
+    /// `)` or bare, then `;`. `vm.parseAddress` refuses any other digit count.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file, for the error only.
+    /// @param value The declaration's last token, from the line after it when the writer wrapped it.
     /// @return The address.
     function declaredAddress(Vm vm, string memory path, string memory value) internal pure returns (address) {
-        string memory bare = vm.replace(vm.replace(vm.replace(value, "address(", ""), ")", ""), ";", "");
-        try vm.parseAddress(bare) returns (address declared) {
+        string[] memory opened = vm.split(value, "0x");
+        if (opened.length != 2) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        bool wrapped = keccak256(bytes(opened[0])) == keccak256("address(");
+        if (!wrapped && bytes(opened[0]).length != 0) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        string[] memory closed = vm.split(opened[1], wrapped ? ");" : ";");
+        if (closed.length != 2 || bytes(closed[1]).length != 0) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        // `vm.parseAddress` reads the 40 digits with or without the `0x` the split removed.
+        try vm.parseAddress(closed[0]) returns (address declared) {
             return declared;
         } catch {
             revert FrozenSnapshotUnreadable(path);
@@ -1417,57 +1595,161 @@ library LibRainDeploySnapshot {
             chainId = chainId * 10 + digit;
             end++;
         }
-        if (end == start) {
+        if (end == start || (end - start > 1 && text[start] == "0")) {
             revert FrozenSnapshotUnreadable(path);
         }
         return chainId;
     }
 
-    /// A record's text with every block comment removed, so that a declaration found in it is one
-    /// the compiler would read.
+    /// A record's lines, block comments removed, from a record whose only line break is `\n`.
+    /// Reverts with `FrozenSnapshotUnreadable` on any other line break solc honours.
     /// @param vm The Vm instance for string operations.
+    /// @param path The record file, for the error only.
     /// @param record The record file's contents.
-    /// @return The contents with every block comment removed.
-    function withoutBlockComments(Vm vm, string memory record) internal pure returns (string memory) {
-        string[] memory opened = vm.split(record, "/*");
-        string memory stripped = opened[0];
-        for (uint256 i = 1; i < opened.length; i++) {
-            string[] memory closed = vm.split(opened[i], "*/");
-            if (closed.length == 1) {
-                break;
-            }
-            stripped = string.concat(stripped, closed[1]);
-            for (uint256 j = 2; j < closed.length; j++) {
-                stripped = string.concat(stripped, "*/", closed[j]);
-            }
+    /// @return The lines.
+    function recordLines(Vm vm, string memory path, string memory record) internal pure returns (string[] memory) {
+        if (hasForeignLineBreak(vm, record)) {
+            revert FrozenSnapshotUnreadable(path);
         }
-        return stripped;
+        return splitRecordLines(vm, record);
     }
 
-    /// The mechanism a frozen record was cut with, read from the declarations the record carries:
+    /// A record's lines, block comments removed, split on `\n` alone with no line break check.
+    /// @param vm The Vm instance for string operations.
+    /// @param record The record file's contents.
+    /// @return The lines.
+    function splitRecordLines(Vm vm, string memory record) internal pure returns (string[] memory) {
+        return vm.split(withoutBlockComments(record), "\n");
+    }
+
+    /// Whether a record holds a line break solc honours other than `\n`: `\r`, `\x0b`, `\x0c`, NEL, LS or PS.
+    /// @param vm The Vm instance for string operations.
+    /// @param record The record file's contents.
+    /// @return Whether it holds one.
+    function hasForeignLineBreak(Vm vm, string memory record) internal pure returns (bool) {
+        return vm.contains(record, "\r") || vm.contains(record, "\x0b") || vm.contains(record, "\x0c")
+            || vm.contains(record, "\xc2\x85") || vm.contains(record, "\xe2\x80\xa8")
+            || vm.contains(record, "\xe2\x80\xa9");
+    }
+
+    /// A record's text with every block comment removed but its line breaks, read left to right: the first `*/` closes
+    /// a block comment, a `//` comment runs to the next `\n`, and a quoted string runs to its unescaped closing quote.
+    /// @param record The record file's contents.
+    /// @return The contents with every block comment removed but its line breaks.
+    function withoutBlockComments(string memory record) internal pure returns (string memory) {
+        bytes memory text = bytes(record);
+        bytes memory stripped = new bytes(text.length);
+        uint256 length = 0;
+        uint256 i = 0;
+        unchecked {
+            while (i < text.length) {
+                bytes1 character = text[i];
+                bool slashNext = character == "/" && i + 1 < text.length;
+                if (slashNext && text[i + 1] == "*") {
+                    i += 2;
+                    while (i < text.length && !(text[i] == "*" && i + 1 < text.length && text[i + 1] == "/")) {
+                        if (text[i] == "\n") {
+                            stripped[length++] = "\n";
+                        }
+                        i++;
+                    }
+                    i += 2;
+                    continue;
+                }
+                bytes1 closing = 0;
+                if (slashNext && text[i + 1] == "/") {
+                    closing = "\n";
+                } else if (character == "\"" || character == "'") {
+                    closing = character;
+                }
+                stripped[length++] = character;
+                i++;
+                if (closing == 0) {
+                    continue;
+                }
+                while (i < text.length) {
+                    character = text[i];
+                    stripped[length++] = character;
+                    i++;
+                    if (character == closing) {
+                        break;
+                    }
+                    if (closing != "\n" && character == "\\" && i < text.length) {
+                        stripped[length++] = text[i];
+                        i++;
+                    }
+                }
+            }
+        }
+        assembly ("memory-safe") {
+            mstore(stripped, length)
+        }
+        return string(stripped);
+    }
+
+    /// The mechanism a frozen record was cut with, read from the declarations the record carries: `MECHANISM_DATA`
+    /// for a clone or beacon proxy, `DEPLOYED_ADDRESS_<chainId>` for one per network, and the `BEACON_PROXY` marker for
+    /// a beacon proxy.
     /// @param vm The Vm instance for file and string operations.
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
     /// @return The mechanism the record was cut with.
     function recordedMechanism(Vm vm, string memory path) internal view returns (DeployMechanism) {
-        string memory record = vm.readFile(path);
-        (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, record);
-        string[] memory lines = vm.split(withoutBlockComments(vm, record), "\n");
+        string[] memory lines = recordLines(vm, path, vm.readFile(path));
+        (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, lines);
         uint256 mechanismData = 0;
+        uint256 markers = 0;
+        bytes32 markerHash = keccak256(bytes(BEACON_PROXY_DECLARATION));
         for (uint256 i = 0; i < lines.length; i++) {
-            if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {
+            if (keccak256(bytes(lines[i])) == markerHash) {
+                markers++;
+            } else if (vm.contains(lines[i], BEACON_PROXY_NAME)) {
+                revert FrozenSnapshotUnreadable(path);
+            } else if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {
                 mechanismData++;
+            } else if (vm.contains(lines[i], MECHANISM_DATA_NAME)) {
+                revert FrozenSnapshotUnreadable(path);
             }
         }
         if (mechanismData > 1) {
             revert FrozenSnapshotMechanismDataAmbiguous(path);
         }
+        if (markers > 1) {
+            revert FrozenSnapshotBeaconProxyMarkerAmbiguous(path);
+        }
         if (mechanismData == 0) {
+            if (markers != 0) {
+                revert FrozenSnapshotBeaconProxyMechanismDataMissing(path);
+            }
             if (chainIds.length != 0) {
                 revert FrozenSnapshotMechanismDataMissing(path);
             }
             return DeployMechanism.Zoltu;
         }
+        if (markers != 0) {
+            return chainIds.length == 0 ? DeployMechanism.BeaconProxy : DeployMechanism.BeaconProxyPerNetwork;
+        }
         return chainIds.length == 0 ? DeployMechanism.Clone : DeployMechanism.ClonePerNetwork;
+    }
+
+    /// @param kind A mechanism.
+    /// @return Its name as a generated released-suites lib spells it.
+    function mechanismName(DeployMechanism kind) internal pure returns (string memory) {
+        if (kind == DeployMechanism.Zoltu) {
+            return "DeployMechanism.Zoltu";
+        }
+        if (kind == DeployMechanism.Clone) {
+            return "DeployMechanism.Clone";
+        }
+        if (kind == DeployMechanism.ClonePerNetwork) {
+            return "DeployMechanism.ClonePerNetwork";
+        }
+        if (kind == DeployMechanism.BeaconProxy) {
+            return "DeployMechanism.BeaconProxy";
+        }
+        if (kind == DeployMechanism.BeaconProxyPerNetwork) {
+            return "DeployMechanism.BeaconProxyPerNetwork";
+        }
+        revert UnknownDeployMechanism(uint8(kind));
     }
 
     /// The aliased import one record file contributes.
@@ -1478,7 +1760,7 @@ library LibRainDeploySnapshot {
         string memory prefix = releasedConstantPrefix(vm, path);
         DeployMechanism mechanism = recordedMechanism(vm, path);
         return string.concat(
-            mechanism == DeployMechanism.ClonePerNetwork
+            LibRainDeployMechanism.isPerNetworkMechanism(mechanism)
                 ? string("import {\n    ")
                 : string.concat("import {\n    DEPLOYED_ADDRESS as ", prefix, "_DEPLOYED_ADDRESS,\n    "),
             "BYTECODE_HASH as ",
@@ -1546,17 +1828,12 @@ library LibRainDeploySnapshot {
         string memory mechanism;
         {
             DeployMechanism kind = recordedMechanism(vm, path);
-            storedDeployedAddress = kind == DeployMechanism.ClonePerNetwork
+            storedDeployedAddress = LibRainDeployMechanism.isPerNetworkMechanism(kind)
                 ? string("address(0)")
                 : string.concat(prefix, "_DEPLOYED_ADDRESS");
             mechanism = kind == DeployMechanism.Zoltu
                 ? string("DeployMechanism.Zoltu,\n            mechanismData: \"\"")
-                : string.concat(
-                    kind == DeployMechanism.Clone ? "DeployMechanism.Clone" : "DeployMechanism.ClonePerNetwork",
-                    ",\n            mechanismData: ",
-                    prefix,
-                    "_MECHANISM_DATA"
-                );
+                : string.concat(mechanismName(kind), ",\n            mechanismData: ", prefix, "_MECHANISM_DATA");
         }
         string memory head = string.concat(
             "        suites[",

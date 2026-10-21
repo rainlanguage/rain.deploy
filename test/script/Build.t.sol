@@ -482,4 +482,42 @@ contract BuildTest is Test {
         vm.expectRevert(BuildHarnessWouldWriteTheCommittedLibs.selector);
         sBuild.externalRegenerateLibs();
     }
+
+    /// PROPERTY: `run()` declares exactly these lines, and each names a committed file.
+    function testRunDeclaresTheCommittedGeneratedFiles() external view {
+        string[] memory paths = sBuild.externalGeneratedPaths();
+        string[] memory lines = LibRainDeploySnapshot.codegenDeclaration(paths);
+
+        string[11] memory expected = [
+            "rainix-codegen owns src/generated/candidate/ConfigRegistry.sol",
+            "rainix-codegen owns src/generated/candidate/MigrationRegistry.sol",
+            "rainix-codegen owns src/generated/candidate/TimelockController.sol",
+            "rainix-codegen owns src/lib/LibConfigRegistryReleased.sol",
+            "rainix-codegen owns src/lib/LibMigrationRegistryReleased.sol",
+            "rainix-codegen owns src/lib/LibReleasedSuites.sol",
+            "rainix-codegen owns foundry.toml",
+            "rainix-codegen owns .env.example",
+            "rainix-codegen owns src/lib/LibAddressRegistryReleased.sol",
+            "rainix-codegen owns src/lib/LibConfigRegistryDeploy.sol",
+            "rainix-codegen owns src/lib/LibMigrationRegistryDeploy.sol"
+        ];
+        assertEq(lines.length, expected.length);
+        for (uint256 i = 0; i < expected.length; i++) {
+            assertEq(lines[i], expected[i]);
+            assertTrue(vm.exists(paths[i]), paths[i]);
+        }
+    }
+
+    /// PROPERTY: every lib `run()` declares is under `libDir()`, the directory `regenerateLibs` writes into.
+    function testRunDeclaresTheLibsUnderLibDir() external {
+        string[] memory paths = new BuildHarness(LIBS_FIXTURE_DIR).externalGeneratedPaths();
+
+        assertEq(paths.length, 11);
+        assertEq(paths[3], string.concat(LIBS_FIXTURE_DIR, "/LibConfigRegistryReleased.sol"));
+        assertEq(paths[4], string.concat(LIBS_FIXTURE_DIR, "/LibMigrationRegistryReleased.sol"));
+        assertEq(paths[5], string.concat(LIBS_FIXTURE_DIR, "/LibReleasedSuites.sol"));
+        assertEq(paths[8], string.concat(LIBS_FIXTURE_DIR, "/LibAddressRegistryReleased.sol"));
+        assertEq(paths[9], string.concat(LIBS_FIXTURE_DIR, "/LibConfigRegistryDeploy.sol"));
+        assertEq(paths[10], string.concat(LIBS_FIXTURE_DIR, "/LibMigrationRegistryDeploy.sol"));
+    }
 }
