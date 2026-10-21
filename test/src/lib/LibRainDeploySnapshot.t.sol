@@ -2007,7 +2007,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// type and silently retypes an append-only record.
     function testSnapshotConstantsDocumentEveryConstant() external view {
         string memory constants =
-            LibRainDeploySnapshot.snapshotConstants(vm, address(this), hex"00", new DeployDependency[](0));
+            LibRainDeploySnapshot.snapshotConstants(vm, address(this), hex"00", new DeployDependency[](0), "");
 
         assertTrue(
             vm.contains(

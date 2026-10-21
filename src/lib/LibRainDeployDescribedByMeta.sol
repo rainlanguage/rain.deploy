@@ -137,14 +137,23 @@ library LibRainDeployDescribedByMeta {
         if (meta.length == 0) {
             return;
         }
-        bytes32 metaHash = keccak256(meta);
+        (bool answered, bytes32 describedByMetaHash) = describedByMetaHashOf(described);
+        if (!answered || describedByMetaHash != keccak256(meta)) {
+            revert DescribedByMetaMismatch(suite, described, answered, describedByMetaHash, keccak256(meta));
+        }
+    }
+
+    /// What `described` answers `describedByMetaV1()` with.
+    /// @param described The deployment.
+    /// @return Whether it answered a word.
+    /// @return The word, zero when it answered none.
+    function describedByMetaHashOf(address described) internal view returns (bool, bytes32) {
         // slither-disable-next-line low-level-calls
         (bool success, bytes memory answer) =
             described.staticcall(abi.encodeCall(IDescribedByMetaV1.describedByMetaV1, ()));
-        bool answered = success && answer.length >= 0x20;
-        bytes32 describedByMetaHash = answered ? abi.decode(answer, (bytes32)) : bytes32(0);
-        if (!answered || describedByMetaHash != metaHash) {
-            revert DescribedByMetaMismatch(suite, described, answered, describedByMetaHash, metaHash);
+        if (!success || answer.length < 0x20) {
+            return (false, bytes32(0));
         }
+        return (true, abi.decode(answer, (bytes32)));
     }
 }

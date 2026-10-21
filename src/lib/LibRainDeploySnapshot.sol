@@ -905,8 +905,7 @@ library LibRainDeploySnapshot {
                 "DEPENDENCIES",
                 abi.encode(suite.dependencies)
             ),
-            LibCodeGen.bytesConstantString(vm, mechanismDataComment, "MECHANISM_DATA", mechanismData),
-            describedByMetaConstant(vm, suite.describedByMeta)
+            LibCodeGen.bytesConstantString(vm, mechanismDataComment, "MECHANISM_DATA", mechanismData)
         );
     }
 
@@ -998,7 +997,8 @@ library LibRainDeploySnapshot {
         DeploySuite memory suite
     ) internal {
         address[] memory deployed = LibRainDeployMechanism.deployLocally(vm, suite);
-        string memory constants = cloneSnapshotConstants(vm, deployed, suite);
+        string memory constants =
+            string.concat(cloneSnapshotConstants(vm, deployed, suite), describedByMetaConstant(vm, suite.describedByMeta));
         LibFs.buildFileForContract(
             vm, deployed[0], snapshotDir, contractName, spdxLicenseIdentifier, copyrightText, constants
         );
@@ -1827,7 +1827,7 @@ library LibRainDeploySnapshot {
     function releasedImport(Vm vm, string memory path) internal view returns (string memory) {
         string memory prefix = releasedConstantPrefix(vm, path);
         DeployMechanism mechanism = recordedMechanism(vm, path);
-        return string.concat(
+        string memory names = string.concat(
             LibRainDeployMechanism.isPerNetworkMechanism(mechanism)
                 ? string("import {\n    ")
                 : string.concat("import {\n    DEPLOYED_ADDRESS as ", prefix, "_DEPLOYED_ADDRESS,\n    "),
@@ -1842,7 +1842,10 @@ library LibRainDeploySnapshot {
             "_DEPENDENCIES",
             mechanism == DeployMechanism.Zoltu
                 ? string("")
-                : string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA"),
+                : string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA")
+        );
+        return string.concat(
+            names,
             recordedDescribedByMeta(vm, path)
                 ? string.concat(",\n    DESCRIBED_BY_META as ", prefix, "_DESCRIBED_BY_META")
                 : string(""),
