@@ -400,6 +400,22 @@ contract LibConfigRegistryRegisterTest is Test {
         this.externalCheckRegisteredOnNetworksWith(forkVm, selected, address(this), "a.b", value);
     }
 
+    /// `registerOnNetworks` binds as the sender it is given, not as its own
+    /// `msg.sender`: called by another account with this contract as both
+    /// sender and authority, it binds on every selected network.
+    function testRegisterOnNetworksBindsAsTheGivenSender(address caller) external {
+        vm.assume(caller != address(this));
+        IConfigRegistryV1 registry = deployRegistry();
+        Vm forkVm = Vm(address(new LocalForkVm()));
+        string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
+        bytes memory value = abi.encode(address(1));
+
+        vm.prank(caller);
+        this.externalRegisterOnNetworksWith(forkVm, selected, address(this), address(this), "a.b", value);
+        assertEq(LibConfigRegistryRead.getValue(registry, address(this), keccak256("a.b")), value);
+        this.externalCheckRegisteredOnNetworksWith(forkVm, selected, address(this), "a.b", value);
+    }
+
     /// The confirmed check refuses its inputs before anything is forked.
     function testCheckRegisteredOnNetworksRefusesInputs() external {
         string[] memory declared = LibRainDeploy.supportedNetworks();
