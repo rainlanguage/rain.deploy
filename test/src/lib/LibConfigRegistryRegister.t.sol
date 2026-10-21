@@ -826,9 +826,10 @@ contract LibConfigRegistryRegisterTest is Test {
         this.externalRegisterOnSelectedChain(base(), AUTHORITY, name, value);
     }
 
-    /// The inputs record, field for field, for st0x's token-owner Safe bound to
-    /// `0x…dEaD`. The hash, value and calldata are `cast keccak
-    /// st0x.token-owner-safe`, `cast abi-encode "f(address)" 0x…dEaD` and
+    /// The inputs record, field for field, for st0x's token-owner Safe bound
+    /// to `0x…dEaD`. The hash, value and calldata are
+    /// `cast keccak st0x.token-owner-safe`,
+    /// `cast abi-encode "f(address)" 0x…dEaD` and
     /// `cast calldata "registerV1(bytes32,bytes)" <hash> <value>`.
     function testDescribeInputs() external pure {
         assertEq(
@@ -839,7 +840,7 @@ contract LibConfigRegistryRegisterTest is Test {
                 "Name: st0x.token-owner-safe\n",
                 "Name hash (keccak256 of the name): 0xba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8\n",
                 "Value: 0x000000000000000000000000000000000000000000000000000000000000dead\n",
-                "Authority (sender): ",
+                "Authority: ",
                 vm.toString(AUTHORITY),
                 "\n",
                 "Registry: ",

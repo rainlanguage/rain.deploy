@@ -15,8 +15,8 @@ import {RegisterConfigRunCaller} from "../concrete/RegisterConfigRunCaller.sol";
 
 /// @title RegisterConfigTest
 /// The script's wiring: which variables it reads, that the signer is the
-/// script's `msg.sender`, and that both entries default to every supported
-/// network. `LibConfigRegistryRegister`'s own tests cover what it does with
+/// script's `msg.sender`, and that all three entries default to every
+/// supported network. `LibConfigRegistryRegister`'s own tests cover what it does with
 /// them.
 ///
 /// ONE test function, because it writes process-wide environment variables and

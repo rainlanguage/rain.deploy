@@ -600,10 +600,13 @@ per-network state, so rotating them is done on every network the authority's
 names are consumed on, then verified on each: a network left out is still
 controlled by the old controllers, who can rebind every name there. On a network
 it is not yet deployed to, its address is claimable by whoever deploys there
-first only where the deployment path does not commit to its controllers — a
+first where the deployment path does not commit to its controllers — a
 CREATE-nonce deployment, or a factory that does not bind the initializer or is
 missing on that network. A Zoltu timelock or a SafeProxyFactory CREATE2 Safe
-commits to its init, so deploying it first seats the same controllers.
+commits to its init, but that init names the original controllers, so replaying
+it on a network after a rotation seats the controllers the rotation removed. A
+contract authority is deployed on every network before any rotation, then
+rotated on each.
 
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
 registry is deployed on a network, an authority binds each name its consumers

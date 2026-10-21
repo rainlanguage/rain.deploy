@@ -13,9 +13,12 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// @title LibConfigRegistryRegister
 /// @notice An authority's side of `ConfigRegistry`: binds one name to one
 /// ABI-encoded value under that authority on every network it is given, signed
-/// by the authority, and reads the binding back. `script/RegisterConfig.sol`
-/// is the entry point and says how it is run; everything with behaviour is
-/// here.
+/// by the authority, and reads the binding back. For a contract authority,
+/// which submits the bind itself, the `simulate` family is the dry run in
+/// place of the signed bind: the same refusals but the sender's, and the bind
+/// simulated as the authority, broadcasting nothing.
+/// `script/RegisterConfig.sol` is the entry point and says how it is run;
+/// everything with behaviour is here.
 ///
 /// ## The value
 ///
@@ -56,15 +59,18 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// authority.
 /// `registerOnNetworks` runs it and logs the inputs record before creating
 /// the forks; `registerOnForks` runs it again for a caller with its own forks,
-/// and logs no record.
+/// and logs no record. `simulateOnNetworks` and `simulateOnForks` do the same
+/// with the authority as the sender, so every refusal but the sender's
+/// applies, and `simulateOnSelectedChain` also refuses a network where the
+/// authority has no code.
 ///
 /// ## Simulation and confirmation
 ///
 /// The same split as `LibRainDeploy`'s `checkResolved*OnForks` and
-/// `checkResolved*OnNetworks` pairs. `registerOnNetworks` returns the forks
-/// it simulated on, and `checkRegisteredOnForks` reads those; nothing is mined
-/// while the script that registers is running, so the binding exists there and
-/// nowhere else. `checkRegisteredOnNetworks` forks every network fresh, as a
+/// `checkResolved*OnNetworks` pairs. `registerOnNetworks` and
+/// `simulateOnNetworks` return the forks they simulated on, and
+/// `checkRegisteredOnForks` reads those; nothing is mined while the script that
+/// registers is running, so the binding exists there and nowhere else. `checkRegisteredOnNetworks` forks every network fresh, as a
 /// run of its own once the transactions have been mined, and is the check that
 /// the binding is on chain.
 library LibConfigRegistryRegister {
@@ -125,7 +131,8 @@ library LibConfigRegistryRegister {
 
     /// Thrown when a contract authority's dry run reaches a network where the
     /// authority has no code. Nothing there can execute the bind it would
-    /// approve, and the address is whoever deploys to it first.
+    /// approve, and unless the authority's deployment path commits to its
+    /// controllers, the address is whoever deploys to it first.
     /// @param network The network simulated on.
     /// @param authority The authority without code there.
     error AuthorityHasNoCode(string network, address authority);
@@ -259,8 +266,9 @@ library LibConfigRegistryRegister {
         }
     }
 
-    /// The calldata of the bind of `name` to `value`: what the device signs,
-    /// and what `registerOnSelectedChain` sends.
+    /// The calldata of the bind of `name` to `value`: what a device signs for
+    /// an EOA authority, or what a contract authority submits, and what
+    /// `registerOnSelectedChain` sends.
     /// @param name The hashed name.
     /// @param value The ABI-encoded value to bind it to.
     /// @return The `registerV1` calldata.
@@ -273,10 +281,9 @@ library LibConfigRegistryRegister {
     /// @param vm The Vm instance to format with.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
-    /// @param sender The account that signs, which is the authority the name is
-    /// bound under.
+    /// @param authority The authority the name is bound under.
     /// @return The record, one field per line.
-    function describeInputs(Vm vm, string memory name, bytes memory value, address sender)
+    function describeInputs(Vm vm, string memory name, bytes memory value, address authority)
         internal
         pure
         returns (string memory)
@@ -289,8 +296,8 @@ library LibConfigRegistryRegister {
             vm.toString(hashed),
             "\nValue: ",
             vm.toString(value),
-            "\nAuthority (sender): ",
-            vm.toString(sender),
+            "\nAuthority: ",
+            vm.toString(authority),
             "\nRegistry: ",
             vm.toString(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
             "\nCalldata: ",
@@ -498,7 +505,7 @@ library LibConfigRegistryRegister {
         }
         SupportedNetwork[] memory networks = selectNetworks(selected, declared);
         checkSender(sender, authority);
-        return (hashed, networks, describeInputs(vm, name, value, sender));
+        return (hashed, networks, describeInputs(vm, name, value, authority));
     }
 
     /// Binds `name` to `value` under `authority` on every selected network,

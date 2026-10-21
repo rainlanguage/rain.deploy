@@ -55,11 +55,13 @@ pragma solidity ^0.8.25;
 /// roles, is done on every chain its names are consumed on and verified on
 /// each; a chain left out is still controlled by the old controllers, who can
 /// rebind every name there. Where it is not yet deployed, its address is
-/// claimable by whoever deploys there first only if the deployment path does
-/// not commit to its controllers — a CREATE-nonce deployment, or a factory that
+/// claimable by whoever deploys there first if the deployment path does not
+/// commit to its controllers — a CREATE-nonce deployment, or a factory that
 /// does not bind the initializer or is missing on that chain. A Zoltu timelock
-/// or a SafeProxyFactory CREATE2 Safe commits to its init, so deploying it
-/// first seats the same controllers.
+/// or a SafeProxyFactory CREATE2 Safe commits to its init, but that init names
+/// the original controllers, so replaying it on a chain after a rotation seats
+/// the controllers the rotation removed. A contract authority is deployed on
+/// every chain before any rotation, then rotated on each.
 ///
 /// Bindings are mutable because the configuration they name is. Rotating an
 /// owning multisig is ordinary business, and a binding that could never change
