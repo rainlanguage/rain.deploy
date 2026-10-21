@@ -4,7 +4,10 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
-import {ICloneableFactoryV5} from "rain-factory-pr271-0477c05/src/interface/ICloneableFactoryV5.sol";
+import {
+    ICLONEABLE_FACTORY_V5_BEACON_PROXY_CREATION_CODE_HASH,
+    ICloneableFactoryV5
+} from "rain-factory-pr271-0477c05/src/interface/ICloneableFactoryV5.sol";
 import {BEACON_PROXY_CREATION_CODE} from "rain-factory-pr271-0477c05/src/generated/BeaconProxy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {CloneTarget} from "../../../src/lib/LibRainDeployClone.sol";
@@ -156,16 +159,28 @@ contract LibRainDeployBeaconProxyTest is Test {
         assertNotEq(LibRainDeployBeaconProxy.beaconProxyDeployedAddress(moved), base, "data");
     }
 
-    /// The artifact path names nothing this build compiles.
-    function testBeaconProxyArtifactPathResolvesToNothing() external {
-        vm.expectRevert();
-        this.externalGetCode(BEACON_PROXY_ARTIFACT_PATH);
+    /// The derived address is `CREATE2` from the factory over the V5 beacon-proxy open salt and the
+    /// proxy's creation code with `abi.encode(beacon, "")`, built here from the domain string and
+    /// held to the V5 creation code hash.
+    function testBeaconProxyAddressIsTheV5Formula(CloneTarget memory target) external pure {
+        assertEq(keccak256(BEACON_PROXY_CREATION_CODE), ICLONEABLE_FACTORY_V5_BEACON_PROXY_CREATION_CODE_HASH);
+        bytes32 salt =
+            keccak256(abi.encode(keccak256("rain.factory.beaconproxy.opensalt"), target.salt, keccak256(target.data)));
+        bytes32 initCodeHash =
+            keccak256(abi.encodePacked(BEACON_PROXY_CREATION_CODE, abi.encode(target.implementation, bytes(""))));
+        address expected =
+            address(uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), target.factory, salt, initCodeHash)))));
+        assertEq(LibRainDeployBeaconProxy.beaconProxyDeployedAddress(target), expected);
     }
 
-    /// @param path An artifact path.
-    /// @return Its creation code.
-    function externalGetCode(string memory path) external view returns (bytes memory) {
-        return vm.getCode(path);
+    /// The artifact path is a `<file>.sol:BeaconProxy` path that names nothing this build compiles.
+    function testBeaconProxyArtifactPathResolvesToNothing() external {
+        string[] memory parts = vm.split(BEACON_PROXY_ARTIFACT_PATH, ".sol:");
+        assertEq(parts.length, 2, "one .sol: separator");
+        assertEq(parts[1], "BeaconProxy", "contract name");
+        try vm.getCode(BEACON_PROXY_ARTIFACT_PATH) returns (bytes memory) {
+            revert("artifact path resolved");
+        } catch {}
     }
 
     /// The step deploys where the package derives, broadcast as the deployer.

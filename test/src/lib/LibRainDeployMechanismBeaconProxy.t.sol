@@ -26,6 +26,7 @@ import {
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {
     CloneCreationCodeMismatch,
+    CloneDataAmbiguous,
     ExtendedNetworkUnfrozen,
     LibRainDeployMechanism
 } from "../../../src/lib/LibRainDeployMechanism.sol";
@@ -78,6 +79,14 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
     /// @return Every address the suite was deployed to.
     function externalDeployLocally(DeploySuite memory suite) external returns (address[] memory) {
         return LibRainDeployMechanism.deployLocally(vm, suite);
+    }
+
+    /// @param data The one init data for every network, set beside per-network init data.
+    /// @return The candidate over `perNetworkCloneChainIds()`.
+    function externalPerNetworkCandidateWithData(bytes memory data) external returns (DeployCandidate memory) {
+        BeaconProxyDeploy memory proxy = declaredBeaconProxy(true);
+        proxy.data = data;
+        return candidateOf(proxy, perNetworkCloneChainIds());
     }
 
     /// @param suite The suite whose addresses are wanted.
@@ -224,6 +233,28 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
         assertNotEq(deployed[0], deployed[1]);
         assertEq(deployed[0].code, suite.storedRuntimeCode);
         assertEq(deployed[1].code, suite.storedRuntimeCode);
+    }
+
+    /// A beacon proxy suite, one-data or per-network, that does not declare its beacon is refused
+    /// naming the beacon, by the address derivation and the local deploy alike.
+    function testBeaconProxySuiteMissingItsBeaconIsRefused(bool initDataPerNetwork) external {
+        BeaconProxyDeploy memory proxy = declaredBeaconProxy(initDataPerNetwork);
+        DeploySuite memory suite = candidateOf(proxy, perNetworkCloneChainIds()).snapshot;
+        DeployDependency[] memory declared = suite.dependencies;
+        suite.dependencies = new DeployDependency[](1);
+        suite.dependencies[0] = declared[0];
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneDependencyUndeclared.selector, proxy.beacon));
+        this.externalDeployedAddresses(suite);
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneDependencyUndeclared.selector, proxy.beacon));
+        this.externalDeployLocally(suite);
+    }
+
+    /// A beacon proxy declaration with init data per network AND one init data for every network is
+    /// refused naming its suite.
+    function testBeaconProxyCandidateRefusesDataBesidePerNetworkData(bytes memory data) external {
+        vm.assume(data.length != 0);
+        vm.expectRevert(abi.encodeWithSelector(CloneDataAmbiguous.selector, "beacon-proxy"));
+        this.externalPerNetworkCandidateWithData(data);
     }
 
     /// A beacon proxy suite whose creation code is not the beacon proxy's over its beacon is

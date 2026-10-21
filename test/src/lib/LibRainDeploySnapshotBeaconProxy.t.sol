@@ -289,6 +289,7 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
         assertTrue(
             vm.contains(record, "/// @dev The deterministic deploy address of the beacon proxy on chain id\n/// 137,")
         );
+        assertEq(occurrences(record, "through its factory's beacon-proxy open salt with that network's init data."), 2);
         assertTrue(
             vm.contains(
                 record,

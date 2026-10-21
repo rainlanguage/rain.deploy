@@ -837,7 +837,9 @@ library LibRainDeploySnapshot {
                             ? "/// @dev The deterministic deploy address of the beacon proxy on chain id\n/// "
                             : "/// @dev The deterministic deploy address of the EIP-1167 clone on chain id\n/// ",
                         chainId,
-                        ", through its factory's open salt with that network's init data."
+                        LibRainDeployMechanism.isBeaconProxy(suite)
+                            ? ", through its factory's beacon-proxy open salt with that network's init data."
+                            : ", through its factory's open salt with that network's init data."
                     ),
                     string.concat("DEPLOYED_ADDRESS_", chainId),
                     deployed[i]
