@@ -6,8 +6,10 @@ name: Manual sol artifacts
 # pins and never broadcasts. So the deploy has to happen first, and separately,
 # which is this.
 #
-# Order is: dispatch this once per suite, confirm `RegistryDeployVerifyTest`
-# passes on every supported network, then push the `sol-v*` tag.
+# Order is: dispatch this once per suite, then open the release PR that sets
+# `[external.package].version` and runs `cutRelease()`, merge it once
+# `RegistryDeployVerifyTest` passes on every supported network, then push the
+# `sol-v*` tag on that merge commit.
 #
 # Deliberately `workflow_dispatch` only. Broadcasting is key custody and real
 # money; nothing about a merge or a tag should trigger it.

@@ -2363,10 +2363,9 @@ library LibRainDeploySnapshot {
     /// append-only gate is exactly what stops the directory being deleted. The
     /// only exit is suspending the invariant the whole design rests on.
     ///
-    /// Nothing upstream is a substitute. The tag is a human-typed `sol-v*` that
-    /// `rainix-tag-release` seds straight into `foundry.toml` after checking
-    /// only that it is on `main` and shaped `X.Y.Z`, so a fat-fingered `0.1.9`
-    /// cut after `0.2.0` reaches this call as the release being made.
+    /// Nothing upstream is a substitute. The version is typed by hand into
+    /// `foundry.toml` before the cut, so a fat-fingered `0.1.9` cut after
+    /// `0.2.0` reaches this call as the release being made.
     /// `SnapshotAlreadyFrozen` is existence-based and has no quarrel with it —
     /// its directory is absent precisely because that release never happened —
     /// and the frozen bytes are the current candidate, already live on chain,

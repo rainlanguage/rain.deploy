@@ -15,11 +15,16 @@ relocated.
   `Manual big blocks` are `workflow_dispatch` only, and no merge, tag or
   schedule may be given a path to any of them.
 - **A `sol-v*` tag is the sole release trigger.** `[external.package].version`
-  in `foundry.toml` is the version of the LAST Soldeer publish, not a
-  next-version slot, so an ordinary PR does not bump it.
+  in `foundry.toml` is the newest release cut into `src/generated/<tag>/`. Only
+  the release PR that cuts that tag moves it, together with the cut, and
+  `testVersionIsTheNewestFrozenRelease` holds the two equal; an ordinary PR does
+  not bump it.
 - **`src/generated/<tag>/` is an append-only record.** `cutRelease()` writes a
   tag directory once. A cut tag can never be un-cut and consumers pin what it
-  holds, so a frozen record is never edited, renamed or deleted.
+  holds, so a frozen record is never edited, renamed or deleted. A release
+  freezes every contract the release before it froze unless
+  `Build.retiredContracts()` lists it; dropping one from `generatedContracts()`
+  alone fails `testNoReleaseDropsAContract`.
 - **`src/generated/extended/` is append-only too.** `run()` appends to it, and
   `ExtendedNetworksRewritten` means a declaration would drop, change or reorder
   a recorded network. Never delete or edit the file to get past it: fix the
