@@ -136,6 +136,11 @@ interface IConfigRegistryV1 {
     ///
     /// The moment is not a field here, because a log already carries the block
     /// it was emitted in.
+    ///
+    /// The abandoned root-locked registry at
+    /// `0x4b5b74E73D90fF3962c2882F20D9FA73B70192E9` emits a `Register` with this
+    /// topic0 but logs the name at topic1 and the sender in the data, so a
+    /// decoder filters by registry address, never by topic0 alone.
     /// @param sender The account that called, which is the authority `name` is
     /// bound under.
     /// @param name The name that was bound.
