@@ -1249,5 +1249,36 @@
       "testUnverifiableSourceLogsEveryArgumentAsData reads the raw log: exactly one log under keccak256(\"UnverifiableSource(address,address,string[])\"), from the deploying contract, with one topic and data abi.encode(sender, entryAddress, networks). Pass 2 at 5ec05f558b477b89b49ae5d988bcfaedfeebe14b (104 green): 11 mutants, 11 KILLED.",
       "The entry address read from deploys.derivedAddresses[0] is the equivalent mutant already recorded in audit/known-false-positives.md (Z7) and was not re-probed."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T18:55:36Z",
+    "commit": "268697e5ab409a27e5be034932d81ef786cb7c40",
+    "testsAfterCommit": "268697e5ab409a27e5be034932d81ef786cb7c40",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 371,
+    "scope": "LibDeploySuiteConcat.concat (src/lib/LibDeploySuiteConcat.sol) and the LibRainDeploySnapshot aggregate emitter's short form: the concat import path derivation (importPathForToml, importPathInThisRepo, concatImportPathForToml, concatImportPathInThisRepo, derivedConcatImportPath), the concat import in aggregateImportBlock and the concat return in aggregateLibraryBlock",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 12,
+      "behavioursProbed": 12,
+      "killedByExistingTests": 0,
+      "gapsFilled": 12,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "sed mutants, each run against forge test --match-path of the owning test file (LibDeploySuiteConcat.t.sol: 5 green at baseline; LibRainDeploySnapshot.t.sol: 104 green at baseline), killers read off the non-PASS result lines.",
+      "concat: flat[offset + j] -> flat[j], offset advance deleted, copy loop from i = 1, total + 1 per array, inner loop from j = 1: 5 KILLED by testConcatOrderPreserved and testConcatShapes (plus testConcatEmptyInnerAmongNonEmpty / testConcatAllInnerEmpty where the shape reaches them).",
+      "emitter: concat subpath swapped for the suites subpath in concatImportPathForToml, concatImportPathInThisRepo, the pinned branch and the no-pin branch of importPathForToml, and derivedConcatImportPath reading the suites path: 5 KILLED by testConcatImportPathForTomlFollowsThePin (and the aggregate writer / committed-file tests where in-repo). Concat import dropped from aggregateImportBlock: KILLED by testAggregateImportBlockImportsEveryReleasedLib, testAggregateImportBlockTakesTheImportPaths, testTheCommittedAggregateIsWhatTheGeneratorEmits. Concat return dropped from aggregateLibraryBlock: KILLED by testAggregateLibraryBlockConcatenatesEveryReleasedLib, testAggregateLibraryBlockDeclaresNothingForNoContracts, testTheCommittedAggregateIsWhatTheGeneratorEmits."
+    ]
   }
 ]
