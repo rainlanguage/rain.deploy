@@ -1274,8 +1274,7 @@ forge soldeer install rain-deploy~<version>
 ```
 
 **You also need `forge-std` 1.17.0, `rain-sol-codegen` 0.1.39 and `rain-factory`
-at git rev `976cd62` (rain.factory#271, which adds `ICloneableFactoryV5`)**,
-remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
+0.2.4**, remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
 `rain-factory-0.2.4/`. The published package ships `src/`, `script/` and the
 licence and README files — no `test/`, no `foundry.toml`, no `remappings.txt`,
 no `soldeer.lock`, no `dependencies/` — so a consumer resolves all three itself.
@@ -1293,7 +1292,7 @@ beneath both, `LibICloneableFactoryV5` and the generated
 [dependencies]
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
-rain-factory = { version = "pr271-976cd62", git = "https://github.com/rainlanguage/rain.factory.git", rev = "976cd6216ad1ba15c270a266d64a654259a5b3f1" }
+rain-factory = "0.2.4"
 rain-deploy = "<version>"
 ```
 
