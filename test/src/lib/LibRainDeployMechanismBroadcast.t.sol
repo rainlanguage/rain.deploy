@@ -223,9 +223,11 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
 
         address caller = makeAddr("broadcast caller");
         LocalForkVm forkVm = new LocalForkVm();
-        vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 1);
+        vm.expectCall(address(forkVm), abi.encodeWithSelector(bytes4(keccak256("toString(address)"))), 1);
         vm.expectCall(
-            address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector, suite.storedDeployedAddress), 1
+            address(forkVm),
+            abi.encodeWithSelector(bytes4(keccak256("toString(address)")), suite.storedDeployedAddress),
+            1
         );
         vm.expectEmit(address(this));
         emit UnverifiableSource(caller, suite.storedDeployedAddress, networks);
