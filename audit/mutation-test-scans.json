@@ -1428,5 +1428,38 @@
       "testUnverifiableSourceLogsEveryArgumentAsData reads the raw log: exactly one log under keccak256(\"UnverifiableSource(address,address,string[])\"), from the deploying contract, with one topic and data abi.encode(sender, entryAddress, networks). Pass 2 at 5ec05f558b477b89b49ae5d988bcfaedfeebe14b (104 green): 11 mutants, 11 KILLED.",
       "The entry address read from deploys.derivedAddresses[0] is the equivalent mutant already recorded in audit/known-false-positives.md (Z7) and was not re-probed."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T20:28:31Z",
+    "commit": "cb6c82e49134a997e616bf0f766ab0fedebe8866",
+    "testsAfterCommit": "9c7e111344f7152905bcc11d0127c5470b53e037",
+    "publishedTag": "sol-v0.1.19",
+    "commitsAheadOfTag": 1,
+    "scope": "Per-network derivation under each network's own chain id (#320) and the explicit chain id of deployLocallyOnChain (#321): RainDeployVerifyBase.deriveDeployment, revertDerivation and checkSeatedState's call, LibRainDeployMechanism.deployLocallyOnChain, and RainDeployBroadcast.checkSeatsNoDeployKey's call",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 23,
+      "behavioursProbed": 23,
+      "killedByExistingTests": 19,
+      "gapsFilled": 3,
+      "equivalentMutants": 1,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 1,
+      "confirmed": 1,
+      "filed": ["#343"],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test minus every test that fails offline for a missing *_RPC_URL (by name, which also drops three same-named offline tests) and the three contracts whose setUp forks (LibRainDeploySnapshotRecordedMechanismTest, LibSafeTest, BuildScriptNarrowNetworksTest). Pass 1 at cb6c82e49134a997e616bf0f766ab0fedebe8866 (1325 green): 20 mutants, 15 KILLED. M07 (only the first network derived), M08 (every network under the first chain id) and M15 (revertDerivation never refuses) SURVIVED; M01 (chain id never set) was NO-RUN and was KILLED in pass 2.",
+      "Pass 2 at 9c7e111344f7152905bcc11d0127c5470b53e037 (1327 green): testPerNetworkCloneSuiteRefusedByALaterNetworksInitIsRefused kills M07 and M08; testDerivationThatCannotBeRevertedIsRefused kills M15 (DerivationSnapshotRevertFailed had no test before). M21-M23 added on re-survey, all KILLED.",
+      "kills credited to tests at cb6c82e49134a997e616bf0f766ab0fedebe8866, which already carried the fix's own tests (the repro file RainDeployVerifyBaseBeaconPerNetworkCloneChainGated.t.sol, testZoltuSuiteDeploysLocallyOnChainUnderThatChainId and the chain id assertions in the deployLocallyOnChain tests): the mutated code does not exist at main, so a pre-fix suite cannot be probed against it.",
+      "M02 (network picked by block.chainid instead of chainId) is equivalent: deployLocallyOnChain sets vm.chainId(chainId) on its first line, so the two are equal where the network is picked. Recorded in audit/known-false-positives.md.",
+      "Adversarial: LibRainDeploySnapshot.writeCloneSnapshotFile still runs every per-network init under the local chain id, so Build reverts for the same chain-gated suite derivation now accepts; filed as #343."
+    ]
   }
 ]

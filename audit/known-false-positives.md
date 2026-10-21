@@ -57,3 +57,6 @@ the value the function returns.
   alone, which `withExtendedNetworks` preserves, and in the no-candidate
   fallback `withUnrecordedNetworks` appends nothing for either argument because
   `suite`'s networks are a subset of `frozen`'s.
+- `LibRainDeployMechanism.deployLocallyOnChain` picks the network by
+  `block.chainid` instead of its `chainId` argument (M02). Its first line sets
+  `vm.chainId(chainId)`, so the two are equal where the network is picked.
