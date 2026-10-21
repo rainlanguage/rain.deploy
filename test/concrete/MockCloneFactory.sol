@@ -2,9 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
-import {ICloneableFactoryV3} from "rain-factory-0.1.30/src/interface/deprecated/ICloneableFactoryV3.sol";
-import {LibICloneableFactoryV4} from "rain-factory-0.1.30/src/lib/LibICloneableFactoryV4.sol";
+import {ICloneableFactoryV4} from "rain-factory-0.2.0/src/interface/deprecated/ICloneableFactoryV4.sol";
+import {ICloneableFactoryV3} from "rain-factory-0.2.0/src/interface/deprecated/ICloneableFactoryV3.sol";
+import {LibICloneableFactoryV5} from "rain-factory-0.2.0/src/lib/LibICloneableFactoryV5.sol";
 
 /// @title MockCloneFactory
 /// @notice A real `ICloneableFactoryV4`, not a stub.
@@ -15,7 +15,7 @@ contract MockCloneFactory is ICloneableFactoryV4 {
         virtual
         returns (address)
     {
-        return LibICloneableFactoryV4.cloneDeterministicOpenSalt(implementation, data, salt);
+        return LibICloneableFactoryV5.cloneDeterministicOpenSalt(implementation, data, salt);
     }
 
     /// @inheritdoc ICloneableFactoryV4
@@ -25,7 +25,7 @@ contract MockCloneFactory is ICloneableFactoryV4 {
         virtual
         returns (address)
     {
-        return LibICloneableFactoryV4.predictDeterministicAddressOpenSalt(implementation, data, salt);
+        return LibICloneableFactoryV5.predictDeterministicAddressOpenSalt(implementation, data, salt);
     }
 
     /// @inheritdoc ICloneableFactoryV3
@@ -34,7 +34,7 @@ contract MockCloneFactory is ICloneableFactoryV4 {
         virtual
         returns (address)
     {
-        return LibICloneableFactoryV4.cloneDeterministic(implementation, data, salt);
+        return LibICloneableFactoryV5.cloneDeterministic(implementation, data, salt);
     }
 
     /// @inheritdoc ICloneableFactoryV3
@@ -44,6 +44,6 @@ contract MockCloneFactory is ICloneableFactoryV4 {
         virtual
         returns (address)
     {
-        return LibICloneableFactoryV4.predictDeterministicAddress(implementation, salt, deployer);
+        return LibICloneableFactoryV5.predictDeterministicAddress(implementation, salt, deployer);
     }
 }

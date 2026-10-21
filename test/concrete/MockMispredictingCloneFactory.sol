@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {ICloneableFactoryV4} from "rain-factory-0.1.30/src/interface/ICloneableFactoryV4.sol";
-import {LibICloneableFactoryV4} from "rain-factory-0.1.30/src/lib/LibICloneableFactoryV4.sol";
+import {ICloneableFactoryV4} from "rain-factory-0.2.0/src/interface/deprecated/ICloneableFactoryV4.sol";
+import {LibICloneableFactoryV5} from "rain-factory-0.2.0/src/lib/LibICloneableFactoryV5.sol";
 import {MockCloneFactory} from "./MockCloneFactory.sol";
 
 /// @title MockMispredictingCloneFactory
@@ -17,7 +17,7 @@ contract MockMispredictingCloneFactory is MockCloneFactory {
         returns (address)
     {
         return address(
-            uint160(LibICloneableFactoryV4.predictDeterministicAddressOpenSalt(implementation, data, salt)) + 1
+            uint160(LibICloneableFactoryV5.predictDeterministicAddressOpenSalt(implementation, data, salt)) + 1
         );
     }
 }

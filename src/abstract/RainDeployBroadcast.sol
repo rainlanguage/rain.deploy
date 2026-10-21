@@ -13,6 +13,7 @@ import {ChainBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
 /// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with a first word whose low
 /// 160 bits are the deploy key. Roles, pending owners, admin slots and contracts the suite's constructors create are
 /// not read.
+/// A beacon proxy suite is checked per network on its fork instead, as `BeaconProxySeatsDeployKey`.
 /// @param suite The suite being broadcast.
 /// @param deployed The address, deployed locally as the deploy key would, that answers `owner()` with a first word
 /// whose low 160 bits are the deploy key.
@@ -84,6 +85,8 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// suite's constructor MUST succeed locally, with only its declared dependencies etched, under each chain id that
     /// check reads), then broadcasts the selected suite by ITS mechanism, through `LibRainDeployMechanism` — the same
     /// dispatch every verification group derives through, so what is broadcast is what was verified.
+    /// A beacon proxy suite's seat check is not one of these pre-fork refusals: it runs per network, on that
+    /// network's fork, as `BeaconProxySeatsDeployKey`.
     /// The seat check reads a per-network release with its extended networks and every network its candidate adds.
     /// A per-network release is broadcast to a network it does not record only once `extendedNetworks` declares it
     /// there. Before any fork, such a network is refused with `ExtendedNetworkUnfrozen`, naming the address its
@@ -128,6 +131,9 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// on the local EVM with only its declared dependencies etched, so it MUST succeed there under each target's
     /// chain id: one that reverts locally (say, by calling an undeclared contract under one chain id) refuses the
     /// broadcast to every network with its revert.
+    /// A beacon proxy suite is only placed here, its frozen code over a beacon with no implementation, so its `owner()`
+    /// is not read: its seat check is the per-network one in
+    /// `LibRainDeployBeaconProxy.beaconProxyDeployStep`, on each network's fork, not this one.
     /// @param suite The suite to broadcast, with its extended networks and every network its candidate adds.
     /// @param networks The networks this broadcast reaches.
     /// @param deployer The deploy key's address.

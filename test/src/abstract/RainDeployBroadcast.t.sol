@@ -51,6 +51,9 @@ import {
 } from "../../../src/lib/LibRainDeployClone.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
+import {LibBeaconProxyTest} from "../../lib/LibBeaconProxyTest.sol";
+import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
+import {perNetworkCloneChainIds} from "../../abstract/PerNetworkCloneDeploys.sol";
 
 /// @title RainDeployBroadcastTest
 /// @notice The broadcast entry point, driven exactly as the `Manual sol
@@ -674,6 +677,29 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
         DeploySuite memory suite = originOwnedSuite();
         vm.expectRevert(abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, suite.storedDeployedAddress));
+        deploy.externalBroadcastSuite(suite, new string[](0), 1);
+    }
+
+    /// A beacon proxy suite whose init data would seat the deploy key passes the pre-fork seat check, which cannot read
+    /// a placed proxy's `owner()`, so the broadcast reaches the network refusal; its seat is checked on each network's fork.
+    function testBroadcastOfABeaconProxySuiteSeatingTheDeployKeyReachesTheNetworkRefusal() external {
+        BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        address beacon = address(new UpgradeableBeacon(address(new MockOriginOwnedCloneable()), address(0xB0B)));
+        DeploySuite memory suite =
+        LibRainDeployMechanism.beaconProxyCandidate(
+            LibBeaconProxyTest.declared(
+                "origin-owned-beacon-proxy",
+                address(new MockBeaconProxyFactory()),
+                beacon,
+                abi.encode(address(0)),
+                false,
+                bytes32(uint256(1)),
+                LibBeaconProxyTest.runtimeOf(vm, beacon)
+            ),
+            perNetworkCloneChainIds()
+        )
+        .snapshot;
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         deploy.externalBroadcastSuite(suite, new string[](0), 1);
     }
 

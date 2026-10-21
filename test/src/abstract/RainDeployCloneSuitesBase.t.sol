@@ -3,8 +3,13 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {DeployCandidate} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {NoCloneDeploys} from "../../../src/abstract/RainDeployCloneSuitesBase.sol";
+import {DeployCandidate, DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {BEACON_PROXY_ARTIFACT_PATH, LibRainDeployBeaconProxy} from "../../../src/lib/LibRainDeployBeaconProxy.sol";
+import {PerNetworkBeaconProxyOnlyDeploySuites} from "../../concrete/PerNetworkBeaconProxyOnlyDeploySuites.sol";
+import {LibBeaconProxyTest} from "../../lib/LibBeaconProxyTest.sol";
+import {BeaconProxyOnlyDeploySuites} from "../../concrete/BeaconProxyOnlyDeploySuites.sol";
+import {MixedCloneBeaconProxyDeploySuites} from "../../concrete/MixedCloneBeaconProxyDeploySuites.sol";
+import {NoFactoryDeploys} from "../../../src/abstract/RainDeployCloneSuitesBase.sol";
 import {CLONE_ARTIFACT_PATH} from "../../../src/lib/LibRainDeployClone.sol";
 import {CloneNetworks, CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
@@ -13,7 +18,8 @@ import {ExampleCloneDeploy} from "../../concrete/ExampleCloneDeploy.sol";
 import {
     NoPerNetworkCloneAdmin,
     PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN,
-    PER_NETWORK_CLONE_POLYGON_ADMIN
+    PER_NETWORK_CLONE_POLYGON_ADMIN,
+    perNetworkCloneInitData
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {exampleCloneFactory, exampleCloneImplementation} from "../../abstract/ExampleCloneDeploys.sol";
 import {NoCloneDeploySuites} from "../../concrete/NoCloneDeploySuites.sol";
@@ -27,7 +33,7 @@ contract RainDeployCloneSuitesBaseTest is Test {
     function testCandidatesAreTheCloneListDerived() external {
         ExampleCloneDeploy fixtureDeploy = new ExampleCloneDeploy();
 
-        uint256 clones = fixtureDeploy.externalCheckedCloneDeploysLength();
+        uint256 clones = fixtureDeploy.externalCloneDeploysLength();
         DeployCandidate[] memory candidates = fixtureDeploy.externalCheckedCandidateSuites();
 
         assertEq(candidates.length, clones, "one candidate per clone");
@@ -56,24 +62,21 @@ contract RainDeployCloneSuitesBaseTest is Test {
         fixtureDeploy.externalCheckCandidatesAnchoredToSource();
     }
 
-    /// An empty clone list MUST be refused with `NoCloneDeploys`, on EVERY reader that goes through
-    /// it.
-    function testNoCloneDeploysReverts() external {
+    /// Empty clone and beacon proxy lists MUST be refused with `NoFactoryDeploys`, on EVERY reader that
+    /// goes through them.
+    function testNoFactoryDeploysReverts() external {
         NoCloneDeploySuites empty = new NoCloneDeploySuites();
 
-        vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
-        empty.externalCheckedCloneDeploysLength();
-
-        vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
+        vm.expectRevert(abi.encodeWithSelector(NoFactoryDeploys.selector));
         empty.externalCheckedCandidateSuites();
 
-        vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
+        vm.expectRevert(abi.encodeWithSelector(NoFactoryDeploys.selector));
         empty.externalCheckCandidatesAnchoredToSource();
 
-        vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
+        vm.expectRevert(abi.encodeWithSelector(NoFactoryDeploys.selector));
         empty.externalAllSuites();
 
-        vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
+        vm.expectRevert(abi.encodeWithSelector(NoFactoryDeploys.selector));
         empty.externalSuiteNames();
     }
 
@@ -146,6 +149,93 @@ contract RainDeployCloneSuitesBaseTest is Test {
                         implementation: exampleCloneImplementation(),
                         data: data,
                         salt: clones.salt
+                    })
+                )
+            );
+        }
+    }
+
+    /// @param actual The candidate read.
+    /// @param expected The candidate derived on its own.
+    function assertSameCandidate(DeployCandidate memory actual, DeployCandidate memory expected) internal pure {
+        assertEq(actual.snapshot.suite, expected.snapshot.suite);
+        assertEq(actual.snapshot.creationCode, expected.snapshot.creationCode);
+        assertEq(actual.snapshot.storedDeployedAddress, expected.snapshot.storedDeployedAddress);
+        assertEq(actual.snapshot.storedBytecodeHash, expected.snapshot.storedBytecodeHash);
+        assertEq(actual.snapshot.storedRuntimeCode, expected.snapshot.storedRuntimeCode);
+        assertEq(actual.snapshot.artifactPath, expected.snapshot.artifactPath);
+        assertEq(uint256(actual.snapshot.mechanism), uint256(expected.snapshot.mechanism));
+        assertEq(actual.snapshot.mechanismData, expected.snapshot.mechanismData);
+        assertEq(abi.encode(actual.snapshot.dependencies), abi.encode(expected.snapshot.dependencies));
+        assertEq(actual.unanchorableReason, expected.unanchorableReason);
+    }
+
+    /// With no clones, the candidates MUST be `beaconProxyCandidate` mapped over `beaconProxyDeploys()`, and
+    /// every reader of them answers rather than refusing `NoFactoryDeploys`.
+    function testCandidatesAreTheBeaconProxyListDerived() external {
+        BeaconProxyOnlyDeploySuites deploy = new BeaconProxyOnlyDeploySuites();
+        assertEq(deploy.externalCloneDeploysLength(), 0);
+        assertEq(deploy.externalBeaconProxyDeploysLength(), 1);
+
+        DeployCandidate[] memory candidates = deploy.externalCheckedCandidateSuites();
+        assertEq(candidates.length, 1);
+        assertSameCandidate(candidates[0], deploy.externalBeaconProxyDeployCandidate(0));
+        assertEq(uint256(candidates[0].snapshot.mechanism), uint256(DeployMechanism.BeaconProxy));
+        assertEq(candidates[0].snapshot.artifactPath, BEACON_PROXY_ARTIFACT_PATH);
+
+        deploy.externalCheckCandidatesAnchoredToSource();
+        DeploySuite[] memory suites = deploy.externalAllSuites();
+        assertEq(suites.length, 1);
+        assertEq(suites[0].suite, "example-beacon-proxy");
+        assertEq(deploy.externalSuiteNames(), "example-beacon-proxy");
+    }
+
+    /// With both, the candidates MUST be the clones' candidates, in order, then the beacon proxies'.
+    function testCandidatesAreTheClonesThenTheBeaconProxies() external {
+        MixedCloneBeaconProxyDeploySuites deploy = new MixedCloneBeaconProxyDeploySuites();
+        uint256 clones = deploy.externalCloneDeploysLength();
+        uint256 proxies = deploy.externalBeaconProxyDeploysLength();
+        assertEq(clones, 2);
+        assertEq(proxies, 2);
+
+        DeployCandidate[] memory candidates = deploy.externalCheckedCandidateSuites();
+        assertEq(candidates.length, clones + proxies);
+        for (uint256 i = 0; i < clones; i++) {
+            assertSameCandidate(candidates[i], deploy.externalCloneDeployCandidate(i));
+        }
+        for (uint256 i = 0; i < proxies; i++) {
+            assertSameCandidate(candidates[clones + i], deploy.externalBeaconProxyDeployCandidate(i));
+            assertEq(uint256(candidates[clones + i].snapshot.mechanism), uint256(DeployMechanism.BeaconProxy));
+        }
+        assertNotEq(candidates[2].snapshot.storedDeployedAddress, candidates[3].snapshot.storedDeployedAddress);
+        deploy.externalCheckCandidatesAnchoredToSource();
+    }
+
+    /// A per-network beacon proxy's candidate, read through `candidateSuites()`, has one entry per supported
+    /// network, in `supportedNetworks()` order, each with that network's chain id, the init data `initData` gives
+    /// for it and the beacon proxy address that data derives.
+    function testPerNetworkBeaconProxyCandidateIsBuiltForTheSupportedNetworksInOrder() external {
+        PerNetworkBeaconProxyOnlyDeploySuites deploy = new PerNetworkBeaconProxyOnlyDeploySuites();
+        DeployCandidate[] memory candidates = deploy.externalCheckedCandidateSuites();
+        assertEq(candidates.length, 1);
+        assertEq(uint256(candidates[0].snapshot.mechanism), uint256(DeployMechanism.BeaconProxyPerNetwork));
+        CloneNetworks memory clones = abi.decode(candidates[0].snapshot.mechanismData, (CloneNetworks));
+        uint256[] memory chainIds = new uint256[](2);
+        chainIds[0] = 42161;
+        chainIds[1] = 137;
+        assertEq(clones.networks.length, chainIds.length, "one entry per supported network");
+        for (uint256 i = 0; i < chainIds.length; i++) {
+            bytes memory data = perNetworkCloneInitData(chainIds[i]);
+            assertEq(clones.networks[i].chainId, chainIds[i]);
+            assertEq(clones.networks[i].data, data);
+            assertEq(
+                clones.networks[i].deployedAddress,
+                LibRainDeployBeaconProxy.beaconProxyDeployedAddress(
+                    CloneTarget({
+                        factory: LibBeaconProxyTest.exampleFactory(),
+                        implementation: LibBeaconProxyTest.exampleBeacon(),
+                        data: data,
+                        salt: bytes32(uint256(7))
                     })
                 )
             );
