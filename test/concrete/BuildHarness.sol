@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {Build, GeneratedContract, RetiredContract} from "../../script/Build.sol";
 import {DeployCandidate, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ParameterisedContract} from "../../src/abstract/RegistryDeploySuites.sol";
+import {BuildScript} from "../../src/abstract/BuildScript.sol";
 
 /// Thrown when a harness left pointed at `Build`'s own lib directory is asked
 /// to run the lib half of a build. That write lands on the committed libs the
