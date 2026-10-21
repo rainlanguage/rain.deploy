@@ -1413,5 +1413,62 @@
       "Equivalent mutants, recorded in audit/known-false-positives.md: S07 (checkInputs describing sender for authority), R07 (registerOnNetworks passing sender as the authority), R16 (registerOnNetworks passing authority as the sender) and R13 (registerOnForks passing authority as the sender to registerOnSelectedChain). checkInputs has reverted SenderNotAuthority unless sender == authority before each line. The round-7/8 B25 (run() passing msg.sender for the authority after its own checkSender) has no line in this shape: run() makes no check of its own, and B25 here, the env authority passed as the sender, is killed.",
       "Adversarial pass: the oracle is the RegisterConfig and LibConfigRegistryRegister NatSpec — a bind lands under and is signed by the authority, and any other sender is refused before a device signs. Forge refusing a broadcast from an account none of its signers is stays a second layer behind SenderNotAuthority. No candidate."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T13:05:00Z",
+    "commit": "38fc8aa2a7f337a2f16a3f6715c5788967d25311",
+    "testsAfterCommit": "38fc8aa2a7f337a2f16a3f6715c5788967d25311",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 399,
+    "scope": "PR #322 round 10: delegates (#326) — src/concrete/ConfigRegistry.sol registerV1, approveV1, revokeV1, approvedV1, checkDelegate, getV1; src/lib/LibConfigRegistryRegister.sol checkSender, checkInputs, registerOnNetworks, registerOnForks, registerOnSelectedChain; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 30,
+      "behavioursProbed": 30,
+      "killedByExistingTests": 30,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "C01-C23 on ConfigRegistry against the registry suites with Build.sol regenerated per probe (146 tests): 23/23 killed.",
+      "R07, R13, R16, S07 and L01-L03 on the register library against the library and RegisterConfig suites (79 tests): 7/7 killed. R07, R13, R16 and S07 were recorded as equivalent under SenderNotAuthority; delegates make sender and authority differ, so they are real and their known false positive entries are removed."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T13:40:00Z",
+    "commit": "d98a42b08f8960694f60de0f7c79ab83d8e5e610",
+    "testsAfterCommit": "d98a42b08f8960694f60de0f7c79ab83d8e5e610",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 401,
+    "scope": "PR #322 round 11: src/abstract/RegistryDelegates.sol and its call sites in src/concrete/MigrationRegistry.sol; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 15,
+      "behavioursProbed": 15,
+      "killedByExistingTests": 15,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "D01-D09 on RegistryDelegates and M01-M06 on MigrationRegistry against the ConfigRegistry and MigrationRegistry suites with Build.sol regenerated per probe (263 tests): 15/15 killed. The scope mutants are killed by MigrationRegistry tests; ConfigRegistry uses one scope."
+    ]
   }
 ]
