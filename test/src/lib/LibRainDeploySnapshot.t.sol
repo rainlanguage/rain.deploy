@@ -3741,14 +3741,15 @@ contract LibRainDeploySnapshotTest is Test {
         string[] memory contractNames = new string[](1);
         contractNames[0] = "Alpha";
 
-        string[] memory paths =
-            LibRainDeploySnapshot.generatedPaths("test/generated-declared", recordNames, contractNames);
+        string[] memory paths = LibRainDeploySnapshot.generatedPaths(
+            "test/libs-declared", "test/generated-declared", recordNames, contractNames
+        );
 
         assertEq(paths.length, 4);
         assertEq(paths[0], "test/generated-declared/candidate/Alpha.sol");
         assertEq(paths[1], "test/generated-declared/candidate/Beta.sol");
-        assertEq(paths[2], "src/lib/LibAlphaReleased.sol");
-        assertEq(paths[3], "src/lib/LibReleasedSuites.sol");
+        assertEq(paths[2], "test/libs-declared/LibAlphaReleased.sol");
+        assertEq(paths[3], "test/libs-declared/LibReleasedSuites.sol");
     }
 
     /// One `rainix-codegen owns` line per path, which is what `rainix-copy-artifacts` reads.

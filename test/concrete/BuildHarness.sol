@@ -31,7 +31,7 @@ contract BuildHarness is Build {
         sLibDir = libDirectory;
     }
 
-    /// @inheritdoc Build
+    /// @inheritdoc BuildScript
     function libDir() internal view override returns (string memory) {
         return bytes(sLibDir).length > 0 ? sLibDir : super.libDir();
     }

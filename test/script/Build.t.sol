@@ -507,4 +507,17 @@ contract BuildTest is Test {
             assertTrue(vm.exists(paths[i]), paths[i]);
         }
     }
+
+    /// PROPERTY: every lib `run()` declares is under `libDir()`, the directory `regenerateLibs` writes into.
+    function testRunDeclaresTheLibsUnderLibDir() external {
+        string[] memory paths = new BuildHarness(LIBS_FIXTURE_DIR).externalGeneratedPaths();
+
+        assertEq(paths.length, 11);
+        assertEq(paths[3], string.concat(LIBS_FIXTURE_DIR, "/LibConfigRegistryReleased.sol"));
+        assertEq(paths[4], string.concat(LIBS_FIXTURE_DIR, "/LibMigrationRegistryReleased.sol"));
+        assertEq(paths[5], string.concat(LIBS_FIXTURE_DIR, "/LibReleasedSuites.sol"));
+        assertEq(paths[8], string.concat(LIBS_FIXTURE_DIR, "/LibAddressRegistryReleased.sol"));
+        assertEq(paths[9], string.concat(LIBS_FIXTURE_DIR, "/LibConfigRegistryDeploy.sol"));
+        assertEq(paths[10], string.concat(LIBS_FIXTURE_DIR, "/LibMigrationRegistryDeploy.sol"));
+    }
 }

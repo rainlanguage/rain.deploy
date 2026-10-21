@@ -146,6 +146,20 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         }
     }
 
+    /// The directory `regenerateLibs` writes every generated lib into, and the
+    /// one `generatedPaths()` declares them under.
+    ///
+    /// Overridable for the reason `recordRoot` is: a hook that can only be
+    /// pointed at the committed tree can only be RUN by overwriting files the
+    /// rest of the suite compiles and reads, and forge runs test contracts in
+    /// parallel. Only the per-contract libs and the aggregate go here —
+    /// `regenerateSnapshots` has no equivalent, because `LibFs` confines every
+    /// snapshot it writes to `src/generated/`.
+    /// @return The lib directory.
+    function libDir() internal view virtual returns (string memory) {
+        return LibRainDeploySnapshot.LIB_DIR;
+    }
+
     /// Every path the repo's own hooks write that `generatedPaths()` does not
     /// already name, e.g. alias libs or retired contracts' released-suites libs.
     /// Defaults to none.
@@ -159,7 +173,7 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// @return The paths.
     function generatedPaths() internal view returns (string[] memory) {
         string[] memory base =
-            LibRainDeploySnapshot.generatedPaths(recordRoot(), releaseRecordNames(), snapshotContractNames());
+            LibRainDeploySnapshot.generatedPaths(libDir(), recordRoot(), releaseRecordNames(), snapshotContractNames());
         string[] memory own = buildGeneratedPaths();
         string[] memory paths = new string[](base.length + 2 + own.length);
         for (uint256 i = 0; i < base.length; i++) {

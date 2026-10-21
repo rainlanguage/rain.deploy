@@ -526,23 +526,25 @@ library LibRainDeploySnapshot {
     /// Every path a `BuildScript.run()` must rewrite: each candidate snapshot,
     /// each contract's released-suites lib and the aggregate. Computed from the
     /// names rather than from the writers, so a dropped writer call is visible.
+    /// @param libDir The directory the libs are written into.
     /// @param recordRoot The record root the candidate snapshots are written under.
     /// @param recordNames The snapshots a release freezes.
     /// @param contractNames The contracts with a released-suites lib.
     /// @return The paths.
-    function generatedPaths(string memory recordRoot, string[] memory recordNames, string[] memory contractNames)
-        internal
-        pure
-        returns (string[] memory)
-    {
+    function generatedPaths(
+        string memory libDir,
+        string memory recordRoot,
+        string[] memory recordNames,
+        string[] memory contractNames
+    ) internal pure returns (string[] memory) {
         string[] memory paths = new string[](recordNames.length + contractNames.length + 1);
         for (uint256 i = 0; i < recordNames.length; i++) {
             paths[i] = pathForSnapshot(recordRoot, CANDIDATE, recordNames[i]);
         }
         for (uint256 i = 0; i < contractNames.length; i++) {
-            paths[recordNames.length + i] = pathForLib(releasedLibraryName(contractNames[i]));
+            paths[recordNames.length + i] = pathForLib(libDir, releasedLibraryName(contractNames[i]));
         }
-        paths[paths.length - 1] = pathForLib(RELEASED_SUITES_LIBRARY);
+        paths[paths.length - 1] = pathForLib(libDir, RELEASED_SUITES_LIBRARY);
         return paths;
     }
 
