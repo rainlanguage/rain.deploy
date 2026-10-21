@@ -174,7 +174,7 @@ contract LibRainDeployBeaconProxyTest is Test {
     }
 
     /// The artifact path is a `<file>.sol:BeaconProxy` path that names nothing this build compiles.
-    function testBeaconProxyArtifactPathResolvesToNothing() external {
+    function testBeaconProxyArtifactPathResolvesToNothing() external view {
         string[] memory parts = vm.split(BEACON_PROXY_ARTIFACT_PATH, ".sol:");
         assertEq(parts.length, 2, "one .sol: separator");
         assertEq(parts[1], "BeaconProxy", "contract name");
