@@ -680,8 +680,8 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         deploy.externalBroadcastSuite(suite, new string[](0), 1);
     }
 
-    /// A beacon proxy suite whose init data would seat the deploy key passes the pre-fork seat check, which reads the
-    /// stand-in beacon, so the broadcast reaches the network refusal; its seat is checked on each network's fork.
+    /// A beacon proxy suite whose init data would seat the deploy key passes the pre-fork seat check, which cannot read
+    /// a placed proxy's `owner()`, so the broadcast reaches the network refusal; its seat is checked on each network's fork.
     function testBroadcastOfABeaconProxySuiteSeatingTheDeployKeyReachesTheNetworkRefusal() external {
         BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
         address beacon = address(new UpgradeableBeacon(address(new MockOriginOwnedCloneable()), address(0xB0B)));

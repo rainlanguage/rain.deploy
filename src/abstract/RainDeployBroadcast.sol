@@ -131,8 +131,8 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// on the local EVM with only its declared dependencies etched, so it MUST succeed there under each target's
     /// chain id: one that reverts locally (say, by calling an undeclared contract under one chain id) refuses the
     /// broadcast to every network with its revert.
-    /// A beacon proxy suite deploys here over the etched stand-ins, so what this reads is the stand-in implementation's
-    /// `owner()`, not the real implementation's: its seat check is the per-network one in
+    /// A beacon proxy suite is only placed here, its frozen code over a beacon with no implementation, so its `owner()`
+    /// is not read: its seat check is the per-network one in
     /// `LibRainDeployBeaconProxy.beaconProxyDeployStep`, on each network's fork, not this one.
     /// @param suite The suite to broadcast, with its extended networks and every network its candidate adds.
     /// @param networks The networks this broadcast reaches.

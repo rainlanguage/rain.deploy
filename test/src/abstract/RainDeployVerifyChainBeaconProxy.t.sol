@@ -106,8 +106,8 @@ contract RainDeployVerifyChainBeaconProxyTest is PerNetworkCloneBeaconVerifyChai
         );
     }
 
-    /// A proxy over the beacon declared on Polygon passes on Polygon, with the beacon's own checks run after the
-    /// local deploy replaced it with the stand-in.
+    /// A proxy over the beacon declared on Polygon passes on Polygon, with the beacon's own checks run on the beacon
+    /// as declared.
     function testProxyOverTheDeclaredBeaconPasses() external {
         DeploySuite memory suite = liveProxySuite(sBeacon);
         bytes memory beaconCode = sBeacon.code;

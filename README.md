@@ -377,21 +377,23 @@ beacon proxy rather than a clone. A record with the marker and no
 `FrozenSnapshotBeaconProxyMechanismDataMissing`, and one with the marker twice
 with `FrozenSnapshotBeaconProxyMarkerAmbiguous`.
 
-The local derivation etches the dependencies, then replaces the beacon with a
-stand-in whose implementation initializes to success with any data, and calls
-the real factory. The two stand-ins are etched from runtime code constants in
-`LibRainDeployBeaconProxy`, never compiled from a concrete here, so no
-`=`-pinned pragma reaches an abstract a consumer inherits. The proxy's code does
-not depend on what the beacon serves, so the derived code is the chain's. A
-suite whose creation code is not the beacon proxy's over its beacon is refused
-with `CloneCreationCodeMismatch`.
+A beacon proxy suite carries its runtime code as a generated constant. In the
+repo's `script/Build.sol`, `LibRainDeployBeaconProxy.beaconProxyRuntimeCode`
+deploys a real `UpgradeableBeacon` serving the real implementation at the
+beacon's address, then rain-factory's `BeaconProxy` creation code with empty
+constructor data, so no `initialize` runs, and returns the deployed code to
+write into `src/generated/`. The `Git is clean` job checks it, as it does a
+Zoltu suite's runtime code. The local derivation places that code at the derived
+address rather than deploying through the factory. A suite whose creation code
+is not the beacon proxy's over its beacon is refused with
+`CloneCreationCodeMismatch`.
 
 The broadcast step asks the factory where it would put the proxy and refuses
 `BeaconProxyFactoryPredictionMismatch` if it disagrees with the derivation. It
 then calls `beaconProxyDeterministicOpenSalt` and refuses
 `BeaconProxySeatsDeployKey` if the proxy answers `owner()` with the deploy key.
 That is the beacon proxy's only real seat check: the pre-fork
-`SuiteSeatsDeployKey` one reaches the stand-in, which has no `owner()`. It reads
+`SuiteSeatsDeployKey` one cannot read a placed proxy's `owner()`. It reads
 `owner()` only. Roles, `AccessControl` admins, pending owners and admin slots
 the implementation's `initialize` grants to `tx.origin` are not read, and the
 deploy key keeps any of them on every network it broadcasts to. Keeping that
@@ -492,7 +494,7 @@ etched, so it MUST succeed there under each target's chain id: one that reverts
 locally refuses the broadcast to every network. That check reads `owner()` only:
 roles, pending owners, admin slots and contracts a constructor creates are not
 read, so assert those yourself. A beacon proxy suite is the exception: locally
-it deploys over the stand-ins, so its seat check is the per-network one in the
+it is placed, not deployed, so its seat check is the per-network one in the
 broadcast step (`BeaconProxySeatsDeployKey`), on each network's fork, not this
 pre-fork one.
 

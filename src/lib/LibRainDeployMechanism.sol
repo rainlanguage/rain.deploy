@@ -95,8 +95,7 @@ error ExtendedNetworkUnfrozen(string suite, string network, address deployedAddr
 /// Thrown when a storage slot of any account but the clone and the accounts created under it is read while the clone
 /// is deployed locally: the factory call and the clone's `initialize`. A full-slot write is not refused; a write to
 /// part of a slot reads the slot first and is refused like a read.
-/// For a beacon proxy the `initialize` that runs is the stand-in implementation's, which reads no storage, not the
-/// beacon's real implementation's.
+/// A beacon proxy is not deployed locally, so this never applies to one.
 /// @param suite The suite being deployed.
 /// @param account The account whose storage was read.
 /// @param slot The slot read.
