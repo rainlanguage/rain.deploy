@@ -56,6 +56,7 @@ ast = true
 # Build reads the version and the network sections from foundry.toml, stages the
 # regenerated sections under .staged-config/ for script/build.sh to install, and
 # writes the generated per-tag snapshots + the current-pin lib under src/.
+# SafeRegisterConfig writes Safe bundles under safe-bundles/.
 # Nothing else in this repo touches the filesystem.
 fs_permissions = [
   # READ, not read-write. `BuildScript.regenerateConfig` reads these two and
@@ -90,6 +91,9 @@ fs_permissions = [
   { access = "read", path = "./out" },
   # RegistryDeploySuitesTest holds the dispatch options to the candidate keys.
   { access = "read", path = "./.github/workflows/manual-sol-artifacts.yaml" },
+  # SafeRegisterConfig writes each network's Safe Transaction Builder JSON
+  # here for the owners to load. Gitignored.
+  { access = "read-write", path = "./safe-bundles" },
 ]
 
 [dependencies]

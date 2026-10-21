@@ -105,6 +105,31 @@ library LibSafeTx {
         return safeTxHash(safe, multiSendTx(txs), nonce);
     }
 
+    /// The single transaction the Safe wallet executes the Transaction Builder
+    /// bundle `txs` as: its one entry itself when it has one, since the wallet
+    /// sends a one-transaction batch as a plain CALL (`txs.length > 1` in
+    /// safe-global/safe-wallet-monorepo `ReviewSafeAppsTx.tsx`), and
+    /// `multiSendTx` otherwise.
+    /// @param txs The bundle. Every entry MUST be a CALL.
+    /// @return The transaction the signers sign.
+    function bundleTx(SafeTx[] memory txs) internal view returns (SafeTx memory) {
+        if (txs.length == 1) {
+            requireCall(0, txs[0].operation);
+            return txs[0];
+        }
+        return multiSendTx(txs);
+    }
+
+    /// The hash owners sign for `safe` to execute the bundle `txs` at `nonce`,
+    /// as the Safe wallet executes it (`bundleTx`).
+    /// @param safe The executing Safe.
+    /// @param txs The bundle. Every entry MUST be a CALL.
+    /// @param nonce The nonce the bundle consumes.
+    /// @return The Safe transaction hash.
+    function bundleSafeTxHash(Safe safe, SafeTx[] memory txs, uint256 nonce) internal view returns (bytes32) {
+        return safeTxHash(safe, bundleTx(txs), nonce);
+    }
+
     /// `addrs` sorted ascending, in a new array.
     /// @param addrs The addresses.
     /// @return The same addresses, ascending.

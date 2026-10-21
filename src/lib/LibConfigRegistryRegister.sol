@@ -4,11 +4,14 @@ pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
+import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
 
 import {IConfigRegistryV2} from "../interface/IConfigRegistryV2.sol";
 import {LibConfigRegistry} from "./LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "./LibConfigRegistryDeploy.sol";
 import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
+import {LibSafe} from "./LibSafe.sol";
+import {LibSafeTx} from "./LibSafeTx.sol";
 
 /// @title LibConfigRegistryRegister
 /// @notice An authority's side of `ConfigRegistry`: binds one name to one
@@ -131,6 +134,26 @@ library LibConfigRegistryRegister {
     /// @param expected The value it should be bound to.
     /// @param actual The value it is bound to.
     error UnexpectedBinding(string network, address authority, bytes32 name, bytes expected, bytes actual);
+
+    /// Thrown when the code at an account on a network differs from the code
+    /// at it on the first selected network. A consumer resolves under one
+    /// address on every chain, so the account must be the same account on
+    /// each: not a different contract, a contract on one and none on another,
+    /// or an EIP-7702 delegation on only some.
+    /// @param network The network that differs.
+    /// @param account The account read.
+    /// @param expected `keccak256` of its code on the first selected network.
+    /// @param actual `keccak256` of its code on this one.
+    error AccountCodeDiffers(string network, address account, bytes32 expected, bytes32 actual);
+
+    /// Thrown when a Safe's owners or threshold on a network differ from the
+    /// first selected network's. Its controllers are per-chain state, so a
+    /// rotation left out of one chain leaves the old owners in control there.
+    /// @param network The network that differs.
+    /// @param safe The Safe read.
+    /// @param expected `safeControllers` on the first selected network.
+    /// @param actual `safeControllers` on this one.
+    error SafeControllersDiffer(string network, address safe, bytes32 expected, bytes32 actual);
 
     /// The `bytes32` a consumer resolves for `name`, refusing a non-canonical
     /// name.
@@ -484,9 +507,61 @@ library LibConfigRegistryRegister {
         }
     }
 
+    /// Whether `account` holds the code of a proxy the v1.3.0 or v1.4.1 Safe
+    /// factory creates, so that its owners and threshold are what control it.
+    /// @param account The account.
+    /// @return True for a Safe proxy.
+    function isSafe(address account) internal view returns (bool) {
+        bytes32 codeHash = account.codehash;
+        return codeHash == LibSafe.SAFE_V1_4_1_PROXY_CODEHASH || codeHash == LibSafe.SAFE_V1_3_0_PROXY_CODEHASH;
+    }
+
+    /// The selected chain's controllers of the Safe at `safe` as one word: its
+    /// owners ascending, and its threshold. Ascending because `getOwners`
+    /// follows the order owners were added in, which two chains with the same
+    /// owners need not share.
+    /// @param safe The Safe.
+    /// @return `keccak256(abi.encode(owners ascending, threshold))`.
+    function safeControllers(address safe) internal view returns (bytes32) {
+        return keccak256(
+            abi.encode(LibSafeTx.sortAscending(Safe(payable(safe)).getOwners()), Safe(payable(safe)).getThreshold())
+        );
+    }
+
+    /// What controls `account` on the selected chain: `keccak256` of its
+    /// code, which is the empty-code hash for an account with none whether or
+    /// not the chain has seen it, and `safeControllers` for a Safe, zero
+    /// otherwise.
+    /// @param account The account.
+    /// @return The code hash.
+    /// @return The Safe controllers, or zero.
+    function accountState(address account) internal view returns (bytes32, bytes32) {
+        return (keccak256(account.code), isSafe(account) ? safeControllers(account) : bytes32(0));
+    }
+
+    /// The record of `account` on one network: its code hash and, for a Safe,
+    /// its threshold and owners.
+    /// @param vm The Vm instance to format with.
+    /// @param network The network's name.
+    /// @param account The account.
+    /// @return The record, one line.
+    function describeAccount(Vm vm, string memory network, address account) internal view returns (string memory) {
+        string memory record =
+            string.concat(vm.toString(account), " on ", network, ": code hash ", vm.toString(keccak256(account.code)));
+        if (isSafe(account)) {
+            address[] memory owners = Safe(payable(account)).getOwners();
+            record = string.concat(record, ", threshold ", vm.toString(Safe(payable(account)).getThreshold()), ", owners");
+            for (uint256 i = 0; i < owners.length; i++) {
+                record = string.concat(record, " ", vm.toString(owners[i]));
+            }
+        }
+        return record;
+    }
+
     /// Reverts unless every given fork's registry binds `name` under
     /// `authority` to `value`, read through `LibConfigRegistry.resolve` exactly
-    /// as a consumer reads it, logging the moment each was bound.
+    /// as a consumer reads it, logging the moment each was bound, and unless
+    /// the authority is the same account on every fork.
     /// @param vm The Vm instance to select forks with.
     /// @param selected The networks the forks are of.
     /// @param declared The networks the declaration supports.
@@ -503,15 +578,57 @@ library LibConfigRegistryRegister {
         string memory name,
         bytes memory value
     ) internal {
+        address[] memory accounts = new address[](1);
+        accounts[0] = authority;
+        checkRegisteredOnForks(vm, selected, declared, forkIds, authority, name, value, accounts);
+    }
+
+    /// `checkRegisteredOnForks`, also refusing a network where any of
+    /// `accounts` differs from the first network's (`accountState`): its code
+    /// (`AccountCodeDiffers`) or, for a Safe, its owners or threshold
+    /// (`SafeControllersDiffer`). Every network's binding and record of each
+    /// account is logged.
+    /// @param vm The Vm instance to select forks with.
+    /// @param selected The networks the forks are of.
+    /// @param declared The networks the declaration supports.
+    /// @param forkIds The fork of each selected network, positionally paired.
+    /// @param authority The authority to read under.
+    /// @param name The name as a consumer writes it.
+    /// @param value The value it must be bound to.
+    /// @param accounts The accounts that must be the same on every network.
+    function checkRegisteredOnForks(
+        Vm vm,
+        string[] memory selected,
+        string[] memory declared,
+        uint256[] memory forkIds,
+        address authority,
+        string memory name,
+        bytes memory value,
+        address[] memory accounts
+    ) internal {
         bytes32 hashed = nameHash(name);
         SupportedNetwork[] memory networks = selectNetworks(selected, declared);
         if (forkIds.length != networks.length) {
             revert LibRainDeploy.ForkIdsLengthMismatch(networks.length, forkIds.length);
         }
+        bytes32[] memory codeHashes = new bytes32[](accounts.length);
+        bytes32[] memory controllers = new bytes32[](accounts.length);
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
             uint256 registeredAt = checkRegisteredOnSelectedChain(vm, networks[i], authority, hashed, value);
             console2.log(string.concat("Bound on ", networks[i].name, " at ", vm.toString(registeredAt)));
+            for (uint256 j = 0; j < accounts.length; j++) {
+                console2.log(describeAccount(vm, networks[i].name, accounts[j]));
+                (bytes32 codeHash, bytes32 controller) = accountState(accounts[j]);
+                if (i == 0) {
+                    codeHashes[j] = codeHash;
+                    controllers[j] = controller;
+                } else if (codeHash != codeHashes[j]) {
+                    revert AccountCodeDiffers(networks[i].name, accounts[j], codeHashes[j], codeHash);
+                } else if (controller != controllers[j]) {
+                    revert SafeControllersDiffer(networks[i].name, accounts[j], controllers[j], controller);
+                }
+            }
         }
     }
 
@@ -555,9 +672,34 @@ library LibConfigRegistryRegister {
         string memory name,
         bytes memory value
     ) internal {
+        address[] memory accounts = new address[](1);
+        accounts[0] = authority;
+        checkRegisteredOnNetworks(vm, selected, declared, authority, name, value, accounts);
+    }
+
+    /// `checkRegisteredOnNetworks`, with `accounts` held the same on every
+    /// network as `checkRegisteredOnForks` holds them.
+    /// @param vm The Vm instance to fork with.
+    /// @param selected The networks to check.
+    /// @param declared The networks the declaration supports.
+    /// @param authority The authority to read under.
+    /// @param name The name as a consumer writes it.
+    /// @param value The value it must be bound to.
+    /// @param accounts The accounts that must be the same on every network.
+    function checkRegisteredOnNetworks(
+        Vm vm,
+        string[] memory selected,
+        string[] memory declared,
+        address authority,
+        string memory name,
+        bytes memory value,
+        address[] memory accounts
+    ) internal {
         // Refused before anything is forked.
         nameHash(name);
         selectNetworks(selected, declared);
-        checkRegisteredOnForks(vm, selected, declared, LibRainDeploy.createForks(vm, selected), authority, name, value);
+        checkRegisteredOnForks(
+            vm, selected, declared, LibRainDeploy.createForks(vm, selected), authority, name, value, accounts
+        );
     }
 }

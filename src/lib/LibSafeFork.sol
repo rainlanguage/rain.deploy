@@ -102,14 +102,15 @@ library LibSafeFork {
         if (!exec(safe, txn, LibSafeTx.approvedHashSignatures(approvers))) revert ExecFailed(address(safe));
     }
 
-    /// Execute the bundle `txs` from `safe` as one `MultiSendCallOnly`
-    /// DELEGATECALL at its live nonce, as the Safe UI does. Every inner call is
-    /// made by the Safe itself.
+    /// Execute the bundle `txs` from `safe` at its live nonce as the Safe UI
+    /// does (`LibSafeTx.bundleTx`): one entry as that CALL, more as one
+    /// `MultiSendCallOnly` DELEGATECALL. Every inner call is made by the Safe
+    /// itself.
     /// @param vm The Vm, for `prank`.
     /// @param safe The executing Safe.
     /// @param txs The bundle. Every entry MUST be a CALL.
     function executeBundle(Vm vm, Safe safe, SafeTx[] memory txs) internal {
-        execute(vm, safe, LibSafeTx.multiSendTx(txs));
+        execute(vm, safe, LibSafeTx.bundleTx(txs));
     }
 
     /// Prove `safe` can still act: a CALL of `data` to `target` at the live
