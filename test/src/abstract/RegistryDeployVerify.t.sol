@@ -101,7 +101,7 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
             string memory path = codeRecords[i];
             uint256 matched = codeRecordIndex(path, names);
 
-            string[] memory lines = vm.split(LibRainDeploySnapshot.withoutBlockComments(vm, vm.readFile(path)), "\n");
+            string[] memory lines = LibRainDeploySnapshot.splitRecordLines(vm, vm.readFile(path));
             bytes32 recordedHash = declaredBytes32(path, lines, declarationLine(path, lines, BYTECODE_HASH_DECLARATION));
             bytes memory initCode = abi.encodePacked(
                 declaredBytes(path, lines, declarationLine(path, lines, CREATION_CODE_DECLARATION)),
