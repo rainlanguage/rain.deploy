@@ -3,7 +3,8 @@
 pragma solidity =0.8.25;
 
 import {RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
-import {CloneNetwork} from "../../src/lib/LibRainDeployClone.sol";
+import {CloneDeploy, CloneNetwork} from "../../src/lib/LibRainDeployClone.sol";
+import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
 import {PerNetworkCloneDeployBase} from "../abstract/PerNetworkCloneDeployBase.sol";
 import {PerNetworkCloneDeploys} from "../abstract/PerNetworkCloneDeploys.sol";
 import {UpgradedPerNetworkCloneDeploys} from "../abstract/UpgradedPerNetworkCloneDeploys.sol";
@@ -11,6 +12,16 @@ import {UpgradedPerNetworkCloneDeploys} from "../abstract/UpgradedPerNetworkClon
 /// @title UpgradedPerNetworkCloneDeploy
 /// @notice `UpgradedPerNetworkCloneDeploys` under `PerNetworkCloneDeployBase`.
 contract UpgradedPerNetworkCloneDeploy is UpgradedPerNetworkCloneDeploys, PerNetworkCloneDeployBase {
+    /// @inheritdoc UpgradedPerNetworkCloneDeploys
+    function cloneDeploys()
+        internal
+        pure
+        override(UpgradedPerNetworkCloneDeploys, RainDeployCloneSuitesBase)
+        returns (CloneDeploy[] memory)
+    {
+        return UpgradedPerNetworkCloneDeploys.cloneDeploys();
+    }
+
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()
         internal

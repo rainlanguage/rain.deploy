@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {CloneDeploy} from "../../src/lib/LibRainDeployClone.sol";
+import {RainDeployCloneSuitesBase} from "../../src/abstract/RainDeployCloneSuitesBase.sol";
 import {RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {PerNetworkCloneDeploys} from "../abstract/PerNetworkCloneDeploys.sol";
 import {ExternalCloneDeploySuites} from "../abstract/ExternalCloneDeploySuites.sol";
@@ -11,6 +13,16 @@ import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 /// `supportedNetworks()` set from outside, so a test can reorder the networks or add one the
 /// clone's `initData` has no answer for, and read what the candidate is built for.
 contract ConfigurablePerNetworkCloneDeploy is PerNetworkCloneDeploys, ExternalCloneDeploySuites, ExternalDeploySuites {
+    /// @inheritdoc PerNetworkCloneDeploys
+    function cloneDeploys()
+        internal
+        pure
+        override(PerNetworkCloneDeploys, RainDeployCloneSuitesBase)
+        returns (CloneDeploy[] memory)
+    {
+        return PerNetworkCloneDeploys.cloneDeploys();
+    }
+
     /// The supported networks, in order.
     string[] internal sNetworks;
 

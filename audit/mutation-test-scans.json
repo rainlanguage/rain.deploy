@@ -1158,6 +1158,68 @@
     ]
   },
   {
+    "timestamp": "2026-10-21T01:26:00Z",
+    "commit": "e94188a08be847e0f19544cf3efe8c34e4bd1b0a",
+    "testsAfterCommit": "e94188a08be847e0f19544cf3efe8c34e4bd1b0a",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 340,
+    "scope": "pr:323, its code changed after the re-run audit (ff2e9ce): the per-network address comment of a beacon proxy record (S13, P04 retargeted onto the local beaconProxy), mechanismName (P03, G04, G05), deployStep's clone arm and its UnknownDeployMechanism guard (G01-G03), isPerNetworkMechanism and its released-lib callers (N01-N05)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 13,
+      "behavioursProbed": 13,
+      "killedByExistingTests": 11,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 2,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pass at e94188a08be847e0f19544cf3efe8c34e4bd1b0a with mutation-probe over the offline suite (forge test minus the RPC-dependent tests), 1309 green at baseline: 13 mutants, 11 KILLED, all by tests present before the probe.",
+      "Survivors: G03 (deployStep's final revert UnknownDeployMechanism removed) and G05 (mechanismName's final revert replaced by an empty return). Both guards are reached only by a DeployMechanism member added to the enum without an arm; every current member has one, and a value outside the enum panics (0x21) when read, before either guard. No test can drive them at this commit.",
+      "Earlier rounds on this PR (M01-M34, B01-B13, S01-S14, C01-C03, V01-V05, P01-P02) were probed before this record and are summarised in the PR body; they have no scan record of their own."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T02:18:54Z",
+    "commit": "72a4f335acaa3e39a899fe6ca7f9a6a8f39168e5",
+    "testsAfterCommit": "72a4f335acaa3e39a899fe6ca7f9a6a8f39168e5",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 342,
+    "scope": "pr:323, the two survivors of the previous entry (G03 deployStep UnknownDeployMechanism revert, G05 mechanismName UnknownDeployMechanism revert) and the per-member tables that replace both if-chains (G06-G17)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 12,
+      "behavioursProbed": 12,
+      "killedByExistingTests": 12,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "G03 and G05 could not be reached: an out-of-range DeployMechanism written with assembly into the stack variable (mechanismName) and into the DeploySuite field in memory (deployStep) panics 0x21 on its first read, before either guard. testDeployStepPanicsOnAMechanismOutsideTheEnum and testMechanismNamePanicsOnAMechanismOutsideTheEnum pin that panic for every value from 5 to 255.",
+      "Both if-chains became per-member tables indexed by the member value, so the reverts and the UnknownDeployMechanism error (added on this PR, never released) are gone and G03/G05 have no target. A member added without a table entry fails with an index panic (0x32). testDeployMechanismHasFiveMembers pins the member count the tables are sized for.",
+      "Pass at 72a4f335acaa3e39a899fe6ca7f9a6a8f39168e5 with mutation-probe over the offline suite (forge test minus the RPC-dependent tests), 1312 green at baseline: 12 mutants (every table entry and both indexes), 12 KILLED, all by tests present before this commit."
+    ]
+  },
+  {
     "timestamp": "2026-10-20T21:13:08Z",
     "commit": "9da7962108e6cb0f9f2f65c996f6fb19f993ccf9",
     "testsAfterCommit": "9da7962108e6cb0f9f2f65c996f6fb19f993ccf9",
