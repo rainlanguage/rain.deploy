@@ -134,6 +134,11 @@ contract PerNetworkCloneBuildScriptHarness is PerNetworkCloneDeploys, BuildScrip
         regenerateExtendedNetworks();
     }
 
+    /// @return The paths `run()` declares.
+    function externalGeneratedPaths() external view returns (string[] memory) {
+        return generatedPaths();
+    }
+
     /// @return The rolling snapshot's path.
     function rollingPath() external view returns (string memory) {
         return LibRainDeploySnapshot.pathForSnapshot(

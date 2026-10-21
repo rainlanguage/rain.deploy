@@ -391,6 +391,38 @@ contract BuildScriptTest is Test {
         );
     }
 
+    /// PROPERTY: `run()` declares the extended networks record of each release that declares extended networks,
+    /// and only those, and writes the one it declares.
+    function testRunDeclaresTheExtendedNetworksRecordsItWrites() external {
+        string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-run-declared");
+        resetFixture(root);
+        new BuildScriptHarness(root, FIXTURE_CONTRACT).seedConfig();
+        TwoReleasePerNetworkCloneBuildScriptHarness harness =
+            new TwoReleasePerNetworkCloneBuildScriptHarness(root, root);
+        CloneNetwork[] memory second = new CloneNetwork[](1);
+        second[0] = extendedNetwork(1, hex"00bb");
+        harness.setSecondExtendedNetworks(second);
+
+        string[] memory undeclared = new PerNetworkCloneBuildScriptHarness(root, root).externalGeneratedPaths();
+        string[] memory paths = harness.externalGeneratedPaths();
+        harness.run();
+        (,, string memory firstPath) =
+            LibRainDeployExtendedNetworks.extendedNetworksPath(root, "per-network-clone@0_0_1");
+        (,, string memory secondPath) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, SECOND_RELEASE_KEY);
+        bool firstWritten = vm.exists(firstPath);
+        bool secondWritten = vm.exists(secondPath);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
+
+        assertEq(paths.length, undeclared.length + 1);
+        for (uint256 i = 0; i < undeclared.length; i++) {
+            assertEq(paths[i], undeclared[i]);
+        }
+        assertEq(paths[paths.length - 1], secondPath);
+        assertTrue(secondWritten);
+        assertFalse(firstWritten);
+    }
+
     /// PROPERTY: the build writes each release's record from that release's own declaration, under that release's
     /// key.
     function testRegenerateExtendedNetworksWritesEachReleasesOwnRecord() external {

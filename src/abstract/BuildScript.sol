@@ -146,6 +146,28 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         }
     }
 
+    /// Every extended networks record `regenerateExtendedNetworks` writes.
+    /// @return The paths.
+    function extendedNetworksPaths() internal view returns (string[] memory) {
+        DeploySuite[] memory released = releasedSuites();
+        string memory root = extendedNetworksRoot();
+        string[] memory written = new string[](released.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < released.length; i++) {
+            (, string memory path) = LibRainDeployExtendedNetworks.writtenExtendedNetworksPath(
+                root, released[i].suite, extendedNetworks(released[i].suite)
+            );
+            if (bytes(path).length > 0) {
+                written[count++] = path;
+            }
+        }
+        string[] memory paths = new string[](count);
+        for (uint256 i = 0; i < count; i++) {
+            paths[i] = written[i];
+        }
+        return paths;
+    }
+
     /// The directory `regenerateLibs` writes every generated lib into, and the
     /// one `generatedPaths()` declares them under.
     ///
@@ -169,13 +191,14 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     }
 
     /// Every path `run()` must rewrite, `script/build.sh`'s installs of the
-    /// staged config included.
+    /// staged config and the extended networks records included.
     /// @return The paths.
     function generatedPaths() internal view returns (string[] memory) {
         string[] memory base =
             LibRainDeploySnapshot.generatedPaths(libDir(), recordRoot(), releaseRecordNames(), snapshotContractNames());
         string[] memory own = buildGeneratedPaths();
-        string[] memory paths = new string[](base.length + 2 + own.length);
+        string[] memory extended = extendedNetworksPaths();
+        string[] memory paths = new string[](base.length + 2 + own.length + extended.length);
         for (uint256 i = 0; i < base.length; i++) {
             paths[i] = base[i];
         }
@@ -183,6 +206,9 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         paths[base.length + 1] = LibRainDeployConfig.ENV_EXAMPLE_NAME;
         for (uint256 i = 0; i < own.length; i++) {
             paths[base.length + 2 + i] = own[i];
+        }
+        for (uint256 i = 0; i < extended.length; i++) {
+            paths[base.length + 2 + own.length + i] = extended[i];
         }
         return paths;
     }
