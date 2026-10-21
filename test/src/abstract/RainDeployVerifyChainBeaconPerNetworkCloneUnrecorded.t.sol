@@ -3,16 +3,37 @@
 pragma solidity =0.8.25;
 
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {PerNetworkCloneDeploys, onlyFirstRecordedNetwork} from "../../abstract/PerNetworkCloneDeploys.sol";
+import {CloneNetwork} from "../../../src/lib/LibRainDeployClone.sol";
+import {LibRainDeployExtendedNetworks} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {
+    PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
+    PerNetworkCloneDeploys,
+    onlyFirstRecordedNetwork,
+    perNetworkCloneInitData,
+    perNetworkCloneReleaseAddress
+} from "../../abstract/PerNetworkCloneDeploys.sol";
 import {
     RainDeployVerifyChainBeaconPerNetworkCloneTestBase
 } from "../../abstract/RainDeployVerifyChainBeaconPerNetworkCloneTestBase.sol";
+import {LibExtendedNetworksFixture} from "../../lib/LibExtendedNetworksFixture.sol";
 
 /// @title RainDeployVerifyChainBeaconPerNetworkCloneUnrecordedTest
-/// @notice A beacon on a network the per-network clone release never recorded must point at its init data's clone.
+/// @notice A beacon on a network the per-network clone release never recorded, but declares as extended, must point
+/// at its init data's clone.
 contract RainDeployVerifyChainBeaconPerNetworkCloneUnrecordedTest is
     RainDeployVerifyChainBeaconPerNetworkCloneTestBase
 {
+    string internal sExtendedRoot;
+
+    constructor() {
+        sExtendedRoot = LibExtendedNetworksFixture.freshRoot(
+            vm, "fixture-lib/extended-networks", "verify-beacon-unrecorded", "per-network-clone@0_0_1"
+        );
+        LibRainDeployExtendedNetworks.writeExtendedNetworks(
+            vm, sExtendedRoot, "per-network-clone@0_0_1", extendedNetworks("per-network-clone@0_0_1")
+        );
+    }
+
     function releasedSuites()
         internal
         pure
@@ -22,5 +43,24 @@ contract RainDeployVerifyChainBeaconPerNetworkCloneUnrecordedTest is
         DeploySuite[] memory suites = PerNetworkCloneDeploys.releasedSuites();
         suites[0] = onlyFirstRecordedNetwork(suites[0]);
         return suites;
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    function extendedNetworks(string memory suite) internal pure override returns (CloneNetwork[] memory) {
+        if (keccak256(bytes(suite)) != keccak256("per-network-clone@0_0_1")) {
+            return new CloneNetwork[](0);
+        }
+        CloneNetwork[] memory networks = new CloneNetwork[](1);
+        networks[0] = CloneNetwork({
+            chainId: PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
+            data: perNetworkCloneInitData(PER_NETWORK_CLONE_POLYGON_CHAIN_ID),
+            deployedAddress: perNetworkCloneReleaseAddress(PER_NETWORK_CLONE_POLYGON_CHAIN_ID)
+        });
+        return networks;
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    function extendedNetworksRoot() internal view override returns (string memory) {
+        return sExtendedRoot;
     }
 }
