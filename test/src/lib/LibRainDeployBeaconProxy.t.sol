@@ -55,12 +55,14 @@ contract LibRainDeployBeaconProxyTest is Test {
     }
 
     /// @param code Creation code.
-    /// @return deployed Where `CREATE` put it.
-    function create(bytes memory code) internal returns (address deployed) {
+    /// @return Where `CREATE` put it.
+    function create(bytes memory code) internal returns (address) {
+        address deployed;
         assembly ("memory-safe") {
             deployed := create(0, add(code, 0x20), mload(code))
         }
         assertNotEq(deployed, address(0), "create failed");
+        return deployed;
     }
 
     /// The offsets are pinned to the generated creation code: the constructor copies the runtime from
