@@ -146,8 +146,21 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         }
     }
 
+    /// Every path `run()` must rewrite.
+    /// @return The paths.
+    function generatedPaths() internal view returns (string[] memory) {
+        return LibRainDeploySnapshot.generatedPaths(recordRoot(), releaseRecordNames(), snapshotContractNames());
+    }
+
+    /// Prints `generatedPaths()` for `rainix-copy-artifacts` to fail a run that
+    /// leaves one unwritten.
+    function declareGeneratedPaths() internal view {
+        LibRainDeploySnapshot.declareGenerated(generatedPaths());
+    }
+
     /// @notice Regenerate everything this repo generates. Freezes nothing.
     function run() external {
+        declareGeneratedPaths();
         regenerateConfig();
         regenerateSnapshots();
         regenerateLibs();

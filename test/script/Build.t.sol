@@ -482,4 +482,24 @@ contract BuildTest is Test {
         vm.expectRevert(BuildHarnessWouldWriteTheCommittedLibs.selector);
         sBuild.externalRegenerateLibs();
     }
+
+    /// PROPERTY: `run()` declares exactly these lines, and each names a committed file.
+    function testRunDeclaresTheCommittedGeneratedFiles() external view {
+        string[] memory paths = sBuild.externalGeneratedPaths();
+        string[] memory lines = LibRainDeploySnapshot.codegenDeclaration(paths);
+
+        string[6] memory expected = [
+            "rainix-codegen owns src/generated/candidate/ConfigRegistry.sol",
+            "rainix-codegen owns src/generated/candidate/MigrationRegistry.sol",
+            "rainix-codegen owns src/generated/candidate/TimelockController.sol",
+            "rainix-codegen owns src/lib/LibConfigRegistryReleased.sol",
+            "rainix-codegen owns src/lib/LibMigrationRegistryReleased.sol",
+            "rainix-codegen owns src/lib/LibReleasedSuites.sol"
+        ];
+        assertEq(lines.length, expected.length);
+        for (uint256 i = 0; i < expected.length; i++) {
+            assertEq(lines[i], expected[i]);
+            assertTrue(vm.exists(paths[i]), paths[i]);
+        }
+    }
 }

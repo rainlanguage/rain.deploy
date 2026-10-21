@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
+import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {
     LibCodeGen,
     RAIN_COPYRIGHT_TEXT,
@@ -508,6 +509,53 @@ library LibRainDeploySnapshot {
     /// @return The path.
     function pathForLib(string memory libraryName) internal pure returns (string memory) {
         return pathForLib(LIB_DIR, libraryName);
+    }
+
+    /// The stdout line `rainix-copy-artifacts` reads a generated path from. It
+    /// fails the job on a declared path the run did not write.
+    string constant CODEGEN_OWNS_PREFIX = "rainix-codegen owns ";
+
+    /// Every path a `BuildScript.run()` must rewrite: each candidate snapshot,
+    /// each contract's released-suites lib and the aggregate. Computed from the
+    /// names rather than from the writers, so a dropped writer call is visible.
+    /// @param recordRoot The record root the candidate snapshots are written under.
+    /// @param recordNames The snapshots a release freezes.
+    /// @param contractNames The contracts with a released-suites lib.
+    /// @return The paths.
+    function generatedPaths(string memory recordRoot, string[] memory recordNames, string[] memory contractNames)
+        internal
+        pure
+        returns (string[] memory)
+    {
+        string[] memory paths = new string[](recordNames.length + contractNames.length + 1);
+        for (uint256 i = 0; i < recordNames.length; i++) {
+            paths[i] = pathForSnapshot(recordRoot, CANDIDATE, recordNames[i]);
+        }
+        for (uint256 i = 0; i < contractNames.length; i++) {
+            paths[recordNames.length + i] = pathForLib(releasedLibraryName(contractNames[i]));
+        }
+        paths[paths.length - 1] = pathForLib(RELEASED_SUITES_LIBRARY);
+        return paths;
+    }
+
+    /// The declaration lines for `paths`.
+    /// @param paths The generated paths.
+    /// @return The lines.
+    function codegenDeclaration(string[] memory paths) internal pure returns (string[] memory) {
+        string[] memory lines = new string[](paths.length);
+        for (uint256 i = 0; i < paths.length; i++) {
+            lines[i] = string.concat(CODEGEN_OWNS_PREFIX, paths[i]);
+        }
+        return lines;
+    }
+
+    /// Prints `codegenDeclaration(paths)`, one line each.
+    /// @param paths The generated paths.
+    function declareGenerated(string[] memory paths) internal pure {
+        string[] memory lines = codegenDeclaration(paths);
+        for (uint256 i = 0; i < lines.length; i++) {
+            console2.log(lines[i]);
+        }
     }
 
     /// Every file in the FROZEN record: everything inside a release-tag

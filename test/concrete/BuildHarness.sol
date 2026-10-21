@@ -81,6 +81,11 @@ contract BuildHarness is Build {
         return snapshotContractNames();
     }
 
+    /// @return The paths `run()` declares.
+    function externalGeneratedPaths() external view returns (string[] memory) {
+        return generatedPaths();
+    }
+
     /// The deploy declaration's list, through the same guarded reader every
     /// other consumer of the declaration uses.
     /// @return The declared candidates.

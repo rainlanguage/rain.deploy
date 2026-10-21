@@ -146,6 +146,19 @@ contract BuildScriptTest is Test {
         assertFalse(frozenExists);
     }
 
+    /// PROPERTY: `run()` declares the rolling snapshot its hook writes, the
+    /// contract's released-suites lib and the aggregate.
+    function testRunDeclaresTheRollingSnapshotAndTheReleasedLibs() external {
+        BuildScriptHarness harness = new BuildScriptHarness(RUN_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        string[] memory paths = harness.externalGeneratedPaths();
+
+        assertEq(paths.length, 3);
+        assertEq(paths[0], harness.rollingPath());
+        assertEq(paths[0], "test/generated-buildscript-run/candidate/Fixture.sol");
+        assertEq(paths[1], "src/lib/LibFixtureReleased.sol");
+        assertEq(paths[2], "src/lib/LibReleasedSuites.sol");
+    }
+
     /// PROPERTY: `cutRelease()` freezes the snapshot its OWN regeneration
     /// wrote, not the one that was on disk when it was called.
     ///
@@ -669,8 +682,15 @@ contract BuildScriptTest is Test {
             );
         }
 
+        assertTrue(
+            referencesId(called, declarationId(json, namedFunctionPath(json, members, "declareGeneratedPaths"))),
+            "run() does not declare its generated paths"
+        );
+
         assertGt(generators, 0, "the base declares no generator");
-        assertEq(called.length, generators, "run() holds a call that is not one of those generators");
+        assertEq(
+            called.length, generators + 1, "run() holds a call that is not one of those generators or the declaration"
+        );
     }
 
     /// PROPERTY: every hook the base declares is reached from an entry point.
