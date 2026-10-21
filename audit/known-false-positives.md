@@ -47,3 +47,8 @@ the value the function returns.
   alone, which `withExtendedNetworks` preserves, and in the no-candidate
   fallback `withUnrecordedNetworks` appends nothing for either argument because
   `suite`'s networks are a subset of `frozen`'s.
+- `RegisterConfig.run()` passes `authority` to `registerOnNetworks`;
+  `msg.sender` is equivalent (B25): the `checkSender(msg.sender, authority)` on
+  the line before has reverted unless the two are equal. Every other
+  `msg.sender` or `tx.origin` read in place of `authority` is killed offline,
+  and the library's `pure` functions refuse both at compile time.

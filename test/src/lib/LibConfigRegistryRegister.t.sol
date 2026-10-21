@@ -84,6 +84,10 @@ contract LibConfigRegistryRegisterTest is Test {
         return LibConfigRegistryRegister.selectNetworks(selected, declared);
     }
 
+    function externalCheckSender(address sender, address authority) external pure {
+        LibConfigRegistryRegister.checkSender(sender, authority);
+    }
+
     function externalCurrentBinding(bytes32 name) external view returns (bytes memory, uint256) {
         return LibConfigRegistryRegister.currentBinding(AUTHORITY, name);
     }
@@ -231,6 +235,20 @@ contract LibConfigRegistryRegisterTest is Test {
     function testSelectEveryDeclaredNetwork() external pure {
         string[] memory declared = LibRainDeploy.supportedNetworks();
         assertEq(LibConfigRegistryRegister.selectNetworks(declared, declared).length, declared.length);
+    }
+
+    /// Any sender but the authority is refused, naming both.
+    function testSenderNotAuthority(address sender, address authority) external {
+        vm.assume(sender != authority);
+        vm.expectRevert(
+            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotAuthority.selector, sender, authority)
+        );
+        this.externalCheckSender(sender, authority);
+    }
+
+    /// The authority passes, whichever account it is.
+    function testSenderIsAuthority(address authority) external pure {
+        LibConfigRegistryRegister.checkSender(authority, authority);
     }
 
     /// The input refusals come before anything is forked, in order: name,
