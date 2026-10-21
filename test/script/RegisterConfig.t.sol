@@ -69,7 +69,8 @@ contract RegisterConfigTest is Test {
                 LibConfigRegistryRegister.SenderNotApproved.selector,
                 LibRainDeploy.supportedNetworks()[0],
                 address(this),
-                authority
+                authority,
+                keccak256(bytes(name))
             )
         );
         script.run();
@@ -166,7 +167,8 @@ contract RegisterConfigTest is Test {
         string memory delegatedName = string.concat(name, "-delegated");
         bytes memory delegatedValue = abi.encode(address(6));
         vm.prank(delegator);
-        IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).approveV1(address(script));
+        IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
+            .approveV1(keccak256(bytes(delegatedName)), address(script));
         vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(delegator));
         vm.setEnv("CONFIG_REGISTRY_NAME", delegatedName);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(delegatedValue));

@@ -155,11 +155,11 @@ contract ConfigRegistryGetTest is Test {
             vm.parseJsonKeys(vm.readFile("out/ConfigRegistry.sol/ConfigRegistry.json"), "$.methodIdentifiers");
 
         assertEq(signatures.length, 5);
-        assertEq(signatures[0], "approveV1(address)");
-        assertEq(signatures[1], "approvedV1(address,address)");
+        assertEq(signatures[0], "approveV1(bytes32,address)");
+        assertEq(signatures[1], "approvedV1(address,bytes32,address)");
         assertEq(signatures[2], "getV1(address,bytes32)");
         assertEq(signatures[3], "registerV1(address,bytes32,bytes)");
-        assertEq(signatures[4], "revokeV1(address)");
+        assertEq(signatures[4], "revokeV1(bytes32,address)");
     }
 
     /// The registry takes no value on any path: ether sent with or without

@@ -119,7 +119,7 @@ contract ConfigRegistryRegisterTest is Test {
         vm.prank(sender, AUTHORITY);
         sRegistry.registerV1(sender, name, value);
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotApproved.selector, AUTHORITY, sender));
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotApproved.selector, AUTHORITY, name, sender));
         vm.prank(sender, AUTHORITY);
         sRegistry.registerV1(AUTHORITY, name, value);
 

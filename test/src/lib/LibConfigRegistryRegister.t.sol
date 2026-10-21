@@ -24,6 +24,7 @@ contract LibConfigRegistryRegisterTest is Test {
     /// The authority every run here binds under and reads under. Any account
     /// is one.
     address internal constant AUTHORITY = address(0xA11CE);
+    bytes32 internal constant NAME = keccak256("a.b");
 
     /// The catalogue entry the local chain is dressed up as.
     /// @return Base's catalogue entry.
@@ -85,7 +86,7 @@ contract LibConfigRegistryRegisterTest is Test {
     }
 
     function externalCheckSender(address sender, address authority) external view {
-        LibConfigRegistryRegister.checkSender(base(), sender, authority);
+        LibConfigRegistryRegister.checkSender(base(), sender, authority, NAME);
     }
 
     function externalCurrentBinding(bytes32 name) external view returns (bytes memory, uint256) {
@@ -244,7 +245,9 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(sender != authority && sender != address(0));
         deployRegistry();
         vm.expectRevert(
-            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, authority)
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, authority, NAME
+            )
         );
         this.externalCheckSender(sender, authority);
     }
@@ -261,13 +264,15 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(sender != AUTHORITY && sender != address(0));
         IConfigRegistryV1 registry = deployRegistry();
         vm.prank(AUTHORITY);
-        registry.approveV1(sender);
+        registry.approveV1(NAME, sender);
         this.externalCheckSender(sender, AUTHORITY);
 
         vm.prank(AUTHORITY);
-        registry.revokeV1(sender);
+        registry.revokeV1(NAME, sender);
         vm.expectRevert(
-            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY)
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
+            )
         );
         this.externalCheckSender(sender, AUTHORITY);
     }
@@ -277,9 +282,25 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(sender != AUTHORITY && sender != address(0) && other != AUTHORITY);
         IConfigRegistryV1 registry = deployRegistry();
         vm.prank(other);
-        registry.approveV1(sender);
+        registry.approveV1(NAME, sender);
         vm.expectRevert(
-            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY)
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
+            )
+        );
+        this.externalCheckSender(sender, AUTHORITY);
+    }
+
+    /// The authority's approval for another name does not pass.
+    function testSenderApprovedForAnotherName(address sender, bytes32 other) external {
+        vm.assume(sender != AUTHORITY && sender != address(0) && other != NAME);
+        IConfigRegistryV1 registry = deployRegistry();
+        vm.prank(AUTHORITY);
+        registry.approveV1(other, sender);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
+            )
         );
         this.externalCheckSender(sender, AUTHORITY);
     }
@@ -400,7 +421,11 @@ contract LibConfigRegistryRegisterTest is Test {
         Vm forkVm = Vm(address(new LocalForkVm()));
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistryRegister.SenderNotApproved.selector, LibRainDeploy.ARBITRUM_ONE, sender, AUTHORITY
+                LibConfigRegistryRegister.SenderNotApproved.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                sender,
+                AUTHORITY,
+                keccak256("a.b")
             )
         );
         this.externalRegisterOnNetworksWith(
@@ -427,7 +452,7 @@ contract LibConfigRegistryRegisterTest is Test {
         string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
         bytes memory value = abi.encode(address(1));
         vm.prank(AUTHORITY);
-        registry.approveV1(address(this));
+        registry.approveV1(keccak256("a.b"), address(this));
 
         (, string memory record) =
             this.externalRegisterOnNetworksWith(forkVm, selected, address(this), AUTHORITY, "a.b", value);
@@ -680,7 +705,7 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(sender != address(this));
         IConfigRegistryV1 registry = deployRegistry();
         vm.prank(AUTHORITY);
-        registry.approveV1(sender);
+        registry.approveV1(keccak256("a"), sender);
         bytes32 name = keccak256("a");
         bytes memory value = abi.encode(address(1));
         vm.warp(1);
@@ -709,8 +734,9 @@ contract LibConfigRegistryRegisterTest is Test {
         bytes memory value = abi.encode(address(1));
         vm.warp(1);
         uint64 nonce = vm.getNonce(sender);
-        bytes memory refusal =
-            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY);
+        bytes memory refusal = abi.encodeWithSelector(
+            LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, name
+        );
         vm.expectRevert(refusal);
         this.externalRegisterOnSelectedChain(base(), sender, AUTHORITY, name, value);
 
