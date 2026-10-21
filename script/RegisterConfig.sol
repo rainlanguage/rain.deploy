@@ -22,9 +22,12 @@ import {LibConfigRegistryRegister} from "../src/lib/LibConfigRegistryRegister.so
 /// `run()` binds, and is a dry run on forks unless forge is given
 /// `--broadcast`. `verify()` is the confirmed check, a run of its own once the
 /// binds are mined. The signer is forge's `--sender`, which is what a script's
-/// `msg.sender` is, and it must be the authority; `--trezor` is what makes the
-/// device that account's wallet. `LibConfigRegistryRegister` carries every
-/// guard.
+/// `msg.sender` is, and `run()` refuses it unless it is the authority;
+/// `--trezor` is what makes the device that account's wallet. Forge's
+/// `--broadcast` is a second layer: it refuses, before sending anything, a
+/// broadcast from an account none of its signers is (`BundledState::broadcast`
+/// in foundry-rs/foundry `crates/script/src/broadcast.rs`).
+/// `LibConfigRegistryRegister` carries every guard.
 contract RegisterConfig is RegistryDeploySuites, Script {
     /// The environment variable holding the authority to bind under and read
     /// under: the account consumers resolve the name under.

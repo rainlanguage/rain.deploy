@@ -54,6 +54,11 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// whole number of 32-byte words, the networks are a non-empty,
 /// duplicate-free subset of the declared ones, and the sender is the
 /// authority.
+/// Forge is a second layer: `forge script --broadcast`, without `--unlocked`,
+/// stops with `No associated wallet for addresses: [...]` before sending on any
+/// chain when no key, Trezor or Ledger it was given is the sender
+/// (`BundledState::broadcast` in foundry-rs/foundry
+/// `crates/script/src/broadcast.rs`).
 /// `registerOnNetworks` runs it and logs the inputs record before creating
 /// the forks; `registerOnForks` runs it again for a caller with its own forks,
 /// and logs no record.
