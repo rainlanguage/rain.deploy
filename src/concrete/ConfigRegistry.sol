@@ -54,15 +54,11 @@ contract ConfigRegistry is IConfigRegistryV1, RegistryDelegates {
     /// answering empty.
     mapping(address authority => mapping(bytes32 name => Binding binding)) internal sBindings;
 
-    /// An approval covers every name under its authority, so every approval is in
-    /// this one scope.
-    bytes32 internal constant DELEGATE_SCOPE = 0;
-
     /// @inheritdoc IConfigRegistryV1
     function registerV1(address authority, bytes32 name, bytes calldata value) external {
         // Who may write is settled before anything about the write.
-        if (!callerWritesUnder(authority, DELEGATE_SCOPE)) {
-            revert NotApproved(authority, msg.sender);
+        if (!callerWritesUnder(authority, name)) {
+            revert NotApproved(authority, name, msg.sender);
         }
         // Rejected so that a name can never be both bound and unreadable.
         if (value.length == 0) {
@@ -86,23 +82,23 @@ contract ConfigRegistry is IConfigRegistryV1, RegistryDelegates {
     }
 
     /// @inheritdoc IConfigRegistryV1
-    function approveV1(address delegate) external {
+    function approveV1(bytes32 name, address delegate) external {
         checkDelegate(delegate);
-        setApproval(DELEGATE_SCOPE, delegate, true);
-        emit Approved(msg.sender, delegate);
+        setApproval(name, delegate, true);
+        emit Approved(msg.sender, name, delegate);
     }
 
     /// @inheritdoc IConfigRegistryV1
-    function revokeV1(address delegate) external {
+    function revokeV1(bytes32 name, address delegate) external {
         checkDelegate(delegate);
-        setApproval(DELEGATE_SCOPE, delegate, false);
-        emit Revoked(msg.sender, delegate);
+        setApproval(name, delegate, false);
+        emit Revoked(msg.sender, name, delegate);
     }
 
     /// @inheritdoc IConfigRegistryV1
-    function approvedV1(address authority, address delegate) external view returns (bool) {
+    function approvedV1(address authority, bytes32 name, address delegate) external view returns (bool) {
         checkDelegate(delegate);
-        return isApproved(authority, DELEGATE_SCOPE, delegate);
+        return isApproved(authority, name, delegate);
     }
 
     /// Refuses the zero delegate: nothing calls from it, so no approval of it

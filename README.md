@@ -704,19 +704,19 @@ wrong explorer.
 `ConfigRegistry` binds an opaque `bytes32` name to ABI-encoded `bytes`: an
 address, a role id, a threshold, a list of accounts, anything a deployment would
 otherwise compile in. Bindings are keyed by authority: any account binds a name
-under its own address, or under an authority that approved it as a delegate
-(`approveV1`, `revokeV1`, read by `approvedV1`); anyone reads a name under an
-authority it names, and reading a name that authority has not bound reverts
-rather than answering empty. The interface is `IConfigRegistryV1`. There is no
-removal, no upgrade, and no way to write under an account that has not approved
-the writer.
+under its own address, or under an authority that approved it as a delegate for
+that name (`approveV1`, `revokeV1`, read by `approvedV1`); anyone reads a name
+under an authority it names, and reading a name that authority has not bound
+reverts rather than answering empty. The interface is `IConfigRegistryV1`. There
+is no removal, no upgrade, and no way to write under an account that has not
+approved the writer.
 
 A consumer names the authority it trusts beside the name it resolves, both in
 its own creation code, and gets only what that authority bound. What the
 consumer then trusts, and what a contract authority must do on every network, is
 in `IConfigRegistryV1`'s NatSpec under "The authority and its delegates are the
-whole access control" and "Delegation is per authority". A delegate can rebind
-every one of its authority's names, so a consumer's prod tests assert
+whole access control" and "Delegation is per authority and name". A delegate can
+rebind the name it was approved for, so a consumer's prod tests assert
 `approvedV1` is false for every retired delegate beside the true answers for the
 live ones.
 
@@ -785,19 +785,21 @@ for an `address[]`.
 An authority, or a delegate it approved, binds a name with
 `script/RegisterConfig.sol`, signed on the Trezor that holds it: the script
 binds under `CONFIG_REGISTRY_AUTHORITY` and, on each network, refuses a signer
-that is neither the authority nor a delegate the authority approved there
-(`SenderNotApproved`), since the registry refuses that bind. It is run by hand
-on the machine the Trezor is plugged into, never in CI: forge's own `--trezor`
-signer asks the device for each signature, and the key never leaves it.
+that is neither the authority nor a delegate the authority approved there for
+the name (`SenderNotApproved`), since the registry refuses that bind. It is run
+by hand on the machine the Trezor is plugged into, never in CI: forge's own
+`--trezor` signer asks the device for each signature, and the key never leaves
+it.
 
 The script signs as an EOA. A Safe or timelock authority either approves that
 EOA as a delegate, once per network through its own execution path
-(`approveV1(delegate)`), after which the EOA runs the script with `--sender` set
-to itself, or submits `registerV1(authority, keccak256("<org>.<name>"),
-value)`
-to the registry itself and then runs step 3 below (`verify`), which reads under
-any authority. An approval lets the delegate rebind every name under the
-authority until it is revoked (`revokeV1(delegate)`) on that network.
+(`approveV1(name, delegate)`), after which the EOA runs the script with
+`--sender` set to itself, or submits
+`registerV1(authority, keccak256("<org>.<name>"),
+value)` to the registry itself
+and then runs step 3 below (`verify`), which reads under any authority. An
+approval lets the delegate rebind that one name under the authority until it is
+revoked (`revokeV1(name, delegate)`) on that network.
 
 **The name is the string consumers hash.** Consumers derive a name as
 `keccak256("<org>.<name>")` — st0x resolves its token-owner Safe as

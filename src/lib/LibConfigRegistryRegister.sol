@@ -102,7 +102,8 @@ library LibConfigRegistryRegister {
     /// @param network The network the sender is not approved on.
     /// @param sender The account that would sign.
     /// @param authority The authority the run binds under.
-    error SenderNotApproved(string network, address sender, address authority);
+    /// @param name The name the run binds.
+    error SenderNotApproved(string network, address sender, address authority, bytes32 name);
 
     /// Thrown when a selected network is not one the declaration supports.
     /// @param network The selected name.
@@ -213,17 +214,21 @@ library LibConfigRegistryRegister {
     }
 
     /// Reverts `SenderNotApproved` unless `sender` is `authority` or approved
-    /// by it in the selected chain's registry.
+    /// by it for `name` in the selected chain's registry.
     /// @param network The catalogue entry of the selected chain.
     /// @param sender The account that would sign.
     /// @param authority The authority the run binds under.
-    function checkSender(SupportedNetwork memory network, address sender, address authority) internal view {
+    /// @param name The name the run binds.
+    function checkSender(SupportedNetwork memory network, address sender, address authority, bytes32 name)
+        internal
+        view
+    {
         if (
             sender != authority
                 && !IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-                    .approvedV1(authority, sender)
+                    .approvedV1(authority, name, sender)
         ) {
-            revert SenderNotApproved(network.name, sender, authority);
+            revert SenderNotApproved(network.name, sender, authority, name);
         }
     }
 
@@ -366,7 +371,7 @@ library LibConfigRegistryRegister {
         bytes memory value
     ) internal returns (bool, string memory) {
         checkChain(vm, network);
-        checkSender(network, sender, authority);
+        checkSender(network, sender, authority, name);
         (bytes memory bound, uint256 registeredAt) = currentBinding(authority, name);
 
         string memory record = describeNetwork(vm, network.name, network.chainId, bound, registeredAt, value);

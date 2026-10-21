@@ -13,7 +13,8 @@ import {LibConfigRegistryRegister} from "../src/lib/LibConfigRegistryRegister.so
 /// `CONFIG_REGISTRY_AUTHORITY` in the `ConfigRegistry` on every network the
 /// declaration supports, or on the comma-separated subset
 /// `CONFIG_REGISTRY_NETWORKS` names, signed on a Trezor by that authority or
-/// by a delegate it approved with `approveV1` on every selected network.
+/// by a delegate it approved for the name with `approveV1` on every selected
+/// network.
 ///
 /// Local only. The signer this is written for is a hardware wallet, so
 /// nothing in CI can sign this, and nothing in CI runs it. The README's

@@ -45,11 +45,12 @@ pragma solidity ^0.8.25;
 /// consumer trusts sits in that consumer's creation code beside the name it
 /// resolves.
 ///
-/// ## Delegation is per authority
+/// ## Delegation is per authority and name
 ///
 /// Only the authority decides who writes under it. An approval names one
-/// delegate under the approving authority and covers every name there, and
-/// approving a delegate under one authority never lets it write under another.
+/// delegate for one name under the approving authority: it covers no other
+/// name, and approving a delegate under one authority never lets it write
+/// under another.
 ///
 /// This decouples an authority from whichever account sends its binds. A Safe
 /// or timelock authority approves a hardware-wallet key, which then binds under
@@ -58,9 +59,9 @@ pragma solidity ^0.8.25;
 /// The authority can always write under itself, approved or not. Revoking
 /// stops later writes and nothing else: a binding a delegate wrote while
 /// approved stays until it is re-bound, as every binding does. Every delegate
-/// is one more key whose compromise rebinds every one of the authority's
-/// names, so the authority's names are only as trustworthy as every delegate
-/// it has ever had, revoked ones included; `Register` names the account that
+/// is one more key whose compromise rebinds the name it was approved for, so
+/// a name is only as trustworthy as every delegate it has ever had, revoked
+/// ones included; `Register` names the account that
 /// wrote each binding. Approve only accounts held to the authority's own
 /// custody, and revoke before rotating one out. Approvals cannot be enumerated
 /// here, only asked about one delegate at a time, so a consumer's prod tests
@@ -154,10 +155,11 @@ interface IConfigRegistryV1 {
     error ZeroDelegate();
 
     /// Thrown when `registerV1`'s caller is neither `authority` nor approved by
-    /// it.
+    /// it for `name`.
     /// @param authority The authority the write named.
+    /// @param name The name the write named.
     /// @param caller The account that called.
-    error NotApproved(address authority, address caller);
+    error NotApproved(address authority, bytes32 name, address caller);
 
     /// Emitted every time `sender` binds `name` under `authority`, including
     /// when it re-binds it. The log is the complete history of the registry
@@ -177,24 +179,26 @@ interface IConfigRegistryV1 {
     /// @param value The value `name` was bound to.
     event Register(address indexed sender, address indexed authority, bytes32 indexed name, bytes value);
 
-    /// Emitted when `sender` approves `delegate` to bind under it.
+    /// Emitted when `sender` approves `delegate` to bind `name` under it.
     /// @param sender The approving authority, which is the account that called.
+    /// @param name The name the approval covers.
     /// @param delegate The approved account.
-    event Approved(address indexed sender, address indexed delegate);
+    event Approved(address indexed sender, bytes32 indexed name, address indexed delegate);
 
-    /// Emitted when `sender` revokes `delegate`, whether or not `delegate` was
-    /// approved.
+    /// Emitted when `sender` revokes `delegate` for `name`, whether or not
+    /// `delegate` was approved.
     /// @param sender The revoking authority, which is the account that called.
+    /// @param name The name the revocation covers.
     /// @param delegate The revoked account.
-    event Revoked(address indexed sender, address indexed delegate);
+    event Revoked(address indexed sender, bytes32 indexed name, address indexed delegate);
 
     /// Binds `name` to `value` under `authority`, replacing any value
     /// `authority` has already bound it to. The caller is `authority` or a
-    /// delegate it has approved. No other authority's binding is read or
+    /// delegate it has approved for `name`. No other authority's binding is read or
     /// touched.
     ///
     /// The implementation MUST first revert `NotApproved` unless the caller is
-    /// `authority` or approved by it. Then it MUST revert `EmptyValue` if
+    /// `authority` or approved by it for `name`. Then it MUST revert `EmptyValue` if
     /// `value` is empty, and MUST revert `TimestampNotAfterBinding` unless the
     /// clock is strictly after the moment the name carries under `authority`,
     /// so a binding's moment strictly increases. On success it MUST emit
@@ -206,31 +210,34 @@ interface IConfigRegistryV1 {
     /// MUST revert on a clock that does not fit rather than truncate it, since a
     /// truncated moment reads as older.
     /// @param authority The authority to bind under: the caller, or one that
-    /// approved it.
+    /// approved it for `name`.
     /// @param name The name to bind.
     /// @param value The ABI-encoded value to bind it to.
     function registerV1(address authority, bytes32 name, bytes calldata value) external;
 
-    /// Approves `delegate` to bind under the caller and emits `Approved`.
-    /// Approving an approved delegate leaves it approved and still emits.
-    /// Refuses `ZeroDelegate`.
+    /// Approves `delegate` to bind `name` under the caller and emits
+    /// `Approved`. Approving an approved delegate leaves it approved and still
+    /// emits. Refuses `ZeroDelegate`.
+    /// @param name The name the approval covers.
     /// @param delegate The account to approve. MUST NOT be zero.
-    function approveV1(address delegate) external;
+    function approveV1(bytes32 name, address delegate) external;
 
-    /// Revokes `delegate`'s approval to bind under the caller and emits
+    /// Revokes `delegate`'s approval to bind `name` under the caller and emits
     /// `Revoked`. Revoking an unapproved delegate leaves it unapproved and
     /// still emits. Refuses `ZeroDelegate`.
+    /// @param name The name the revocation covers.
     /// @param delegate The account to revoke. MUST NOT be zero.
-    function revokeV1(address delegate) external;
+    function revokeV1(bytes32 name, address delegate) external;
 
-    /// Whether `authority` has approved `delegate` to bind under it. Refuses
+    /// Whether `authority` has approved `delegate` to bind `name` under it. Refuses
     /// `ZeroDelegate` rather than answering false about a question the caller
     /// did not mean to ask. The zero authority answers false for every
     /// delegate, as it answers `NameNotRegistered` for every name.
     /// @param authority The approving authority.
+    /// @param name The name asked about.
     /// @param delegate The account asked about.
     /// @return True when approved.
-    function approvedV1(address authority, address delegate) external view returns (bool);
+    function approvedV1(address authority, bytes32 name, address delegate) external view returns (bool);
 
     /// The value `authority` currently binds `name` to, and when it bound it.
     ///
