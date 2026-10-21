@@ -16,6 +16,7 @@ import {
     UnverifiableSource
 } from "../../../src/lib/LibRainDeployMechanism.sol";
 import {DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {BEACON_PROXY_ARTIFACT_PATH} from "../../../src/lib/LibRainDeployBeaconProxy.sol";
 import {
     exampleCloneDependencies,
     exampleCloneFactory,
@@ -204,6 +205,32 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         assertEq(deployed[0], suite.storedDeployedAddress);
         assertEq(deployed[1], suite.storedDeployedAddress);
         assertEq(deployed[0].code, type(MockCloneable).runtimeCode);
+    }
+
+    /// A Zoltu broadcast under `BEACON_PROXY_ARTIFACT_PATH` is treated as one under `CLONE_ARTIFACT_PATH`: one
+    /// `UnverifiableSource` notice and no verify command.
+    function testZoltuBroadcastUnderTheBeaconProxyArtifactPathPrintsAManualVerificationNotice() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        DeploySuite memory suite = zoltuSuite(LibRainDeploy.zoltuAddress(type(MockCloneable).creationCode));
+        suite.storedBytecodeHash = keccak256(type(MockCloneable).runtimeCode);
+        suite.artifactPath = BEACON_PROXY_ARTIFACT_PATH;
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.POLYGON;
+
+        address caller = makeAddr("broadcast caller");
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 1);
+        vm.expectCall(
+            address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector, suite.storedDeployedAddress), 1
+        );
+        vm.expectEmit(address(this));
+        emit UnverifiableSource(caller, suite.storedDeployedAddress, networks);
+        vm.prank(caller);
+        address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
+        assertEq(deployed.length, 2);
+        assertEq(deployed[0], suite.storedDeployedAddress);
+        assertEq(deployed[1], suite.storedDeployedAddress);
     }
 
     /// A per-network clone broadcast formats no verify command and no notice, even under a compiled artifact's path.

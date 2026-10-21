@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
-import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployMechanism, DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {BeaconProxyBeaconUndeclared} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
@@ -14,6 +14,7 @@ import {
     PER_NETWORK_CLONE_ARBITRUM_ONE_CHAIN_ID,
     PER_NETWORK_CLONE_POLYGON_CHAIN_ID,
     perNetworkCloneChainIds,
+    perNetworkCloneInitData,
     perNetworkCloneReleaseAddress
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {PerNetworkCloneBeaconVerifyChain} from "../../abstract/PerNetworkCloneBeaconVerifyChain.sol";
@@ -60,10 +61,18 @@ contract RainDeployVerifyChainBeaconProxyTest is PerNetworkCloneBeaconVerifyChai
         return sRequiredEverywhere || keccak256(bytes(network)) == keccak256(bytes(LibRainDeploy.POLYGON));
     }
 
-    /// The proxy suite over `beacon`, live at its derived address on every fork.
+    /// The one-data proxy suite over `beacon`, live at its derived address on every fork.
     /// @param beacon The beacon the proxy reads.
     /// @return The suite.
     function liveProxySuite(address beacon) internal returns (DeploySuite memory) {
+        return liveProxySuite(beacon, false);
+    }
+
+    /// The proxy suite over `beacon`, live at each of its derived addresses on every fork.
+    /// @param beacon The beacon the proxy reads.
+    /// @param initDataPerNetwork Whether its init data, and so its address, is per network.
+    /// @return The suite.
+    function liveProxySuite(address beacon, bool initDataPerNetwork) internal returns (DeploySuite memory) {
         DeployDependency[] memory dependencies = new DeployDependency[](2);
         dependencies[0] = DeployDependency({deployedAddress: sFactory, runtimeCode: sFactory.code});
         dependencies[1] = DeployDependency({deployedAddress: beacon, runtimeCode: beacon.code});
@@ -73,17 +82,20 @@ contract RainDeployVerifyChainBeaconProxyTest is PerNetworkCloneBeaconVerifyChai
                 suite: PROXY_SUITE,
                 factory: sFactory,
                 beacon: beacon,
-                data: hex"deadbeef",
-                initDataPerNetwork: false,
-                initData: LibRainDeployClone.noInitDataPerNetwork,
+                data: initDataPerNetwork ? bytes("") : bytes(hex"deadbeef"),
+                initDataPerNetwork: initDataPerNetwork,
+                initData: initDataPerNetwork ? perNetworkCloneInitData : LibRainDeployClone.noInitDataPerNetwork,
                 salt: bytes32(uint256(5)),
                 dependencies: dependencies
             }),
             perNetworkCloneChainIds()
         )
         .snapshot;
-        vm.etch(suite.storedDeployedAddress, suite.storedRuntimeCode);
-        vm.makePersistent(suite.storedDeployedAddress);
+        address[] memory deployed = LibRainDeployMechanism.deployedAddresses(suite);
+        for (uint256 i = 0; i < deployed.length; i++) {
+            vm.etch(deployed[i], suite.storedRuntimeCode);
+            vm.makePersistent(deployed[i]);
+        }
         return suite;
     }
 
@@ -152,6 +164,27 @@ contract RainDeployVerifyChainBeaconProxyTest is PerNetworkCloneBeaconVerifyChai
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, suite.storedDeployedAddress
+            )
+        );
+        this.externalCheckOnLocalForks(suite);
+    }
+
+    /// A per-network proxy over the beacon declared on Polygon passes on Polygon, where it is required.
+    function testPerNetworkProxyOverTheDeclaredBeaconPasses() external {
+        DeploySuite memory suite = liveProxySuite(sBeacon, true);
+        assertEq(uint256(suite.mechanism), uint256(DeployMechanism.BeaconProxyPerNetwork));
+        this.externalCheckOnLocalForks(suite);
+        assertEq(UpgradeableBeacon(sBeacon).owner(), OWNER);
+    }
+
+    /// Required on Arbitrum One too, where no beacon is declared, the per-network proxy is refused naming Arbitrum
+    /// One and its beacon.
+    function testPerNetworkProxyRequiredWhereItsBeaconIsUndeclaredIsRefused() external {
+        DeploySuite memory suite = liveProxySuite(sBeacon, true);
+        sRequiredEverywhere = true;
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                BeaconProxyBeaconUndeclared.selector, PROXY_SUITE, LibRainDeploy.ARBITRUM_ONE, sBeacon
             )
         );
         this.externalCheckOnLocalForks(suite);
