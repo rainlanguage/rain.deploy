@@ -39,13 +39,6 @@ import {
     EXAMPLE_CLONE_RELEASE_TAG
 } from "../../abstract/ExampleCloneDeploys.sol";
 
-/// A memory struct so a recursion into a subtree writes what it finds where the
-/// caller can read it: every frame of the walk shares this one accumulator.
-struct AstReferences {
-    int256[] ids;
-    uint256 count;
-}
-
 /// @title BuildScriptTest
 /// @notice The split between the two entry points every deploy repo inherits.
 ///
@@ -981,46 +974,20 @@ contract BuildScriptTest is Test {
         return reached;
     }
 
+    /// One query, not a walk: every cheatcode call is handed the whole artifact.
     function referencedIds(string memory json, string memory path) internal view returns (int256[] memory) {
-        AstReferences memory references = AstReferences(new int256[](256), 0);
-        collectReferences(json, path, references);
-
-        int256[] memory ids = new int256[](references.count);
-        for (uint256 i = 0; i < references.count; i++) {
-            ids[i] = references.ids[i];
+        string memory key = string.concat(path, "..[?(@.nodeType == 'Identifier')].referencedDeclaration");
+        if (!vm.keyExistsJson(json, key)) {
+            return new int256[](0);
         }
-        return ids;
-    }
-
-    /// Generic over node shapes rather than a walk of the expressions the base
-    /// happens to hold today: a hook handed to a library as a function pointer
-    /// is a reference several levels inside an argument list, and a call moved
-    /// inside a block is one level inside a statement. Neither is a hook that
-    /// nothing wires, so neither may read as one here.
-    function collectReferences(string memory json, string memory path, AstReferences memory references) internal view {
-        string memory nodeType = string.concat(path, ".nodeType");
-        if (!vm.keyExistsJson(json, nodeType)) {
-            return;
+        bytes memory raw = vm.parseJson(json, key);
+        // One match decodes as a value, several as an array.
+        if (raw.length == 32) {
+            int256[] memory one = new int256[](1);
+            one[0] = abi.decode(raw, (int256));
+            return one;
         }
-        if (keccak256(bytes(vm.parseJsonString(json, nodeType))) == keccak256("Identifier")) {
-            references.ids[references.count] = vm.parseJsonInt(json, string.concat(path, ".referencedDeclaration"));
-            references.count++;
-        }
-
-        string[] memory keys = vm.parseJsonKeys(json, path);
-        for (uint256 i = 0; i < keys.length; i++) {
-            string memory child = string.concat(path, ".", keys[i]);
-            collectReferences(json, child, references);
-            // An object child is a node, walked above; only an array child is indexed. JSONPath indexes an object
-            // as well, so indexing a node such as a `for` loop's `initializationExpression` would select its
-            // fields rather than array elements.
-            if (vm.keyExistsJson(json, string.concat(child, ".nodeType"))) {
-                continue;
-            }
-            for (uint256 j = 0; vm.keyExistsJson(json, string.concat(child, "[", vm.toString(j), "].nodeType")); j++) {
-                collectReferences(json, string.concat(child, "[", vm.toString(j), "]"), references);
-            }
-        }
+        return abi.decode(raw, (int256[]));
     }
 
     function referencesId(int256[] memory ids, int256 id) internal pure returns (bool) {
