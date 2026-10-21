@@ -1,6 +1,4 @@
-[
-"$(nix develop -c cast wallet address --trezor)" = "${CONFIG_REGISTRY_SENDER:?}"
-] && echo "signer OK" || echo "NOT the signer"# rain.deploy
+# rain.deploy
 
 Tooling to deploy Solidity contracts deterministically across EVM networks via
 the Zoltu deployment proxy.
@@ -799,7 +797,9 @@ EOA as a delegate, once per network through its own execution path
 value)` to the registry itself
 and then runs step 3 below (`verify`), which reads under any authority. An
 approval lets the delegate rebind that one name under the authority until it is
-revoked (`revokeV2(name, delegate)`) on that network.
+revoked (`revokeV2(name, delegate)`) on that network. An EOA authority approves
+or revokes a delegate, such as a Safe, with `script/ApproveConfigDelegate.sol`
+("Approving a delegate" below).
 
 **The name is the string consumers hash.** Consumers derive a name as
 `keccak256("<org>.<name>")` — st0x resolves its token-owner Safe as
@@ -849,7 +849,7 @@ networks, set `CONFIG_REGISTRY_NETWORKS` to those.
   below):
 
   ```sh
-  [ "$(nix develop -c cast wallet address --trezor)" = "${CONFIG_REGISTRY_AUTHORITY:?}" ] && echo "authority OK" || echo "NOT the authority"
+  [ "$(nix develop -c cast wallet address --trezor)" = "${CONFIG_REGISTRY_SENDER:?}" ] && echo "signer OK" || echo "NOT the signer"
   ```
 
 - The signer needs native gas on every network it binds on.
@@ -915,6 +915,58 @@ record to approve against. For each transaction the device shows:
 Labels vary by firmware; whatever they are called, the recipient, amount, chain
 and raw calldata must each match the dry run. Reject on the device if any of
 them differs.
+
+### Approving a delegate
+
+`script/ApproveConfigDelegate.sol` approves a delegate for one name under the
+authority, or revokes it, on every declared network by default. `approveV2` and
+`revokeV2` act under their caller, so the signer is the authority itself, and
+the run refuses any other `--sender` (`SenderNotAuthority`) before forking. It
+takes its own variables, so nothing exported for `RegisterConfig` carries over.
+The Trezor setup is "Before the first run" above, with the authority as the
+signer.
+
+```sh
+export CONFIG_DELEGATE_AUTHORITY=0x... # the authority, which signs
+export CONFIG_DELEGATE_NAME=st0x.token-owner-safe
+export CONFIG_DELEGATE_ADDRESS=0x... # the delegate, such as the Safe
+# Optional: false revokes. Unset approves.
+# export CONFIG_DELEGATE_APPROVED=false
+# Optional, to act on fewer networks than all of them:
+# export CONFIG_DELEGATE_NETWORKS=base,arbitrum
+
+# 1. Dry run.
+nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelegate \
+  --sender "$CONFIG_DELEGATE_AUTHORITY" --trezor --legacy
+
+# 2. The same command with --broadcast. The device asks once per network the
+#    dry run marked APPROVE or REVOKE.
+nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelegate \
+  --sender "$CONFIG_DELEGATE_AUTHORITY" --trezor --legacy --broadcast
+
+# 3. Once every transaction is mined: reads every network fresh and fails
+#    unless the delegate is approved (or, with false, not approved) on each.
+nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelegate --sig "verify()"
+```
+
+Before anything is signed the run refuses a signer that is not the authority, a
+zero delegate, and every name, network, chain id and registry refusal of
+`RegisterConfig`. A network already in the target state is `SKIP`, so a run that
+stopped partway is fixed by running it again. An approval covers that one name;
+each name the delegate binds is a run of its own.
+
+The dry run prints the name, its hash, the authority, the delegate, the target,
+the registry address and the exact calldata, then for each network its chain id,
+the size of the code at the delegate (`none` where the delegate has no code
+there: a Safe not yet deployed on that network), whether it is approved now, and
+`APPROVE`, `REVOKE` or `SKIP`. The device shows the registry as recipient,
+amount 0, the network, and the `Calldata:` line as data: `approveV2`'s selector
+`0xfc7dfd2e` or `revokeV2`'s `0x2026c9f1`, then the name hash and the delegate.
+
+A Safe delegate then binds by executing
+`registerV2(authority, keccak256("<org>.<name>"), value)` on the registry from
+the Safe, on each network, and `RegisterConfig`'s `verify()` checks the binding
+under the authority.
 
 ## Migration registry
 
