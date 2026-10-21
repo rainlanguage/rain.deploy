@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
@@ -10,6 +10,7 @@ import {LibConfigRegistry} from "../../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibConfigRegistryRegister} from "../../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
+import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockRevertingRegistry} from "../../concrete/MockRevertingRegistry.sol";
 import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
 
@@ -336,6 +337,67 @@ contract LibConfigRegistryRegisterTest is Test {
         assertEq(networks[0].name, LibRainDeploy.ARBITRUM_ONE);
         assertEq(networks[1].name, LibRainDeploy.BASE);
         assertEq(record, LibConfigRegistryRegister.describeInputs(vm, "a.b", value, AUTHORITY));
+    }
+
+    function externalRegisterOnNetworksWith(
+        Vm forkVm,
+        string[] memory selected,
+        address sender,
+        address authority,
+        string memory name,
+        bytes memory value
+    ) external returns (uint256[] memory, string memory) {
+        return LibConfigRegistryRegister.registerOnNetworks(
+            forkVm, selected, LibRainDeploy.supportedNetworks(), sender, authority, name, value
+        );
+    }
+
+    function externalCheckRegisteredOnNetworksWith(
+        Vm forkVm,
+        string[] memory selected,
+        address authority,
+        string memory name,
+        bytes memory value
+    ) external {
+        LibConfigRegistryRegister.checkRegisteredOnNetworks(
+            forkVm, selected, LibRainDeploy.supportedNetworks(), authority, name, value
+        );
+    }
+
+    /// `registerOnNetworks` refuses another signer before it calls the Vm at
+    /// all: through a Vm with no code, where any call reverts, the refusal is
+    /// still `SenderNotAuthority`.
+    function testRegisterOnNetworksRefusesTheSignerBeforeTheVm(address sender) external {
+        vm.assume(sender != AUTHORITY);
+        vm.expectRevert(
+            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotAuthority.selector, sender, AUTHORITY)
+        );
+        this.externalRegisterOnNetworksWith(
+            Vm(address(0xC0DE1E55)), list(LibRainDeploy.BASE), sender, AUTHORITY, "a.b", abi.encode(address(1))
+        );
+    }
+
+    /// On the local fork seam, `registerOnNetworks` binds on every selected
+    /// network in selection order and returns each network's fork and the
+    /// inputs record, and the confirmed check then passes on each. The seam's
+    /// broadcast is a no-op, so this contract signs and is the authority.
+    function testRegisterOnNetworksReturnsEachForkAndTheRecord() external {
+        IConfigRegistryV1 registry = deployRegistry();
+        Vm forkVm = Vm(address(new LocalForkVm()));
+        string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
+        SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(selected);
+        bytes memory value = abi.encode(address(1));
+
+        (uint256[] memory forkIds, string memory record) =
+            this.externalRegisterOnNetworksWith(forkVm, selected, address(this), address(this), "a.b", value);
+        assertEq(forkIds.length, 2);
+        assertEq(forkIds[0], networks[0].chainId);
+        assertEq(forkIds[1], networks[1].chainId);
+        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, "a.b", value, address(this)));
+        assertEq(block.chainid, networks[1].chainId);
+        assertEq(LibConfigRegistryRead.getValue(registry, address(this), keccak256("a.b")), value);
+
+        this.externalCheckRegisteredOnNetworksWith(forkVm, selected, address(this), "a.b", value);
     }
 
     /// The confirmed check refuses its inputs before anything is forked.
