@@ -8,6 +8,8 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDependentDeployable} from "../../concrete/MockDependentDeployable.sol";
+import {MockSnapshotDeletingCreation} from "../../concrete/MockSnapshotDeletingCreation.sol";
+import {DerivationSnapshotRevertFailed} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {
     CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE,
     DEPLOYED_ADDRESS as CONFIG_REGISTRY_DEPLOYED_ADDRESS,
@@ -264,5 +266,16 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.DeployFailed.selector, false, address(0)));
         this.externalDeriveDeployment(dependentSuite(dependentCreationCode(addresses), dependencies));
+    }
+
+    /// A derivation whose state cannot be reverted is refused rather than left in place.
+    function testDerivationThatCannotBeRevertedIsRefused() external {
+        DeploySuite memory suite =
+            dependentSuite(type(MockSnapshotDeletingCreation).creationCode, new DeployDependency[](0));
+        uint256 derivationSnapshotId = vm.snapshotState() + 1;
+        vm.expectRevert(
+            abi.encodeWithSelector(DerivationSnapshotRevertFailed.selector, "a-dependent-key", derivationSnapshotId)
+        );
+        this.externalDeriveDeployment(suite);
     }
 }

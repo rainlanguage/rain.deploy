@@ -14,7 +14,7 @@ import {
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
-import {MockChainGatedCloneable} from "../../concrete/MockChainGatedCloneable.sol";
+import {MockChainGatedCloneable, MockChainGatedCloneableWrongChain} from "../../concrete/MockChainGatedCloneable.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
 import {LibBeaconDeclarations} from "../../lib/LibBeaconDeclarations.sol";
 import {BeaconVerifyFixture} from "../../abstract/BeaconVerifyFixture.sol";
@@ -27,6 +27,12 @@ contract RainDeployVerifyBaseBeaconPerNetworkCloneChainGatedTest is BeaconVerify
 
     /// @return The chain-gated per-network clone suite.
     function chainGatedSuite() internal pure returns (DeploySuite memory) {
+        return chainGatedSuite(8453);
+    }
+
+    /// @param baseNamed The chain id Base's clone's init data names.
+    /// @return The chain-gated per-network clone suite.
+    function chainGatedSuite(uint256 baseNamed) internal pure returns (DeploySuite memory) {
         address factory = LibRainDeploy.zoltuAddress(type(MockCloneFactory).creationCode);
         address implementation = LibRainDeploy.zoltuAddress(type(MockChainGatedCloneable).creationCode);
         DeployDependency[] memory dependencies = new DeployDependency[](2);
@@ -39,7 +45,7 @@ contract RainDeployVerifyBaseBeaconPerNetworkCloneChainGatedTest is BeaconVerify
         // Each network's clone initializes only under its own chain id.
         clones.networks[0] =
             CloneNetwork({chainId: 42161, data: abi.encode(uint256(42161)), deployedAddress: address(0)});
-        clones.networks[1] = CloneNetwork({chainId: 8453, data: abi.encode(uint256(8453)), deployedAddress: address(0)});
+        clones.networks[1] = CloneNetwork({chainId: 8453, data: abi.encode(baseNamed), deployedAddress: address(0)});
         bytes memory runtimeCode = LibRainDeployClone.cloneRuntimeCode(implementation);
         return DeploySuite({
             suite: "chain-gated-clone-beacon@0_0_1",
@@ -97,6 +103,19 @@ contract RainDeployVerifyBaseBeaconPerNetworkCloneChainGatedTest is BeaconVerify
         assertEq(block.chainid, chainId);
         assertEq(expected[0].code.length, 0);
         assertEq(expected[1].code.length, 0);
+    }
+
+    /// External wrapper for `deriveDeployment`.
+    /// @param suite The suite to derive.
+    /// @return The derivation.
+    function externalDeriveDeployment(DeploySuite memory suite) external returns (DerivedDeploy memory) {
+        return deriveDeployment(suite);
+    }
+
+    /// A later network's init that refuses under that network's own chain id refuses derivation.
+    function testPerNetworkCloneSuiteRefusedByALaterNetworksInitIsRefused() external {
+        vm.expectRevert(abi.encodeWithSelector(MockChainGatedCloneableWrongChain.selector, 42161, 8453));
+        this.externalDeriveDeployment(chainGatedSuite(42161));
     }
 
     /// Networks sharing init data share an address, and each network's derivation deploys it afresh rather than
