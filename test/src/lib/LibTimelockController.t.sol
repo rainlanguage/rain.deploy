@@ -10,6 +10,7 @@ import {LibTimelockController} from "../../../src/lib/LibTimelockController.sol"
 import {BYTECODE_HASH, CREATION_CODE, RUNTIME_CODE} from "../../../src/generated/candidate/TimelockController.sol";
 import {CREATION_CODE as CREATION_CODE_0_1_18} from "../../../src/generated/0_1_18/TimelockController.sol";
 import {CREATION_CODE as CREATION_CODE_0_1_19} from "../../../src/generated/0_1_19/TimelockController.sol";
+import {CREATION_CODE as CREATION_CODE_0_1_20} from "../../../src/generated/0_1_20/TimelockController.sol";
 import {MockTimelockControllerGeneration} from "../../concrete/MockTimelockControllerGeneration.sol";
 import {MockTimelockControllerImmutableGeneration} from "../../concrete/MockTimelockControllerImmutableGeneration.sol";
 import {MockSnapshotDeletingCreation} from "../../concrete/MockSnapshotDeletingCreation.sol";
@@ -119,6 +120,12 @@ contract LibTimelockControllerTest is Test {
     /// it derives the same production timelocks.
     function testFrozen0119CodeDerivesProductionTimelocks() external pure {
         assertDerivesProductionTimelocks(CREATION_CODE_0_1_19);
+    }
+
+    /// The frozen 0_1_20 generation freezes the same generation as 0_1_18, so
+    /// it derives the same production timelocks.
+    function testFrozen0120CodeDerivesProductionTimelocks() external pure {
+        assertDerivesProductionTimelocks(CREATION_CODE_0_1_20);
     }
 
     /// A deploy with arguments other than the snapshot's reference deploy carries
