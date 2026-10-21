@@ -36,6 +36,7 @@ import {
     exampleCloneImplementation
 } from "../../abstract/ExampleCloneDeploys.sol";
 import {MockCloneFactory} from "../../concrete/MockCloneFactory.sol";
+import {MockChainOriginOwned} from "../../concrete/MockChainOriginOwned.sol";
 import {MockCloneable} from "../../concrete/MockCloneable.sol";
 import {MockSaltShiftingCloneFactory} from "../../concrete/MockSaltShiftingCloneFactory.sol";
 import {
@@ -592,29 +593,44 @@ contract LibRainDeployMechanismTest is Test {
         assertEq(MockCloneable(deployed[1]).sInitData(), abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN));
     }
 
-    /// @param suite The suite to deploy locally under `block.chainid`.
-    function externalDeployLocallyOnChain(DeploySuite memory suite) external {
-        LibRainDeployMechanism.deployLocallyOnChain(vm, suite);
+    /// @param suite The suite to deploy locally.
+    /// @param chainId The chain id to deploy it under.
+    function externalDeployLocallyOnChain(DeploySuite memory suite, uint256 chainId) external {
+        LibRainDeployMechanism.deployLocallyOnChain(vm, suite, chainId);
     }
 
+    /// The passed chain id picks the network, not the ambient one, and is left set.
     function testPerNetworkSuiteDeploysLocallyOnChainOnlyThatNetworksClone() external {
         DeploySuite memory suite = perNetworkSuite();
         bytes memory mechanismData = suite.mechanismData;
         address arbitrumAddress = exampleCloneAddress(abi.encode(PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN));
         address polygonAddress = exampleCloneAddress(abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN));
-        vm.chainId(137);
-        LibRainDeployMechanism.deployLocallyOnChain(vm, suite);
+        vm.chainId(42161);
+        LibRainDeployMechanism.deployLocallyOnChain(vm, suite, 137);
+        assertEq(block.chainid, 137);
         assertEq(suite.mechanismData, mechanismData);
         assertEq(polygonAddress.code, suite.storedRuntimeCode);
         assertEq(MockCloneable(polygonAddress).sInitData(), abi.encode(PER_NETWORK_CLONE_POLYGON_ADMIN));
         assertEq(arbitrumAddress.code.length, 0);
     }
 
+    /// A one-address suite's constructor runs under the passed chain id, which is left set.
+    function testZoltuSuiteDeploysLocallyOnChainUnderThatChainId() external {
+        bytes memory creationCode = abi.encodePacked(type(MockChainOriginOwned).creationCode, abi.encode(uint256(8453)));
+        DeploySuite memory suite = zoltuMockDeployableSuite("chain-origin-owned");
+        suite.creationCode = creationCode;
+        address deployed = LibRainDeploy.zoltuAddress(creationCode);
+        assertNotEq(block.chainid, 8453);
+        LibRainDeployMechanism.deployLocallyOnChain(vm, suite, 8453);
+        assertEq(block.chainid, 8453);
+        assertEq(MockChainOriginOwned(deployed).owner(), tx.origin);
+    }
+
     function testPerNetworkSuiteDeployLocallyOnAnUndeclaredChainIsRefused() external {
         DeploySuite memory suite = perNetworkSuite();
-        vm.chainId(8453);
+        vm.chainId(137);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeployClone.CloneNetworkUndeclared.selector, 8453));
-        this.externalDeployLocallyOnChain(suite);
+        this.externalDeployLocallyOnChain(suite, 8453);
     }
 
     /// Networks sharing init data share an address, and that clone is deployed once without skipping a later network's own clone.

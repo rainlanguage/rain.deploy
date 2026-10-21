@@ -471,12 +471,15 @@ library LibRainDeployMechanism {
         return false;
     }
 
-    /// `deployLocally` as the deploy to the network of `block.chainid` runs it: a per-network clone or beacon proxy
-    /// suite deploys only that network's target, so no other network's init data runs under its chain id.
-    /// A per-network suite with no entry for `block.chainid` is refused with `CloneNetworkUndeclared`.
+    /// `deployLocally` as the deploy to the network of `chainId` runs it: under `chainId`, which it leaves set, and for
+    /// a per-network clone or beacon proxy suite only that network's target, so no other network's init data runs
+    /// under its chain id.
+    /// A per-network suite with no entry for `chainId` is refused with `CloneNetworkUndeclared`.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy. Its `mechanismData` is restored before returning.
-    function deployLocallyOnChain(Vm vm, DeploySuite memory suite) internal {
+    /// @param chainId The network's chain id.
+    function deployLocallyOnChain(Vm vm, DeploySuite memory suite, uint256 chainId) internal {
+        vm.chainId(chainId);
         if (!isPerNetwork(suite)) {
             deployLocally(vm, suite);
             return;
@@ -484,7 +487,7 @@ library LibRainDeployMechanism {
         bytes memory mechanismData = suite.mechanismData;
         CloneNetworks memory clones = cloneNetworks(suite);
         CloneNetwork[] memory own = new CloneNetwork[](1);
-        own[0] = clones.networks[LibRainDeployClone.cloneNetworkIndex(clones, block.chainid)];
+        own[0] = clones.networks[LibRainDeployClone.cloneNetworkIndex(clones, chainId)];
         clones.networks = own;
         suite.mechanismData = abi.encode(clones);
         deployLocally(vm, suite);

@@ -86,17 +86,40 @@ struct ResolvedBeacon {
 /// @notice The derivation and beacon resolution every deploy-verification group shares.
 abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     /// Derives where a suite's mechanism puts it and the code hash it leaves there, from the suite
-    /// alone.
+    /// alone. A per-network suite deploys each network's target alone under that network's chain id, as
+    /// `LibRainDeployMechanism.deployLocallyOnChain` does, its code hash read from the first.
     /// @param suite The suite to derive from.
     /// @return The addresses and code hash the suite's mechanism produces.
     function deriveDeployment(DeploySuite memory suite) internal returns (DerivedDeploy memory) {
-        uint256 snapshotId = vm.snapshotState();
+        if (!LibRainDeployMechanism.isPerNetwork(suite)) {
+            uint256 snapshotId = vm.snapshotState();
+            address[] memory deployedAddresses = LibRainDeployMechanism.deployLocally(vm, suite);
+            DerivedDeploy memory derived = DerivedDeploy({
+                suite: suite.suite, deployedAddresses: deployedAddresses, bytecodeHash: deployedAddresses[0].codehash
+            });
+            revertDerivation(suite, snapshotId);
+            return derived;
+        }
 
-        address[] memory deployedAddresses = LibRainDeployMechanism.deployLocally(vm, suite);
-        DerivedDeploy memory derived = DerivedDeploy({
-            suite: suite.suite, deployedAddresses: deployedAddresses, bytecodeHash: deployedAddresses[0].codehash
-        });
+        address[] memory perNetwork = LibRainDeployMechanism.deployedAddresses(suite);
+        uint256[] memory chainIds = LibRainDeployMechanism.addressChainIds(suite);
+        bytes32 bytecodeHash;
+        for (uint256 i = 0; i < chainIds.length; i++) {
+            uint256 snapshotId = vm.snapshotState();
+            LibRainDeployMechanism.deployLocallyOnChain(vm, suite, chainIds[i]);
+            if (i == 0) {
+                bytecodeHash = perNetwork[0].codehash;
+            }
+            // Restores the chain id with the state.
+            revertDerivation(suite, snapshotId);
+        }
+        return DerivedDeploy({suite: suite.suite, deployedAddresses: perNetwork, bytecodeHash: bytecodeHash});
+    }
 
+    /// Reverts a derivation's state, refusing `DerivationSnapshotRevertFailed` when the revert fails.
+    /// @param suite The suite derived.
+    /// @param snapshotId The snapshot taken before the derivation.
+    function revertDerivation(DeploySuite memory suite, uint256 snapshotId) internal {
         // A failed revert is unrecoverable, not a warning to silence. The etch
         // and the nonce reset would survive into every later derivation, whose
         // results would then look entirely plausible while describing state
@@ -104,8 +127,6 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         if (!vm.revertToState(snapshotId)) {
             revert DerivationSnapshotRevertFailed(suite.suite, snapshotId);
         }
-
-        return derived;
     }
 
     /// Derives every suite once, before anything forks. Callers that compare
@@ -247,8 +268,8 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
         return resolved;
     }
 
-    /// Deploys the beacon's suite locally, as `deriveDeployment` does but under the beacon's chain id and, for a
-    /// per-network clone suite, only that network's clone, and refuses
+    /// Deploys the beacon's suite locally under the beacon's chain id and, for a per-network clone suite, only that
+    /// network's clone, and refuses
     /// `BeaconSeatedOwner` or `BeaconSeatedImplementation` when the deployment at the beacon's address answers
     /// `owner()` or `implementation()` other than the initial state. A read that reverts or answers nothing is left
     /// to the chain group's `LibRainDeployBeacon.checkBeacon`.
@@ -256,17 +277,14 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     /// @param beaconIndex The beacon's index in `beacons()`, for the refusal.
     function checkSeatedState(ResolvedBeacon memory resolved, uint256 beaconIndex) internal {
         uint256 snapshotId = vm.snapshotState();
-        vm.chainId(resolved.chainId);
-        LibRainDeployMechanism.deployLocallyOnChain(vm, resolved.suite);
+        LibRainDeployMechanism.deployLocallyOnChain(vm, resolved.suite, resolved.chainId);
         // slither-disable-next-line low-level-calls
         (bool ownerAnswered, bytes memory owner) = resolved.beacon.beacon.staticcall(abi.encodeCall(IERC5313.owner, ()));
         // slither-disable-next-line low-level-calls
         (bool implementationAnswered, bytes memory implementation) =
             resolved.beacon.beacon.staticcall(abi.encodeCall(IBeacon.implementation, ()));
         // Restores the chain id with the state.
-        if (!vm.revertToState(snapshotId)) {
-            revert DerivationSnapshotRevertFailed(resolved.suite.suite, snapshotId);
-        }
+        revertDerivation(resolved.suite, snapshotId);
         if (seatsOther(ownerAnswered, owner, resolved.beacon.initial.owner)) {
             revert BeaconSeatedOwner(resolved.chainId, beaconIndex, owner);
         }

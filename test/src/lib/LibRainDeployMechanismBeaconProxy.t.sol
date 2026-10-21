@@ -456,8 +456,8 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
         DeploySuite memory suite = candidateOf(proxy, chainIds).snapshot;
         bytes memory mechanismData = suite.mechanismData;
 
-        vm.chainId(chainIds[1]);
-        LibRainDeployMechanism.deployLocallyOnChain(vm, suite);
+        LibRainDeployMechanism.deployLocallyOnChain(vm, suite, chainIds[1]);
+        assertEq(block.chainid, chainIds[1]);
         assertEq(suite.mechanismData, mechanismData);
         assertEq(beaconProxyAddressOn(proxy, chainIds[1]).code, suite.storedRuntimeCode);
         assertEq(beaconProxyAddressOn(proxy, chainIds[0]).code.length, 0);

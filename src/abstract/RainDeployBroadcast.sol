@@ -162,9 +162,8 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         }
         for (uint256 i = 0; i < chainIds.length; i++) {
             uint256 snapshotId = vm.snapshotState();
-            vm.chainId(chainIds[i]);
             vm.startPrank(deployer, deployer);
-            LibRainDeployMechanism.deployLocallyOnChain(vm, suite);
+            LibRainDeployMechanism.deployLocallyOnChain(vm, suite, chainIds[i]);
             vm.stopPrank();
             address deployed = LibRainDeployMechanism.deployedAddress(suite, chainIds[i]);
             // slither-disable-next-line low-level-calls
