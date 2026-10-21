@@ -65,7 +65,8 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
             artifactPath: CLONE_ARTIFACT_PATH,
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.ClonePerNetwork,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
     }
 

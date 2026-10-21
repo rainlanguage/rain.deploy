@@ -1390,7 +1390,8 @@ contract LibRainDeploySnapshotTest is Test {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
     }
 
@@ -3725,7 +3726,8 @@ contract LibRainDeploySnapshotTest is Test {
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: hex"00"
+            mechanismData: hex"00",
+            describedByMeta: ""
         });
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
         this.externalWriteSuiteSnapshot(suite);

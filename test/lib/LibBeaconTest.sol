@@ -43,7 +43,8 @@ library LibBeaconTest {
             artifactPath: artifactPath,
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
     }
 

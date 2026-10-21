@@ -78,7 +78,8 @@ abstract contract ExampleCloneDeploys is RainDeployCloneSuitesBase {
             artifactPath: CLONE_ARTIFACT_PATH,
             dependencies: abi.decode(EXAMPLE_CLONE_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Clone,
-            mechanismData: EXAMPLE_CLONE_MECHANISM_DATA
+            mechanismData: EXAMPLE_CLONE_MECHANISM_DATA,
+            describedByMeta: ""
         });
         return suites;
     }

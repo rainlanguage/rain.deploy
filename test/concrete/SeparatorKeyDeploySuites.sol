@@ -32,7 +32,8 @@ contract SeparatorKeyDeploySuites is ExternalDeploySuites {
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         return suites;
     }
@@ -50,7 +51,8 @@ contract SeparatorKeyDeploySuites is ExternalDeploySuites {
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: "",
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });

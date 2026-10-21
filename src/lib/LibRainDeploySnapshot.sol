@@ -69,7 +69,7 @@ error SnapshotStateRevertFailed(string suite, uint256 snapshotId);
 
 /// Thrown when a file in the frozen record declares no deployed address, declares one as
 /// `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in decimal digits without a leading zero, names
-/// `DEPLOYED_ADDRESS` or `MECHANISM_DATA` outside a block comment on a line not starting with the writer's
+/// `DEPLOYED_ADDRESS`, `MECHANISM_DATA` or `DESCRIBED_BY_META` outside a block comment on a line not starting with the writer's
 /// declaration of it (a line comment, the SPDX header's licence identifier and copyright text included), declares
 /// one whose value is not `0x` and 40 hex digits, bare or in `address(...)`, then `;`, declares one outside the
 /// writer's format (`=` fourth of five space-separated tokens, or wrapped onto the next line at the writer's indent),
@@ -85,6 +85,10 @@ error FrozenSnapshotAmbiguous(string path);
 /// Thrown when a file in the frozen record declares `MECHANISM_DATA` more than once.
 /// @param path The record file declaring `MECHANISM_DATA` more than once.
 error FrozenSnapshotMechanismDataAmbiguous(string path);
+
+/// Thrown when a file in the frozen record declares `DESCRIBED_BY_META` more than once.
+/// @param path The record file declaring `DESCRIBED_BY_META` more than once.
+error FrozenSnapshotDescribedByMetaAmbiguous(string path);
 
 /// Thrown when a file in the frozen record declares its deployed addresses per network, as
 /// `DEPLOYED_ADDRESS_<chainId>`, and declares no `MECHANISM_DATA`.
@@ -667,12 +671,14 @@ library LibRainDeploySnapshot {
     /// @param creationCode The contract's creation code.
     /// @param dependencies Each address that must already have code on a
     /// network before this contract can be broadcast there, with that code.
+    /// @param describedByMeta The described-by meta, declared only when non-empty.
     /// @return The constants, as Solidity source.
     function snapshotConstants(
         Vm vm,
         address deployed,
         bytes memory creationCode,
-        DeployDependency[] memory dependencies
+        DeployDependency[] memory dependencies,
+        bytes memory describedByMeta
     ) internal view returns (string memory) {
         return string.concat(
             LibCodeGen.addressConstantString(
@@ -695,7 +701,25 @@ library LibRainDeploySnapshot {
                 "/// file-scope constant of dynamic array type.",
                 "DEPENDENCIES",
                 abi.encode(dependencies)
-            )
+            ),
+            describedByMetaConstant(vm, describedByMeta)
+        );
+    }
+
+    /// The `DESCRIBED_BY_META` constant a record declares, or nothing for an empty meta.
+    /// @param vm The Vm instance for string operations.
+    /// @param describedByMeta The described-by meta.
+    /// @return The constant, as Solidity source.
+    function describedByMetaConstant(Vm vm, bytes memory describedByMeta) internal pure returns (string memory) {
+        if (describedByMeta.length == 0) {
+            return "";
+        }
+        return LibCodeGen.bytesConstantString(
+            vm,
+            "/// @dev The described-by meta this release emits on the metaboard: what the\n"
+            "/// deployment's `describedByMetaV1()` hashes to.",
+            DESCRIBED_BY_META_NAME,
+            describedByMeta
         );
     }
 
@@ -761,8 +785,33 @@ library LibRainDeploySnapshot {
         bytes memory creationCode,
         DeployDependency[] memory dependencies
     ) internal returns (string memory) {
-        address deployed = LibRainDeploy.etchAndDeployZoltu(vm, creationCode);
-        string memory constants = snapshotConstants(vm, deployed, creationCode, dependencies);
+        DeploySuite memory suite;
+        suite.creationCode = creationCode;
+        suite.dependencies = dependencies;
+        return writeZoltuSnapshot(vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite);
+    }
+
+    /// `writeSnapshot` for a Zoltu suite: its creation code, its dependencies and its described-by meta.
+    /// @param vm The Vm instance for file operations.
+    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// @param contractName The contract the snapshot describes.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written snapshot declares.
+    /// @param copyrightText The copyright text the written snapshot declares.
+    /// @param suite The suite to snapshot.
+    /// @return The path written.
+    function writeZoltuSnapshot(
+        Vm vm,
+        string memory root,
+        string memory dir,
+        string memory contractName,
+        string memory spdxLicenseIdentifier,
+        string memory copyrightText,
+        DeploySuite memory suite
+    ) internal returns (string memory) {
+        address deployed = LibRainDeploy.etchAndDeployZoltu(vm, suite.creationCode);
+        string memory constants =
+            snapshotConstants(vm, deployed, suite.creationCode, suite.dependencies, suite.describedByMeta);
 
         // The directory is created by the writer, from the same root and tag
         // this path is derived from, so there is no `createDir` here to
@@ -856,7 +905,8 @@ library LibRainDeploySnapshot {
                 "DEPENDENCIES",
                 abi.encode(suite.dependencies)
             ),
-            LibCodeGen.bytesConstantString(vm, mechanismDataComment, "MECHANISM_DATA", mechanismData)
+            LibCodeGen.bytesConstantString(vm, mechanismDataComment, "MECHANISM_DATA", mechanismData),
+            describedByMetaConstant(vm, suite.describedByMeta)
         );
     }
 
@@ -920,16 +970,7 @@ library LibRainDeploySnapshot {
     ) internal returns (string memory) {
         if (suite.mechanism == DeployMechanism.Zoltu) {
             LibRainDeployMechanism.checkZoltuMechanismData(suite);
-            return writeSnapshot(
-                vm,
-                root,
-                dir,
-                contractName,
-                spdxLicenseIdentifier,
-                copyrightText,
-                suite.creationCode,
-                suite.dependencies
-            );
+            return writeZoltuSnapshot(vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite);
         }
 
         uint256 snapshotId = vm.snapshotState();
@@ -1424,6 +1465,12 @@ library LibRainDeploySnapshot {
 
     string constant MECHANISM_DATA_DECLARATION = "bytes constant MECHANISM_DATA =";
 
+    /// The name of the described-by meta constant. A line holding it anywhere but at the start of the writer's
+    /// declaration is not the writer's.
+    string constant DESCRIBED_BY_META_NAME = "DESCRIBED_BY_META";
+
+    string constant DESCRIBED_BY_META_DECLARATION = "bytes constant DESCRIBED_BY_META =";
+
     /// The name of the beacon proxy marker. A line holding it anywhere but as the writer's declaration of it is not
     /// the writer's.
     string constant BEACON_PROXY_NAME = "BEACON_PROXY";
@@ -1731,6 +1778,27 @@ library LibRainDeploySnapshot {
         return chainIds.length == 0 ? DeployMechanism.Clone : DeployMechanism.ClonePerNetwork;
     }
 
+    /// Whether a frozen record declares `DESCRIBED_BY_META`. A record cut before a suite could carry a described-by
+    /// meta declares none, as does one cut from a suite that describes nothing.
+    /// @param vm The Vm instance for file and string operations.
+    /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @return True if the record declares it.
+    function recordedDescribedByMeta(Vm vm, string memory path) internal view returns (bool) {
+        string[] memory lines = recordLines(vm, path, vm.readFile(path));
+        uint256 declarations = 0;
+        for (uint256 i = 0; i < lines.length; i++) {
+            if (vm.indexOf(lines[i], DESCRIBED_BY_META_DECLARATION) == 0) {
+                declarations++;
+            } else if (vm.contains(lines[i], DESCRIBED_BY_META_NAME)) {
+                revert FrozenSnapshotUnreadable(path);
+            }
+        }
+        if (declarations > 1) {
+            revert FrozenSnapshotDescribedByMetaAmbiguous(path);
+        }
+        return declarations == 1;
+    }
+
     /// @param kind A mechanism.
     /// @return Its name as a generated released-suites lib spells it.
     function mechanismName(DeployMechanism kind) internal pure returns (string memory) {
@@ -1775,6 +1843,9 @@ library LibRainDeploySnapshot {
             mechanism == DeployMechanism.Zoltu
                 ? string("")
                 : string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA"),
+            recordedDescribedByMeta(vm, path)
+                ? string.concat(",\n    DESCRIBED_BY_META as ", prefix, "_DESCRIBED_BY_META")
+                : string(""),
             "\n} from \"../generated/",
             tagForRecordPath(vm, path),
             "/",
@@ -1859,6 +1930,8 @@ library LibRainDeploySnapshot {
             prefix,
             "_DEPENDENCIES, (DeployDependency[])),\n            mechanism: ",
             mechanism,
+            ",\n            describedByMeta: ",
+            recordedDescribedByMeta(vm, path) ? string.concat(prefix, "_DESCRIBED_BY_META") : string("\"\""),
             "\n        });\n"
         );
     }
@@ -1888,12 +1961,13 @@ library LibRainDeploySnapshot {
             "\n/// @notice Every frozen release of `",
             contractName,
             "`: one entry per file in\n" "/// the append-only `src/generated/<tag>/` record, in tag order.\n///\n"
-            "/// The deploy address, code hash, creation code, runtime code and dependency\n"
-            "/// list of each entry are aliased from that release's own frozen snapshot, so\n"
-            "/// what a release deployed, and what it required to already be on chain, are\n"
-            "/// read from the immutable file and from nowhere else. A dependency dropped\n"
-            "/// from current source stays required by the releases cut with it, and one\n"
-            "/// added is not imposed on releases cut without it.\n///\n"
+            "/// The deploy address, code hash, creation code, runtime code, dependency\n"
+            "/// list and described-by meta of each entry are aliased from that release's\n"
+            "/// own frozen snapshot, so what a release deployed, and what it required to\n"
+            "/// already be on chain, are read from the immutable file and from nowhere\n"
+            "/// else. A dependency dropped from current source stays required by the\n"
+            "/// releases cut with it, and one added is not imposed on releases cut\n"
+            "/// without it.\n///\n"
             "/// The key and the artifact path are explorer and ordering metadata\n"
             "/// regenerated from the CURRENT declaration, and are not part of that\n"
             "/// record. A moved source path retroactively updates every entry's artifact\n"

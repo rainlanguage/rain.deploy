@@ -9,6 +9,7 @@ import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {DerivationSnapshotRevertFailed, LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {ChainBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
+import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
 
 /// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with a first word whose low
 /// 160 bits are the deploy key. Roles, pending owners, admin slots and contracts the suite's constructors create are
@@ -92,6 +93,8 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// there. Before any fork, such a network is refused with `ExtendedNetworkUnfrozen`, naming the address its
     /// candidate's init data derives there to declare, or with `CloneNetworkUndeclared` where its candidate has no
     /// entry there.
+    /// A suite carrying a described-by meta is refused `MetaBoardUndeclared` before any fork, and once deployed has the
+    /// meta emitted on `metaBoard()` on each network whose metaboard does not already hold it.
     /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
     /// @param networks The networks to broadcast to, as `deployNetworks()` gave them.
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
@@ -111,6 +114,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             }
         }
         DeploySuite memory frozen = withExtendedNetworks(suite);
+        address board = checkedMetaBoard(frozen);
         DeploySuite memory candidate = candidateOf(frozen);
         checkSeatsNoDeployKey(
             LibRainDeployMechanism.withUnrecordedNetworks(
@@ -119,7 +123,17 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             networks,
             deployer
         );
-        return LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, frozen, candidate);
+        (address[] memory deployed, uint256[] memory forkIds) =
+            LibRainDeployMechanism.deployAndBroadcast(vm, networks, deployerPrivateKey, frozen, candidate);
+        if (frozen.describedByMeta.length != 0) {
+            for (uint256 i = 0; i < networks.length; i++) {
+                vm.selectFork(forkIds[i]);
+                LibRainDeployDescribedByMeta.emitUnlessEmitted(
+                    vm, networks[i], board, deployed[i], frozen.describedByMeta, deployer
+                );
+            }
+        }
+        return (deployed, forkIds);
     }
 
     /// Deploys `suite` locally with `deployer` as sender and origin, once under each target's chain id (a per-network

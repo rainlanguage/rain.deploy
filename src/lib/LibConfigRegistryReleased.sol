@@ -44,7 +44,8 @@ library LibConfigRegistryReleased {
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_19_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         return suites;
     }

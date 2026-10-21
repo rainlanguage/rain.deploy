@@ -773,7 +773,8 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
             artifactPath: CLONE_ARTIFACT_PATH,
             dependencies: dependencies,
             mechanism: DeployMechanism.ClonePerNetwork,
-            mechanismData: abi.encode(clones)
+            mechanismData: abi.encode(clones),
+            describedByMeta: ""
         });
     }
 
@@ -961,7 +962,8 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
             artifactPath: CLONE_ARTIFACT_PATH,
             dependencies: dependencies,
             mechanism: DeployMechanism.Clone,
-            mechanismData: abi.encode(target)
+            mechanismData: abi.encode(target),
+            describedByMeta: ""
         });
     }
 

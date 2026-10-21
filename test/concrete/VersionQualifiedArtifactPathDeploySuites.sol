@@ -46,7 +46,8 @@ contract VersionQualifiedArtifactPathDeploySuites is ExternalDeploySuites {
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: "",
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });
@@ -60,7 +61,8 @@ contract VersionQualifiedArtifactPathDeploySuites is ExternalDeploySuites {
                 artifactPath: "MockDeployableV2:0.8.25",
                 dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: "",
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });

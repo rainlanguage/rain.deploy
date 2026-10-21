@@ -14,6 +14,7 @@ import {CloneNetwork} from "../lib/LibRainDeployClone.sol";
 import {LibRainDeployExtendedNetworks} from "../lib/LibRainDeployExtendedNetworks.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 import {ChainBeacon} from "../lib/LibRainDeployBeacon.sol";
+import {MetaBoardUndeclared} from "../lib/LibRainDeployDescribedByMeta.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
@@ -205,6 +206,9 @@ struct DeploySuite {
     DeployMechanism mechanism;
     /// What the mechanism needs beyond `creationCode`.
     bytes mechanismData;
+    /// The Rain meta the deployment's `describedByMetaV1()` hashes to, which `RainDeployBroadcast` emits about it on
+    /// `metaBoard()`, frozen with each release. Empty for a suite that describes nothing.
+    bytes describedByMeta;
 }
 
 /// The rolling candidate: a snapshot that tracks current source rather than a
@@ -280,6 +284,24 @@ abstract contract RainDeploySuitesBase {
     /// @return The beacons; one with transitions reads `MigrationRegistry`, which MUST be deployed on its network.
     function beacons() internal view virtual returns (ChainBeacon[] memory) {
         return new ChainBeacon[](0);
+    }
+
+    /// The metaboard every suite's `describedByMeta` is emitted on and checked against, on every network. None by
+    /// default; a declaration with a suite carrying a described-by meta MUST name one.
+    /// @return The metaboard.
+    function metaBoard() internal view virtual returns (address) {
+        return address(0);
+    }
+
+    /// Refuses `MetaBoardUndeclared` when `suite` carries a described-by meta and `metaBoard()` is zero.
+    /// @param suite The suite.
+    /// @return The metaboard.
+    function checkedMetaBoard(DeploySuite memory suite) internal view returns (address) {
+        address board = metaBoard();
+        if (suite.describedByMeta.length != 0 && board == address(0)) {
+            revert MetaBoardUndeclared(suite.suite);
+        }
+        return board;
     }
 
     /// Every network this repo deals with: what a broadcast targets, the set

@@ -49,7 +49,8 @@ contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
                 artifactPath: "test/concrete/VendoredDeployable.sol:VendoredDeployable",
                 dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: "",
+                describedByMeta: ""
             }),
             unanchorableReason: "Vendored third party deployment: the pinned creation code is the source."
         });
@@ -64,7 +65,8 @@ contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: "",
+                describedByMeta: ""
             }),
             unanchorableReason: "There is no source file to compile."
         });

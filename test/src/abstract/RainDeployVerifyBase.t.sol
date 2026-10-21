@@ -35,7 +35,8 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
 
         DerivedDeploy memory derived = deriveDeployment(suite);
@@ -123,7 +124,8 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
             artifactPath: "test/concrete/MockDependentDeployable.sol:MockDependentDeployable",
             dependencies: dependencies,
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
     }
 

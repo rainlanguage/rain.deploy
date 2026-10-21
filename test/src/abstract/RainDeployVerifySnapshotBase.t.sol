@@ -238,7 +238,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
     }
 
@@ -252,7 +253,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
     }
 
@@ -645,7 +647,8 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
     }
 

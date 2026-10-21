@@ -9,6 +9,7 @@ import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {DeployBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
+import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
 
 /// Thrown when `requiresSuiteOn` requires a suite on none of the networks
 /// checked, which would pass the suite having checked it nowhere.
@@ -49,6 +50,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// where `beacons()` declares no beacon at its beacon; the beacon's own checks then cover what the proxy
     /// delegates into. Those checks read the beacon's current state only: how the proxy was initialized, under
     /// whichever implementation the beacon served when it was deployed, is not read.
+    /// A suite carrying a described-by meta is refused `MetaBoardUndeclared` before forking, and on each network it is
+    /// required on `metaBoard()` MUST hold the meta's emission about it.
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
@@ -90,6 +93,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             if (!requiredSomewhere) {
                 revert SuiteRequiredNowhere(suites[j].suite);
             }
+            checkedMetaBoard(suites[j]);
         }
 
         address[][] memory addresses = new address[][](networks.length);
@@ -120,6 +124,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
                     continue;
                 }
                 checkSuiteOnNetwork(networks[i].name, suites[j], derived[j], addresses[i][j]);
+                LibRainDeployDescribedByMeta.checkEmitted(
+                    forkVm, networks[i].name, suites[j].suite, metaBoard(), addresses[i][j], suites[j].describedByMeta
+                );
             }
             checkBeaconsOnNetwork(networks[i], resolved);
         }
