@@ -108,17 +108,7 @@ contract LibConfigRegistryRegisterTest is Test {
         string memory name,
         bytes memory value
     ) external returns (uint256[] memory, string memory) {
-        vm.prank(sender);
-        return this.externalRegisterOnNetworksAsCaller(selected, declared, name, value);
-    }
-
-    function externalRegisterOnNetworksAsCaller(
-        string[] memory selected,
-        string[] memory declared,
-        string memory name,
-        bytes memory value
-    ) external returns (uint256[] memory, string memory) {
-        return LibConfigRegistryRegister.registerOnNetworks(vm, selected, declared, AUTHORITY, name, value);
+        return LibConfigRegistryRegister.registerOnNetworks(vm, selected, declared, sender, AUTHORITY, name, value);
     }
 
     function externalCheckRegisteredOnForks(
@@ -328,23 +318,13 @@ contract LibConfigRegistryRegisterTest is Test {
         address sender,
         string memory name,
         bytes memory value
-    ) external returns (bytes32, SupportedNetwork[] memory, string memory) {
-        vm.prank(sender);
-        return this.externalCheckInputsAsCaller(selected, declared, name, value);
-    }
-
-    function externalCheckInputsAsCaller(
-        string[] memory selected,
-        string[] memory declared,
-        string memory name,
-        bytes memory value
-    ) external view returns (bytes32, SupportedNetwork[] memory, string memory) {
-        return LibConfigRegistryRegister.checkInputs(vm, selected, declared, AUTHORITY, name, value);
+    ) external pure returns (bytes32, SupportedNetwork[] memory, string memory) {
+        return LibConfigRegistryRegister.checkInputs(vm, selected, declared, sender, AUTHORITY, name, value);
     }
 
     /// Inputs that pass every refusal give the hashed name, the selected
     /// networks and the record of exactly the inputs signed.
-    function testCheckInputsRecordIsTheInputsSigned(uint8 words, bytes32 seed) external {
+    function testCheckInputsRecordIsTheInputsSigned(uint8 words, bytes32 seed) external view {
         bytes memory value = new bytes(32 * (uint256(words) % 4 + 1));
         for (uint256 i = 0; i < value.length; i++) {
             value[i] = keccak256(abi.encode(seed, i))[0];
@@ -367,19 +347,8 @@ contract LibConfigRegistryRegisterTest is Test {
         string memory name,
         bytes memory value
     ) external returns (uint256[] memory, string memory) {
-        vm.prank(sender);
-        return this.externalRegisterOnNetworksWithAsCaller(forkVm, selected, authority, name, value);
-    }
-
-    function externalRegisterOnNetworksWithAsCaller(
-        Vm forkVm,
-        string[] memory selected,
-        address authority,
-        string memory name,
-        bytes memory value
-    ) external returns (uint256[] memory, string memory) {
         return LibConfigRegistryRegister.registerOnNetworks(
-            forkVm, selected, LibRainDeploy.supportedNetworks(), authority, name, value
+            forkVm, selected, LibRainDeploy.supportedNetworks(), sender, authority, name, value
         );
     }
 

@@ -66,6 +66,7 @@ contract RegisterConfig is RegistryDeploySuites, Script {
             forkVm(),
             selectedNetworks(),
             supportedNetworks(),
+            msg.sender,
             vm.envAddress(AUTHORITY_VAR),
             vm.envString(NAME_VAR),
             vm.envBytes(VALUE_VAR)

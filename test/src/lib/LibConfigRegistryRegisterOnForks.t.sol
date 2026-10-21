@@ -27,15 +27,15 @@ import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
 /// The name is fresh per run, so no live binding can satisfy or contradict
 /// anything here.
 contract LibConfigRegistryRegisterOnForksTest is Test {
-    /// The authority every run here binds under and reads under: this contract,
-    /// which is the caller of every wrapper below and so the account that signs.
-    address internal immutable AUTHORITY = address(this);
+    /// The authority every run here binds under and reads under. Any account
+    /// is one.
+    address internal constant AUTHORITY = address(0xA11CE);
 
     function externalRegisterOnNetworks(string[] memory networks, string memory name, bytes memory value)
         external
         returns (uint256[] memory, string memory)
     {
-        return LibConfigRegistryRegister.registerOnNetworks(vm, networks, networks, AUTHORITY, name, value);
+        return LibConfigRegistryRegister.registerOnNetworks(vm, networks, networks, AUTHORITY, AUTHORITY, name, value);
     }
 
     function externalRegisterOnForks(
@@ -44,7 +44,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         string memory name,
         bytes memory value
     ) external {
-        LibConfigRegistryRegister.registerOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
+        LibConfigRegistryRegister.registerOnForks(vm, networks, networks, forkIds, AUTHORITY, AUTHORITY, name, value);
     }
 
     function externalRegisterOnForksFrom(
@@ -54,18 +54,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         string memory name,
         bytes memory value
     ) external {
-        vm.prank(sender);
-        this.externalRegisterOnForks(networks, forkIds, name, value);
-    }
-
-    function externalCheckInputs(string[] memory networks, string memory name, bytes memory value)
-        external
-        view
-        returns (string memory)
-    {
-        (,, string memory record) =
-            LibConfigRegistryRegister.checkInputs(vm, networks, networks, AUTHORITY, name, value);
-        return record;
+        LibConfigRegistryRegister.registerOnForks(vm, networks, networks, forkIds, sender, AUTHORITY, name, value);
     }
 
     function externalCheckRegisteredOnForks(
@@ -167,7 +156,8 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         }
         (uint256[] memory forkIds, string memory record) = this.externalRegisterOnNetworks(networks, name, value);
         assertEq(forkIds.length, networks.length);
-        string memory inputs = this.externalCheckInputs(networks, name, value);
+        (,, string memory inputs) =
+            LibConfigRegistryRegister.checkInputs(vm, networks, networks, AUTHORITY, AUTHORITY, name, value);
         assertEq(record, inputs);
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
     }
@@ -185,7 +175,8 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         LibConfigRegistryFork.ensureDeployed(vm);
         vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
-        string memory inputs = this.externalCheckInputs(networks, name, value);
+        (,, string memory inputs) =
+            LibConfigRegistryRegister.checkInputs(vm, networks, networks, AUTHORITY, AUTHORITY, name, value);
         (uint256[] memory forkIds, string memory record) = this.externalRegisterOnNetworks(networks, name, value);
         assertEq(forkIds.length, 2);
         assertEq(record, inputs);

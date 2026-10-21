@@ -52,8 +52,8 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// is in the registry consumers read. `checkInputs` checks the inputs before
 /// any fork: the name is canonical, the value is not empty and is a
 /// whole number of 32-byte words, the networks are a non-empty,
-/// duplicate-free subset of the declared ones, and the caller, which is the
-/// account that signs, is the authority.
+/// duplicate-free subset of the declared ones, and the sender is the
+/// authority.
 /// `registerOnNetworks` runs it and logs the inputs record before creating
 /// the forks; `registerOnForks` runs it again for a caller with its own forks,
 /// and logs no record.
@@ -213,13 +213,6 @@ library LibConfigRegistryRegister {
         }
     }
 
-    /// `checkSender` of this call's `msg.sender`, which in a script is forge's
-    /// `--sender`: the account that signs. Nothing else here reads `msg.sender`.
-    /// @param authority The authority the run binds under.
-    function checkCaller(address authority) internal view {
-        checkSender(msg.sender, authority);
-    }
-
     /// Reverts unless the selected chain is the network's and its registry is
     /// the pinned one.
     /// @param vm The Vm the chain id is read through, so the read follows the
@@ -330,12 +323,12 @@ library LibConfigRegistryRegister {
         );
     }
 
-    /// Binds `name` to `value` under `authority` on the selected chain, signed
-    /// by `authority`, unless it is bound to `value` there already. Logs the
-    /// current binding and what is about to happen to it.
+    /// Binds `name` to `value` under `sender` on the selected chain, signed by
+    /// `sender`, unless it is bound to `value` there already. Logs the current
+    /// binding and what is about to happen to it.
     /// @param vm The Vm instance to broadcast with.
     /// @param network The catalogue entry of the selected chain.
-    /// @param authority The authority bound under, and the account that signs.
+    /// @param sender The account that signs, and the authority bound under.
     /// @param name The hashed name.
     /// @param value The ABI-encoded value to bind it to.
     /// @return Whether a bind was broadcast.
@@ -343,18 +336,18 @@ library LibConfigRegistryRegister {
     function registerOnSelectedChain(
         Vm vm,
         SupportedNetwork memory network,
-        address authority,
+        address sender,
         bytes32 name,
         bytes memory value
     ) internal returns (bool, string memory) {
         checkChain(vm, network);
-        (bytes memory bound, uint256 registeredAt) = currentBinding(authority, name);
+        (bytes memory bound, uint256 registeredAt) = currentBinding(sender, name);
 
         string memory record = describeNetwork(vm, network.name, network.chainId, bound, registeredAt, value);
         console2.log(record);
         bool binds = keccak256(bound) != keccak256(value);
         if (binds) {
-            vm.startBroadcast(authority);
+            vm.startBroadcast(sender);
             IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).registerV1(name, value);
             vm.stopBroadcast();
         }
@@ -362,12 +355,12 @@ library LibConfigRegistryRegister {
     }
 
     /// Every input refusal of `registerOnNetworks`, in order — the name, the
-    /// value, the networks, then the caller — and the inputs record it logs.
+    /// value, the networks, then the sender — and the inputs record it logs.
     /// @param vm The Vm instance to format with.
     /// @param selected The networks to bind on.
     /// @param declared The networks the declaration supports.
-    /// @param authority The authority to bind under. MUST be `msg.sender`, the
-    /// account that signs.
+    /// @param sender The account that signs. MUST be `authority`.
+    /// @param authority The authority to bind under.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
     /// @return The hashed name.
@@ -377,10 +370,11 @@ library LibConfigRegistryRegister {
         Vm vm,
         string[] memory selected,
         string[] memory declared,
+        address sender,
         address authority,
         string memory name,
         bytes memory value
-    ) internal view returns (bytes32, SupportedNetwork[] memory, string memory) {
+    ) internal pure returns (bytes32, SupportedNetwork[] memory, string memory) {
         bytes32 hashed = nameHash(name);
         if (value.length == 0) {
             revert IConfigRegistryV1.EmptyValue(hashed);
@@ -389,20 +383,20 @@ library LibConfigRegistryRegister {
             revert NonCanonicalValue(value);
         }
         SupportedNetwork[] memory networks = selectNetworks(selected, declared);
-        checkCaller(authority);
+        checkSender(sender, authority);
         return (hashed, networks, describeInputs(vm, name, value, authority));
     }
 
     /// Binds `name` to `value` under `authority` on every selected network,
-    /// signed by `authority`.
+    /// signed by `sender`.
     ///
     /// Every input refusal comes before the first fork, and every network is
     /// forked before any is selected, as `LibRainDeploy.createForks` requires.
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param selected The networks to bind on.
     /// @param declared The networks the declaration supports.
-    /// @param authority The authority to bind under. MUST be `msg.sender`, the
-    /// account that signs.
+    /// @param sender The account that signs. MUST be `authority`.
+    /// @param authority The authority to bind under.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
     /// @return The fork each selected network was simulated on, for
@@ -412,26 +406,27 @@ library LibConfigRegistryRegister {
         Vm vm,
         string[] memory selected,
         string[] memory declared,
+        address sender,
         address authority,
         string memory name,
         bytes memory value
     ) internal returns (uint256[] memory, string memory) {
-        (,, string memory record) = checkInputs(vm, selected, declared, authority, name, value);
+        (,, string memory record) = checkInputs(vm, selected, declared, sender, authority, name, value);
         console2.log(record);
 
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, selected);
-        registerOnForks(vm, selected, declared, forkIds, authority, name, value);
+        registerOnForks(vm, selected, declared, forkIds, sender, authority, name, value);
         return (forkIds, record);
     }
 
-    /// Binds `name` to `value` under `authority`, signed by `authority`, on
-    /// every given fork, after the input refusals of `checkInputs`.
+    /// Binds `name` to `value` under `authority`, signed by `sender`, on every
+    /// given fork, after the input refusals of `checkInputs`.
     /// @param vm The Vm instance to select forks and broadcast with.
     /// @param selected The networks the forks are of.
     /// @param declared The networks the declaration supports.
     /// @param forkIds The fork of each selected network, positionally paired.
-    /// @param authority The authority to bind under. MUST be `msg.sender`, the
-    /// account that signs.
+    /// @param sender The account that signs. MUST be `authority`.
+    /// @param authority The authority to bind under.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
     function registerOnForks(
@@ -439,18 +434,19 @@ library LibConfigRegistryRegister {
         string[] memory selected,
         string[] memory declared,
         uint256[] memory forkIds,
+        address sender,
         address authority,
         string memory name,
         bytes memory value
     ) internal {
         (bytes32 hashed, SupportedNetwork[] memory networks,) =
-            checkInputs(vm, selected, declared, authority, name, value);
+            checkInputs(vm, selected, declared, sender, authority, name, value);
         if (forkIds.length != networks.length) {
             revert LibRainDeploy.ForkIdsLengthMismatch(networks.length, forkIds.length);
         }
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
-            registerOnSelectedChain(vm, networks[i], authority, hashed, value);
+            registerOnSelectedChain(vm, networks[i], sender, hashed, value);
         }
     }
 
