@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 
-import {IConfigRegistryV1} from "../interface/IConfigRegistryV1.sol";
+import {IConfigRegistryV2} from "../interface/IConfigRegistryV2.sol";
 import {LibConfigRegistry} from "./LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "./LibConfigRegistryDeploy.sol";
 import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
@@ -225,8 +225,8 @@ library LibConfigRegistryRegister {
     {
         if (
             sender != authority
-                && !IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-                    .approvedV1(authority, name, sender)
+                && !IConfigRegistryV2(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
+                    .approvedV2(authority, name, sender)
         ) {
             revert SenderNotApproved(network.name, sender, authority, name);
         }
@@ -254,14 +254,14 @@ library LibConfigRegistryRegister {
     /// @return The bound value, or empty.
     /// @return The moment it was bound, or zero.
     function currentBinding(address authority, bytes32 name) internal view returns (bytes memory, uint256) {
-        try IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(authority, name) returns (
+        try IConfigRegistryV2(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV2(authority, name) returns (
             bytes memory value, uint256 registeredAt
         ) {
             return (value, registeredAt);
         } catch (bytes memory reason) {
             if (
                 keccak256(reason)
-                    == keccak256(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, authority, name))
+                    == keccak256(abi.encodeWithSelector(IConfigRegistryV2.NameNotRegistered.selector, authority, name))
             ) {
                 return ("", 0);
             }
@@ -276,13 +276,13 @@ library LibConfigRegistryRegister {
     /// @param authority The authority to bind under.
     /// @param name The hashed name.
     /// @param value The ABI-encoded value to bind it to.
-    /// @return The `registerV1` calldata.
+    /// @return The `registerV2` calldata.
     function registerCalldata(address authority, bytes32 name, bytes memory value)
         internal
         pure
         returns (bytes memory)
     {
-        return abi.encodeCall(IConfigRegistryV1.registerV1, (authority, name, value));
+        return abi.encodeCall(IConfigRegistryV2.registerV2, (authority, name, value));
     }
 
     /// The record of a run's inputs, printed before any network: everything the
@@ -379,8 +379,8 @@ library LibConfigRegistryRegister {
         bool binds = keccak256(bound) != keccak256(value);
         if (binds) {
             vm.startBroadcast(sender);
-            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-                .registerV1(authority, name, value);
+            IConfigRegistryV2(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
+                .registerV2(authority, name, value);
             vm.stopBroadcast();
         }
         return (binds, record);
@@ -410,7 +410,7 @@ library LibConfigRegistryRegister {
     ) internal pure returns (bytes32, SupportedNetwork[] memory, string memory) {
         bytes32 hashed = nameHash(name);
         if (value.length == 0) {
-            revert IConfigRegistryV1.EmptyValue(hashed);
+            revert IConfigRegistryV2.EmptyValue(hashed);
         }
         if (value.length % 32 != 0) {
             revert NonCanonicalValue(value);

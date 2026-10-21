@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeployDependency, LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
-import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
+import {IConfigRegistryV2} from "../../../src/interface/IConfigRegistryV2.sol";
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
@@ -1424,12 +1424,12 @@ contract LibRainDeployTest is Test {
     /// @return The deployed consumer holding the resolved address.
     function deployRegistryAndConsumer(bytes32 name, address account)
         internal
-        returns (IConfigRegistryV1, MockResolvedOwner)
+        returns (IConfigRegistryV2, MockResolvedOwner)
     {
-        IConfigRegistryV1 registry =
-            IConfigRegistryV1(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
+        IConfigRegistryV2 registry =
+            IConfigRegistryV2(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
         vm.prank(CONFIG_AUTHORITY);
-        registry.registerV1(CONFIG_AUTHORITY, name, abi.encode(account));
+        registry.registerV2(CONFIG_AUTHORITY, name, abi.encode(account));
         MockResolvedOwner consumer = new MockResolvedOwner(CONFIG_AUTHORITY, name);
         return (registry, consumer);
     }
@@ -1493,13 +1493,13 @@ contract LibRainDeployTest is Test {
         vm.assume(account != address(0));
         vm.assume(rebound != address(0));
         vm.assume(rebound != account);
-        (IConfigRegistryV1 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+        (IConfigRegistryV2 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
         // A re-bind needs a later block: a name's moment strictly increases.
         vm.warp(block.timestamp + 1);
         vm.prank(CONFIG_AUTHORITY);
-        registry.registerV1(CONFIG_AUTHORITY, name, abi.encode(rebound));
-        (bytes memory nowBound,) = registry.getV1(CONFIG_AUTHORITY, name);
+        registry.registerV2(CONFIG_AUTHORITY, name, abi.encode(rebound));
+        (bytes memory nowBound,) = registry.getV2(CONFIG_AUTHORITY, name);
         assertEq(nowBound, abi.encode(rebound));
 
         assertEq(consumer.iOwner(), account);

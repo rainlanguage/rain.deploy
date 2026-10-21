@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
-import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
+import {IConfigRegistryV2} from "../../../src/interface/IConfigRegistryV2.sol";
 import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibConfigRegistryRegister} from "../../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
@@ -109,7 +109,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
             assertEq(vm.getChainId(), configs[i].chainId, networks[i]);
             assertEq(
                 LibConfigRegistryRead.getValue(
-                    IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), AUTHORITY, hashed
+                    IConfigRegistryV2(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), AUTHORITY, hashed
                 ),
                 value,
                 networks[i]
@@ -190,14 +190,14 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         (string memory name, bytes32 hashed, bytes memory value) = fresh();
         string[] memory networks = LibRainDeploy.supportedNetworks();
         uint256[] memory forkIds = forksWithRegistry(networks);
-        IConfigRegistryV1 registry = IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+        IConfigRegistryV2 registry = IConfigRegistryV2(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
         vm.recordLogs();
         this.externalRegisterOnForks(networks, forkIds, name, value);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         uint256 registers = 0;
         for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].emitter == address(registry) && logs[i].topics[0] == IConfigRegistryV1.Register.selector) {
+            if (logs[i].emitter == address(registry) && logs[i].topics[0] == IConfigRegistryV2.Register.selector) {
                 assertEq(logs[i].topics[1], bytes32(uint256(uint160(AUTHORITY))));
                 assertEq(logs[i].topics[2], bytes32(uint256(uint160(AUTHORITY))));
                 assertEq(logs[i].topics[3], hashed);
@@ -272,7 +272,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         this.externalCheckRegisteredOnForks(networks, swapped, name, value);
         assertEq(
             LibConfigRegistryRead.getValue(
-                IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), AUTHORITY, hashed
+                IConfigRegistryV2(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), AUTHORITY, hashed
             ),
             value
         );

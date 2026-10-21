@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 /// @title IRegistryDelegatesV1
-/// @notice The delegation events and errors `IConfigRegistryV1` and
+/// @notice The delegation events and errors `IConfigRegistryV2` and
 /// `IMigrationRegistryV3` share. An account approves a delegate to write under
 /// it within one scope: a name in the config registry, a namespace in the
 /// migration registry. An approval covers no other scope and no other account,

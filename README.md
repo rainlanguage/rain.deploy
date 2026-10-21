@@ -705,19 +705,19 @@ wrong explorer.
 address, a role id, a threshold, a list of accounts, anything a deployment would
 otherwise compile in. Bindings are keyed by authority: any account binds a name
 under its own address, or under an authority that approved it as a delegate for
-that name (`approveV1`, `revokeV1`, read by `approvedV1`); anyone reads a name
+that name (`approveV2`, `revokeV2`, read by `approvedV2`); anyone reads a name
 under an authority it names, and reading a name that authority has not bound
-reverts rather than answering empty. The interface is `IConfigRegistryV1`. There
+reverts rather than answering empty. The interface is `IConfigRegistryV2`. There
 is no removal, no upgrade, and no way to write under an account that has not
 approved the writer.
 
 A consumer names the authority it trusts beside the name it resolves, both in
 its own creation code, and gets only what that authority bound. What the
 consumer then trusts, and what a contract authority must do on every network, is
-in `IConfigRegistryV1`'s NatSpec under "The authority and its delegates are the
+in `IConfigRegistryV2`'s NatSpec under "The authority and its delegates are the
 whole access control" and "Delegation is per authority and name". A delegate can
 rebind the name it was approved for, so a consumer's prod tests assert
-`approvedV1` is false for every retired delegate beside the true answers for the
+`approvedV2` is false for every retired delegate beside the true answers for the
 live ones.
 
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
@@ -793,13 +793,13 @@ it.
 
 The script signs as an EOA. A Safe or timelock authority either approves that
 EOA as a delegate, once per network through its own execution path
-(`approveV1(name, delegate)`), after which the EOA runs the script with
+(`approveV2(name, delegate)`), after which the EOA runs the script with
 `--sender` set to itself, or submits
-`registerV1(authority, keccak256("<org>.<name>"),
+`registerV2(authority, keccak256("<org>.<name>"),
 value)` to the registry itself
 and then runs step 3 below (`verify`), which reads under any authority. An
 approval lets the delegate rebind that one name under the authority until it is
-revoked (`revokeV1(name, delegate)`) on that network.
+revoked (`revokeV2(name, delegate)`) on that network.
 
 **The name is the string consumers hash.** Consumers derive a name as
 `keccak256("<org>.<name>")` — st0x resolves its token-owner Safe as
@@ -906,10 +906,10 @@ record to approve against. For each transaction the device shows:
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
-- **Data**: exactly the `Calldata:` line the dry run printed: `registerV1`'s
+- **Data**: exactly the `Calldata:` line the dry run printed: `registerV2`'s
   selector, the authority, the name hash, the offset `0x60`, the value's length
   and the value padded to a multiple of 32 bytes. The device cannot decode
-  `registerV1`, so it shows the raw bytes; open the full data on the device to
+  `registerV2`, so it shows the raw bytes; open the full data on the device to
   compare them.
 
 Labels vary by firmware; whatever they are called, the recipient, amount, chain
