@@ -50,14 +50,7 @@ contract RegisterConfigTest is Test {
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, keccak256(bytes(name))));
         script.run();
 
-        // Networks unset: the default is every declared network, which is a
-        // valid selection, so the refusal reached is the sender — this test
-        // contract, as the script's `msg.sender`.
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
-        vm.expectRevert(
-            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotAuthority.selector, address(this), authority)
-        );
-        script.run();
 
         // The confirmed check forks every declared network, and the first
         // fails first, with no registry there yet.
@@ -67,6 +60,19 @@ contract RegisterConfigTest is Test {
         runAsAuthorityOnEveryNetwork(script, name);
         vm.setEnv("CONFIG_REGISTRY_NAME", name);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
+
+        // Networks unset: the default is every declared network, and the
+        // first refuses the sender — this test contract, as the script's
+        // `msg.sender` — which the authority has not approved there.
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.SenderNotApproved.selector,
+                LibRainDeploy.supportedNetworks()[0],
+                address(this),
+                authority
+            )
+        );
+        script.run();
 
         vm.setEnv("CONFIG_REGISTRY_NETWORKS", "base,nowhere");
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
@@ -84,7 +90,7 @@ contract RegisterConfigTest is Test {
         bytes memory value = abi.encode(address(1));
         vm.prank(authority);
         IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-            .registerV1(keccak256(bytes(name)), value);
+            .registerV1(authority, keccak256(bytes(name)), value);
         vm.setEnv("CONFIG_REGISTRY_NETWORKS", network);
         vm.setEnv("CONFIG_REGISTRY_NAME", name);
         script.verify();
@@ -136,7 +142,7 @@ contract RegisterConfigTest is Test {
         vm.warp(vm.getBlockTimestamp() + 1);
         vm.prank(authority);
         IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-            .registerV1(keccak256(bytes(rotateName)), freshValue);
+            .registerV1(authority, keccak256(bytes(rotateName)), freshValue);
         vm.warp(vm.getBlockTimestamp() + 1);
         vm.setEnv("CONFIG_REGISTRY_NAME", rotateName);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(rotateValue));
@@ -146,6 +152,32 @@ contract RegisterConfigTest is Test {
             .getV1(authority, keccak256(bytes(rotateName)));
         assertEq(bound, rotateValue);
         assertEq(registeredAt, block.timestamp);
+
+        // Run as a delegate: another authority approves the script, which
+        // then binds under that authority and not under itself, and the
+        // confirmed check under that authority passes.
+        address delegator = address(0xD0D0);
+        string memory delegatedName = string.concat(name, "-delegated");
+        bytes memory delegatedValue = abi.encode(address(6));
+        vm.prank(delegator);
+        IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).approveV1(address(script));
+        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(delegator));
+        vm.setEnv("CONFIG_REGISTRY_NAME", delegatedName);
+        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(delegatedValue));
+        script.runAsItself();
+        assertEq(
+            LibConfigRegistryRead.getValue(
+                IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
+                delegator,
+                keccak256(bytes(delegatedName))
+            ),
+            delegatedValue
+        );
+        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(address(script)));
+        vm.expectRevert(LibConfigRegistryFork.unboundResolveRevert(address(script), keccak256(bytes(delegatedName))));
+        script.verify();
+        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(delegator));
+        script.verify();
     }
 
     /// Deploys the registry, then runs as the authority with networks unset,

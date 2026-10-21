@@ -1,4 +1,6 @@
-# rain.deploy
+[
+"$(nix develop -c cast wallet address --trezor)" = "${CONFIG_REGISTRY_SENDER:?}"
+] && echo "signer OK" || echo "NOT the signer"# rain.deploy
 
 Tooling to deploy Solidity contracts deterministically across EVM networks via
 the Zoltu deployment proxy.
@@ -623,17 +625,22 @@ wrong explorer.
 
 `ConfigRegistry` binds an opaque `bytes32` name to ABI-encoded `bytes`: an
 address, a role id, a threshold, a list of accounts, anything a deployment would
-otherwise compile in. Bindings are keyed by the authority that wrote them: any
-account binds a name under its own address, anyone reads a name under an
+otherwise compile in. Bindings are keyed by authority: any account binds a name
+under its own address, or under an authority that approved it as a delegate
+(`approveV1`, `revokeV1`, read by `approvedV1`); anyone reads a name under an
 authority it names, and reading a name that authority has not bound reverts
 rather than answering empty. The interface is `IConfigRegistryV1`. There is no
-removal, no upgrade, and no way to write under another account.
+removal, no upgrade, and no way to write under an account that has not approved
+the writer.
 
 A consumer names the authority it trusts beside the name it resolves, both in
 its own creation code, and gets only what that authority bound. What the
 consumer then trusts, and what a contract authority must do on every network, is
-in `IConfigRegistryV1`'s NatSpec under "The authority is the whole access
-control".
+in `IConfigRegistryV1`'s NatSpec under "The authority and its delegates are the
+whole access control" and "Delegation is per authority". A delegate can rebind
+every one of its authority's names, so a consumer's prod tests assert
+`approvedV1` is false for every retired delegate beside the true answers for the
+live ones.
 
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
 registry is deployed on a network, an authority binds each name its consumers
@@ -697,18 +704,22 @@ for an `address[]`.
 
 ## Managing the config registry
 
-An authority binds a name with `script/RegisterConfig.sol`, signed on the Trezor
-that holds it: the script binds under `CONFIG_REGISTRY_AUTHORITY` and refuses
-any other signer, since the registry binds under whoever signs. It is run by
-hand on the machine the Trezor is plugged into, never in CI: forge's own
-`--trezor` signer asks the device for each signature, and the key never leaves
-it.
+An authority, or a delegate it approved, binds a name with
+`script/RegisterConfig.sol`, signed on the Trezor that holds it: the script
+binds under `CONFIG_REGISTRY_AUTHORITY` and, on each network, refuses a signer
+that is neither the authority nor a delegate the authority approved there
+(`SenderNotApproved`), since the registry refuses that bind. It is run by hand
+on the machine the Trezor is plugged into, never in CI: forge's own `--trezor`
+signer asks the device for each signature, and the key never leaves it.
 
-The script binds for an EOA authority only, since it broadcasts from the
-authority itself. A Safe or timelock authority submits
-`registerV1(keccak256("<org>.<name>"), value)` to the registry itself, through
-its own execution path, and the operator then runs step 3 below (`verify`),
-which reads under any authority.
+The script signs as an EOA. A Safe or timelock authority either approves that
+EOA as a delegate, once per network through its own execution path
+(`approveV1(delegate)`), after which the EOA runs the script with `--sender` set
+to itself, or submits `registerV1(authority, keccak256("<org>.<name>"),
+value)`
+to the registry itself and then runs step 3 below (`verify`), which reads under
+any authority. An approval lets the delegate rebind every name under the
+authority until it is revoked (`revokeV1(delegate)`) on that network.
 
 **The name is the string consumers hash.** Consumers derive a name as
 `keccak256("<org>.<name>")` — st0x resolves its token-owner Safe as
@@ -744,9 +755,16 @@ networks, set `CONFIG_REGISTRY_NETWORKS` to those.
   export CONFIG_REGISTRY_AUTHORITY=0x...
   ```
 
-- Check the device answers as the authority (add
+- Name the signer: the authority itself, or a delegate the authority approved on
+  every network the run binds on:
+
+  ```sh
+  export CONFIG_REGISTRY_SENDER="$CONFIG_REGISTRY_AUTHORITY" # or the delegate
+  ```
+
+- Check the device answers as the signer (add
   `--mnemonic-derivation-path "<path>"` after `--trezor` inside the `$(…)` if
-  the authority is not the first Ethereum account in Trezor Suite, and the same
+  the signer is not the first Ethereum account in Trezor Suite, and the same
   path as `--mnemonic-derivation-paths "<path>"` on the `forge script` commands
   below):
 
@@ -754,7 +772,7 @@ networks, set `CONFIG_REGISTRY_NETWORKS` to those.
   [ "$(nix develop -c cast wallet address --trezor)" = "${CONFIG_REGISTRY_AUTHORITY:?}" ] && echo "authority OK" || echo "NOT the authority"
   ```
 
-- The authority needs native gas on every network it binds on.
+- The signer needs native gas on every network it binds on.
 - `cp .env.example .env` for the network endpoints. They are public and
   rate-limit; replace any that fail with your own.
 
@@ -770,12 +788,12 @@ export CONFIG_REGISTRY_VALUE=$(nix develop -c cast abi-encode "f(address)" 0x...
 # 1. Dry run. Executes every check and the bind itself on a fork of each
 #    network, and sends nothing.
 nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
-  --sender "$CONFIG_REGISTRY_AUTHORITY" --trezor --legacy
+  --sender "$CONFIG_REGISTRY_SENDER" --trezor --legacy
 
 # 2. The same command with --broadcast. The device asks once per network the
 #    dry run marked BIND or REBIND.
 nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
-  --sender "$CONFIG_REGISTRY_AUTHORITY" --trezor --legacy --broadcast
+  --sender "$CONFIG_REGISTRY_SENDER" --trezor --legacy --broadcast
 
 # 3. Once every transaction is mined: reads every network fresh and fails
 #    unless the name resolves to the value under the authority on each.
@@ -789,16 +807,16 @@ itself.
 Before anything is signed the run refuses, with an error naming what is wrong: a
 non-canonical name, an empty value, a value that is not a whole number of
 32-byte words (a bare 20-byte address, say, rather than its ABI encoding), a
-network the repo does not support or one named twice, a sender other than the
-authority, a network whose endpoint reports another chain id than the catalogue
-states for it, and a registry address that does not hold the pinned registry
-code. With `--broadcast`, forge itself is a second layer: it refuses a device
-that is not the authority before sending on any network, with
-`No associated wallet for addresses: [<authority>]`. A refused run signs
-nothing.
+network the repo does not support or one named twice, a network whose endpoint
+reports another chain id than the catalogue states for it, a registry address
+that does not hold the pinned registry code, and a signer that is neither the
+authority nor a delegate the authority approved on that network. With
+`--broadcast`, forge itself is a second layer: it refuses a device that is not
+the signer before sending on any network, with
+`No associated wallet for addresses: [<signer>]`. A refused run signs nothing.
 
-The dry run prints the name, its hash, the value, the authority, the registry
-address and the exact calldata, then for each network its chain id, the
+The dry run prints the name, its hash, the value, the authority, the signer, the
+registry address and the exact calldata, then for each network its chain id, the
 authority's current binding (`unbound`, or the value and the moment it was
 bound) and what will happen: `BIND`, `REBIND` (old → new) or `SKIP`. That is the
 record to approve against. For each transaction the device shows:
@@ -809,9 +827,10 @@ record to approve against. For each transaction the device shows:
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
 - **Data**: exactly the `Calldata:` line the dry run printed: `registerV1`'s
-  selector, the name hash, the offset `0x40`, the value's length and the value
-  padded to a multiple of 32 bytes. The device cannot decode `registerV1`, so it
-  shows the raw bytes; open the full data on the device to compare them.
+  selector, the authority, the name hash, the offset `0x60`, the value's length
+  and the value padded to a multiple of 32 bytes. The device cannot decode
+  `registerV1`, so it shows the raw bytes; open the full data on the device to
+  compare them.
 
 Labels vary by firmware; whatever they are called, the recipient, amount, chain
 and raw calldata must each match the dry run. Reject on the device if any of

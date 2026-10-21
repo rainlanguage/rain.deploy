@@ -13,7 +13,7 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// @title LibConfigRegistryRegister
 /// @notice An authority's side of `ConfigRegistry`: binds one name to one
 /// ABI-encoded value under that authority on every network it is given, signed
-/// by the authority, and reads the binding back. `script/RegisterConfig.sol`
+/// by the authority or a delegate it approved, and reads the binding back. `script/RegisterConfig.sol`
 /// is the entry point and says how it is run; everything with behaviour is
 /// here.
 ///
@@ -51,9 +51,11 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// `LibConfigRegistry.resolve` makes before every read, so the binding written
 /// is in the registry consumers read. `checkInputs` checks the inputs before
 /// any fork: the name is canonical, the value is not empty and is a
-/// whole number of 32-byte words, the networks are a non-empty,
-/// duplicate-free subset of the declared ones, and the sender is the
-/// authority.
+/// whole number of 32-byte words, and the networks are a non-empty,
+/// duplicate-free subset of the declared ones. An approval is per-chain state,
+/// so `checkSender` is made per network once it is forked, before anything is
+/// recorded: the sender is the authority or a delegate the authority approved
+/// on that chain.
 /// Forge is a second layer: `forge script --broadcast`, without `--unlocked`,
 /// stops with `No associated wallet for addresses: [...]` before sending on any
 /// chain when no key, Trezor or Ledger it was given is the sender
@@ -92,14 +94,15 @@ library LibConfigRegistryRegister {
     /// @param value The value as given.
     error NonCanonicalValue(bytes value);
 
-    /// Thrown when the account that would sign is not the authority the run
-    /// binds under. The registry binds under whoever signs, so this is a
-    /// binding under an account no consumer of the authority reads, refused
-    /// before a device is asked to sign it: a wrong derivation path, most
-    /// likely.
+    /// Thrown when the account that would sign is neither the authority the
+    /// run binds under nor a delegate the authority approved on the network.
+    /// The registry would refuse the bind with `NotApproved`; this refuses it
+    /// before a device is asked to sign it: a wrong derivation path, or a
+    /// delegate not yet approved on that chain, most likely.
+    /// @param network The network the sender is not approved on.
     /// @param sender The account that would sign.
     /// @param authority The authority the run binds under.
-    error SenderNotAuthority(address sender, address authority);
+    error SenderNotApproved(string network, address sender, address authority);
 
     /// Thrown when a selected network is not one the declaration supports.
     /// @param network The selected name.
@@ -209,12 +212,18 @@ library LibConfigRegistryRegister {
         return LibRainDeploy.declaredNetworkConfigs(selected);
     }
 
-    /// Reverts `SenderNotAuthority` unless `sender` is `authority`.
+    /// Reverts `SenderNotApproved` unless `sender` is `authority` or approved
+    /// by it in the selected chain's registry.
+    /// @param network The catalogue entry of the selected chain.
     /// @param sender The account that would sign.
     /// @param authority The authority the run binds under.
-    function checkSender(address sender, address authority) internal pure {
-        if (sender != authority) {
-            revert SenderNotAuthority(sender, authority);
+    function checkSender(SupportedNetwork memory network, address sender, address authority) internal view {
+        if (
+            sender != authority
+                && !IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
+                    .approvedV1(authority, sender)
+        ) {
+            revert SenderNotApproved(network.name, sender, authority);
         }
     }
 
@@ -257,24 +266,30 @@ library LibConfigRegistryRegister {
         }
     }
 
-    /// The calldata of the bind of `name` to `value`: what the device signs,
-    /// and what `registerOnSelectedChain` sends.
+    /// The calldata of the bind of `name` to `value` under `authority`: what
+    /// the device signs, and what `registerOnSelectedChain` sends.
+    /// @param authority The authority to bind under.
     /// @param name The hashed name.
     /// @param value The ABI-encoded value to bind it to.
     /// @return The `registerV1` calldata.
-    function registerCalldata(bytes32 name, bytes memory value) internal pure returns (bytes memory) {
-        return abi.encodeCall(IConfigRegistryV1.registerV1, (name, value));
+    function registerCalldata(address authority, bytes32 name, bytes memory value)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encodeCall(IConfigRegistryV1.registerV1, (authority, name, value));
     }
 
     /// The record of a run's inputs, printed before any network: everything the
-    /// authority's device is asked to sign, exactly as it will be signed.
+    /// sender's device is asked to sign, exactly as it will be signed.
     /// @param vm The Vm instance to format with.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
-    /// @param authority The authority the name is bound under, which is the
-    /// account that signs.
+    /// @param sender The account that signs: the authority or a delegate it
+    /// approved.
+    /// @param authority The authority the name is bound under.
     /// @return The record, one field per line.
-    function describeInputs(Vm vm, string memory name, bytes memory value, address authority)
+    function describeInputs(Vm vm, string memory name, bytes memory value, address sender, address authority)
         internal
         pure
         returns (string memory)
@@ -289,10 +304,12 @@ library LibConfigRegistryRegister {
             vm.toString(value),
             "\nAuthority: ",
             vm.toString(authority),
+            "\nSender: ",
+            vm.toString(sender),
             "\nRegistry: ",
             vm.toString(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
             "\nCalldata: ",
-            vm.toString(registerCalldata(hashed, value))
+            vm.toString(registerCalldata(authority, hashed, value))
         );
     }
 
@@ -328,12 +345,14 @@ library LibConfigRegistryRegister {
         );
     }
 
-    /// Binds `name` to `value` under `sender` on the selected chain, signed by
-    /// `sender`, unless it is bound to `value` there already. Logs the current
-    /// binding and what is about to happen to it.
+    /// Binds `name` to `value` under `authority` on the selected chain, signed
+    /// by `sender`, unless it is bound to `value` there already. Logs the
+    /// current binding and what is about to happen to it.
     /// @param vm The Vm instance to broadcast with.
     /// @param network The catalogue entry of the selected chain.
-    /// @param sender The account that signs, and the authority bound under.
+    /// @param sender The account that signs: `authority` or a delegate it
+    /// approved on this chain.
+    /// @param authority The authority to bind under.
     /// @param name The hashed name.
     /// @param value The ABI-encoded value to bind it to.
     /// @return Whether a bind was broadcast.
@@ -342,29 +361,33 @@ library LibConfigRegistryRegister {
         Vm vm,
         SupportedNetwork memory network,
         address sender,
+        address authority,
         bytes32 name,
         bytes memory value
     ) internal returns (bool, string memory) {
         checkChain(vm, network);
-        (bytes memory bound, uint256 registeredAt) = currentBinding(sender, name);
+        checkSender(network, sender, authority);
+        (bytes memory bound, uint256 registeredAt) = currentBinding(authority, name);
 
         string memory record = describeNetwork(vm, network.name, network.chainId, bound, registeredAt, value);
         console2.log(record);
         bool binds = keccak256(bound) != keccak256(value);
         if (binds) {
             vm.startBroadcast(sender);
-            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).registerV1(name, value);
+            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
+                .registerV1(authority, name, value);
             vm.stopBroadcast();
         }
         return (binds, record);
     }
 
     /// Every input refusal of `registerOnNetworks`, in order — the name, the
-    /// value, the networks, then the sender — and the inputs record it logs.
+    /// value, then the networks — and the inputs record it logs. The sender is
+    /// checked per network, by `registerOnSelectedChain`.
     /// @param vm The Vm instance to format with.
     /// @param selected The networks to bind on.
     /// @param declared The networks the declaration supports.
-    /// @param sender The account that signs. MUST be `authority`.
+    /// @param sender The account that signs.
     /// @param authority The authority to bind under.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
@@ -388,8 +411,7 @@ library LibConfigRegistryRegister {
             revert NonCanonicalValue(value);
         }
         SupportedNetwork[] memory networks = selectNetworks(selected, declared);
-        checkSender(sender, authority);
-        return (hashed, networks, describeInputs(vm, name, value, authority));
+        return (hashed, networks, describeInputs(vm, name, value, sender, authority));
     }
 
     /// Binds `name` to `value` under `authority` on every selected network,
@@ -400,7 +422,8 @@ library LibConfigRegistryRegister {
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param selected The networks to bind on.
     /// @param declared The networks the declaration supports.
-    /// @param sender The account that signs. MUST be `authority`.
+    /// @param sender The account that signs: `authority` or a delegate it
+    /// approved on every selected network.
     /// @param authority The authority to bind under.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
@@ -430,7 +453,8 @@ library LibConfigRegistryRegister {
     /// @param selected The networks the forks are of.
     /// @param declared The networks the declaration supports.
     /// @param forkIds The fork of each selected network, positionally paired.
-    /// @param sender The account that signs. MUST be `authority`.
+    /// @param sender The account that signs: `authority` or a delegate it
+    /// approved on every selected network.
     /// @param authority The authority to bind under.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
@@ -451,7 +475,7 @@ library LibConfigRegistryRegister {
         }
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
-            registerOnSelectedChain(vm, networks[i], sender, hashed, value);
+            registerOnSelectedChain(vm, networks[i], sender, authority, hashed, value);
         }
     }
 

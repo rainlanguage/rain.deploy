@@ -100,7 +100,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
             (bool broadcast,) =
-                LibConfigRegistryRegister.registerOnSelectedChain(vm, configs[i], AUTHORITY, hashed, value);
+                LibConfigRegistryRegister.registerOnSelectedChain(vm, configs[i], AUTHORITY, AUTHORITY, hashed, value);
             assertTrue(broadcast);
         }
 
@@ -227,19 +227,14 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         this.externalRegisterOnForks(networks, forkIds, name, value);
     }
 
-    /// `registerOnForks` refuses a sender other than the authority and a value
-    /// that is not whole words as `checkInputs` does, before selecting any fork.
+    /// `registerOnForks` refuses a value that is not whole words as
+    /// `checkInputs` does, before selecting any fork.
     function testRegisterOnForksRefusesInputsBeforeSelecting() external {
         (string memory name,, bytes memory value) = fresh();
         string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.BASE;
         networks[1] = LibRainDeploy.ARBITRUM_ONE;
         uint256[] memory forkIds = LibResolvedReadFixture.unselectableForkIds(2);
-        address other = address(uint160(AUTHORITY) ^ 1);
-
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotAuthority.selector, other, AUTHORITY));
-        this.externalRegisterOnForksFrom(networks, forkIds, other, name, value);
-
         bytes memory unaligned = abi.encodePacked(value, bytes1(0));
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, unaligned));
         this.externalRegisterOnForksFrom(networks, forkIds, AUTHORITY, name, unaligned);
@@ -257,7 +252,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         uint256[] memory forkIds = forksWithRegistry(networks);
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
-            LibConfigRegistryRegister.registerOnSelectedChain(vm, configs[i], AUTHORITY, hashed, value);
+            LibConfigRegistryRegister.registerOnSelectedChain(vm, configs[i], AUTHORITY, AUTHORITY, hashed, value);
         }
         vm.selectFork(forkIds[0]);
         assertEq(vm.getChainId(), 8453);

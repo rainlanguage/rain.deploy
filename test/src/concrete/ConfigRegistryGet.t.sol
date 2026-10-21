@@ -37,7 +37,7 @@ contract ConfigRegistryGetTest is Test {
         vm.assume(value.length > 0);
 
         vm.prank(other);
-        sRegistry.registerV1(name, value);
+        sRegistry.registerV1(other, name, value);
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, asked, name));
         LibConfigRegistryRead.getValue(sRegistry, asked, name);
@@ -48,7 +48,7 @@ contract ConfigRegistryGetTest is Test {
     function testGetZeroAuthorityUnbound(bytes32 name, bytes memory value) external {
         vm.assume(value.length > 0);
         vm.prank(AUTHORITY);
-        sRegistry.registerV1(name, value);
+        sRegistry.registerV1(AUTHORITY, name, value);
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, address(0), name));
         LibConfigRegistryRead.getValue(sRegistry, address(0), name);
@@ -60,7 +60,7 @@ contract ConfigRegistryGetTest is Test {
         vm.assume(value.length > 0);
 
         vm.prank(AUTHORITY);
-        sRegistry.registerV1(name, value);
+        sRegistry.registerV1(AUTHORITY, name, value);
 
         assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), value);
         assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), value);
@@ -74,7 +74,7 @@ contract ConfigRegistryGetTest is Test {
             bytes memory value = vm.randomBytes(lengths[i]);
             bytes32 name = bytes32(i);
             vm.prank(AUTHORITY);
-            sRegistry.registerV1(name, value);
+            sRegistry.registerV1(AUTHORITY, name, value);
             assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), value);
         }
     }
@@ -83,7 +83,7 @@ contract ConfigRegistryGetTest is Test {
     /// account it was bound as. The registry adds and strips nothing.
     function testGetAddressBindingDecodes(bytes32 name, address account) external {
         vm.prank(AUTHORITY);
-        sRegistry.registerV1(name, abi.encode(account));
+        sRegistry.registerV1(AUTHORITY, name, abi.encode(account));
 
         bytes memory value = LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name);
         assertEq(value.length, 32);
@@ -94,7 +94,7 @@ contract ConfigRegistryGetTest is Test {
     /// zeros, which is not empty, and only empty is how an unbound name reads.
     function testGetZeroAddressBindingIsBound(bytes32 name) external {
         vm.prank(AUTHORITY);
-        sRegistry.registerV1(name, abi.encode(address(0)));
+        sRegistry.registerV1(AUTHORITY, name, abi.encode(address(0)));
 
         bytes memory value = LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name);
         assertEq(value, new bytes(32));
@@ -105,7 +105,7 @@ contract ConfigRegistryGetTest is Test {
     /// deploy configuration takes, a list of accounts with a threshold.
     function testGetStructuredBindingDecodes(bytes32 name, address[] memory accounts, uint256 threshold) external {
         vm.prank(AUTHORITY);
-        sRegistry.registerV1(name, abi.encode(accounts, threshold));
+        sRegistry.registerV1(AUTHORITY, name, abi.encode(accounts, threshold));
 
         (address[] memory gotAccounts, uint256 gotThreshold) =
             abi.decode(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, name), (address[], uint256));
@@ -122,7 +122,7 @@ contract ConfigRegistryGetTest is Test {
         for (uint256 i = 0; i < names.length; i++) {
             ConfigRegistry registry = new ConfigRegistry();
             vm.prank(AUTHORITY);
-            registry.registerV1(names[i], value);
+            registry.registerV1(AUTHORITY, names[i], value);
             assertEq(LibConfigRegistryRead.getValue(registry, AUTHORITY, names[i]), value);
         }
     }
@@ -136,24 +136,30 @@ contract ConfigRegistryGetTest is Test {
     }
 
     /// An unknown selector reverts: no fallback, no receive, nothing beyond the
-    /// two `IConfigRegistryV1` functions.
+    /// five `IConfigRegistryV1` functions.
     function testGetNoOtherEntryPoint(bytes4 selector, bytes32 name) external {
         vm.assume(selector != IConfigRegistryV1.getV1.selector);
         vm.assume(selector != IConfigRegistryV1.registerV1.selector);
+        vm.assume(selector != IConfigRegistryV1.approveV1.selector);
+        vm.assume(selector != IConfigRegistryV1.revokeV1.selector);
+        vm.assume(selector != IConfigRegistryV1.approvedV1.selector);
 
         (bool success,) = address(sRegistry).call(abi.encodeWithSelector(selector, name, abi.encode(address(this))));
         assertFalse(success);
     }
 
-    /// The ABI is exactly the two `IConfigRegistryV1` functions, counted
+    /// The ABI is exactly the five `IConfigRegistryV1` functions, counted
     /// rather than sampled.
     function testGetAbiIsExactlyTheInterface() external view {
         string[] memory signatures =
             vm.parseJsonKeys(vm.readFile("out/ConfigRegistry.sol/ConfigRegistry.json"), "$.methodIdentifiers");
 
-        assertEq(signatures.length, 2);
-        assertEq(signatures[0], "getV1(address,bytes32)");
-        assertEq(signatures[1], "registerV1(bytes32,bytes)");
+        assertEq(signatures.length, 5);
+        assertEq(signatures[0], "approveV1(address)");
+        assertEq(signatures[1], "approvedV1(address,address)");
+        assertEq(signatures[2], "getV1(address,bytes32)");
+        assertEq(signatures[3], "registerV1(address,bytes32,bytes)");
+        assertEq(signatures[4], "revokeV1(address)");
     }
 
     /// The registry takes no value on any path: ether sent with or without
@@ -168,7 +174,7 @@ contract ConfigRegistryGetTest is Test {
 
         vm.prank(AUTHORITY);
         (bool registered,) =
-            address(sRegistry).call{value: 1}(abi.encodeCall(IConfigRegistryV1.registerV1, (name, value)));
+            address(sRegistry).call{value: 1}(abi.encodeCall(IConfigRegistryV1.registerV1, (AUTHORITY, name, value)));
         assertFalse(registered);
 
         vm.prank(AUTHORITY);
@@ -185,7 +191,7 @@ contract ConfigRegistryGetTest is Test {
         time = bound(time, 1, type(uint256).max);
         vm.warp(time);
         vm.prank(AUTHORITY);
-        sRegistry.registerV1(name, value);
+        sRegistry.registerV1(AUTHORITY, name, value);
 
         (bytes memory got, uint256 registeredAt) = sRegistry.getV1(AUTHORITY, name);
         assertEq(got, value);
@@ -201,7 +207,7 @@ contract ConfigRegistryGetTest is Test {
 
         vm.warp(time);
         vm.prank(AUTHORITY);
-        sRegistry.registerV1(name, value);
+        sRegistry.registerV1(AUTHORITY, name, value);
 
         vm.warp(time + elapsed);
         assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), time);
@@ -224,12 +230,12 @@ contract ConfigRegistryGetTest is Test {
         timeA = bound(timeA, 1, type(uint256).max);
         vm.warp(timeA);
         vm.prank(AUTHORITY);
-        sRegistry.registerV1(nameA, valueA);
+        sRegistry.registerV1(AUTHORITY, nameA, valueA);
 
         timeB = bound(timeB, 1, type(uint256).max);
         vm.warp(timeB);
         vm.prank(AUTHORITY);
-        sRegistry.registerV1(nameB, valueB);
+        sRegistry.registerV1(AUTHORITY, nameB, valueB);
 
         assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, nameA), timeA);
         assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, nameB), timeB);
@@ -250,7 +256,7 @@ contract ConfigRegistryGetTest is Test {
         for (uint256 i = 0; i < times.length; i++) {
             vm.warp(times[i]);
             vm.prank(AUTHORITY);
-            sRegistry.registerV1(name, value);
+            sRegistry.registerV1(AUTHORITY, name, value);
             assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, name), times[i]);
         }
     }
@@ -267,7 +273,7 @@ contract ConfigRegistryGetTest is Test {
         for (uint256 i = 0; i < values.length; i++) {
             vm.warp(start + i);
             vm.prank(AUTHORITY);
-            sRegistry.registerV1(name, values[i]);
+            sRegistry.registerV1(AUTHORITY, name, values[i]);
 
             (bytes memory got, uint256 registeredAt) = sRegistry.getV1(AUTHORITY, name);
             assertEq(got, values[i]);

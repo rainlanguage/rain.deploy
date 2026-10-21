@@ -12,9 +12,10 @@ import {LibConfigRegistryRegister} from "../src/lib/LibConfigRegistryRegister.so
 /// @notice Binds `CONFIG_REGISTRY_NAME` to `CONFIG_REGISTRY_VALUE` under
 /// `CONFIG_REGISTRY_AUTHORITY` in the `ConfigRegistry` on every network the
 /// declaration supports, or on the comma-separated subset
-/// `CONFIG_REGISTRY_NETWORKS` names, signed by that authority on a Trezor.
+/// `CONFIG_REGISTRY_NETWORKS` names, signed on a Trezor by that authority or
+/// by a delegate it approved with `approveV1` on every selected network.
 ///
-/// Local only. The authority this is written for is a hardware wallet, so
+/// Local only. The signer this is written for is a hardware wallet, so
 /// nothing in CI can sign this, and nothing in CI runs it. The README's
 /// "Managing the config registry" section carries the commands and what the
 /// device shows.
@@ -22,7 +23,8 @@ import {LibConfigRegistryRegister} from "../src/lib/LibConfigRegistryRegister.so
 /// `run()` binds, and is a dry run on forks unless forge is given
 /// `--broadcast`. `verify()` is the confirmed check, a run of its own once the
 /// binds are mined. The signer is forge's `--sender`, which is what a script's
-/// `msg.sender` is, and `run()` refuses it unless it is the authority;
+/// `msg.sender` is, and `run()` refuses it on each network unless it is the
+/// authority or a delegate the authority approved there;
 /// `--trezor` is what makes the device that account's wallet. Forge's
 /// `--broadcast` is a second layer: it refuses, before sending anything, a
 /// broadcast from an account none of its signers is (`BundledState::broadcast`

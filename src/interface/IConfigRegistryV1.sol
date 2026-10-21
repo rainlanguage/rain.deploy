@@ -4,11 +4,14 @@ pragma solidity ^0.8.25;
 
 /// @title IConfigRegistryV1
 /// @notice A registry of `bytes32` names to ABI-encoded values, keyed by the
-/// authority that bound them, with exactly two operations: any account binds a
-/// name under its own address (`registerV1`), and anyone reads a name under an
-/// authority it names (`getV1`). An authority may re-bind a name it has already
-/// bound. There is no removal, no upgrade, and no way for one account to write
-/// under another, and an implementation MUST NOT add any.
+/// authority that bound them. A write names the authority it binds under, and
+/// that authority, or an account it has approved, binds a name there
+/// (`registerV1`); anyone reads a name under an authority it names (`getV1`).
+/// An authority may re-bind a name it has already bound. An authority approves
+/// and revokes delegates (`approveV1`, `revokeV1`), and anyone reads an
+/// approval (`approvedV1`). There is no removal, no upgrade, and no way for
+/// one account to write under another that has not approved it, and an
+/// implementation MUST NOT add any.
 ///
 /// Deploy-time configuration compiled into creation code — an address, a role
 /// id, a threshold, a delay, a list of accounts, a code hash — moves the
@@ -24,14 +27,15 @@ pragma solidity ^0.8.25;
 /// an implementation MUST NOT constrain it. Two callers agreeing on a name is
 /// entirely their business.
 ///
-/// ## The authority is the whole access control
+/// ## The authority and its delegates are the whole access control
 ///
-/// A binding is keyed by the account that wrote it, and only that account
-/// writes under its address. Anyone may bind, but only for themselves, so a
-/// reader that reads the names of an authority it already trusts is reading
-/// something only that authority could have written. Bindings under any other
-/// authority are unforgeable garbage no reader asks for, and one name under two
-/// authorities is two unrelated bindings.
+/// A binding is keyed by its authority, and only the authority, or an account
+/// it has approved, writes under its address. Anyone may bind, but only under
+/// their own address or one whose authority approved them, so a reader that
+/// reads the names of an authority it already trusts is reading something only
+/// that authority, or an account it chose, could have written. Bindings under
+/// any other authority are unforgeable garbage no reader asks for, and one name
+/// under two authorities is two unrelated bindings.
 ///
 /// This is deliberately not a root. A root welded into creation code is one
 /// authority for every consumer, so every consumer trusts whoever holds it, and
@@ -41,12 +45,29 @@ pragma solidity ^0.8.25;
 /// consumer trusts sits in that consumer's creation code beside the name it
 /// resolves.
 ///
-/// There are no delegates. A binding is a standalone write with nothing that
-/// has to land atomically beside it, so the authority can always make it
-/// itself, and an authority whose operators rotate is an account whose address
-/// survives the rotation — a Safe, a timelock — not a key that hands its
-/// authority on. Every approved account would be one more key whose compromise
-/// rebinds the authority's names.
+/// ## Delegation is per authority
+///
+/// Only the authority decides who writes under it. An approval names one
+/// delegate under the approving authority and covers every name there, and
+/// approving a delegate under one authority never lets it write under another.
+///
+/// This decouples an authority from whichever account sends its binds. A Safe
+/// or timelock authority approves a hardware-wallet key, which then binds under
+/// the Safe without the Safe executing each bind.
+///
+/// The authority can always write under itself, approved or not. Revoking
+/// stops later writes and nothing else: a binding a delegate wrote while
+/// approved stays until it is re-bound, as every binding does. Every delegate
+/// is one more key whose compromise rebinds every one of the authority's
+/// names, so the authority's names are only as trustworthy as every delegate
+/// it has ever had, revoked ones included; `Register` names the account that
+/// wrote each binding. Approve only accounts held to the authority's own
+/// custody, and revoke before rotating one out. Approvals cannot be enumerated
+/// here, only asked about one delegate at a time, so a consumer's prod tests
+/// assert `approvedV1` is false for every retired delegate beside the true
+/// answers for the live ones. Approvals are per-chain state, like a contract
+/// authority's controllers: an approval or revocation is made on every chain
+/// the authority's names are consumed on.
 ///
 /// A consumer resolves under one authority address on every chain, so it
 /// trusts whoever controls that address on each of them. An EOA is one key on
@@ -78,8 +99,8 @@ pragma solidity ^0.8.25;
 /// deliberate migration rather than a silent, retroactive change to live
 /// contracts.
 ///
-/// A compromised authority therefore cannot touch anything deployed, nor any
-/// other authority's bindings. It can point one of its own names at a value it
+/// A compromised authority or delegate therefore cannot touch anything
+/// deployed, nor any other authority's bindings. It can point one of its own names at a value it
 /// chose, so that a deployment made after the compromise snapshots that value.
 /// That is caught by verifying a deployment after deploying it and before
 /// anything depends on it: the deployed contract has already snapshotted the
@@ -104,13 +125,14 @@ interface IConfigRegistryV1 {
     /// Thrown by `getV1` when `authority` has never bound `name`, so that a
     /// caller cannot silently proceed on an empty value by forgetting to check.
     /// The zero authority is one of these for every name: nothing calls from
-    /// it, so nothing is ever bound under it.
+    /// it, so it neither binds nor approves, and nothing is ever bound under
+    /// it.
     /// @param authority The authority the name was read under.
     /// @param name The name that is not bound under it.
     error NameNotRegistered(address authority, bytes32 name);
 
     /// Thrown by `registerV1` when the clock is not strictly after the moment the
-    /// name already carries under the caller.
+    /// name already carries under the authority.
     ///
     /// Behind it would lower the moment, and a caller measuring
     /// `block.timestamp -` it would then read an age larger than the time that
@@ -121,49 +143,93 @@ interface IConfigRegistryV1 {
     /// never zero.
     /// @param name The name that was being bound.
     /// @param timestamp The clock the bind was attempted at.
-    /// @param registeredAt The moment the name carries under the caller. Zero
-    /// when unbound.
+    /// @param registeredAt The moment the name carries under the authority.
+    /// Zero when unbound.
     error TimestampNotAfterBinding(bytes32 name, uint256 timestamp, uint256 registeredAt);
 
-    /// Emitted every time `sender` binds `name`, including when it re-binds it.
-    /// The log is the complete history of the registry and the only way to
-    /// discover a binding without already knowing its authority and name; the
-    /// most recent `Register` from an authority for a name is that authority's
-    /// current binding of it.
+    /// Thrown when `approveV1`, `revokeV1` or `approvedV1` is given the zero
+    /// delegate, which nothing can call from and which is what an
+    /// uninitialised `address` reads as.
+    error ZeroDelegate();
+
+    /// Thrown when `registerV1`'s caller is neither `authority` nor approved by
+    /// it.
+    /// @param authority The authority the write named.
+    /// @param caller The account that called.
+    error NotApproved(address authority, address caller);
+
+    /// Emitted every time `sender` binds `name` under `authority`, including
+    /// when it re-binds it. The log is the complete history of the registry
+    /// and the only way to discover a binding without already knowing its
+    /// authority and name; the most recent `Register` under an authority for a
+    /// name is that authority's current binding of it.
     ///
     /// `value` is not indexed, because an indexed `bytes` is logged as its hash
     /// and the history would then not hold the values.
     ///
     /// The moment is not a field here, because a log already carries the block
     /// it was emitted in.
-    ///
-    /// The abandoned root-locked registry at
-    /// `0x4b5b74E73D90fF3962c2882F20D9FA73B70192E9` emits a `Register` with this
-    /// topic0 but logs the name at topic1 and the sender in the data, so a
-    /// decoder filters by registry address, never by topic0 alone.
-    /// @param sender The account that called, which is the authority `name` is
-    /// bound under.
+    /// @param sender The account that called: `authority` or a delegate it
+    /// approved.
+    /// @param authority The authority `name` is bound under.
     /// @param name The name that was bound.
     /// @param value The value `name` was bound to.
-    event Register(address indexed sender, bytes32 indexed name, bytes value);
+    event Register(address indexed sender, address indexed authority, bytes32 indexed name, bytes value);
 
-    /// Binds `name` to `value` under the caller, replacing any value the caller
-    /// has already bound it to. No other authority's binding is read or
+    /// Emitted when `sender` approves `delegate` to bind under it.
+    /// @param sender The approving authority, which is the account that called.
+    /// @param delegate The approved account.
+    event Approved(address indexed sender, address indexed delegate);
+
+    /// Emitted when `sender` revokes `delegate`, whether or not `delegate` was
+    /// approved.
+    /// @param sender The revoking authority, which is the account that called.
+    /// @param delegate The revoked account.
+    event Revoked(address indexed sender, address indexed delegate);
+
+    /// Binds `name` to `value` under `authority`, replacing any value
+    /// `authority` has already bound it to. The caller is `authority` or a
+    /// delegate it has approved. No other authority's binding is read or
     /// touched.
     ///
-    /// The implementation MUST revert `EmptyValue` if `value` is empty, and
-    /// MUST revert `TimestampNotAfterBinding` unless the clock is strictly
-    /// after the moment the name carries under the caller, so a binding's
-    /// moment strictly increases. On success it MUST emit `Register` and record
+    /// The implementation MUST first revert `NotApproved` unless the caller is
+    /// `authority` or approved by it. Then it MUST revert `EmptyValue` if
+    /// `value` is empty, and MUST revert `TimestampNotAfterBinding` unless the
+    /// clock is strictly after the moment the name carries under `authority`,
+    /// so a binding's moment strictly increases. On success it MUST emit
+    /// `Register` and record
     /// `block.timestamp` as the moment — including when `value` is the value
     /// already bound, which is a bind like any other. The moment dates the
     /// write, not the value.
     /// An implementation storing the moment narrower than `block.timestamp`
     /// MUST revert on a clock that does not fit rather than truncate it, since a
     /// truncated moment reads as older.
+    /// @param authority The authority to bind under: the caller, or one that
+    /// approved it.
     /// @param name The name to bind.
     /// @param value The ABI-encoded value to bind it to.
-    function registerV1(bytes32 name, bytes calldata value) external;
+    function registerV1(address authority, bytes32 name, bytes calldata value) external;
+
+    /// Approves `delegate` to bind under the caller and emits `Approved`.
+    /// Approving an approved delegate leaves it approved and still emits.
+    /// Refuses `ZeroDelegate`.
+    /// @param delegate The account to approve. MUST NOT be zero.
+    function approveV1(address delegate) external;
+
+    /// Revokes `delegate`'s approval to bind under the caller and emits
+    /// `Revoked`. Revoking an unapproved delegate leaves it unapproved and
+    /// still emits. Refuses `ZeroDelegate`.
+    /// @param delegate The account to revoke. MUST NOT be zero.
+    function revokeV1(address delegate) external;
+
+    /// Whether `authority` has approved `delegate` to bind under it. Refuses
+    /// `ZeroDelegate` rather than answering false about a question the caller
+    /// did not mean to ask. The zero authority answers false for every
+    /// delegate, as it answers `NameNotRegistered` for every name.
+    /// @param authority The approving authority.
+    /// @param delegate The account asked about.
+    /// @return True when approved.
+    function approvedV1(address authority, address delegate) external view returns (bool);
 
     /// The value `authority` currently binds `name` to, and when it bound it.
     ///
@@ -180,7 +246,7 @@ interface IConfigRegistryV1 {
     /// @param name The name to read.
     /// @return The value bound to `name` under `authority`, byte for byte as it
     /// was bound. Never empty.
-    /// @return The `block.timestamp` of `authority`'s most recent `registerV1`
-    /// for `name`. Never zero.
+    /// @return The `block.timestamp` of the most recent `registerV1` of `name`
+    /// under `authority`. Never zero.
     function getV1(address authority, bytes32 name) external view returns (bytes memory, uint256);
 }

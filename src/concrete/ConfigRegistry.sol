@@ -6,12 +6,13 @@ import {IConfigRegistryV1} from "../interface/IConfigRegistryV1.sol";
 
 /// @title ConfigRegistry
 /// @notice The whole of `IConfigRegistryV1`: any account binds a `bytes32` name
-/// to an ABI-encoded value under its own address, anyone reads a name under an
-/// authority it names and gets back the value with the moment it was bound,
-/// and a read of an unbound name reverts.
+/// to an ABI-encoded value under its own address or under an authority that
+/// approved it, anyone reads a name under an authority it names and gets back
+/// the value with the moment it was bound, and a read of an unbound name
+/// reverts.
 ///
-/// There is deliberately nothing else. No removal, no upgrade, no pause, no
-/// delegates, and no account that writes under another. The value is held and
+/// There is deliberately nothing else. No removal, no upgrade, no pause, and
+/// no account that writes under another that has not approved it. The value is held and
 /// returned verbatim and never decoded; its type is between the authority that
 /// binds the name and whoever reads it.
 ///
@@ -52,14 +53,22 @@ contract ConfigRegistry is IConfigRegistryV1 {
     /// answering empty.
     mapping(address authority => mapping(bytes32 name => Binding binding)) internal sBindings;
 
+    /// The delegates each authority has approved. Not `public`: the only
+    /// external reader is `approvedV1`, which refuses the zero delegate.
+    mapping(address authority => mapping(address delegate => bool)) internal sApproved;
+
     /// @inheritdoc IConfigRegistryV1
-    function registerV1(bytes32 name, bytes calldata value) external {
+    function registerV1(address authority, bytes32 name, bytes calldata value) external {
+        // Who may write is settled before anything about the write.
+        if (msg.sender != authority && !sApproved[authority][msg.sender]) {
+            revert NotApproved(authority, msg.sender);
+        }
         // Rejected so that a name can never be both bound and unreadable.
         if (value.length == 0) {
             revert EmptyValue(name);
         }
         // Read after the cheap guard, so a refused call does not pay for it.
-        uint256 registeredAt = sBindings[msg.sender][name].registeredAt;
+        uint256 registeredAt = sBindings[authority][name].registeredAt;
         // The clock is checked against a stored moment, never against a
         // deadline, so the validator-nudge hazard the analysers flag does not
         // reach it.
@@ -71,8 +80,37 @@ contract ConfigRegistry is IConfigRegistryV1 {
         // slither-disable-end timestamp
         // Assigned whole, so a re-bind replaces the moment in the same write
         // that replaces the value.
-        sBindings[msg.sender][name] = Binding({value: value, registeredAt: block.timestamp});
-        emit Register(msg.sender, name, value);
+        sBindings[authority][name] = Binding({value: value, registeredAt: block.timestamp});
+        emit Register(msg.sender, authority, name, value);
+    }
+
+    /// @inheritdoc IConfigRegistryV1
+    function approveV1(address delegate) external {
+        checkDelegate(delegate);
+        sApproved[msg.sender][delegate] = true;
+        emit Approved(msg.sender, delegate);
+    }
+
+    /// @inheritdoc IConfigRegistryV1
+    function revokeV1(address delegate) external {
+        checkDelegate(delegate);
+        sApproved[msg.sender][delegate] = false;
+        emit Revoked(msg.sender, delegate);
+    }
+
+    /// @inheritdoc IConfigRegistryV1
+    function approvedV1(address authority, address delegate) external view returns (bool) {
+        checkDelegate(delegate);
+        return sApproved[authority][delegate];
+    }
+
+    /// Refuses the zero delegate: nothing calls from it, so no approval of it
+    /// is one anybody can use.
+    /// @param delegate The delegate.
+    function checkDelegate(address delegate) internal pure {
+        if (delegate == address(0)) {
+            revert ZeroDelegate();
+        }
     }
 
     /// @inheritdoc IConfigRegistryV1
