@@ -13,12 +13,9 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// @title LibConfigRegistryRegister
 /// @notice An authority's side of `ConfigRegistry`: binds one name to one
 /// ABI-encoded value under that authority on every network it is given, signed
-/// by the authority, and reads the binding back. For a contract authority,
-/// which submits the bind itself, the `simulate` family is the dry run in
-/// place of the signed bind: the same refusals but the sender's, and the bind
-/// simulated as the authority, broadcasting nothing.
-/// `script/RegisterConfig.sol` is the entry point and says how it is run;
-/// everything with behaviour is here.
+/// by the authority, and reads the binding back. `script/RegisterConfig.sol`
+/// is the entry point and says how it is run; everything with behaviour is
+/// here.
 ///
 /// ## The value
 ///
@@ -59,18 +56,15 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// authority.
 /// `registerOnNetworks` runs it and logs the inputs record before creating
 /// the forks; `registerOnForks` runs it again for a caller with its own forks,
-/// and logs no record. `simulateOnNetworks` and `simulateOnForks` do the same
-/// with the authority as the sender, so every refusal but the sender's
-/// applies, and `simulateOnSelectedChain` also refuses a network where the
-/// authority has no code.
+/// and logs no record.
 ///
 /// ## Simulation and confirmation
 ///
 /// The same split as `LibRainDeploy`'s `checkResolved*OnForks` and
-/// `checkResolved*OnNetworks` pairs. `registerOnNetworks` and
-/// `simulateOnNetworks` return the forks they simulated on, and
-/// `checkRegisteredOnForks` reads those; nothing is mined while the script that
-/// registers is running, so the binding exists there and nowhere else. `checkRegisteredOnNetworks` forks every network fresh, as a
+/// `checkResolved*OnNetworks` pairs. `registerOnNetworks` returns the forks
+/// it simulated on, and `checkRegisteredOnForks` reads those; nothing is mined
+/// while the script that registers is running, so the binding exists there and
+/// nowhere else. `checkRegisteredOnNetworks` forks every network fresh, as a
 /// run of its own once the transactions have been mined, and is the check that
 /// the binding is on chain.
 library LibConfigRegistryRegister {
@@ -128,14 +122,6 @@ library LibConfigRegistryRegister {
     /// @param expected The value it should be bound to.
     /// @param actual The value it is bound to.
     error UnexpectedBinding(string network, address authority, bytes32 name, bytes expected, bytes actual);
-
-    /// Thrown when a contract authority's dry run reaches a network where the
-    /// authority has no code. Nothing there can execute the bind it would
-    /// approve, and unless the authority's deployment path commits to its
-    /// controllers, the address is whoever deploys to it first.
-    /// @param network The network simulated on.
-    /// @param authority The authority without code there.
-    error AuthorityHasNoCode(string network, address authority);
 
     /// The `bytes32` a consumer resolves for `name`, refusing a non-canonical
     /// name.
@@ -266,9 +252,8 @@ library LibConfigRegistryRegister {
         }
     }
 
-    /// The calldata of the bind of `name` to `value`: what a device signs for
-    /// an EOA authority, or what a contract authority submits, and what
-    /// `registerOnSelectedChain` sends.
+    /// The calldata of the bind of `name` to `value`: what the device signs,
+    /// and what `registerOnSelectedChain` sends.
     /// @param name The hashed name.
     /// @param value The ABI-encoded value to bind it to.
     /// @return The `registerV1` calldata.
@@ -277,11 +262,12 @@ library LibConfigRegistryRegister {
     }
 
     /// The record of a run's inputs, printed before any network: everything the
-    /// device is asked to sign, exactly as it will be signed.
+    /// authority's device is asked to sign, exactly as it will be signed.
     /// @param vm The Vm instance to format with.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
-    /// @param authority The authority the name is bound under.
+    /// @param authority The authority the name is bound under, which is the
+    /// account that signs.
     /// @return The record, one field per line.
     function describeInputs(Vm vm, string memory name, bytes memory value, address authority)
         internal
@@ -354,125 +340,18 @@ library LibConfigRegistryRegister {
         bytes32 name,
         bytes memory value
     ) internal returns (bool, string memory) {
-        (bool binds, string memory record) = planOnSelectedChain(vm, network, sender, name, value);
+        checkChain(vm, network);
+        (bytes memory bound, uint256 registeredAt) = currentBinding(sender, name);
+
+        string memory record = describeNetwork(vm, network.name, network.chainId, bound, registeredAt, value);
+        console2.log(record);
+        bool binds = keccak256(bound) != keccak256(value);
         if (binds) {
             vm.startBroadcast(sender);
             IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).registerV1(name, value);
             vm.stopBroadcast();
         }
         return (binds, record);
-    }
-
-    /// The checks and the record both binds on the selected chain share:
-    /// `checkChain`, then the current binding of `name` under `authority`,
-    /// logged as `describeNetwork`.
-    /// @param vm The Vm instance to read and format with.
-    /// @param network The catalogue entry of the selected chain.
-    /// @param authority The authority bound under.
-    /// @param name The hashed name.
-    /// @param value The ABI-encoded value to bind it to.
-    /// @return Whether the name is bound to anything other than `value`.
-    /// @return The record logged.
-    function planOnSelectedChain(
-        Vm vm,
-        SupportedNetwork memory network,
-        address authority,
-        bytes32 name,
-        bytes memory value
-    ) internal view returns (bool, string memory) {
-        checkChain(vm, network);
-        (bytes memory bound, uint256 registeredAt) = currentBinding(authority, name);
-        string memory record = describeNetwork(vm, network.name, network.chainId, bound, registeredAt, value);
-        console2.log(record);
-        return (keccak256(bound) != keccak256(value), record);
-    }
-
-    /// `registerOnSelectedChain` for a contract authority, which submits the
-    /// bind through its own execution path rather than signing it here: the
-    /// bind is made as `authority` by `vm.prank`, which forge never broadcasts.
-    /// Refuses a network where `authority` has no code, after the checks of
-    /// `planOnSelectedChain`.
-    /// @param vm The Vm instance to prank with.
-    /// @param network The catalogue entry of the selected chain.
-    /// @param authority The authority bound under.
-    /// @param name The hashed name.
-    /// @param value The ABI-encoded value to bind it to.
-    /// @return Whether a bind was simulated.
-    /// @return The record logged.
-    function simulateOnSelectedChain(
-        Vm vm,
-        SupportedNetwork memory network,
-        address authority,
-        bytes32 name,
-        bytes memory value
-    ) internal returns (bool, string memory) {
-        (bool binds, string memory record) = planOnSelectedChain(vm, network, authority, name, value);
-        if (authority.code.length == 0) revert AuthorityHasNoCode(network.name, authority);
-        if (binds) {
-            vm.prank(authority);
-            IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).registerV1(name, value);
-        }
-        return (binds, record);
-    }
-
-    /// The dry run of `registerOnNetworks` for a contract authority — a Safe,
-    /// a timelock — that cannot sign here: every input refusal but the
-    /// sender's, the inputs record, whose `Calldata:` line is the transaction
-    /// data the authority submits to the registry, and the bind simulated as
-    /// the authority on every selected network, logged `BIND`, `REBIND` or
-    /// `SKIP`. Nothing it does is broadcast.
-    /// @param vm The Vm instance to fork and prank with.
-    /// @param selected The networks to simulate on.
-    /// @param declared The networks the declaration supports.
-    /// @param authority The authority to bind under.
-    /// @param name The name as a consumer writes it.
-    /// @param value The ABI-encoded value to bind it to.
-    /// @return The fork each selected network was simulated on, for
-    /// `checkRegisteredOnForks`.
-    /// @return The `describeInputs` record logged.
-    function simulateOnNetworks(
-        Vm vm,
-        string[] memory selected,
-        string[] memory declared,
-        address authority,
-        string memory name,
-        bytes memory value
-    ) internal returns (uint256[] memory, string memory) {
-        (,, string memory record) = checkInputs(vm, selected, declared, authority, authority, name, value);
-        console2.log(record);
-
-        uint256[] memory forkIds = LibRainDeploy.createForks(vm, selected);
-        simulateOnForks(vm, selected, declared, forkIds, authority, name, value);
-        return (forkIds, record);
-    }
-
-    /// The bind simulated as `authority` on every given fork, after the input
-    /// refusals of `checkInputs` but the sender's.
-    /// @param vm The Vm instance to select forks and prank with.
-    /// @param selected The networks the forks are of.
-    /// @param declared The networks the declaration supports.
-    /// @param forkIds The fork of each selected network, positionally paired.
-    /// @param authority The authority to bind under.
-    /// @param name The name as a consumer writes it.
-    /// @param value The ABI-encoded value to bind it to.
-    function simulateOnForks(
-        Vm vm,
-        string[] memory selected,
-        string[] memory declared,
-        uint256[] memory forkIds,
-        address authority,
-        string memory name,
-        bytes memory value
-    ) internal {
-        (bytes32 hashed, SupportedNetwork[] memory networks,) =
-            checkInputs(vm, selected, declared, authority, authority, name, value);
-        if (forkIds.length != networks.length) {
-            revert LibRainDeploy.ForkIdsLengthMismatch(networks.length, forkIds.length);
-        }
-        for (uint256 i = 0; i < networks.length; i++) {
-            vm.selectFork(forkIds[i]);
-            simulateOnSelectedChain(vm, networks[i], authority, hashed, value);
-        }
     }
 
     /// Every input refusal of `registerOnNetworks`, in order — the name, the

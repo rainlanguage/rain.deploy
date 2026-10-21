@@ -15,8 +15,8 @@ import {RegisterConfigRunCaller} from "../concrete/RegisterConfigRunCaller.sol";
 
 /// @title RegisterConfigTest
 /// The script's wiring: which variables it reads, that the signer is the
-/// script's `msg.sender`, and that all three entries default to every
-/// supported network. `LibConfigRegistryRegister`'s own tests cover what it does with
+/// script's `msg.sender`, and that both entries default to every supported
+/// network. `LibConfigRegistryRegister`'s own tests cover what it does with
 /// them.
 ///
 /// ONE test function, because it writes process-wide environment variables and
@@ -116,7 +116,8 @@ contract RegisterConfigTest is Test {
         );
         script.verify();
 
-        // Run as the authority on a fresh name binds it on exactly the selected network.
+        // Run as the authority on a fresh name binds it on exactly the
+        // selected network.
         string memory freshName = string.concat(name, "-run");
         bytes memory freshValue = abi.encode(address(3));
         vm.setEnv("CONFIG_REGISTRY_NAME", freshName);
@@ -133,7 +134,8 @@ contract RegisterConfigTest is Test {
 
         assertRunSkips(script, keccak256(bytes(freshName)), freshValue, registeredAt);
 
-        // Run as the authority on a name already bound to another value rebinds it.
+        // Run as the authority on a name already bound to another value
+        // rebinds it.
         string memory rotateName = string.concat(name, "-rotate");
         bytes memory rotateValue = abi.encode(address(4));
         vm.warp(vm.getBlockTimestamp() - 1);
@@ -149,62 +151,13 @@ contract RegisterConfigTest is Test {
             .getV1(AUTHORITY, keccak256(bytes(rotateName)));
         assertEq(bound, rotateValue);
         assertEq(registeredAt, block.timestamp);
-
-        assertSimulatesContractAuthority(script, string.concat(name, "-safe"));
     }
 
-    /// `simulateContractAuthority()`, called by this test rather than the
-    /// authority, binds under the authority on exactly the selected network
-    /// and returns the inputs record, whose `Calldata:` line is exactly the
-    /// bind's calldata; it refuses a non-canonical name and a bare 20-byte
-    /// value as `run()` does.
-    /// @param script The script.
-    /// @param name A name bound nowhere.
-    function assertSimulatesContractAuthority(RegisterConfig script, string memory name) internal {
-        bytes memory value = abi.encode(address(6));
-        vm.setEnv("CONFIG_REGISTRY_NAME", name);
-        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(value));
-        (uint256[] memory forkIds, string memory record) = script.simulateContractAuthority();
-        assertEq(forkIds.length, 1);
-        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, name, value, AUTHORITY));
-        assertTrue(
-            vm.contains(
-                record,
-                string.concat(
-                    "\nCalldata: ",
-                    vm.toString(
-                        LibConfigRegistryRegister.registerCalldata(LibConfigRegistryRegister.nameHash(name), value)
-                    )
-                )
-            )
-        );
-        vm.selectFork(forkIds[0]);
-        assertEq(block.chainid, LibRainDeploy.declaredNetworkConfigs(LibRainDeploy.supportedNetworks())[0].chainId);
-        assertEq(
-            LibConfigRegistryRead.getValue(
-                IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
-                AUTHORITY,
-                keccak256(bytes(name))
-            ),
-            value
-        );
-
-        vm.setEnv("CONFIG_REGISTRY_NAME", "Not.Canonical");
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
-        script.simulateContractAuthority();
-
-        bytes memory bare = abi.encodePacked(address(6));
-        vm.setEnv("CONFIG_REGISTRY_NAME", name);
-        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(bare));
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, bare));
-        script.simulateContractAuthority();
-    }
-
-    /// Runs as the authority with networks unset, which forks every supported network in
-    /// declaration order; the persistent registry carries the first fork's bind
-    /// to the rest, which skip. A prank cannot reach `run()`, since a
-    /// prank and a broadcast cannot both be active, so the authority calls it through
-    /// code etched there.
+    /// Runs as the authority with networks unset, which forks every supported
+    /// network in declaration order; the persistent registry carries the first
+    /// fork's bind to the rest, which skip. A prank cannot reach `run()`, since
+    /// a prank and a broadcast cannot both be active, so the authority calls it
+    /// through code etched there.
     /// @param script The script.
     /// @param name The test's base name.
     function runAsAuthorityOnEveryNetwork(RegisterConfig script, string memory name) internal {
@@ -232,9 +185,9 @@ contract RegisterConfigTest is Test {
         }
     }
 
-    /// `run()` stops on forge's own refusal to parse `CONFIG_REGISTRY_AUTHORITY`.
-    /// Forge raises it as `CheatcodeError(string)`, and only the prefix naming
-    /// the variable is pinned; the parser's wording
+    /// `run()` stops on forge's own refusal to parse
+    /// `CONFIG_REGISTRY_AUTHORITY`. Forge raises it as `CheatcodeError(string)`,
+    /// and only the prefix naming the variable is pinned; the parser's wording
     /// after it is forge's.
     /// @param script The script.
     function assertEnvAddressRefused(RegisterConfig script) internal {
@@ -263,8 +216,8 @@ contract RegisterConfigTest is Test {
         }
     }
 
-    /// Runs again as the authority with `name` bound to `value` already, which skips it:
-    /// no `Register`, and the binding and its moment are unchanged.
+    /// Runs again as the authority with `name` bound to `value` already, which
+    /// skips it: no `Register`, and the binding and its moment are unchanged.
     /// @param script The script.
     /// @param name The bound name, hashed.
     /// @param value The value it is bound to.

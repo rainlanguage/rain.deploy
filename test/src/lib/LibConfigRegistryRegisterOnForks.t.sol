@@ -88,9 +88,9 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         return forkIds;
     }
 
-    /// Binds a fresh name on every supported network's fork from the authority, reads
-    /// it back on each, and shows the confirmed check reads the chains rather
-    /// than the simulation.
+    /// Binds a fresh name on every supported network's fork from the
+    /// authority, reads it back on each, and shows the confirmed check reads the
+    /// chains rather than the simulation.
     function testRegisterOnEveryNetwork() external {
         (string memory name, bytes32 hashed, bytes memory value) = fresh();
         string[] memory networks = LibRainDeploy.supportedNetworks();
@@ -183,111 +183,6 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
     }
 
-    function externalSimulateOnNetworks(string[] memory networks, string memory name, bytes memory value)
-        external
-        returns (uint256[] memory, string memory)
-    {
-        return LibConfigRegistryRegister.simulateOnNetworks(vm, networks, networks, AUTHORITY, name, value);
-    }
-
-    /// A contract authority's simulation, called by an account that is not
-    /// the authority, forks every selected network in declaration order and
-    /// binds under the authority on each; the persistent registry carries the
-    /// first fork's bind to the rest, which skip. Its record is the inputs
-    /// record, whose `Calldata:` line is exactly the bind's calldata.
-    function testSimulateOnNetworksBindsEverySelected() external {
-        (string memory name, bytes32 hashed, bytes memory value) = fresh();
-        string[] memory networks = new string[](2);
-        networks[0] = LibRainDeploy.BASE;
-        networks[1] = LibRainDeploy.ARBITRUM_ONE;
-
-        vm.createSelectFork(networks[0]);
-        LibConfigRegistryFork.ensureDeployed(vm);
-        vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
-        vm.etch(AUTHORITY, hex"00");
-        vm.makePersistent(AUTHORITY);
-
-        (uint256[] memory forkIds, string memory record) = this.externalSimulateOnNetworks(networks, name, value);
-        assertEq(forkIds.length, 2);
-        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, name, value, AUTHORITY));
-        assertTrue(
-            vm.contains(
-                record,
-                string.concat(
-                    "\nCalldata: ",
-                    vm.toString(
-                        LibConfigRegistryRegister.registerCalldata(LibConfigRegistryRegister.nameHash(name), value)
-                    )
-                )
-            )
-        );
-        for (uint256 i = 0; i < forkIds.length; i++) {
-            vm.selectFork(forkIds[i]);
-            assertEq(vm.getChainId(), LibRainDeploy.declaredNetworkConfigs(networks)[i].chainId);
-        }
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, address(this), hashed));
-        IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV1(address(this), hashed);
-    }
-
-    function externalSimulateOnForks(
-        string[] memory networks,
-        uint256[] memory forkIds,
-        string memory name,
-        bytes memory value
-    ) external {
-        LibConfigRegistryRegister.simulateOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
-    }
-
-    /// `simulateOnForks` binds as the authority on every given fork's own
-    /// registry, with nothing persistent: each fork's registry holds the value
-    /// bound at that fork's own moment, and the authority's nonce is untouched
-    /// on each, since nothing is broadcast.
-    function testSimulateOnForksBindsOnEachFork() external {
-        (string memory name, bytes32 hashed, bytes memory value) = fresh();
-        string[] memory networks = LibRainDeploy.supportedNetworks();
-        uint256[] memory forkIds = forksWithRegistry(networks);
-        IConfigRegistryV1 registry = IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
-        uint64[] memory nonces = new uint64[](forkIds.length);
-        for (uint256 i = 0; i < forkIds.length; i++) {
-            vm.selectFork(forkIds[i]);
-            nonces[i] = vm.getNonce(AUTHORITY);
-        }
-        vm.etch(AUTHORITY, hex"00");
-        vm.makePersistent(AUTHORITY);
-
-        this.externalSimulateOnForks(networks, forkIds, name, value);
-
-        for (uint256 i = 0; i < forkIds.length; i++) {
-            vm.selectFork(forkIds[i]);
-            assertEq(LibConfigRegistryRead.getValue(registry, AUTHORITY, hashed), value, networks[i]);
-            assertEq(LibConfigRegistryRead.getMoment(registry, AUTHORITY, hashed), vm.getBlockTimestamp(), networks[i]);
-            assertEq(vm.getNonce(AUTHORITY), nonces[i], networks[i]);
-        }
-    }
-
-    /// `simulateOnForks` refuses fork ids not paired one to one with the
-    /// selected networks, and inputs `checkInputs` refuses, before selecting
-    /// any fork.
-    function testSimulateOnForksRefusesBeforeSelecting() external {
-        (string memory name,, bytes memory value) = fresh();
-        string[] memory networks = new string[](2);
-        networks[0] = LibRainDeploy.BASE;
-        networks[1] = LibRainDeploy.ARBITRUM_ONE;
-
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, 2, 1));
-        this.externalSimulateOnForks(networks, new uint256[](1), name, value);
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.ForkIdsLengthMismatch.selector, 2, 3));
-        this.externalSimulateOnForks(networks, new uint256[](3), name, value);
-
-        uint256[] memory forkIds = LibResolvedReadFixture.unselectableForkIds(2);
-        bytes memory unaligned = abi.encodePacked(value, bytes1(0));
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, unaligned));
-        this.externalSimulateOnForks(networks, forkIds, name, unaligned);
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "A.b"));
-        this.externalSimulateOnForks(networks, forkIds, "A.b", value);
-    }
-
     /// `registerOnForks` binds on every given fork's own registry, with
     /// nothing persistent: one `Register` log per network, and each fork's
     /// registry holds the value bound at that fork's own moment.
@@ -332,8 +227,8 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         this.externalRegisterOnForks(networks, forkIds, name, value);
     }
 
-    /// `registerOnForks` refuses a sender other than the authority and a value that is
-    /// not whole words as `checkInputs` does, before selecting any fork.
+    /// `registerOnForks` refuses a sender other than the authority and a value
+    /// that is not whole words as `checkInputs` does, before selecting any fork.
     function testRegisterOnForksRefusesInputsBeforeSelecting() external {
         (string memory name,, bytes memory value) = fresh();
         string[] memory networks = new string[](2);
