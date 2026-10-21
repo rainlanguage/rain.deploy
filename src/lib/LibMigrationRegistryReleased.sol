@@ -90,12 +90,13 @@ import {
 /// @notice Every frozen release of `MigrationRegistry`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
 ///
-/// The deploy address, code hash, creation code, runtime code and dependency
-/// list of each entry are aliased from that release's own frozen snapshot, so
-/// what a release deployed, and what it required to already be on chain, are
-/// read from the immutable file and from nowhere else. A dependency dropped
-/// from current source stays required by the releases cut with it, and one
-/// added is not imposed on releases cut without it.
+/// The deploy address, code hash, creation code, runtime code, dependency
+/// list and described-by meta of each entry are aliased from that release's
+/// own frozen snapshot, so what a release deployed, and what it required to
+/// already be on chain, are read from the immutable file and from nowhere
+/// else. A dependency dropped from current source stays required by the
+/// releases cut with it, and one added is not imposed on releases cut
+/// without it.
 ///
 /// The key and the artifact path are explorer and ordering metadata
 /// regenerated from the CURRENT declaration, and are not part of that
