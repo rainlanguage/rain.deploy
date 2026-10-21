@@ -112,7 +112,7 @@ contract BuildScriptGeneratedContractsTest is Test {
             noRetired()
         );
         vm.expectRevert(abi.encodeWithSelector(GeneratedContractNotDeclared.selector, "B", "b"));
-        harness.externalCheckedGeneratedContracts();
+        harness.externalSnapshotContractNames();
     }
 
     function testRefusesADeclaredCandidateNothingGenerates() external {
@@ -120,7 +120,7 @@ contract BuildScriptGeneratedContractsTest is Test {
             two(anchored("a", "A"), anchored("b", "B")), one(generated("A", "", anchored("a", "A"))), noRetired()
         );
         vm.expectRevert(abi.encodeWithSelector(DeclaredCandidateNotGenerated.selector, "b"));
-        harness.externalCheckedGeneratedContracts();
+        harness.externalSnapshotContractNames();
     }
 
     function testRefusesAGeneratedCandidateOtherThanTheOneDeclaredUnderItsKey() external {
@@ -130,23 +130,22 @@ contract BuildScriptGeneratedContractsTest is Test {
         GeneratedContractsBuildScriptHarness harness =
             harnessDeclaring(one(declared), one(generated("A", "", other)), noRetired());
         vm.expectRevert(abi.encodeWithSelector(GeneratedCandidateNotDeclared.selector, "a"));
-        harness.externalCheckedGeneratedContracts();
+        harness.externalSnapshotContractNames();
     }
 
     function testRefusesAnAnchoredCandidateGeneratedUnderAnotherContractsName() external {
         GeneratedContractsBuildScriptHarness harness =
             harnessDeclaring(one(anchored("a", "A")), one(generated("Other", "", anchored("a", "A"))), noRetired());
         vm.expectRevert(abi.encodeWithSelector(GeneratedContractNameNotArtifact.selector, "Other", "src/A.sol:A"));
-        harness.externalCheckedGeneratedContracts();
+        harness.externalSnapshotContractNames();
     }
 
     function testAnUnanchorableCandidateMayBeGeneratedUnderAnyName() external {
         GeneratedContractsBuildScriptHarness harness =
             harnessDeclaring(one(unanchorable("a")), one(generated("Anything", "", unanchorable("a"))), noRetired());
-        GeneratedContract[] memory checked =
-            abi.decode(harness.externalCheckedGeneratedContracts(), (GeneratedContract[]));
-        assertEq(checked.length, 1);
-        assertEq(checked[0].contractName, "Anything");
+        string[] memory names = harness.externalSnapshotContractNames();
+        assertEq(names.length, 1);
+        assertEq(names[0], "Anything");
     }
 
     function testRefusesTwoGeneratedContractsUnderOneKey() external {
@@ -156,7 +155,7 @@ contract BuildScriptGeneratedContractsTest is Test {
             noRetired()
         );
         vm.expectRevert(abi.encodeWithSelector(DuplicateDeploySuite.selector, "a"));
-        harness.externalCheckedGeneratedContracts();
+        harness.externalSnapshotContractNames();
     }
 
     function testRefusesTwoGeneratedContractsUnderOneName() external {
@@ -166,7 +165,7 @@ contract BuildScriptGeneratedContractsTest is Test {
             noRetired()
         );
         vm.expectRevert(abi.encodeWithSelector(DuplicateGeneratedContractName.selector, "X"));
-        harness.externalCheckedGeneratedContracts();
+        harness.externalSnapshotContractNames();
     }
 
     function testRefusesARetiredContractUnderAGeneratedContractsName() external {
@@ -175,7 +174,7 @@ contract BuildScriptGeneratedContractsTest is Test {
         GeneratedContractsBuildScriptHarness harness =
             harnessDeclaring(one(anchored("a", "A")), one(generated("A", "", anchored("a", "A"))), retiredList);
         vm.expectRevert(abi.encodeWithSelector(DuplicateGeneratedContractName.selector, "A"));
-        harness.externalCheckedGeneratedContracts();
+        harness.externalSnapshotContractNames();
     }
 
     function testRefusesTwoRetiredContractsUnderOneName() external {
@@ -185,7 +184,7 @@ contract BuildScriptGeneratedContractsTest is Test {
         GeneratedContractsBuildScriptHarness harness =
             harnessDeclaring(one(anchored("a", "A")), one(generated("A", "", anchored("a", "A"))), retiredList);
         vm.expectRevert(abi.encodeWithSelector(DuplicateGeneratedContractName.selector, "R"));
-        harness.externalCheckedGeneratedContracts();
+        harness.externalSnapshotContractNames();
     }
 
     function testRefusesTwoAliasLibsUnderOnePrefix() external {
@@ -195,7 +194,7 @@ contract BuildScriptGeneratedContractsTest is Test {
             noRetired()
         );
         vm.expectRevert(abi.encodeWithSelector(DuplicateConstantPrefix.selector, "P"));
-        harness.externalCheckedGeneratedContracts();
+        harness.externalSnapshotContractNames();
     }
 
     function testSeveralContractsMayHaveNoAliasLib() external {
@@ -204,7 +203,7 @@ contract BuildScriptGeneratedContractsTest is Test {
             two(generated("A", "", anchored("a", "A")), generated("B", "", anchored("b", "B"))),
             noRetired()
         );
-        assertEq(abi.decode(harness.externalCheckedGeneratedContracts(), (GeneratedContract[])).length, 2);
+        assertEq(harness.externalSnapshotContractNames().length, 2);
     }
 
     function testRunRefusesABadDeclaration() external {

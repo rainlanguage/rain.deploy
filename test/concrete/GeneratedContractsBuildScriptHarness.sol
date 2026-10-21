@@ -77,10 +77,6 @@ contract GeneratedContractsBuildScriptHarness is BuildScript {
         return sLibDir;
     }
 
-    function externalCheckedGeneratedContracts() external view returns (bytes memory) {
-        return abi.encode(checkedGeneratedContracts());
-    }
-
     function externalSnapshotContractNames() external view returns (string[] memory) {
         return snapshotContractNames();
     }
