@@ -793,10 +793,9 @@ network the repo does not support or one named twice, a sender other than the
 authority, a network whose endpoint reports another chain id than the catalogue
 states for it, and a registry address that does not hold the pinned registry
 code. With `--broadcast`, forge itself is a second layer: it refuses a device
-that is not the authority, with
-`No associated wallet for addresses:
-[<authority>]`, before sending on any
-network. A refused run signs nothing.
+that is not the authority before sending on any network, with
+`No associated wallet for addresses: [<authority>]`. A refused run signs
+nothing.
 
 The dry run prints the name, its hash, the value, the authority, the registry
 address and the exact calldata, then for each network its chain id, the
