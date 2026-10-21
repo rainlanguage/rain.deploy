@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
@@ -119,7 +120,7 @@ contract ConfigRegistryRegisterTest is Test {
         vm.prank(sender, AUTHORITY);
         sRegistry.registerV1(sender, name, value);
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotApproved.selector, AUTHORITY, name, sender));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, AUTHORITY, name, sender));
         vm.prank(sender, AUTHORITY);
         sRegistry.registerV1(AUTHORITY, name, value);
 

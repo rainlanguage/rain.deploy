@@ -57,9 +57,7 @@ contract ConfigRegistry is IConfigRegistryV1, RegistryDelegates {
     /// @inheritdoc IConfigRegistryV1
     function registerV1(address authority, bytes32 name, bytes calldata value) external {
         // Who may write is settled before anything about the write.
-        if (!callerWritesUnder(authority, name)) {
-            revert NotApproved(authority, name, msg.sender);
-        }
+        checkCallerWritesUnder(authority, name);
         // Rejected so that a name can never be both bound and unreadable.
         if (value.length == 0) {
             revert EmptyValue(name);
@@ -83,22 +81,17 @@ contract ConfigRegistry is IConfigRegistryV1, RegistryDelegates {
 
     /// @inheritdoc IConfigRegistryV1
     function approveV1(bytes32 name, address delegate) external {
-        checkDelegateKey(delegate);
-        setApproval(name, delegate, true);
-        emit Approved(msg.sender, name, delegate);
+        approveWithin(name, delegate);
     }
 
     /// @inheritdoc IConfigRegistryV1
     function revokeV1(bytes32 name, address delegate) external {
-        checkDelegateKey(delegate);
-        setApproval(name, delegate, false);
-        emit Revoked(msg.sender, name, delegate);
+        revokeWithin(name, delegate);
     }
 
     /// @inheritdoc IConfigRegistryV1
     function approvedV1(address authority, bytes32 name, address delegate) external view returns (bool) {
-        checkDelegateKey(delegate);
-        return isApproved(authority, name, delegate);
+        return approvedWithin(authority, name, delegate);
     }
 
     /// @inheritdoc IConfigRegistryV1

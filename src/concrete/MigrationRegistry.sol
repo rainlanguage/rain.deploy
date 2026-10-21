@@ -129,32 +129,20 @@ contract MigrationRegistry is IMigrationRegistryV3, RegistryDelegates {
 
     /// @inheritdoc IMigrationRegistryV3
     function approveV3(bytes32 namespace, address delegate) external {
-        checkApprovalKey(msg.sender, namespace, delegate);
-        setApproval(namespace, delegate, true);
-        emit Approved(msg.sender, namespace, delegate);
+        checkLineKey(msg.sender, namespace);
+        approveWithin(namespace, delegate);
     }
 
     /// @inheritdoc IMigrationRegistryV3
     function revokeV3(bytes32 namespace, address delegate) external {
-        checkApprovalKey(msg.sender, namespace, delegate);
-        setApproval(namespace, delegate, false);
-        emit Revoked(msg.sender, namespace, delegate);
+        checkLineKey(msg.sender, namespace);
+        revokeWithin(namespace, delegate);
     }
 
     /// @inheritdoc IMigrationRegistryV3
     function approvedV3(address writer, bytes32 namespace, address delegate) external view returns (bool) {
-        checkApprovalKey(writer, namespace, delegate);
-        return isApproved(writer, namespace, delegate);
-    }
-
-    /// Refuses the zero writer, namespace and delegate: none names an approval
-    /// anybody can hold.
-    /// @param writer The approving writer.
-    /// @param namespace The line under the writer.
-    /// @param delegate The delegate.
-    function checkApprovalKey(address writer, bytes32 namespace, address delegate) internal pure {
         checkLineKey(writer, namespace);
-        checkDelegateKey(delegate);
+        return approvedWithin(writer, namespace, delegate);
     }
 
     /// Refuses a write whose caller is neither `writer` nor approved by it for
@@ -164,9 +152,7 @@ contract MigrationRegistry is IMigrationRegistryV3, RegistryDelegates {
     /// @param namespace The line under the writer.
     function checkDelegate(address writer, bytes32 namespace) internal view {
         checkWriter(writer);
-        if (!callerWritesUnder(writer, namespace)) {
-            revert NotApproved(writer, namespace, msg.sender);
-        }
+        checkCallerWritesUnder(writer, namespace);
     }
 
     /// Reached by every write, so both share one refusal order.

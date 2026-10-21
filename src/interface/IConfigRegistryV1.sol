@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {ZeroDelegate} from "../error/ErrRegistryDelegates.sol";
+import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
 
 /// @title IConfigRegistryV1
 /// @notice A registry of `bytes32` names to ABI-encoded values, keyed by the
@@ -118,7 +118,7 @@ import {ZeroDelegate} from "../error/ErrRegistryDelegates.sol";
 /// imposes nothing on it: a fresh binding is live at once, and an
 /// implementation MUST NOT withhold one. What counts as too fresh belongs to
 /// the caller.
-interface IConfigRegistryV1 {
+interface IConfigRegistryV1 is IRegistryDelegatesV1 {
     /// Thrown when `registerV1` is called with an empty value. Empty is how an
     /// unbound name reads, so binding it would produce a name that is both
     /// bound and unreadable. A name cannot be unbound once bound; the closest
@@ -151,13 +151,6 @@ interface IConfigRegistryV1 {
     /// Zero when unbound.
     error TimestampNotAfterBinding(bytes32 name, uint256 timestamp, uint256 registeredAt);
 
-    /// Thrown when `registerV1`'s caller is neither `authority` nor approved by
-    /// it for `name`.
-    /// @param authority The authority the write named.
-    /// @param name The name the write named.
-    /// @param caller The account that called.
-    error NotApproved(address authority, bytes32 name, address caller);
-
     /// Emitted every time `sender` binds `name` under `authority`, including
     /// when it re-binds it. The log is the complete history of the registry
     /// and the only way to discover a binding without already knowing its
@@ -175,19 +168,6 @@ interface IConfigRegistryV1 {
     /// @param name The name that was bound.
     /// @param value The value `name` was bound to.
     event Register(address indexed sender, address indexed authority, bytes32 indexed name, bytes value);
-
-    /// Emitted when `sender` approves `delegate` to bind `name` under it.
-    /// @param sender The approving authority, which is the account that called.
-    /// @param name The name the approval covers.
-    /// @param delegate The approved account.
-    event Approved(address indexed sender, bytes32 indexed name, address indexed delegate);
-
-    /// Emitted when `sender` revokes `delegate` for `name`, whether or not
-    /// `delegate` was approved.
-    /// @param sender The revoking authority, which is the account that called.
-    /// @param name The name the revocation covers.
-    /// @param delegate The revoked account.
-    event Revoked(address indexed sender, bytes32 indexed name, address indexed delegate);
 
     /// Binds `name` to `value` under `authority`, replacing any value
     /// `authority` has already bound it to. The caller is `authority` or a

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {ZeroDelegate} from "../../../src/error/ErrRegistryDelegates.sol";
+import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
@@ -44,7 +44,7 @@ contract ConfigRegistryDelegateTest is Test {
         vm.assume(otherName != NAME);
         vm.assume(otherDelegate != DELEGATE && otherDelegate != address(0));
         vm.expectEmit(address(sRegistry));
-        emit IConfigRegistryV1.Approved(AUTHORITY, NAME, DELEGATE);
+        emit IRegistryDelegatesV1.Approved(AUTHORITY, NAME, DELEGATE);
         approveDelegate();
         assertTrue(sRegistry.approvedV1(AUTHORITY, NAME, DELEGATE));
         assertFalse(sRegistry.approvedV1(otherAuthority, NAME, DELEGATE));
@@ -80,19 +80,19 @@ contract ConfigRegistryDelegateTest is Test {
     /// each emit and leave the approval as named.
     function testRevokeRemovesTheApproval() external {
         vm.expectEmit(address(sRegistry));
-        emit IConfigRegistryV1.Revoked(AUTHORITY, NAME, DELEGATE);
+        emit IRegistryDelegatesV1.Revoked(AUTHORITY, NAME, DELEGATE);
         vm.prank(AUTHORITY);
         sRegistry.revokeV1(NAME, DELEGATE);
         assertFalse(sRegistry.approvedV1(AUTHORITY, NAME, DELEGATE));
         for (uint256 i = 0; i < 2; i++) {
             vm.expectEmit(address(sRegistry));
-            emit IConfigRegistryV1.Approved(AUTHORITY, NAME, DELEGATE);
+            emit IRegistryDelegatesV1.Approved(AUTHORITY, NAME, DELEGATE);
             approveDelegate();
             assertTrue(sRegistry.approvedV1(AUTHORITY, NAME, DELEGATE));
         }
         for (uint256 i = 0; i < 2; i++) {
             vm.expectEmit(address(sRegistry));
-            emit IConfigRegistryV1.Revoked(AUTHORITY, NAME, DELEGATE);
+            emit IRegistryDelegatesV1.Revoked(AUTHORITY, NAME, DELEGATE);
             vm.prank(AUTHORITY);
             sRegistry.revokeV1(NAME, DELEGATE);
             assertFalse(sRegistry.approvedV1(AUTHORITY, NAME, DELEGATE));
@@ -119,14 +119,14 @@ contract ConfigRegistryDelegateTest is Test {
     /// and a refused approve or revoke emits nothing.
     function testApprovalRefusesZeroDelegate(address caller, address authority) external {
         vm.recordLogs();
-        vm.expectRevert(ZeroDelegate.selector);
+        vm.expectRevert(IRegistryDelegatesV1.ZeroDelegate.selector);
         vm.prank(caller);
         sRegistry.approveV1(NAME, address(0));
-        vm.expectRevert(ZeroDelegate.selector);
+        vm.expectRevert(IRegistryDelegatesV1.ZeroDelegate.selector);
         vm.prank(caller);
         sRegistry.revokeV1(NAME, address(0));
         assertEq(vm.getRecordedLogs().length, 0);
-        vm.expectRevert(ZeroDelegate.selector);
+        vm.expectRevert(IRegistryDelegatesV1.ZeroDelegate.selector);
         sRegistry.approvedV1(authority, NAME, address(0));
     }
 
@@ -167,7 +167,7 @@ contract ConfigRegistryDelegateTest is Test {
         sRegistry.registerV1(AUTHORITY, NAME, hex"01");
         assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, NAME), hex"01");
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotApproved.selector, AUTHORITY, other, DELEGATE));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, AUTHORITY, other, DELEGATE));
         vm.prank(DELEGATE);
         sRegistry.registerV1(AUTHORITY, other, hex"02");
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, AUTHORITY, other));
@@ -208,7 +208,7 @@ contract ConfigRegistryDelegateTest is Test {
         vm.assume(value.length > 0);
 
         vm.recordLogs();
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotApproved.selector, AUTHORITY, NAME, caller));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, AUTHORITY, NAME, caller));
         vm.prank(caller);
         sRegistry.registerV1(AUTHORITY, NAME, value);
         assertEq(vm.getRecordedLogs().length, 0);
@@ -223,12 +223,12 @@ contract ConfigRegistryDelegateTest is Test {
     function testUnapprovedCallerIsRefusedBeforeItsArguments(address caller) external {
         vm.assume(caller != AUTHORITY);
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotApproved.selector, AUTHORITY, NAME, caller));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, AUTHORITY, NAME, caller));
         vm.prank(caller);
         sRegistry.registerV1(AUTHORITY, NAME, "");
 
         vm.warp(0);
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotApproved.selector, AUTHORITY, NAME, caller));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, AUTHORITY, NAME, caller));
         vm.prank(caller);
         sRegistry.registerV1(AUTHORITY, NAME, hex"01");
     }
@@ -246,7 +246,7 @@ contract ConfigRegistryDelegateTest is Test {
     /// nothing is approved under it.
     function testZeroAuthorityRefusesEveryCaller(address caller) external {
         vm.assume(caller != address(0));
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotApproved.selector, address(0), NAME, caller));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, address(0), NAME, caller));
         vm.prank(caller);
         sRegistry.registerV1(address(0), NAME, hex"01");
     }
@@ -260,7 +260,7 @@ contract ConfigRegistryDelegateTest is Test {
         vm.prank(other);
         sRegistry.approveV1(NAME, otherDelegate);
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotApproved.selector, other, NAME, DELEGATE));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, other, NAME, DELEGATE));
         vm.prank(DELEGATE);
         sRegistry.registerV1(other, NAME, hex"01");
     }
@@ -273,7 +273,7 @@ contract ConfigRegistryDelegateTest is Test {
         vm.prank(DELEGATE);
         sRegistry.approveV1(NAME, grand);
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotApproved.selector, AUTHORITY, NAME, grand));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, AUTHORITY, NAME, grand));
         vm.prank(grand);
         sRegistry.registerV1(AUTHORITY, NAME, hex"01");
 
@@ -294,7 +294,7 @@ contract ConfigRegistryDelegateTest is Test {
         sRegistry.revokeV1(NAME, DELEGATE);
 
         vm.warp(2);
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotApproved.selector, AUTHORITY, NAME, DELEGATE));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, AUTHORITY, NAME, DELEGATE));
         vm.prank(DELEGATE);
         sRegistry.registerV1(AUTHORITY, NAME, hex"02");
 

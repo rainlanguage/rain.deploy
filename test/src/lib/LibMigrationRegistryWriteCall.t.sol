@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
@@ -211,7 +212,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assertFalse(success);
         assertEq(
             returnData,
-            abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, address(this), namespace, sender)
+            abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, address(this), namespace, sender)
         );
         assertEq(LibMigrationRegistry.appliedV3(sender, namespace, migration), 0);
         assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migration), 0);

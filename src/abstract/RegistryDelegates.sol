@@ -2,14 +2,13 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {ZeroDelegate} from "../error/ErrRegistryDelegates.sol";
+import {IRegistryDelegatesV1} from "../interface/IRegistryDelegatesV1.sol";
 
 /// @title RegistryDelegates
-/// @notice The delegation `ConfigRegistry` and `MigrationRegistry` share: an
-/// account approves delegates to write under it within a scope, and only the
-/// account or a delegate it approved for that scope writes there. The zero delegate is refused here; each registry checks its own other
-/// keys and emits and reverts with its own interface's events and errors.
-abstract contract RegistryDelegates {
+/// @notice The delegation `ConfigRegistry` and `MigrationRegistry` share, as
+/// `IRegistryDelegatesV1` describes it. Each registry checks its own other keys
+/// before calling in.
+abstract contract RegistryDelegates is IRegistryDelegatesV1 {
     mapping(address account => mapping(bytes32 scope => mapping(address delegate => bool))) internal sApproved;
 
     /// Refuses the zero delegate with `ZeroDelegate`.
@@ -20,27 +19,41 @@ abstract contract RegistryDelegates {
         }
     }
 
-    /// Sets whether `delegate` writes under the caller within `scope`.
+    /// Approves `delegate` within `scope` under the caller and emits
+    /// `Approved`.
     /// @param scope The scope under the caller.
     /// @param delegate The delegate.
-    /// @param approved Whether it is approved.
-    function setApproval(bytes32 scope, address delegate, bool approved) internal {
-        sApproved[msg.sender][scope][delegate] = approved;
+    function approveWithin(bytes32 scope, address delegate) internal {
+        checkDelegateKey(delegate);
+        sApproved[msg.sender][scope][delegate] = true;
+        emit Approved(msg.sender, scope, delegate);
+    }
+
+    /// Revokes `delegate` within `scope` under the caller and emits `Revoked`.
+    /// @param scope The scope under the caller.
+    /// @param delegate The delegate.
+    function revokeWithin(bytes32 scope, address delegate) internal {
+        checkDelegateKey(delegate);
+        sApproved[msg.sender][scope][delegate] = false;
+        emit Revoked(msg.sender, scope, delegate);
     }
 
     /// @param account The approving account.
     /// @param scope The scope under `account`.
     /// @param delegate The delegate.
     /// @return Whether `account` has approved `delegate` within `scope`.
-    function isApproved(address account, bytes32 scope, address delegate) internal view returns (bool) {
+    function approvedWithin(address account, bytes32 scope, address delegate) internal view returns (bool) {
+        checkDelegateKey(delegate);
         return sApproved[account][scope][delegate];
     }
 
+    /// Reverts `NotApproved` unless the caller is `account` or a delegate it
+    /// approved within `scope`.
     /// @param account The account written under.
     /// @param scope The scope under `account`.
-    /// @return Whether the caller is `account` or a delegate it approved within
-    /// `scope`.
-    function callerWritesUnder(address account, bytes32 scope) internal view returns (bool) {
-        return msg.sender == account || sApproved[account][scope][msg.sender];
+    function checkCallerWritesUnder(address account, bytes32 scope) internal view {
+        if (msg.sender != account && !sApproved[account][scope][msg.sender]) {
+            revert NotApproved(account, scope, msg.sender);
+        }
     }
 }
