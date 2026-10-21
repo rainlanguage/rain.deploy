@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Script} from "forge-std-1.17.0/src/Script.sol";
+import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
 import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibConfigRegistryRegister} from "../src/lib/LibConfigRegistryRegister.sol";
@@ -51,12 +52,18 @@ contract RegisterConfig is RegistryDeploySuites, Script {
         return vm.envOr(NETWORKS_VAR, ",", supportedNetworks());
     }
 
+    /// The Vm `run()` and `verify()` fork, select and broadcast with.
+    /// @return The cheatcodes.
+    function forkVm() internal view virtual returns (Vm) {
+        return vm;
+    }
+
     /// Binds the name under the authority on every selected network where it
     /// is not already bound to the value.
     /// @return The fork each selected network was simulated on.
     function run() external returns (uint256[] memory) {
         (uint256[] memory forkIds,) = LibConfigRegistryRegister.registerOnNetworks(
-            vm,
+            forkVm(),
             selectedNetworks(),
             supportedNetworks(),
             msg.sender,
@@ -71,7 +78,7 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     /// to the value under the authority on each.
     function verify() external {
         LibConfigRegistryRegister.checkRegisteredOnNetworks(
-            vm,
+            forkVm(),
             selectedNetworks(),
             supportedNetworks(),
             vm.envAddress(AUTHORITY_VAR),

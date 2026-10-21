@@ -8,27 +8,28 @@ import {IConfigRegistryV1} from "../../src/interface/IConfigRegistryV1.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibConfigRegistryDeploy} from "../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibConfigRegistryRegister} from "../../src/lib/LibConfigRegistryRegister.sol";
-import {RegisterConfig} from "../../script/RegisterConfig.sol";
 import {LibConfigRegistryFork} from "../lib/LibConfigRegistryFork.sol";
 import {LibConfigRegistryRead} from "../lib/LibConfigRegistryRead.sol";
-import {RegisterConfigRunCaller} from "../concrete/RegisterConfigRunCaller.sol";
+import {LocalRegisterConfig} from "../concrete/LocalRegisterConfig.sol";
 
 /// @title RegisterConfigTest
 /// The script's wiring: which variables it reads, that the signer is the
-/// script's `msg.sender`, and that both entries default to every supported
-/// network. `LibConfigRegistryRegister`'s own tests cover what it does with
-/// them.
+/// script's `msg.sender`, that both entries default to every supported
+/// network, and that it forks with the cheatcodes. Every network forks as the
+/// local EVM, so nothing here needs an RPC. `LibConfigRegistryRegister`'s own
+/// tests cover what it does with them on live forks.
 ///
 /// ONE test function, because it writes process-wide environment variables and
 /// forge runs test functions concurrently. Nothing else in the suite reads or
 /// writes these names, and the unset-networks cases run before the variable is
 /// first set, since a set variable cannot be unset.
 contract RegisterConfigTest is Test {
-    /// The authority `CONFIG_REGISTRY_AUTHORITY` names. Any account is one.
-    address internal constant AUTHORITY = address(0xA11CE);
-
     function testWiring() external {
-        RegisterConfig script = new RegisterConfig();
+        LocalRegisterConfig script = new LocalRegisterConfig();
+        assertEq(address(script.baseForkVm()), address(vm));
+        // The no-op broadcast leaves the script signing, so the script is the
+        // authority a bind lands under.
+        address authority = address(script);
         string memory name = string.concat("rain.deploy.register-test.", vm.toString(vm.randomUint()));
 
         // Authority not an address, set here so an exported one cannot leak
@@ -37,7 +38,7 @@ contract RegisterConfigTest is Test {
         vm.setEnv("CONFIG_REGISTRY_NAME", name);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
         assertEnvAddressRefused(script);
-        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(AUTHORITY));
+        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(authority));
 
         vm.setEnv("CONFIG_REGISTRY_NAME", "Not.Canonical");
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
@@ -54,16 +55,13 @@ contract RegisterConfigTest is Test {
         // contract, as the script's `msg.sender`.
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
         vm.expectRevert(
-            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotAuthority.selector, address(this), AUTHORITY)
+            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotAuthority.selector, address(this), authority)
         );
         script.run();
 
-        // The confirmed check forks every declared network fresh, where the
-        // fresh name is bound nowhere. The first network fails first, so its
-        // fork says which refusal that is.
-        vm.makePersistent(address(script));
-        vm.createSelectFork(LibRainDeploy.supportedNetworks()[0]);
-        vm.expectRevert(LibConfigRegistryFork.unboundResolveRevert(AUTHORITY, keccak256(bytes(name))));
+        // The confirmed check forks every declared network, and the first
+        // fails first, with no registry there yet.
+        vm.expectRevert(LibConfigRegistryFork.unboundResolveRevert(authority, keccak256(bytes(name))));
         script.verify();
 
         runAsAuthorityOnEveryNetwork(script, name);
@@ -81,15 +79,12 @@ contract RegisterConfigTest is Test {
         script.verify();
 
         // With the name bound, the confirmed check passes on exactly the value
-        // given and refuses any other. The registry is persistent so the fresh
-        // fork `verify` creates carries the binding made here.
+        // given and refuses any other.
         string memory network = LibRainDeploy.supportedNetworks()[0];
         bytes memory value = abi.encode(address(1));
-        LibConfigRegistryFork.ensureDeployed(vm);
-        vm.prank(AUTHORITY);
+        vm.prank(authority);
         IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
             .registerV1(keccak256(bytes(name)), value);
-        vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
         vm.setEnv("CONFIG_REGISTRY_NETWORKS", network);
         vm.setEnv("CONFIG_REGISTRY_NAME", name);
         script.verify();
@@ -100,7 +95,7 @@ contract RegisterConfigTest is Test {
         vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(otherAuthority));
         vm.expectRevert(LibConfigRegistryFork.unboundResolveRevert(otherAuthority, keccak256(bytes(name))));
         script.verify();
-        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(AUTHORITY));
+        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(authority));
 
         bytes memory other = abi.encode(address(2));
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(other));
@@ -108,7 +103,7 @@ contract RegisterConfigTest is Test {
             abi.encodeWithSelector(
                 LibConfigRegistryRegister.UnexpectedBinding.selector,
                 network,
-                AUTHORITY,
+                authority,
                 keccak256(bytes(name)),
                 other,
                 value
@@ -122,67 +117,67 @@ contract RegisterConfigTest is Test {
         bytes memory freshValue = abi.encode(address(3));
         vm.setEnv("CONFIG_REGISTRY_NAME", freshName);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(freshValue));
-        uint256[] memory forkIds = RegisterConfigRunCaller(AUTHORITY).callRun(script);
+        uint256[] memory forkIds = script.runAsItself();
         assertEq(forkIds.length, 1);
-        vm.selectFork(forkIds[0]);
-        assertEq(block.chainid, LibRainDeploy.declaredNetworkConfigs(LibRainDeploy.supportedNetworks())[0].chainId);
+        assertEq(forkIds[0], LibRainDeploy.declaredNetworkConfigs(LibRainDeploy.supportedNetworks())[0].chainId);
+        assertEq(block.chainid, forkIds[0]);
         (bytes memory bound, uint256 registeredAt) = IConfigRegistryV1(
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS
-            ).getV1(AUTHORITY, keccak256(bytes(freshName)));
+            ).getV1(authority, keccak256(bytes(freshName)));
         assertEq(bound, freshValue);
         assertEq(registeredAt, vm.getBlockTimestamp());
 
-        assertRunSkips(script, keccak256(bytes(freshName)), freshValue, registeredAt);
+        assertRunSkips(script, authority, keccak256(bytes(freshName)), freshValue, registeredAt);
 
         // Run as the authority on a name already bound to another value
         // rebinds it.
         string memory rotateName = string.concat(name, "-rotate");
         bytes memory rotateValue = abi.encode(address(4));
-        vm.warp(vm.getBlockTimestamp() - 1);
-        vm.prank(AUTHORITY);
+        vm.warp(vm.getBlockTimestamp() + 1);
+        vm.prank(authority);
         IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
             .registerV1(keccak256(bytes(rotateName)), freshValue);
+        vm.warp(vm.getBlockTimestamp() + 1);
         vm.setEnv("CONFIG_REGISTRY_NAME", rotateName);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(rotateValue));
-        forkIds = RegisterConfigRunCaller(AUTHORITY).callRun(script);
+        forkIds = script.runAsItself();
         assertEq(forkIds.length, 1);
-        vm.selectFork(forkIds[0]);
         (bound, registeredAt) = IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-            .getV1(AUTHORITY, keccak256(bytes(rotateName)));
+            .getV1(authority, keccak256(bytes(rotateName)));
         assertEq(bound, rotateValue);
         assertEq(registeredAt, block.timestamp);
     }
 
-    /// Runs as the authority with networks unset, which forks every supported
-    /// network in declaration order; the persistent registry carries the first
-    /// fork's bind to the rest, which skip. A prank cannot reach `run()`, since
-    /// a prank and a broadcast cannot both be active, so the authority calls it
-    /// through code etched there.
+    /// Deploys the registry, then runs as the authority with networks unset,
+    /// which forks every supported network in declaration order: the first
+    /// binds and the rest, the same local EVM, skip. The confirmed check then
+    /// passes on every one.
     /// @param script The script.
     /// @param name The test's base name.
-    function runAsAuthorityOnEveryNetwork(RegisterConfig script, string memory name) internal {
+    function runAsAuthorityOnEveryNetwork(LocalRegisterConfig script, string memory name) internal {
         LibConfigRegistryFork.ensureDeployed(vm);
-        vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
-        vm.etch(AUTHORITY, address(new RegisterConfigRunCaller()).code);
-        vm.makePersistent(AUTHORITY);
+        address authority = address(script);
         bytes32 allName = keccak256(bytes(string.concat(name, "-all")));
         bytes memory allValue = abi.encode(address(5));
         vm.setEnv("CONFIG_REGISTRY_NAME", string.concat(name, "-all"));
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(allValue));
 
         string[] memory supported = LibRainDeploy.supportedNetworks();
-        uint256[] memory forkIds = RegisterConfigRunCaller(AUTHORITY).callRun(script);
+        uint256[] memory forkIds = script.runAsItself();
         assertEq(forkIds.length, supported.length);
+        Vm forkVm = Vm(address(script.iLocalForkVm()));
         for (uint256 i = 0; i < forkIds.length; i++) {
-            vm.selectFork(forkIds[i]);
-            assertEq(vm.getChainId(), LibRainDeploy.declaredNetworkConfigs(supported)[i].chainId);
+            assertEq(forkIds[i], LibRainDeploy.declaredNetworkConfigs(supported)[i].chainId);
+            forkVm.selectFork(forkIds[i]);
+            assertEq(vm.getChainId(), forkIds[i]);
             assertEq(
                 LibConfigRegistryRead.getValue(
-                    IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), AUTHORITY, allName
+                    IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), authority, allName
                 ),
                 allValue
             );
         }
+        script.verify();
     }
 
     /// `run()` stops on forge's own refusal to parse
@@ -190,7 +185,7 @@ contract RegisterConfigTest is Test {
     /// and only the prefix naming the variable is pinned; the parser's wording
     /// after it is forge's.
     /// @param script The script.
-    function assertEnvAddressRefused(RegisterConfig script) internal {
+    function assertEnvAddressRefused(LocalRegisterConfig script) internal {
         try script.run() {
             revert("run() did not revert");
         } catch (bytes memory reason) {
@@ -219,20 +214,27 @@ contract RegisterConfigTest is Test {
     /// Runs again as the authority with `name` bound to `value` already, which
     /// skips it: no `Register`, and the binding and its moment are unchanged.
     /// @param script The script.
+    /// @param authority The authority it is bound under.
     /// @param name The bound name, hashed.
     /// @param value The value it is bound to.
     /// @param registeredAt The moment it was bound at.
-    function assertRunSkips(RegisterConfig script, bytes32 name, bytes memory value, uint256 registeredAt) internal {
+    function assertRunSkips(
+        LocalRegisterConfig script,
+        address authority,
+        bytes32 name,
+        bytes memory value,
+        uint256 registeredAt
+    ) internal {
+        vm.warp(vm.getBlockTimestamp() + 1);
         vm.recordLogs();
-        uint256[] memory forkIds = RegisterConfigRunCaller(AUTHORITY).callRun(script);
+        uint256[] memory forkIds = script.runAsItself();
         Vm.Log[] memory entries = vm.getRecordedLogs();
         for (uint256 i = 0; i < entries.length; i++) {
             assertTrue(entries[i].emitter != LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
         }
         assertEq(forkIds.length, 1);
-        vm.selectFork(forkIds[0]);
         IConfigRegistryV1 registry = IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
-        assertEq(LibConfigRegistryRead.getValue(registry, AUTHORITY, name), value);
-        assertEq(LibConfigRegistryRead.getMoment(registry, AUTHORITY, name), registeredAt);
+        assertEq(LibConfigRegistryRead.getValue(registry, authority, name), value);
+        assertEq(LibConfigRegistryRead.getMoment(registry, authority, name), registeredAt);
     }
 }
