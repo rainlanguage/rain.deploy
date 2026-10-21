@@ -70,7 +70,7 @@ function upgradedPerNetworkCloneAddress(uint256 chainId) pure returns (address) 
 /// since its `0_0_1` release was cut.
 abstract contract UpgradedPerNetworkCloneDeploys is PerNetworkCloneDeploys {
     /// @inheritdoc RainDeployCloneSuitesBase
-    function cloneDeploys() internal pure override returns (CloneDeploy[] memory) {
+    function cloneDeploys() internal pure virtual override returns (CloneDeploy[] memory) {
         CloneDeploy[] memory clones = new CloneDeploy[](1);
         clones[0] = upgradedPerNetworkClone();
         return clones;
