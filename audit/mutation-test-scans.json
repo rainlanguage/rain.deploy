@@ -1397,5 +1397,36 @@
       "These targets are test-code helpers; the oracles are the separate fixture tests, so no target co-mutates its expectation.",
       "Adversarial pass: the intent (each frozen code record's CREATION_CODE, deployed with its own declaration's referenceConstructorArgs, hashes to its declared BYTECODE_HASH) was re-derived from the NatSpec. A failed create is reported as FrozenCodeRecordDeploysOtherCode with a zero hash; it fails closed and rain-marvin already raised it as INFO, so it is not a new candidate. No candidate bug."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T15:39:59Z",
+    "commit": "5c5891ce7b74022be377619e96849242dd6f3fb1",
+    "testsAfterCommit": "5ec05f558b477b89b49ae5d988bcfaedfeebe14b",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 366,
+    "scope": "UnverifiableSource unindexed per the ruling that rain events index nothing: the event declaration (src/lib/LibRainDeployMechanism.sol) and its emit in LibRainDeployMechanism.deployAndBroadcast",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 11,
+      "behavioursProbed": 11,
+      "killedByExistingTests": 6,
+      "gapsFilled": 5,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc LibRainDeployMechanism minus the three RPC-dependent testClone* fork tests. Pass 1 at 5c5891ce7b74022be377619e96849242dd6f3fb1 (103 green): U05 emit deleted, U06 sender address(this), U07 sender tx.origin, U08 entry address(0), U10 sender/entry swapped KILLED by the pre-existing testZoltuBroadcastUnderThe{Clone,BeaconProxy}ArtifactPathPrintsAManualVerificationNotice; U09 networks emptied was NO-RUN (nix interrupted) and was killed by those same two tests in pass 2. U01-U04 (sender, entryAddress, both, or networks indexed) and U11 (emitted twice) SURVIVED: vm.expectEmit compares against the same declaration, so it cannot see an indexing change, and it does not count emits.",
+      "testUnverifiableSourceLogsEveryArgumentAsData reads the raw log: exactly one log under keccak256(\"UnverifiableSource(address,address,string[])\"), from the deploying contract, with one topic and data abi.encode(sender, entryAddress, networks). Pass 2 at 5ec05f558b477b89b49ae5d988bcfaedfeebe14b (104 green): 11 mutants, 11 KILLED.",
+      "The entry address read from deploys.derivedAddresses[0] is the equivalent mutant already recorded in audit/known-false-positives.md (Z7) and was not re-probed."
+    ]
   }
 ]
