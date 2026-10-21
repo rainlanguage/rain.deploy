@@ -18,6 +18,8 @@ contract MockMisansweringOwnerCloneable is ICloneableV2 {
         return ICLONEABLE_V2_SUCCESS;
     }
 
+    /// Never returns normally: reverts with the origin, or returns 31 bytes of it.
+    /// @return Nothing: it never returns a full word.
     function owner() external view returns (address) {
         address seated = sOrigin;
         bool short = sShort;

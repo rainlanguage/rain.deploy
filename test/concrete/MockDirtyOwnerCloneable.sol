@@ -16,6 +16,7 @@ contract MockDirtyOwnerCloneable is ICloneableV2 {
         return ICLONEABLE_V2_SUCCESS;
     }
 
+    /// @return The stored word: the origin in the low 160 bits, the init data's `uint96` above.
     function owner() external view returns (uint256) {
         return sOwner;
     }

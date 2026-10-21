@@ -20,9 +20,10 @@ string constant CLONE_UNANCHORABLE_REASON = "An EIP-1167 minimal proxy, assemble
 
 /// What a clone factory is asked to deploy.
 struct CloneTarget {
-    /// The `ICloneableFactoryV4` that deploys the clone.
+    /// The factory that deploys the target: an `ICloneableFactoryV4` for a clone, an `ICloneableFactoryV5` for a
+    /// beacon proxy.
     address factory;
-    /// The contract the proxy delegates into.
+    /// The contract a clone delegates into, or for a beacon proxy the beacon it reads its implementation from.
     address implementation;
     /// The initialization data, passed verbatim to `ICloneableV2.initialize` and hashed into the
     /// open salt.

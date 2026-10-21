@@ -49,12 +49,13 @@ error ZoltuDerivationMismatch(string suite, address formulaAddress, address fact
 /// Thrown when a clone suite's declared factory, run locally, puts the clone somewhere other than
 /// the address `rain-factory`'s formula derives.
 /// @param suite The suite being derived.
-/// @param formulaAddress The address `LibRainDeployClone.cloneDeployedAddress` computed.
+/// @param formulaAddress The address `targetAddress` computed: `LibRainDeployClone.cloneDeployedAddress` for a clone,
+/// `LibRainDeployBeaconProxy.beaconProxyDeployedAddress` for a beacon proxy.
 /// @param factoryAddress The address the declared factory actually deployed to.
 error CloneDerivationMismatch(string suite, address formulaAddress, address factoryAddress);
 
-/// Thrown when a clone suite's `creationCode` is not the EIP-1167 creation code for the
-/// implementation its `mechanismData` names.
+/// Thrown when a clone suite's `creationCode` is not the EIP-1167 creation code for the implementation its
+/// `mechanismData` names, or a beacon proxy suite's is not the `BeaconProxy` creation code over its beacon.
 /// @param suite The suite being derived.
 error CloneCreationCodeMismatch(string suite);
 
@@ -62,7 +63,7 @@ error CloneCreationCodeMismatch(string suite);
 /// @param suite The suite carrying the data.
 error UnexpectedMechanismData(string suite);
 
-/// Thrown when a `ClonePerNetwork` suite carries a `storedDeployedAddress`.
+/// Thrown when a `ClonePerNetwork` or `BeaconProxyPerNetwork` suite carries a `storedDeployedAddress`.
 /// @param suite The suite carrying the address.
 /// @param storedDeployedAddress The address it carries.
 error UnexpectedStoredDeployedAddress(string suite, address storedDeployedAddress);
@@ -103,7 +104,13 @@ error ExtendedNetworkUnfrozen(string suite, string network, address deployedAddr
 /// @param slot The slot read.
 error CloneInitializeReadsStorage(string suite, address account, bytes32 slot);
 
-/// Emitted when a broadcast Zoltu entry under `CLONE_ARTIFACT_PATH` or `BEACON_PROXY_ARTIFACT_PATH` leaves its source to verify by hand.
+/// Thrown when a `DeployMechanism` member has no arm in a function that dispatches on it: a member added to the enum
+/// without one. A value outside the enum never reaches it, since Solidity panics (0x21) on reading one.
+/// @param mechanism The member's value.
+error UnknownDeployMechanism(uint8 mechanism);
+
+/// Emitted when a broadcast Zoltu entry under `CLONE_ARTIFACT_PATH` or `BEACON_PROXY_ARTIFACT_PATH` leaves its source
+/// to verify by hand.
 /// @param sender The deploy's `msg.sender`, not the broadcasting key.
 /// @param entryAddress Where the entry is deployed on every network.
 /// @param networks The networks it was broadcast to.
@@ -123,9 +130,13 @@ library LibRainDeployMechanism {
     /// @param suite The suite.
     /// @return Whether its mechanism data is a `CloneNetworks`, with init data and an address per network.
     function isPerNetwork(DeploySuite memory suite) internal pure returns (bool) {
-        return
-            suite.mechanism == DeployMechanism.ClonePerNetwork
-                || suite.mechanism == DeployMechanism.BeaconProxyPerNetwork;
+        return isPerNetworkMechanism(suite.mechanism);
+    }
+
+    /// @param mechanism A mechanism.
+    /// @return Whether a suite of it records init data and an address per network.
+    function isPerNetworkMechanism(DeployMechanism mechanism) internal pure returns (bool) {
+        return mechanism == DeployMechanism.ClonePerNetwork || mechanism == DeployMechanism.BeaconProxyPerNetwork;
     }
 
     /// @param suite The suite.
@@ -154,7 +165,7 @@ library LibRainDeployMechanism {
 
     /// A clone or beacon proxy suite's `CloneTarget`, with its factory and implementation held to being declared
     /// dependencies of the same suite.
-    /// @param suite A suite whose mechanism is `Clone`.
+    /// @param suite A suite whose mechanism is `Clone` or `BeaconProxy`.
     /// @return The decoded target.
     function cloneTarget(DeploySuite memory suite) internal pure returns (CloneTarget memory) {
         CloneTarget memory target = abi.decode(suite.mechanismData, (CloneTarget));
@@ -164,7 +175,7 @@ library LibRainDeployMechanism {
 
     /// A per-network clone or beacon proxy suite's `CloneNetworks`, held to `LibRainDeployClone.checkCloneNetworks`
     /// and to carrying no `storedDeployedAddress`.
-    /// @param suite A suite whose mechanism is `ClonePerNetwork`.
+    /// @param suite A suite whose mechanism is `ClonePerNetwork` or `BeaconProxyPerNetwork`.
     /// @return The decoded per-network clone.
     function cloneNetworks(DeploySuite memory suite) internal pure returns (CloneNetworks memory) {
         if (suite.storedDeployedAddress != address(0)) {
@@ -225,7 +236,10 @@ library LibRainDeployMechanism {
         if (isBeaconProxy(suite)) {
             return LibRainDeployBeaconProxy.beaconProxyDeployStep;
         }
-        return LibRainDeployClone.cloneDeployStep;
+        if (suite.mechanism == DeployMechanism.Clone || suite.mechanism == DeployMechanism.ClonePerNetwork) {
+            return LibRainDeployClone.cloneDeployStep;
+        }
+        revert UnknownDeployMechanism(uint8(suite.mechanism));
     }
 
     /// Every address a suite's mechanism derives for it, in the suite's address order.
@@ -492,9 +506,9 @@ library LibRainDeployMechanism {
     /// The clone MUST NOT have been deployed earlier in the same EVM without its state reverted since: a `Create` that
     /// collides with an account already there is recorded as creating it, so reads of that account are exempt.
     /// Each clone is deployed under a state-diff recording, which ends any recording the caller started.
-    /// For a beacon proxy the beacon is etched with `BeaconProxyStandInBeacon` and `BEACON_PROXY_STAND_IN_IMPLEMENTATION`
-    /// with `BeaconProxyStandInImplementation` first, so the `initialize` that runs is the stand-in's, and both stay
-    /// etched after this returns.
+    /// For a beacon proxy the beacon is etched with `BeaconProxyStandInBeacon` and
+    /// `BEACON_PROXY_STAND_IN_IMPLEMENTATION` with `BeaconProxyStandInImplementation` first, so the `initialize` that
+    /// runs is the stand-in's, and both stay etched after this returns.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy.
     /// @return Where the mechanism deployed it, in the suite's address order — the derived
@@ -744,8 +758,8 @@ library LibRainDeployMechanism {
         return (deploys.expectedAddresses, forkIds);
     }
 
-    /// The notice that a Zoltu entry under `CLONE_ARTIFACT_PATH` or `BEACON_PROXY_ARTIFACT_PATH` names no compiled source to verify, so its source
-    /// needs verifying by hand on each network.
+    /// The notice that a Zoltu entry under `CLONE_ARTIFACT_PATH` or `BEACON_PROXY_ARTIFACT_PATH` names no compiled
+    /// source to verify, so its source needs verifying by hand on each network.
     /// @param vm The Vm instance to format the address with.
     /// @param networks The networks the entry is deployed on.
     /// @param where Where it is deployed on every one of them.

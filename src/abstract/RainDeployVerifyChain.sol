@@ -45,8 +45,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// other network it is required on it is refused before any network is forked: with `ExtendedNetworkUnfrozen`,
     /// naming the address its candidate's init data derives there, whether or not anything is live at it, or with
     /// `CloneNetworkUndeclared` where its candidate has no entry there.
-    /// A beacon proxy suite is refused `BeaconProxyBeaconUndeclared` before forking on a network it is required on where
-    /// `beacons()` declares no beacon at its beacon; the beacon's own checks then cover what the proxy delegates into.
+    /// A beacon proxy suite is refused `BeaconProxyBeaconUndeclared` before forking on a network it is required on
+    /// where `beacons()` declares no beacon at its beacon; the beacon's own checks then cover what the proxy
+    /// delegates into.
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.

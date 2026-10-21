@@ -12,7 +12,7 @@ import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
 import {DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
 import {CloneNetworks} from "./LibRainDeployClone.sol";
-import {LibRainDeployMechanism} from "./LibRainDeployMechanism.sol";
+import {LibRainDeployMechanism, UnknownDeployMechanism} from "./LibRainDeployMechanism.sol";
 
 /// Thrown when `[external.package].version` is not strict `X.Y.Z`. A version
 /// like `0.1.7-rc1` maps to the directory `0_1_7-rc1`, which the append-only
@@ -825,6 +825,7 @@ library LibRainDeploySnapshot {
     {
         CloneNetworks memory clones = LibRainDeployMechanism.cloneNetworks(suite);
         string memory addressConstants = "";
+        bool beaconProxy = LibRainDeployMechanism.isBeaconProxy(suite);
         for (uint256 i = 0; i < clones.networks.length; i++) {
             clones.networks[i].deployedAddress = deployed[i];
             string memory chainId = vm.toString(clones.networks[i].chainId);
@@ -833,11 +834,11 @@ library LibRainDeploySnapshot {
                 LibCodeGen.addressConstantString(
                     vm,
                     string.concat(
-                        LibRainDeployMechanism.isBeaconProxy(suite)
+                        beaconProxy
                             ? "/// @dev The deterministic deploy address of the beacon proxy on chain id\n/// "
                             : "/// @dev The deterministic deploy address of the EIP-1167 clone on chain id\n/// ",
                         chainId,
-                        LibRainDeployMechanism.isBeaconProxy(suite)
+                        beaconProxy
                             ? ", through its factory's beacon-proxy open salt with that network's init data."
                             : ", through its factory's open salt with that network's init data."
                     ),
@@ -1674,12 +1675,6 @@ library LibRainDeploySnapshot {
     }
 
     /// @param kind A mechanism.
-    /// @return Whether a suite of it records an address per network.
-    function isPerNetworkKind(DeployMechanism kind) internal pure returns (bool) {
-        return kind == DeployMechanism.ClonePerNetwork || kind == DeployMechanism.BeaconProxyPerNetwork;
-    }
-
-    /// @param kind A mechanism.
     /// @return Its name as a generated released-suites lib spells it.
     function mechanismName(DeployMechanism kind) internal pure returns (string memory) {
         if (kind == DeployMechanism.Zoltu) {
@@ -1694,7 +1689,10 @@ library LibRainDeploySnapshot {
         if (kind == DeployMechanism.BeaconProxy) {
             return "DeployMechanism.BeaconProxy";
         }
-        return "DeployMechanism.BeaconProxyPerNetwork";
+        if (kind == DeployMechanism.BeaconProxyPerNetwork) {
+            return "DeployMechanism.BeaconProxyPerNetwork";
+        }
+        revert UnknownDeployMechanism(uint8(kind));
     }
 
     /// The aliased import one record file contributes.
@@ -1705,7 +1703,7 @@ library LibRainDeploySnapshot {
         string memory prefix = releasedConstantPrefix(vm, path);
         DeployMechanism mechanism = recordedMechanism(vm, path);
         return string.concat(
-            isPerNetworkKind(mechanism)
+            LibRainDeployMechanism.isPerNetworkMechanism(mechanism)
                 ? string("import {\n    ")
                 : string.concat("import {\n    DEPLOYED_ADDRESS as ", prefix, "_DEPLOYED_ADDRESS,\n    "),
             "BYTECODE_HASH as ",
@@ -1773,8 +1771,9 @@ library LibRainDeploySnapshot {
         string memory mechanism;
         {
             DeployMechanism kind = recordedMechanism(vm, path);
-            storedDeployedAddress =
-                isPerNetworkKind(kind) ? string("address(0)") : string.concat(prefix, "_DEPLOYED_ADDRESS");
+            storedDeployedAddress = LibRainDeployMechanism.isPerNetworkMechanism(kind)
+                ? string("address(0)")
+                : string.concat(prefix, "_DEPLOYED_ADDRESS");
             mechanism = kind == DeployMechanism.Zoltu
                 ? string("DeployMechanism.Zoltu,\n            mechanismData: \"\"")
                 : string.concat(mechanismName(kind), ",\n            mechanismData: ", prefix, "_MECHANISM_DATA");

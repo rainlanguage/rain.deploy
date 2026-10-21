@@ -126,7 +126,9 @@ and binds the same broadcast as any other repo:
 ```solidity
 // src/abstract/MyCloneDeploys.sol
 abstract contract MyCloneDeploys is RainDeployCloneSuitesBase {
-    function cloneDeploys() internal pure override returns (CloneDeploy[] memory);
+    // `cloneDeploys()` has a default body, so it is implemented here, not redeclared.
+    // A repo of beacon proxies overrides `beaconProxyDeploys()` the same way.
+    function cloneDeploys() internal pure override returns (CloneDeploy[] memory) { ... }
     function releasedSuites() internal pure override returns (DeploySuite[] memory);
 }
 
@@ -349,11 +351,11 @@ A repo whose deployment is an OpenZeppelin `BeaconProxy` over an upgradeable
 beacon, deployed by an `ICloneableFactoryV5` factory, declares it in
 `beaconProxyDeploys()` beside, or instead of, `cloneDeploys()`. Both default to
 empty, `candidateSuites()` is the clones' candidates then the beacon proxies',
-and only both empty is refused with `NoCloneDeploys`. A `BeaconProxyDeploy` has
-the fields of a `CloneDeploy`, with `beacon` in place of `implementation`, and
-its dependencies MUST name the factory and the beacon, refused otherwise with
-`CloneDependencyUndeclared`. Because `cloneDeploys()` now has a default body, a
-contract that inherits it from an abstract of its own as well as from
+and only both empty is refused with `NoFactoryDeploys`. A `BeaconProxyDeploy`
+has the fields of a `CloneDeploy`, with `beacon` in place of `implementation`,
+and its dependencies MUST name the factory and the beacon, refused otherwise
+with `CloneDependencyUndeclared`. Because `cloneDeploys()` now has a default
+body, a contract that inherits it from an abstract of its own as well as from
 `RainDeployCloneSuitesBase` names both in its override:
 `override(MyCloneDeploys, RainDeployCloneSuitesBase)`.
 
@@ -1261,7 +1263,9 @@ all three itself. The requirement is transitive rather than incidental: the
 deployed contract imports nothing outside this package, but every abstract a
 consumer inherits pulls them in — `Script` via `RainDeployBroadcast`, `Test` via
 `RainDeployVerifyBase`, `Vm` via `LibRainDeploy` beneath both,
-`ICloneableFactoryV4` via `LibRainDeployMechanism` beneath both, and
+`ICloneableFactoryV4` and `ICloneableFactoryV5` via `LibRainDeployMechanism`
+beneath both, `LibICloneableFactoryV5` and the generated
+`BEACON_PROXY_CREATION_CODE` via `LibRainDeployBeaconProxy` beneath both, and
 `LibCodeGen`/`LibFs` via `LibRainDeploySnapshot`, which
 `RainDeployVerifySnapshot` imports:
 
@@ -1433,11 +1437,8 @@ it. In order:
    `src/interface/deprecated/`. The registry has a new address, so migrations
    recorded in the 0.1.18 registry stay there and read as unapplied in V3: apply
    them again, with `applyMigrationHistoryV3` for one that already ran.
-9. A contract that inherits `cloneDeploys()` from an abstract of its own as well
-   as from `RainDeployCloneSuitesBase`, which now gives it a default body, names
-   both in its override: `override(MyCloneDeploys, RainDeployCloneSuitesBase)`.
-10. Regenerate: `forge script ./script/Build.sol` followed by
-    `./script/build.sh`.
+9. Regenerate: `forge script ./script/Build.sol` followed by
+   `./script/build.sh`.
 
 `LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,
 `RainDeployBroadcast.broadcastSuite` and

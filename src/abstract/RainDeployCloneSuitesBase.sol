@@ -9,7 +9,7 @@ import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {DeployCandidate, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 
 /// Thrown when a declaration names no clone and no beacon proxy at all.
-error NoCloneDeploys();
+error NoFactoryDeploys();
 
 /// @title RainDeployCloneSuitesBase
 /// @notice The declaration for a repo whose candidates are factory deployments: EIP-1167 clones,
@@ -40,12 +40,12 @@ abstract contract RainDeployCloneSuitesBase is RainDeploySuitesBase {
     }
 
     /// Every candidate this repo deploys.
-    /// @return The clones, then the beacon proxies, refusing `NoCloneDeploys` when there are neither.
+    /// @return The clones, then the beacon proxies, refusing `NoFactoryDeploys` when there are neither.
     function candidateSuites() internal view override returns (DeployCandidate[] memory) {
         CloneDeploy[] memory clones = cloneDeploys();
         BeaconProxyDeploy[] memory proxies = beaconProxyDeploys();
         if (clones.length == 0 && proxies.length == 0) {
-            revert NoCloneDeploys();
+            revert NoFactoryDeploys();
         }
         uint256[] memory chainIds = supportedChainIds();
         DeployCandidate[] memory candidates = new DeployCandidate[](clones.length + proxies.length);

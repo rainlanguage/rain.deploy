@@ -8,6 +8,7 @@ import {ICLONEABLE_V2_SUCCESS} from "rain-factory-pr271-0477c05/src/interface/IC
 /// @notice What the stand-in beacon serves during a local deploy: initializes to success with any
 /// data and reads no storage.
 contract BeaconProxyStandInImplementation {
+    /// The init data is unnamed: any data initializes.
     /// @return The `ICloneableV2` success value.
     function initialize(bytes calldata) external pure returns (bytes32) {
         return ICLONEABLE_V2_SUCCESS;

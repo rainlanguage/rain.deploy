@@ -190,11 +190,11 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
             LibRainDeploySnapshot.mechanismName(DeployMechanism.BeaconProxyPerNetwork),
             "DeployMechanism.BeaconProxyPerNetwork"
         );
-        assertFalse(LibRainDeploySnapshot.isPerNetworkKind(DeployMechanism.Zoltu));
-        assertFalse(LibRainDeploySnapshot.isPerNetworkKind(DeployMechanism.Clone));
-        assertTrue(LibRainDeploySnapshot.isPerNetworkKind(DeployMechanism.ClonePerNetwork));
-        assertFalse(LibRainDeploySnapshot.isPerNetworkKind(DeployMechanism.BeaconProxy));
-        assertTrue(LibRainDeploySnapshot.isPerNetworkKind(DeployMechanism.BeaconProxyPerNetwork));
+        assertFalse(LibRainDeployMechanism.isPerNetworkMechanism(DeployMechanism.Zoltu));
+        assertFalse(LibRainDeployMechanism.isPerNetworkMechanism(DeployMechanism.Clone));
+        assertTrue(LibRainDeployMechanism.isPerNetworkMechanism(DeployMechanism.ClonePerNetwork));
+        assertFalse(LibRainDeployMechanism.isPerNetworkMechanism(DeployMechanism.BeaconProxy));
+        assertTrue(LibRainDeployMechanism.isPerNetworkMechanism(DeployMechanism.BeaconProxyPerNetwork));
     }
 
     /// A beacon proxy candidate over a fresh factory and beacon, both declared as its dependencies.

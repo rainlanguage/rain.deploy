@@ -20,6 +20,8 @@ uint256 constant BEACON_PROXY_RUNTIME_OFFSET = 0x424;
 /// `PUSH32`, which the constructor fills with `MSTORE(0x23, beacon)`.
 uint256 constant BEACON_PROXY_BEACON_IMMUTABLE_OFFSET = 0x23;
 
+/// @dev The artifact path a beacon proxy suite carries. It names no compiled source here: see
+/// `BEACON_PROXY_UNANCHORABLE_REASON`.
 string constant BEACON_PROXY_ARTIFACT_PATH = "rain-factory/BeaconProxy.sol:BeaconProxy";
 
 string constant BEACON_PROXY_UNANCHORABLE_REASON = "An OpenZeppelin BeaconProxy, deployed by the factory from "

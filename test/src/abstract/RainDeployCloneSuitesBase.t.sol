@@ -7,7 +7,7 @@ import {DeployCandidate, DeployMechanism, DeploySuite} from "../../../src/abstra
 import {BEACON_PROXY_ARTIFACT_PATH} from "../../../src/lib/LibRainDeployBeaconProxy.sol";
 import {BeaconProxyOnlyDeploySuites} from "../../concrete/BeaconProxyOnlyDeploySuites.sol";
 import {MixedCloneBeaconProxyDeploySuites} from "../../concrete/MixedCloneBeaconProxyDeploySuites.sol";
-import {NoCloneDeploys} from "../../../src/abstract/RainDeployCloneSuitesBase.sol";
+import {NoFactoryDeploys} from "../../../src/abstract/RainDeployCloneSuitesBase.sol";
 import {CLONE_ARTIFACT_PATH} from "../../../src/lib/LibRainDeployClone.sol";
 import {CloneNetworks, CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
@@ -59,21 +59,21 @@ contract RainDeployCloneSuitesBaseTest is Test {
         fixtureDeploy.externalCheckCandidatesAnchoredToSource();
     }
 
-    /// Empty clone and beacon proxy lists MUST be refused with `NoCloneDeploys`, on EVERY reader that
+    /// Empty clone and beacon proxy lists MUST be refused with `NoFactoryDeploys`, on EVERY reader that
     /// goes through them.
-    function testNoCloneDeploysReverts() external {
+    function testNoFactoryDeploysReverts() external {
         NoCloneDeploySuites empty = new NoCloneDeploySuites();
 
-        vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
+        vm.expectRevert(abi.encodeWithSelector(NoFactoryDeploys.selector));
         empty.externalCheckedCandidateSuites();
 
-        vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
+        vm.expectRevert(abi.encodeWithSelector(NoFactoryDeploys.selector));
         empty.externalCheckCandidatesAnchoredToSource();
 
-        vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
+        vm.expectRevert(abi.encodeWithSelector(NoFactoryDeploys.selector));
         empty.externalAllSuites();
 
-        vm.expectRevert(abi.encodeWithSelector(NoCloneDeploys.selector));
+        vm.expectRevert(abi.encodeWithSelector(NoFactoryDeploys.selector));
         empty.externalSuiteNames();
     }
 
@@ -168,7 +168,7 @@ contract RainDeployCloneSuitesBaseTest is Test {
     }
 
     /// With no clones, the candidates MUST be `beaconProxyCandidate` mapped over `beaconProxyDeploys()`, and
-    /// every reader of them answers rather than refusing `NoCloneDeploys`.
+    /// every reader of them answers rather than refusing `NoFactoryDeploys`.
     function testCandidatesAreTheBeaconProxyListDerived() external {
         BeaconProxyOnlyDeploySuites deploy = new BeaconProxyOnlyDeploySuites();
         assertEq(deploy.externalCloneDeploysLength(), 0);
