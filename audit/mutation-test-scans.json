@@ -1218,5 +1218,36 @@
       "Both if-chains became per-member tables indexed by the member value, so the reverts and the UnknownDeployMechanism error (added on this PR, never released) are gone and G03/G05 have no target. A member added without a table entry fails with an index panic (0x32). testDeployMechanismHasFiveMembers pins the member count the tables are sized for.",
       "Pass at 72a4f335acaa3e39a899fe6ca7f9a6a8f39168e5 with mutation-probe over the offline suite (forge test minus the RPC-dependent tests), 1312 green at baseline: 12 mutants (every table entry and both indexes), 12 KILLED, all by tests present before this commit."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T15:39:59Z",
+    "commit": "5c5891ce7b74022be377619e96849242dd6f3fb1",
+    "testsAfterCommit": "5ec05f558b477b89b49ae5d988bcfaedfeebe14b",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 366,
+    "scope": "UnverifiableSource unindexed per the ruling that rain events index nothing: the event declaration (src/lib/LibRainDeployMechanism.sol) and its emit in LibRainDeployMechanism.deployAndBroadcast",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 11,
+      "behavioursProbed": 11,
+      "killedByExistingTests": 6,
+      "gapsFilled": 5,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc LibRainDeployMechanism minus the three RPC-dependent testClone* fork tests. Pass 1 at 5c5891ce7b74022be377619e96849242dd6f3fb1 (103 green): U05 emit deleted, U06 sender address(this), U07 sender tx.origin, U08 entry address(0), U10 sender/entry swapped KILLED by the pre-existing testZoltuBroadcastUnderThe{Clone,BeaconProxy}ArtifactPathPrintsAManualVerificationNotice; U09 networks emptied was NO-RUN (nix interrupted) and was killed by those same two tests in pass 2. U01-U04 (sender, entryAddress, both, or networks indexed) and U11 (emitted twice) SURVIVED: vm.expectEmit compares against the same declaration, so it cannot see an indexing change, and it does not count emits.",
+      "testUnverifiableSourceLogsEveryArgumentAsData reads the raw log: exactly one log under keccak256(\"UnverifiableSource(address,address,string[])\"), from the deploying contract, with one topic and data abi.encode(sender, entryAddress, networks). Pass 2 at 5ec05f558b477b89b49ae5d988bcfaedfeebe14b (104 green): 11 mutants, 11 KILLED.",
+      "The entry address read from deploys.derivedAddresses[0] is the equivalent mutant already recorded in audit/known-false-positives.md (Z7) and was not re-probed."
+    ]
   }
 ]
