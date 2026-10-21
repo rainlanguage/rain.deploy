@@ -1124,7 +1124,7 @@ the record atomic with the migration it describes.
 
 ## Deploying, and then releasing
 
-Three separate steps, in this order. Nothing automatic ever broadcasts.
+Four separate steps, in this order. Nothing automatic ever broadcasts.
 
 1. **Deploy.** Dispatch the
    [`Manual sol artifacts`](.github/workflows/manual-sol-artifacts.yaml)
@@ -1134,17 +1134,31 @@ Three separate steps, in this order. Nothing automatic ever broadcasts.
    is key custody and real money, and no merge or tag should be able to trigger
    it. It is idempotent — a network that already has the code is skipped — so a
    partial run is fixed by running it again rather than by unpicking anything.
-2. **Verify.** `RegistryDeployVerifyTest` passes only once every **released**
+2. **Cut.** Set `[external.package].version` in `foundry.toml` to the release
+   version first, because `cutRelease()` freezes under that version's tag. Then
+   run `nix develop -c forge script ./script/Build.sol --sig 'cutRelease()'`,
+   then `nix develop -c forge script ./script/Build.sol` FOLLOWED BY
+   `nix develop -c ./script/build.sh`, and open the release PR. Its CI checks
+   the newly released suites on chain, so merge it only once step 1 has landed
+   on every supported network. A release freezes every contract the release
+   before it froze, unless `Build.retiredContracts()` lists it:
+   `testNoReleaseDropsAContract` refuses any other drop. Retiring a contract is
+   moving it from `generatedContracts()` to `retiredContracts()`, as
+   `AddressRegistry` was.
+3. **Verify.** `RegistryDeployVerifyTest` passes only once every **released**
    suite is live on every supported network, with the code that release froze.
-3. **Tag.** Push a `sol-v*` tag, the sole release trigger. It verifies and
-   publishes but never broadcasts, which is exactly why step 1 cannot be folded
-   into it. The release mechanics are `rainix-tag-release`'s.
+4. **Tag.** Push a `sol-v*` tag on the release PR's merge commit, the sole
+   release trigger; a later commit whose candidate has moved fails the tag's
+   frozen-equals-regenerated check. It verifies and publishes but never
+   broadcasts, which is exactly why step 1 cannot be folded into it. The release
+   mechanics are `rainix-tag-release`'s.
 
 This is a deploy repo: it carries deployed concretes whose addresses and
 codehashes consumers pin, so releases are **manual `sol-v*` tags**, not merges.
-`[external.package].version` is the version of the LAST Soldeer publish, and
-only a release moves it. A release cut under this lifecycle also names the
-frozen `src/generated/<tag>/` record `cutRelease()` wrote for it. Every version
+`[external.package].version` is the newest release cut into
+`src/generated/<tag>/`: only the release PR that cuts that tag moves it, and an
+ordinary PR does not. A release cut under this lifecycle also names the frozen
+`src/generated/<tag>/` record `cutRelease()` wrote for it. Every version
 published under the previous merge-driven lifecycle predates that record and has
 none, so `src/generated/` holds no directory for it; those versions stay
 published, and consumers pin exact versions and are unaffected.
