@@ -5,8 +5,8 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeployDependency, LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
-import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
-import {ConfigRegistry, CONFIG_REGISTRY_ROOT} from "../../../src/concrete/ConfigRegistry.sol";
+import {IConfigRegistryV2} from "../../../src/interface/IConfigRegistryV2.sol";
+import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
 import {MockDirtyWordOwner} from "../../concrete/MockDirtyWordOwner.sol";
@@ -27,6 +27,10 @@ import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
 /// that need `vm.expectRevert` at the correct call depth, and for functions
 /// that require a storage mapping reference.
 contract LibRainDeployTest is Test {
+    /// The authority the config registry tests bind under and resolve under.
+    /// Any account is one.
+    address internal constant CONFIG_AUTHORITY = address(0xA11CE);
+
     /// The address the Zoltu factory derives for empty creation code, i.e.
     /// CREATE2 over the factory address, a zero salt and the hash of empty
     /// creation code. An account is created there but it has no code.
@@ -1412,21 +1416,21 @@ contract LibRainDeployTest is Test {
     }
 
     /// Deploys `ConfigRegistry` through the Zoltu factory (which lands it at
-    /// its pinned address), binds `name` to `account` as root, then deploys a
-    /// consumer that resolves `name` once in its constructor.
+    /// its pinned address), binds `name` to `account` under `CONFIG_AUTHORITY`,
+    /// then deploys a consumer that resolves `name` once in its constructor.
     /// @param name The name to bind and resolve.
     /// @param account The address to bind it to.
     /// @return The deployed registry.
     /// @return The deployed consumer holding the resolved address.
     function deployRegistryAndConsumer(bytes32 name, address account)
         internal
-        returns (IConfigRegistryV1, MockResolvedOwner)
+        returns (IConfigRegistryV2, MockResolvedOwner)
     {
-        IConfigRegistryV1 registry =
-            IConfigRegistryV1(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
-        MockResolvedOwner consumer = new MockResolvedOwner(name);
+        IConfigRegistryV2 registry =
+            IConfigRegistryV2(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
+        vm.prank(CONFIG_AUTHORITY);
+        registry.registerV2(CONFIG_AUTHORITY, name, abi.encode(account));
+        MockResolvedOwner consumer = new MockResolvedOwner(CONFIG_AUTHORITY, name);
         return (registry, consumer);
     }
 
@@ -1489,13 +1493,13 @@ contract LibRainDeployTest is Test {
         vm.assume(account != address(0));
         vm.assume(rebound != address(0));
         vm.assume(rebound != account);
-        (IConfigRegistryV1 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+        (IConfigRegistryV2 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
         // A re-bind needs a later block: a name's moment strictly increases.
         vm.warp(block.timestamp + 1);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(rebound));
-        (bytes memory nowBound,) = registry.getV1(name);
+        vm.prank(CONFIG_AUTHORITY);
+        registry.registerV2(CONFIG_AUTHORITY, name, abi.encode(rebound));
+        (bytes memory nowBound,) = registry.getV2(CONFIG_AUTHORITY, name);
         assertEq(nowBound, abi.encode(rebound));
 
         assertEq(consumer.iOwner(), account);

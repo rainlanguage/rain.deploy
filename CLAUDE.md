@@ -30,9 +30,6 @@ relocated.
   a recorded network. Never delete or edit the file to get past it: fix the
   declaration. CI does not notice a record deleted or edited together with its
   declaration, nor one never committed.
-- **`CONFIG_REGISTRY_ROOT` is welded into the creation code.** Rotating it moves
-  the deploy address, the code hash and the snapshot together, as an ordinary
-  source change; the registry at the old address stays where it is.
 - **The deploy/verify abstracts live in `src/`, a SCOPED exception.** This
   repo's PRODUCT is the deploy process, so its machinery is published rather
   than scaffolding. Do not carry the exception into a consumer repo: there

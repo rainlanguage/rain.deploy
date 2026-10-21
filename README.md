@@ -667,10 +667,10 @@ fails the job every push runs.
 It reaches `foundry.toml` in two steps, because foundry refuses a filesystem
 cheatcode write to the project root's own config whatever `fs_permissions` says.
 `run()` stages the spliced files under `.staged-config/` and rainix's
-`rainix-copy-artifacts` installs them — see [Install](#install). Reads are allowed, which is what makes
-the splice possible at all, and staging removes the hazard the direct write
-would have carried: nothing under `forge test` can race a rewrite of the config
-every other test reads, because nothing rewrites it.
+`rainix-copy-artifacts` installs them — see [Install](#install). Reads are
+allowed, which is what makes the splice possible at all, and staging removes the
+hazard the direct write would have carried: nothing under `forge test` can race
+a rewrite of the config every other test reads, because nothing rewrites it.
 
 That is what a config group used to be for, and comparing is the weaker half of
 it. A comparison keeps both statements, so every assertion in it is one somebody
@@ -701,22 +701,31 @@ wrong explorer.
 
 `ConfigRegistry` binds an opaque `bytes32` name to ABI-encoded `bytes`: an
 address, a role id, a threshold, a list of accounts, anything a deployment would
-otherwise compile in. An immutable root authority binds a name, anyone reads a
-bound name, and reading an unbound name reverts rather than answering empty. The
-interface is `IConfigRegistryV1`. There is no removal, no upgrade and no
-authority besides root.
+otherwise compile in. Bindings are keyed by authority: any account binds a name
+under its own address, or under an authority that approved it as a delegate for
+that name (`approveV2`, `revokeV2`, read by `approvedV2`); anyone reads a name
+under an authority it names, and reading a name that authority has not bound
+reverts rather than answering empty. The interface is `IConfigRegistryV2`. There
+is no removal, no upgrade, and no way to write under an account that has not
+approved the writer.
+
+A consumer names the authority it trusts beside the name it resolves, both in
+its own creation code, and gets only what that authority bound. What the
+consumer then trusts, and what a contract authority must do on every network, is
+in `IConfigRegistryV2`'s NatSpec under "The authority and its delegates are the
+whole access control" and "Delegation is per authority and name". A delegate can
+rebind the name it was approved for, so a consumer's prod tests assert
+`approvedV2` is false for every retired delegate beside the true answers for the
+live ones.
 
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
-registry is deployed on a network, root binds each name a consumer resolves with
-`script/RegisterConfig.sol` (value `cast abi-encode "f(address)" <account>`, and
-`CONFIG_REGISTRY_NETWORKS` naming the networks it is deployed on until that is
-every declared one) before that consumer deploys against it. Which names those
-are is each consumer's to declare; until a name is bound, its
+registry is deployed on a network, an authority binds each name its consumers
+resolve with `script/RegisterConfig.sol` (value
+`cast abi-encode "f(address)" <account>`, and `CONFIG_REGISTRY_NETWORKS` naming
+the networks it is deployed on until that is every declared one) before those
+consumers deploy against it. Which names and which authority are each consumer's
+to declare; until a name is bound under that authority, its
 `LibConfigRegistry.resolve` reverts.
-
-`CONFIG_REGISTRY_ROOT` in `src/concrete/ConfigRegistry.sol` is the one place
-root lives. It is welded into the creation code, so rotating it moves the deploy
-address, the code hash and the snapshot with it.
 
 Bindings are **mutable**, because the configuration they name is. Rotating an
 owning multisig is ordinary business and has to be expressible without moving
@@ -731,11 +740,12 @@ re-binding a name changes what the _next_ deployment resolves and nothing else,
 which makes a rotation a deliberate migration rather than a silent change to
 live contracts.
 
-`LibConfigRegistry.resolve` is the read, verifying the registry's code hash
-first, the same way `LibRainDeploy` verifies the Zoltu factory's. It resolves a
-name to the bound bytes and never decodes them: only the consumer knows the type
-it expects, so the consumer decodes, as `abi.decode(value, (address))` for an
-address. What it does with the value, and when, is the consumer's business.
+`LibConfigRegistry.resolve(authority, name)` is the read, verifying the
+registry's code hash first, the same way `LibRainDeploy` verifies the Zoltu
+factory's. It resolves a name under an authority to the bound bytes and never
+decodes them: only the consumer knows the type it expects, so the consumer
+decodes, as `abi.decode(value, (address))` for an address. What it does with the
+value, and when, is the consumer's business.
 
 `LibRainDeploy` carries the **post-deploy** verification: on every target
 network, the deployed contract must hold the value the deployment expected. It
@@ -770,10 +780,26 @@ for an `address[]`.
 
 ## Managing the config registry
 
-Root binds a name with `script/RegisterConfig.sol`, signed on the Trezor that
-holds `CONFIG_REGISTRY_ROOT`. It is run by hand on the machine the Trezor is
-plugged into, never in CI: forge's own `--trezor` signer asks the device for
-each signature, and the key never leaves it.
+An authority, or a delegate it approved, binds a name with
+`script/RegisterConfig.sol`, signed on the Trezor that holds it: the script
+binds under `CONFIG_REGISTRY_AUTHORITY` and, on each network, refuses a signer
+that is neither the authority nor a delegate the authority approved there for
+the name (`SenderNotApproved`), since the registry refuses that bind. It is run
+by hand on the machine the Trezor is plugged into, never in CI: forge's own
+`--trezor` signer asks the device for each signature, and the key never leaves
+it.
+
+The script signs as an EOA. A Safe or timelock authority either approves that
+EOA as a delegate, once per network through its own execution path
+(`approveV2(name, delegate)`), after which the EOA runs the script with
+`--sender` set to itself, or submits
+`registerV2(authority, keccak256("<org>.<name>"),
+value)` to the registry itself
+and then runs step 3 below (`verify`), which reads under any authority. An
+approval lets the delegate rebind that one name under the authority until it is
+revoked (`revokeV2(name, delegate)`) on that network. An EOA authority approves
+or revokes a delegate, such as a Safe, with `script/ApproveConfigDelegate.sol`
+("Approving a delegate" below).
 
 **The name is the string consumers hash.** Consumers derive a name as
 `keccak256("<org>.<name>")` — st0x resolves its token-owner Safe as
@@ -799,24 +825,34 @@ networks, set `CONFIG_REGISTRY_NETWORKS` to those.
 
 ### Before the first run
 
-- The Trezor: unlocked, with the passphrase of root's wallet if it has one, and
-  Trezor Suite closed (it holds the USB connection).
-- Read root from the source:
+- The Trezor: unlocked, with the passphrase of the authority's wallet if it has
+  one, and Trezor Suite closed (it holds the USB connection).
+- Name the authority consumers resolve the name under, copied from the consuming
+  repo's source constant beside the name it resolves, never typed. The dry run's
+  authority line must match that constant:
 
   ```sh
-  export CONFIG_REGISTRY_ROOT=$(grep -oE "CONFIG_REGISTRY_ROOT = 0x[0-9a-fA-F]{40}" src/concrete/ConfigRegistry.sol | grep -oE "0x[0-9a-fA-F]{40}")
+  export CONFIG_REGISTRY_AUTHORITY=0x...
   ```
 
-- Check the device answers as root (add `--mnemonic-derivation-path "<path>"`
-  after `--trezor` inside the `$(…)` if root is not the first Ethereum account
-  in Trezor Suite, and the same path as `--mnemonic-derivation-paths "<path>"`
-  on the `forge script` commands below):
+- Name the signer: the authority itself, or a delegate the authority approved on
+  every network the run binds on:
 
   ```sh
-  [ "$(nix develop -c cast wallet address --trezor)" = "${CONFIG_REGISTRY_ROOT:?}" ] && echo "root OK" || echo "NOT root"
+  export CONFIG_REGISTRY_SENDER="$CONFIG_REGISTRY_AUTHORITY" # or the delegate
   ```
 
-- Root needs native gas on every network it binds on.
+- Check the device answers as the signer (add
+  `--mnemonic-derivation-path "<path>"` after `--trezor` inside the `$(…)` if
+  the signer is not the first Ethereum account in Trezor Suite, and the same
+  path as `--mnemonic-derivation-paths "<path>"` on the `forge script` commands
+  below):
+
+  ```sh
+  [ "$(nix develop -c cast wallet address --trezor)" = "${CONFIG_REGISTRY_SENDER:?}" ] && echo "signer OK" || echo "NOT the signer"
+  ```
+
+- The signer needs native gas on every network it binds on.
 - `cp .env.example .env` for the network endpoints. They are public and
   rate-limit; replace any that fail with your own.
 
@@ -832,15 +868,15 @@ export CONFIG_REGISTRY_VALUE=$(nix develop -c cast abi-encode "f(address)" 0x...
 # 1. Dry run. Executes every check and the bind itself on a fork of each
 #    network, and sends nothing.
 nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
-  --sender "$CONFIG_REGISTRY_ROOT" --trezor --legacy
+  --sender "$CONFIG_REGISTRY_SENDER" --trezor --legacy
 
 # 2. The same command with --broadcast. The device asks once per network the
 #    dry run marked BIND or REBIND.
 nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
-  --sender "$CONFIG_REGISTRY_ROOT" --trezor --legacy --broadcast
+  --sender "$CONFIG_REGISTRY_SENDER" --trezor --legacy --broadcast
 
 # 3. Once every transaction is mined: reads every network fresh and fails
-#    unless the name resolves to the value on each.
+#    unless the name resolves to the value under the authority on each.
 nix develop -c forge script script/RegisterConfig.sol:RegisterConfig --sig "verify()"
 ```
 
@@ -851,30 +887,86 @@ itself.
 Before anything is signed the run refuses, with an error naming what is wrong: a
 non-canonical name, an empty value, a value that is not a whole number of
 32-byte words (a bare 20-byte address, say, rather than its ABI encoding), a
-network the repo does not support or one named twice, a sender other than root,
-a network whose endpoint reports another chain id than the catalogue states for
-it, and a registry address that does not hold the pinned registry code. A
-refused run signs nothing.
+network the repo does not support or one named twice, a network whose endpoint
+reports another chain id than the catalogue states for it, a registry address
+that does not hold the pinned registry code, and a signer that is neither the
+authority nor a delegate the authority approved on that network. With
+`--broadcast`, forge itself is a second layer: it refuses a device that is not
+the signer before sending on any network, with
+`No associated wallet for addresses: [<signer>]`. A refused run signs nothing.
 
-The dry run prints the name, its hash, the value, the registry address and the
-exact calldata, then for each network its chain id, the current binding
-(`unbound`, or the value and the moment it was bound) and what will happen:
-`BIND`, `REBIND` (old → new) or `SKIP`. That is the record to approve against.
-For each transaction the device shows:
+The dry run prints the name, its hash, the value, the authority, the signer, the
+registry address and the exact calldata, then for each network its chain id, the
+authority's current binding (`unbound`, or the value and the moment it was
+bound) and what will happen: `BIND`, `REBIND` (old → new) or `SKIP`. That is the
+record to approve against. For each transaction the device shows:
 
 - **Recipient**: the registry address the dry run printed
   (`LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS`);
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
-- **Data**: exactly the `Calldata:` line the dry run printed: `registerV1`'s
-  selector, the name hash, the offset `0x40`, the value's length and the value
-  padded to a multiple of 32 bytes. The device cannot decode `registerV1`, so it
-  shows the raw bytes; open the full data on the device to compare them.
+- **Data**: exactly the `Calldata:` line the dry run printed: `registerV2`'s
+  selector, the authority, the name hash, the offset `0x60`, the value's length
+  and the value padded to a multiple of 32 bytes. The device cannot decode
+  `registerV2`, so it shows the raw bytes; open the full data on the device to
+  compare them.
 
 Labels vary by firmware; whatever they are called, the recipient, amount, chain
 and raw calldata must each match the dry run. Reject on the device if any of
 them differs.
+
+### Approving a delegate
+
+`script/ApproveConfigDelegate.sol` approves a delegate for one name under the
+authority, or revokes it, on every declared network by default. `approveV2` and
+`revokeV2` act under their caller, so the signer is the authority itself, and
+the run refuses any other `--sender` (`SenderNotAuthority`) before forking. It
+takes its own variables, so nothing exported for `RegisterConfig` carries over.
+The Trezor setup is "Before the first run" above, with the authority as the
+signer.
+
+```sh
+export CONFIG_DELEGATE_AUTHORITY=0x... # the authority, which signs
+export CONFIG_DELEGATE_NAME=st0x.token-owner-safe
+export CONFIG_DELEGATE_ADDRESS=0x... # the delegate, such as the Safe
+# Optional: false revokes. Unset approves.
+# export CONFIG_DELEGATE_APPROVED=false
+# Optional, to act on fewer networks than all of them:
+# export CONFIG_DELEGATE_NETWORKS=base,arbitrum
+
+# 1. Dry run.
+nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelegate \
+  --sender "$CONFIG_DELEGATE_AUTHORITY" --trezor --legacy
+
+# 2. The same command with --broadcast. The device asks once per network the
+#    dry run marked APPROVE or REVOKE.
+nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelegate \
+  --sender "$CONFIG_DELEGATE_AUTHORITY" --trezor --legacy --broadcast
+
+# 3. Once every transaction is mined: reads every network fresh and fails
+#    unless the delegate is approved (or, with false, not approved) on each.
+nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelegate --sig "verify()"
+```
+
+Before anything is signed the run refuses a signer that is not the authority, a
+zero delegate, and every name, network, chain id and registry refusal of
+`RegisterConfig`. A network already in the target state is `SKIP`, so a run that
+stopped partway is fixed by running it again. An approval covers that one name;
+each name the delegate binds is a run of its own.
+
+The dry run prints the name, its hash, the authority, the delegate, the target,
+the registry address and the exact calldata, then for each network its chain id,
+the size of the code at the delegate (`none` where the delegate has no code
+there: a Safe not yet deployed on that network), whether it is approved now, and
+`APPROVE`, `REVOKE` or `SKIP`. The device shows the registry as recipient,
+amount 0, the network, and the `Calldata:` line as data: `approveV2`'s selector
+`0xfc7dfd2e` or `revokeV2`'s `0x2026c9f1`, then the name hash and the delegate.
+
+A Safe delegate then binds by executing
+`registerV2(authority, keccak256("<org>.<name>"), value)` on the registry from
+the Safe, on each network, and `RegisterConfig`'s `verify()` checks the binding
+under the authority.
 
 ## Migration registry
 
@@ -1100,12 +1192,12 @@ before rotating one out. Approvals cannot be enumerated on chain, only asked
 about one delegate at a time, so a consumer's prod tests assert `approvedV3` is
 false for every retired delegate beside the true answers for the live ones. A
 namespace is not an authority: it is the writer's to name, and a record in it is
-that writer's claim. A root would have to be welded into the creation code, the
-way `CONFIG_REGISTRY_ROOT` is — and the account that applies a migration is a
-different Safe, deployer or timelock for every consumer and every chain, so one
-root would have to be all of them, and baking each consumer's authority in would
-give each a different address for what is meant to be one shared registry. With
-nothing to configure there is also no rollout state in which it is inert.
+that writer's claim. A root would have to be welded into the creation code — and
+the account that applies a migration is a different Safe, deployer or timelock
+for every consumer and every chain, so one root would have to be all of them,
+and baking each consumer's authority in would give each a different address for
+what is meant to be one shared registry. With nothing to configure there is also
+no rollout state in which it is inert.
 
 **An index, not proof.** The registry says which invariant applies. It does not
 say the invariant holds — a multisig can act out of band and nothing here moves.
@@ -1288,9 +1380,8 @@ forge soldeer install rain-deploy~<version>
 ```
 
 **You also need `forge-std` 1.17.0, `rain-sol-codegen` 0.1.39 and `rain-factory`
-at git rev `976cd62` (rain.factory#271, which adds `ICloneableFactoryV5`)**,
-remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
-`rain-factory-0.2.0/`. The published package ships `src/`, `script/` and the
+0.2.4**, remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
+`rain-factory-0.2.4/`. The published package ships `src/`, `script/` and the
 licence and README files — no `test/`, no `foundry.toml`, no `remappings.txt`,
 no `soldeer.lock`, no `dependencies/` — so a consumer resolves all three itself.
 The requirement is transitive rather than incidental: the deployed contract
@@ -1307,7 +1398,7 @@ beneath both, `LibICloneableFactoryV5` and the generated
 [dependencies]
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
-rain-factory = { version = "pr271-976cd62", git = "https://github.com/rainlanguage/rain.factory.git", rev = "976cd6216ad1ba15c270a266d64a654259a5b3f1" }
+rain-factory = "0.2.4"
 rain-deploy = "<version>"
 ```
 
@@ -1332,9 +1423,9 @@ is on the path, so no `fs_permissions` grant and no spelling of the path gets
 past it. `run()` therefore reads each file, splices its blocks, and writes the
 result to `.staged-config/` under the same name.
 
-What installs it is rainix's `rainix-copy-artifacts`, after `forge script
-./script/Build.sol` and before the `git diff` that fails a stale tree, so the
-repo needs no `script/build.sh`. Locally:
+What installs it is rainix's `rainix-copy-artifacts`, after
+`forge script ./script/Build.sol` and before the `git diff` that fails a stale
+tree, so the repo needs no `script/build.sh`. Locally:
 `nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`.
 
 ```sh
@@ -1390,7 +1481,7 @@ it. In order:
 1. Add `mechanism: DeployMechanism.Zoltu, mechanismData: ""` to every entry of
    the generated released libs, and import `DeployMechanism` beside
    `DeploySuite`.
-2. Add `rain-factory` at rev `976cd62` and its remapping, as above.
+2. Add `rain-factory` 0.2.4 and its remapping, as above.
 3. Make `view` every function of yours that calls `checkedCandidateSuites`,
    `allSuites`, `suiteNames`, `suiteByName` or `candidateSuites`, which are
    `view` now. A `pure` override of `candidateSuites` still compiles.

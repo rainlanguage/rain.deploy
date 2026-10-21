@@ -1428,5 +1428,374 @@
       "testUnverifiableSourceLogsEveryArgumentAsData reads the raw log: exactly one log under keccak256(\"UnverifiableSource(address,address,string[])\"), from the deploying contract, with one topic and data abi.encode(sender, entryAddress, networks). Pass 2 at 5ec05f558b477b89b49ae5d988bcfaedfeebe14b (104 green): 11 mutants, 11 KILLED.",
       "The entry address read from deploys.derivedAddresses[0] is the equivalent mutant already recorded in audit/known-false-positives.md (Z7) and was not re-probed."
     ]
+  },
+  {
+    "timestamp": "2026-10-20T21:13:08Z",
+    "commit": "9da7962108e6cb0f9f2f65c996f6fb19f993ccf9",
+    "testsAfterCommit": "9da7962108e6cb0f9f2f65c996f6fb19f993ccf9",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 212,
+    "scope": "PR #322: the authority-keyed ConfigRegistry (src/concrete/ConfigRegistry.sol, src/lib/LibConfigRegistry.sol, the authority paths of src/lib/LibConfigRegistryRegister.sol, script/RegisterConfig.sol)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 40,
+      "behavioursProbed": 39,
+      "killedByExistingTests": 39,
+      "gapsFilled": 0,
+      "equivalentMutants": 1,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "ConfigRegistry C01-C12 probed against test/src/concrete/ConfigRegistry*.t.sol alone (48 tests, `new ConfigRegistry()`), so no kill is the pinned address or code hash: 12/12 killed.",
+      "LibConfigRegistry L01-L11 and LibConfigRegistryRegister R01-R14 probed offline (LibConfigRegistry.t.sol, LibConfigRegistryRegister.t.sol, the concrete suites, two LibRainDeploy resolved-address tests and testRegisterOnForksRefuses*; 119 tests): 22/23 killed. R10 (checkRegisteredOnForks passing another authority) survives offline and is killed on forks.",
+      "R10, R11 and script S01-S03 probed on forks with the .env.example public endpoints (RegisterConfig.t.sol and LibConfigRegistryRegisterOnForks.t.sol, 8 tests): 5/5 killed, by testRegisterOnEveryNetwork, testRegisterOnNetworksBindsEverySelected, testRegisterOnSubset and testWiring.",
+      "Equivalent: registerOnNetworks forwarding sender in place of authority to registerOnForks, after its own checkInputs has refused sender != authority. Not probed.",
+      "The pre-existing suite is this PR's own conversion: the tests were rewritten for authority keys in the same branch, so 'existing' means present before the probe, not before the PR.",
+      "Adversarial pass: authority isolation (one name under two authorities, same-block binds by two authorities, a revert for another authority not read as unbound), sender-is-authority refusal, and the Register event's indexed sender were checked against the interface NatSpec; no candidate."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T01:37:24Z",
+    "commit": "e2bf79e72796b467d5bc47f39b094cc62139d781",
+    "testsAfterCommit": "5eba0b27748e477d4374a0ca977f1740c75286ba",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 230,
+    "scope": "PR #322 round 2: the authority paths of src/lib/LibConfigRegistry.sol and src/lib/LibConfigRegistryRegister.sol, script/RegisterConfig.sol, and the register and check fork loops, made killable with no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 37,
+      "behavioursProbed": 37,
+      "killedByExistingTests": 20,
+      "gapsFilled": 17,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pre-existing suite at e2bf79e (LibConfigRegistry.t.sol, LibConfigRegistryRegister.t.sol, the concrete suites, two LibRainDeploy resolved-address tests and testRegisterOnForksRefuses*; 119 tests, RPC endpoints present): L01-L05, R01-R12, R14-R16 killed, 20/27. Survived R13 (registerOnNetworks checking sender as authority), R17 and R18 (the check loops reading under address(0)) and S01-S04 (the script's authority variable, its name and its signer), because RegisterConfigTest.testWiring forked live networks and was outside an offline run.",
+      "At 01f2adf the script forks through a virtual forkVm() and testWiring runs on LocalRegisterConfig over LocalForkVm, with the registry deployed locally. With no RPC variables and no .env (122 tests), testWiring kills S01-S04, R17, R18, the seam itself (S05 forkVm returning no cheatcodes, S06 and S07 run and verify bypassing it), S08 (the networks variable ignored), S09 (verify ignoring the selection) and K03 (no fork ids returned).",
+      "At 5eba0b2 LibConfigRegistryRegisterTest.testRegisterOnNetworksRefusesTheSignerBeforeTheVm kills R13 through a Vm with no code, whether or not RPC endpoints resolve, and testRegisterOnNetworksReturnsEachForkAndTheRecord kills K01, K02 and K05 (the loops pinned to the first fork or network) and K04 (an empty record). 37/37 killed offline.",
+      "R01 was re-probed at 5eba0b2 because a pre-commit stash briefly removed its applied mutant during the 01f2adf run: killed by testWiring and testRegisterOnForksRefusesInputsBeforeSelecting.",
+      "The fail-pattern was widened to one level of nested brackets after kills whose fuzz counterexamples carry brackets were reported without names; R13, K01, K02 and K05 were re-probed under it.",
+      "audit/known-false-positives.md drops the rows these offline kills replace (R28, R32, R10, the first-fork and first-network loop rows, the empty record, and script S01-S03); D10 in LibRainDeploy is outside this scope and stays.",
+      "Adversarial pass: the signer must be the authority the variable names and binds land under it (testWiring, under the script as authority since the local broadcast is a no-op), every refusal precedes any Vm call, and each selected network is bound and checked on its own fork in selection order, all derived from the RegisterConfig and LibConfigRegistryRegister NatSpec; no candidate."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T02:50:34Z",
+    "commit": "36e62335f40ce440516f4b07e3cf2224c0157768",
+    "testsAfterCommit": "36e62335f40ce440516f4b07e3cf2224c0157768",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 342,
+    "scope": "PR #322 round 6: the signer threading changed in e4ce5ad — src/lib/LibConfigRegistryRegister.sol checkCaller, checkInputs, registerOnNetworks, registerOnForks and registerOnSelectedChain, and script/RegisterConfig.sol run(); offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 15,
+      "behavioursProbed": 15,
+      "killedByExistingTests": 15,
+      "gapsFilled": 0,
+      "equivalentMutants": 2,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "The signer is read as msg.sender in checkCaller alone, and checkInputs, registerOnNetworks, registerOnForks, registerOnSelectedChain and run() carry only the authority, so the swapped-argument lines of the e159fcf audit and the R07 known-false-positive row are gone. Two equivalent mutants were left on the changed lines and not probed: registerOnForks passing msg.sender in place of authority to registerOnSelectedChain (R13), and registerOnNetworks doing the same to registerOnForks (R16). checkInputs, through checkCaller(authority), had already reverted unless msg.sender == authority, and an internal library call keeps msg.sender, so no test could tell either apart. The round-7 record removes both by taking the caller check out of the library.",
+      "A01-A15 probed with no RPC variables and no .env against the .mutation-test/check.sh suite (122 tests): 15/15 killed. Covered: checkCaller removed, self-compared either way, or reading tx.origin; checkInputs skipping it, checking address(0), checking it before the networks, or describing address(0); registerOnNetworks and registerOnForks passing address(0) to checkInputs, registerOnForks or registerOnSelectedChain; registerOnSelectedChain reading or broadcasting under address(0); run() binding under address(0).",
+      "The test wrappers now supply the signer as the caller of an inner wrapper with vm.prank. The SenderNotAuthority test bodies and expectations are unchanged. LibConfigRegistryRegisterOnForksTest binds under this contract (AUTHORITY = address(this)), because forge refuses vm.startBroadcast inside a pranked call.",
+      "Adversarial pass: the script's msg.sender is forge's --sender, so the signer checked is unchanged. The refusal order (name, value, networks, then the caller) is pinned by testRegisterOnNetworksRefusesInputsInOrder, and A07 is the mutant that breaks it. A contract that wraps registerOnForks in its own external function is checked against its own caller, as checkCaller's NatSpec states. No candidate."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T03:55:03Z",
+    "commit": "990c46c49b1a2f06a64d6bee61e383ee463188bf",
+    "testsAfterCommit": "990c46c49b1a2f06a64d6bee61e383ee463188bf",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 344,
+    "scope": "PR #322 round 7: the caller check moved out of the library into RegisterConfig.run() — every authority call site of src/lib/LibConfigRegistryRegister.sol, checkInputs and checkSender, and script/RegisterConfig.sol run() and verify(); offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 45,
+      "behavioursProbed": 45,
+      "killedByExistingTests": 44,
+      "gapsFilled": 0,
+      "equivalentMutants": 1,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "At 990c46c the library reads msg.sender nowhere: checkCaller is deleted, checkInputs takes no authority and returns no record, registerOnNetworks builds the record itself with describeInputs, and every bind is broadcast from the authority it is given. RegisterConfig.run() alone calls checkSender(msg.sender, authority), before it reads the name, the value or the networks. The R13 and R16 equivalents of round 6 are gone: the library tests pass any fuzzed authority other than this contract and tx.origin.",
+      "The tests were rewritten together with the refactor, which removes the behaviour they used to pin (a library-level caller check), so 'existing' means present at 990c46c before the probe. New in that commit: testRegisterOnNetworksBindsUnderTheAuthority and testRegisterOnForksBindsUnderTheAuthority, which run through LocalForkVm, now recording each account a broadcast starts from, with every library call pranked as the authority; testCheckInputsGivesTheNameAndNetworks; and testWiring reordered so the sender is refused before the name, the value and the networks.",
+      "B01-B45 (.mutation-test/r7/offline.toml) probed with no RPC variables and no .env against .mutation-test/check.sh (122 tests): 44/45 killed. Covered: msg.sender and tx.origin in place of authority at every non-pure call site (currentBinding's getV1 and unbound match, registerOnSelectedChain's read and broadcast, registerOnNetworks' record and registerOnForks call, registerOnForks' registerOnSelectedChain call, the three check-loop forwards, resolve, UnexpectedBinding, run()'s checkSender and registerOnNetworks, verify()); run()'s sender check removed, self-compared or reading tx.origin; checkSender inverted, disabled or naming one account twice; checkInputs skipped or its refusals and returns broken; address(0) bound, described or broadcast from.",
+      "Equivalent, B25: run() passing msg.sender in place of authority to registerOnNetworks. The checkSender(msg.sender, authority) on the line before has reverted unless the two are equal, so no test can tell them apart. It follows from the check sitting at the top of run(). The round-8 record removes it by deleting checkSender, so run() reads no msg.sender, and its audit/known-false-positives.md entry goes with it.",
+      "P01-P04 (.mutation-test/r7/pure.toml): msg.sender or tx.origin in place of authority in checkSender and describeInputs are NO-RUN, refused by solc (error 2527) because both functions are pure. Not counted as behaviours.",
+      "Adversarial pass: from the RegisterConfig and LibConfigRegistryRegister NatSpec, a sender other than the authority must be refused before anything is read or forked (testWiring), the record must name the authority that binds (testRegisterOnNetworksBindsUnderTheAuthority), and each bind must be read and broadcast under the given authority whoever calls the library (both BindsUnderTheAuthority tests). No candidate."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T04:35:53Z",
+    "commit": "5d2652a96d8b322c7a64bd2fe6ba477e50308326",
+    "testsAfterCommit": "5d2652a96d8b322c7a64bd2fe6ba477e50308326",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 346,
+    "scope": "PR #322 round 8: RegisterConfig.run() reading no msg.sender — script/RegisterConfig.sol run() and the bind broadcast in src/lib/LibConfigRegistryRegister.sol registerOnSelectedChain; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 13,
+      "behavioursProbed": 13,
+      "killedByExistingTests": 13,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "At 5d2652a run() passes vm.envAddress(CONFIG_REGISTRY_AUTHORITY) straight to registerOnNetworks and reads no msg.sender; checkSender and SenderNotAuthority are deleted. Forge refuses the case they guarded: forge script --broadcast without --unlocked stops with 'No associated wallet for addresses: [...]' before sending on any chain when none of its signers is a broadcast's account (BundledState::broadcast, crates/script/src/broadcast.rs, foundry 43923a4). Reproduced with that forge against a local anvil: a script calling vm.startBroadcast(0xA11CE) fails with that error and exit 1 both with no wallet and with an unrelated --private-key.",
+      "The tests changed with the refactor, so 'existing' means present at 5d2652a before the probe. testWiring runs the script with the authority set to the script itself, asserted to be neither its msg.sender (the test contract) nor tx.origin, and after every run checks the accounts LocalForkVm recorded each broadcast as started from: all the authority, and as many as the runs bound.",
+      "C01-C13 (.mutation-test/r8/offline.toml, with C01-C07 re-probed from offline-rerun.toml after their first targets also matched verify()) probed with no RPC variables and no .env against .mutation-test/check.sh (120 tests): 13/13 killed. Covered: run() passing msg.sender, tx.origin, address(0) or address(this) as the authority, forking with the cheatcodes, ignoring or doubling the network selection, returning no fork ids; the bind broadcast started from msg.sender, tx.origin or address(this), with no account, or not at all.",
+      "Equivalent mutants: none. B25 of round 7 no longer exists: there is no msg.sender read in run() to swap.",
+      "Adversarial pass: the oracle is the RegisterConfig NatSpec — every bind broadcast from the authority, and nothing signed by any other account. In-script, every broadcast started is from the authority (testWiring). Off-script, a device answering as another account is refused by forge before anything is sent, per the source and the reproduction above. A dry run with a wrong --sender now simulates without a revert; it sends nothing, and the README's pre-run `cast wallet address --trezor` check is what compares the device to the authority before the broadcast. No candidate."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T07:42:28Z",
+    "commit": "77e9d23713a341b35c8c072f7ee0a0e8f0c30acd",
+    "testsAfterCommit": "e356085a1610b555717180758d1ed529fa75da4a",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 352,
+    "scope": "PR #322 round 9: the sender-plus-authority shape restored by reverting 5d2652a, 990c46c and e4ce5ad — src/lib/LibConfigRegistryRegister.sol checkSender, checkInputs, registerOnNetworks, registerOnForks and registerOnSelectedChain sender/authority threading, and script/RegisterConfig.sol run(); offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 18,
+      "behavioursProbed": 18,
+      "killedByExistingTests": 13,
+      "gapsFilled": 1,
+      "equivalentMutants": 4,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "User ruling: SenderNotAuthority stays, and code is never changed because of a mutant it makes equivalent. 5d2652a, 990c46c and e4ce5ad were reverted with git revert, returning run() to passing msg.sender and the authority and the library to checking them in checkInputs.",
+      "S01-B27 (.mutation-test/r9/offline.toml) probed with no RPC variables and no .env against .mutation-test/check.sh (122 tests at 77e9d23): 13/18 killed by existing tests. Covered: checkSender never reverting or naming its arguments swapped, checkInputs dropping the sender check or making it before the name, registerOnNetworks and registerOnForks checking the authority as the sender, registerOnForks binding as tx.origin, the bind broadcast from tx.origin or no account, the binding read under tx.origin, and run() passing the env authority or tx.origin as the sender or msg.sender as the authority.",
+      "Gap filled: R20 (registerOnNetworks passing its own msg.sender as the sender to registerOnForks) survived offline; only the fork tests, whose sender 0xA11CE is not their msg.sender, reached it. testRegisterOnNetworksBindsAsTheGivenSender calls registerOnNetworks from a pranked caller with this contract as sender and authority; R20 re-probed (.mutation-test/r9/r20.toml, 123 tests at e356085): killed.",
+      "Equivalent mutants, recorded in audit/known-false-positives.md: S07 (checkInputs describing sender for authority), R07 (registerOnNetworks passing sender as the authority), R16 (registerOnNetworks passing authority as the sender) and R13 (registerOnForks passing authority as the sender to registerOnSelectedChain). checkInputs has reverted SenderNotAuthority unless sender == authority before each line. The round-7/8 B25 (run() passing msg.sender for the authority after its own checkSender) has no line in this shape: run() makes no check of its own, and B25 here, the env authority passed as the sender, is killed.",
+      "Adversarial pass: the oracle is the RegisterConfig and LibConfigRegistryRegister NatSpec — a bind lands under and is signed by the authority, and any other sender is refused before a device signs. Forge refusing a broadcast from an account none of its signers is stays a second layer behind SenderNotAuthority. No candidate."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T13:05:00Z",
+    "commit": "38fc8aa2a7f337a2f16a3f6715c5788967d25311",
+    "testsAfterCommit": "38fc8aa2a7f337a2f16a3f6715c5788967d25311",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 399,
+    "scope": "PR #322 round 10: delegates (#326) — src/concrete/ConfigRegistry.sol registerV1, approveV1, revokeV1, approvedV1, checkDelegate, getV1; src/lib/LibConfigRegistryRegister.sol checkSender, checkInputs, registerOnNetworks, registerOnForks, registerOnSelectedChain; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 30,
+      "behavioursProbed": 30,
+      "killedByExistingTests": 30,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "C01-C23 on ConfigRegistry against the registry suites with Build.sol regenerated per probe (146 tests): 23/23 killed.",
+      "R07, R13, R16, S07 and L01-L03 on the register library against the library and RegisterConfig suites (79 tests): 7/7 killed. R07, R13, R16 and S07 were recorded as equivalent under SenderNotAuthority; delegates make sender and authority differ, so they are real and their known false positive entries are removed."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T13:40:00Z",
+    "commit": "d98a42b08f8960694f60de0f7c79ab83d8e5e610",
+    "testsAfterCommit": "d98a42b08f8960694f60de0f7c79ab83d8e5e610",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 401,
+    "scope": "PR #322 round 11: src/abstract/RegistryDelegates.sol and its call sites in src/concrete/MigrationRegistry.sol; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 15,
+      "behavioursProbed": 15,
+      "killedByExistingTests": 15,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "D01-D09 on RegistryDelegates and M01-M06 on MigrationRegistry against the ConfigRegistry and MigrationRegistry suites with Build.sol regenerated per probe (263 tests): 15/15 killed. The scope mutants are killed by MigrationRegistry tests; ConfigRegistry uses one scope."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T15:10:00Z",
+    "commit": "57d4e5e98b3d6ed7159e2e410f0e6db715c85e30",
+    "testsAfterCommit": "57d4e5e98b3d6ed7159e2e410f0e6db715c85e30",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 405,
+    "scope": "PR #322 round 12: name-scoped ConfigRegistry approvals — src/concrete/ConfigRegistry.sol registerV1, approveV1, revokeV1, approvedV1 name arguments and events; src/lib/LibConfigRegistryRegister.sol checkSender name; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 10,
+      "behavioursProbed": 10,
+      "killedByExistingTests": 10,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "N01-N10 against the ConfigRegistry, register library and RegisterConfig suites with Build.sol regenerated per probe (149 tests): 10/10 killed, by the name-isolation tests added with the change (testApprovalCoversOnlyItsName, testRevokeIsPerName, testSenderApprovedForAnotherName) and the existing delegate tests."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T16:20:00Z",
+    "commit": "ff20bf92e0727e5296a95d396ce088e836c1646e",
+    "testsAfterCommit": "ff20bf92e0727e5296a95d396ce088e836c1646e",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 409,
+    "scope": "PR #322 round 13: the shared delegation surface — src/abstract/RegistryDelegates.sol checkDelegateKey, approveWithin, revokeWithin, approvedWithin, checkCallerWritesUnder; src/concrete/MigrationRegistry.sol approveV3, approvedV3 and checkDelegate key checks; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 18,
+      "behavioursProbed": 18,
+      "killedByExistingTests": 18,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "A01-A15 on RegistryDelegates and M07-M09 on MigrationRegistry against the ConfigRegistry, MigrationRegistry, register library and RegisterConfig suites with Build.sol regenerated per probe (430 tests): 18/18 killed.",
+      "The later rename to IConfigRegistryV2 at c47018802ab97978eaee7a2ac4f6ab5a96bbf062 changes names and selectors only; the pinned selector test holds the new selector to cast sig."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T15:50:02Z",
+    "commit": "bd0141715ad0e4b0f6ce314b0a2c23afd0f9ede0",
+    "testsAfterCommit": "bd0141715ad0e4b0f6ce314b0a2c23afd0f9ede0",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 415,
+    "scope": "PR #322 round 14: the unindexed emits — src/concrete/ConfigRegistry.sol emit Register; src/abstract/RegistryDelegates.sol emit Approved and emit Revoked; src/concrete/MigrationRegistry.sol emit Migrated; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 22,
+      "behavioursProbed": 22,
+      "killedByExistingTests": 22,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "U01-U22 against the ConfigRegistry, MigrationRegistry, register library and RegisterConfig suites with Build.sol regenerated per probe (428 tests, LibConfigRegistryRegisterOnForks excluded for lack of RPC): 22/22 killed. Each field of each event swapped, zeroed or replaced, Approved and Revoked swapped, and each emit deleted.",
+      "The suite credited is the one this commit lands: the event-layout tests were rewritten in it to read every field from the data with one topic, so attribution is to those rewritten tests, not to the pre-unindexing suite.",
+      "Migrated sender/writer swaps (U16, U17) are killed by the MigrationRegistryDelegate expectEmit tests, where the sender is a delegate; the ApplyMigration layout tests have sender equal to writer."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T19:47:50Z",
+    "commit": "b076b591532ea21ebf994d6450d3e78ec7287265",
+    "publishedTag": "sol-v0.1.19",
+    "commitsAheadOfTag": 69,
+    "scope": "PR #339 release 0.1.20: src/generated/0_1_20/ConfigRegistry.sol, MigrationRegistry.sol, TimelockController.sol; LibConfigRegistryReleased and LibMigrationRegistryReleased 0_1_20 entries; foundry.toml version; LibConfigRegistryApprove.checkApprovalOnNetworks input checks; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 6,
+      "behaviours": 10,
+      "behavioursProbed": 10,
+      "killedByExistingTests": 9,
+      "gapsFilled": 1,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Full offline suite per probe (1642 tests), killers are failures outside the 21-name baseline set of fork tests missing RPC URLs: 10/10 killed.",
+      "R1-R4 (0_1_20 registry address or hash swapped for 0_1_19's) and R6-R7 (Released lib entry pointed at 0_1_19's address or hash) killed by testSnapshotInternallyConsistent; R8 (version back to 0.1.19) by testVersionIsTheNewestFrozenRelease.",
+      "R5 (0_1_20 TimelockController creation code last byte 56->57) killed by testEveryFrozenCodeRecordDeploysItsRecordedHash and by the gap-filling testFrozen0120CodeDerivesProductionTimelocks.",
+      "A1 (checkName deleted) killed by testCheckApprovalOnNetworksRefusesInputs; A2 (selectNetworks deleted) by testCheckApprovalOnNetworksRefusesInputs and testWiring."
+    ]
   }
 ]
