@@ -26,14 +26,6 @@ error NoChainId(string network);
 /// every check that reads them stays green.
 error EmptyRoster();
 
-/// Thrown when the repo has no `script/build.sh`. That hook is the only thing
-/// that moves a staged config into place, so without it the generated blocks
-/// are written somewhere nothing reads, `foundry.toml` never changes, and `Git
-/// is clean` passes a tree whose config has drifted from the roster it pins —
-/// the silent green this whole mechanism exists to remove.
-/// @param path The hook that was looked for.
-error BuildHookMissing(string path);
-
 /// @title LibRainDeployConfig
 /// @notice Writes the network config a deploy repo cannot state twice: the
 /// `[rpc_endpoints]` and `[etherscan]` sections of `foundry.toml`, and the
@@ -60,9 +52,8 @@ error BuildHookMissing(string path);
 /// the whole reason this is possible at all.
 ///
 /// So the spliced file is written to `<root>/.staged-config/` and installed by
-/// `script/build.sh`, the hook rainix's `rainix-copy-artifacts` runs — outside
-/// any devshell, after `forge script ./script/Build.sol` and before the `git
-/// diff` that fails a stale tree. FFI is the other way to reach a shell from a
+/// rainix's `rainix-copy-artifacts`, after `forge script ./script/Build.sol`
+/// and before the `git diff` that fails a stale tree. FFI is the other way to reach a shell from a
 /// script, and is not taken: the invocation that matters passes no `--ffi`, and
 /// granting it there would hand FFI to every consumer's build.
 ///
@@ -86,14 +77,10 @@ library LibRainDeployConfig {
     string constant ENV_EXAMPLE_NAME = ".env.example";
 
     /// The directory under the root that a generated file is staged in. Git
-    /// ignored: `script/build.sh` removes it once it has installed what is in
-    /// it, and a run that failed between the two must not leave a tracked file
+    /// ignored: `rainix-copy-artifacts` removes it once it has installed what
+    /// is in it, and a run that failed between the two must not leave a tracked file
     /// behind.
     string constant STAGED_DIR_NAME = ".staged-config";
-
-    /// The hook that installs what was staged. Matched exactly, because that is
-    /// the path `rainix-copy-artifacts` conditions its own step on.
-    string constant BUILD_HOOK_PATH = "script/build.sh";
 
     /// The `[rpc_endpoints]` block, as it is named in its markers.
     string constant RPC_ENDPOINTS_BLOCK = "rpc_endpoints";
@@ -270,7 +257,7 @@ library LibRainDeployConfig {
     }
 
     /// Where a generated file is staged, named as it will be installed.
-    /// `script/build.sh` copies by name, so a staged file lands on the file of
+    /// `rainix-copy-artifacts` copies by name, so a staged file lands on the file of
     /// the same name under the root and nowhere else.
     /// @param root The project root.
     /// @param name The file name under the root.
@@ -310,25 +297,12 @@ library LibRainDeployConfig {
         vm.writeFile(staged, content);
     }
 
-    /// Stages every generated config file under a root, for the build hook to
-    /// install.
-    ///
-    /// Refuses a repo with no hook. Nothing else moves a staged file into
-    /// place, so generating for a repo that has none writes the roster to a
-    /// directory nothing reads while the config it is meant to hold goes on
-    /// saying whatever it said — green, from a build that regenerated nothing.
-    /// Presence is the same condition `rainix-copy-artifacts` runs the hook on,
-    /// so this is exactly the state in which the install would be skipped.
+    /// Stages every generated config file under a root, for
+    /// `rainix-copy-artifacts` to install.
     /// @param vm The Vm instance for file operations.
     /// @param root The project root.
-    /// @param hookPath The hook that installs what this stages.
     /// @param networks The networks to generate for.
-    function writeStagedConfig(Vm vm, string memory root, string memory hookPath, SupportedNetwork[] memory networks)
-        internal
-    {
-        if (!vm.exists(hookPath)) {
-            revert BuildHookMissing(hookPath);
-        }
+    function writeStagedConfig(Vm vm, string memory root, SupportedNetwork[] memory networks) internal {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(stagedDir(root), true);
         writeNetworkConfig(vm, configPath(root), stagedPath(root, CONFIG_NAME), networks);

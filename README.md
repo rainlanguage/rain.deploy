@@ -666,8 +666,8 @@ fails the job every push runs.
 
 It reaches `foundry.toml` in two steps, because foundry refuses a filesystem
 cheatcode write to the project root's own config whatever `fs_permissions` says.
-`run()` stages the spliced files under `.staged-config/` and `script/build.sh`
-installs them — see [Install](#install). Reads are allowed, which is what makes
+`run()` stages the spliced files under `.staged-config/` and rainix's
+`rainix-copy-artifacts` installs them — see [Install](#install). Reads are allowed, which is what makes
 the splice possible at all, and staging removes the hazard the direct write
 would have carried: nothing under `forge test` can race a rewrite of the config
 every other test reads, because nothing rewrites it.
@@ -1323,7 +1323,6 @@ fs_permissions = [
   { access = "read", path = "./foundry.toml" },
   { access = "read", path = "./.env.example" },
   { access = "read-write", path = "./.staged-config" },
-  { access = "read", path = "./script/build.sh" },
 ]
 ```
 
@@ -1333,22 +1332,15 @@ is on the path, so no `fs_permissions` grant and no spelling of the path gets
 past it. `run()` therefore reads each file, splices its blocks, and writes the
 result to `.staged-config/` under the same name.
 
-What installs it is `script/build.sh`, the hook rainix's `rainix-copy-artifacts`
-runs after `forge script ./script/Build.sol` and before the `git diff` that
-fails a stale tree. Copy this repo's — it needs no forge, no nix and no `--ffi`,
-which is the other way a script could reach a shell and is not taken: the
-invocation that matters passes no `--ffi`, and granting it there would hand FFI
-to every consumer's build rather than to one step.
+What installs it is rainix's `rainix-copy-artifacts`, after `forge script
+./script/Build.sol` and before the `git diff` that fails a stale tree, so the
+repo needs no `script/build.sh`. Locally:
+`nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`.
 
 ```sh
 # .gitignore
 .staged-config
 ```
-
-A repo with no `script/build.sh` is REFUSED rather than staged for, because
-nothing else moves a staged file into place: generating for it would write the
-roster where nothing reads it while the config went on saying whatever it said,
-and the build would report success.
 
 Both files then need the markers the generated blocks are spliced between, once
 each and the begin before the end. A file carrying neither is refused, naming

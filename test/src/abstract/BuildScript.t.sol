@@ -600,7 +600,7 @@ contract BuildScriptTest is Test {
     /// runs and the only one `Git is clean` currency checks.
     ///
     /// The staging directory being ABSENT is what says so now: a staged file
-    /// left behind by a release is one the next `script/build.sh` installs,
+    /// left behind by a release is one the next install puts in place,
     /// which is the config change happening anyway, one step later.
     function testCutReleaseLeavesTheConfigAlone() external {
         resetFixture(CUT_CONFIG_FIXTURE_ROOT);

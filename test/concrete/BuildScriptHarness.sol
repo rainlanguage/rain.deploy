@@ -81,7 +81,7 @@ contract BuildScriptHarness is BuildScript {
     /// @inheritdoc BuildScript
     /// @dev The fixture root, never the repo's own. A `run()` here would
     /// otherwise read the committed config and stage a spliced copy of it,
-    /// which the next `script/build.sh` would install.
+    /// which the next install would put in place.
     function configRoot() internal view override returns (string memory) {
         return sRoot;
     }
