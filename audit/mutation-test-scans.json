@@ -1767,5 +1767,35 @@
       "The suite credited is the one this commit lands: the event-layout tests were rewritten in it to read every field from the data with one topic, so attribution is to those rewritten tests, not to the pre-unindexing suite.",
       "Migrated sender/writer swaps (U16, U17) are killed by the MigrationRegistryDelegate expectEmit tests, where the sender is a delegate; the ApplyMigration layout tests have sender equal to writer."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T19:47:50Z",
+    "commit": "b076b591532ea21ebf994d6450d3e78ec7287265",
+    "publishedTag": "sol-v0.1.19",
+    "commitsAheadOfTag": 69,
+    "scope": "PR #339 release 0.1.20: src/generated/0_1_20/ConfigRegistry.sol, MigrationRegistry.sol, TimelockController.sol; LibConfigRegistryReleased and LibMigrationRegistryReleased 0_1_20 entries; foundry.toml version; LibConfigRegistryApprove.checkApprovalOnNetworks input checks; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 6,
+      "behaviours": 10,
+      "behavioursProbed": 10,
+      "killedByExistingTests": 9,
+      "gapsFilled": 1,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Full offline suite per probe (1642 tests), killers are failures outside the 21-name baseline set of fork tests missing RPC URLs: 10/10 killed.",
+      "R1-R4 (0_1_20 registry address or hash swapped for 0_1_19's) and R6-R7 (Released lib entry pointed at 0_1_19's address or hash) killed by testSnapshotInternallyConsistent; R8 (version back to 0.1.19) by testVersionIsTheNewestFrozenRelease.",
+      "R5 (0_1_20 TimelockController creation code last byte 56->57) killed by testEveryFrozenCodeRecordDeploysItsRecordedHash and by the gap-filling testFrozen0120CodeDerivesProductionTimelocks.",
+      "A1 (checkName deleted) killed by testCheckApprovalOnNetworksRefusesInputs; A2 (selectNetworks deleted) by testCheckApprovalOnNetworksRefusesInputs and testWiring."
+    ]
   }
 ]
