@@ -1383,7 +1383,7 @@ it. In order:
 1. Add `mechanism: DeployMechanism.Zoltu, mechanismData: ""` to every entry of
    the generated released libs, and import `DeployMechanism` beside
    `DeploySuite`.
-2. Add `rain-factory` at rev `976cd62` and its remapping, as above.
+2. Add `rain-factory` 0.2.4 and its remapping, as above.
 3. Make `view` every function of yours that calls `checkedCandidateSuites`,
    `allSuites`, `suiteNames`, `suiteByName` or `candidateSuites`, which are
    `view` now. A `pure` override of `candidateSuites` still compiles.
