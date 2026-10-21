@@ -355,7 +355,8 @@ library LibConfigRegistryApprove {
         bool approve
     ) internal {
         // Refused before anything is forked.
-        LibConfigRegistryRegister.nameHash(name);
+        LibConfigRegistryRegister.checkName(name);
+        //slither-disable-next-line unused-return
         LibConfigRegistryRegister.selectNetworks(selected, declared);
         checkApprovalOnForks(
             vm, selected, declared, LibRainDeploy.createForks(vm, selected), authority, name, delegate, approve
