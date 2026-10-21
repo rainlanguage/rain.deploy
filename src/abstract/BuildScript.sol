@@ -146,10 +146,28 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         }
     }
 
+    /// Every path the repo's own hooks write that `LibRainDeploySnapshot.generatedPaths`
+    /// does not name, e.g. alias libs or retired contracts' released-suites libs.
+    /// Defaults to none.
+    /// @return The paths.
+    function buildGeneratedPaths() internal view virtual returns (string[] memory) {
+        return new string[](0);
+    }
+
     /// Every path `run()` must rewrite.
     /// @return The paths.
     function generatedPaths() internal view returns (string[] memory) {
-        return LibRainDeploySnapshot.generatedPaths(recordRoot(), releaseRecordNames(), snapshotContractNames());
+        string[] memory base =
+            LibRainDeploySnapshot.generatedPaths(recordRoot(), releaseRecordNames(), snapshotContractNames());
+        string[] memory own = buildGeneratedPaths();
+        string[] memory paths = new string[](base.length + own.length);
+        for (uint256 i = 0; i < base.length; i++) {
+            paths[i] = base[i];
+        }
+        for (uint256 i = 0; i < own.length; i++) {
+            paths[base.length + i] = own[i];
+        }
+        return paths;
     }
 
     /// Prints `generatedPaths()` for `rainix-copy-artifacts` to fail a run that

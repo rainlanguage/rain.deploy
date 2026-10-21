@@ -1190,7 +1190,7 @@ library LibRainDeploySnapshot {
         string memory spdxLicenseIdentifier,
         string memory copyrightText
     ) internal returns (string memory) {
-        string memory libraryName = string.concat("Lib", contractName, "Deploy");
+        string memory libraryName = aliasLibraryName(contractName);
         string memory path = pathForLib(libDir, libraryName);
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
@@ -1383,6 +1383,13 @@ library LibRainDeploySnapshot {
             selected[i] = found[i];
         }
         return sortedRecordPaths(vm, selected);
+    }
+
+    /// The name of the alias lib that re-exports ONE contract's candidate pins.
+    /// @param contractName The contract the alias lib describes.
+    /// @return The library name, e.g. `LibConfigRegistryDeploy`.
+    function aliasLibraryName(string memory contractName) internal pure returns (string memory) {
+        return string.concat("Lib", contractName, "Deploy");
     }
 
     /// The name of the generated lib that declares ONE contract's releases.

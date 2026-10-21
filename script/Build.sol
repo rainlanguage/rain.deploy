@@ -126,6 +126,26 @@ contract Build is BuildScript, RegistryDeploySuites {
         LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, dir, releasedContractNames());
     }
 
+    /// @inheritdoc BuildScript
+    /// @dev Each retired contract's released-suites lib, then each alias lib.
+    function buildGeneratedPaths() internal view override returns (string[] memory) {
+        RetiredContract[] memory retired = retiredContracts();
+        GeneratedContract[] memory contracts = generatedContracts();
+        string memory dir = libDir();
+        string[] memory paths = new string[](retired.length + contracts.length);
+        for (uint256 i = 0; i < retired.length; i++) {
+            paths[i] = LibRainDeploySnapshot.pathForLib(
+                dir, LibRainDeploySnapshot.releasedLibraryName(retired[i].contractName)
+            );
+        }
+        for (uint256 i = 0; i < contracts.length; i++) {
+            paths[retired.length + i] = LibRainDeploySnapshot.pathForLib(
+                dir, LibRainDeploySnapshot.aliasLibraryName(contracts[i].contractName)
+            );
+        }
+        return paths;
+    }
+
     /// Contracts this repo no longer builds whose frozen releases stay
     /// declared, in the order they were released. Their record can no longer
     /// grow, so regenerating their released-suites libs is a no-op that keeps
