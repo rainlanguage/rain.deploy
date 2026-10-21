@@ -34,6 +34,7 @@ import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
 import {MockCloneableV2} from "../../concrete/MockCloneableV2.sol";
 import {perNetworkCloneChainIds, perNetworkCloneInitData} from "../../abstract/PerNetworkCloneDeploys.sol";
+import {LibBeaconProxyTest} from "../../lib/LibBeaconProxyTest.sol";
 
 /// @title LibRainDeployMechanismBeaconProxyTest
 /// @notice The BEACON_PROXY mechanisms as `LibRainDeployMechanism` reads them: the candidate, the
@@ -47,21 +48,14 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
     /// @param initDataPerNetwork Whether the init data is per network.
     /// @return The declaration.
     function declaredBeaconProxy(bool initDataPerNetwork) internal returns (BeaconProxyDeploy memory) {
-        address factory = address(new MockBeaconProxyFactory());
-        address beacon = address(new UpgradeableBeacon(address(new MockCloneableV2()), address(this)));
-        DeployDependency[] memory dependencies = new DeployDependency[](2);
-        dependencies[0] = DeployDependency({deployedAddress: factory, runtimeCode: factory.code});
-        dependencies[1] = DeployDependency({deployedAddress: beacon, runtimeCode: beacon.code});
-        return BeaconProxyDeploy({
-            suite: "beacon-proxy",
-            factory: factory,
-            beacon: beacon,
-            data: initDataPerNetwork ? bytes("") : TEST_DATA,
-            initDataPerNetwork: initDataPerNetwork,
-            initData: initDataPerNetwork ? perNetworkCloneInitData : LibRainDeployClone.noInitDataPerNetwork,
-            salt: TEST_SALT,
-            dependencies: dependencies
-        });
+        return LibBeaconProxyTest.declared(
+            "beacon-proxy",
+            address(new MockBeaconProxyFactory()),
+            address(new UpgradeableBeacon(address(new MockCloneableV2()), address(this))),
+            TEST_DATA,
+            initDataPerNetwork,
+            TEST_SALT
+        );
     }
 
     /// @param proxy The declaration.

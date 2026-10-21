@@ -16,7 +16,12 @@ import {
     UnverifiableSource
 } from "../../../src/lib/LibRainDeployMechanism.sol";
 import {DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {BEACON_PROXY_ARTIFACT_PATH} from "../../../src/lib/LibRainDeployBeaconProxy.sol";
+import {BEACON_PROXY_ARTIFACT_PATH, LibRainDeployBeaconProxy} from "../../../src/lib/LibRainDeployBeaconProxy.sol";
+import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
+import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
+import {MockOriginOwnedCloneable} from "../../concrete/MockOriginOwnedCloneable.sol";
+import {LibBeaconProxyTest} from "../../lib/LibBeaconProxyTest.sol";
+import {perNetworkCloneChainIds} from "../../abstract/PerNetworkCloneDeploys.sol";
 import {
     exampleCloneDependencies,
     exampleCloneFactory,
@@ -231,6 +236,53 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         assertEq(deployed.length, 2);
         assertEq(deployed[0], suite.storedDeployedAddress);
         assertEq(deployed[1], suite.storedDeployedAddress);
+    }
+
+    /// A beacon proxy suite over a fresh factory and a beacon of `MockOriginOwnedCloneable`, seating `owner`.
+    /// @param owner The owner the proxy's init data names.
+    /// @return The suite.
+    function ownedBeaconProxySuite(address owner) internal returns (DeploySuite memory) {
+        return LibRainDeployMechanism.beaconProxyCandidate(
+            LibBeaconProxyTest.declared(
+                "owned-beacon-proxy",
+                address(new MockBeaconProxyFactory()),
+                address(new UpgradeableBeacon(address(new MockOriginOwnedCloneable()), address(this))),
+                abi.encode(owner),
+                false,
+                TEST_SALT
+            ),
+            perNetworkCloneChainIds()
+        )
+        .snapshot;
+    }
+
+    /// A beacon proxy broadcast that would seat the deploy key is refused on the network's fork, naming the network
+    /// and the proxy's derived address.
+    function testBeaconProxyBroadcastRefusesTheDeployKeySeated() external {
+        DeploySuite memory suite = ownedBeaconProxySuite(vm.addr(1));
+        address derived = LibRainDeployMechanism.deployedAddresses(suite)[0];
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        Vm forkVm = Vm(address(new LocalForkVm()));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployBeaconProxy.BeaconProxySeatsDeployKey.selector, LibRainDeploy.ARBITRUM_ONE, derived
+            )
+        );
+        this.externalDeployAndBroadcastOn(forkVm, networks, suite);
+    }
+
+    /// A beacon proxy broadcast seating anyone but the deploy key deploys the proxy at its derived address.
+    function testBeaconProxyBroadcastSeatsAnotherOwner(address owner) external {
+        vm.assume(owner != vm.addr(1) && owner != address(0));
+        DeploySuite memory suite = ownedBeaconProxySuite(owner);
+        address derived = LibRainDeployMechanism.deployedAddresses(suite)[0];
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(new LocalForkVm())), networks, suite);
+        assertEq(deployed.length, 1);
+        assertEq(deployed[0], derived);
+        assertEq(MockOriginOwnedCloneable(derived).owner(), owner);
     }
 
     /// A per-network clone broadcast formats no verify command and no notice, even under a compiled artifact's path.

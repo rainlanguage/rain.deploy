@@ -20,6 +20,7 @@ import {
 import {PerNetworkCloneBeaconVerifyChain} from "../../abstract/PerNetworkCloneBeaconVerifyChain.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
+import {LibBeaconProxyTest} from "../../lib/LibBeaconProxyTest.sol";
 
 /// @title RainDeployVerifyChainBeaconProxyTest
 /// @notice The chain matrix, on local forks, over a beacon proxy suite whose beacon is the one declared on Polygon.
@@ -73,21 +74,11 @@ contract RainDeployVerifyChainBeaconProxyTest is PerNetworkCloneBeaconVerifyChai
     /// @param initDataPerNetwork Whether its init data, and so its address, is per network.
     /// @return The suite.
     function liveProxySuite(address beacon, bool initDataPerNetwork) internal returns (DeploySuite memory) {
-        DeployDependency[] memory dependencies = new DeployDependency[](2);
-        dependencies[0] = DeployDependency({deployedAddress: sFactory, runtimeCode: sFactory.code});
-        dependencies[1] = DeployDependency({deployedAddress: beacon, runtimeCode: beacon.code});
         DeploySuite memory suite =
         LibRainDeployMechanism.beaconProxyCandidate(
-            BeaconProxyDeploy({
-                suite: PROXY_SUITE,
-                factory: sFactory,
-                beacon: beacon,
-                data: initDataPerNetwork ? bytes("") : bytes(hex"deadbeef"),
-                initDataPerNetwork: initDataPerNetwork,
-                initData: initDataPerNetwork ? perNetworkCloneInitData : LibRainDeployClone.noInitDataPerNetwork,
-                salt: bytes32(uint256(5)),
-                dependencies: dependencies
-            }),
+            LibBeaconProxyTest.declared(
+                PROXY_SUITE, sFactory, beacon, hex"deadbeef", initDataPerNetwork, bytes32(uint256(5))
+            ),
             perNetworkCloneChainIds()
         )
         .snapshot;

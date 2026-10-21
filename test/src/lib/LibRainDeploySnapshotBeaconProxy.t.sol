@@ -17,6 +17,7 @@ import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.so
 import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
 import {MockCloneableV2} from "../../concrete/MockCloneableV2.sol";
 import {perNetworkCloneChainIds, perNetworkCloneInitData} from "../../abstract/PerNetworkCloneDeploys.sol";
+import {LibBeaconProxyTest} from "../../lib/LibBeaconProxyTest.sol";
 
 /// @title LibRainDeploySnapshotBeaconProxyTest
 /// @notice The beacon proxy record marker: what the writer emits, how `recordedMechanism` reads it,
@@ -201,22 +202,15 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
     /// @param initDataPerNetwork Whether the init data is per network.
     /// @return The candidate's suite.
     function beaconProxySuite(bool initDataPerNetwork) internal returns (DeploySuite memory) {
-        address factory = address(new MockBeaconProxyFactory());
-        address beacon = address(new UpgradeableBeacon(address(new MockCloneableV2()), address(this)));
-        DeployDependency[] memory dependencies = new DeployDependency[](2);
-        dependencies[0] = DeployDependency({deployedAddress: factory, runtimeCode: factory.code});
-        dependencies[1] = DeployDependency({deployedAddress: beacon, runtimeCode: beacon.code});
         return LibRainDeployMechanism.beaconProxyCandidate(
-            BeaconProxyDeploy({
-                suite: "beacon-proxy",
-                factory: factory,
-                beacon: beacon,
-                data: initDataPerNetwork ? bytes("") : bytes(hex"deadbeef"),
-                initDataPerNetwork: initDataPerNetwork,
-                initData: initDataPerNetwork ? perNetworkCloneInitData : LibRainDeployClone.noInitDataPerNetwork,
-                salt: bytes32(uint256(7)),
-                dependencies: dependencies
-            }),
+            LibBeaconProxyTest.declared(
+                "beacon-proxy",
+                address(new MockBeaconProxyFactory()),
+                address(new UpgradeableBeacon(address(new MockCloneableV2()), address(this))),
+                hex"deadbeef",
+                initDataPerNetwork,
+                bytes32(uint256(7))
+            ),
             perNetworkCloneChainIds()
         )
         .snapshot;
