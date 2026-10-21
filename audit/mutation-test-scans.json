@@ -1239,7 +1239,7 @@
       "behavioursProbed": 15,
       "killedByExistingTests": 15,
       "gapsFilled": 0,
-      "equivalentMutants": 0,
+      "equivalentMutants": 2,
       "unkillableDefensiveGuards": 0,
       "notExecutedBySuite": 0,
       "nonTerminating": 0,
@@ -1249,10 +1249,43 @@
       "alreadyFiled": []
     },
     "notes": [
-      "The signer is read as msg.sender in checkCaller alone, and checkInputs, registerOnNetworks, registerOnForks, registerOnSelectedChain and run() carry only the authority, so the R7 and R16 equivalents of the e159fcf audit (sender and authority swapped after checkSender proved them equal) and the R07 known-false-positive row have no line left to mutate.",
+      "The signer is read as msg.sender in checkCaller alone, and checkInputs, registerOnNetworks, registerOnForks, registerOnSelectedChain and run() carry only the authority, so the swapped-argument lines of the e159fcf audit and the R07 known-false-positive row are gone. Two equivalent mutants were left on the changed lines and not probed: registerOnForks passing msg.sender in place of authority to registerOnSelectedChain (R13), and registerOnNetworks doing the same to registerOnForks (R16). checkInputs, through checkCaller(authority), had already reverted unless msg.sender == authority, and an internal library call keeps msg.sender, so no test could tell either apart. The round-7 record removes both by taking the caller check out of the library.",
       "A01-A15 probed with no RPC variables and no .env against the .mutation-test/check.sh suite (122 tests): 15/15 killed. Covered: checkCaller removed, self-compared either way, or reading tx.origin; checkInputs skipping it, checking address(0), checking it before the networks, or describing address(0); registerOnNetworks and registerOnForks passing address(0) to checkInputs, registerOnForks or registerOnSelectedChain; registerOnSelectedChain reading or broadcasting under address(0); run() binding under address(0).",
       "The test wrappers now supply the signer as the caller of an inner wrapper with vm.prank. The SenderNotAuthority test bodies and expectations are unchanged. LibConfigRegistryRegisterOnForksTest binds under this contract (AUTHORITY = address(this)), because forge refuses vm.startBroadcast inside a pranked call.",
       "Adversarial pass: the script's msg.sender is forge's --sender, so the signer checked is unchanged. The refusal order (name, value, networks, then the caller) is pinned by testRegisterOnNetworksRefusesInputsInOrder, and A07 is the mutant that breaks it. A contract that wraps registerOnForks in its own external function is checked against its own caller, as checkCaller's NatSpec states. No candidate."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T03:55:03Z",
+    "commit": "990c46c49b1a2f06a64d6bee61e383ee463188bf",
+    "testsAfterCommit": "990c46c49b1a2f06a64d6bee61e383ee463188bf",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 344,
+    "scope": "PR #322 round 7: the caller check moved out of the library into RegisterConfig.run() — every authority call site of src/lib/LibConfigRegistryRegister.sol, checkInputs and checkSender, and script/RegisterConfig.sol run() and verify(); offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 45,
+      "behavioursProbed": 45,
+      "killedByExistingTests": 44,
+      "gapsFilled": 0,
+      "equivalentMutants": 1,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "At 990c46c the library reads msg.sender nowhere: checkCaller is deleted, checkInputs takes no authority and returns no record, registerOnNetworks builds the record itself with describeInputs, and every bind is broadcast from the authority it is given. RegisterConfig.run() alone calls checkSender(msg.sender, authority), before it reads the name, the value or the networks. The R13 and R16 equivalents of round 6 are gone: the library tests pass any fuzzed authority other than this contract and tx.origin.",
+      "The tests were rewritten together with the refactor, which removes the behaviour they used to pin (a library-level caller check), so 'existing' means present at 990c46c before the probe. New in that commit: testRegisterOnNetworksBindsUnderTheAuthority and testRegisterOnForksBindsUnderTheAuthority, which run through LocalForkVm, now recording each account a broadcast starts from, with every library call pranked as the authority; testCheckInputsGivesTheNameAndNetworks; and testWiring reordered so the sender is refused before the name, the value and the networks.",
+      "B01-B45 (.mutation-test/r7/offline.toml) probed with no RPC variables and no .env against .mutation-test/check.sh (122 tests): 44/45 killed. Covered: msg.sender and tx.origin in place of authority at every non-pure call site (currentBinding's getV1 and unbound match, registerOnSelectedChain's read and broadcast, registerOnNetworks' record and registerOnForks call, registerOnForks' registerOnSelectedChain call, the three check-loop forwards, resolve, UnexpectedBinding, run()'s checkSender and registerOnNetworks, verify()); run()'s sender check removed, self-compared or reading tx.origin; checkSender inverted, disabled or naming one account twice; checkInputs skipped or its refusals and returns broken; address(0) bound, described or broadcast from.",
+      "Equivalent, B25: run() passing msg.sender in place of authority to registerOnNetworks. The checkSender(msg.sender, authority) on the line before has reverted unless the two are equal, so no test can tell them apart. It follows from the check sitting at the top of run(); listed in audit/known-false-positives.md.",
+      "P01-P04 (.mutation-test/r7/pure.toml): msg.sender or tx.origin in place of authority in checkSender and describeInputs are NO-RUN, refused by solc (error 2527) because both functions are pure. Not counted as behaviours.",
+      "Adversarial pass: from the RegisterConfig and LibConfigRegistryRegister NatSpec, a sender other than the authority must be refused before anything is read or forked (testWiring), the record must name the authority that binds (testRegisterOnNetworksBindsUnderTheAuthority), and each bind must be read and broadcast under the given authority whoever calls the library (both BindsUnderTheAuthority tests). No candidate."
     ]
   }
 ]
