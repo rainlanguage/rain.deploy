@@ -791,9 +791,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         }
     }
 
-    /// `Migrated` is emitted with the writer, namespace and migration indexed,
-    /// so the log can be filtered by any of them, and carries the sender and
-    /// the moment as data. The log is the only enumeration of the registry, so
+    /// `Migrated` is emitted with nothing indexed, the sender, writer,
+    /// namespace, migration and moment all as data. The log is the only enumeration of the registry, so
     /// a record that does not emit is a record nobody can find.
     ///
     /// It carries no head because the log already holds it: one line's entries
@@ -823,12 +822,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         assertEq(entries.length, 1);
         assertEq(entries[0].emitter, address(sRegistry));
-        assertEq(entries[0].topics.length, 4);
+        assertEq(entries[0].topics.length, 1);
         assertEq(entries[0].topics[0], keccak256("Migrated(address,address,bytes32,bytes32,uint256)"));
-        assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
-        assertEq(entries[0].topics[2], namespace);
-        assertEq(entries[0].topics[3], migration);
-        assertEq(entries[0].data, abi.encode(writer, uint256(appliedAt)));
+        assertEq(entries[0].data, abi.encode(writer, writer, namespace, migration, uint256(appliedAt)));
     }
 
     /// A refused write emits nothing, so a failed apply can never be
@@ -1995,8 +1991,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(cursor, MIGRATION_HEAD_GENESIS);
     }
 
-    /// One `Migrated` entry: the writer, the namespace and the migration
-    /// indexed in that order, the sender and the moment as data.
+    /// One `Migrated` entry, nothing indexed: the sender, the writer, the
+    /// namespace, the migration and the moment as data in that order.
     function testApplyMigrationEvent(address writer, bytes32 namespace, bytes32 migration, uint32 blockMoment)
         external
     {
@@ -2013,12 +2009,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         assertEq(entries.length, 1);
         assertEq(entries[0].emitter, address(sRegistry));
-        assertEq(entries[0].topics.length, 4);
+        assertEq(entries[0].topics.length, 1);
         assertEq(entries[0].topics[0], keccak256("Migrated(address,address,bytes32,bytes32,uint256)"));
-        assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
-        assertEq(entries[0].topics[2], namespace);
-        assertEq(entries[0].topics[3], migration);
-        assertEq(entries[0].data, abi.encode(writer, uint256(blockMoment)));
+        assertEq(entries[0].data, abi.encode(writer, writer, namespace, migration, uint256(blockMoment)));
     }
 
     /// With its one prerequisite applied, a write naming it records exactly
@@ -3302,8 +3295,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
     }
 
     /// A write naming prerequisites emits `Migrated` exactly as one naming none
-    /// does: one entry, the writer, namespace and migration indexed, the
-    /// sender and the moment as data, and nothing about the list — the list is
+    /// does: one entry, nothing indexed, the sender, writer, namespace,
+    /// migration and moment as data, and nothing about the list — the list is
     /// in the record, read back by `appliedAfterV3`, so one filter on
     /// `Migrated` is the complete history.
     function testApplyMigrationWithPrerequisitesEmitsOneMigrated(
@@ -3343,12 +3336,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         assertEq(entries.length, 1);
         assertEq(entries[0].emitter, address(sRegistry));
-        assertEq(entries[0].topics.length, 4);
+        assertEq(entries[0].topics.length, 1);
         assertEq(entries[0].topics[0], keccak256("Migrated(address,address,bytes32,bytes32,uint256)"));
-        assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
-        assertEq(entries[0].topics[2], namespace);
-        assertEq(entries[0].topics[3], migration);
-        assertEq(entries[0].data, abi.encode(writer, uint256(blockMoment)));
+        assertEq(entries[0].data, abi.encode(writer, writer, namespace, migration, uint256(blockMoment)));
     }
 
     /// The same one entry from `applyMigrationHistoryV3`, with the caller's
@@ -3389,12 +3379,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
         assertEq(entries.length, 1);
         assertEq(entries[0].emitter, address(sRegistry));
-        assertEq(entries[0].topics.length, 4);
+        assertEq(entries[0].topics.length, 1);
         assertEq(entries[0].topics[0], keccak256("Migrated(address,address,bytes32,bytes32,uint256)"));
-        assertEq(entries[0].topics[1], bytes32(uint256(uint160(writer))));
-        assertEq(entries[0].topics[2], namespace);
-        assertEq(entries[0].topics[3], migration);
-        assertEq(entries[0].data, abi.encode(writer, uint256(appliedAt)));
+        assertEq(entries[0].data, abi.encode(writer, writer, namespace, migration, uint256(appliedAt)));
     }
 
     /// A write after the head alone and a write with a list emit one entry each,
@@ -3427,14 +3414,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 2);
-        assertEq(entries[0].topics.length, 4);
+        assertEq(entries[0].topics.length, 1);
         assertEq(entries[0].topics[0], keccak256("Migrated(address,address,bytes32,bytes32,uint256)"));
-        assertEq(entries[0].topics[2], namespace);
-        assertEq(entries[0].topics[3], migrationA);
-        assertEq(entries[1].topics.length, 4);
+        assertEq(entries[0].data, abi.encode(writer, writer, namespace, migrationA, block.timestamp));
+        assertEq(entries[1].topics.length, 1);
         assertEq(entries[1].topics[0], keccak256("Migrated(address,address,bytes32,bytes32,uint256)"));
-        assertEq(entries[1].topics[2], namespace);
-        assertEq(entries[1].topics[3], migrationB);
+        assertEq(entries[1].data, abi.encode(writer, writer, namespace, migrationB, block.timestamp));
     }
 
     /// A refused write naming prerequisites emits nothing, for every one of

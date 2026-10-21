@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {
@@ -46,7 +47,7 @@ contract MigrationRegistryDelegateTest is Test {
         vm.assume(otherNamespace != NAMESPACE && otherNamespace != bytes32(0));
         vm.assume(otherWriter != WRITER && otherWriter != address(0));
         vm.expectEmit(address(sRegistry));
-        emit IMigrationRegistryV3.Approved(WRITER, NAMESPACE, DELEGATE);
+        emit IRegistryDelegatesV1.Approved(WRITER, NAMESPACE, DELEGATE);
         approveDelegate();
         assertTrue(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
         assertFalse(sRegistry.approvedV3(WRITER, otherNamespace, DELEGATE));
@@ -57,19 +58,19 @@ contract MigrationRegistryDelegateTest is Test {
     /// each emit and leave the approval as named.
     function testRevokeRemovesTheApproval() external {
         vm.expectEmit(address(sRegistry));
-        emit IMigrationRegistryV3.Revoked(WRITER, NAMESPACE, DELEGATE);
+        emit IRegistryDelegatesV1.Revoked(WRITER, NAMESPACE, DELEGATE);
         vm.prank(WRITER);
         sRegistry.revokeV3(NAMESPACE, DELEGATE);
         assertFalse(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
         for (uint256 i = 0; i < 2; i++) {
             vm.expectEmit(address(sRegistry));
-            emit IMigrationRegistryV3.Approved(WRITER, NAMESPACE, DELEGATE);
+            emit IRegistryDelegatesV1.Approved(WRITER, NAMESPACE, DELEGATE);
             approveDelegate();
             assertTrue(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
         }
         for (uint256 i = 0; i < 2; i++) {
             vm.expectEmit(address(sRegistry));
-            emit IMigrationRegistryV3.Revoked(WRITER, NAMESPACE, DELEGATE);
+            emit IRegistryDelegatesV1.Revoked(WRITER, NAMESPACE, DELEGATE);
             vm.prank(WRITER);
             sRegistry.revokeV3(NAMESPACE, DELEGATE);
             assertFalse(sRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
@@ -88,7 +89,7 @@ contract MigrationRegistryDelegateTest is Test {
         assertTrue(sRegistry.approvedV3(WRITER, otherNamespace, DELEGATE));
         Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
         vm.prank(DELEGATE);
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
         sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, MIGRATION, 1, prerequisites);
         vm.prank(DELEGATE);
         sRegistry.applyMigrationHistoryV3(
@@ -111,18 +112,18 @@ contract MigrationRegistryDelegateTest is Test {
         sRegistry.approveV3(NAMESPACE, caller);
         Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(WRITER, bytes32(0), MIGRATION_HEAD_GENESIS);
         vm.startPrank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, bytes32(0), caller));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, bytes32(0), caller));
         sRegistry.applyMigrationV3(WRITER, bytes32(0), MIGRATION, prerequisites);
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, bytes32(0), caller));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, bytes32(0), caller));
         sRegistry.applyMigrationHistoryV3(WRITER, bytes32(0), MIGRATION, 1, prerequisites);
         vm.stopPrank();
         vm.startPrank(unapproved);
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, bytes32(0), unapproved)
+            abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, bytes32(0), unapproved)
         );
         sRegistry.applyMigrationV3(WRITER, bytes32(0), MIGRATION, prerequisites);
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, bytes32(0), unapproved)
+            abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, bytes32(0), unapproved)
         );
         sRegistry.applyMigrationHistoryV3(WRITER, bytes32(0), MIGRATION, 1, prerequisites);
         vm.stopPrank();
@@ -139,11 +140,11 @@ contract MigrationRegistryDelegateTest is Test {
         vm.startPrank(WRITER);
         vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
         sRegistry.approveV3(bytes32(0), DELEGATE);
-        vm.expectRevert(IMigrationRegistryV3.ZeroDelegate.selector);
+        vm.expectRevert(IRegistryDelegatesV1.ZeroDelegate.selector);
         sRegistry.approveV3(NAMESPACE, address(0));
         vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
         sRegistry.revokeV3(bytes32(0), DELEGATE);
-        vm.expectRevert(IMigrationRegistryV3.ZeroDelegate.selector);
+        vm.expectRevert(IRegistryDelegatesV1.ZeroDelegate.selector);
         sRegistry.revokeV3(NAMESPACE, address(0));
         vm.stopPrank();
     }
@@ -154,7 +155,7 @@ contract MigrationRegistryDelegateTest is Test {
         sRegistry.approvedV3(address(0), NAMESPACE, DELEGATE);
         vm.expectRevert(IMigrationRegistryV3.ZeroNamespace.selector);
         sRegistry.approvedV3(WRITER, bytes32(0), DELEGATE);
-        vm.expectRevert(IMigrationRegistryV3.ZeroDelegate.selector);
+        vm.expectRevert(IRegistryDelegatesV1.ZeroDelegate.selector);
         sRegistry.approvedV3(WRITER, NAMESPACE, address(0));
     }
 
@@ -250,9 +251,9 @@ contract MigrationRegistryDelegateTest is Test {
         vm.assume(caller != WRITER);
         Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
         vm.startPrank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, caller));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, NAMESPACE, caller));
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, prerequisites);
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, caller));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, NAMESPACE, caller));
         sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, MIGRATION, 1, prerequisites);
         vm.stopPrank();
     }
@@ -265,9 +266,9 @@ contract MigrationRegistryDelegateTest is Test {
         vm.assume(caller != WRITER);
         Prerequisite[] memory none = new Prerequisite[](0);
         vm.startPrank(caller);
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, caller));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, NAMESPACE, caller));
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, bytes32(0), none);
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, caller));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, NAMESPACE, caller));
         sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, bytes32(0), 0, none);
         vm.stopPrank();
     }
@@ -280,9 +281,9 @@ contract MigrationRegistryDelegateTest is Test {
         sRegistry.approveV3(NAMESPACE, DELEGATE);
         Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS);
         vm.startPrank(DELEGATE);
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, MIGRATION, prerequisites);
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
         sRegistry.applyMigrationHistoryV3(WRITER, NAMESPACE, MIGRATION, 1, prerequisites);
         vm.stopPrank();
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION_HEAD_GENESIS);
@@ -332,7 +333,7 @@ contract MigrationRegistryDelegateTest is Test {
         Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(WRITER, otherNamespace, MIGRATION_HEAD_GENESIS);
         vm.prank(DELEGATE);
         vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, otherNamespace, DELEGATE)
+            abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, otherNamespace, DELEGATE)
         );
         sRegistry.applyMigrationV3(WRITER, otherNamespace, MIGRATION, prerequisites);
     }
@@ -348,7 +349,7 @@ contract MigrationRegistryDelegateTest is Test {
         vm.prank(WRITER);
         sRegistry.revokeV3(NAMESPACE, DELEGATE);
         vm.prank(DELEGATE);
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV3.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
         sRegistry.applyMigrationV3(WRITER, NAMESPACE, SECOND, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION));
         assertTrue(sRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION) != 0);
     }

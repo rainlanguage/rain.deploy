@@ -2,14 +2,16 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
+import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
-import {ConfigRegistry, CONFIG_REGISTRY_ROOT} from "../../../src/concrete/ConfigRegistry.sol";
-import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
+import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
+import {IConfigRegistryV2} from "../../../src/interface/IConfigRegistryV2.sol";
 import {LibConfigRegistry} from "../../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibConfigRegistryRegister} from "../../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
+import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockRevertingRegistry} from "../../concrete/MockRevertingRegistry.sol";
 import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
 
@@ -20,6 +22,11 @@ import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
 /// Nothing here forks; `LibConfigRegistryRegisterOnForksTest` drives the fork
 /// loops.
 contract LibConfigRegistryRegisterTest is Test {
+    /// The authority every run here binds under and reads under. Any account
+    /// is one.
+    address internal constant AUTHORITY = address(0xA11CE);
+    bytes32 internal constant NAME = keccak256("a.b");
+
     /// The catalogue entry the local chain is dressed up as.
     /// @return Base's catalogue entry.
     function base() internal pure returns (SupportedNetwork memory) {
@@ -31,12 +38,12 @@ contract LibConfigRegistryRegisterTest is Test {
     /// Deploys the real registry at its pinned address and sets the chain id to
     /// Base's.
     /// @return The registry.
-    function deployRegistry() internal returns (IConfigRegistryV1) {
+    function deployRegistry() internal returns (IConfigRegistryV2) {
         vm.chainId(base().chainId);
         LibRainDeploy.etchZoltuFactory(vm);
         address registry = LibRainDeploy.deployZoltu(type(ConfigRegistry).creationCode);
         assertEq(registry, LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
-        return IConfigRegistryV1(registry);
+        return IConfigRegistryV2(registry);
     }
 
     /// One-element string list.
@@ -79,21 +86,22 @@ contract LibConfigRegistryRegisterTest is Test {
         return LibConfigRegistryRegister.selectNetworks(selected, declared);
     }
 
-    function externalCheckSender(address sender) external pure {
-        LibConfigRegistryRegister.checkSender(sender);
+    function externalCheckSender(address sender, address authority) external view {
+        LibConfigRegistryRegister.checkSender(base(), sender, authority, NAME);
     }
 
     function externalCurrentBinding(bytes32 name) external view returns (bytes memory, uint256) {
-        return LibConfigRegistryRegister.currentBinding(name);
+        return LibConfigRegistryRegister.currentBinding(AUTHORITY, name);
     }
 
     function externalRegisterOnSelectedChain(
         SupportedNetwork memory network,
         address sender,
+        address authority,
         bytes32 name,
         bytes memory value
     ) external returns (bool, string memory) {
-        return LibConfigRegistryRegister.registerOnSelectedChain(vm, network, sender, name, value);
+        return LibConfigRegistryRegister.registerOnSelectedChain(vm, network, sender, authority, name, value);
     }
 
     function externalRegisterOnNetworks(
@@ -103,7 +111,7 @@ contract LibConfigRegistryRegisterTest is Test {
         string memory name,
         bytes memory value
     ) external returns (uint256[] memory, string memory) {
-        return LibConfigRegistryRegister.registerOnNetworks(vm, selected, declared, sender, name, value);
+        return LibConfigRegistryRegister.registerOnNetworks(vm, selected, declared, sender, AUTHORITY, name, value);
     }
 
     function externalCheckRegisteredOnForks(
@@ -113,7 +121,7 @@ contract LibConfigRegistryRegisterTest is Test {
         string memory name,
         bytes memory value
     ) external {
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, selected, declared, forkIds, name, value);
+        LibConfigRegistryRegister.checkRegisteredOnForks(vm, selected, declared, forkIds, AUTHORITY, name, value);
     }
 
     function externalCheckRegisteredOnSelectedChain(SupportedNetwork memory network, bytes32 name, bytes memory value)
@@ -121,7 +129,7 @@ contract LibConfigRegistryRegisterTest is Test {
         view
         returns (uint256)
     {
-        return LibConfigRegistryRegister.checkRegisteredOnSelectedChain(vm, network, name, value);
+        return LibConfigRegistryRegister.checkRegisteredOnSelectedChain(vm, network, AUTHORITY, name, value);
     }
 
     function externalCheckRegisteredOnNetworks(
@@ -130,7 +138,7 @@ contract LibConfigRegistryRegisterTest is Test {
         string memory name,
         bytes memory value
     ) external {
-        LibConfigRegistryRegister.checkRegisteredOnNetworks(vm, selected, declared, name, value);
+        LibConfigRegistryRegister.checkRegisteredOnNetworks(vm, selected, declared, AUTHORITY, name, value);
     }
 
     /// The name is the `keccak256` of its string, the derivation consumers
@@ -232,31 +240,83 @@ contract LibConfigRegistryRegisterTest is Test {
         assertEq(LibConfigRegistryRegister.selectNetworks(declared, declared).length, declared.length);
     }
 
-    /// Any sender but root is refused, naming both.
-    function testSenderNotRoot(address sender) external {
-        vm.assume(sender != CONFIG_REGISTRY_ROOT);
+    /// Any sender but the authority that the authority has not approved on
+    /// the selected chain is refused, naming the network and both accounts.
+    function testSenderNotApproved(address sender, address authority) external {
+        vm.assume(sender != authority && sender != address(0));
+        deployRegistry();
         vm.expectRevert(
-            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotRoot.selector, sender, CONFIG_REGISTRY_ROOT)
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, authority, NAME
+            )
         );
-        this.externalCheckSender(sender);
+        this.externalCheckSender(sender, authority);
     }
 
-    /// Root passes.
-    function testSenderRoot() external pure {
-        LibConfigRegistryRegister.checkSender(CONFIG_REGISTRY_ROOT);
+    /// The authority passes, whichever account it is, without reading the
+    /// registry: there is none here, and any read of it would revert.
+    function testSenderIsAuthority(address authority) external view {
+        this.externalCheckSender(authority, authority);
+    }
+
+    /// A delegate the authority approved on the selected chain passes, and is
+    /// refused again once revoked.
+    function testSenderIsApprovedDelegate(address sender) external {
+        vm.assume(sender != AUTHORITY && sender != address(0));
+        IConfigRegistryV2 registry = deployRegistry();
+        vm.prank(AUTHORITY);
+        registry.approveV2(NAME, sender);
+        this.externalCheckSender(sender, AUTHORITY);
+
+        vm.prank(AUTHORITY);
+        registry.revokeV2(NAME, sender);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
+            )
+        );
+        this.externalCheckSender(sender, AUTHORITY);
+    }
+
+    /// An approval by another authority does not pass.
+    function testSenderApprovedByAnotherAuthority(address sender, address other) external {
+        vm.assume(sender != AUTHORITY && sender != address(0) && other != AUTHORITY);
+        IConfigRegistryV2 registry = deployRegistry();
+        vm.prank(other);
+        registry.approveV2(NAME, sender);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
+            )
+        );
+        this.externalCheckSender(sender, AUTHORITY);
+    }
+
+    /// The authority's approval for another name does not pass.
+    function testSenderApprovedForAnotherName(address sender, bytes32 other) external {
+        vm.assume(sender != AUTHORITY && sender != address(0) && other != NAME);
+        IConfigRegistryV2 registry = deployRegistry();
+        vm.prank(AUTHORITY);
+        registry.approveV2(other, sender);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
+            )
+        );
+        this.externalCheckSender(sender, AUTHORITY);
     }
 
     /// The input refusals come before anything is forked, in order: name,
-    /// value, networks, sender. Every case here would otherwise reach a fork
-    /// of a network this test supplies no endpoint for.
+    /// value, networks. Every case here would otherwise reach a fork of a
+    /// network this test supplies no endpoint for.
     function testRegisterOnNetworksRefusesInputsInOrder(address sender) external {
-        vm.assume(sender != CONFIG_REGISTRY_ROOT);
+        vm.assume(sender != AUTHORITY);
         string[] memory declared = LibRainDeploy.supportedNetworks();
 
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "A"));
         this.externalRegisterOnNetworks(new string[](0), declared, sender, "A", "");
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, keccak256("a.b")));
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV2.EmptyValue.selector, keccak256("a.b")));
         this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", "");
 
         bytes memory bare = abi.encodePacked(address(0xdEaD));
@@ -268,11 +328,6 @@ contract LibConfigRegistryRegisterTest is Test {
 
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
         this.externalRegisterOnNetworks(list("nowhere"), declared, sender, "a.b", abi.encode(address(1)));
-
-        vm.expectRevert(
-            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotRoot.selector, sender, CONFIG_REGISTRY_ROOT)
-        );
-        this.externalRegisterOnNetworks(list("base"), declared, sender, "a.b", abi.encode(address(1)));
     }
 
     /// A non-empty value is refused exactly when its length is not a multiple
@@ -286,9 +341,7 @@ contract LibConfigRegistryRegisterTest is Test {
         } else {
             vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, value));
         }
-        this.externalRegisterOnNetworks(
-            new string[](0), LibRainDeploy.supportedNetworks(), CONFIG_REGISTRY_ROOT, "a.b", value
-        );
+        this.externalRegisterOnNetworks(new string[](0), LibRainDeploy.supportedNetworks(), AUTHORITY, "a.b", value);
     }
 
     /// Fixed lengths on and either side of the first three word boundaries,
@@ -298,15 +351,13 @@ contract LibConfigRegistryRegisterTest is Test {
         for (uint256 i = 0; i < refused.length; i++) {
             bytes memory value = new bytes(refused[i]);
             vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, value));
-            this.externalRegisterOnNetworks(
-                new string[](0), LibRainDeploy.supportedNetworks(), CONFIG_REGISTRY_ROOT, "a.b", value
-            );
+            this.externalRegisterOnNetworks(new string[](0), LibRainDeploy.supportedNetworks(), AUTHORITY, "a.b", value);
         }
         uint256[3] memory passed = [uint256(32), 64, 96];
         for (uint256 i = 0; i < passed.length; i++) {
             vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
             this.externalRegisterOnNetworks(
-                new string[](0), LibRainDeploy.supportedNetworks(), CONFIG_REGISTRY_ROOT, "a.b", new bytes(passed[i])
+                new string[](0), LibRainDeploy.supportedNetworks(), AUTHORITY, "a.b", new bytes(passed[i])
             );
         }
     }
@@ -318,7 +369,7 @@ contract LibConfigRegistryRegisterTest is Test {
         string memory name,
         bytes memory value
     ) external pure returns (bytes32, SupportedNetwork[] memory, string memory) {
-        return LibConfigRegistryRegister.checkInputs(vm, selected, declared, sender, name, value);
+        return LibConfigRegistryRegister.checkInputs(vm, selected, declared, sender, AUTHORITY, name, value);
     }
 
     /// Inputs that pass every refusal give the hashed name, the selected
@@ -330,12 +381,128 @@ contract LibConfigRegistryRegisterTest is Test {
         }
         string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
         (bytes32 hashed, SupportedNetwork[] memory networks, string memory record) =
-            this.externalCheckInputs(selected, LibRainDeploy.supportedNetworks(), CONFIG_REGISTRY_ROOT, "a.b", value);
+            this.externalCheckInputs(selected, LibRainDeploy.supportedNetworks(), AUTHORITY, "a.b", value);
         assertEq(hashed, keccak256("a.b"));
         assertEq(networks.length, 2);
         assertEq(networks[0].name, LibRainDeploy.ARBITRUM_ONE);
         assertEq(networks[1].name, LibRainDeploy.BASE);
-        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, "a.b", value, CONFIG_REGISTRY_ROOT));
+        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, "a.b", value, AUTHORITY, AUTHORITY));
+    }
+
+    function externalRegisterOnNetworksWith(
+        Vm forkVm,
+        string[] memory selected,
+        address sender,
+        address authority,
+        string memory name,
+        bytes memory value
+    ) external returns (uint256[] memory, string memory) {
+        return LibConfigRegistryRegister.registerOnNetworks(
+            forkVm, selected, LibRainDeploy.supportedNetworks(), sender, authority, name, value
+        );
+    }
+
+    function externalCheckRegisteredOnNetworksWith(
+        Vm forkVm,
+        string[] memory selected,
+        address authority,
+        string memory name,
+        bytes memory value
+    ) external {
+        LibConfigRegistryRegister.checkRegisteredOnNetworks(
+            forkVm, selected, LibRainDeploy.supportedNetworks(), authority, name, value
+        );
+    }
+
+    /// On the local fork seam, a signer the authority has not approved is
+    /// refused on the first selected network, naming it, and nothing is bound.
+    function testRegisterOnNetworksRefusesAnUnapprovedSigner(address sender) external {
+        vm.assume(sender != AUTHORITY && sender != address(0));
+        IConfigRegistryV2 registry = deployRegistry();
+        Vm forkVm = Vm(address(new LocalForkVm()));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.SenderNotApproved.selector,
+                LibRainDeploy.ARBITRUM_ONE,
+                sender,
+                AUTHORITY,
+                keccak256("a.b")
+            )
+        );
+        this.externalRegisterOnNetworksWith(
+            forkVm,
+            list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE),
+            sender,
+            AUTHORITY,
+            "a.b",
+            abi.encode(address(1))
+        );
+        vm.expectRevert(
+            abi.encodeWithSelector(IConfigRegistryV2.NameNotRegistered.selector, AUTHORITY, keccak256("a.b"))
+        );
+        registry.getV2(AUTHORITY, keccak256("a.b"));
+    }
+
+    /// On the local fork seam, a delegate the authority approved binds under
+    /// the authority on every selected network, and the confirmed check under
+    /// the authority passes. The seam's broadcast is a no-op, so this contract
+    /// signs and is the delegate.
+    function testRegisterOnNetworksBindsAsAnApprovedDelegate() external {
+        IConfigRegistryV2 registry = deployRegistry();
+        Vm forkVm = Vm(address(new LocalForkVm()));
+        string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
+        bytes memory value = abi.encode(address(1));
+        vm.prank(AUTHORITY);
+        registry.approveV2(keccak256("a.b"), address(this));
+
+        (, string memory record) =
+            this.externalRegisterOnNetworksWith(forkVm, selected, address(this), AUTHORITY, "a.b", value);
+        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, "a.b", value, address(this), AUTHORITY));
+        assertEq(LibConfigRegistryRead.getValue(registry, AUTHORITY, keccak256("a.b")), value);
+        vm.expectRevert(
+            abi.encodeWithSelector(IConfigRegistryV2.NameNotRegistered.selector, address(this), keccak256("a.b"))
+        );
+        registry.getV2(address(this), keccak256("a.b"));
+        this.externalCheckRegisteredOnNetworksWith(forkVm, selected, AUTHORITY, "a.b", value);
+    }
+
+    /// On the local fork seam, `registerOnNetworks` binds on every selected
+    /// network in selection order and returns each network's fork and the
+    /// inputs record, and the confirmed check then passes on each. The seam's
+    /// broadcast is a no-op, so this contract signs and is the authority.
+    function testRegisterOnNetworksReturnsEachForkAndTheRecord() external {
+        IConfigRegistryV2 registry = deployRegistry();
+        Vm forkVm = Vm(address(new LocalForkVm()));
+        string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
+        SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(selected);
+        bytes memory value = abi.encode(address(1));
+
+        (uint256[] memory forkIds, string memory record) =
+            this.externalRegisterOnNetworksWith(forkVm, selected, address(this), address(this), "a.b", value);
+        assertEq(forkIds.length, 2);
+        assertEq(forkIds[0], networks[0].chainId);
+        assertEq(forkIds[1], networks[1].chainId);
+        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, "a.b", value, address(this), address(this)));
+        assertEq(block.chainid, networks[1].chainId);
+        assertEq(LibConfigRegistryRead.getValue(registry, address(this), keccak256("a.b")), value);
+
+        this.externalCheckRegisteredOnNetworksWith(forkVm, selected, address(this), "a.b", value);
+    }
+
+    /// `registerOnNetworks` binds as the sender it is given, not as its own
+    /// `msg.sender`: called by another account with this contract as both
+    /// sender and authority, it binds on every selected network.
+    function testRegisterOnNetworksBindsAsTheGivenSender(address caller) external {
+        vm.assume(caller != address(this));
+        IConfigRegistryV2 registry = deployRegistry();
+        Vm forkVm = Vm(address(new LocalForkVm()));
+        string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
+        bytes memory value = abi.encode(address(1));
+
+        vm.prank(caller);
+        this.externalRegisterOnNetworksWith(forkVm, selected, address(this), address(this), "a.b", value);
+        assertEq(LibConfigRegistryRead.getValue(registry, address(this), keccak256("a.b")), value);
+        this.externalCheckRegisteredOnNetworksWith(forkVm, selected, address(this), "a.b", value);
     }
 
     /// The confirmed check refuses its inputs before anything is forked.
@@ -382,29 +549,31 @@ contract LibConfigRegistryRegisterTest is Test {
     function testCheckRegisteredOnSelectedChainBound(bytes32 name, bytes memory value, uint96 time) external {
         vm.assume(value.length > 0);
         time = uint96(bound(time, 1, type(uint96).max));
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV2 registry = deployRegistry();
         vm.warp(time);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, value);
+        vm.prank(AUTHORITY);
+        registry.registerV2(AUTHORITY, name, value);
         vm.warp(uint256(time) + 1);
 
         assertEq(this.externalCheckRegisteredOnSelectedChain(base(), name, value), time);
     }
 
-    /// Any other bound value is refused, naming the network, the name, the
-    /// value expected and the value bound, in that order.
-    function testCheckRegisteredOnSelectedChainOtherValue(bytes32 name, bytes memory bound_, bytes memory value)
+    /// Any other bound value is refused, naming the network, the authority,
+    /// the name, the value expected and the value bound, in that order.
+    function testCheckRegisteredOnSelectedChainOtherValue(bytes32 name, bytes memory boundValue, bytes memory value)
         external
     {
-        vm.assume(bound_.length > 0);
-        vm.assume(keccak256(bound_) != keccak256(value));
-        IConfigRegistryV1 registry = deployRegistry();
+        vm.assume(boundValue.length > 0);
+        vm.assume(keccak256(boundValue) != keccak256(value));
+        IConfigRegistryV2 registry = deployRegistry();
         vm.warp(1);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, bound_);
+        vm.prank(AUTHORITY);
+        registry.registerV2(AUTHORITY, name, boundValue);
 
         vm.expectRevert(
-            abi.encodeWithSelector(LibConfigRegistryRegister.UnexpectedBinding.selector, "base", name, value, bound_)
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.UnexpectedBinding.selector, "base", AUTHORITY, name, value, boundValue
+            )
         );
         this.externalCheckRegisteredOnSelectedChain(base(), name, value);
     }
@@ -412,7 +581,7 @@ contract LibConfigRegistryRegisterTest is Test {
     /// An unbound name is refused by the registry itself.
     function testCheckRegisteredOnSelectedChainUnbound(bytes32 name) external {
         deployRegistry();
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name));
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV2.NameNotRegistered.selector, AUTHORITY, name));
         this.externalCheckRegisteredOnSelectedChain(base(), name, abi.encode(address(1)));
     }
 
@@ -420,10 +589,10 @@ contract LibConfigRegistryRegisterTest is Test {
     /// read, even when the name is bound to the value.
     function testCheckRegisteredOnSelectedChainWrongChain(uint64 chainId) external {
         vm.assume(chainId != base().chainId);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV2 registry = deployRegistry();
         vm.warp(1);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(keccak256("a"), abi.encode(address(1)));
+        vm.prank(AUTHORITY);
+        registry.registerV2(AUTHORITY, keccak256("a"), abi.encode(address(1)));
         vm.chainId(chainId);
 
         vm.expectRevert(
@@ -458,7 +627,7 @@ contract LibConfigRegistryRegisterTest is Test {
                 LibConfigRegistryRegister.UnexpectedChainId.selector, "base", base().chainId, uint256(chainId)
             )
         );
-        this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, keccak256("a"), abi.encode(address(1)));
+        this.externalRegisterOnSelectedChain(base(), AUTHORITY, AUTHORITY, keccak256("a"), abi.encode(address(1)));
     }
 
     /// A registry address without the pinned code is refused.
@@ -471,7 +640,7 @@ contract LibConfigRegistryRegisterTest is Test {
                 bytes32(0)
             )
         );
-        this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, keccak256("a"), abi.encode(address(1)));
+        this.externalRegisterOnSelectedChain(base(), AUTHORITY, AUTHORITY, keccak256("a"), abi.encode(address(1)));
     }
 
     /// Something else at the registry address is refused.
@@ -487,33 +656,110 @@ contract LibConfigRegistryRegisterTest is Test {
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS.codehash
             )
         );
-        this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, keccak256("a"), abi.encode(address(1)));
+        this.externalRegisterOnSelectedChain(base(), AUTHORITY, AUTHORITY, keccak256("a"), abi.encode(address(1)));
     }
 
     /// An unbound name is bound, from the sender.
     function testRegisterUnbound(bytes32 name, bytes memory value, uint96 time) external {
         vm.assume(value.length > 0);
         time = uint96(bound(time, 1, type(uint96).max));
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV2 registry = deployRegistry();
         vm.warp(time);
 
         (bool broadcast, string memory record) =
-            this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
+            this.externalRegisterOnSelectedChain(base(), AUTHORITY, AUTHORITY, name, value);
         assertTrue(broadcast);
         assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, "", 0, value));
-        (bytes memory boundValue, uint256 registeredAt) = registry.getV1(name);
+        (bytes memory boundValue, uint256 registeredAt) = registry.getV2(AUTHORITY, name);
         assertEq(boundValue, value);
         assertEq(registeredAt, time);
     }
 
-    /// The bind is broadcast from the sender it is given: the registry itself
-    /// refuses any other.
+    /// The bind is broadcast from the sender it is given, so as its own
+    /// authority it lands under that sender and under no other, and the
+    /// broadcast spends one of the sender's nonces.
     function testRegisterBroadcastsFromSender(address sender) external {
-        vm.assume(sender != CONFIG_REGISTRY_ROOT);
-        deployRegistry();
+        assumeNotPrecompile(sender);
+        assumeNotForgeAddress(sender);
+        vm.assume(sender != AUTHORITY);
+        vm.assume(sender != address(this));
+        IConfigRegistryV2 registry = deployRegistry();
+        bytes32 name = keccak256("a");
+        bytes memory value = abi.encode(address(1));
         vm.warp(1);
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NotRoot.selector, sender));
-        this.externalRegisterOnSelectedChain(base(), sender, keccak256("a"), abi.encode(address(1)));
+        uint64 nonce = vm.getNonce(sender);
+        (bool broadcast,) = this.externalRegisterOnSelectedChain(base(), sender, sender, name, value);
+        assertTrue(broadcast);
+        assertEq(vm.getNonce(sender), nonce + 1);
+        assertEq(LibConfigRegistryRead.getValue(registry, sender, name), value);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV2.NameNotRegistered.selector, AUTHORITY, name));
+        registry.getV2(AUTHORITY, name);
+    }
+
+    /// A delegate the authority approved broadcasts the bind from itself, and
+    /// it lands under the authority and not under the delegate.
+    function testRegisterBroadcastsFromAnApprovedDelegate(address sender) external {
+        assumeNotPrecompile(sender);
+        assumeNotForgeAddress(sender);
+        vm.assume(sender != AUTHORITY);
+        vm.assume(sender != address(0));
+        vm.assume(sender != address(this));
+        IConfigRegistryV2 registry = deployRegistry();
+        vm.prank(AUTHORITY);
+        registry.approveV2(keccak256("a"), sender);
+        bytes32 name = keccak256("a");
+        bytes memory value = abi.encode(address(1));
+        vm.warp(1);
+        uint64 nonce = vm.getNonce(sender);
+        vm.expectEmit(address(registry));
+        emit IConfigRegistryV2.Register(sender, AUTHORITY, name, value);
+        (bool broadcast,) = this.externalRegisterOnSelectedChain(base(), sender, AUTHORITY, name, value);
+        assertTrue(broadcast);
+        assertEq(vm.getNonce(sender), nonce + 1);
+        assertEq(LibConfigRegistryRead.getValue(registry, AUTHORITY, name), value);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV2.NameNotRegistered.selector, sender, name));
+        registry.getV2(sender, name);
+    }
+
+    /// A sender the authority has not approved is refused on the selected
+    /// chain before anything is broadcast and spends no nonce, both where the
+    /// name is unbound and where the run would SKIP it.
+    function testRegisterRefusesAnUnapprovedSender(address sender) external {
+        assumeNotPrecompile(sender);
+        assumeNotForgeAddress(sender);
+        vm.assume(sender != AUTHORITY);
+        vm.assume(sender != address(0));
+        vm.assume(sender != address(this));
+        IConfigRegistryV2 registry = deployRegistry();
+        bytes32 name = keccak256("a");
+        bytes memory value = abi.encode(address(1));
+        vm.warp(1);
+        uint64 nonce = vm.getNonce(sender);
+        bytes memory refusal = abi.encodeWithSelector(
+            LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, name
+        );
+        vm.expectRevert(refusal);
+        this.externalRegisterOnSelectedChain(base(), sender, AUTHORITY, name, value);
+
+        vm.prank(AUTHORITY);
+        registry.registerV2(AUTHORITY, name, value);
+        vm.warp(2);
+        vm.expectRevert(refusal);
+        this.externalRegisterOnSelectedChain(base(), sender, AUTHORITY, name, value);
+        assertEq(vm.getNonce(sender), nonce);
+    }
+
+    /// The zero address as the sender is refused on the selected chain by the
+    /// registry's own `ZeroDelegate`, which `approvedV2` raises before any
+    /// approval is read, and nothing is bound.
+    function testRegisterRefusesTheZeroSender() external {
+        IConfigRegistryV2 registry = deployRegistry();
+        bytes32 name = keccak256("a");
+        vm.warp(1);
+        vm.expectRevert(IRegistryDelegatesV1.ZeroDelegate.selector);
+        this.externalRegisterOnSelectedChain(base(), address(0), AUTHORITY, name, abi.encode(address(1)));
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV2.NameNotRegistered.selector, AUTHORITY, name));
+        registry.getV2(AUTHORITY, name);
     }
 
     /// A name bound to another value is re-bound.
@@ -521,17 +767,17 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(previous.length > 0);
         vm.assume(value.length > 0);
         vm.assume(keccak256(previous) != keccak256(value));
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV2 registry = deployRegistry();
         vm.warp(1);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, previous);
+        vm.prank(AUTHORITY);
+        registry.registerV2(AUTHORITY, name, previous);
         vm.warp(2);
 
         (bool broadcast, string memory record) =
-            this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
+            this.externalRegisterOnSelectedChain(base(), AUTHORITY, AUTHORITY, name, value);
         assertTrue(broadcast);
         assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, previous, 1, value));
-        (bytes memory boundValue, uint256 registeredAt) = registry.getV1(name);
+        (bytes memory boundValue, uint256 registeredAt) = registry.getV2(AUTHORITY, name);
         assertEq(boundValue, value);
         assertEq(registeredAt, 2);
     }
@@ -541,20 +787,20 @@ contract LibConfigRegistryRegisterTest is Test {
     /// of the whole value.
     function testRegisterRebindsNearMisses() external {
         bytes32 name = keccak256("a.b");
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV2 registry = deployRegistry();
         bytes memory previous = abi.encode(uint256(1), uint256(2));
         bytes[3] memory nearMisses = [
             abi.encode(uint256(1), uint256(3)), abi.encode(uint256(1)), abi.encode(uint256(1), uint256(2), uint256(0))
         ];
         for (uint256 i = 0; i < nearMisses.length; i++) {
             vm.warp(2 * i + 1);
-            vm.prank(CONFIG_REGISTRY_ROOT);
-            registry.registerV1(name, previous);
+            vm.prank(AUTHORITY);
+            registry.registerV2(AUTHORITY, name, previous);
             vm.warp(2 * i + 2);
 
-            (bool broadcast,) = this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, nearMisses[i]);
+            (bool broadcast,) = this.externalRegisterOnSelectedChain(base(), AUTHORITY, AUTHORITY, name, nearMisses[i]);
             assertTrue(broadcast);
-            assertEq(LibConfigRegistryRead.getValue(registry, name), nearMisses[i]);
+            assertEq(LibConfigRegistryRead.getValue(registry, AUTHORITY, name), nearMisses[i]);
         }
     }
 
@@ -562,17 +808,17 @@ contract LibConfigRegistryRegisterTest is Test {
     /// the moment stays the original bind's.
     function testRegisterSkipsSameBinding(bytes32 name, bytes memory value) external {
         vm.assume(value.length > 0);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV2 registry = deployRegistry();
         vm.warp(1);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, value);
+        vm.prank(AUTHORITY);
+        registry.registerV2(AUTHORITY, name, value);
         vm.warp(2);
 
         (bool broadcast, string memory record) =
-            this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
+            this.externalRegisterOnSelectedChain(base(), AUTHORITY, AUTHORITY, name, value);
         assertFalse(broadcast);
         assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, value, 1, value));
-        (bytes memory boundValue, uint256 registeredAt) = registry.getV1(name);
+        (bytes memory boundValue, uint256 registeredAt) = registry.getV2(AUTHORITY, name);
         assertEq(boundValue, value);
         assertEq(registeredAt, 1);
     }
@@ -582,28 +828,39 @@ contract LibConfigRegistryRegisterTest is Test {
     function testCurrentBinding(bytes32 name, bytes32 other, bytes memory value) external {
         vm.assume(value.length > 0);
         vm.assume(name != other);
-        IConfigRegistryV1 registry = deployRegistry();
-        (bytes memory boundValue, uint256 registeredAt) = LibConfigRegistryRegister.currentBinding(name);
+        IConfigRegistryV2 registry = deployRegistry();
+        (bytes memory boundValue, uint256 registeredAt) = LibConfigRegistryRegister.currentBinding(AUTHORITY, name);
         assertEq(boundValue, "");
         assertEq(registeredAt, 0);
 
         vm.warp(7);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, value);
-        (boundValue, registeredAt) = LibConfigRegistryRegister.currentBinding(name);
+        vm.prank(AUTHORITY);
+        registry.registerV2(AUTHORITY, name, value);
+        (boundValue, registeredAt) = LibConfigRegistryRegister.currentBinding(AUTHORITY, name);
         assertEq(boundValue, value);
         assertEq(registeredAt, 7);
-        (boundValue, registeredAt) = LibConfigRegistryRegister.currentBinding(other);
+        (boundValue, registeredAt) = LibConfigRegistryRegister.currentBinding(AUTHORITY, other);
         assertEq(boundValue, "");
         assertEq(registeredAt, 0);
     }
 
-    /// Only the registry's `NameNotRegistered` for THIS name reads as unbound.
-    /// Any other revert — for another name, or anything else — is re-raised
-    /// as it was.
-    function testCurrentBindingReraisesOtherReverts(bytes32 name, bytes32 other) external {
+    /// Only the registry's `NameNotRegistered` for THIS authority and name
+    /// reads as unbound. Any other revert — for another name, another
+    /// authority, or anything else — is re-raised as it was.
+    function testCurrentBindingReraisesOtherReverts(bytes32 name, bytes32 other, address otherAuthority) external {
         vm.assume(name != other);
-        bytes memory otherName = abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, other);
+        vm.assume(otherAuthority != AUTHORITY);
+        bytes memory otherAuthorityName =
+            abi.encodeWithSelector(IConfigRegistryV2.NameNotRegistered.selector, otherAuthority, name);
+        deployCodeTo(
+            "MockRevertingRegistry.sol",
+            abi.encode(otherAuthorityName),
+            LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS
+        );
+        vm.expectRevert(otherAuthorityName);
+        this.externalCurrentBinding(name);
+
+        bytes memory otherName = abi.encodeWithSelector(IConfigRegistryV2.NameNotRegistered.selector, AUTHORITY, other);
         deployCodeTo(
             "MockRevertingRegistry.sol", abi.encode(otherName), LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS
         );
@@ -623,7 +880,7 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.expectRevert(bytes(""));
         this.externalCurrentBinding(name);
 
-        bytes memory thisName = abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name);
+        bytes memory thisName = abi.encodeWithSelector(IConfigRegistryV2.NameNotRegistered.selector, AUTHORITY, name);
         deployCodeTo(
             "MockRevertingRegistry.sol", abi.encode(thisName), LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS
         );
@@ -632,49 +889,56 @@ contract LibConfigRegistryRegisterTest is Test {
         assertEq(registeredAt, 0);
     }
 
-    /// The bind's calldata is `registerV1(bytes32,bytes)` — selector
-    /// `0xb5a8845f`, from `cast sig` — over the name hash and the value as a
-    /// dynamic argument: its offset, its length and its bytes right-padded to
-    /// a word. It is exactly the call the bind makes.
+    /// The bind's calldata is `registerV2(address,bytes32,bytes)` — selector
+    /// `0xac853219`, from `cast sig` — over the authority, the name hash and
+    /// the value as a dynamic argument: its offset, its length and its bytes
+    /// right-padded to a word. It is exactly the call the bind makes.
     function testRegisterCalldataIsTheCallSent(bytes32 name, bytes memory value) external {
         vm.assume(value.length > 0);
         bytes memory expected = abi.encodePacked(
-            bytes4(0xb5a8845f),
+            bytes4(0xac853219),
+            uint256(uint160(AUTHORITY)),
             name,
-            uint256(0x40),
+            uint256(0x60),
             uint256(value.length),
             value,
             new bytes((32 - value.length % 32) % 32)
         );
-        assertEq(LibConfigRegistryRegister.registerCalldata(name, value), expected);
+        assertEq(LibConfigRegistryRegister.registerCalldata(AUTHORITY, name, value), expected);
 
         deployRegistry();
         vm.warp(1);
         vm.expectCall(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS, expected, 1);
-        this.externalRegisterOnSelectedChain(base(), CONFIG_REGISTRY_ROOT, name, value);
+        this.externalRegisterOnSelectedChain(base(), AUTHORITY, AUTHORITY, name, value);
     }
 
-    /// The inputs record, field for field, for st0x's token-owner Safe bound to
-    /// `0x…dEaD`. The hash, value and calldata are `cast keccak
-    /// st0x.token-owner-safe`, `cast abi-encode "f(address)" 0x…dEaD` and
-    /// `cast calldata "registerV1(bytes32,bytes)" <hash> <value>`.
+    /// The inputs record, field for field, for st0x's token-owner Safe bound
+    /// to `0x…dEaD`. The hash, value and calldata are
+    /// `cast keccak st0x.token-owner-safe`,
+    /// `cast abi-encode "f(address)" 0x…dEaD` and
+    /// `cast calldata "registerV2(address,bytes32,bytes)" <authority> <hash> <value>`.
     function testDescribeInputs() external pure {
         assertEq(
             LibConfigRegistryRegister.describeInputs(
-                vm, "st0x.token-owner-safe", abi.encode(address(0xdEaD)), CONFIG_REGISTRY_ROOT
+                vm, "st0x.token-owner-safe", abi.encode(address(0xdEaD)), address(0xB0B), AUTHORITY
             ),
             string.concat(
                 "Name: st0x.token-owner-safe\n",
                 "Name hash (keccak256 of the name): 0xba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8\n",
                 "Value: 0x000000000000000000000000000000000000000000000000000000000000dead\n",
-                "Sender (root): ",
-                vm.toString(CONFIG_REGISTRY_ROOT),
+                "Authority: ",
+                vm.toString(AUTHORITY),
+                "\n",
+                "Sender: ",
+                vm.toString(address(0xB0B)),
                 "\n",
                 "Registry: ",
                 vm.toString(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
                 "\n",
-                "Calldata: 0xb5a8845fba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
-                "0000000000000000000000000000000000000000000000000000000000000040",
+                "Calldata: 0xac853219",
+                "00000000000000000000000000000000000000000000000000000000000a11ce",
+                "ba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
+                "0000000000000000000000000000000000000000000000000000000000000060",
                 "0000000000000000000000000000000000000000000000000000000000000020",
                 "000000000000000000000000000000000000000000000000000000000000dead"
             )
@@ -688,7 +952,7 @@ contract LibConfigRegistryRegisterTest is Test {
     }
 
     function externalDescribeInputs(string memory name) external pure returns (string memory) {
-        return LibConfigRegistryRegister.describeInputs(vm, name, abi.encode(address(0xdEaD)), CONFIG_REGISTRY_ROOT);
+        return LibConfigRegistryRegister.describeInputs(vm, name, abi.encode(address(0xdEaD)), AUTHORITY, AUTHORITY);
     }
 
     /// An unbound name is a BIND.

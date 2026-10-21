@@ -177,7 +177,7 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
 
         LocalForkVm forkVm = new LocalForkVm();
-        vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 0);
+        vm.expectCall(address(forkVm), abi.encodeWithSignature("toString(address)"), 0);
         address[] memory deployed = this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
         assertEq(deployed.length, 1);
         assertEq(deployed[0], expected);
@@ -198,10 +198,8 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
 
         address caller = makeAddr("broadcast caller");
         LocalForkVm forkVm = new LocalForkVm();
-        vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 1);
-        vm.expectCall(
-            address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector, suite.storedDeployedAddress), 1
-        );
+        vm.expectCall(address(forkVm), abi.encodeWithSignature("toString(address)"), 1);
+        vm.expectCall(address(forkVm), abi.encodeWithSignature("toString(address)", suite.storedDeployedAddress), 1);
         vm.expectEmit(address(this));
         emit UnverifiableSource(caller, suite.storedDeployedAddress, networks);
         vm.prank(caller);
@@ -256,9 +254,11 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
 
         address caller = makeAddr("broadcast caller");
         LocalForkVm forkVm = new LocalForkVm();
-        vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 1);
+        vm.expectCall(address(forkVm), abi.encodeWithSelector(bytes4(keccak256("toString(address)"))), 1);
         vm.expectCall(
-            address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector, suite.storedDeployedAddress), 1
+            address(forkVm),
+            abi.encodeWithSelector(bytes4(keccak256("toString(address)")), suite.storedDeployedAddress),
+            1
         );
         vm.expectEmit(address(this));
         emit UnverifiableSource(caller, suite.storedDeployedAddress, networks);
@@ -327,7 +327,7 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         frozen.storedBytecodeHash = LibRainDeployClone.cloneDeployedCodehash(implementation);
         frozen.artifactPath = "test/concrete/MockCloneable.sol:MockCloneable";
         LocalForkVm forkVm = new LocalForkVm();
-        vm.expectCall(address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector), 0);
+        vm.expectCall(address(forkVm), abi.encodeWithSignature("toString(address)"), 0);
         address[] memory deployed = this.externalDeployAndBroadcastFrozenOn(
             Vm(address(forkVm)), arbitrumAndPolygon(), frozen, perNetworkSuite(clones)
         );
@@ -386,9 +386,7 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         networks[0] = LibRainDeploy.ARBITRUM_ONE;
         networks[1] = LibRainDeploy.POLYGON;
         LocalForkVm forkVm = new LocalForkVm();
-        vm.expectCall(
-            address(forkVm), abi.encodeWithSelector(LocalForkVm.toString.selector, suite.storedDeployedAddress), 2
-        );
+        vm.expectCall(address(forkVm), abi.encodeWithSignature("toString(address)", suite.storedDeployedAddress), 2);
         vm.recordLogs();
         this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
         Vm.Log[] memory logs = vm.getRecordedLogs();

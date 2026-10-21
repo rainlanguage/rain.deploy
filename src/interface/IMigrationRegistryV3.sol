@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
+import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
+
 /// @dev The head of a line that has never applied a migration. The first
 /// migration applied in a line names this, and every later one names the
 /// migration before it.
@@ -294,7 +296,9 @@ struct Prerequisite {
 /// Only `writer` decides who writes its line. An approval names one namespace
 /// under the approving writer and nothing else, so approving a delegate for one
 /// line never lets it write another, and anyone may own a namespace of the same
-/// name under their own address.
+/// name under their own address. The events and errors are
+/// `IRegistryDelegatesV1`'s, whose account is the writer and whose scope is
+/// the namespace.
 ///
 /// This decouples a line from whichever account executes a migration. A Safe
 /// that changes contracts directly and a timelock that executes scheduled
@@ -342,7 +346,7 @@ struct Prerequisite {
 /// and follows the same convention: one named constant per repo, beside its
 /// migration ids, named by every write in that repo and by every reader of
 /// its line.
-interface IMigrationRegistryV3 {
+interface IMigrationRegistryV3 is IRegistryDelegatesV1 {
     /// Thrown when a write is called with the zero migration id or given a
     /// prerequisite naming it, and by `appliedV3`, `appliedOntoV3`,
     /// `appliedAfterV3` and `appliedByV3` when asked about one. The zero id is
@@ -519,18 +523,6 @@ interface IMigrationRegistryV3 {
     /// @param migration The own migration named after the head.
     error OwnPrerequisite(bytes32 migration);
 
-    /// Thrown when `approveV3`, `revokeV3` or `approvedV3` is given the zero
-    /// delegate, which nothing can call from and which is what an
-    /// uninitialised `address` reads as.
-    error ZeroDelegate();
-
-    /// Thrown when a write's caller is neither `writer` nor approved by it for
-    /// `namespace`.
-    /// @param writer The line's writer.
-    /// @param namespace The line under the writer.
-    /// @param caller The account that called.
-    error NotApproved(address writer, bytes32 namespace, address caller);
-
     /// Emitted every time a migration is applied, by both writes. A migration
     /// is applied at most once per line, so the log is the complete history
     /// of the registry and the only way to discover a record without already
@@ -551,23 +543,7 @@ interface IMigrationRegistryV3 {
     /// @param namespace The line under the writer.
     /// @param migration The migration applied.
     /// @param appliedAt The moment recorded against it.
-    event Migrated(
-        address sender, address indexed writer, bytes32 indexed namespace, bytes32 indexed migration, uint256 appliedAt
-    );
-
-    /// Emitted when `sender` approves `delegate` to write its line in
-    /// `namespace`.
-    /// @param sender The approving writer, which is the account that called.
-    /// @param namespace The line under the writer.
-    /// @param delegate The approved account.
-    event Approved(address indexed sender, bytes32 indexed namespace, address indexed delegate);
-
-    /// Emitted when `sender` revokes `delegate` for its line in `namespace`,
-    /// whether or not `delegate` was approved.
-    /// @param sender The revoking writer, which is the account that called.
-    /// @param namespace The line under the writer.
-    /// @param delegate The revoked account.
-    event Revoked(address indexed sender, bytes32 indexed namespace, address indexed delegate);
+    event Migrated(address sender, address writer, bytes32 namespace, bytes32 migration, uint256 appliedAt);
 
     /// Applies `migration` in `writer`'s line in `namespace`, after
     /// `prerequisites`, as having been applied in the block this call lands
