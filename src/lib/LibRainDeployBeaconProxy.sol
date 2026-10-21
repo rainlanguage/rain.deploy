@@ -81,6 +81,11 @@ library LibRainDeployBeaconProxy {
     /// @param beacon The beacon.
     error BeaconProxyLocalDeployFailed(address beacon);
 
+    /// Thrown when `beaconProxyRuntimeCode` cannot revert the local state it wrote.
+    /// @param beacon The beacon.
+    /// @param state The state snapshot.
+    error BeaconProxyLocalStateNotReverted(address beacon, uint256 state);
+
     /// The proxy's creation code.
     /// @param beacon The beacon.
     /// @return The creation code, with the beacon as its constructor argument.
@@ -102,6 +107,7 @@ library LibRainDeployBeaconProxy {
     {
         uint256 state = vm.snapshotState();
         vm.etch(implementation, implementationCode);
+        // slither-disable-next-line too-many-digits
         vm.etch(beacon, bytes.concat(type(UpgradeableBeacon).creationCode, abi.encode(implementation, beacon)));
         // slither-disable-next-line low-level-calls
         (bool constructed, bytes memory beaconCode) = beacon.call("");
@@ -118,7 +124,9 @@ library LibRainDeployBeaconProxy {
             revert BeaconProxyLocalDeployFailed(beacon);
         }
         bytes memory runtimeCode = proxy.code;
-        vm.revertToState(state);
+        if (!vm.revertToState(state)) {
+            revert BeaconProxyLocalStateNotReverted(beacon, state);
+        }
         return runtimeCode;
     }
 
