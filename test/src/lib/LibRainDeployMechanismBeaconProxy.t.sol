@@ -26,12 +26,17 @@ import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.so
 import {
     CloneCreationCodeMismatch,
     CloneDataAmbiguous,
+    CloneDerivationMismatch,
+    CloneInitializeReadsStorage,
+    ExtendedNetworksUnexpected,
     ExtendedNetworkUnfrozen,
     LibRainDeployMechanism
 } from "../../../src/lib/LibRainDeployMechanism.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
 import {MockCloneableV2} from "../../concrete/MockCloneableV2.sol";
+import {MockSaltShiftingBeaconProxyFactory} from "../../concrete/MockSaltShiftingBeaconProxyFactory.sol";
+import {MockStorageReadingBeaconProxyFactory} from "../../concrete/MockStorageReadingBeaconProxyFactory.sol";
 import {perNetworkCloneChainIds, perNetworkCloneInitData} from "../../abstract/PerNetworkCloneDeploys.sol";
 import {LibBeaconProxyTest} from "../../lib/LibBeaconProxyTest.sol";
 
@@ -229,6 +234,35 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
         assertEq(deployed[1].code, suite.storedRuntimeCode);
     }
 
+    /// A real beacon proxy factory whose proxy lands somewhere other than the address the formula derives is refused
+    /// as a derivation mismatch, naming both.
+    function testBeaconProxyFactoryLandingOffTheFormulaIsADerivationMismatch() external {
+        DeploySuite memory suite = candidateOf(declaredBeaconProxy(false), perNetworkCloneChainIds()).snapshot;
+        suite.dependencies[0].runtimeCode = type(MockSaltShiftingBeaconProxyFactory).runtimeCode;
+        CloneTarget memory shifted = LibRainDeployMechanism.cloneTarget(suite);
+        shifted.salt ^= bytes32(uint256(1));
+        address elsewhere = LibRainDeployBeaconProxy.beaconProxyDeployedAddress(shifted);
+        assertNotEq(elsewhere, suite.storedDeployedAddress);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                CloneDerivationMismatch.selector, suite.suite, suite.storedDeployedAddress, elsewhere
+            )
+        );
+        this.externalDeployLocally(suite);
+    }
+
+    /// A beacon proxy factory's read of its own storage is refused naming the factory and the slot: the factory
+    /// predates the call.
+    function testBeaconProxyFactoryReadingItsOwnStorageIsRefused() external {
+        DeploySuite memory suite = candidateOf(declaredBeaconProxy(false), perNetworkCloneChainIds()).snapshot;
+        address factory = suite.dependencies[0].deployedAddress;
+        suite.dependencies[0].runtimeCode = type(MockStorageReadingBeaconProxyFactory).runtimeCode;
+        vm.expectRevert(
+            abi.encodeWithSelector(CloneInitializeReadsStorage.selector, suite.suite, factory, bytes32(uint256(1)))
+        );
+        this.externalDeployLocally(suite);
+    }
+
     /// A beacon proxy suite, one-data or per-network, that does not declare its beacon is refused
     /// naming the beacon, by the address derivation and the local deploy alike.
     function testBeaconProxySuiteMissingItsBeaconIsRefused(bool initDataPerNetwork) external {
@@ -404,6 +438,15 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
         DeploySuite memory frozen = this.externalWithExtendedNetworks(release, extended);
         assertEq(LibRainDeployMechanism.recordedAddresses(frozen).length, 2);
         assertEq(LibRainDeployMechanism.recordedAddress(frozen, chainIds[1]), beaconProxyAddressOn(proxy, chainIds[1]));
+    }
+
+    /// Extended networks on a one-data beacon proxy suite are refused.
+    function testExtendedNetworksOnAOneDataBeaconProxyAreRefused() external {
+        DeploySuite memory oneData = candidateOf(declaredBeaconProxy(false), perNetworkCloneChainIds()).snapshot;
+        CloneNetwork[] memory extended = new CloneNetwork[](1);
+        extended[0] = CloneNetwork({chainId: 137, data: TEST_DATA, deployedAddress: oneData.storedDeployedAddress});
+        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnexpected.selector, oneData.suite));
+        this.externalWithExtendedNetworks(oneData, extended);
     }
 
     /// A per-network beacon proxy is frozen only on the networks it records, and a broadcast to another is refused.
