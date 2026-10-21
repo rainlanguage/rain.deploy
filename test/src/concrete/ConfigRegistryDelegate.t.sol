@@ -318,9 +318,9 @@ contract ConfigRegistryDelegateTest is Test {
 
     /// The approvals mapping is not `public`, so there is no generated getter
     /// answering the zero delegate with false.
-    function testApprovedNoGeneratedMappingGetter(address authority, address delegate) external {
-        (bool success,) =
-            address(sRegistry).call(abi.encodeWithSignature("sApproved(address,address)", authority, delegate));
+    function testApprovedNoGeneratedMappingGetter(address authority, bytes32 scope, address delegate) external {
+        (bool success,) = address(sRegistry)
+            .call(abi.encodeWithSignature("sApproved(address,bytes32,address)", authority, scope, delegate));
         assertFalse(success);
     }
 }

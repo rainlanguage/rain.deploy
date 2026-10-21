@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {IMigrationRegistryV3, Prerequisite, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV3.sol";
+import {RegistryDelegates} from "../abstract/RegistryDelegates.sol";
 
 /// @dev One line's record of one migration. Written in one call, so a record
 /// can never hold one half of itself.
@@ -86,7 +87,7 @@ struct MigrationRecord {
 /// mapping's generated getter would answer all of them with zero — which for a
 /// record is "not applied" and for `headV3` is a value no head can ever hold,
 /// i.e. exactly the silent wrong-branch this contract reverts to prevent.
-contract MigrationRegistry is IMigrationRegistryV3 {
+contract MigrationRegistry is IMigrationRegistryV3, RegistryDelegates {
     /// Every record, keyed by writer, namespace and migration. A zero
     /// `appliedAt` means never applied. Not `public`: the only external readers are
     /// `appliedV3`, `appliedOntoV3`, `appliedAfterV3` and `appliedByV3`, which
@@ -100,10 +101,6 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// disagree about where an empty line is. Not `public`, for the same
     /// reason as the records: the untranslated zero is not a head.
     mapping(address writer => mapping(bytes32 namespace => bytes32 head)) internal sHead;
-
-    /// The delegates each writer has approved for each of its lines. Not
-    /// `public`: the only external reader is `approvedV3`, which refuses the zero inputs.
-    mapping(address writer => mapping(bytes32 namespace => mapping(address delegate => bool))) internal sApproved;
 
     /// @inheritdoc IMigrationRegistryV3
     /// @dev The block is the moment, so a caller that has nothing to say about
@@ -133,21 +130,21 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// @inheritdoc IMigrationRegistryV3
     function approveV3(bytes32 namespace, address delegate) external {
         checkApprovalKey(msg.sender, namespace, delegate);
-        sApproved[msg.sender][namespace][delegate] = true;
+        setApproval(namespace, delegate, true);
         emit Approved(msg.sender, namespace, delegate);
     }
 
     /// @inheritdoc IMigrationRegistryV3
     function revokeV3(bytes32 namespace, address delegate) external {
         checkApprovalKey(msg.sender, namespace, delegate);
-        sApproved[msg.sender][namespace][delegate] = false;
+        setApproval(namespace, delegate, false);
         emit Revoked(msg.sender, namespace, delegate);
     }
 
     /// @inheritdoc IMigrationRegistryV3
     function approvedV3(address writer, bytes32 namespace, address delegate) external view returns (bool) {
         checkApprovalKey(writer, namespace, delegate);
-        return sApproved[writer][namespace][delegate];
+        return isApproved(writer, namespace, delegate);
     }
 
     /// Refuses the zero writer, namespace and delegate: none names an approval
@@ -169,7 +166,7 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// @param namespace The line under the writer.
     function checkDelegate(address writer, bytes32 namespace) internal view {
         checkWriter(writer);
-        if (msg.sender != writer && !sApproved[writer][namespace][msg.sender]) {
+        if (!callerWritesUnder(writer, namespace)) {
             revert NotApproved(writer, namespace, msg.sender);
         }
     }

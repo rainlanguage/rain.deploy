@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {IConfigRegistryV1} from "../interface/IConfigRegistryV1.sol";
+import {RegistryDelegates} from "../abstract/RegistryDelegates.sol";
 
 /// @title ConfigRegistry
 /// @notice The whole of `IConfigRegistryV1`: any account binds a `bytes32` name
@@ -32,7 +33,7 @@ import {IConfigRegistryV1} from "../interface/IConfigRegistryV1.sol";
 /// The moment is reported and nothing more; this contract holds nothing
 /// pending. A binding's moment strictly increases, so an age derived from it
 /// never overstates the time that passed.
-contract ConfigRegistry is IConfigRegistryV1 {
+contract ConfigRegistry is IConfigRegistryV1, RegistryDelegates {
     /// @dev One binding. Declared in the contract because it is storage layout
     /// and no part of anybody's ABI — `getV1` returns two flat values.
     ///
@@ -53,14 +54,14 @@ contract ConfigRegistry is IConfigRegistryV1 {
     /// answering empty.
     mapping(address authority => mapping(bytes32 name => Binding binding)) internal sBindings;
 
-    /// The delegates each authority has approved. Not `public`: the only
-    /// external reader is `approvedV1`, which refuses the zero delegate.
-    mapping(address authority => mapping(address delegate => bool)) internal sApproved;
+    /// An approval covers every name under its authority, so every approval is in
+    /// this one scope.
+    bytes32 internal constant DELEGATE_SCOPE = 0;
 
     /// @inheritdoc IConfigRegistryV1
     function registerV1(address authority, bytes32 name, bytes calldata value) external {
         // Who may write is settled before anything about the write.
-        if (msg.sender != authority && !sApproved[authority][msg.sender]) {
+        if (!callerWritesUnder(authority, DELEGATE_SCOPE)) {
             revert NotApproved(authority, msg.sender);
         }
         // Rejected so that a name can never be both bound and unreadable.
@@ -87,21 +88,21 @@ contract ConfigRegistry is IConfigRegistryV1 {
     /// @inheritdoc IConfigRegistryV1
     function approveV1(address delegate) external {
         checkDelegate(delegate);
-        sApproved[msg.sender][delegate] = true;
+        setApproval(DELEGATE_SCOPE, delegate, true);
         emit Approved(msg.sender, delegate);
     }
 
     /// @inheritdoc IConfigRegistryV1
     function revokeV1(address delegate) external {
         checkDelegate(delegate);
-        sApproved[msg.sender][delegate] = false;
+        setApproval(DELEGATE_SCOPE, delegate, false);
         emit Revoked(msg.sender, delegate);
     }
 
     /// @inheritdoc IConfigRegistryV1
     function approvedV1(address authority, address delegate) external view returns (bool) {
         checkDelegate(delegate);
-        return sApproved[authority][delegate];
+        return isApproved(authority, DELEGATE_SCOPE, delegate);
     }
 
     /// Refuses the zero delegate: nothing calls from it, so no approval of it
