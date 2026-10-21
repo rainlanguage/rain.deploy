@@ -4,7 +4,9 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {DeployCandidate, DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {BEACON_PROXY_ARTIFACT_PATH} from "../../../src/lib/LibRainDeployBeaconProxy.sol";
+import {BEACON_PROXY_ARTIFACT_PATH, LibRainDeployBeaconProxy} from "../../../src/lib/LibRainDeployBeaconProxy.sol";
+import {PerNetworkBeaconProxyOnlyDeploySuites} from "../../concrete/PerNetworkBeaconProxyOnlyDeploySuites.sol";
+import {LibBeaconProxyTest} from "../../lib/LibBeaconProxyTest.sol";
 import {BeaconProxyOnlyDeploySuites} from "../../concrete/BeaconProxyOnlyDeploySuites.sol";
 import {MixedCloneBeaconProxyDeploySuites} from "../../concrete/MixedCloneBeaconProxyDeploySuites.sol";
 import {NoFactoryDeploys} from "../../../src/abstract/RainDeployCloneSuitesBase.sol";
@@ -16,7 +18,8 @@ import {ExampleCloneDeploy} from "../../concrete/ExampleCloneDeploy.sol";
 import {
     NoPerNetworkCloneAdmin,
     PER_NETWORK_CLONE_ARBITRUM_ONE_ADMIN,
-    PER_NETWORK_CLONE_POLYGON_ADMIN
+    PER_NETWORK_CLONE_POLYGON_ADMIN,
+    perNetworkCloneInitData
 } from "../../abstract/PerNetworkCloneDeploys.sol";
 import {exampleCloneFactory, exampleCloneImplementation} from "../../abstract/ExampleCloneDeploys.sol";
 import {NoCloneDeploySuites} from "../../concrete/NoCloneDeploySuites.sol";
@@ -206,5 +209,36 @@ contract RainDeployCloneSuitesBaseTest is Test {
         }
         assertNotEq(candidates[2].snapshot.storedDeployedAddress, candidates[3].snapshot.storedDeployedAddress);
         deploy.externalCheckCandidatesAnchoredToSource();
+    }
+
+    /// A per-network beacon proxy's candidate, read through `candidateSuites()`, has one entry per supported
+    /// network, in `supportedNetworks()` order, each with that network's chain id, the init data `initData` gives
+    /// for it and the beacon proxy address that data derives.
+    function testPerNetworkBeaconProxyCandidateIsBuiltForTheSupportedNetworksInOrder() external {
+        PerNetworkBeaconProxyOnlyDeploySuites deploy = new PerNetworkBeaconProxyOnlyDeploySuites();
+        DeployCandidate[] memory candidates = deploy.externalCheckedCandidateSuites();
+        assertEq(candidates.length, 1);
+        assertEq(uint256(candidates[0].snapshot.mechanism), uint256(DeployMechanism.BeaconProxyPerNetwork));
+        CloneNetworks memory clones = abi.decode(candidates[0].snapshot.mechanismData, (CloneNetworks));
+        uint256[] memory chainIds = new uint256[](2);
+        chainIds[0] = 42161;
+        chainIds[1] = 137;
+        assertEq(clones.networks.length, chainIds.length, "one entry per supported network");
+        for (uint256 i = 0; i < chainIds.length; i++) {
+            bytes memory data = perNetworkCloneInitData(chainIds[i]);
+            assertEq(clones.networks[i].chainId, chainIds[i]);
+            assertEq(clones.networks[i].data, data);
+            assertEq(
+                clones.networks[i].deployedAddress,
+                LibRainDeployBeaconProxy.beaconProxyDeployedAddress(
+                    CloneTarget({
+                        factory: LibBeaconProxyTest.exampleFactory(),
+                        implementation: LibBeaconProxyTest.exampleBeacon(),
+                        data: data,
+                        salt: bytes32(uint256(7))
+                    })
+                )
+            );
+        }
     }
 }

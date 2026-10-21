@@ -198,6 +198,32 @@ contract LibRainDeployBeaconProxyTest is Test {
         assertEq(deployed.codehash, LibRainDeployBeaconProxy.beaconProxyDeployedCodehash(target.implementation));
     }
 
+    /// The step returns the address the factory's deploy call reports, not the address it derived.
+    function testBeaconProxyDeployStepReturnsWhereTheFactoryDeployed() external {
+        MockBeaconProxyFactory factory = new MockBeaconProxyFactory();
+        CloneTarget memory target =
+            CloneTarget({factory: address(factory), implementation: realBeacon(), data: TEST_DATA, salt: TEST_SALT});
+        address elsewhere = address(uint160(LibRainDeployBeaconProxy.beaconProxyDeployedAddress(target)) + 1);
+        vm.mockCall(
+            address(factory),
+            abi.encodeWithSelector(ICloneableFactoryV5.beaconProxyDeterministicOpenSalt.selector),
+            abi.encode(elsewhere)
+        );
+        address deployed =
+            this.externalBeaconProxyDeployStep(LibRainDeploy.ARBITRUM_ONE, address(0xD3910E8), abi.encode(target));
+        assertEq(deployed, elsewhere);
+    }
+
+    /// The step stops the broadcast it starts, so the caller can start the next one.
+    function testBeaconProxyDeployStepStopsItsBroadcast() external {
+        MockBeaconProxyFactory factory = new MockBeaconProxyFactory();
+        CloneTarget memory target =
+            CloneTarget({factory: address(factory), implementation: realBeacon(), data: TEST_DATA, salt: TEST_SALT});
+        this.externalBeaconProxyDeployStep(LibRainDeploy.ARBITRUM_ONE, address(0xD3910E8), abi.encode(target));
+        vm.startBroadcast(address(0xD3910E8));
+        vm.stopBroadcast();
+    }
+
     /// The step refuses a factory that predicts another address, before deploying.
     function testBeaconProxyDeployStepPredictionMismatchReverts() external {
         MockBeaconProxyFactory factory = new MockBeaconProxyFactory();

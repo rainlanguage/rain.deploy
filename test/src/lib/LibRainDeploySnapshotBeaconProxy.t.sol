@@ -9,6 +9,7 @@ import {DeployDependency, DeployMechanism, DeploySuite} from "../../../src/abstr
 import {
     FrozenSnapshotBeaconProxyMarkerAmbiguous,
     FrozenSnapshotBeaconProxyMechanismDataMissing,
+    FrozenSnapshotMechanismDataAmbiguous,
     FrozenSnapshotUnreadable,
     LibRainDeploySnapshot
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
@@ -29,6 +30,9 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
     string constant MARKER_LINE = "bool constant BEACON_PROXY = true;\n";
 
     string constant MECHANISM_DATA_LINE = "bytes constant MECHANISM_DATA = hex\"01\";\n";
+
+    string constant MARKER_BLOCK = "\n/// @dev Marks a beacon proxy record: its factory call's `implementation` is the\n"
+        "/// beacon.\nbool constant BEACON_PROXY = true;\n";
 
     /// @param path The record.
     /// @return The mechanism it was cut with.
@@ -147,11 +151,25 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
         );
     }
 
+    /// Two `MECHANISM_DATA` declarations beside two markers are refused as `MECHANISM_DATA` ambiguity, which is
+    /// checked before the marker's.
+    function testTwoMechanismDataBesideTwoMarkersIsMechanismDataAmbiguity() external {
+        checkRefused(
+            "two-data-two-markers",
+            string.concat(
+                MARKER_LINE, MECHANISM_DATA_LINE, MARKER_LINE, MECHANISM_DATA_LINE, everyNetworkLine(address(1))
+            ),
+            FrozenSnapshotMechanismDataAmbiguous.selector
+        );
+    }
+
     /// A line naming `BEACON_PROXY` that is not exactly the marker is refused as unreadable, whether
     /// solc would read it as the marker, as another value, or not at all.
     function testAStrayMentionOfTheMarkerIsUnreadable() external {
-        string[5] memory strays = [
+        string[7] memory strays = [
             "bool constant BEACON_PROXY = false;\n",
+            "bool constant BEACON_PROXY=true;\n",
+            "/// BEACON_PROXY\n",
             "bool constant BEACON_PROXY = true; \n",
             " bool constant BEACON_PROXY = true;\n",
             "// bool constant BEACON_PROXY = true;\n",
@@ -234,13 +252,22 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
         return vm.split(haystack, needle).length - 1;
     }
 
-    /// A one-address beacon proxy's record carries the marker once, reads back as a beacon proxy,
-    /// and is released as one, at its recorded address.
+    /// A one-address beacon proxy's record carries the marker once, a blank line below the declaration
+    /// before it, under its doc comment and directly above its address constant, reads back as a
+    /// beacon proxy, and is released as one, at its recorded address.
     function testTheWriterMarksAOneAddressBeaconProxyAndReleasesIt() external {
         DeploySuite memory suite = beaconProxySuite(false);
         string memory path = writeBeaconProxyRecord("0_0_1", suite);
         string memory record = vm.readFile(path);
         assertEq(occurrences(record, MARKER_LINE), 1);
+        assertEq(occurrences(record, MARKER_BLOCK), 1);
+        assertEq(
+            occurrences(
+                record, string.concat(MARKER_BLOCK, "\n/// @dev The deterministic deploy address of the beacon proxy")
+            ),
+            1
+        );
+        assertEq(occurrences(record, string.concat(";\n", MARKER_BLOCK)), 1);
         assertEq(uint256(this.externalRecordedMechanism(path)), uint256(DeployMechanism.BeaconProxy));
         assertTrue(
             vm.contains(
@@ -270,13 +297,22 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
         vm.removeDir(string.concat(ROOT, "/0_0_1"), true);
     }
 
-    /// A per-network beacon proxy's record carries the marker once, reads back as a per-network
-    /// beacon proxy, and is released as one, with no stored address.
+    /// A per-network beacon proxy's record carries the marker once, a blank line below the declaration
+    /// before it, under its doc comment and directly above its address constants, reads back as a
+    /// per-network beacon proxy, and is released as one, with no stored address.
     function testTheWriterMarksAPerNetworkBeaconProxyAndReleasesIt() external {
         DeploySuite memory suite = beaconProxySuite(true);
         string memory path = writeBeaconProxyRecord("0_0_2", suite);
         string memory record = vm.readFile(path);
         assertEq(occurrences(record, MARKER_LINE), 1);
+        assertEq(occurrences(record, MARKER_BLOCK), 1);
+        assertEq(
+            occurrences(
+                record, string.concat(MARKER_BLOCK, "\n/// @dev The deterministic deploy address of the beacon proxy")
+            ),
+            1
+        );
+        assertEq(occurrences(record, string.concat(";\n", MARKER_BLOCK)), 1);
         assertEq(uint256(this.externalRecordedMechanism(path)), uint256(DeployMechanism.BeaconProxyPerNetwork));
         assertTrue(
             vm.contains(record, "/// @dev The deterministic deploy address of the beacon proxy on chain id\n/// 42161,")
