@@ -1283,9 +1283,41 @@
       "At 990c46c the library reads msg.sender nowhere: checkCaller is deleted, checkInputs takes no authority and returns no record, registerOnNetworks builds the record itself with describeInputs, and every bind is broadcast from the authority it is given. RegisterConfig.run() alone calls checkSender(msg.sender, authority), before it reads the name, the value or the networks. The R13 and R16 equivalents of round 6 are gone: the library tests pass any fuzzed authority other than this contract and tx.origin.",
       "The tests were rewritten together with the refactor, which removes the behaviour they used to pin (a library-level caller check), so 'existing' means present at 990c46c before the probe. New in that commit: testRegisterOnNetworksBindsUnderTheAuthority and testRegisterOnForksBindsUnderTheAuthority, which run through LocalForkVm, now recording each account a broadcast starts from, with every library call pranked as the authority; testCheckInputsGivesTheNameAndNetworks; and testWiring reordered so the sender is refused before the name, the value and the networks.",
       "B01-B45 (.mutation-test/r7/offline.toml) probed with no RPC variables and no .env against .mutation-test/check.sh (122 tests): 44/45 killed. Covered: msg.sender and tx.origin in place of authority at every non-pure call site (currentBinding's getV1 and unbound match, registerOnSelectedChain's read and broadcast, registerOnNetworks' record and registerOnForks call, registerOnForks' registerOnSelectedChain call, the three check-loop forwards, resolve, UnexpectedBinding, run()'s checkSender and registerOnNetworks, verify()); run()'s sender check removed, self-compared or reading tx.origin; checkSender inverted, disabled or naming one account twice; checkInputs skipped or its refusals and returns broken; address(0) bound, described or broadcast from.",
-      "Equivalent, B25: run() passing msg.sender in place of authority to registerOnNetworks. The checkSender(msg.sender, authority) on the line before has reverted unless the two are equal, so no test can tell them apart. It follows from the check sitting at the top of run(); listed in audit/known-false-positives.md.",
+      "Equivalent, B25: run() passing msg.sender in place of authority to registerOnNetworks. The checkSender(msg.sender, authority) on the line before has reverted unless the two are equal, so no test can tell them apart. It follows from the check sitting at the top of run(). The round-8 record removes it by deleting checkSender, so run() reads no msg.sender, and its audit/known-false-positives.md entry goes with it.",
       "P01-P04 (.mutation-test/r7/pure.toml): msg.sender or tx.origin in place of authority in checkSender and describeInputs are NO-RUN, refused by solc (error 2527) because both functions are pure. Not counted as behaviours.",
       "Adversarial pass: from the RegisterConfig and LibConfigRegistryRegister NatSpec, a sender other than the authority must be refused before anything is read or forked (testWiring), the record must name the authority that binds (testRegisterOnNetworksBindsUnderTheAuthority), and each bind must be read and broadcast under the given authority whoever calls the library (both BindsUnderTheAuthority tests). No candidate."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T04:35:53Z",
+    "commit": "5d2652a96d8b322c7a64bd2fe6ba477e50308326",
+    "testsAfterCommit": "5d2652a96d8b322c7a64bd2fe6ba477e50308326",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 346,
+    "scope": "PR #322 round 8: RegisterConfig.run() reading no msg.sender — script/RegisterConfig.sol run() and the bind broadcast in src/lib/LibConfigRegistryRegister.sol registerOnSelectedChain; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 13,
+      "behavioursProbed": 13,
+      "killedByExistingTests": 13,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "At 5d2652a run() passes vm.envAddress(CONFIG_REGISTRY_AUTHORITY) straight to registerOnNetworks and reads no msg.sender; checkSender and SenderNotAuthority are deleted. Forge refuses the case they guarded: forge script --broadcast without --unlocked stops with 'No associated wallet for addresses: [...]' before sending on any chain when none of its signers is a broadcast's account (BundledState::broadcast, crates/script/src/broadcast.rs, foundry 43923a4). Reproduced with that forge against a local anvil: a script calling vm.startBroadcast(0xA11CE) fails with that error and exit 1 both with no wallet and with an unrelated --private-key.",
+      "The tests changed with the refactor, so 'existing' means present at 5d2652a before the probe. testWiring runs the script with the authority set to the script itself, asserted to be neither its msg.sender (the test contract) nor tx.origin, and after every run checks the accounts LocalForkVm recorded each broadcast as started from: all the authority, and as many as the runs bound.",
+      "C01-C13 (.mutation-test/r8/offline.toml, with C01-C07 re-probed from offline-rerun.toml after their first targets also matched verify()) probed with no RPC variables and no .env against .mutation-test/check.sh (120 tests): 13/13 killed. Covered: run() passing msg.sender, tx.origin, address(0) or address(this) as the authority, forking with the cheatcodes, ignoring or doubling the network selection, returning no fork ids; the bind broadcast started from msg.sender, tx.origin or address(this), with no account, or not at all.",
+      "Equivalent mutants: none. B25 of round 7 no longer exists: there is no msg.sender read in run() to swap.",
+      "Adversarial pass: the oracle is the RegisterConfig NatSpec — every bind broadcast from the authority, and nothing signed by any other account. In-script, every broadcast started is from the authority (testWiring). Off-script, a device answering as another account is refused by forge before anything is sent, per the source and the reproduction above. A dry run with a wrong --sender now simulates without a revert; it sends nothing, and the README's pre-run `cast wallet address --trezor` check is what compares the device to the authority before the broadcast. No candidate."
     ]
   }
 ]
