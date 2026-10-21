@@ -1319,5 +1319,37 @@
       "Equivalent mutants: none. B25 of round 7 no longer exists: there is no msg.sender read in run() to swap.",
       "Adversarial pass: the oracle is the RegisterConfig NatSpec — every bind broadcast from the authority, and nothing signed by any other account. In-script, every broadcast started is from the authority (testWiring). Off-script, a device answering as another account is refused by forge before anything is sent, per the source and the reproduction above. A dry run with a wrong --sender now simulates without a revert; it sends nothing, and the README's pre-run `cast wallet address --trezor` check is what compares the device to the authority before the broadcast. No candidate."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T07:42:28Z",
+    "commit": "77e9d23713a341b35c8c072f7ee0a0e8f0c30acd",
+    "testsAfterCommit": "e356085a1610b555717180758d1ed529fa75da4a",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 352,
+    "scope": "PR #322 round 9: the sender-plus-authority shape restored by reverting 5d2652a, 990c46c and e4ce5ad — src/lib/LibConfigRegistryRegister.sol checkSender, checkInputs, registerOnNetworks, registerOnForks and registerOnSelectedChain sender/authority threading, and script/RegisterConfig.sol run(); offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 18,
+      "behavioursProbed": 18,
+      "killedByExistingTests": 13,
+      "gapsFilled": 1,
+      "equivalentMutants": 4,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "User ruling: SenderNotAuthority stays, and code is never changed because of a mutant it makes equivalent. 5d2652a, 990c46c and e4ce5ad were reverted with git revert, returning run() to passing msg.sender and the authority and the library to checking them in checkInputs.",
+      "S01-B27 (.mutation-test/r9/offline.toml) probed with no RPC variables and no .env against .mutation-test/check.sh (122 tests at 77e9d23): 13/18 killed by existing tests. Covered: checkSender never reverting or naming its arguments swapped, checkInputs dropping the sender check or making it before the name, registerOnNetworks and registerOnForks checking the authority as the sender, registerOnForks binding as tx.origin, the bind broadcast from tx.origin or no account, the binding read under tx.origin, and run() passing the env authority or tx.origin as the sender or msg.sender as the authority.",
+      "Gap filled: R20 (registerOnNetworks passing its own msg.sender as the sender to registerOnForks) survived offline; only the fork tests, whose sender 0xA11CE is not their msg.sender, reached it. testRegisterOnNetworksBindsAsTheGivenSender calls registerOnNetworks from a pranked caller with this contract as sender and authority; R20 re-probed (.mutation-test/r9/r20.toml, 123 tests at e356085): killed.",
+      "Equivalent mutants, recorded in audit/known-false-positives.md: S07 (checkInputs describing sender for authority), R07 (registerOnNetworks passing sender as the authority), R16 (registerOnNetworks passing authority as the sender) and R13 (registerOnForks passing authority as the sender to registerOnSelectedChain). checkInputs has reverted SenderNotAuthority unless sender == authority before each line. The round-7/8 B25 (run() passing msg.sender for the authority after its own checkSender) has no line in this shape: run() makes no check of its own, and B25 here, the env authority passed as the sender, is killed.",
+      "Adversarial pass: the oracle is the RegisterConfig and LibConfigRegistryRegister NatSpec — a bind lands under and is signed by the authority, and any other sender is refused before a device signs. Forge refusing a broadcast from an account none of its signers is stays a second layer behind SenderNotAuthority. No candidate."
+    ]
   }
 ]

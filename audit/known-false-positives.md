@@ -48,8 +48,13 @@ the value the function returns.
   alone, which `withExtendedNetworks` preserves, and in the no-candidate
   fallback `withUnrecordedNetworks` appends nothing for either argument because
   `suite`'s networks are a subset of `frozen`'s.
-- `RegisterConfig.run()` passes `authority` to `registerOnNetworks`;
-  `msg.sender` is equivalent (B25): the `checkSender(msg.sender, authority)` on
-  the line before has reverted unless the two are equal. Every other
-  `msg.sender` or `tx.origin` read in place of `authority` is killed offline,
-  and the library's `pure` functions refuse both at compile time.
+- `LibConfigRegistryRegister`'s sender and authority after `checkInputs`'
+  `checkSender(sender, authority)`, which reverts `SenderNotAuthority` unless
+  the two are equal, so either can stand for the other on every later line:
+  `checkInputs` describing `sender` in place of `authority` (S07),
+  `registerOnNetworks` passing `authority` as the sender to `registerOnForks`
+  (R16), and `registerOnForks` passing `authority` as the sender to
+  `registerOnSelectedChain` (R13). R07, passing `sender` as the authority, is in
+  the table above. These are known false positives of the `SenderNotAuthority`
+  check, which stays: a mutant it makes equivalent is recorded here, never
+  killed by deleting the check.
