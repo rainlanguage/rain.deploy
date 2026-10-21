@@ -12,17 +12,8 @@ import {BEACON_PROXY_CREATION_CODE} from "rain-factory-0.2.0/src/generated/Beaco
 import {DelegatedBeacon} from "rain-factory-0.2.0/src/lib/LibICloneableFactoryV5.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {CloneTarget} from "../../../src/lib/LibRainDeployClone.sol";
-import {
-    BEACON_PROXY_ARTIFACT_PATH,
-    BEACON_PROXY_BEACON_IMMUTABLE_OFFSET,
-    BEACON_PROXY_RUNTIME_OFFSET,
-    BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE,
-    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
-    BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE,
-    LibRainDeployBeaconProxy
-} from "../../../src/lib/LibRainDeployBeaconProxy.sol";
-import {BeaconProxyStandInBeacon} from "../../concrete/BeaconProxyStandInBeacon.sol";
-import {BeaconProxyStandInImplementation} from "../../concrete/BeaconProxyStandInImplementation.sol";
+import {BEACON_PROXY_ARTIFACT_PATH, LibRainDeployBeaconProxy} from "../../../src/lib/LibRainDeployBeaconProxy.sol";
+import {EXAMPLE_BEACON_PROXY_RUNTIME_CODE, LibBeaconProxyTest} from "../../lib/LibBeaconProxyTest.sol";
 import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
 import {MockCloneableV2} from "../../concrete/MockCloneableV2.sol";
 import {MockDirtyOwnerCloneable} from "../../concrete/MockDirtyOwnerCloneable.sol";
@@ -65,40 +56,6 @@ contract LibRainDeployBeaconProxyTest is Test {
         return deployed;
     }
 
-    /// The offsets are pinned to the generated creation code: the constructor copies the runtime from
-    /// `BEACON_PROXY_RUNTIME_OFFSET` and stores the beacon at `BEACON_PROXY_BEACON_IMMUTABLE_OFFSET`,
-    /// the operand of the runtime's one `PUSH32` of zero.
-    function testBeaconProxyOffsetsArePinned() external pure {
-        assertEq(BEACON_PROXY_RUNTIME_OFFSET, 0x424);
-        assertEq(BEACON_PROXY_BEACON_IMMUTABLE_OFFSET, 0x23);
-        bytes memory creation = BEACON_PROXY_CREATION_CODE;
-        assertEq(creation.length - BEACON_PROXY_RUNTIME_OFFSET, 0x10b, "runtime length");
-        // `PUSH2 0x10b PUSH2 0x424 PUSH0 CODECOPY`, then `PUSH0 PUSH1 0x23 ADD MSTORE`.
-        bytes memory constructorTail = hex"61010b6104245f395f60230152";
-        uint256 found = 0;
-        for (uint256 i = 0; i + constructorTail.length <= BEACON_PROXY_RUNTIME_OFFSET; i++) {
-            bool matches = true;
-            for (uint256 j = 0; j < constructorTail.length && matches; j++) {
-                matches = creation[i + j] == constructorTail[j];
-            }
-            if (matches) {
-                found++;
-            }
-        }
-        assertEq(found, 1, "the constructor's copy and immutable store");
-        uint256 push32 = 0;
-        for (uint256 i = BEACON_PROXY_RUNTIME_OFFSET; i < creation.length; i++) {
-            if (creation[i] == 0x7f) {
-                push32++;
-            }
-        }
-        assertEq(push32, 1, "one PUSH32 in the runtime");
-        assertEq(uint8(creation[BEACON_PROXY_RUNTIME_OFFSET + BEACON_PROXY_BEACON_IMMUTABLE_OFFSET - 1]), 0x7f);
-        for (uint256 i = 0; i < 0x20; i++) {
-            assertEq(uint8(creation[BEACON_PROXY_RUNTIME_OFFSET + BEACON_PROXY_BEACON_IMMUTABLE_OFFSET + i]), 0);
-        }
-    }
-
     /// The creation code is the generated creation code with `abi.encode(beacon, "")` appended.
     function testBeaconProxyCreationCode(address beacon) external pure {
         assertEq(
@@ -107,24 +64,27 @@ contract LibRainDeployBeaconProxyTest is Test {
         );
     }
 
-    /// The runtime matches what a real `BeaconProxy` deploy leaves, for any beacon address.
-    function testBeaconProxyRuntimeMatchesARealDeploy(address beacon) external {
-        assumeNotForgeAddress(beacon);
-        vm.assume(uint160(beacon) > 0xffff && beacon.code.length == 0);
-        vm.assume(beacon != BEACON_PROXY_STAND_IN_IMPLEMENTATION);
-        vm.etch(beacon, BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE);
-        vm.etch(BEACON_PROXY_STAND_IN_IMPLEMENTATION, BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE);
+    /// The generated runtime is the code a real factory leaves at the derived address, for a real beacon at any
+    /// address, and generating it leaves no state behind.
+    function testBeaconProxyRuntimeCodeIsWhatARealFactoryDeploys(address beaconAt, bytes32 salt, bytes memory data)
+        external
+    {
+        assumeNotForgeAddress(beaconAt);
+        vm.assume(uint160(beaconAt) > 0xffff && beaconAt.code.length == 0);
+        MockCloneableV2 implementation = new MockCloneableV2();
+        vm.assume(beaconAt != address(implementation));
 
-        address proxy = create(LibRainDeployBeaconProxy.beaconProxyCreationCode(beacon));
-        assertEq(proxy.code, LibRainDeployBeaconProxy.beaconProxyRuntimeCode(beacon));
-        assertEq(proxy.codehash, LibRainDeployBeaconProxy.beaconProxyDeployedCodehash(beacon));
-    }
+        bytes memory generated = LibRainDeployBeaconProxy.beaconProxyRuntimeCode(
+            vm, beaconAt, address(implementation), address(implementation).code
+        );
+        assertEq(beaconAt.code.length, 0, "beacon left behind");
 
-    /// The runtime of a real beacon's proxy matches too, and the proxy delegates into its implementation.
-    function testBeaconProxyRuntimeMatchesARealBeacon() external {
-        address beacon = realBeacon();
-        address proxy = create(LibRainDeployBeaconProxy.beaconProxyCreationCode(beacon));
-        assertEq(proxy.code, LibRainDeployBeaconProxy.beaconProxyRuntimeCode(beacon));
+        deployCodeTo(
+            "UpgradeableBeacon.sol:UpgradeableBeacon", abi.encode(address(implementation), address(this)), beaconAt
+        );
+        MockBeaconProxyFactory factory = new MockBeaconProxyFactory();
+        address proxy = factory.beaconProxyDeterministicOpenSalt(beaconAt, data, salt);
+        assertEq(proxy.code, generated);
         assertEq(MockCloneableV2(proxy).version(), 2);
     }
 
@@ -137,7 +97,6 @@ contract LibRainDeployBeaconProxyTest is Test {
         address expected = LibRainDeployBeaconProxy.beaconProxyDeployedAddress(target);
         assertEq(factory.predictBeaconProxyAddressOpenSalt(beacon, data, salt), expected);
         assertEq(factory.beaconProxyDeterministicOpenSalt(beacon, data, salt), expected);
-        assertEq(expected.code, LibRainDeployBeaconProxy.beaconProxyRuntimeCode(beacon));
     }
 
     /// The address moves with each of factory, beacon, salt and data.
@@ -195,7 +154,13 @@ contract LibRainDeployBeaconProxyTest is Test {
         address deployed =
             this.externalBeaconProxyDeployStep(LibRainDeploy.ARBITRUM_ONE, address(0xD3910E8), abi.encode(target));
         assertEq(deployed, LibRainDeployBeaconProxy.beaconProxyDeployedAddress(target));
-        assertEq(deployed.codehash, LibRainDeployBeaconProxy.beaconProxyDeployedCodehash(target.implementation));
+        address implementation = UpgradeableBeacon(target.implementation).implementation();
+        assertEq(
+            deployed.code,
+            LibRainDeployBeaconProxy.beaconProxyRuntimeCode(
+                vm, target.implementation, implementation, implementation.code
+            )
+        );
     }
 
     /// The step returns the address the factory's deploy call reports, not the address it derived.
@@ -341,37 +306,14 @@ contract LibRainDeployBeaconProxyTest is Test {
         assertEq(expected.code.length, 0);
     }
 
-    /// The stand-in beacon's runtime constant is its test-only source compiled under this repo's settings.
-    function testStandInBeaconRuntimeCodeIsItsSource() external pure {
-        assertEq(BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE, type(BeaconProxyStandInBeacon).runtimeCode);
-    }
-
-    /// The stand-in implementation's runtime constant is its test-only source compiled under this repo's settings.
-    function testStandInImplementationRuntimeCodeIsItsSource() external pure {
-        assertEq(BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE, type(BeaconProxyStandInImplementation).runtimeCode);
-    }
-
-    /// The etched stand-in beacon serves the stand-in implementation.
-    function testStandInBeaconServesTheStandInImplementation() external {
-        address beacon = address(0xBEAC0);
-        vm.etch(beacon, BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE);
-        assertEq(UpgradeableBeacon(beacon).implementation(), BEACON_PROXY_STAND_IN_IMPLEMENTATION);
-    }
-
-    /// The stand-in implementation's address is the hash of its tag.
-    function testStandInImplementationAddressDerivation() external pure {
+    /// The example fixture's runtime code is what the generator produces for its beacon.
+    function testExampleBeaconProxyRuntimeCodeIsGenerated() external {
+        MockCloneableV2 implementation = new MockCloneableV2();
         assertEq(
-            BEACON_PROXY_STAND_IN_IMPLEMENTATION,
-            address(uint160(uint256(keccak256("rain.deploy.beaconproxy.standin.implementation"))))
-        );
-    }
-
-    /// The etched stand-in implementation initializes to the `ICloneableV2` success value with any data.
-    function testStandInImplementationInitializes(bytes memory data) external {
-        vm.etch(BEACON_PROXY_STAND_IN_IMPLEMENTATION, BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE);
-        assertEq(
-            BeaconProxyStandInImplementation(BEACON_PROXY_STAND_IN_IMPLEMENTATION).initialize(data),
-            keccak256("ICloneableV2.initialize")
+            EXAMPLE_BEACON_PROXY_RUNTIME_CODE,
+            LibRainDeployBeaconProxy.beaconProxyRuntimeCode(
+                vm, LibBeaconProxyTest.exampleBeacon(), address(implementation), address(implementation).code
+            )
         );
     }
 }

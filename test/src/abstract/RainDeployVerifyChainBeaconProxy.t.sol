@@ -77,7 +77,13 @@ contract RainDeployVerifyChainBeaconProxyTest is PerNetworkCloneBeaconVerifyChai
         DeploySuite memory suite =
         LibRainDeployMechanism.beaconProxyCandidate(
             LibBeaconProxyTest.declared(
-                PROXY_SUITE, sFactory, beacon, hex"deadbeef", initDataPerNetwork, bytes32(uint256(5))
+                PROXY_SUITE,
+                sFactory,
+                beacon,
+                hex"deadbeef",
+                initDataPerNetwork,
+                bytes32(uint256(5)),
+                LibBeaconProxyTest.runtimeOf(vm, beacon)
             ),
             perNetworkCloneChainIds()
         )

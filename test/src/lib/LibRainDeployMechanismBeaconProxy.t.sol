@@ -15,9 +15,6 @@ import {
 } from "../../../src/lib/LibRainDeployClone.sol";
 import {
     BEACON_PROXY_ARTIFACT_PATH,
-    BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE,
-    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
-    BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE,
     BEACON_PROXY_UNANCHORABLE_REASON,
     BeaconProxyDeploy,
     LibRainDeployBeaconProxy
@@ -26,8 +23,6 @@ import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.so
 import {
     CloneCreationCodeMismatch,
     CloneDataAmbiguous,
-    CloneDerivationMismatch,
-    CloneInitializeReadsStorage,
     ExtendedNetworksUnexpected,
     ExtendedNetworkUnfrozen,
     LibRainDeployMechanism
@@ -35,7 +30,6 @@ import {
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
 import {MockCloneableV2} from "../../concrete/MockCloneableV2.sol";
-import {MockSaltShiftingBeaconProxyFactory} from "../../concrete/MockSaltShiftingBeaconProxyFactory.sol";
 import {MockStorageReadingBeaconProxyFactory} from "../../concrete/MockStorageReadingBeaconProxyFactory.sol";
 import {perNetworkCloneChainIds, perNetworkCloneInitData} from "../../abstract/PerNetworkCloneDeploys.sol";
 import {LibBeaconProxyTest} from "../../lib/LibBeaconProxyTest.sol";
@@ -52,13 +46,15 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
     /// @param initDataPerNetwork Whether the init data is per network.
     /// @return The declaration.
     function declaredBeaconProxy(bool initDataPerNetwork) internal returns (BeaconProxyDeploy memory) {
+        address beacon = address(new UpgradeableBeacon(address(new MockCloneableV2()), address(this)));
         return LibBeaconProxyTest.declared(
             "beacon-proxy",
             address(new MockBeaconProxyFactory()),
-            address(new UpgradeableBeacon(address(new MockCloneableV2()), address(this))),
+            beacon,
             TEST_DATA,
             initDataPerNetwork,
-            TEST_SALT
+            TEST_SALT,
+            LibBeaconProxyTest.runtimeOf(vm, beacon)
         );
     }
 
@@ -116,10 +112,8 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
         assertEq(candidate.snapshot.suite, proxy.suite);
         assertEq(candidate.snapshot.creationCode, LibRainDeployBeaconProxy.beaconProxyCreationCode(proxy.beacon));
         assertEq(candidate.snapshot.storedDeployedAddress, LibRainDeployBeaconProxy.beaconProxyDeployedAddress(target));
-        assertEq(candidate.snapshot.storedRuntimeCode, LibRainDeployBeaconProxy.beaconProxyRuntimeCode(proxy.beacon));
-        assertEq(
-            candidate.snapshot.storedBytecodeHash, LibRainDeployBeaconProxy.beaconProxyDeployedCodehash(proxy.beacon)
-        );
+        assertEq(candidate.snapshot.storedRuntimeCode, proxy.runtimeCode);
+        assertEq(candidate.snapshot.storedBytecodeHash, keccak256(proxy.runtimeCode));
         assertEq(candidate.snapshot.artifactPath, BEACON_PROXY_ARTIFACT_PATH);
         assertEq(uint256(candidate.snapshot.mechanism), uint256(DeployMechanism.BeaconProxy));
         assertEq(candidate.snapshot.mechanismData, abi.encode(target));
@@ -140,7 +134,7 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
         assertEq(uint256(candidate.snapshot.mechanism), uint256(DeployMechanism.BeaconProxyPerNetwork));
         assertEq(candidate.snapshot.storedDeployedAddress, address(0));
         assertEq(candidate.snapshot.creationCode, LibRainDeployBeaconProxy.beaconProxyCreationCode(proxy.beacon));
-        assertEq(candidate.snapshot.storedRuntimeCode, LibRainDeployBeaconProxy.beaconProxyRuntimeCode(proxy.beacon));
+        assertEq(candidate.snapshot.storedRuntimeCode, proxy.runtimeCode);
         assertEq(candidate.snapshot.artifactPath, BEACON_PROXY_ARTIFACT_PATH);
         assertEq(candidate.unanchorableReason, BEACON_PROXY_UNANCHORABLE_REASON);
 
@@ -209,8 +203,8 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
         assertFalse(LibRainDeployMechanism.isProxyArtifactPath(other));
     }
 
-    /// A beacon proxy deploys locally through the real factory to its derived address, with its
-    /// beacon replaced by the stand-in beacon.
+    /// A beacon proxy is placed locally at its derived address with its frozen runtime code, and its beacon is left
+    /// as declared.
     function testBeaconProxySuiteDeploysLocallyToItsDerivedAddress() external {
         DeploySuite memory suite = candidateOf(declaredBeaconProxy(false), perNetworkCloneChainIds()).snapshot;
         address[] memory deployed = this.externalDeployLocally(suite);
@@ -218,9 +212,7 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
         assertEq(deployed[0], suite.storedDeployedAddress);
         assertEq(deployed[0].code, suite.storedRuntimeCode);
         address beacon = abi.decode(suite.mechanismData, (CloneTarget)).implementation;
-        assertEq(beacon.code, BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE);
-        assertEq(BEACON_PROXY_STAND_IN_IMPLEMENTATION.code, BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE);
-        assertEq(UpgradeableBeacon(beacon).implementation(), BEACON_PROXY_STAND_IN_IMPLEMENTATION);
+        assertEq(beacon.code, suite.dependencies[1].runtimeCode);
     }
 
     /// A per-network beacon proxy deploys locally to each network's address.
@@ -234,33 +226,16 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
         assertEq(deployed[1].code, suite.storedRuntimeCode);
     }
 
-    /// A real beacon proxy factory whose proxy lands somewhere other than the address the formula derives is refused
-    /// as a derivation mismatch, naming both.
-    function testBeaconProxyFactoryLandingOffTheFormulaIsADerivationMismatch() external {
-        DeploySuite memory suite = candidateOf(declaredBeaconProxy(false), perNetworkCloneChainIds()).snapshot;
-        suite.dependencies[0].runtimeCode = type(MockSaltShiftingBeaconProxyFactory).runtimeCode;
-        CloneTarget memory shifted = LibRainDeployMechanism.cloneTarget(suite);
-        shifted.salt ^= bytes32(uint256(1));
-        address elsewhere = LibRainDeployBeaconProxy.beaconProxyDeployedAddress(shifted);
-        assertNotEq(elsewhere, suite.storedDeployedAddress);
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                CloneDerivationMismatch.selector, suite.suite, suite.storedDeployedAddress, elsewhere
-            )
-        );
-        this.externalDeployLocally(suite);
-    }
-
-    /// A beacon proxy factory's read of its own storage is refused naming the factory and the slot: the factory
-    /// predates the call.
-    function testBeaconProxyFactoryReadingItsOwnStorageIsRefused() external {
+    /// A beacon proxy's local derivation never calls its factory, so neither a factory landing off the formula nor
+    /// one reading storage is reached: the frozen runtime code is placed at the derived address.
+    function testBeaconProxyLocalDerivationNeverCallsTheFactory() external {
         DeploySuite memory suite = candidateOf(declaredBeaconProxy(false), perNetworkCloneChainIds()).snapshot;
         address factory = suite.dependencies[0].deployedAddress;
         suite.dependencies[0].runtimeCode = type(MockStorageReadingBeaconProxyFactory).runtimeCode;
-        vm.expectRevert(
-            abi.encodeWithSelector(CloneInitializeReadsStorage.selector, suite.suite, factory, bytes32(uint256(1)))
-        );
-        this.externalDeployLocally(suite);
+        vm.expectCall(factory, bytes(""), 0);
+        address[] memory deployed = this.externalDeployLocally(suite);
+        assertEq(deployed[0], suite.storedDeployedAddress);
+        assertEq(deployed[0].code, suite.storedRuntimeCode);
     }
 
     /// A beacon proxy suite, one-data or per-network, that does not declare its beacon is refused

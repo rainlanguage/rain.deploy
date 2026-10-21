@@ -220,14 +220,16 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
     /// @param initDataPerNetwork Whether the init data is per network.
     /// @return The candidate's suite.
     function beaconProxySuite(bool initDataPerNetwork) internal returns (DeploySuite memory) {
+        address beacon = address(new UpgradeableBeacon(address(new MockCloneableV2()), address(this)));
         return LibRainDeployMechanism.beaconProxyCandidate(
             LibBeaconProxyTest.declared(
                 "beacon-proxy",
                 address(new MockBeaconProxyFactory()),
-                address(new UpgradeableBeacon(address(new MockCloneableV2()), address(this))),
+                beacon,
                 hex"deadbeef",
                 initDataPerNetwork,
-                bytes32(uint256(7))
+                bytes32(uint256(7)),
+                LibBeaconProxyTest.runtimeOf(vm, beacon)
             ),
             perNetworkCloneChainIds()
         )

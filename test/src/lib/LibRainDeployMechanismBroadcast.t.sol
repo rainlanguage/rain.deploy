@@ -242,14 +242,16 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
     /// @param owner The owner the proxy's init data names.
     /// @return The suite.
     function ownedBeaconProxySuite(address owner) internal returns (DeploySuite memory) {
+        address beacon = address(new UpgradeableBeacon(address(new MockOriginOwnedCloneable()), address(this)));
         return LibRainDeployMechanism.beaconProxyCandidate(
             LibBeaconProxyTest.declared(
                 "owned-beacon-proxy",
                 address(new MockBeaconProxyFactory()),
-                address(new UpgradeableBeacon(address(new MockOriginOwnedCloneable()), address(this))),
+                beacon,
                 abi.encode(owner),
                 false,
-                TEST_SALT
+                TEST_SALT,
+                LibBeaconProxyTest.runtimeOf(vm, beacon)
             ),
             perNetworkCloneChainIds()
         )

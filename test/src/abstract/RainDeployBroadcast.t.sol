@@ -684,15 +684,17 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
     /// stand-in beacon, so the broadcast reaches the network refusal; its seat is checked on each network's fork.
     function testBroadcastOfABeaconProxySuiteSeatingTheDeployKeyReachesTheNetworkRefusal() external {
         BeaconOwnerDeploy deploy = new BeaconOwnerDeploy();
+        address beacon = address(new UpgradeableBeacon(address(new MockOriginOwnedCloneable()), address(0xB0B)));
         DeploySuite memory suite =
         LibRainDeployMechanism.beaconProxyCandidate(
             LibBeaconProxyTest.declared(
                 "origin-owned-beacon-proxy",
                 address(new MockBeaconProxyFactory()),
-                address(new UpgradeableBeacon(address(new MockOriginOwnedCloneable()), address(0xB0B))),
+                beacon,
                 abi.encode(address(0)),
                 false,
-                bytes32(uint256(1))
+                bytes32(uint256(1)),
+                LibBeaconProxyTest.runtimeOf(vm, beacon)
             ),
             perNetworkCloneChainIds()
         )
