@@ -962,15 +962,19 @@ contract BuildScriptTest is Test {
             references[i] = referencedIds(json, members[i]);
         }
 
-        // One pass per member: a pass that changes nothing has closed the set,
-        // and a pass that changes something adds at least one member to it.
-        for (uint256 pass = 0; pass < members.length; pass++) {
+        // A pass that adds nothing has closed the set.
+        bool changed = true;
+        while (changed) {
+            changed = false;
             for (uint256 i = 0; i < members.length; i++) {
                 if (!reached[i]) {
                     continue;
                 }
                 for (uint256 j = 0; j < members.length; j++) {
-                    reached[j] = reached[j] || referencesId(references[i], ids[j]);
+                    if (!reached[j] && referencesId(references[i], ids[j])) {
+                        reached[j] = true;
+                        changed = true;
+                    }
                 }
             }
         }

@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {BuildScript, GeneratedContract} from "../../src/abstract/BuildScript.sol";
 import {RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
-import {CloneNetwork} from "../../src/lib/LibRainDeployClone.sol";
+import {CloneDeploy, CloneNetwork} from "../../src/lib/LibRainDeployClone.sol";
 import {LibRainDeployMechanism} from "../../src/lib/LibRainDeployMechanism.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {
@@ -33,6 +33,15 @@ contract CloneBuildScriptHarness is ExampleCloneDeploys, BuildScript {
     /// @inheritdoc BuildScript
     function recordRoot() internal view override returns (string memory) {
         return sRoot;
+    }
+
+    /// @inheritdoc ExampleCloneDeploys
+    /// @dev The first clone only: this build regenerates one snapshot, and a
+    /// build must generate every candidate it declares.
+    function cloneDeploys() internal pure override returns (CloneDeploy[] memory) {
+        CloneDeploy[] memory clones = new CloneDeploy[](1);
+        clones[0] = ExampleCloneDeploys.cloneDeploys()[0];
+        return clones;
     }
 
     /// @inheritdoc BuildScript
