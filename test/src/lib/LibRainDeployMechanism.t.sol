@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
+import {stdError} from "forge-std-1.17.0/src/StdError.sol";
 import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {ICloneableFactoryV4} from "rain-factory-pr271-0477c05/src/interface/deprecated/ICloneableFactoryV4.sol";
 import {DeployCandidate, DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
@@ -1405,5 +1406,27 @@ contract LibRainDeployMechanismTest is Test {
         (DeploySuite memory suite,) = storageClone(SourceUse.Refuse);
         vm.expectRevert(abi.encodeWithSelector(MockInitializeRefused.selector));
         this.externalDeployLocally(suite);
+    }
+
+    /// @param mechanism A mechanism byte, which may lie outside the enum.
+    function externalDeployStepOf(uint8 mechanism) external pure {
+        DeploySuite memory suite;
+        // `mechanism` is the eighth field of `DeploySuite`.
+        assembly ("memory-safe") {
+            mstore(add(suite, 0xe0), mechanism)
+        }
+        LibRainDeployMechanism.deployStep(suite);
+    }
+
+    /// A suite whose mechanism lies outside the enum panics on reading it, before any step is chosen.
+    function testDeployStepPanicsOnAMechanismOutsideTheEnum(uint8 mechanism) external {
+        mechanism = uint8(bound(mechanism, uint256(type(DeployMechanism).max) + 1, type(uint8).max));
+        vm.expectRevert(stdError.enumConversionError);
+        this.externalDeployStepOf(mechanism);
+    }
+
+    /// `deployStep` and `LibRainDeploySnapshot.mechanismName` hold one table entry per member, five in all.
+    function testDeployMechanismHasFiveMembers() external pure {
+        assertEq(uint256(type(DeployMechanism).max), 4);
     }
 }

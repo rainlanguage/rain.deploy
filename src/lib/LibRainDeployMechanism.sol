@@ -104,11 +104,6 @@ error ExtendedNetworkUnfrozen(string suite, string network, address deployedAddr
 /// @param slot The slot read.
 error CloneInitializeReadsStorage(string suite, address account, bytes32 slot);
 
-/// Thrown when a `DeployMechanism` member has no arm in a function that dispatches on it: a member added to the enum
-/// without one. A value outside the enum never reaches it, since Solidity panics (0x21) on reading one.
-/// @param mechanism The member's value.
-error UnknownDeployMechanism(uint8 mechanism);
-
 /// Emitted when a broadcast Zoltu entry under `CLONE_ARTIFACT_PATH` or `BEACON_PROXY_ARTIFACT_PATH` leaves its source
 /// to verify by hand.
 /// @param sender The deploy's `msg.sender`, not the broadcasting key.
@@ -230,16 +225,15 @@ library LibRainDeployMechanism {
         pure
         returns (function(Vm, string memory, address, bytes memory) internal returns (address))
     {
-        if (suite.mechanism == DeployMechanism.Zoltu) {
-            return LibRainDeploy.zoltuDeployStep;
-        }
-        if (isBeaconProxy(suite)) {
-            return LibRainDeployBeaconProxy.beaconProxyDeployStep;
-        }
-        if (suite.mechanism == DeployMechanism.Clone || suite.mechanism == DeployMechanism.ClonePerNetwork) {
-            return LibRainDeployClone.cloneDeployStep;
-        }
-        revert UnknownDeployMechanism(uint8(suite.mechanism));
+        // One entry per `DeployMechanism` member, in member order: a member without one panics (0x32).
+        function(Vm, string memory, address, bytes memory) internal returns (address)[5] memory steps = [
+            LibRainDeploy.zoltuDeployStep,
+            LibRainDeployClone.cloneDeployStep,
+            LibRainDeployClone.cloneDeployStep,
+            LibRainDeployBeaconProxy.beaconProxyDeployStep,
+            LibRainDeployBeaconProxy.beaconProxyDeployStep
+        ];
+        return steps[uint8(suite.mechanism)];
     }
 
     /// Every address a suite's mechanism derives for it, in the suite's address order.
