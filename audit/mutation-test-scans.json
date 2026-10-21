@@ -1527,5 +1527,35 @@
       "A01-A15 on RegistryDelegates and M07-M09 on MigrationRegistry against the ConfigRegistry, MigrationRegistry, register library and RegisterConfig suites with Build.sol regenerated per probe (430 tests): 18/18 killed.",
       "The later rename to IConfigRegistryV2 at c47018802ab97978eaee7a2ac4f6ab5a96bbf062 changes names and selectors only; the pinned selector test holds the new selector to cast sig."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T15:50:02Z",
+    "commit": "bd0141715ad0e4b0f6ce314b0a2c23afd0f9ede0",
+    "testsAfterCommit": "bd0141715ad0e4b0f6ce314b0a2c23afd0f9ede0",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 415,
+    "scope": "PR #322 round 14: the unindexed emits — src/concrete/ConfigRegistry.sol emit Register; src/abstract/RegistryDelegates.sol emit Approved and emit Revoked; src/concrete/MigrationRegistry.sol emit Migrated; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 22,
+      "behavioursProbed": 22,
+      "killedByExistingTests": 22,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "U01-U22 against the ConfigRegistry, MigrationRegistry, register library and RegisterConfig suites with Build.sol regenerated per probe (428 tests, LibConfigRegistryRegisterOnForks excluded for lack of RPC): 22/22 killed. Each field of each event swapped, zeroed or replaced, Approved and Revoked swapped, and each emit deleted.",
+      "The suite credited is the one this commit lands: the event-layout tests were rewritten in it to read every field from the data with one topic, so attribution is to those rewritten tests, not to the pre-unindexing suite.",
+      "Migrated sender/writer swaps (U16, U17) are killed by the MigrationRegistryDelegate expectEmit tests, where the sender is a delegate; the ApplyMigration layout tests have sender equal to writer."
+    ]
   }
 ]
