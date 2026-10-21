@@ -1220,6 +1220,216 @@
     ]
   },
   {
+    "timestamp": "2026-10-20T08:06:58Z",
+    "commit": "d5803b30c5dd64532952350c563d9f29faccd402",
+    "testsAfterCommit": "6d5ec114d2c591fca7c1db79d6825c94752a6bf2",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 97,
+    "scope": "PR #317 (release 0.1.19), the changed lines only: foundry.toml [external.package].version, src/generated/0_1_19/{AddressRegistry,MigrationRegistry,TimelockController}.sol constants, and the suites[9] entries and array lengths in src/lib/LibAddressRegistryReleased.sol and src/lib/LibMigrationRegistryReleased.sol",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behavioursProbed": 20,
+      "killedByExistingTests": 16,
+      "gapsFilled": 4,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "20 mutants probed with mutation-probe against the pre-existing suite at the scanned commit (fresh clone, baseline green at 856): 16 KILLED, 4 SURVIVED (version set back to 0.1.18, version set ahead to 0.1.20, a TimelockController 0_1_19 CREATION_CODE runtime-tail byte, and a constructor-only CREATION_CODE byte).",
+      "Gaps filled: RegistryDeployVerifyTest.testEveryFrozenCodeRecordDeploysItsRecordedHash deploys every frozen code record with its declaration referenceConstructorArgs and compares the code hash to BYTECODE_HASH; LibTimelockControllerTest.testFrozen0119CodeDerivesProductionTimelocks derives the ST0x production timelocks from the 0_1_19 generation; LibRainDeploySnapshotTest.testVersionIsTheNewestFrozenRelease and testVersionBehindTheNewestFrozenReleaseIsRefused hold the version to the newest frozen tag. Re-probe at testsAfterCommit (baseline green at 860): 20/20 KILLED.",
+      "Fork tests need RPC URLs, which were not available: the 169 tests failing at baseline on missing *_RPC_URL (and LibSafeTest, whose setUp forks) were excluded by name from the probe suite. CI on testsAfterCommit fails only RegistryDeployVerifyTest.testSuitesLiveOnEverySupportedNetwork (NotDeployedOnNetwork arbitrum, V3 MigrationRegistry not yet deployed).",
+      "Adversarial pass: the frozen records were checked against the candidate (byte-identical) and the timelock generation against the production timelock addresses; no candidate bug."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T10:28:06Z",
+    "commit": "467df7bd7c79b522642b52544365c68064202346",
+    "testsAfterCommit": "3531943fb34e8d0d7be37153788f608fb1d3f4d3",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 105,
+    "scope": "PR #317 (release 0.1.19) as of 467df7b: codeRecordIndex, partitionFrozenRecords, declaredBytecodeHash and checkFrozenCodeRecord in src/abstract/RainDeployVerifySnapshotBase.sol; the suites[9] entries and array lengths in src/lib/LibAddressRegistryReleased.sol and src/lib/LibMigrationRegistryReleased.sol; foundry.toml [external.package].version; the src/generated/0_1_19/ constants; and deleting a 0_1_19 record",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behavioursProbed": 27,
+      "killedByExistingTests": 26,
+      "gapsFilled": 1,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "25 mutants probed with mutation-probe against the suite at the scanned commit (baseline green at 863): 24 KILLED, 1 SURVIVED (codeRecordIndex returning 0 on a match, which no test distinguished because every caller passed one name or checked only the miss). Gap filled at testsAfterCommit by RainDeployVerifySnapshotBaseTest.testCodeRecordIndexIsTheFirstMatchingName; re-probe there (baseline green at 865): 25/25 KILLED.",
+      "The two deletion mutants (remove src/generated/0_1_19/AddressRegistry.sol or MigrationRegistry.sol and regenerate the Released lib to 9 entries) span a record file plus a regeneration, so they cannot be a single-file mutant. They were run by hand in a fresh clone at the scanned commit with both records removed (git rm, then forge script ./script/Build.sol and ./script/build.sh): 862 passed, 1 failed, the failure being LibRainDeploySnapshotTest.testNoReleaseDropsAContract with ReleaseDropsContract(\"0_1_19\", \"AddressRegistry\"). Recorded as 2 behaviours killed by an existing test.",
+      "Fork tests need RPC URLs, which were not available: the tests failing at baseline on missing *_RPC_URL were excluded by name, and LibSafeTest (whose setUp forks) by contract. The name filter also drops one test that passes offline (testSuitesLiveOnEverySupportedNetwork in a contract that does not fork), so the probe suite is 863 rather than 864 at the scanned commit. CI on testsAfterCommit passes in full, testSuitesLiveOnEverySupportedNetwork included, so the V3 MigrationRegistry is live.",
+      "testVersionAheadOfTheNewestFrozenReleaseIsRefused was also added at testsAfterCommit. It covers the test-code helper externalCheckVersionIsNewestRelease, which is outside the mutation targets because it is test code.",
+      "Adversarial pass: codeRecordIndex was checked against its NatSpec (first whole-file-name match, else length), and the drop check against version order rather than text order (the keeps fixture runs 0_1_9 to 0_1_10 to 0_1_12); no candidate bug."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T11:09:04Z",
+    "commit": "49c65bfd215c8f1987c6c9fceda894fc1f453e1f",
+    "testsAfterCommit": "368ff22198d8546b135a6667a96acb0cbbabfddd",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 107,
+    "scope": "PR #317 (release 0.1.19), the two test-side release guards rain-marvin found weak at 49c65bf: the successor choice in LibRainDeploySnapshotTest.externalCheckNoReleaseDropsAContract, and RegistryDeployVerifyTest.checkFrozenCodeRecordsDeploy (factored out of testEveryFrozenCodeRecordDeploysItsRecordedHash at 368ff22)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behavioursProbed": 11,
+      "killedByExistingTests": 0,
+      "gapsFilled": 2,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "The pre-existing-suite pass is rain-marvin's audit of 49c65bf, which probed both guards and reported two survivors: the greatest-following-tag swap in externalCheckNoReleaseDropsAContract, and the tautology assertEq(deployed.codehash, keccak256(deployed.code)) in testEveryFrozenCodeRecordDeploysItsRecordedHash. They were not re-probed here at 49c65bf. Gaps filled at testsAfterCommit by LibRainDeploySnapshotTest.testReleaseDroppingAContractALaterReleaseRestoresIsRefused (0_1_9 {A,B}, 0_1_10 {A}, 0_1_12 {A,B} refused as ReleaseDropsContract(0_1_10, B)) and RegistryDeployVerifyTest.testFrozenCodeRecordDeployingOtherCodeIsRefused (the real 0_1_19 TimelockController record with only CREATION_CODE swapped for MockTimelockControllerGeneration's, consistent per checkFrozenCodeRecord, refused as FrozenCodeRecordDeploysOtherCode with the mock's runtime hash).",
+      "11 mutants probed with mutation-probe at testsAfterCommit against RegistryDeployVerifyTest and LibRainDeploySnapshotTest (baseline green at 107, fork tests excluded by name): 11/11 KILLED, including both survivors rain-marvin reported. These targets are test-code helpers; the oracles are the separate fixture tests, so no target co-mutates its expectation.",
+      "Adversarial pass: the deploy check now reverts on a codehash mismatch only; a failed create leaves address(0), whose codehash is 0 and never a recorded hash, so a non-deploying record is refused with deployed hash 0. No candidate bug."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T11:57:00Z",
+    "commit": "01b0331bd7fbc54fa19bee8747d7bfc02071e6bf",
+    "testsAfterCommit": "b1d0f9abe3ae5ab781bc04715d2e3278b2a2795f",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 109,
+    "scope": "PR #317 (release 0.1.19): the count checkFrozenCodeRecordsDeploy returns (rain-marvin MEDIUM on 01b0331), and every line d198881 and b1d0f9a add to RegistryDeployVerifyTest.testEveryCodeRecordUnderTheRootIsChecked",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behavioursProbed": 12,
+      "killedByExistingTests": 1,
+      "gapsFilled": 3,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "Pre-existing-suite pass at 01b0331 with mutation-probe against RegistryDeployVerifyTest and LibRainDeploySnapshotTest (baseline green at 107, fork tests excluded by name): return codeRecords.length -> 1 SURVIVED (rain-marvin's MEDIUM), -> length + 1 SURVIVED, -> 0 KILLED by testEveryFrozenCodeRecordDeploysItsRecordedHash. checkFrozenCodeRecordsDeploy is internal to RegistryDeployVerifyTest and nothing inherits it, so that contract holds every possible killer.",
+      "Gaps filled at testsAfterCommit: testEveryCodeRecordUnderTheRootIsChecked (d198881) writes the real 0_1_18 and 0_1_19 TimelockController records under its own root and asserts the count is 2; it kills -> 1, -> 0 and -> length + 1.",
+      "A first pass at d198881 showed N01 (tags 0_1_19 twice) SURVIVED for a different reason: a failed run leaves its records on disk, because a cheatcode write is not undone by a revert, and the next run counted the stale 0_1_18. Every verdict after the first killed mutant in that pass was contaminated and is discarded. b1d0f9a clears the root before writing it, and the full pass was re-run there.",
+      "12 mutants probed at testsAfterCommit (baseline green at 108): 9/12 KILLED, all by testEveryCodeRecordUnderTheRootIsChecked (M13 also by testEveryFrozenCodeRecordDeploysItsRecordedHash). N01 is killed even with a stale 0_1_18 left by M14. Three survivors are equivalent mutants: N06 (read 0_1_19 for both) is a no-op because src/generated/0_1_18/TimelockController.sol and 0_1_19 are byte-identical; N08 (drop the end-of-test removeDir) only skips cleanup that no assertion reads; N09 (skip the start-of-test clear) only matters when a different fixture left the root stale, because a failed run of this test leaves the same two records, which it overwrites.",
+      "The fixture lines are test code that mutate the oracle itself; they were probed to show that each fixture step is load-bearing for the count, not to establish coverage of src.",
+      "Adversarial pass: the intent (every code record under the root is checked, and the count says so) was re-derived from the NatSpec. The count comes from partitionFrozenRecords, which keeps only paths whose file name matches frozenCodeRecordNames(); N05 (a non-code file name) gives 0 records and is refused. No candidate bug."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T13:30:00Z",
+    "commit": "f9644765cc2c7ab74203b4ce54f24a7ebc8540a5",
+    "testsAfterCommit": "1ac3817821b8b074e047eef96d91c0e541e80939",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 112,
+    "scope": "PR #317 (release 0.1.19): RegistryDeployVerifyTest.checkFrozenCodeRecordsDeploy's record walk and LibRainDeploySnapshotTest's no-release-drops walk (both rain-marvin MEDIUMs on f964476), and every line 1ac3817 changes in testEveryCodeRecordUnderTheRootIsChecked, checkNoReleaseDropsAContract and testReleaseDropIsFoundWhateverThePathOrder",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behavioursProbed": 11,
+      "killedByExistingTests": 8,
+      "gapsFilled": 2,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "Pre-existing-suite pass at commit with mutation-probe against RegistryDeployVerifyTest and LibRainDeploySnapshotTest (baseline green at 108, fork tests excluded by name): 8/10 KILLED. Both rain-marvin survivors reproduced: P01 (deploy walk checks only the first record, i < codeRecords.length && i < 1) and Q01 (drop check takes the first following tag in path order, && !hasNext) SURVIVED.",
+      "Gaps filled at testsAfterCommit: testEveryCodeRecordUnderTheRootIsChecked keeps the count of 2, then swaps each record in turn to MockTimelockControllerGeneration's creation code and expects FrozenCodeRecordDeploysOtherCode naming that record, so one of the two cases makes the record the walk reaches second the bad one whatever readDir order is. checkNoReleaseDropsAContract is split from the directory read; testReleaseDropIsFoundWhateverThePathOrder walks the restores record with 0_1_12 listed before 0_1_10 and after it, and expects ReleaseDropsContract(0_1_10, B) both times.",
+      "11 mutants probed at testsAfterCommit (baseline green at 109): 11/11 KILLED. P01 by testEveryCodeRecordUnderTheRootIsChecked, Q01 by testReleaseDropIsFoundWhateverThePathOrder; Q07 (the path-taking wrapper walks nothing) by the new test; Q06 (the readDir wrapper walks nothing) by the readDir-driven drop tests.",
+      "These targets are test-code helpers; the oracles are the separate fixture tests, so no target co-mutates its expectation. Mutants of the new tests' own fixture order were not probed: they mutate the oracle.",
+      "Adversarial pass: the intent (each release compared with the least frozen tag strictly following it, every code record deployed) was re-derived from the NatSpec. Q02 (greatest following tag) and Q03 (any non-preceding tag, including its own) are both refused, so only the least following tag satisfies the tests. No candidate bug."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T15:59:04Z",
+    "commit": "799a7b60c5f9d2798d394aef8744426afbadbe17",
+    "testsAfterCommit": "799a7b60c5f9d2798d394aef8744426afbadbe17",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 165,
+    "scope": "PR #317 after merging main and re-cutting 0_1_19, narrowed by user ruling to the lines the merge and re-cut change: the src/generated/0_1_19/{ConfigRegistry,MigrationRegistry,TimelockController}.sol records, the regenerated LibConfigRegistryReleased, LibMigrationRegistryReleased and LibAddressRegistryReleased entries and lengths, the requiresSuiteOn override kept in the RegistryDeployVerify.t.sol merge resolution, and checkNoReleaseDropsAContract in test/src/lib/LibRainDeploySnapshot.t.sol (retired-contract exemption and the outer walk)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behavioursProbed": 19,
+      "killedByExistingTests": 19,
+      "gapsFilled": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "19 mutants probed with mutation-probe at commit against RegistryDeployVerifyTest, LibRainDeploySnapshotTest, GeneratedSnapshotShapeTest, RegistryDeploySuitesTest, BuildTest, LibTimelockControllerTest and RainDeployVerifySnapshotBaseTest, fork tests excluded by name (baseline green at 215): 19/19 KILLED. R01 and R03 first came back NO-RUN because their replacement addresses failed the checksum; re-probed with checksummed addresses, both KILLED by testEveryFrozenSnapshotIsReleased and testSnapshotInternallyConsistent.",
+      "The drop-check tests were written in the scanned commit, before the probe, because the merge needed them: under main, 0_1_19 drops the retired AddressRegistry and the old check refused it. So the D mutants credit tests that are new in this commit, not pre-existing ones. D01 (outer walk from i = 1), reported surviving by rain-marvin at a51d48f, is KILLED by testReleaseDropIsFoundWhateverThePathOrder through the new witness-first ordering. D02, D05 and D08 are KILLED by testNoReleaseDropsAContract on the real record, which reads Build.retiredContracts(). D04 and D06 are KILLED by the fixtures that put another retired name first or second.",
+      "These targets are test-code helpers; the oracles are the separate fixture tests, so no target co-mutates its expectation.",
+      "Adversarial pass: the oracle is the retirement rule main defines (Build.retiredContracts(): contracts no longer built, whose record cannot grow). The re-cut 0_1_19 ConfigRegistry and MigrationRegistry records are byte-identical to src/generated/candidate/, and MigrationRegistry and TimelockController are byte-identical to the first 0_1_19 cut. A later release could in principle restore a retired contract without the drop check objecting, but Build cannot freeze a contract that is absent from generatedContracts(), so there is no path to it. No candidate bug."
+    ]
+  },
+  {
+    "timestamp": "2026-10-20T16:47:47Z",
+    "commit": "41404a27224caa94e4fab588a711d23daf3862ee",
+    "testsAfterCommit": "0f555be11d93e25b3db68dd730a3e7874506917d",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 166,
+    "scope": "PR #317, narrowed to checkFrozenCodeRecordsDeploy in test/src/abstract/RegistryDeployVerify.t.sol and its external wrappers, to kill rain-marvin's survivors M49, M53 and M54 from the audit at 41404a2",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behavioursProbed": 8,
+      "killedByExistingTests": 4,
+      "gapsFilled": 3,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": []
+    },
+    "notes": [
+      "Pre-existing-suite pass at commit with mutation-probe against RegistryDeployVerifyTest, fork tests excluded by name (baseline green at 8): 4/7 KILLED. All three rain-marvin survivors reproduced: F01 (M49, recorded hash read as keccak256(RUNTIME_CODE)), F02 (M53, assertLt(matched, declared.length, path) dropped) and F03 (M54, declared[0] for declared[matched]) SURVIVED.",
+      "Gaps filled at testsAfterCommit. M49: testFrozenCodeRecordDeployingOtherThanItsHashIsRefused writes the real 0_1_19 TimelockController record with only its BYTECODE_HASH swapped for MockTimelockControllerGeneration's runtime hash, and expects FrozenCodeRecordDeploysOtherCode(path, that hash, the real hash). M54: checkFrozenCodeRecordsDeploy now takes the parameterised contracts it checks; testEachCodeRecordDeploysWithItsOwnDeclaration declares TimelockController and then MockTimelockControllerImmutableGeneration (minDelay 7, held in an immutable), asserts the first declaration's args deploy the mock to other code, and expects both records checked. M53: the code record names are now derived from the declarations passed in, so every matched index is below declared.length by construction and the assertLt was removed as redundant rather than exempted.",
+      "8 mutants probed at testsAfterCommit (baseline green at 10): 8/8 KILLED. G01 (M49) by testFrozenCodeRecordDeployingOtherThanItsHashIsRefused; G02 (M54) and G03 (names all taken from the first declaration) by testEachCodeRecordDeploysWithItsOwnDeclaration; G08 (root-only wrapper passes no declarations) by every real-record test.",
+      "These targets are test-code helpers; the oracles are the separate fixture tests, so no target co-mutates its expectation.",
+      "Adversarial pass: the intent (each frozen code record's CREATION_CODE, deployed with its own declaration's referenceConstructorArgs, hashes to its declared BYTECODE_HASH) was re-derived from the NatSpec. A failed create is reported as FrozenCodeRecordDeploysOtherCode with a zero hash; it fails closed and rain-marvin already raised it as INFO, so it is not a new candidate. No candidate bug."
+    ]
+  },
+  {
+    "timestamp": "2026-10-21T15:39:59Z",
+    "commit": "5c5891ce7b74022be377619e96849242dd6f3fb1",
+    "testsAfterCommit": "5ec05f558b477b89b49ae5d988bcfaedfeebe14b",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 366,
+    "scope": "UnverifiableSource unindexed per the ruling that rain events index nothing: the event declaration (src/lib/LibRainDeployMechanism.sol) and its emit in LibRainDeployMechanism.deployAndBroadcast",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 1,
+      "behaviours": 11,
+      "behavioursProbed": 11,
+      "killedByExistingTests": 6,
+      "gapsFilled": 5,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Suite: forge test --mc LibRainDeployMechanism minus the three RPC-dependent testClone* fork tests. Pass 1 at 5c5891ce7b74022be377619e96849242dd6f3fb1 (103 green): U05 emit deleted, U06 sender address(this), U07 sender tx.origin, U08 entry address(0), U10 sender/entry swapped KILLED by the pre-existing testZoltuBroadcastUnderThe{Clone,BeaconProxy}ArtifactPathPrintsAManualVerificationNotice; U09 networks emptied was NO-RUN (nix interrupted) and was killed by those same two tests in pass 2. U01-U04 (sender, entryAddress, both, or networks indexed) and U11 (emitted twice) SURVIVED: vm.expectEmit compares against the same declaration, so it cannot see an indexing change, and it does not count emits.",
+      "testUnverifiableSourceLogsEveryArgumentAsData reads the raw log: exactly one log under keccak256(\"UnverifiableSource(address,address,string[])\"), from the deploying contract, with one topic and data abi.encode(sender, entryAddress, networks). Pass 2 at 5ec05f558b477b89b49ae5d988bcfaedfeebe14b (104 green): 11 mutants, 11 KILLED.",
+      "The entry address read from deploys.derivedAddresses[0] is the equivalent mutant already recorded in audit/known-false-positives.md (Z7) and was not re-probed."
+    ]
+  },
+  {
     "timestamp": "2026-10-20T21:13:08Z",
     "commit": "9da7962108e6cb0f9f2f65c996f6fb19f993ccf9",
     "testsAfterCommit": "9da7962108e6cb0f9f2f65c996f6fb19f993ccf9",

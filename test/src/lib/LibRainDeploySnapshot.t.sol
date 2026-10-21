@@ -43,6 +43,18 @@ import {
 import {CloneNetworks} from "../../../src/lib/LibRainDeployClone.sol";
 import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
 import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.2.0/src/lib/LibMemoryKV.sol";
+import {BuildHarness} from "../../concrete/BuildHarness.sol";
+import {RetiredContract} from "../../../script/Build.sol";
+
+/// The version `foundry.toml` declares is not the newest frozen release.
+/// @param tag The tag the version converts to.
+/// @param newest The newest frozen release.
+error VersionNotNewestRelease(string tag, string newest);
+
+/// A frozen release does not hold a contract the release before it holds.
+/// @param tag The release that drops the contract.
+/// @param contractName The contract it drops.
+error ReleaseDropsContract(string tag, string contractName);
 
 /// @title LibRainDeploySnapshotTest
 /// @notice The guards on the release machinery every deploy repo inherits.
@@ -3266,6 +3278,248 @@ contract LibRainDeploySnapshotTest is Test {
         }
     }
 
+    /// External wrapper so `vm.expectRevert` lands at the right call depth.
+    /// Reverts unless `tag` is the newest release frozen under `recordRoot`.
+    /// @param recordRoot The record root to read the newest release from.
+    /// @param tag The tag the version converts to.
+    function externalCheckVersionIsNewestRelease(string memory recordRoot, string memory tag) external view {
+        string memory newest = LibRainDeploySnapshot.newestFrozenTag(vm, recordRoot);
+        if (keccak256(bytes(tag)) != keccak256(bytes(newest))) {
+            revert VersionNotNewestRelease(tag, newest);
+        }
+    }
+
+    /// The record frozen one release past the version. See
+    /// `NEWEST_FIXTURE_ROOT`.
+    string constant AHEAD_FIXTURE_ROOT = "test/generated-snapshot/ahead";
+
+    /// `[external.package].version` MUST be the newest release frozen under
+    /// `src/generated/`: the release PR moves the two in lockstep.
+    function testVersionIsTheNewestFrozenRelease() external view {
+        this.externalCheckVersionIsNewestRelease(LibRainDeploySnapshot.LIB_FS_ROOT, LibRainDeploySnapshot.deployTag(vm));
+    }
+
+    /// A version behind the newest frozen release MUST be refused.
+    function testVersionBehindTheNewestFrozenReleaseIsRefused() external {
+        writeFixture(string.concat(AHEAD_FIXTURE_ROOT, "/0_1_19/", FIXTURE_CONTRACT, ".sol"));
+        writeFixture(string.concat(AHEAD_FIXTURE_ROOT, "/0_1_20/", FIXTURE_CONTRACT, ".sol"));
+
+        vm.expectRevert(abi.encodeWithSelector(VersionNotNewestRelease.selector, "0_1_19", "0_1_20"));
+        this.externalCheckVersionIsNewestRelease(AHEAD_FIXTURE_ROOT, "0_1_19");
+        this.externalCheckVersionIsNewestRelease(AHEAD_FIXTURE_ROOT, "0_1_20");
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(AHEAD_FIXTURE_ROOT, true);
+    }
+
+    /// The record frozen one release behind the version.
+    string constant BUMPED_FIXTURE_ROOT = "test/generated-snapshot/bumped";
+
+    /// A version ahead of the newest frozen release, bumped without a cut,
+    /// MUST be refused.
+    function testVersionAheadOfTheNewestFrozenReleaseIsRefused() external {
+        writeFixture(string.concat(BUMPED_FIXTURE_ROOT, "/0_1_19/", FIXTURE_CONTRACT, ".sol"));
+
+        vm.expectRevert(abi.encodeWithSelector(VersionNotNewestRelease.selector, "0_1_20", "0_1_19"));
+        this.externalCheckVersionIsNewestRelease(BUMPED_FIXTURE_ROOT, "0_1_20");
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(BUMPED_FIXTURE_ROOT, true);
+    }
+
+    /// External wrapper so `vm.expectRevert` lands at the right call depth.
+    /// Reverts unless every release frozen under `recordRoot` holds every
+    /// contract the release before it holds, other than a retired one.
+    /// @param recordRoot The record root to read the releases from.
+    /// @param retired The retired contracts' names.
+    function externalCheckNoReleaseDropsAContract(string memory recordRoot, string[] memory retired) external view {
+        checkNoReleaseDropsAContract(recordRoot, LibRainDeploySnapshot.frozenSnapshotPaths(vm, recordRoot), retired);
+    }
+
+    /// External wrapper so `vm.expectRevert` lands at the right call depth.
+    /// @param recordRoot The record root the releases are frozen under.
+    /// @param paths The frozen record paths to walk, in the order given.
+    function externalCheckNoReleaseDropsAContractOver(string memory recordRoot, string[] memory paths) external view {
+        checkNoReleaseDropsAContract(recordRoot, paths, new string[](0));
+    }
+
+    /// Reverts unless every release among `paths` holds every contract the
+    /// release before it holds, comparing each release with the least frozen
+    /// tag following it whatever order `paths` is in. A retired contract is
+    /// one the build no longer freezes, so a release may drop it.
+    /// @param recordRoot The record root the releases are frozen under.
+    /// @param paths The frozen record paths to walk.
+    /// @param retired The retired contracts' names.
+    function checkNoReleaseDropsAContract(string memory recordRoot, string[] memory paths, string[] memory retired)
+        internal
+        view
+    {
+        for (uint256 i = 0; i < paths.length; i++) {
+            string memory tag = LibRainDeploySnapshot.tagForRecordPath(vm, paths[i]);
+            // `next` is the least frozen tag strictly following `tag`, once `hasNext`.
+            bool hasNext = false;
+            string memory next;
+            for (uint256 j = 0; j < paths.length; j++) {
+                string memory other = LibRainDeploySnapshot.tagForRecordPath(vm, paths[j]);
+                if (
+                    LibRainDeploySnapshot.tagPrecedes(vm, tag, other)
+                        && (!hasNext || LibRainDeploySnapshot.tagPrecedes(vm, other, next))
+                ) {
+                    next = other;
+                    hasNext = true;
+                }
+            }
+            if (!hasNext) {
+                continue;
+            }
+            string memory name = LibRainDeploySnapshot.contractForRecordPath(vm, paths[i]);
+            if (vm.exists(LibRainDeploySnapshot.pathForSnapshot(recordRoot, next, name))) {
+                continue;
+            }
+            bool isRetired = false;
+            for (uint256 k = 0; k < retired.length; k++) {
+                if (keccak256(bytes(retired[k])) == keccak256(bytes(name))) {
+                    isRetired = true;
+                }
+            }
+            if (!isRetired) {
+                revert ReleaseDropsContract(next, name);
+            }
+        }
+    }
+
+    /// A record whose newest release drops a contract. See
+    /// `NEWEST_FIXTURE_ROOT`.
+    string constant DROPS_FIXTURE_ROOT = "test/generated-snapshot/drops";
+
+    /// A record whose releases keep or add contracts. See
+    /// `NEWEST_FIXTURE_ROOT`.
+    string constant KEEPS_FIXTURE_ROOT = "test/generated-snapshot/keeps";
+
+    /// Every release frozen under `src/generated/` MUST hold every contract
+    /// the release before it holds, other than one `Build` has retired.
+    function testNoReleaseDropsAContract() external {
+        assertGt(LibRainDeploySnapshot.frozenSnapshotPaths(vm).length, 0);
+        RetiredContract[] memory retiredContracts = new BuildHarness("").externalRetiredContracts();
+        string[] memory retired = new string[](retiredContracts.length);
+        for (uint256 i = 0; i < retiredContracts.length; i++) {
+            retired[i] = retiredContracts[i].contractName;
+        }
+        this.externalCheckNoReleaseDropsAContract(LibRainDeploySnapshot.LIB_FS_ROOT, retired);
+    }
+
+    /// A release that adds a contract, or keeps every one, MUST be accepted,
+    /// across a gap in the tags and the `0_1_9` to `0_1_10` step a text order
+    /// gets wrong.
+    function testReleaseKeepingEveryContractIsAccepted() external {
+        writeFixture(string.concat(KEEPS_FIXTURE_ROOT, "/0_1_9/A.sol"));
+        writeFixture(string.concat(KEEPS_FIXTURE_ROOT, "/0_1_10/A.sol"));
+        writeFixture(string.concat(KEEPS_FIXTURE_ROOT, "/0_1_10/B.sol"));
+        writeFixture(string.concat(KEEPS_FIXTURE_ROOT, "/0_1_12/A.sol"));
+        writeFixture(string.concat(KEEPS_FIXTURE_ROOT, "/0_1_12/B.sol"));
+
+        this.externalCheckNoReleaseDropsAContract(KEEPS_FIXTURE_ROOT, new string[](0));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(KEEPS_FIXTURE_ROOT, true);
+    }
+
+    /// A release that drops a contract the release before it holds MUST be
+    /// refused, naming that release and the contract: `0_1_12` drops the `B`
+    /// that `0_1_10`, the release before it, holds.
+    function testReleaseDroppingAContractIsRefused() external {
+        writeFixture(string.concat(DROPS_FIXTURE_ROOT, "/0_1_9/A.sol"));
+        writeFixture(string.concat(DROPS_FIXTURE_ROOT, "/0_1_10/A.sol"));
+        writeFixture(string.concat(DROPS_FIXTURE_ROOT, "/0_1_10/B.sol"));
+        writeFixture(string.concat(DROPS_FIXTURE_ROOT, "/0_1_12/A.sol"));
+
+        string[] memory otherRetired = new string[](1);
+        otherRetired[0] = "C";
+        vm.expectRevert(abi.encodeWithSelector(ReleaseDropsContract.selector, "0_1_12", "B"));
+        this.externalCheckNoReleaseDropsAContract(DROPS_FIXTURE_ROOT, otherRetired);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(DROPS_FIXTURE_ROOT, true);
+    }
+
+    /// A record whose newest release drops a retired contract. See
+    /// `NEWEST_FIXTURE_ROOT`.
+    string constant RETIRES_FIXTURE_ROOT = "test/generated-snapshot/retires";
+
+    /// A release that drops a retired contract MUST be accepted, wherever it
+    /// sits in the retired list: `0_1_12` drops the `B` that `0_1_10` holds.
+    function testReleaseDroppingARetiredContractIsAccepted() external {
+        writeFixture(string.concat(RETIRES_FIXTURE_ROOT, "/0_1_9/A.sol"));
+        writeFixture(string.concat(RETIRES_FIXTURE_ROOT, "/0_1_10/A.sol"));
+        writeFixture(string.concat(RETIRES_FIXTURE_ROOT, "/0_1_10/B.sol"));
+        writeFixture(string.concat(RETIRES_FIXTURE_ROOT, "/0_1_12/A.sol"));
+
+        string[] memory retired = new string[](2);
+        retired[0] = "B";
+        retired[1] = "C";
+        this.externalCheckNoReleaseDropsAContract(RETIRES_FIXTURE_ROOT, retired);
+        retired[0] = "C";
+        retired[1] = "B";
+        this.externalCheckNoReleaseDropsAContract(RETIRES_FIXTURE_ROOT, retired);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(RETIRES_FIXTURE_ROOT, true);
+    }
+
+    /// A record where a later release restores a contract a release dropped.
+    /// See `NEWEST_FIXTURE_ROOT`.
+    string constant RESTORES_FIXTURE_ROOT = "test/generated-snapshot/restores";
+
+    /// A release that drops a contract MUST be refused even when a later
+    /// release holds it again: `0_1_10` drops the `B` that `0_1_9` holds. Each
+    /// release is compared with the LEAST release following it, so `0_1_9`
+    /// is compared with `0_1_10`, not with `0_1_12`.
+    function testReleaseDroppingAContractALaterReleaseRestoresIsRefused() external {
+        writeFixture(string.concat(RESTORES_FIXTURE_ROOT, "/0_1_9/A.sol"));
+        writeFixture(string.concat(RESTORES_FIXTURE_ROOT, "/0_1_9/B.sol"));
+        writeFixture(string.concat(RESTORES_FIXTURE_ROOT, "/0_1_10/A.sol"));
+        writeFixture(string.concat(RESTORES_FIXTURE_ROOT, "/0_1_12/A.sol"));
+        writeFixture(string.concat(RESTORES_FIXTURE_ROOT, "/0_1_12/B.sol"));
+
+        vm.expectRevert(abi.encodeWithSelector(ReleaseDropsContract.selector, "0_1_10", "B"));
+        this.externalCheckNoReleaseDropsAContract(RESTORES_FIXTURE_ROOT, new string[](0));
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(RESTORES_FIXTURE_ROOT, true);
+    }
+
+    /// The restores record walked in an order the test drives. See
+    /// `NEWEST_FIXTURE_ROOT`.
+    string constant PATH_ORDER_FIXTURE_ROOT = "test/generated-snapshot/restores-order";
+
+    /// The restores refusal MUST NOT depend on path order: walked with
+    /// `0_1_12` listed before `0_1_10`, and after it, `0_1_9` is still compared
+    /// with `0_1_10`, so `0_1_10` dropping `B` is refused every time, including
+    /// with the witness `0_1_9/B.sol` walked first.
+    function testReleaseDropIsFoundWhateverThePathOrder() external {
+        string[5] memory files = ["0_1_12/A.sol", "0_1_12/B.sol", "0_1_9/A.sol", "0_1_9/B.sol", "0_1_10/A.sol"];
+        string[] memory descending = new string[](files.length);
+        string[] memory ascending = new string[](files.length);
+        string[] memory witnessFirst = new string[](files.length);
+        for (uint256 i = 0; i < files.length; i++) {
+            descending[i] = string.concat(PATH_ORDER_FIXTURE_ROOT, "/", files[i]);
+            ascending[(i + 3) % files.length] = descending[i];
+            witnessFirst[(i + 2) % files.length] = descending[i];
+            writeFixture(descending[i]);
+        }
+        assertEq(witnessFirst[0], string.concat(PATH_ORDER_FIXTURE_ROOT, "/0_1_9/B.sol"));
+
+        vm.expectRevert(abi.encodeWithSelector(ReleaseDropsContract.selector, "0_1_10", "B"));
+        this.externalCheckNoReleaseDropsAContractOver(PATH_ORDER_FIXTURE_ROOT, descending);
+        vm.expectRevert(abi.encodeWithSelector(ReleaseDropsContract.selector, "0_1_10", "B"));
+        this.externalCheckNoReleaseDropsAContractOver(PATH_ORDER_FIXTURE_ROOT, ascending);
+        vm.expectRevert(abi.encodeWithSelector(ReleaseDropsContract.selector, "0_1_10", "B"));
+        this.externalCheckNoReleaseDropsAContractOver(PATH_ORDER_FIXTURE_ROOT, witnessFirst);
+
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(PATH_ORDER_FIXTURE_ROOT, true);
+    }
+
     /// Over EVERY tag, against a record on disk, the guard MUST accept exactly
     /// the tags that strictly follow the newest release and refuse every other
     /// one, naming both tags when it does.
@@ -3731,5 +3985,37 @@ contract LibRainDeploySnapshotTest is Test {
     /// A block comment keeps its line breaks, so what follows a multi-line comment starts a line as the compiler reads it.
     function testWithoutBlockCommentsKeepsLineBreaks() external pure {
         assertEq(LibRainDeploySnapshot.withoutBlockComments("a; /* c\n*/b"), "a; \nb");
+    }
+
+    /// The paths a build declares: each candidate snapshot, each released-suites lib, then the aggregate.
+    function testGeneratedPathsAreEachCandidateEachReleasedLibAndTheAggregate() external pure {
+        string[] memory recordNames = new string[](2);
+        recordNames[0] = "Alpha";
+        recordNames[1] = "Beta";
+        string[] memory contractNames = new string[](1);
+        contractNames[0] = "Alpha";
+
+        string[] memory paths = LibRainDeploySnapshot.generatedPaths(
+            "test/libs-declared", "test/generated-declared", recordNames, contractNames
+        );
+
+        assertEq(paths.length, 4);
+        assertEq(paths[0], "test/generated-declared/candidate/Alpha.sol");
+        assertEq(paths[1], "test/generated-declared/candidate/Beta.sol");
+        assertEq(paths[2], "test/libs-declared/LibAlphaReleased.sol");
+        assertEq(paths[3], "test/libs-declared/LibReleasedSuites.sol");
+    }
+
+    /// One `rainix-codegen owns` line per path, which is what `rainix-copy-artifacts` reads.
+    function testCodegenDeclarationIsOneOwnsLinePerPath() external pure {
+        string[] memory paths = new string[](2);
+        paths[0] = "src/generated/candidate/Alpha.sol";
+        paths[1] = "src/lib/LibReleasedSuites.sol";
+
+        string[] memory lines = LibRainDeploySnapshot.codegenDeclaration(paths);
+
+        assertEq(lines.length, 2);
+        assertEq(lines[0], "rainix-codegen owns src/generated/candidate/Alpha.sol");
+        assertEq(lines[1], "rainix-codegen owns src/lib/LibReleasedSuites.sol");
     }
 }

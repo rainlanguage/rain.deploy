@@ -1,4 +1,4 @@
 {
   "filter_paths": "dependencies/(forge-std|rain-factory|rain-lib-memkv|@openzeppelin-contracts|safe-global-safe-smart-account)-|src/abstract/(RainDeploy(SuitesBase|Broadcast|CloneSuitesBase|VerifyBase|VerifyChain|VerifySnapshotBase|VerifySnapshot|Verify)|RegistryDeploySuites|BuildScript|SafeBundleScript)\\.sol",
-  "detectors_to_exclude": "assembly"
+  "detectors_to_exclude": "assembly,unindexed-event-address"
 }

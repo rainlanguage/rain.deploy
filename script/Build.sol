@@ -90,19 +90,6 @@ contract Build is BuildScript, RegistryDeploySuites {
         return names;
     }
 
-    /// The directory every generated lib is written into.
-    ///
-    /// Overridable for the reason `BuildScript.recordRoot` is: a hook that can
-    /// only be pointed at the committed tree can only be RUN by overwriting
-    /// files the rest of the suite compiles and reads, and forge runs test
-    /// contracts in parallel. Only the per-contract libs and the aggregate go
-    /// here — `regenerateSnapshots` has no equivalent, because `LibFs` confines
-    /// every snapshot it writes to `src/generated/`.
-    /// @return The lib directory.
-    function libDir() internal view virtual returns (string memory) {
-        return LibRainDeploySnapshot.LIB_DIR;
-    }
-
     /// @inheritdoc BuildScript
     /// @dev Every alias lib, every released-suites lib, retired ones included,
     /// and the aggregate over them.
@@ -124,6 +111,26 @@ contract Build is BuildScript, RegistryDeploySuites {
             );
         }
         LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, dir, releasedContractNames());
+    }
+
+    /// @inheritdoc BuildScript
+    /// @dev Each retired contract's released-suites lib, then each alias lib.
+    function buildGeneratedPaths() internal view override returns (string[] memory) {
+        RetiredContract[] memory retired = retiredContracts();
+        GeneratedContract[] memory contracts = generatedContracts();
+        string memory dir = libDir();
+        string[] memory paths = new string[](retired.length + contracts.length);
+        for (uint256 i = 0; i < retired.length; i++) {
+            paths[i] = LibRainDeploySnapshot.pathForLib(
+                dir, LibRainDeploySnapshot.releasedLibraryName(retired[i].contractName)
+            );
+        }
+        for (uint256 i = 0; i < contracts.length; i++) {
+            paths[retired.length + i] = LibRainDeploySnapshot.pathForLib(
+                dir, LibRainDeploySnapshot.aliasLibraryName(contracts[i].contractName)
+            );
+        }
+        return paths;
     }
 
     /// Contracts this repo no longer builds whose frozen releases stay
