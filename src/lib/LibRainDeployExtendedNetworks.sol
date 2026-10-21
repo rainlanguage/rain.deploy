@@ -239,6 +239,28 @@ library LibRainDeployExtendedNetworks {
         }
     }
 
+    /// Where `writeExtendedNetworks` writes `declared`, or nothing when nothing is declared. Reverts with
+    /// `ExtendedNetworksUnrecorded` for a key with no tag.
+    /// @param root The record root.
+    /// @param suite The release's suite key.
+    /// @param declared The networks `extendedNetworks` declares for it.
+    /// @return The record's directory, empty when nothing is declared.
+    /// @return The record's path, empty when nothing is declared.
+    function writtenExtendedNetworksPath(string memory root, string memory suite, CloneNetwork[] memory declared)
+        internal
+        pure
+        returns (string memory, string memory)
+    {
+        if (declared.length == 0) {
+            return ("", "");
+        }
+        (bool tagged, string memory dir, string memory path) = extendedNetworksPath(root, suite);
+        if (!tagged) {
+            revert ExtendedNetworksUnrecorded(suite);
+        }
+        return (dir, path);
+    }
+
     /// Writes a release's extended networks record, appending to the one already written: every network it holds
     /// MUST be declared again, unchanged and in the same position, else `ExtendedNetworksRewritten`. Writes nothing
     /// when nothing is declared.
@@ -262,12 +284,9 @@ library LibRainDeployExtendedNetworks {
                 revert ExtendedNetworksRewritten(suite, i);
             }
         }
-        if (declared.length == 0) {
+        (string memory dir, string memory path) = writtenExtendedNetworksPath(root, suite, declared);
+        if (bytes(path).length == 0) {
             return;
-        }
-        (bool tagged, string memory dir, string memory path) = extendedNetworksPath(root, suite);
-        if (!tagged) {
-            revert ExtendedNetworksUnrecorded(suite);
         }
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(dir, true);

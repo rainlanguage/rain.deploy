@@ -146,6 +146,21 @@ contract BuildScriptTest is Test {
         assertFalse(frozenExists);
     }
 
+    /// PROPERTY: `run()` declares the rolling snapshot its hook writes, the
+    /// contract's released-suites lib and the aggregate.
+    function testRunDeclaresTheRollingSnapshotAndTheReleasedLibs() external {
+        BuildScriptHarness harness = new BuildScriptHarness(RUN_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        string[] memory paths = harness.externalGeneratedPaths();
+
+        assertEq(paths.length, 5);
+        assertEq(paths[0], harness.rollingPath());
+        assertEq(paths[0], "test/generated-buildscript-run/candidate/Fixture.sol");
+        assertEq(paths[1], "src/lib/LibFixtureReleased.sol");
+        assertEq(paths[2], "src/lib/LibReleasedSuites.sol");
+        assertEq(paths[3], "foundry.toml");
+        assertEq(paths[4], ".env.example");
+    }
+
     /// PROPERTY: `cutRelease()` freezes the snapshot its OWN regeneration
     /// wrote, not the one that was on disk when it was called.
     ///
@@ -374,6 +389,38 @@ contract BuildScriptTest is Test {
                 LibRainDeployExtendedNetworks.extendedNetworksBody(vm, networks)
             )
         );
+    }
+
+    /// PROPERTY: `run()` declares the extended networks record of each release that declares extended networks,
+    /// and only those, and writes the one it declares.
+    function testRunDeclaresTheExtendedNetworksRecordsItWrites() external {
+        string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-run-declared");
+        resetFixture(root);
+        new BuildScriptHarness(root, FIXTURE_CONTRACT).seedConfig();
+        TwoReleasePerNetworkCloneBuildScriptHarness harness =
+            new TwoReleasePerNetworkCloneBuildScriptHarness(root, root);
+        CloneNetwork[] memory second = new CloneNetwork[](1);
+        second[0] = extendedNetwork(1, hex"00bb");
+        harness.setSecondExtendedNetworks(second);
+
+        string[] memory undeclared = new PerNetworkCloneBuildScriptHarness(root, root).externalGeneratedPaths();
+        string[] memory paths = harness.externalGeneratedPaths();
+        harness.run();
+        (,, string memory firstPath) =
+            LibRainDeployExtendedNetworks.extendedNetworksPath(root, "per-network-clone@0_0_1");
+        (,, string memory secondPath) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, SECOND_RELEASE_KEY);
+        bool firstWritten = vm.exists(firstPath);
+        bool secondWritten = vm.exists(secondPath);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
+
+        assertEq(paths.length, undeclared.length + 1);
+        for (uint256 i = 0; i < undeclared.length; i++) {
+            assertEq(paths[i], undeclared[i]);
+        }
+        assertEq(paths[paths.length - 1], secondPath);
+        assertTrue(secondWritten);
+        assertFalse(firstWritten);
     }
 
     /// PROPERTY: the build writes each release's record from that release's own declaration, under that release's
@@ -669,8 +716,15 @@ contract BuildScriptTest is Test {
             );
         }
 
+        assertTrue(
+            referencesId(called, declarationId(json, namedFunctionPath(json, members, "declareGeneratedPaths"))),
+            "run() does not declare its generated paths"
+        );
+
         assertGt(generators, 0, "the base declares no generator");
-        assertEq(called.length, generators, "run() holds a call that is not one of those generators");
+        assertEq(
+            called.length, generators + 1, "run() holds a call that is not one of those generators or the declaration"
+        );
     }
 
     /// PROPERTY: every hook the base declares is reached from an entry point.

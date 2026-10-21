@@ -210,6 +210,37 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
         assertEq(deployed[0].code, type(MockCloneable).runtimeCode);
     }
 
+    /// `UnverifiableSource` indexes nothing: its one log carries the signature as its only topic, and the sender,
+    /// entry address and networks ABI-encoded in its data.
+    function testUnverifiableSourceLogsEveryArgumentAsData() external {
+        LibRainDeploy.etchZoltuFactory(vm);
+        DeploySuite memory suite = zoltuSuite(LibRainDeploy.zoltuAddress(type(MockCloneable).creationCode));
+        suite.storedBytecodeHash = keccak256(type(MockCloneable).runtimeCode);
+        suite.artifactPath = CLONE_ARTIFACT_PATH;
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.POLYGON;
+
+        address caller = makeAddr("broadcast caller");
+        LocalForkVm forkVm = new LocalForkVm();
+        vm.recordLogs();
+        vm.prank(caller);
+        this.externalDeployAndBroadcastOn(Vm(address(forkVm)), networks, suite);
+        Vm.Log[] memory logs = vm.getRecordedLogs();
+
+        bytes32 signature = keccak256("UnverifiableSource(address,address,string[])");
+        uint256 found = 0;
+        for (uint256 i = 0; i < logs.length; i++) {
+            if (logs[i].topics.length > 0 && logs[i].topics[0] == signature) {
+                found++;
+                assertEq(logs[i].emitter, address(this));
+                assertEq(logs[i].topics.length, 1);
+                assertEq(logs[i].data, abi.encode(caller, suite.storedDeployedAddress, networks));
+            }
+        }
+        assertEq(found, 1);
+    }
+
     /// A Zoltu broadcast under `BEACON_PROXY_ARTIFACT_PATH` is treated as one under `CLONE_ARTIFACT_PATH`: one
     /// `UnverifiableSource` notice and no verify command.
     function testZoltuBroadcastUnderTheBeaconProxyArtifactPathPrintsAManualVerificationNotice() external {

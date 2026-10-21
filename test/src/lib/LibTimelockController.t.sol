@@ -9,9 +9,27 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibTimelockController} from "../../../src/lib/LibTimelockController.sol";
 import {BYTECODE_HASH, CREATION_CODE, RUNTIME_CODE} from "../../../src/generated/candidate/TimelockController.sol";
 import {CREATION_CODE as CREATION_CODE_0_1_18} from "../../../src/generated/0_1_18/TimelockController.sol";
+import {CREATION_CODE as CREATION_CODE_0_1_19} from "../../../src/generated/0_1_19/TimelockController.sol";
 import {MockTimelockControllerGeneration} from "../../concrete/MockTimelockControllerGeneration.sol";
 import {MockTimelockControllerImmutableGeneration} from "../../concrete/MockTimelockControllerImmutableGeneration.sol";
 import {MockSnapshotDeletingCreation} from "../../concrete/MockSnapshotDeletingCreation.sol";
+
+/// @dev The ST0x token-owner Safe on Base, the production timelock's proposer.
+address constant ST0X_BASE_TOKEN_OWNER_SAFE = 0xe70d821f3462a074e63b42d0AaC6523faAe1d611;
+
+/// @dev The ST0x governance timelock on Base
+/// (https://basescan.org/address/0x48ba1371a78e6cc54157c63721756ab444510db3).
+address constant ST0X_BASE_TIMELOCK = 0x48ba1371A78E6cC54157c63721756ab444510DB3;
+
+/// @dev The ST0x token-owner Safe on Ethereum, the production timelock's proposer.
+address constant ST0X_ETHEREUM_TOKEN_OWNER_SAFE = 0x3840aeDaEc8e82f79d8F6a8F6ADCa271E13E0329;
+
+/// @dev The ST0x governance timelock on Ethereum
+/// (https://etherscan.io/address/0x831e4e1bb2b9a67c00b7d17f252a18a22cd0bd2b).
+address constant ST0X_ETHEREUM_TIMELOCK = 0x831E4e1bB2b9a67C00b7d17F252A18a22cd0bD2B;
+
+/// @dev The ST0x governance timelocks' minimum delay.
+uint256 constant ST0X_TIMELOCK_MIN_DELAY = 48 hours;
 
 /// @title LibTimelockControllerTest
 /// The snapshot against the dependency, the frozen generation against
@@ -73,26 +91,34 @@ contract LibTimelockControllerTest is Test {
         assertEq(BYTECODE_HASH, keccak256(RUNTIME_CODE));
     }
 
-    /// The frozen 0_1_18 generation is the one production carries: with a
-    /// 48 hour delay and the ST0x token-owner Safes as proposer it derives the
-    /// ST0x governance timelocks deployed on Base
-    /// (https://basescan.org/address/0x48ba1371a78e6cc54157c63721756ab444510db3)
-    /// and Ethereum
-    /// (https://etherscan.io/address/0x831e4e1bb2b9a67c00b7d17f252a18a22cd0bd2b),
-    /// as pinned in S01-Issuer/st0x.deploy `LibTimelockInvariants`.
+    /// `creationCode`, with the ST0x delay and token-owner Safes as proposer,
+    /// MUST derive the ST0x governance timelocks.
+    /// @param creationCode The timelock generation's creation code.
+    function assertDerivesProductionTimelocks(bytes memory creationCode) internal pure {
+        assertEq(
+            LibTimelockController.expectedTimelockAddress(
+                creationCode, ST0X_TIMELOCK_MIN_DELAY, ST0X_BASE_TOKEN_OWNER_SAFE
+            ),
+            ST0X_BASE_TIMELOCK
+        );
+        assertEq(
+            LibTimelockController.expectedTimelockAddress(
+                creationCode, ST0X_TIMELOCK_MIN_DELAY, ST0X_ETHEREUM_TOKEN_OWNER_SAFE
+            ),
+            ST0X_ETHEREUM_TIMELOCK
+        );
+    }
+
+    /// The frozen 0_1_18 generation is the one production carries, as pinned
+    /// in S01-Issuer/st0x.deploy `LibTimelockInvariants`.
     function testFrozenCodeDerivesProductionTimelocks() external pure {
-        assertEq(
-            LibTimelockController.expectedTimelockAddress(
-                CREATION_CODE_0_1_18, 48 hours, 0xe70d821f3462a074e63b42d0AaC6523faAe1d611
-            ),
-            0x48ba1371A78E6cC54157c63721756ab444510DB3
-        );
-        assertEq(
-            LibTimelockController.expectedTimelockAddress(
-                CREATION_CODE_0_1_18, 48 hours, 0x3840aeDaEc8e82f79d8F6a8F6ADCa271E13E0329
-            ),
-            0x831E4e1bB2b9a67C00b7d17F252A18a22cd0bD2B
-        );
+        assertDerivesProductionTimelocks(CREATION_CODE_0_1_18);
+    }
+
+    /// The frozen 0_1_19 generation freezes the same generation as 0_1_18, so
+    /// it derives the same production timelocks.
+    function testFrozen0119CodeDerivesProductionTimelocks() external pure {
+        assertDerivesProductionTimelocks(CREATION_CODE_0_1_19);
     }
 
     /// A deploy with arguments other than the snapshot's reference deploy carries
