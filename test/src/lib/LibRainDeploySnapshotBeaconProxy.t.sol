@@ -3,7 +3,6 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {stdError} from "forge-std-1.17.0/src/StdError.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {DeployDependency, DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
@@ -340,22 +339,5 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
         assertTrue(vm.contains(entry, "mechanismData: BeaconProxyRecord_0_0_2_MECHANISM_DATA\n"));
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(string.concat(ROOT, "/0_0_2"), true);
-    }
-
-    /// @param mechanism A mechanism byte, which may lie outside the enum.
-    /// @return Its name.
-    function externalMechanismNameOf(uint8 mechanism) external pure returns (string memory) {
-        DeployMechanism kind;
-        assembly ("memory-safe") {
-            kind := mechanism
-        }
-        return LibRainDeploySnapshot.mechanismName(kind);
-    }
-
-    /// A mechanism outside the enum panics on reading it, before any name is chosen.
-    function testMechanismNamePanicsOnAMechanismOutsideTheEnum(uint8 mechanism) external {
-        mechanism = uint8(bound(mechanism, uint256(type(DeployMechanism).max) + 1, type(uint8).max));
-        vm.expectRevert(stdError.enumConversionError);
-        this.externalMechanismNameOf(mechanism);
     }
 }

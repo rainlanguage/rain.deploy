@@ -12,7 +12,7 @@ import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
 import {DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
 import {CloneNetworks} from "./LibRainDeployClone.sol";
-import {LibRainDeployMechanism} from "./LibRainDeployMechanism.sol";
+import {LibRainDeployMechanism, UnknownDeployMechanism} from "./LibRainDeployMechanism.sol";
 
 /// Thrown when `[external.package].version` is not strict `X.Y.Z`. A version
 /// like `0.1.7-rc1` maps to the directory `0_1_7-rc1`, which the append-only
@@ -1677,15 +1677,22 @@ library LibRainDeploySnapshot {
     /// @param kind A mechanism.
     /// @return Its name as a generated released-suites lib spells it.
     function mechanismName(DeployMechanism kind) internal pure returns (string memory) {
-        // One entry per `DeployMechanism` member, in member order: a member without one panics (0x32).
-        string[5] memory names = [
-            string("DeployMechanism.Zoltu"),
-            "DeployMechanism.Clone",
-            "DeployMechanism.ClonePerNetwork",
-            "DeployMechanism.BeaconProxy",
-            "DeployMechanism.BeaconProxyPerNetwork"
-        ];
-        return names[uint8(kind)];
+        if (kind == DeployMechanism.Zoltu) {
+            return "DeployMechanism.Zoltu";
+        }
+        if (kind == DeployMechanism.Clone) {
+            return "DeployMechanism.Clone";
+        }
+        if (kind == DeployMechanism.ClonePerNetwork) {
+            return "DeployMechanism.ClonePerNetwork";
+        }
+        if (kind == DeployMechanism.BeaconProxy) {
+            return "DeployMechanism.BeaconProxy";
+        }
+        if (kind == DeployMechanism.BeaconProxyPerNetwork) {
+            return "DeployMechanism.BeaconProxyPerNetwork";
+        }
+        revert UnknownDeployMechanism(uint8(kind));
     }
 
     /// The aliased import one record file contributes.
