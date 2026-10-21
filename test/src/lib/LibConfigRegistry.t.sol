@@ -201,7 +201,7 @@ contract LibConfigRegistryTest is Test {
         return LibConfigRegistry.resolveSafe(authority, name, minAge);
     }
 
-    /// A chain with no registry deployed) reverts on the code hash, with an
+    /// A chain with no registry deployed reverts on the code hash, with an
     /// actual hash of zero: a never-touched address does not exist at all.
     function testResolveNoRegistry(bytes32 name) external {
         assertEq(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);

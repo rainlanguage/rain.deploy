@@ -125,8 +125,8 @@ contract ConfigRegistryRegisterTest is Test {
         sRegistry.registerV1(name, "");
     }
 
-    /// An authority may re-bind a name to a different value, and the new binding is
-    /// what `getV1` answers with from then on.
+    /// An authority may re-bind a name to a different value, and the new
+    /// binding is what `getV1` answers with from then on.
     function testRegisterRebind(bytes32 name, bytes memory boundValue, bytes memory value) external {
         vm.assume(boundValue.length > 0);
         vm.assume(value.length > 0);

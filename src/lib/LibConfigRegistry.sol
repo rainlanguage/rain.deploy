@@ -24,7 +24,9 @@ import {LibConfigRegistryDeploy} from "./LibConfigRegistryDeploy.sol";
 /// The authority is the caller's choice and the whole of what it trusts: a
 /// binding is only ever written by the authority it is read under, so the
 /// caller names the account it already trusts for the name, beside the name,
-/// in its own creation code.
+/// in its own creation code. It MUST be a constant or a constructor argument,
+/// which the deterministic address commits to, never `tx.origin`, `msg.sender`
+/// or anything else read at construction, which it does not commit to.
 ///
 /// Bindings are mutable, so `resolve` answers with whatever the authority has
 /// bound most recently. A caller that needs an answer that cannot move
@@ -81,8 +83,8 @@ library LibConfigRegistry {
         }
     }
 
-    /// The value `authority` currently binds `name` to in the registry, and when
-    /// it bound it.
+    /// The value `authority` currently binds `name` to in the registry, and
+    /// when it bound it.
     ///
     /// Verifies the registry's code hash before reading, so a chain where the
     /// registry is absent, or where something else occupies its address, is a
@@ -93,10 +95,10 @@ library LibConfigRegistry {
     /// The value is returned exactly as the authority bound it. The caller
     /// decodes it with the type it expects. `abi.decode` refuses some wrongly
     /// shaped values, such as one shorter than the type's encoding or one with
-    /// bits a narrow type cannot hold, but it ignores trailing bytes and decodes
-    /// any word that is valid for the requested type. A caller that must refuse a
-    /// wrongly shaped binding checks it, e.g. `value.length == 32` for one
-    /// static type, or `keccak256(abi.encode(decoded)) == keccak256(value)`.
+    /// bits a narrow type cannot hold, but it ignores trailing bytes and
+    /// decodes any word that is valid for the requested type. A caller that must
+    /// refuse a wrongly shaped binding checks it, e.g. `value.length == 32` for
+    /// one static type, or `keccak256(abi.encode(decoded)) == keccak256(value)`.
     /// @param authority The account whose binding to read: the one the caller
     /// trusts for `name`.
     /// @param name The name to resolve. Opaque; the registry constrains nothing
