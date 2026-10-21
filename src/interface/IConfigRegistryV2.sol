@@ -158,9 +158,6 @@ interface IConfigRegistryV2 is IRegistryDelegatesV1 {
     /// authority and name; the most recent `Register` under an authority for a
     /// name is that authority's current binding of it.
     ///
-    /// `value` is not indexed, because an indexed `bytes` is logged as its hash
-    /// and the history would then not hold the values.
-    ///
     /// The moment is not a field here, because a log already carries the block
     /// it was emitted in.
     /// @param sender The account that called: `authority` or a delegate it
@@ -168,7 +165,7 @@ interface IConfigRegistryV2 is IRegistryDelegatesV1 {
     /// @param authority The authority `name` is bound under.
     /// @param name The name that was bound.
     /// @param value The value `name` was bound to.
-    event Register(address indexed sender, address indexed authority, bytes32 indexed name, bytes value);
+    event Register(address sender, address authority, bytes32 name, bytes value);
 
     /// Binds `name` to `value` under `authority`, replacing any value
     /// `authority` has already bound it to. The caller is `authority` or a

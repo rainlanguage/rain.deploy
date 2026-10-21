@@ -543,9 +543,7 @@ interface IMigrationRegistryV3 is IRegistryDelegatesV1 {
     /// @param namespace The line under the writer.
     /// @param migration The migration applied.
     /// @param appliedAt The moment recorded against it.
-    event Migrated(
-        address sender, address indexed writer, bytes32 indexed namespace, bytes32 indexed migration, uint256 appliedAt
-    );
+    event Migrated(address sender, address writer, bytes32 namespace, bytes32 migration, uint256 appliedAt);
 
     /// Applies `migration` in `writer`'s line in `namespace`, after
     /// `prerequisites`, as having been applied in the block this call lands

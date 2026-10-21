@@ -26,12 +26,12 @@ interface IRegistryDelegatesV1 {
     /// @param sender The approving account, which is the account that called.
     /// @param scope The scope the approval covers.
     /// @param delegate The approved account.
-    event Approved(address indexed sender, bytes32 indexed scope, address indexed delegate);
+    event Approved(address sender, bytes32 scope, address delegate);
 
     /// Emitted when `sender` revokes `delegate` within `scope`, whether or not
     /// `delegate` was approved.
     /// @param sender The revoking account, which is the account that called.
     /// @param scope The scope the revocation covers.
     /// @param delegate The revoked account.
-    event Revoked(address indexed sender, bytes32 indexed scope, address indexed delegate);
+    event Revoked(address sender, bytes32 scope, address delegate);
 }

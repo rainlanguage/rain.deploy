@@ -25,9 +25,8 @@ contract ConfigRegistryRegisterTest is Test {
     }
 
     /// Asserts `entry` is the one `Register` a bind of `name` to `value` under
-    /// `authority` by `sender` emits: the sender, the authority and the name
-    /// indexed, the value whole in the data, so the log holds the value itself
-    /// rather than its hash.
+    /// `authority` by `sender` emits: nothing indexed, the sender, the
+    /// authority, the name and the whole value in the data.
     /// @param entry The log.
     /// @param sender The account that bound.
     /// @param authority The authority it bound under.
@@ -38,13 +37,10 @@ contract ConfigRegistryRegisterTest is Test {
         view
     {
         assertEq(entry.emitter, address(sRegistry));
-        assertEq(entry.topics.length, 4);
+        assertEq(entry.topics.length, 1);
         assertEq(entry.topics[0], keccak256("Register(address,address,bytes32,bytes)"));
         assertEq(entry.topics[0], IConfigRegistryV2.Register.selector);
-        assertEq(entry.topics[1], bytes32(uint256(uint160(sender))));
-        assertEq(entry.topics[2], bytes32(uint256(uint160(authority))));
-        assertEq(entry.topics[3], name);
-        assertEq(entry.data, abi.encode(value));
+        assertEq(entry.data, abi.encode(sender, authority, name, value));
     }
 
     /// Any caller binds, with no permission asked, and the binding lands under
@@ -339,9 +335,8 @@ contract ConfigRegistryRegisterTest is Test {
         assertEq(LibConfigRegistryRead.getValue(sRegistry, AUTHORITY, nameB), valueB);
     }
 
-    /// `Register` is emitted once, with the authority and the name indexed and
-    /// the value whole in the data, so the log holds the value itself rather
-    /// than its hash.
+    /// `Register` is emitted once, with nothing indexed and every field, the
+    /// whole value included, in the data.
     function testRegisterEvent(bytes32 name, bytes memory value) external {
         vm.assume(value.length > 0);
 

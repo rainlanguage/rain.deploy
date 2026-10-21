@@ -198,9 +198,8 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         uint256 registers = 0;
         for (uint256 i = 0; i < logs.length; i++) {
             if (logs[i].emitter == address(registry) && logs[i].topics[0] == IConfigRegistryV2.Register.selector) {
-                assertEq(logs[i].topics[1], bytes32(uint256(uint160(AUTHORITY))));
-                assertEq(logs[i].topics[2], bytes32(uint256(uint160(AUTHORITY))));
-                assertEq(logs[i].topics[3], hashed);
+                assertEq(logs[i].topics.length, 1);
+                assertEq(logs[i].data, abi.encode(AUTHORITY, AUTHORITY, hashed, value));
                 registers++;
             }
         }

@@ -53,7 +53,7 @@ contract ConfigRegistryDelegateTest is Test {
     }
 
     /// `Approved` and `Revoked` carry the sender, the name and the delegate,
-    /// all indexed, and nothing in the data.
+    /// none indexed: the selector is the one topic and all three are the data.
     function testApprovalEventLayout() external {
         vm.recordLogs();
         approveDelegate();
@@ -62,18 +62,12 @@ contract ConfigRegistryDelegateTest is Test {
         Vm.Log[] memory entries = vm.getRecordedLogs();
 
         assertEq(entries.length, 2);
-        assertEq(entries[0].topics.length, 4);
+        assertEq(entries[0].topics.length, 1);
         assertEq(entries[0].topics[0], keccak256("Approved(address,bytes32,address)"));
-        assertEq(entries[0].topics[1], bytes32(uint256(uint160(AUTHORITY))));
-        assertEq(entries[0].topics[2], NAME);
-        assertEq(entries[0].topics[3], bytes32(uint256(uint160(DELEGATE))));
-        assertEq(entries[0].data.length, 0);
-        assertEq(entries[1].topics.length, 4);
+        assertEq(entries[0].data, abi.encode(AUTHORITY, NAME, DELEGATE));
+        assertEq(entries[1].topics.length, 1);
         assertEq(entries[1].topics[0], keccak256("Revoked(address,bytes32,address)"));
-        assertEq(entries[1].topics[1], bytes32(uint256(uint160(AUTHORITY))));
-        assertEq(entries[1].topics[2], NAME);
-        assertEq(entries[1].topics[3], bytes32(uint256(uint160(DELEGATE))));
-        assertEq(entries[1].data.length, 0);
+        assertEq(entries[1].data, abi.encode(AUTHORITY, NAME, DELEGATE));
     }
 
     /// Revoking an unapproved delegate, approving twice and revoking twice
