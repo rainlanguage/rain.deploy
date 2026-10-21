@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {ICloneableFactoryV4} from "rain-factory-pr271-976cd62/src/interface/deprecated/ICloneableFactoryV4.sol";
-import {LibICloneableFactoryV4} from "rain-factory-pr271-976cd62/src/lib/LibICloneableFactoryV4.sol";
+import {ICloneableFactoryV4} from "rain-factory-0.2.0/src/interface/deprecated/ICloneableFactoryV4.sol";
+import {LibICloneableFactoryV5} from "rain-factory-0.2.0/src/lib/LibICloneableFactoryV5.sol";
 import {MockCloneFactory} from "./MockCloneFactory.sol";
 
 /// @title MockSaltShiftingCloneFactory
@@ -16,6 +16,6 @@ contract MockSaltShiftingCloneFactory is MockCloneFactory {
         override
         returns (address)
     {
-        return LibICloneableFactoryV4.cloneDeterministicOpenSalt(implementation, data, salt ^ bytes32(uint256(1)));
+        return LibICloneableFactoryV5.cloneDeterministicOpenSalt(implementation, data, salt ^ bytes32(uint256(1)));
     }
 }

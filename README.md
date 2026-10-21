@@ -1274,12 +1274,12 @@ forge soldeer install rain-deploy~<version>
 **You also need `forge-std` 1.17.0, `rain-sol-codegen` 0.1.39 and `rain-factory`
 at git rev `976cd62` (rain.factory#271, which adds `ICloneableFactoryV5`)**,
 remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
-`rain-factory-pr271-976cd62/`. The published package ships `src/`, `script/` and
-the licence and README files — no `test/`, no `foundry.toml`, no
-`remappings.txt`, no `soldeer.lock`, no `dependencies/` — so a consumer resolves
-all three itself. The requirement is transitive rather than incidental: the
-deployed contract imports nothing outside this package, but every abstract a
-consumer inherits pulls them in — `Script` via `RainDeployBroadcast`, `Test` via
+`rain-factory-0.2.0/`. The published package ships `src/`, `script/` and the
+licence and README files — no `test/`, no `foundry.toml`, no `remappings.txt`,
+no `soldeer.lock`, no `dependencies/` — so a consumer resolves all three itself.
+The requirement is transitive rather than incidental: the deployed contract
+imports nothing outside this package, but every abstract a consumer inherits
+pulls them in — `Script` via `RainDeployBroadcast`, `Test` via
 `RainDeployVerifyBase`, `Vm` via `LibRainDeploy` beneath both,
 `ICloneableFactoryV4` and `ICloneableFactoryV5` via `LibRainDeployMechanism`
 beneath both, `LibICloneableFactoryV5` and the generated

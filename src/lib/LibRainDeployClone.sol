@@ -4,8 +4,8 @@ pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
-import {ICloneableFactoryV4} from "rain-factory-pr271-976cd62/src/interface/deprecated/ICloneableFactoryV4.sol";
-import {LibICloneableFactoryV4} from "rain-factory-pr271-976cd62/src/lib/LibICloneableFactoryV4.sol";
+import {ICloneableFactoryV4} from "rain-factory-0.2.0/src/interface/deprecated/ICloneableFactoryV4.sol";
+import {LibICloneableFactoryV5} from "rain-factory-0.2.0/src/lib/LibICloneableFactoryV5.sol";
 
 import {DeployDependency} from "./LibRainDeploy.sol";
 
@@ -122,7 +122,7 @@ library LibRainDeployClone {
     /// @param implementation The contract the proxy delegates into.
     /// @return The creation code.
     function cloneCreationCode(address implementation) internal pure returns (bytes memory) {
-        return LibICloneableFactoryV4.cloneCreationCode(implementation);
+        return LibICloneableFactoryV5.cloneCreationCode(implementation);
     }
 
     /// The clone's runtime code.
@@ -150,8 +150,8 @@ library LibRainDeployClone {
     /// @param target The clone being deployed.
     /// @return The predicted clone address.
     function cloneDeployedAddress(CloneTarget memory target) internal pure returns (address) {
-        return LibICloneableFactoryV4.predictCloneAddress(
-            target.factory, target.implementation, LibICloneableFactoryV4.effectiveOpenSalt(target.salt, target.data)
+        return LibICloneableFactoryV5.predictCloneAddress(
+            target.factory, target.implementation, LibICloneableFactoryV5.effectiveOpenSalt(target.salt, target.data)
         );
     }
 

@@ -5,9 +5,9 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
-import {ICloneableFactoryV5} from "rain-factory-pr271-976cd62/src/interface/ICloneableFactoryV5.sol";
-import {BEACON_PROXY_CREATION_CODE} from "rain-factory-pr271-976cd62/src/generated/BeaconProxy.sol";
-import {LibICloneableFactoryV5} from "rain-factory-pr271-976cd62/src/lib/LibICloneableFactoryV5.sol";
+import {ICloneableFactoryV5} from "rain-factory-0.2.0/src/interface/ICloneableFactoryV5.sol";
+import {BEACON_PROXY_CREATION_CODE} from "rain-factory-0.2.0/src/generated/BeaconProxy.sol";
+import {LibICloneableFactoryV5} from "rain-factory-0.2.0/src/lib/LibICloneableFactoryV5.sol";
 
 import {DeployDependency} from "./LibRainDeploy.sol";
 import {CloneTarget} from "./LibRainDeployClone.sol";

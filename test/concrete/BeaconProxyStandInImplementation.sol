@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {ICLONEABLE_V2_SUCCESS} from "rain-factory-pr271-976cd62/src/interface/ICloneableV2.sol";
+import {ICLONEABLE_V2_SUCCESS} from "rain-factory-0.2.0/src/interface/ICloneableV2.sol";
 
 /// @title BeaconProxyStandInImplementation
 /// @notice The source `BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE` is compiled from.

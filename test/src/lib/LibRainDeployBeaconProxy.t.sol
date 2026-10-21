@@ -7,9 +7,9 @@ import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/Upgr
 import {
     ICLONEABLE_FACTORY_V5_BEACON_PROXY_CREATION_CODE_HASH,
     ICloneableFactoryV5
-} from "rain-factory-pr271-976cd62/src/interface/ICloneableFactoryV5.sol";
-import {BEACON_PROXY_CREATION_CODE} from "rain-factory-pr271-976cd62/src/generated/BeaconProxy.sol";
-import {DelegatedBeacon} from "rain-factory-pr271-976cd62/src/lib/LibICloneableFactoryV5.sol";
+} from "rain-factory-0.2.0/src/interface/ICloneableFactoryV5.sol";
+import {BEACON_PROXY_CREATION_CODE} from "rain-factory-0.2.0/src/generated/BeaconProxy.sol";
+import {DelegatedBeacon} from "rain-factory-0.2.0/src/lib/LibICloneableFactoryV5.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {CloneTarget} from "../../../src/lib/LibRainDeployClone.sol";
 import {
