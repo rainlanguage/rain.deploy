@@ -30,17 +30,13 @@ contract GeneratedContractsBuildScriptHarness is BuildScript {
         sRetired = abi.encode(new RetiredContract[](0));
     }
 
-    /// @param candidates What `candidateSuites` declares.
-    /// @param generated What `generatedContracts` returns.
-    /// @param retired What `retiredContracts` returns.
-    function declare(
-        DeployCandidate[] memory candidates,
-        GeneratedContract[] memory generated,
-        RetiredContract[] memory retired
-    ) external {
-        sCandidates = abi.encode(candidates);
-        sGenerated = abi.encode(generated);
-        sRetired = abi.encode(retired);
+    /// @param candidates `abi.encode` of what `candidateSuites` declares.
+    /// @param generated `abi.encode` of what `generatedContracts` returns.
+    /// @param retired `abi.encode` of what `retiredContracts` returns.
+    function declare(bytes memory candidates, bytes memory generated, bytes memory retired) external {
+        sCandidates = candidates;
+        sGenerated = generated;
+        sRetired = retired;
     }
 
     /// @inheritdoc RainDeploySuitesBase
@@ -81,8 +77,8 @@ contract GeneratedContractsBuildScriptHarness is BuildScript {
         return sLibDir;
     }
 
-    function externalCheckedGeneratedContracts() external view returns (GeneratedContract[] memory) {
-        return checkedGeneratedContracts();
+    function externalCheckedGeneratedContracts() external view returns (bytes memory) {
+        return abi.encode(checkedGeneratedContracts());
     }
 
     function externalSnapshotContractNames() external view returns (string[] memory) {

@@ -219,8 +219,7 @@ contract BuildScriptTest is Test {
         assertTrue(vm.contains(released, "new DeploySuite[](1)"));
         assertTrue(
             vm.contains(
-                released,
-                string.concat("suite: \"harness-candidate@", LibRainDeploySnapshot.deployTag(vm), "\"")
+                released, string.concat("suite: \"harness-candidate@", LibRainDeploySnapshot.deployTag(vm), "\"")
             )
         );
     }

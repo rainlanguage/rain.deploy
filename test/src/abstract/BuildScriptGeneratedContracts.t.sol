@@ -41,9 +41,8 @@ contract BuildScriptGeneratedContractsTest is Test {
     }
 
     function anchored(string memory key, string memory name) internal pure returns (DeployCandidate memory) {
-        return DeployCandidate({
-            snapshot: suite(key, string.concat("src/", name, ".sol:", name)), unanchorableReason: ""
-        });
+        return
+            DeployCandidate({snapshot: suite(key, string.concat("src/", name, ".sol:", name)), unanchorableReason: ""});
     }
 
     function unanchorable(string memory key) internal pure returns (DeployCandidate memory) {
@@ -102,13 +101,15 @@ contract BuildScriptGeneratedContractsTest is Test {
         RetiredContract[] memory retiredList
     ) internal returns (GeneratedContractsBuildScriptHarness) {
         GeneratedContractsBuildScriptHarness harness = new GeneratedContractsBuildScriptHarness(ROOT, ROOT);
-        harness.declare(candidates, generatedList, retiredList);
+        harness.declare(abi.encode(candidates), abi.encode(generatedList), abi.encode(retiredList));
         return harness;
     }
 
     function testRefusesAGeneratedContractWhoseKeyNoCandidateDeclares() external {
         GeneratedContractsBuildScriptHarness harness = harnessDeclaring(
-            one(anchored("a", "A")), two(generated("A", "", anchored("a", "A")), generated("B", "", anchored("b", "B"))), noRetired()
+            one(anchored("a", "A")),
+            two(generated("A", "", anchored("a", "A")), generated("B", "", anchored("b", "B"))),
+            noRetired()
         );
         vm.expectRevert(abi.encodeWithSelector(GeneratedContractNotDeclared.selector, "B", "b"));
         harness.externalCheckedGeneratedContracts();
@@ -142,7 +143,8 @@ contract BuildScriptGeneratedContractsTest is Test {
     function testAnUnanchorableCandidateMayBeGeneratedUnderAnyName() external {
         GeneratedContractsBuildScriptHarness harness =
             harnessDeclaring(one(unanchorable("a")), one(generated("Anything", "", unanchorable("a"))), noRetired());
-        GeneratedContract[] memory checked = harness.externalCheckedGeneratedContracts();
+        GeneratedContract[] memory checked =
+            abi.decode(harness.externalCheckedGeneratedContracts(), (GeneratedContract[]));
         assertEq(checked.length, 1);
         assertEq(checked[0].contractName, "Anything");
     }
@@ -202,7 +204,7 @@ contract BuildScriptGeneratedContractsTest is Test {
             two(generated("A", "", anchored("a", "A")), generated("B", "", anchored("b", "B"))),
             noRetired()
         );
-        assertEq(harness.externalCheckedGeneratedContracts().length, 2);
+        assertEq(abi.decode(harness.externalCheckedGeneratedContracts(), (GeneratedContract[])).length, 2);
     }
 
     function testRunRefusesABadDeclaration() external {
@@ -247,9 +249,9 @@ contract BuildScriptGeneratedContractsTest is Test {
         retiredList[0] = retired("R");
         GeneratedContractsBuildScriptHarness harness = new GeneratedContractsBuildScriptHarness(ROOT, dir);
         harness.declare(
-            two(anchored("a", "A"), anchored("b", "B")),
-            two(generated("A", "A_PREFIX", anchored("a", "A")), generated("B", "", anchored("b", "B"))),
-            retiredList
+            abi.encode(two(anchored("a", "A"), anchored("b", "B"))),
+            abi.encode(two(generated("A", "A_PREFIX", anchored("a", "A")), generated("B", "", anchored("b", "B")))),
+            abi.encode(retiredList)
         );
         harness.externalRegenerateLibs();
 

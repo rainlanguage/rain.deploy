@@ -134,7 +134,8 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
                 }
                 if (
                     bytes(generated[i].constantPrefix).length > 0
-                        && keccak256(bytes(generated[j].constantPrefix)) == keccak256(bytes(generated[i].constantPrefix))
+                        && keccak256(bytes(generated[j].constantPrefix))
+                            == keccak256(bytes(generated[i].constantPrefix))
                 ) {
                     revert DuplicateConstantPrefix(generated[i].constantPrefix);
                 }
@@ -192,10 +193,17 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
             revert GeneratedContractNotDeclared(generated.contractName, generated.candidate.snapshot.suite);
         }
         if (bytes(generated.candidate.unanchorableReason).length == 0) {
-            string[] memory components = vm.split(generated.candidate.snapshot.artifactPath, ":");
-            if (keccak256(bytes(components[components.length - 1])) != keccak256(bytes(generated.contractName))) {
-                revert GeneratedContractNameNotArtifact(generated.contractName, generated.candidate.snapshot.artifactPath);
-            }
+            checkGeneratedContractName(generated);
+        }
+    }
+
+    /// Refuses a generated contract whose name is not the contract its
+    /// artifact path names.
+    /// @param generated The generated contract.
+    function checkGeneratedContractName(GeneratedContract memory generated) internal pure {
+        string[] memory components = vm.split(generated.candidate.snapshot.artifactPath, ":");
+        if (keccak256(bytes(components[components.length - 1])) != keccak256(bytes(generated.contractName))) {
+            revert GeneratedContractNameNotArtifact(generated.contractName, generated.candidate.snapshot.artifactPath);
         }
     }
 
@@ -255,7 +263,13 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         string memory copyrightText = libCopyrightText();
         for (uint256 i = 0; i < retired.length; i++) {
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, dir, recordRoot(), retired[i].contractName, spdxLicenseIdentifier, copyrightText, retired[i].template
+                vm,
+                dir,
+                recordRoot(),
+                retired[i].contractName,
+                spdxLicenseIdentifier,
+                copyrightText,
+                retired[i].template
             );
         }
         for (uint256 i = 0; i < generated.length; i++) {
