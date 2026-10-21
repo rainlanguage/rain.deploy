@@ -66,9 +66,8 @@ contract Deploy is MyDeploySuites, RainDeployBroadcast {}
 
 // script/Build.sol
 contract Build is MyDeploySuites, BuildScript {
+    function generatedContracts() internal view override returns (GeneratedContract[] memory);
     function regenerateSnapshots() internal override;
-    function regenerateLibs() internal override;
-    function snapshotContractNames() internal view override returns (string[] memory);
 }
 
 // test/src/abstract/MyDeployVerify.t.sol

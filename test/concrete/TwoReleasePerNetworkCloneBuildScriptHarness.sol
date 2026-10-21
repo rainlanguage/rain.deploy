@@ -18,8 +18,8 @@ contract TwoReleasePerNetworkCloneBuildScriptHarness is PerNetworkCloneBuildScri
     CloneNetwork[] internal sSecondExtendedNetworks;
 
     /// @param root The record root to regenerate into.
-    /// @param libDir The directory the released-suites lib is written to.
-    constructor(string memory root, string memory libDir) PerNetworkCloneBuildScriptHarness(root, libDir) {}
+    /// @param libDirectory The directory the released-suites lib is written to.
+    constructor(string memory root, string memory libDirectory) PerNetworkCloneBuildScriptHarness(root, libDirectory) {}
 
     /// @inheritdoc PerNetworkCloneDeploys
     function releasedSuites()

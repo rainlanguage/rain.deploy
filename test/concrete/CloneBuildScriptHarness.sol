@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {BuildScript} from "../../src/abstract/BuildScript.sol";
+import {BuildScript, GeneratedContract} from "../../src/abstract/BuildScript.sol";
 import {RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {CloneNetwork} from "../../src/lib/LibRainDeployClone.sol";
 import {LibRainDeployMechanism} from "../../src/lib/LibRainDeployMechanism.sol";
@@ -24,10 +24,10 @@ contract CloneBuildScriptHarness is ExampleCloneDeploys, BuildScript {
     CloneNetwork[] internal sExtendedNetworks;
 
     /// @param root The record root to regenerate and cut into.
-    /// @param libDir The directory the released-suites lib is written to.
-    constructor(string memory root, string memory libDir) {
+    /// @param libDirectory The directory the released-suites lib is written to.
+    constructor(string memory root, string memory libDirectory) {
         sRoot = root;
-        sLibDir = libDir;
+        sLibDir = libDirectory;
     }
 
     /// @inheritdoc BuildScript
@@ -36,10 +36,12 @@ contract CloneBuildScriptHarness is ExampleCloneDeploys, BuildScript {
     }
 
     /// @inheritdoc BuildScript
-    function snapshotContractNames() internal pure override returns (string[] memory) {
-        string[] memory names = new string[](1);
-        names[0] = EXAMPLE_CLONE_RECORD_CONTRACT;
-        return names;
+    function generatedContracts() internal view override returns (GeneratedContract[] memory) {
+        GeneratedContract[] memory generated = new GeneratedContract[](1);
+        generated[0] = GeneratedContract({
+            contractName: EXAMPLE_CLONE_RECORD_CONTRACT, constantPrefix: "", candidate: candidateSuites()[0]
+        });
+        return generated;
     }
 
     /// @inheritdoc BuildScript
@@ -54,10 +56,8 @@ contract CloneBuildScriptHarness is ExampleCloneDeploys, BuildScript {
     }
 
     /// @inheritdoc BuildScript
-    function regenerateLibs() internal override {
-        LibRainDeploySnapshot.writeReleasedSuitesLib(
-            vm, sLibDir, recordRoot(), EXAMPLE_CLONE_RECORD_CONTRACT, candidateSuites()[0].snapshot
-        );
+    function libDir() internal view override returns (string memory) {
+        return sLibDir;
     }
 
     /// @return The rolling snapshot's path.
