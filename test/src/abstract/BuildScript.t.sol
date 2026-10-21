@@ -152,11 +152,13 @@ contract BuildScriptTest is Test {
         BuildScriptHarness harness = new BuildScriptHarness(RUN_FIXTURE_ROOT, FIXTURE_CONTRACT);
         string[] memory paths = harness.externalGeneratedPaths();
 
-        assertEq(paths.length, 3);
+        assertEq(paths.length, 5);
         assertEq(paths[0], harness.rollingPath());
         assertEq(paths[0], "test/generated-buildscript-run/candidate/Fixture.sol");
         assertEq(paths[1], "src/lib/LibFixtureReleased.sol");
         assertEq(paths[2], "src/lib/LibReleasedSuites.sol");
+        assertEq(paths[3], "foundry.toml");
+        assertEq(paths[4], ".env.example");
     }
 
     /// PROPERTY: `cutRelease()` freezes the snapshot its OWN regeneration

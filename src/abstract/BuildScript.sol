@@ -146,26 +146,29 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         }
     }
 
-    /// Every path the repo's own hooks write that `LibRainDeploySnapshot.generatedPaths`
-    /// does not name, e.g. alias libs or retired contracts' released-suites libs.
+    /// Every path the repo's own hooks write that `generatedPaths()` does not
+    /// already name, e.g. alias libs or retired contracts' released-suites libs.
     /// Defaults to none.
     /// @return The paths.
     function buildGeneratedPaths() internal view virtual returns (string[] memory) {
         return new string[](0);
     }
 
-    /// Every path `run()` must rewrite.
+    /// Every path `run()` must rewrite, `script/build.sh`'s installs of the
+    /// staged config included.
     /// @return The paths.
     function generatedPaths() internal view returns (string[] memory) {
         string[] memory base =
             LibRainDeploySnapshot.generatedPaths(recordRoot(), releaseRecordNames(), snapshotContractNames());
         string[] memory own = buildGeneratedPaths();
-        string[] memory paths = new string[](base.length + own.length);
+        string[] memory paths = new string[](base.length + 2 + own.length);
         for (uint256 i = 0; i < base.length; i++) {
             paths[i] = base[i];
         }
+        paths[base.length] = LibRainDeployConfig.CONFIG_NAME;
+        paths[base.length + 1] = LibRainDeployConfig.ENV_EXAMPLE_NAME;
         for (uint256 i = 0; i < own.length; i++) {
-            paths[base.length + i] = own[i];
+            paths[base.length + 2 + i] = own[i];
         }
         return paths;
     }

@@ -488,13 +488,15 @@ contract BuildTest is Test {
         string[] memory paths = sBuild.externalGeneratedPaths();
         string[] memory lines = LibRainDeploySnapshot.codegenDeclaration(paths);
 
-        string[9] memory expected = [
+        string[11] memory expected = [
             "rainix-codegen owns src/generated/candidate/ConfigRegistry.sol",
             "rainix-codegen owns src/generated/candidate/MigrationRegistry.sol",
             "rainix-codegen owns src/generated/candidate/TimelockController.sol",
             "rainix-codegen owns src/lib/LibConfigRegistryReleased.sol",
             "rainix-codegen owns src/lib/LibMigrationRegistryReleased.sol",
             "rainix-codegen owns src/lib/LibReleasedSuites.sol",
+            "rainix-codegen owns foundry.toml",
+            "rainix-codegen owns .env.example",
             "rainix-codegen owns src/lib/LibAddressRegistryReleased.sol",
             "rainix-codegen owns src/lib/LibConfigRegistryDeploy.sol",
             "rainix-codegen owns src/lib/LibMigrationRegistryDeploy.sol"
