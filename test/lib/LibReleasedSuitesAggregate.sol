@@ -20,21 +20,21 @@ library LibReleasedSuitesAggregate {
     /// The contracts an emitted aggregate declares, in the order it imports
     /// them.
     ///
-    /// Split on the import statement's own opening rather than parsed, because
-    /// the text is generated: `aggregateImportBlock` emits exactly
-    /// `import {Lib<Contract>Released} from ...` on a line of its own, one per
-    /// contract, and nothing else in the file opens a line that way. The
-    /// `DeploySuite` import does not match — it is not a `Lib` — and the
-    /// library block below the imports never starts a line with `import`.
+    /// Split on the sibling-import close rather than parsed, because the text
+    /// is generated: `aggregateImportBlock` emits exactly
+    /// `import {Lib<Contract>Released} from "./...` on a line of its own, one
+    /// per contract, and no other import in the file is a sibling `Released`
+    /// lib. The name is what follows the last `import {Lib` before each close.
     /// @param vm The Vm instance for string operations.
     /// @param source An emitted aggregate.
     /// @return The contract names, in the order imported.
     function declaredContractNames(Vm vm, string memory source) internal pure returns (string[] memory) {
-        string[] memory chunks = vm.split(source, "\nimport {Lib");
+        string[] memory chunks = vm.split(source, "Released} from \"./");
 
         string[] memory names = new string[](chunks.length - 1);
-        for (uint256 i = 1; i < chunks.length; i++) {
-            names[i - 1] = vm.split(chunks[i], "Released}")[0];
+        for (uint256 i = 0; i < names.length; i++) {
+            string[] memory opens = vm.split(chunks[i], "\nimport {Lib");
+            names[i] = opens[opens.length - 1];
         }
         return names;
     }
