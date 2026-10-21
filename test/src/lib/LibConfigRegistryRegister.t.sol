@@ -676,6 +676,7 @@ contract LibConfigRegistryRegisterTest is Test {
         assumeNotPrecompile(sender);
         assumeNotForgeAddress(sender);
         vm.assume(sender != AUTHORITY);
+        vm.assume(sender != address(0));
         vm.assume(sender != address(this));
         IConfigRegistryV1 registry = deployRegistry();
         vm.prank(AUTHORITY);
@@ -701,6 +702,7 @@ contract LibConfigRegistryRegisterTest is Test {
         assumeNotPrecompile(sender);
         assumeNotForgeAddress(sender);
         vm.assume(sender != AUTHORITY);
+        vm.assume(sender != address(0));
         vm.assume(sender != address(this));
         IConfigRegistryV1 registry = deployRegistry();
         bytes32 name = keccak256("a");
@@ -718,6 +720,19 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.expectRevert(refusal);
         this.externalRegisterOnSelectedChain(base(), sender, AUTHORITY, name, value);
         assertEq(vm.getNonce(sender), nonce);
+    }
+
+    /// The zero address as the sender is refused on the selected chain by the
+    /// registry's own `ZeroDelegate`, which `approvedV1` raises before any
+    /// approval is read, and nothing is bound.
+    function testRegisterRefusesTheZeroSender() external {
+        IConfigRegistryV1 registry = deployRegistry();
+        bytes32 name = keccak256("a");
+        vm.warp(1);
+        vm.expectRevert(IConfigRegistryV1.ZeroDelegate.selector);
+        this.externalRegisterOnSelectedChain(base(), address(0), AUTHORITY, name, abi.encode(address(1)));
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, AUTHORITY, name));
+        registry.getV1(AUTHORITY, name);
     }
 
     /// A name bound to another value is re-bound.

@@ -100,8 +100,9 @@ pragma solidity ^0.8.25;
 /// contracts.
 ///
 /// A compromised authority or delegate therefore cannot touch anything
-/// deployed, nor any other authority's bindings. It can point one of its own names at a value it
-/// chose, so that a deployment made after the compromise snapshots that value.
+/// deployed, nor any other authority's bindings. It can point one of its own
+/// names at a value it chose, so that a deployment made after the compromise
+/// snapshots that value.
 /// That is caught by verifying a deployment after deploying it and before
 /// anything depends on it: the deployed contract has already snapshotted the
 /// value, so checking it is checking settled state. A poisoned deploy is a

@@ -153,9 +153,15 @@ contract RegisterConfigTest is Test {
         assertEq(bound, rotateValue);
         assertEq(registeredAt, block.timestamp);
 
-        // Run as a delegate: another authority approves the script, which
-        // then binds under that authority and not under itself, and the
-        // confirmed check under that authority passes.
+        runAsDelegate(script, name);
+    }
+
+    /// Runs as a delegate: another authority approves the script, which then
+    /// binds under that authority and not under itself, and the confirmed
+    /// check under that authority passes.
+    /// @param script The script.
+    /// @param name The test's base name.
+    function runAsDelegate(LocalRegisterConfig script, string memory name) internal {
         address delegator = address(0xD0D0);
         string memory delegatedName = string.concat(name, "-delegated");
         bytes memory delegatedValue = abi.encode(address(6));

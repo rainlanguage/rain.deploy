@@ -13,9 +13,9 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// @title LibConfigRegistryRegister
 /// @notice An authority's side of `ConfigRegistry`: binds one name to one
 /// ABI-encoded value under that authority on every network it is given, signed
-/// by the authority or a delegate it approved, and reads the binding back. `script/RegisterConfig.sol`
-/// is the entry point and says how it is run; everything with behaviour is
-/// here.
+/// by the authority or a delegate it approved, and reads the binding back.
+/// `script/RegisterConfig.sol` is the entry point and says how it is run;
+/// everything with behaviour is here.
 ///
 /// ## The value
 ///
