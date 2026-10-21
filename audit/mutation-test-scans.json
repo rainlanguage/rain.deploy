@@ -1498,5 +1498,34 @@
     "notes": [
       "N01-N10 against the ConfigRegistry, register library and RegisterConfig suites with Build.sol regenerated per probe (149 tests): 10/10 killed, by the name-isolation tests added with the change (testApprovalCoversOnlyItsName, testRevokeIsPerName, testSenderApprovedForAnotherName) and the existing delegate tests."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T16:20:00Z",
+    "commit": "ff20bf92e0727e5296a95d396ce088e836c1646e",
+    "testsAfterCommit": "ff20bf92e0727e5296a95d396ce088e836c1646e",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 409,
+    "scope": "PR #322 round 13: the shared delegation surface — src/abstract/RegistryDelegates.sol checkDelegateKey, approveWithin, revokeWithin, approvedWithin, checkCallerWritesUnder; src/concrete/MigrationRegistry.sol approveV3, approvedV3 and checkDelegate key checks; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 18,
+      "behavioursProbed": 18,
+      "killedByExistingTests": 18,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "A01-A15 on RegistryDelegates and M07-M09 on MigrationRegistry against the ConfigRegistry, MigrationRegistry, register library and RegisterConfig suites with Build.sol regenerated per probe (430 tests): 18/18 killed.",
+      "The later rename to IConfigRegistryV2 at c47018802ab97978eaee7a2ac4f6ab5a96bbf062 changes names and selectors only; the pinned selector test holds the new selector to cast sig."
+    ]
   }
 ]
