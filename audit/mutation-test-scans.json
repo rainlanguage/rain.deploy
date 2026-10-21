@@ -1156,5 +1156,36 @@
       "Re-probe at bbcb0f1aa4b78638108f66c791cb044ea5fec011, 980 green at baseline: 19 mutants, 18 KILLED (V02, A01, A03-A06, H01-H12). A02 (text before a bare 0x accepted) SURVIVED and is KILLED at 08d4d58fe8f6c85a03afa29ff7534cedefce9d09 by testDeclarationValueOutsideTheWritersShapeIsUnreadable with x0x... and (0x...) values, 980 green at baseline.",
       "Adversarial candidate, not filed: a licence or copyright text that itself contains its SPDX tag is written by the writer (filePrefix only requires a non-empty single line) but refused by the reader, since the tag is stripped everywhere and the line no longer matches. Such a header carries the tag twice on one line, which REUSE would read ambiguously; left for triage."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T01:26:00Z",
+    "commit": "e94188a08be847e0f19544cf3efe8c34e4bd1b0a",
+    "testsAfterCommit": "e94188a08be847e0f19544cf3efe8c34e4bd1b0a",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 340,
+    "scope": "pr:323, its code changed after the re-run audit (ff2e9ce): the per-network address comment of a beacon proxy record (S13, P04 retargeted onto the local beaconProxy), mechanismName (P03, G04, G05), deployStep's clone arm and its UnknownDeployMechanism guard (G01-G03), isPerNetworkMechanism and its released-lib callers (N01-N05)",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 4,
+      "behaviours": 13,
+      "behavioursProbed": 13,
+      "killedByExistingTests": 11,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 2,
+      "notExecutedBySuite": 0,
+      "unobservableSideEffects": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pass at e94188a08be847e0f19544cf3efe8c34e4bd1b0a with mutation-probe over the offline suite (forge test minus the RPC-dependent tests), 1309 green at baseline: 13 mutants, 11 KILLED, all by tests present before the probe.",
+      "Survivors: G03 (deployStep's final revert UnknownDeployMechanism removed) and G05 (mechanismName's final revert replaced by an empty return). Both guards are reached only by a DeployMechanism member added to the enum without an arm; every current member has one, and a value outside the enum panics (0x21) when read, before either guard. No test can drive them at this commit.",
+      "Earlier rounds on this PR (M01-M34, B01-B13, S01-S14, C01-C03, V01-V05, P01-P02) were probed before this record and are summarised in the PR body; they have no scan record of their own."
+    ]
   }
 ]
