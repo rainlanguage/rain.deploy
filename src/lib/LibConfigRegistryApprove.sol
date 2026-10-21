@@ -354,8 +354,10 @@ library LibConfigRegistryApprove {
         address delegate,
         bool approve
     ) internal {
-        // Refused before anything is forked.
+        // Refused before anything is forked; the returns are not needed here.
+        // slither-disable-next-line unused-return
         LibConfigRegistryRegister.nameHash(name);
+        // slither-disable-next-line unused-return
         LibConfigRegistryRegister.selectNetworks(selected, declared);
         checkApprovalOnForks(
             vm, selected, declared, LibRainDeploy.createForks(vm, selected), authority, name, delegate, approve
