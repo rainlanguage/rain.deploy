@@ -4,8 +4,8 @@ pragma solidity ^0.8.25;
 
 import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
-import {ICloneableFactoryV4} from "rain-factory-pr271-0477c05/src/interface/deprecated/ICloneableFactoryV4.sol";
-import {ICloneableFactoryV5} from "rain-factory-pr271-0477c05/src/interface/ICloneableFactoryV5.sol";
+import {ICloneableFactoryV4} from "rain-factory-pr271-976cd62/src/interface/deprecated/ICloneableFactoryV4.sol";
+import {ICloneableFactoryV5} from "rain-factory-pr271-976cd62/src/interface/ICloneableFactoryV5.sol";
 
 import {DeployCandidate, DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy, NetworkDeploys, SupportedNetwork} from "./LibRainDeploy.sol";
@@ -20,12 +20,13 @@ import {
 } from "./LibRainDeployClone.sol";
 import {
     BEACON_PROXY_ARTIFACT_PATH,
+    BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE,
+    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
+    BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE,
     BEACON_PROXY_UNANCHORABLE_REASON,
     BeaconProxyDeploy,
     LibRainDeployBeaconProxy
 } from "./LibRainDeployBeaconProxy.sol";
-import {BEACON_PROXY_STAND_IN_IMPLEMENTATION, BeaconProxyStandInBeacon} from "../concrete/BeaconProxyStandInBeacon.sol";
-import {BeaconProxyStandInImplementation} from "../concrete/BeaconProxyStandInImplementation.sol";
 
 /// Thrown when the state snapshot taken around a local deploy could not be
 /// reverted. A local deploy plants code at the derived address, clears its
@@ -68,12 +69,12 @@ error UnexpectedMechanismData(string suite);
 /// @param storedDeployedAddress The address it carries.
 error UnexpectedStoredDeployedAddress(string suite, address storedDeployedAddress);
 
-/// Thrown when a clone declaration sets `initDataPerNetwork` and also declares `data` for every
+/// Thrown when a clone or beacon proxy declaration sets `initDataPerNetwork` and also declares `data` for every
 /// network.
 /// @param suite The declaration's suite key.
 error CloneDataAmbiguous(string suite);
 
-/// Thrown when a suite that is not a per-network clone is given extended networks.
+/// Thrown when a suite that is not a per-network clone or beacon proxy is given extended networks.
 /// @param suite The suite's key.
 error ExtendedNetworksUnexpected(string suite);
 
@@ -297,7 +298,7 @@ library LibRainDeployMechanism {
         return chainIds;
     }
 
-    /// A per-network clone suite with an entry for every network in play its candidate has one for.
+    /// A per-network clone or beacon proxy suite with an entry for every network in play its candidate has one for.
     /// @param suite The suite.
     /// @param candidate The candidate whose init data the suite's unrecorded networks take.
     /// @param chainIds The chain ids in play; a candidate network on any other chain is not added.
@@ -468,9 +469,9 @@ library LibRainDeployMechanism {
         return false;
     }
 
-    /// `deployLocally` as the deploy to the network of `block.chainid` runs it: a per-network clone deploys only
-    /// that network's clone, so no other network's init data runs under its chain id.
-    /// A per-network clone with no entry for `block.chainid` is refused with `CloneNetworkUndeclared`.
+    /// `deployLocally` as the deploy to the network of `block.chainid` runs it: a per-network clone or beacon proxy
+    /// suite deploys only that network's target, so no other network's init data runs under its chain id.
+    /// A per-network suite with no entry for `block.chainid` is refused with `CloneNetworkUndeclared`.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy. Its `mechanismData` is restored before returning.
     function deployLocallyOnChain(Vm vm, DeploySuite memory suite) internal {
@@ -500,9 +501,9 @@ library LibRainDeployMechanism {
     /// The clone MUST NOT have been deployed earlier in the same EVM without its state reverted since: a `Create` that
     /// collides with an account already there is recorded as creating it, so reads of that account are exempt.
     /// Each clone is deployed under a state-diff recording, which ends any recording the caller started.
-    /// For a beacon proxy the beacon is etched with `BeaconProxyStandInBeacon` and
-    /// `BEACON_PROXY_STAND_IN_IMPLEMENTATION` with `BeaconProxyStandInImplementation` first, so the `initialize` that
-    /// runs is the stand-in's, and both stay etched after this returns.
+    /// For a beacon proxy the beacon is etched with `BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE` and
+    /// `BEACON_PROXY_STAND_IN_IMPLEMENTATION` with `BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE` first, so the
+    /// `initialize` that runs is the stand-in's, and both stay etched after this returns.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy.
     /// @return Where the mechanism deployed it, in the suite's address order — the derived
@@ -580,8 +581,8 @@ library LibRainDeployMechanism {
     /// @param vm The Vm instance to etch with.
     /// @param beacon The beacon the suite's beacon proxies share.
     function etchBeaconProxyStandIns(Vm vm, address beacon) internal {
-        vm.etch(beacon, type(BeaconProxyStandInBeacon).runtimeCode);
-        vm.etch(BEACON_PROXY_STAND_IN_IMPLEMENTATION, type(BeaconProxyStandInImplementation).runtimeCode);
+        vm.etch(beacon, BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE);
+        vm.etch(BEACON_PROXY_STAND_IN_IMPLEMENTATION, BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE);
     }
 
     /// Deploys one clone target through its factory, under the storage-read check `deployLocally` documents.

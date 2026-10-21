@@ -7,24 +7,26 @@ import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/Upgr
 import {
     ICLONEABLE_FACTORY_V5_BEACON_PROXY_CREATION_CODE_HASH,
     ICloneableFactoryV5
-} from "rain-factory-pr271-0477c05/src/interface/ICloneableFactoryV5.sol";
-import {BEACON_PROXY_CREATION_CODE} from "rain-factory-pr271-0477c05/src/generated/BeaconProxy.sol";
+} from "rain-factory-pr271-976cd62/src/interface/ICloneableFactoryV5.sol";
+import {BEACON_PROXY_CREATION_CODE} from "rain-factory-pr271-976cd62/src/generated/BeaconProxy.sol";
+import {DelegatedBeacon} from "rain-factory-pr271-976cd62/src/lib/LibICloneableFactoryV5.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {CloneTarget} from "../../../src/lib/LibRainDeployClone.sol";
 import {
     BEACON_PROXY_ARTIFACT_PATH,
     BEACON_PROXY_BEACON_IMMUTABLE_OFFSET,
     BEACON_PROXY_RUNTIME_OFFSET,
+    BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE,
+    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
+    BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE,
     LibRainDeployBeaconProxy
 } from "../../../src/lib/LibRainDeployBeaconProxy.sol";
-import {
-    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
-    BeaconProxyStandInBeacon
-} from "../../../src/concrete/BeaconProxyStandInBeacon.sol";
-import {BeaconProxyStandInImplementation} from "../../../src/concrete/BeaconProxyStandInImplementation.sol";
+import {BeaconProxyStandInBeacon} from "../../concrete/BeaconProxyStandInBeacon.sol";
+import {BeaconProxyStandInImplementation} from "../../concrete/BeaconProxyStandInImplementation.sol";
 import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
 import {MockCloneableV2} from "../../concrete/MockCloneableV2.sol";
 import {MockDirtyOwnerCloneable} from "../../concrete/MockDirtyOwnerCloneable.sol";
+import {MockLongOwnerCloneable} from "../../concrete/MockLongOwnerCloneable.sol";
 import {MockMisansweringOwnerCloneable} from "../../concrete/MockMisansweringOwnerCloneable.sol";
 import {MockOriginOwnedCloneable} from "../../concrete/MockOriginOwnedCloneable.sol";
 
@@ -108,8 +110,8 @@ contract LibRainDeployBeaconProxyTest is Test {
         assumeNotForgeAddress(beacon);
         vm.assume(uint160(beacon) > 0xffff && beacon.code.length == 0);
         vm.assume(beacon != BEACON_PROXY_STAND_IN_IMPLEMENTATION);
-        vm.etch(beacon, type(BeaconProxyStandInBeacon).runtimeCode);
-        vm.etch(BEACON_PROXY_STAND_IN_IMPLEMENTATION, type(BeaconProxyStandInImplementation).runtimeCode);
+        vm.etch(beacon, BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE);
+        vm.etch(BEACON_PROXY_STAND_IN_IMPLEMENTATION, BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE);
 
         address proxy = create(LibRainDeployBeaconProxy.beaconProxyCreationCode(beacon));
         assertEq(proxy.code, LibRainDeployBeaconProxy.beaconProxyRuntimeCode(beacon));
@@ -279,5 +281,69 @@ contract LibRainDeployBeaconProxyTest is Test {
             )
         );
         this.externalBeaconProxyDeployStep(LibRainDeploy.ARBITRUM_ONE, deployer, abi.encode(target));
+    }
+
+    /// A proxy whose `owner()` answers more than a word, the deploy key in its first, is refused.
+    function testBeaconProxyDeployStepRefusesTheDeployKeyInALongerAnswer(bytes32 trailing) external {
+        address deployer = address(0xD3910E8);
+        MockBeaconProxyFactory factory = new MockBeaconProxyFactory();
+        address beacon = address(new UpgradeableBeacon(address(new MockLongOwnerCloneable()), address(this)));
+        CloneTarget memory target = CloneTarget({
+            factory: address(factory), implementation: beacon, data: abi.encode(trailing), salt: TEST_SALT
+        });
+        address expected = LibRainDeployBeaconProxy.beaconProxyDeployedAddress(target);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeployBeaconProxy.BeaconProxySeatsDeployKey.selector, LibRainDeploy.ARBITRUM_ONE, expected
+            )
+        );
+        this.externalBeaconProxyDeployStep(LibRainDeploy.ARBITRUM_ONE, deployer, abi.encode(target));
+    }
+
+    /// The step refuses an EIP-7702 delegated beacon with the factory's `DelegatedBeacon`, deploying nothing.
+    function testBeaconProxyDeployStepRefusesADelegatedBeacon(address delegate) external {
+        MockBeaconProxyFactory factory = new MockBeaconProxyFactory();
+        address beacon = address(0xBEAC0);
+        vm.etch(beacon, abi.encodePacked(hex"ef0100", delegate));
+        CloneTarget memory target =
+            CloneTarget({factory: address(factory), implementation: beacon, data: TEST_DATA, salt: TEST_SALT});
+        address expected = LibRainDeployBeaconProxy.beaconProxyDeployedAddress(target);
+        vm.expectRevert(abi.encodeWithSelector(DelegatedBeacon.selector));
+        this.externalBeaconProxyDeployStep(LibRainDeploy.ARBITRUM_ONE, address(0xD3910E8), abi.encode(target));
+        assertEq(expected.code.length, 0);
+    }
+
+    /// The stand-in beacon's runtime constant is its test-only source compiled under this repo's settings.
+    function testStandInBeaconRuntimeCodeIsItsSource() external pure {
+        assertEq(BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE, type(BeaconProxyStandInBeacon).runtimeCode);
+    }
+
+    /// The stand-in implementation's runtime constant is its test-only source compiled under this repo's settings.
+    function testStandInImplementationRuntimeCodeIsItsSource() external pure {
+        assertEq(BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE, type(BeaconProxyStandInImplementation).runtimeCode);
+    }
+
+    /// The etched stand-in beacon serves the stand-in implementation.
+    function testStandInBeaconServesTheStandInImplementation() external {
+        address beacon = address(0xBEAC0);
+        vm.etch(beacon, BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE);
+        assertEq(UpgradeableBeacon(beacon).implementation(), BEACON_PROXY_STAND_IN_IMPLEMENTATION);
+    }
+
+    /// The stand-in implementation's address is the hash of its tag.
+    function testStandInImplementationAddressDerivation() external pure {
+        assertEq(
+            BEACON_PROXY_STAND_IN_IMPLEMENTATION,
+            address(uint160(uint256(keccak256("rain.deploy.beaconproxy.standin.implementation"))))
+        );
+    }
+
+    /// The etched stand-in implementation initializes to the `ICloneableV2` success value with any data.
+    function testStandInImplementationInitializes(bytes memory data) external {
+        vm.etch(BEACON_PROXY_STAND_IN_IMPLEMENTATION, BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE);
+        assertEq(
+            BeaconProxyStandInImplementation(BEACON_PROXY_STAND_IN_IMPLEMENTATION).initialize(data),
+            keccak256("ICloneableV2.initialize")
+        );
     }
 }

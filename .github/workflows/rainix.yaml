@@ -23,3 +23,15 @@ jobs:
           cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
       - uses: rainlanguage/rainix/.github/actions/rust-cache@main
       - run: nix develop github:rainlanguage/rainix/${{ env.RAINIX_SHA }}#rust-shell -c bash -c 'cd tools/hyperliquid-big-blocks && cargo fmt --all -- --check && cargo clippy --all-targets --all-features --locked -- -D warnings -D clippy::all && cargo test --locked'
+  # Every abstract a consumer inherits, and everything it imports, floats: a
+  # consumer on a later 0.8.x compiles them under its own solc. A `=`-pinned
+  # file reachable from `src/abstract/` fails this build: no solc matches its
+  # version requirement under `--use`.
+  abstracts-float:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: rainlanguage/rainix/.github/actions/nix-cachix-setup@main
+        with:
+          cachix-auth-token: ${{ secrets.CACHIX_AUTH_TOKEN }}
+      - run: nix develop -c forge soldeer install
+      - run: nix develop -c forge build --use 0.8.26 --out float-out --cache-path float-cache src/abstract

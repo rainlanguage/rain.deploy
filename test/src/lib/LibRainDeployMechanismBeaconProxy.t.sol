@@ -15,14 +15,13 @@ import {
 } from "../../../src/lib/LibRainDeployClone.sol";
 import {
     BEACON_PROXY_ARTIFACT_PATH,
+    BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE,
+    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
+    BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE,
     BEACON_PROXY_UNANCHORABLE_REASON,
     BeaconProxyDeploy,
     LibRainDeployBeaconProxy
 } from "../../../src/lib/LibRainDeployBeaconProxy.sol";
-import {
-    BEACON_PROXY_STAND_IN_IMPLEMENTATION,
-    BeaconProxyStandInBeacon
-} from "../../../src/concrete/BeaconProxyStandInBeacon.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {
     CloneCreationCodeMismatch,
@@ -214,7 +213,8 @@ contract LibRainDeployMechanismBeaconProxyTest is Test {
         assertEq(deployed[0], suite.storedDeployedAddress);
         assertEq(deployed[0].code, suite.storedRuntimeCode);
         address beacon = abi.decode(suite.mechanismData, (CloneTarget)).implementation;
-        assertEq(beacon.code, type(BeaconProxyStandInBeacon).runtimeCode);
+        assertEq(beacon.code, BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE);
+        assertEq(BEACON_PROXY_STAND_IN_IMPLEMENTATION.code, BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE);
         assertEq(UpgradeableBeacon(beacon).implementation(), BEACON_PROXY_STAND_IN_IMPLEMENTATION);
     }
 

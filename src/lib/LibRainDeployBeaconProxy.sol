@@ -5,9 +5,9 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
-import {ICloneableFactoryV5} from "rain-factory-pr271-0477c05/src/interface/ICloneableFactoryV5.sol";
-import {BEACON_PROXY_CREATION_CODE} from "rain-factory-pr271-0477c05/src/generated/BeaconProxy.sol";
-import {LibICloneableFactoryV5} from "rain-factory-pr271-0477c05/src/lib/LibICloneableFactoryV5.sol";
+import {ICloneableFactoryV5} from "rain-factory-pr271-976cd62/src/interface/ICloneableFactoryV5.sol";
+import {BEACON_PROXY_CREATION_CODE} from "rain-factory-pr271-976cd62/src/generated/BeaconProxy.sol";
+import {LibICloneableFactoryV5} from "rain-factory-pr271-976cd62/src/lib/LibICloneableFactoryV5.sol";
 
 import {DeployDependency} from "./LibRainDeploy.sol";
 import {CloneTarget} from "./LibRainDeployClone.sol";
@@ -30,7 +30,28 @@ string constant BEACON_PROXY_UNANCHORABLE_REASON = "An OpenZeppelin BeaconProxy,
     "serves, are the anchored contracts, and because the beacon address is embedded in the proxy's runtime the "
     "recorded code hash is what says which beacon this proxy reads.";
 
+/// @dev The implementation the stand-in beacon serves during a local deploy.
+address constant BEACON_PROXY_STAND_IN_IMPLEMENTATION =
+    address(uint160(uint256(keccak256("rain.deploy.beaconproxy.standin.implementation"))));
+
+/// @dev Etched over a beacon proxy's beacon during a local deploy: its `implementation()` returns
+/// `BEACON_PROXY_STAND_IN_IMPLEMENTATION`. Runtime code rather than a compiled concrete, so no pinned
+/// pragma reaches the abstracts that import this library; a test holds it to the test-only
+/// `BeaconProxyStandInBeacon` compiled under this repo's settings.
+bytes constant BEACON_PROXY_STAND_IN_BEACON_RUNTIME_CODE =
+    hex"6080604052348015600e575f80fd5b50600436106026575f3560e01c80635c60da1b14602a575b5f80fd5b604080517335bde2e333e6569b296b58650da50650dbcaa30b815290519081900360200190f3";
+
+/// @dev Etched at `BEACON_PROXY_STAND_IN_IMPLEMENTATION` during a local deploy: its `initialize(bytes)`
+/// returns the `ICloneableV2` success value for any data and reads no storage. A test holds it to the
+/// test-only `BeaconProxyStandInImplementation`.
+bytes constant BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE =
+    hex"6080604052348015600e575f80fd5b50600436106026575f3560e01c8063439fab9114602a575b5f80fd5b605c6035366004606e565b7fe0e57eda3f08f2a93bbe980d3df7f9c315eac41181f58b865a13d917fe769fc392915050565b60405190815260200160405180910390f35b5f8060208385031215607e575f80fd5b823567ffffffffffffffff808211156094575f80fd5b818501915085601f83011260a6575f80fd5b81358181111560b3575f80fd5b86602082850101111560c3575f80fd5b6020929092019691955090935050505056";
+
 /// One contract a repo deploys as a beacon proxy, as a beacon proxy repo declares it.
+/// The proxy's address does not commit to the implementation that runs `initialize(data)`: anyone may deploy it
+/// while the beacon serves any implementation, and a broadcast that finds code there skips it unchecked. Every
+/// implementation the beacon serves while the proxy is undeployed MUST give the same `initialize(data)` result, or
+/// revert, as `ICloneableFactoryV5` requires.
 struct BeaconProxyDeploy {
     /// The suite key, held to the key alphabet and to uniqueness like any other.
     string suite;
@@ -65,8 +86,9 @@ library LibRainDeployBeaconProxy {
 
     /// Thrown when a beacon proxy deployed on the fork answers `owner()` with a first word whose
     /// low 160 bits are the deploy key.
-    /// Only `owner()` is read: roles, `AccessControl` admins and pending owners the implementation's
-    /// `initialize` grants are not, so assert those yourself.
+    /// Only `owner()` is read: roles, `AccessControl` admins, pending owners and admin slots the implementation's
+    /// `initialize` grants to `tx.origin` are not, and the deploy key keeps them. The implementation MUST NOT grant
+    /// the origin any authority, or the declaring repo's tests MUST assert it does not.
     /// @param network The network.
     /// @param proxy The proxy.
     error BeaconProxySeatsDeployKey(string network, address proxy);

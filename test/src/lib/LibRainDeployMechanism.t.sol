@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {stdError} from "forge-std-1.17.0/src/StdError.sol";
 import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
-import {ICloneableFactoryV4} from "rain-factory-pr271-0477c05/src/interface/deprecated/ICloneableFactoryV4.sol";
+import {ICloneableFactoryV4} from "rain-factory-pr271-976cd62/src/interface/deprecated/ICloneableFactoryV4.sol";
 import {DeployCandidate, DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     CLONE_ARTIFACT_PATH,

@@ -14,9 +14,9 @@ integrity = "fa706c8a7caf3426c90f75e6aafa3224b0a6c899b490800cf6944e4ec42f9344"
 
 [[dependencies]]
 name = "rain-factory"
-version = "pr271-0477c05"
+version = "pr271-976cd62"
 git = "https://github.com/rainlanguage/rain.factory.git"
-rev = "0477c05a53d546ac83de3cef9c0cc3e2423ac909"
+rev = "976cd6216ad1ba15c270a266d64a654259a5b3f1"
 
 [[dependencies]]
 name = "rain-lib-memkv"

@@ -2,11 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {ICLONEABLE_V2_SUCCESS} from "rain-factory-pr271-0477c05/src/interface/ICloneableV2.sol";
+import {ICLONEABLE_V2_SUCCESS} from "rain-factory-pr271-976cd62/src/interface/ICloneableV2.sol";
 
 /// @title BeaconProxyStandInImplementation
-/// @notice What the stand-in beacon serves during a local deploy: initializes to success with any
-/// data and reads no storage.
+/// @notice The source `BEACON_PROXY_STAND_IN_IMPLEMENTATION_RUNTIME_CODE` is compiled from.
 contract BeaconProxyStandInImplementation {
     /// The init data is unnamed: any data initializes.
     /// @return The `ICloneableV2` success value.

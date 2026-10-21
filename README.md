@@ -378,9 +378,12 @@ with `FrozenSnapshotBeaconProxyMarkerAmbiguous`.
 
 The local derivation etches the dependencies, then replaces the beacon with a
 stand-in whose implementation initializes to success with any data, and calls
-the real factory. The proxy's code does not depend on what the beacon serves, so
-the derived code is the chain's. A suite whose creation code is not the beacon
-proxy's over its beacon is refused with `CloneCreationCodeMismatch`.
+the real factory. The two stand-ins are etched from runtime code constants in
+`LibRainDeployBeaconProxy`, never compiled from a concrete here, so no
+`=`-pinned pragma reaches an abstract a consumer inherits. The proxy's code does
+not depend on what the beacon serves, so the derived code is the chain's. A
+suite whose creation code is not the beacon proxy's over its beacon is refused
+with `CloneCreationCodeMismatch`.
 
 The broadcast step asks the factory where it would put the proxy and refuses
 `BeaconProxyFactoryPredictionMismatch` if it disagrees with the derivation. It
@@ -388,8 +391,12 @@ then calls `beaconProxyDeterministicOpenSalt` and refuses
 `BeaconProxySeatsDeployKey` if the proxy answers `owner()` with the deploy key.
 That is the beacon proxy's only real seat check: the pre-fork
 `SuiteSeatsDeployKey` one reaches the stand-in, which has no `owner()`. It reads
-`owner()` only, so roles and `AccessControl` admins the implementation's
-`initialize` grants are not read.
+`owner()` only. Roles, `AccessControl` admins, pending owners and admin slots
+the implementation's `initialize` grants to `tx.origin` are not read, and the
+deploy key keeps any of them on every network it broadcasts to. Keeping that
+authority off the deploy key is the declaring repo's job: its implementation's
+`initialize` MUST NOT grant the origin anything, or its own tests MUST assert
+the grant away.
 
 The chain group checks the proxy's code at its address and its dependencies as
 for a clone. The code says nothing about what the beacon serves, so on every
@@ -397,6 +404,16 @@ network the proxy is required on, `beacons()` MUST declare its beacon, refused
 before any fork with `BeaconProxyBeaconUndeclared`. The beacon's own checks then
 hold its implementation and owner. The broadcast does not yet check the beacon
 before deploying a proxy over it.
+
+A proxy's address commits to its factory, beacon, salt and init data, not to the
+implementation that runs `initialize(data)`. Anyone can deploy it, at any time,
+and its initial state is whatever the beacon served then. `ICloneableFactoryV5`
+puts this on the beacon owner: every implementation the beacon serves while the
+proxy is undeployed MUST give the same `initialize(data)` result, or revert.
+Nothing here checks that. A broadcast that finds code at the proxy's address
+skips it, so neither the per-network seat check nor anything else reads how that
+proxy was initialized, and the chain group checks only its code, its
+dependencies and the beacon's current state.
 
 ### Upgradeable beacons
 
@@ -1254,9 +1271,9 @@ forge soldeer install rain-deploy~<version>
 ```
 
 **You also need `forge-std` 1.17.0, `rain-sol-codegen` 0.1.39 and `rain-factory`
-at git rev `0477c05` (rain.factory#271, which adds `ICloneableFactoryV5`)**,
+at git rev `976cd62` (rain.factory#271, which adds `ICloneableFactoryV5`)**,
 remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
-`rain-factory-pr271-0477c05/`. The published package ships `src/`, `script/` and
+`rain-factory-pr271-976cd62/`. The published package ships `src/`, `script/` and
 the licence and README files — no `test/`, no `foundry.toml`, no
 `remappings.txt`, no `soldeer.lock`, no `dependencies/` — so a consumer resolves
 all three itself. The requirement is transitive rather than incidental: the
@@ -1273,7 +1290,7 @@ beneath both, `LibICloneableFactoryV5` and the generated
 [dependencies]
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
-rain-factory = { version = "pr271-0477c05", git = "https://github.com/rainlanguage/rain.factory.git", rev = "0477c05a53d546ac83de3cef9c0cc3e2423ac909" }
+rain-factory = { version = "pr271-976cd62", git = "https://github.com/rainlanguage/rain.factory.git", rev = "976cd6216ad1ba15c270a266d64a654259a5b3f1" }
 rain-deploy = "<version>"
 ```
 
@@ -1364,7 +1381,7 @@ it. In order:
 1. Add `mechanism: DeployMechanism.Zoltu, mechanismData: ""` to every entry of
    the generated released libs, and import `DeployMechanism` beside
    `DeploySuite`.
-2. Add `rain-factory` at rev `0477c05` and its remapping, as above.
+2. Add `rain-factory` at rev `976cd62` and its remapping, as above.
 3. Make `view` every function of yours that calls `checkedCandidateSuites`,
    `allSuites`, `suiteNames`, `suiteByName` or `candidateSuites`, which are
    `view` now. A `pure` override of `candidateSuites` still compiles.
