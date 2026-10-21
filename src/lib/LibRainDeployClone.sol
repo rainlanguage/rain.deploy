@@ -89,20 +89,20 @@ library LibRainDeployClone {
     /// @param predicted The address the factory says it would deploy to.
     error CloneFactoryPredictionMismatch(string network, address factory, address expected, address predicted);
 
-    /// Thrown when a clone's factory or implementation is not among the dependencies declared
+    /// Thrown when a clone or beacon proxy's factory or implementation is not among the dependencies declared
     /// beside it.
     /// @param dependency The factory or implementation address no declared dependency names.
     error CloneDependencyUndeclared(address dependency);
 
-    /// Thrown when a per-network clone names no network at all.
+    /// Thrown when a per-network clone or beacon proxy names no network at all.
     error NoCloneNetworks();
 
-    /// Thrown when a per-network clone names one chain id twice, so which init data that network
+    /// Thrown when a per-network clone or beacon proxy names one chain id twice, so which init data that network
     /// gets would depend on which entry a reader happened to stop at.
     /// @param chainId The chain id named more than once.
     error DuplicateCloneNetwork(uint256 chainId);
 
-    /// Thrown when a per-network clone is asked for a network it has no entry for.
+    /// Thrown when a per-network clone or beacon proxy is asked for a network it has no entry for.
     /// @param chainId The chain id with no entry.
     error CloneNetworkUndeclared(uint256 chainId);
 
@@ -155,8 +155,9 @@ library LibRainDeployClone {
         );
     }
 
-    /// Requires the clone's factory AND implementation to be among the declared dependencies.
-    /// @param target The clone.
+    /// Requires the clone or beacon proxy's factory AND implementation to be among the declared dependencies. For a
+    /// beacon proxy the implementation is its beacon.
+    /// @param target The clone or beacon proxy.
     /// @param dependencies The dependencies declared beside it.
     function checkCloneDependencies(CloneTarget memory target, DeployDependency[] memory dependencies) internal pure {
         bool factoryDeclared = false;
@@ -177,9 +178,9 @@ library LibRainDeployClone {
         }
     }
 
-    /// Requires a per-network clone to name at least one network, no chain id twice, and its
-    /// factory and implementation among the declared dependencies.
-    /// @param clones The per-network clone.
+    /// Requires a per-network clone or beacon proxy to name at least one network, no chain id twice, and its
+    /// factory and implementation (for a beacon proxy, its beacon) among the declared dependencies.
+    /// @param clones The per-network clone or beacon proxy.
     /// @param dependencies The dependencies declared beside it.
     function checkCloneNetworks(CloneNetworks memory clones, DeployDependency[] memory dependencies) internal pure {
         if (clones.networks.length == 0) {
