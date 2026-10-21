@@ -1223,5 +1223,36 @@
       "audit/known-false-positives.md drops the rows these offline kills replace (R28, R32, R10, the first-fork and first-network loop rows, the empty record, and script S01-S03); D10 in LibRainDeploy is outside this scope and stays.",
       "Adversarial pass: the signer must be the authority the variable names and binds land under it (testWiring, under the script as authority since the local broadcast is a no-op), every refusal precedes any Vm call, and each selected network is bound and checked on its own fork in selection order, all derived from the RegisterConfig and LibConfigRegistryRegister NatSpec; no candidate."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T02:50:34Z",
+    "commit": "36e62335f40ce440516f4b07e3cf2224c0157768",
+    "testsAfterCommit": "36e62335f40ce440516f4b07e3cf2224c0157768",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 342,
+    "scope": "PR #322 round 6: the signer threading changed in e4ce5ad — src/lib/LibConfigRegistryRegister.sol checkCaller, checkInputs, registerOnNetworks, registerOnForks and registerOnSelectedChain, and script/RegisterConfig.sol run(); offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 15,
+      "behavioursProbed": 15,
+      "killedByExistingTests": 15,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "The signer is read as msg.sender in checkCaller alone, and checkInputs, registerOnNetworks, registerOnForks, registerOnSelectedChain and run() carry only the authority, so the R7 and R16 equivalents of the e159fcf audit (sender and authority swapped after checkSender proved them equal) and the R07 known-false-positive row have no line left to mutate.",
+      "A01-A15 probed with no RPC variables and no .env against the .mutation-test/check.sh suite (122 tests): 15/15 killed. Covered: checkCaller removed, self-compared either way, or reading tx.origin; checkInputs skipping it, checking address(0), checking it before the networks, or describing address(0); registerOnNetworks and registerOnForks passing address(0) to checkInputs, registerOnForks or registerOnSelectedChain; registerOnSelectedChain reading or broadcasting under address(0); run() binding under address(0).",
+      "The test wrappers now supply the signer as the caller of an inner wrapper with vm.prank. The SenderNotAuthority test bodies and expectations are unchanged. LibConfigRegistryRegisterOnForksTest binds under this contract (AUTHORITY = address(this)), because forge refuses vm.startBroadcast inside a pranked call.",
+      "Adversarial pass: the script's msg.sender is forge's --sender, so the signer checked is unchanged. The refusal order (name, value, networks, then the caller) is pinned by testRegisterOnNetworksRefusesInputsInOrder, and A07 is the mutant that breaks it. A contract that wraps registerOnForks in its own external function is checked against its own caller, as checkCaller's NatSpec states. No candidate."
+    ]
   }
 ]
