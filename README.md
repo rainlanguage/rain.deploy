@@ -582,31 +582,10 @@ rather than answering empty. The interface is `IConfigRegistryV1`. There is no
 removal, no upgrade, and no way to write under another account.
 
 A consumer names the authority it trusts beside the name it resolves, both in
-its own creation code, and gets only what that authority bound. Bindings under
-any other authority are unforgeable garbage nobody asks for, and one name under
-two authorities is two unrelated bindings. Nothing is configured into the
-registry's creation code, so it is one contract at one address on every network
-for every authority.
-
-There are no delegates. A bind is a standalone write with nothing that has to
-land atomically beside it, so the authority can always make it itself, and an
-authority whose operators rotate is an account whose address survives the
-rotation — a Safe, a timelock — rather than a key that hands its authority on.
-
-A consumer resolves under one authority address on every network, so it trusts
-whoever controls that address on each. An EOA is one key everywhere; a contract
-authority is not. A Safe's owners and threshold, and a timelock's roles, are
-per-network state, so rotating them is done on every network the authority's
-names are consumed on, then verified on each: a network left out is still
-controlled by the old controllers, who can rebind every name there. On a network
-it is not yet deployed to, its address is claimable by whoever deploys there
-first where the deployment path does not commit to its controllers — a
-CREATE-nonce deployment, or a factory that does not bind the initializer or is
-missing on that network. A Zoltu timelock or a SafeProxyFactory CREATE2 Safe
-commits to its init, but that init names the original controllers, so replaying
-it on a network after a rotation seats the controllers the rotation removed. A
-contract authority is deployed on every network before any rotation, then
-rotated on each.
+its own creation code, and gets only what that authority bound. What the
+consumer then trusts, and what a contract authority must do on every network, is
+in `IConfigRegistryV1`'s NatSpec under "The authority is the whole access
+control".
 
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
 registry is deployed on a network, an authority binds each name its consumers
