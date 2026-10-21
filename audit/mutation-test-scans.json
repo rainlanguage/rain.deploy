@@ -1470,5 +1470,33 @@
     "notes": [
       "D01-D09 on RegistryDelegates and M01-M06 on MigrationRegistry against the ConfigRegistry and MigrationRegistry suites with Build.sol regenerated per probe (263 tests): 15/15 killed. The scope mutants are killed by MigrationRegistry tests; ConfigRegistry uses one scope."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T15:10:00Z",
+    "commit": "57d4e5e98b3d6ed7159e2e410f0e6db715c85e30",
+    "testsAfterCommit": "57d4e5e98b3d6ed7159e2e410f0e6db715c85e30",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 405,
+    "scope": "PR #322 round 12: name-scoped ConfigRegistry approvals — src/concrete/ConfigRegistry.sol registerV1, approveV1, revokeV1, approvedV1 name arguments and events; src/lib/LibConfigRegistryRegister.sol checkSender name; offline, no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 2,
+      "behaviours": 10,
+      "behavioursProbed": 10,
+      "killedByExistingTests": 10,
+      "gapsFilled": 0,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "N01-N10 against the ConfigRegistry, register library and RegisterConfig suites with Build.sol regenerated per probe (149 tests): 10/10 killed, by the name-isolation tests added with the change (testApprovalCoversOnlyItsName, testRevokeIsPerName, testSenderApprovedForAnotherName) and the existing delegate tests."
+    ]
   }
 ]
