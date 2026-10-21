@@ -612,7 +612,9 @@ contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerif
         returns (DerivedDeploy memory)
     {
         ResolvedBeacon[] memory resolved = resolveBeacons(networks);
-        return deriveUnlessResolved(onSupportedNetworks(candidate), resolved);
+        return deriveUnlessResolved(
+            onSupportedNetworks(withExtendedNetworks(candidate), LibRainDeploy.networkChainIds(networks)), resolved
+        );
     }
 
     function testSuiteWithAResolvedKeyButOtherCodeIsDerivedAfresh() external {

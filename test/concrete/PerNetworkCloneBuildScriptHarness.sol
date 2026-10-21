@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {BuildScript} from "../../src/abstract/BuildScript.sol";
 import {RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {CloneNetwork} from "../../src/lib/LibRainDeployClone.sol";
 import {LibRainDeployMechanism} from "../../src/lib/LibRainDeployMechanism.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {
@@ -19,6 +20,15 @@ contract PerNetworkCloneBuildScriptHarness is PerNetworkCloneDeploys, BuildScrip
     string internal sRoot;
 
     string internal sLibDir;
+
+    /// The networks `extendedNetworks` declares for the release. Empty by default.
+    CloneNetwork[] internal sExtendedNetworks;
+
+    /// The licence `extendedNetworksSpdxLicenseIdentifier` gives once `setExtendedNetworksLicence` has run.
+    string internal sSpdxLicenseIdentifier;
+
+    /// The copyright text `extendedNetworksCopyrightText` gives once `setExtendedNetworksLicence` has run.
+    string internal sCopyrightText;
 
     /// @inheritdoc PerNetworkCloneDeploys
     function supportedNetworks()
@@ -39,6 +49,12 @@ contract PerNetworkCloneBuildScriptHarness is PerNetworkCloneDeploys, BuildScrip
 
     /// @inheritdoc BuildScript
     function recordRoot() internal view override returns (string memory) {
+        return sRoot;
+    }
+
+    /// @inheritdoc BuildScript
+    /// @dev The fixture root, so a `run()` here stages no config over the repo's own.
+    function configRoot() internal view override returns (string memory) {
         return sRoot;
     }
 
@@ -65,6 +81,57 @@ contract PerNetworkCloneBuildScriptHarness is PerNetworkCloneDeploys, BuildScrip
         LibRainDeploySnapshot.writeReleasedSuitesLib(
             vm, sLibDir, recordRoot(), PER_NETWORK_CLONE_RECORD_CONTRACT, candidateSuites()[0].snapshot
         );
+    }
+
+    /// Sets what `extendedNetworks` declares for the release.
+    /// @param networks The networks.
+    function setExtendedNetworks(CloneNetwork[] memory networks) external {
+        delete sExtendedNetworks;
+        for (uint256 i = 0; i < networks.length; i++) {
+            sExtendedNetworks.push(networks[i]);
+        }
+    }
+
+    /// Sets the licence the extended networks records declare.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier.
+    /// @param copyrightText The copyright text.
+    function setExtendedNetworksLicence(string memory spdxLicenseIdentifier, string memory copyrightText) external {
+        sSpdxLicenseIdentifier = spdxLicenseIdentifier;
+        sCopyrightText = copyrightText;
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    function extendedNetworks(string memory suite) internal view virtual override returns (CloneNetwork[] memory) {
+        if (keccak256(bytes(suite)) != keccak256("per-network-clone@0_0_1")) {
+            return new CloneNetwork[](0);
+        }
+        return sExtendedNetworks;
+    }
+
+    /// @inheritdoc RainDeploySuitesBase
+    function extendedNetworksRoot() internal view override returns (string memory) {
+        return sRoot;
+    }
+
+    /// @inheritdoc BuildScript
+    function extendedNetworksSpdxLicenseIdentifier() internal view override returns (string memory) {
+        if (bytes(sSpdxLicenseIdentifier).length == 0) {
+            return BuildScript.extendedNetworksSpdxLicenseIdentifier();
+        }
+        return sSpdxLicenseIdentifier;
+    }
+
+    /// @inheritdoc BuildScript
+    function extendedNetworksCopyrightText() internal view override returns (string memory) {
+        if (bytes(sCopyrightText).length == 0) {
+            return BuildScript.extendedNetworksCopyrightText();
+        }
+        return sCopyrightText;
+    }
+
+    /// External wrapper for `regenerateExtendedNetworks`.
+    function externalRegenerateExtendedNetworks() external {
+        regenerateExtendedNetworks();
     }
 
     /// @return The rolling snapshot's path.

@@ -285,7 +285,8 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
 
     /// Refuses `BeaconSuiteNotReleased` when `key` is not in `released`.
     /// @param key The key a beacon names.
-    /// @param released `releasedSuites()`, each replaced by its `onSupportedNetworks` form when first resolved.
+    /// @param released `releasedSuites()`, each replaced when first resolved by its `onSupportedNetworks` form over its
+    /// `withExtendedNetworks` form and `supportedNetworks()`.
     /// @param derived Each released suite's derivation, filled when first resolved.
     /// @return The index of `key` in `released`.
     function resolveReleased(string memory key, DeploySuite[] memory released, DerivedDeploy[] memory derived)
@@ -297,7 +298,10 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
             revert BeaconSuiteNotReleased(key);
         }
         if (bytes(derived[releasedIndex].suite).length == 0) {
-            released[releasedIndex] = onSupportedNetworks(released[releasedIndex]);
+            released[releasedIndex] = onSupportedNetworks(
+                withExtendedNetworks(released[releasedIndex]),
+                LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()))
+            );
             derived[releasedIndex] = deriveDeployment(released[releasedIndex]);
         }
         return releasedIndex;

@@ -8,6 +8,7 @@ import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
+import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
     BYTECODE_HASH as CONFIG_REGISTRY_BYTECODE_HASH,
@@ -402,6 +403,18 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         this.externalCheckDeployedOnNetworks(networks, releasedSuites());
     }
 
+    /// The chain group forks through `vm`: a network whose name is neither an alias nor a URL is refused by the
+    /// `createFork` cheatcode itself.
+    function testChainGroupForksThroughTheVm() external {
+        SupportedNetwork[] memory networks = new SupportedNetwork[](1);
+        networks[0] = SupportedNetwork({name: "no-such-alias", chainId: 1, explorerUrl: "", defaultRpcUrl: ""});
+
+        vm.expectRevert(
+            abi.encodeWithSignature("CheatcodeError(string)", "vm.createFork: invalid rpc url: no-such-alias")
+        );
+        this.externalCheckDeployedOnNetworks(networks, releasedSuites());
+    }
+
     /// PROPERTY: a declared chain id that is not the reported one fails hard,
     /// naming the network and BOTH ids.
     ///
@@ -473,5 +486,33 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     function testChainIdEmptyRosterReverts() external {
         vm.expectRevert(LibRainDeploy.NoNetworks.selector);
         this.externalCheckNetworkChainIds(new SupportedNetwork[](0));
+    }
+
+    /// The matrix over both released suites on local forks.
+    function externalCheckOnLocalForks() external {
+        checkDeployedOnNetworks(
+            Vm(address(new LocalForkVm())), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), releasedSuites()
+        );
+    }
+
+    /// Each suite is held to its own derived code hash: both suites, with different code, pass on local forks.
+    function testLocalMatrixPassesEachSuiteAtItsOwnHash() external {
+        assertNotEq(keccak256(secondRuntimeCode()), CONFIG_REGISTRY_BYTECODE_HASH);
+        this.externalCheckOnLocalForks();
+    }
+
+    /// The later suite holding other code is refused naming its own code hash, not the first suite's.
+    function testLocalMatrixRefusesALaterSuiteNamingItsOwnHash() external {
+        vm.etch(secondDeployedAddress(), hex"6001");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRainDeploy.CodeHashMismatchOnNetwork.selector,
+                supportedNetworks()[0],
+                secondDeployedAddress(),
+                keccak256(secondRuntimeCode()),
+                keccak256(hex"6001")
+            )
+        );
+        this.externalCheckOnLocalForks();
     }
 }

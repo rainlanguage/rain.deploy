@@ -6,7 +6,11 @@ import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeplo
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
-import {NoPerNetworkCloneAdmin, PerNetworkCloneDeploys} from "../../abstract/PerNetworkCloneDeploys.sol";
+import {
+    NoPerNetworkCloneAdmin,
+    PerNetworkCloneDeploys,
+    etchPerNetworkCloneRelease
+} from "../../abstract/PerNetworkCloneDeploys.sol";
 
 /// @title RainDeployVerifyChainClonePerNetworkUndeclaredTest
 /// @notice A repo verified on a network its per-network clone's `initData` has no init data for.
@@ -21,15 +25,7 @@ contract RainDeployVerifyChainClonePerNetworkUndeclaredTest is PerNetworkCloneDe
     /// fork.
     function setUp() external {
         DeploySuite memory release = releasedSuites()[0];
-        for (uint256 i = 0; i < release.dependencies.length; i++) {
-            vm.etch(release.dependencies[i].deployedAddress, release.dependencies[i].runtimeCode);
-            vm.makePersistent(release.dependencies[i].deployedAddress);
-        }
-        address[] memory addresses = LibRainDeployMechanism.deployedAddresses(release);
-        for (uint256 i = 0; i < addresses.length; i++) {
-            vm.etch(addresses[i], release.storedRuntimeCode);
-            vm.makePersistent(addresses[i]);
-        }
+        etchPerNetworkCloneRelease(vm, release, LibRainDeployMechanism.deployedAddresses(release));
     }
 
     /// @inheritdoc RainDeploySuitesBase
