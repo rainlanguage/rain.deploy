@@ -369,9 +369,10 @@ beacon written into its one immutable, so the recorded code hash says which
 beacon the proxy reads. The proxy is unanchorable like a clone: it carries
 `BEACON_PROXY_UNANCHORABLE_REASON` and `BEACON_PROXY_ARTIFACT_PATH`.
 
-A beacon proxy's snapshot is a clone's with one more line,
-`bool constant BEACON_PROXY = true;`, which is how a frozen record is read back
-as a beacon proxy rather than a clone. A record with the marker and no
+A beacon proxy's snapshot declares a clone's constants, with comments naming the
+beacon proxy and its factory, and one more, `bool constant BEACON_PROXY = true;`
+under its own `@dev` comment, which is how a frozen record is read back as a
+beacon proxy rather than a clone. A record with the marker and no
 `MECHANISM_DATA` is refused with
 `FrozenSnapshotBeaconProxyMechanismDataMissing`, and one with the marker twice
 with `FrozenSnapshotBeaconProxyMarkerAmbiguous`.
