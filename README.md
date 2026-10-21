@@ -1214,6 +1214,42 @@ executing a bundle that never broadcasts, and such a script appends the
 `applyMigrationV3Call` output to the bundle it is already emitting, which makes
 the record atomic with the migration it describes.
 
+## Managing the migration registry
+
+`script/ApproveMigrationDelegate.sol` approves a delegate to write one
+namespace's line under the writer, or revokes it, on every declared network by
+default. `approveV3` and `revokeV3` act under their caller, so the signer is the
+writer itself, and the run refuses any other `--sender` (`SenderNotAuthority`)
+before forking. The namespace is the string the consumer hashes, refused unless
+canonical as a config name is. Everything else — the Trezor setup, the refusals,
+the dry run's record and `SKIP` — is "Approving a delegate" above, with the
+writer as the signer and the migration registry as the recipient.
+
+```sh
+export MIGRATION_DELEGATE_WRITER=0x... # the writer, which signs
+export MIGRATION_DELEGATE_NAMESPACE=st0x.deploy
+export MIGRATION_DELEGATE_ADDRESS=0x... # the delegate, such as a Safe or timelock
+# Optional: false revokes. Unset approves.
+# export MIGRATION_DELEGATE_APPROVED=false
+# Optional, to act on fewer networks than all of them:
+# export MIGRATION_DELEGATE_NETWORKS=base,arbitrum
+
+# 1. Dry run.
+nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate \
+  --sender "$MIGRATION_DELEGATE_WRITER" --trezor --legacy
+
+# 2. The same command with --broadcast.
+nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate \
+  --sender "$MIGRATION_DELEGATE_WRITER" --trezor --legacy --broadcast
+
+# 3. Once every transaction is mined.
+nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate --sig "verify()"
+```
+
+The device shows `approveV3`'s selector `0xd04b1603` or `revokeV3`'s
+`0x786d07ab`, then the namespace hash and the delegate. An approval covers that
+one namespace; each delegate is a run of its own.
+
 ## Deploying, and then releasing
 
 Four separate steps, in this order. Nothing automatic ever broadcasts.

@@ -8,6 +8,7 @@ import {IConfigRegistryV2} from "../../src/interface/IConfigRegistryV2.sol";
 import {IRegistryDelegatesV1} from "../../src/interface/IRegistryDelegatesV1.sol";
 import {LibConfigRegistry} from "../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryApprove} from "../../src/lib/LibConfigRegistryApprove.sol";
+import {LibRegistryDelegatesApprove} from "../../src/lib/LibRegistryDelegatesApprove.sol";
 import {LibConfigRegistryDeploy} from "../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibConfigRegistryRegister} from "../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
@@ -59,7 +60,7 @@ contract ApproveConfigDelegateTest is Test {
         // The signer is the script's `msg.sender`: this test contract is not
         // the authority.
         vm.expectRevert(
-            abi.encodeWithSelector(LibConfigRegistryApprove.SenderNotAuthority.selector, address(this), authority)
+            abi.encodeWithSelector(LibRegistryDelegatesApprove.SenderNotAuthority.selector, address(this), authority)
         );
         script.run();
 
@@ -106,7 +107,7 @@ contract ApproveConfigDelegateTest is Test {
         vm.setEnv("CONFIG_DELEGATE_AUTHORITY", vm.toString(otherAuthority));
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistryApprove.UnexpectedApproval.selector, network, otherAuthority, hashed, delegate, true
+                LibRegistryDelegatesApprove.UnexpectedApproval.selector, network, otherAuthority, hashed, delegate, true
             )
         );
         script.verify();
@@ -116,7 +117,7 @@ contract ApproveConfigDelegateTest is Test {
         vm.setEnv("CONFIG_DELEGATE_APPROVED", "false");
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistryApprove.UnexpectedApproval.selector, network, authority, hashed, delegate, false
+                LibRegistryDelegatesApprove.UnexpectedApproval.selector, network, authority, hashed, delegate, false
             )
         );
         script.verify();

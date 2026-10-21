@@ -7,6 +7,7 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
 import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibConfigRegistryApprove} from "../src/lib/LibConfigRegistryApprove.sol";
+import {LibRegistryDelegatesApprove} from "../src/lib/LibRegistryDelegatesApprove.sol";
 
 /// @title ApproveConfigDelegate
 /// @notice Approves `CONFIG_DELEGATE_ADDRESS` to bind `CONFIG_DELEGATE_NAME`
@@ -66,7 +67,8 @@ contract ApproveConfigDelegate is RegistryDeploySuites, Script {
     /// the target state.
     /// @return The fork each selected network was simulated on.
     function run() external returns (uint256[] memory) {
-        (uint256[] memory forkIds,) = LibConfigRegistryApprove.approveOnNetworks(
+        (uint256[] memory forkIds,) = LibRegistryDelegatesApprove.approveOnNetworks(
+            LibConfigRegistryApprove.delegation(),
             forkVm(),
             selectedNetworks(),
             supportedNetworks(),
@@ -82,7 +84,8 @@ contract ApproveConfigDelegate is RegistryDeploySuites, Script {
     /// Reads every selected network fresh and reverts unless the approval is
     /// in the target state on each.
     function verify() external {
-        LibConfigRegistryApprove.checkApprovalOnNetworks(
+        LibRegistryDelegatesApprove.checkApprovalOnNetworks(
+            LibConfigRegistryApprove.delegation(),
             forkVm(),
             selectedNetworks(),
             supportedNetworks(),
