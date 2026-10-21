@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
 import {ConfigRegistry} from "../../src/concrete/ConfigRegistry.sol";
-import {IConfigRegistryV1} from "../../src/interface/IConfigRegistryV1.sol";
+import {IConfigRegistryV2} from "../../src/interface/IConfigRegistryV2.sol";
 import {LibConfigRegistry} from "../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
@@ -24,15 +24,16 @@ library LibConfigRegistryFork {
             == LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH;
     }
 
-    /// The revert a resolve of `name` gives on the selected chain when `name` is
-    /// bound nowhere: the registry's own `NameNotRegistered` where the pinned
-    /// registry is deployed, and the code-hash refusal, naming what is there,
-    /// where it is not.
+    /// The revert a resolve of `name` under `authority` gives on the selected
+    /// chain when `authority` has bound `name` nowhere: the registry's own
+    /// `NameNotRegistered` where the pinned registry is deployed, and the
+    /// code-hash refusal, naming what is there, where it is not.
+    /// @param authority The authority read under.
     /// @param name The unbound name.
     /// @return The revert data.
-    function unboundResolveRevert(bytes32 name) internal view returns (bytes memory) {
+    function unboundResolveRevert(address authority, bytes32 name) internal view returns (bytes memory) {
         if (isDeployed()) {
-            return abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name);
+            return abi.encodeWithSelector(IConfigRegistryV2.NameNotRegistered.selector, authority, name);
         }
         return abi.encodeWithSelector(
             LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,

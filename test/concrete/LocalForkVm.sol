@@ -52,10 +52,37 @@ contract LocalForkVm {
     /// Broadcasts nothing.
     function stopBroadcast() external pure {}
 
+    /// The local EVM's chain id.
+    /// @return The chain id.
+    function getChainId() external view returns (uint256) {
+        return VM.getChainId();
+    }
+
     /// Formats an address as the cheatcode does.
     /// @param value The address.
     /// @return It, formatted.
     function toString(address value) external pure returns (string memory) {
+        return VM.toString(value);
+    }
+
+    /// Formats bytes as the cheatcode does.
+    /// @param value The bytes.
+    /// @return They, formatted.
+    function toString(bytes calldata value) external pure returns (string memory) {
+        return VM.toString(value);
+    }
+
+    /// Formats a word as the cheatcode does.
+    /// @param value The word.
+    /// @return It, formatted.
+    function toString(bytes32 value) external pure returns (string memory) {
+        return VM.toString(value);
+    }
+
+    /// Formats a number as the cheatcode does.
+    /// @param value The number.
+    /// @return It, formatted.
+    function toString(uint256 value) external pure returns (string memory) {
         return VM.toString(value);
     }
 }

@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {IMigrationRegistryV3, Prerequisite, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV3.sol";
+import {RegistryDelegates} from "../abstract/RegistryDelegates.sol";
 
 /// @dev One line's record of one migration. Written in one call, so a record
 /// can never hold one half of itself.
@@ -29,20 +30,18 @@ struct MigrationRecord {
 /// account wrote it, or where that line has got to.
 ///
 /// There is deliberately nothing else. No removal, no upgrade, no pause, and no
-/// authority but each writer's over its own lines — which is the difference
-/// from `ConfigRegistry`, and the reason nothing here is CONFIGURED at
-/// compile time. `MIGRATION_HEAD_GENESIS` is a compile-time constant, but it is
-/// the same value for every consumer on every chain and names nobody, so it is
-/// part of what this contract IS rather than a choice welded into it.
+/// authority but each writer's over its own lines — the reason nothing here is
+/// CONFIGURED at compile time. `MIGRATION_HEAD_GENESIS` is a compile-time
+/// constant, but it is the same value for every consumer on every chain and
+/// names nobody, so it is part of what this contract IS rather than a choice
+/// welded into it.
 ///
-/// `ConfigRegistry` has a root, and a root has to be welded into the creation
-/// code so it cannot be rotated, which puts it in the deterministic address.
-/// That is workable there because there is one registry of names for the whole
-/// organisation. It is not workable here: the account that applies a migration
-/// is a different Safe, deployer or timelock for every consumer and every
-/// chain, so one root would have to be all of them at once, and baking each
-/// consumer's authority into the creation code would give each a different
-/// address for what is meant to be one shared registry.
+/// A root would have to be welded into the creation code so it cannot be
+/// rotated, which puts it in the deterministic address. The account that
+/// applies a migration is a different Safe, deployer or timelock for every
+/// consumer and every chain, so one root would have to be all of them at once,
+/// and baking each consumer's authority into the creation code would give each
+/// a different address for what is meant to be one shared registry.
 ///
 /// Keying by the writer removes the authority instead of choosing one. Anyone
 /// may write, but only under themselves or a writer that approved them, so a
@@ -88,7 +87,7 @@ struct MigrationRecord {
 /// mapping's generated getter would answer all of them with zero — which for a
 /// record is "not applied" and for `headV3` is a value no head can ever hold,
 /// i.e. exactly the silent wrong-branch this contract reverts to prevent.
-contract MigrationRegistry is IMigrationRegistryV3 {
+contract MigrationRegistry is IMigrationRegistryV3, RegistryDelegates {
     /// Every record, keyed by writer, namespace and migration. A zero
     /// `appliedAt` means never applied. Not `public`: the only external readers are
     /// `appliedV3`, `appliedOntoV3`, `appliedAfterV3` and `appliedByV3`, which
@@ -102,10 +101,6 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// disagree about where an empty line is. Not `public`, for the same
     /// reason as the records: the untranslated zero is not a head.
     mapping(address writer => mapping(bytes32 namespace => bytes32 head)) internal sHead;
-
-    /// The delegates each writer has approved for each of its lines. Not
-    /// `public`: the only external reader is `approvedV3`, which refuses the zero inputs.
-    mapping(address writer => mapping(bytes32 namespace => mapping(address delegate => bool))) internal sApproved;
 
     /// @inheritdoc IMigrationRegistryV3
     /// @dev The block is the moment, so a caller that has nothing to say about
@@ -134,34 +129,20 @@ contract MigrationRegistry is IMigrationRegistryV3 {
 
     /// @inheritdoc IMigrationRegistryV3
     function approveV3(bytes32 namespace, address delegate) external {
-        checkApprovalKey(msg.sender, namespace, delegate);
-        sApproved[msg.sender][namespace][delegate] = true;
-        emit Approved(msg.sender, namespace, delegate);
+        checkLineKey(msg.sender, namespace);
+        approveWithin(namespace, delegate);
     }
 
     /// @inheritdoc IMigrationRegistryV3
     function revokeV3(bytes32 namespace, address delegate) external {
-        checkApprovalKey(msg.sender, namespace, delegate);
-        sApproved[msg.sender][namespace][delegate] = false;
-        emit Revoked(msg.sender, namespace, delegate);
+        checkLineKey(msg.sender, namespace);
+        revokeWithin(namespace, delegate);
     }
 
     /// @inheritdoc IMigrationRegistryV3
     function approvedV3(address writer, bytes32 namespace, address delegate) external view returns (bool) {
-        checkApprovalKey(writer, namespace, delegate);
-        return sApproved[writer][namespace][delegate];
-    }
-
-    /// Refuses the zero writer, namespace and delegate: none names an approval
-    /// anybody can hold.
-    /// @param writer The approving writer.
-    /// @param namespace The line under the writer.
-    /// @param delegate The delegate.
-    function checkApprovalKey(address writer, bytes32 namespace, address delegate) internal pure {
         checkLineKey(writer, namespace);
-        if (delegate == address(0)) {
-            revert ZeroDelegate();
-        }
+        return approvedWithin(writer, namespace, delegate);
     }
 
     /// Refuses a write whose caller is neither `writer` nor approved by it for
@@ -171,9 +152,7 @@ contract MigrationRegistry is IMigrationRegistryV3 {
     /// @param namespace The line under the writer.
     function checkDelegate(address writer, bytes32 namespace) internal view {
         checkWriter(writer);
-        if (msg.sender != writer && !sApproved[writer][namespace][msg.sender]) {
-            revert NotApproved(writer, namespace, msg.sender);
-        }
+        checkCallerWritesUnder(writer, namespace);
     }
 
     /// Reached by every write, so both share one refusal order.
