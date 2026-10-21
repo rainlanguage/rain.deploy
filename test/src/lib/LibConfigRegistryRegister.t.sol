@@ -104,21 +104,11 @@ contract LibConfigRegistryRegisterTest is Test {
     function externalRegisterOnNetworks(
         string[] memory selected,
         string[] memory declared,
-        address sender,
+        address authority,
         string memory name,
         bytes memory value
     ) external returns (uint256[] memory, string memory) {
-        vm.prank(sender);
-        return this.externalRegisterOnNetworksAsCaller(selected, declared, name, value);
-    }
-
-    function externalRegisterOnNetworksAsCaller(
-        string[] memory selected,
-        string[] memory declared,
-        string memory name,
-        bytes memory value
-    ) external returns (uint256[] memory, string memory) {
-        return LibConfigRegistryRegister.registerOnNetworks(vm, selected, declared, AUTHORITY, name, value);
+        return LibConfigRegistryRegister.registerOnNetworks(vm, selected, declared, authority, name, value);
     }
 
     function externalCheckRegisteredOnForks(
@@ -262,32 +252,27 @@ contract LibConfigRegistryRegisterTest is Test {
     }
 
     /// The input refusals come before anything is forked, in order: name,
-    /// value, networks, sender. Every case here would otherwise reach a fork
-    /// of a network this test supplies no endpoint for.
-    function testRegisterOnNetworksRefusesInputsInOrder(address sender) external {
-        vm.assume(sender != AUTHORITY);
+    /// value, networks. Every case here would otherwise reach a fork of a
+    /// network this test supplies no endpoint for. None depends on the
+    /// authority.
+    function testRegisterOnNetworksRefusesInputsInOrder(address authority) external {
         string[] memory declared = LibRainDeploy.supportedNetworks();
 
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "A"));
-        this.externalRegisterOnNetworks(new string[](0), declared, sender, "A", "");
+        this.externalRegisterOnNetworks(new string[](0), declared, authority, "A", "");
 
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, keccak256("a.b")));
-        this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", "");
+        this.externalRegisterOnNetworks(new string[](0), declared, authority, "a.b", "");
 
         bytes memory bare = abi.encodePacked(address(0xdEaD));
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, bare));
-        this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", bare);
+        this.externalRegisterOnNetworks(new string[](0), declared, authority, "a.b", bare);
 
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalRegisterOnNetworks(new string[](0), declared, sender, "a.b", abi.encode(address(1)));
+        this.externalRegisterOnNetworks(new string[](0), declared, authority, "a.b", abi.encode(address(1)));
 
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
-        this.externalRegisterOnNetworks(list("nowhere"), declared, sender, "a.b", abi.encode(address(1)));
-
-        vm.expectRevert(
-            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotAuthority.selector, sender, AUTHORITY)
-        );
-        this.externalRegisterOnNetworks(list("base"), declared, sender, "a.b", abi.encode(address(1)));
+        this.externalRegisterOnNetworks(list("nowhere"), declared, authority, "a.b", abi.encode(address(1)));
     }
 
     /// A non-empty value is refused exactly when its length is not a multiple
@@ -322,65 +307,63 @@ contract LibConfigRegistryRegisterTest is Test {
         }
     }
 
-    function externalCheckInputs(
-        string[] memory selected,
-        string[] memory declared,
-        address sender,
-        string memory name,
-        bytes memory value
-    ) external returns (bytes32, SupportedNetwork[] memory, string memory) {
-        vm.prank(sender);
-        return this.externalCheckInputsAsCaller(selected, declared, name, value);
-    }
-
-    function externalCheckInputsAsCaller(
-        string[] memory selected,
-        string[] memory declared,
-        string memory name,
-        bytes memory value
-    ) external view returns (bytes32, SupportedNetwork[] memory, string memory) {
-        return LibConfigRegistryRegister.checkInputs(vm, selected, declared, AUTHORITY, name, value);
-    }
-
-    /// Inputs that pass every refusal give the hashed name, the selected
-    /// networks and the record of exactly the inputs signed.
-    function testCheckInputsRecordIsTheInputsSigned(uint8 words, bytes32 seed) external {
+    /// Inputs that pass every refusal give the hashed name and the selected
+    /// networks' catalogue entries, in selection order.
+    function testCheckInputsGivesTheNameAndNetworks(uint8 words) external pure {
         bytes memory value = new bytes(32 * (uint256(words) % 4 + 1));
-        for (uint256 i = 0; i < value.length; i++) {
-            value[i] = keccak256(abi.encode(seed, i))[0];
-        }
         string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
-        (bytes32 hashed, SupportedNetwork[] memory networks, string memory record) =
-            this.externalCheckInputs(selected, LibRainDeploy.supportedNetworks(), AUTHORITY, "a.b", value);
+        (bytes32 hashed, SupportedNetwork[] memory networks) =
+            LibConfigRegistryRegister.checkInputs(selected, LibRainDeploy.supportedNetworks(), "a.b", value);
         assertEq(hashed, keccak256("a.b"));
         assertEq(networks.length, 2);
         assertEq(networks[0].name, LibRainDeploy.ARBITRUM_ONE);
         assertEq(networks[1].name, LibRainDeploy.BASE);
-        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, "a.b", value, AUTHORITY));
     }
 
+    /// Discards any `authority` that is this contract, which is the library's
+    /// `msg.sender` in every wrapper below, or the transaction's origin, so a
+    /// read of either in place of `authority` is told apart.
+    /// @param authority The candidate authority.
+    function assumeArbitraryAuthority(address authority) internal view {
+        assumeNotPrecompile(authority);
+        assumeNotForgeAddress(authority);
+        vm.assume(authority != address(this));
+        vm.assume(authority != tx.origin);
+    }
+
+    /// Every call the library makes here is pranked as `authority`, standing
+    /// in for the broadcast the local seam does not send, so a bind lands under
+    /// `authority`; the library's own frame keeps this contract as its
+    /// `msg.sender`.
     function externalRegisterOnNetworksWith(
         Vm forkVm,
         string[] memory selected,
-        address sender,
         address authority,
         string memory name,
         bytes memory value
     ) external returns (uint256[] memory, string memory) {
-        vm.prank(sender);
-        return this.externalRegisterOnNetworksWithAsCaller(forkVm, selected, authority, name, value);
-    }
-
-    function externalRegisterOnNetworksWithAsCaller(
-        Vm forkVm,
-        string[] memory selected,
-        address authority,
-        string memory name,
-        bytes memory value
-    ) external returns (uint256[] memory, string memory) {
-        return LibConfigRegistryRegister.registerOnNetworks(
+        vm.startPrank(authority);
+        (uint256[] memory forkIds, string memory record) = LibConfigRegistryRegister.registerOnNetworks(
             forkVm, selected, LibRainDeploy.supportedNetworks(), authority, name, value
         );
+        vm.stopPrank();
+        return (forkIds, record);
+    }
+
+    /// As `externalRegisterOnNetworksWith`, for `registerOnForks`.
+    function externalRegisterOnForksWith(
+        Vm forkVm,
+        string[] memory selected,
+        uint256[] memory forkIds,
+        address authority,
+        string memory name,
+        bytes memory value
+    ) external {
+        vm.startPrank(authority);
+        LibConfigRegistryRegister.registerOnForks(
+            forkVm, selected, LibRainDeploy.supportedNetworks(), forkIds, authority, name, value
+        );
+        vm.stopPrank();
     }
 
     function externalCheckRegisteredOnNetworksWith(
@@ -395,40 +378,62 @@ contract LibConfigRegistryRegisterTest is Test {
         );
     }
 
-    /// `registerOnNetworks` refuses another signer before it calls the Vm at
-    /// all: through a Vm with no code, where any call reverts, the refusal is
-    /// still `SenderNotAuthority`.
-    function testRegisterOnNetworksRefusesTheSignerBeforeTheVm(address sender) external {
-        vm.assume(sender != AUTHORITY);
-        vm.expectRevert(
-            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotAuthority.selector, sender, AUTHORITY)
-        );
-        this.externalRegisterOnNetworksWith(
-            Vm(address(0xC0DE1E55)), list(LibRainDeploy.BASE), sender, AUTHORITY, "a.b", abi.encode(address(1))
-        );
-    }
-
-    /// On the local fork seam, `registerOnNetworks` binds on every selected
-    /// network in selection order and returns each network's fork and the
-    /// inputs record, and the confirmed check then passes on each. The seam's
-    /// broadcast is a no-op, so this contract signs and is the authority.
-    function testRegisterOnNetworksReturnsEachForkAndTheRecord() external {
+    /// On the local fork seam, `registerOnNetworks` under any authority
+    /// returns each selected network's fork in selection order and the inputs
+    /// record naming that authority, and reads and broadcasts under it. Both
+    /// networks are the one local EVM, so the first binds and the second, which
+    /// reads that bind under the authority, skips: one broadcast, from the
+    /// authority. The confirmed check then passes under it on each.
+    function testRegisterOnNetworksBindsUnderTheAuthority(address authority) external {
+        assumeArbitraryAuthority(authority);
         IConfigRegistryV1 registry = deployRegistry();
-        Vm forkVm = Vm(address(new LocalForkVm()));
+        LocalForkVm localForkVm = new LocalForkVm();
+        Vm forkVm = Vm(address(localForkVm));
         string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
         SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(selected);
         bytes memory value = abi.encode(address(1));
 
         (uint256[] memory forkIds, string memory record) =
-            this.externalRegisterOnNetworksWith(forkVm, selected, address(this), address(this), "a.b", value);
+            this.externalRegisterOnNetworksWith(forkVm, selected, authority, "a.b", value);
         assertEq(forkIds.length, 2);
         assertEq(forkIds[0], networks[0].chainId);
         assertEq(forkIds[1], networks[1].chainId);
-        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, "a.b", value, address(this)));
+        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, "a.b", value, authority));
         assertEq(block.chainid, networks[1].chainId);
-        assertEq(LibConfigRegistryRead.getValue(registry, address(this), keccak256("a.b")), value);
+        address[] memory broadcasters = localForkVm.broadcasters();
+        assertEq(broadcasters.length, 1);
+        assertEq(broadcasters[0], authority);
+        assertEq(LibConfigRegistryRead.getValue(registry, authority, keccak256("a.b")), value);
 
-        this.externalCheckRegisteredOnNetworksWith(forkVm, selected, address(this), "a.b", value);
+        this.externalCheckRegisteredOnNetworksWith(forkVm, selected, authority, "a.b", value);
+    }
+
+    /// On the local fork seam, `registerOnForks` under any authority reads
+    /// each fork's binding under it and broadcasts from it: a name the
+    /// authority bound to another value is rebound on the first fork, and the
+    /// second, the same local EVM, skips.
+    function testRegisterOnForksBindsUnderTheAuthority(address authority) external {
+        assumeArbitraryAuthority(authority);
+        IConfigRegistryV1 registry = deployRegistry();
+        LocalForkVm localForkVm = new LocalForkVm();
+        string[] memory selected = list(LibRainDeploy.BASE, LibRainDeploy.ARBITRUM_ONE);
+        SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(selected);
+        uint256[] memory forkIds = new uint256[](2);
+        forkIds[0] = networks[0].chainId;
+        forkIds[1] = networks[1].chainId;
+        bytes memory value = abi.encode(address(2));
+        vm.warp(1);
+        vm.prank(authority);
+        registry.registerV1(keccak256("a.b"), abi.encode(address(1)));
+        vm.warp(2);
+
+        this.externalRegisterOnForksWith(Vm(address(localForkVm)), selected, forkIds, authority, "a.b", value);
+        assertEq(block.chainid, networks[1].chainId);
+        address[] memory broadcasters = localForkVm.broadcasters();
+        assertEq(broadcasters.length, 1);
+        assertEq(broadcasters[0], authority);
+        assertEq(LibConfigRegistryRead.getValue(registry, authority, keccak256("a.b")), value);
+        assertEq(LibConfigRegistryRead.getMoment(registry, authority, keccak256("a.b")), 2);
     }
 
     /// The confirmed check refuses its inputs before anything is forked.

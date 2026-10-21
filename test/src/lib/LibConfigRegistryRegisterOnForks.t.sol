@@ -27,9 +27,10 @@ import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
 /// The name is fresh per run, so no live binding can satisfy or contradict
 /// anything here.
 contract LibConfigRegistryRegisterOnForksTest is Test {
-    /// The authority every run here binds under and reads under: this contract,
-    /// which is the caller of every wrapper below and so the account that signs.
-    address internal immutable AUTHORITY = address(this);
+    /// The authority every run here binds under and reads under. Any account
+    /// is one: every bind is broadcast from it, and none of the wrappers below
+    /// is called from it.
+    address internal constant AUTHORITY = address(0xA11CE);
 
     function externalRegisterOnNetworks(string[] memory networks, string memory name, bytes memory value)
         external
@@ -45,27 +46,6 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         bytes memory value
     ) external {
         LibConfigRegistryRegister.registerOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
-    }
-
-    function externalRegisterOnForksFrom(
-        string[] memory networks,
-        uint256[] memory forkIds,
-        address sender,
-        string memory name,
-        bytes memory value
-    ) external {
-        vm.prank(sender);
-        this.externalRegisterOnForks(networks, forkIds, name, value);
-    }
-
-    function externalCheckInputs(string[] memory networks, string memory name, bytes memory value)
-        external
-        view
-        returns (string memory)
-    {
-        (,, string memory record) =
-            LibConfigRegistryRegister.checkInputs(vm, networks, networks, AUTHORITY, name, value);
-        return record;
     }
 
     function externalCheckRegisteredOnForks(
@@ -167,7 +147,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         }
         (uint256[] memory forkIds, string memory record) = this.externalRegisterOnNetworks(networks, name, value);
         assertEq(forkIds.length, networks.length);
-        string memory inputs = this.externalCheckInputs(networks, name, value);
+        string memory inputs = LibConfigRegistryRegister.describeInputs(vm, name, value, AUTHORITY);
         assertEq(record, inputs);
         LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
     }
@@ -185,7 +165,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         LibConfigRegistryFork.ensureDeployed(vm);
         vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
-        string memory inputs = this.externalCheckInputs(networks, name, value);
+        string memory inputs = LibConfigRegistryRegister.describeInputs(vm, name, value, AUTHORITY);
         (uint256[] memory forkIds, string memory record) = this.externalRegisterOnNetworks(networks, name, value);
         assertEq(forkIds.length, 2);
         assertEq(record, inputs);
@@ -236,22 +216,18 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         this.externalRegisterOnForks(networks, forkIds, name, value);
     }
 
-    /// `registerOnForks` refuses a sender other than the authority and a value
-    /// that is not whole words as `checkInputs` does, before selecting any fork.
+    /// `registerOnForks` refuses a value that is not whole words as
+    /// `checkInputs` does, before selecting any fork.
     function testRegisterOnForksRefusesInputsBeforeSelecting() external {
         (string memory name,, bytes memory value) = fresh();
         string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.BASE;
         networks[1] = LibRainDeploy.ARBITRUM_ONE;
         uint256[] memory forkIds = LibResolvedReadFixture.unselectableForkIds(2);
-        address other = address(uint160(AUTHORITY) ^ 1);
-
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotAuthority.selector, other, AUTHORITY));
-        this.externalRegisterOnForksFrom(networks, forkIds, other, name, value);
 
         bytes memory unaligned = abi.encodePacked(value, bytes1(0));
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalValue.selector, unaligned));
-        this.externalRegisterOnForksFrom(networks, forkIds, AUTHORITY, name, unaligned);
+        this.externalRegisterOnForks(networks, forkIds, name, unaligned);
     }
 
     /// A subset binds on exactly the networks selected, in selection order.

@@ -13,8 +13,9 @@ import {LibConfigRegistryRead} from "../lib/LibConfigRegistryRead.sol";
 import {LocalRegisterConfig} from "../concrete/LocalRegisterConfig.sol";
 
 /// @title RegisterConfigTest
-/// The script's wiring: which variables it reads, that the signer is the
-/// script's `msg.sender`, that both entries default to every supported
+/// The script's wiring: which variables it reads, that `run()` refuses any
+/// `msg.sender` but the authority before reading anything else, that both
+/// entries default to every supported
 /// network, and that it forks with the cheatcodes. Every network forks as the
 /// local EVM, so nothing here needs an RPC. `LibConfigRegistryRegister`'s own
 /// tests cover what it does with them on live forks.
@@ -40,19 +41,27 @@ contract RegisterConfigTest is Test {
         assertEnvAddressRefused(script);
         vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(authority));
 
+        // The sender — this test contract, as the script's `msg.sender` — is
+        // refused before the name is read.
         vm.setEnv("CONFIG_REGISTRY_NAME", "Not.Canonical");
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
+        vm.expectRevert(
+            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotAuthority.selector, address(this), authority)
+        );
         script.run();
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
+        script.runAsItself();
 
         vm.setEnv("CONFIG_REGISTRY_NAME", name);
         vm.setEnv("CONFIG_REGISTRY_VALUE", "0x");
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, keccak256(bytes(name))));
+        vm.expectRevert(
+            abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotAuthority.selector, address(this), authority)
+        );
         script.run();
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.EmptyValue.selector, keccak256(bytes(name))));
+        script.runAsItself();
 
-        // Networks unset: the default is every declared network, which is a
-        // valid selection, so the refusal reached is the sender — this test
-        // contract, as the script's `msg.sender`.
+        // Every input valid, networks unset: the sender is still refused.
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
         vm.expectRevert(
             abi.encodeWithSelector(LibConfigRegistryRegister.SenderNotAuthority.selector, address(this), authority)
@@ -70,7 +79,7 @@ contract RegisterConfigTest is Test {
 
         vm.setEnv("CONFIG_REGISTRY_NETWORKS", "base,nowhere");
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
-        script.run();
+        script.runAsItself();
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
         script.verify();
 

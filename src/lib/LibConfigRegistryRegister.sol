@@ -51,12 +51,17 @@ import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 /// `LibConfigRegistry.resolve` makes before every read, so the binding written
 /// is in the registry consumers read. `checkInputs` checks the inputs before
 /// any fork: the name is canonical, the value is not empty and is a
-/// whole number of 32-byte words, the networks are a non-empty,
-/// duplicate-free subset of the declared ones, and the caller, which is the
-/// account that signs, is the authority.
+/// whole number of 32-byte words, and the networks are a non-empty,
+/// duplicate-free subset of the declared ones.
 /// `registerOnNetworks` runs it and logs the inputs record before creating
 /// the forks; `registerOnForks` runs it again for a caller with its own forks,
 /// and logs no record.
+///
+/// Nothing here reads `msg.sender`. Every bind is broadcast from the
+/// `authority` it is given, and forge signs a broadcast only with a key it
+/// holds for that account. A script whose signer is its `--sender` refuses any
+/// other sender with `checkSender` at its entry point, as
+/// `RegisterConfig.run()` does.
 ///
 /// ## Simulation and confirmation
 ///
@@ -213,13 +218,6 @@ library LibConfigRegistryRegister {
         }
     }
 
-    /// `checkSender` of this call's `msg.sender`, which in a script is forge's
-    /// `--sender`: the account that signs. Nothing else here reads `msg.sender`.
-    /// @param authority The authority the run binds under.
-    function checkCaller(address authority) internal view {
-        checkSender(msg.sender, authority);
-    }
-
     /// Reverts unless the selected chain is the network's and its registry is
     /// the pinned one.
     /// @param vm The Vm the chain id is read through, so the read follows the
@@ -361,26 +359,19 @@ library LibConfigRegistryRegister {
         return (binds, record);
     }
 
-    /// Every input refusal of `registerOnNetworks`, in order — the name, the
-    /// value, the networks, then the caller — and the inputs record it logs.
-    /// @param vm The Vm instance to format with.
+    /// Every input refusal of `registerOnNetworks`, in order: the name, the
+    /// value, then the networks.
     /// @param selected The networks to bind on.
     /// @param declared The networks the declaration supports.
-    /// @param authority The authority to bind under. MUST be `msg.sender`, the
-    /// account that signs.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
     /// @return The hashed name.
     /// @return The selected networks' catalogue entries.
-    /// @return The `describeInputs` record of the inputs.
-    function checkInputs(
-        Vm vm,
-        string[] memory selected,
-        string[] memory declared,
-        address authority,
-        string memory name,
-        bytes memory value
-    ) internal view returns (bytes32, SupportedNetwork[] memory, string memory) {
+    function checkInputs(string[] memory selected, string[] memory declared, string memory name, bytes memory value)
+        internal
+        pure
+        returns (bytes32, SupportedNetwork[] memory)
+    {
         bytes32 hashed = nameHash(name);
         if (value.length == 0) {
             revert IConfigRegistryV1.EmptyValue(hashed);
@@ -388,9 +379,7 @@ library LibConfigRegistryRegister {
         if (value.length % 32 != 0) {
             revert NonCanonicalValue(value);
         }
-        SupportedNetwork[] memory networks = selectNetworks(selected, declared);
-        checkCaller(authority);
-        return (hashed, networks, describeInputs(vm, name, value, authority));
+        return (hashed, selectNetworks(selected, declared));
     }
 
     /// Binds `name` to `value` under `authority` on every selected network,
@@ -401,8 +390,8 @@ library LibConfigRegistryRegister {
     /// @param vm The Vm instance to fork and broadcast with.
     /// @param selected The networks to bind on.
     /// @param declared The networks the declaration supports.
-    /// @param authority The authority to bind under. MUST be `msg.sender`, the
-    /// account that signs.
+    /// @param authority The authority to bind under, and the account that
+    /// signs.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
     /// @return The fork each selected network was simulated on, for
@@ -416,7 +405,8 @@ library LibConfigRegistryRegister {
         string memory name,
         bytes memory value
     ) internal returns (uint256[] memory, string memory) {
-        (,, string memory record) = checkInputs(vm, selected, declared, authority, name, value);
+        checkInputs(selected, declared, name, value);
+        string memory record = describeInputs(vm, name, value, authority);
         console2.log(record);
 
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, selected);
@@ -430,8 +420,8 @@ library LibConfigRegistryRegister {
     /// @param selected The networks the forks are of.
     /// @param declared The networks the declaration supports.
     /// @param forkIds The fork of each selected network, positionally paired.
-    /// @param authority The authority to bind under. MUST be `msg.sender`, the
-    /// account that signs.
+    /// @param authority The authority to bind under, and the account that
+    /// signs.
     /// @param name The name as a consumer writes it.
     /// @param value The ABI-encoded value to bind it to.
     function registerOnForks(
@@ -443,8 +433,7 @@ library LibConfigRegistryRegister {
         string memory name,
         bytes memory value
     ) internal {
-        (bytes32 hashed, SupportedNetwork[] memory networks,) =
-            checkInputs(vm, selected, declared, authority, name, value);
+        (bytes32 hashed, SupportedNetwork[] memory networks) = checkInputs(selected, declared, name, value);
         if (forkIds.length != networks.length) {
             revert LibRainDeploy.ForkIdsLengthMismatch(networks.length, forkIds.length);
         }
