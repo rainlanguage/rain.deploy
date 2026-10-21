@@ -890,13 +890,13 @@ contract LibConfigRegistryRegisterTest is Test {
     }
 
     /// The bind's calldata is `registerV2(address,bytes32,bytes)` — selector
-    /// `0xb1cda166`, from `cast sig` — over the authority, the name hash and
+    /// `0xac853219`, from `cast sig` — over the authority, the name hash and
     /// the value as a dynamic argument: its offset, its length and its bytes
     /// right-padded to a word. It is exactly the call the bind makes.
     function testRegisterCalldataIsTheCallSent(bytes32 name, bytes memory value) external {
         vm.assume(value.length > 0);
         bytes memory expected = abi.encodePacked(
-            bytes4(0xb1cda166),
+            bytes4(0xac853219),
             uint256(uint160(AUTHORITY)),
             name,
             uint256(0x60),
@@ -935,7 +935,7 @@ contract LibConfigRegistryRegisterTest is Test {
                 "Registry: ",
                 vm.toString(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
                 "\n",
-                "Calldata: 0xb1cda166",
+                "Calldata: 0xac853219",
                 "00000000000000000000000000000000000000000000000000000000000a11ce",
                 "ba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
                 "0000000000000000000000000000000000000000000000000000000000000060",
