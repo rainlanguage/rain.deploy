@@ -899,5 +899,39 @@
       "The pre-existing suite is this PR's own conversion: the tests were rewritten for authority keys in the same branch, so 'existing' means present before the probe, not before the PR.",
       "Adversarial pass: authority isolation (one name under two authorities, same-block binds by two authorities, a revert for another authority not read as unbound), sender-is-authority refusal, and the Register event's indexed sender were checked against the interface NatSpec; no candidate."
     ]
+  },
+  {
+    "timestamp": "2026-10-21T01:37:24Z",
+    "commit": "e2bf79e72796b467d5bc47f39b094cc62139d781",
+    "testsAfterCommit": "5eba0b27748e477d4374a0ca977f1740c75286ba",
+    "publishedTag": "sol-v0.1.18",
+    "commitsAheadOfTag": 230,
+    "scope": "PR #322 round 2: the authority paths of src/lib/LibConfigRegistry.sol and src/lib/LibConfigRegistryRegister.sol, script/RegisterConfig.sol, and the register and check fork loops, made killable with no RPC",
+    "tool": "adversarial-mutation-test",
+    "skillVersion": "0.35.0",
+    "summary": {
+      "units": 3,
+      "behaviours": 37,
+      "behavioursProbed": 37,
+      "killedByExistingTests": 20,
+      "gapsFilled": 17,
+      "equivalentMutants": 0,
+      "unkillableDefensiveGuards": 0,
+      "notExecutedBySuite": 0,
+      "nonTerminating": 0,
+      "candidates": 0,
+      "confirmed": 0,
+      "filed": [],
+      "alreadyFiled": []
+    },
+    "notes": [
+      "Pre-existing suite at e2bf79e (LibConfigRegistry.t.sol, LibConfigRegistryRegister.t.sol, the concrete suites, two LibRainDeploy resolved-address tests and testRegisterOnForksRefuses*; 119 tests, RPC endpoints present): L01-L05, R01-R12, R14-R16 killed, 20/27. Survived R13 (registerOnNetworks checking sender as authority), R17 and R18 (the check loops reading under address(0)) and S01-S04 (the script's authority variable, its name and its signer), because RegisterConfigTest.testWiring forked live networks and was outside an offline run.",
+      "At 01f2adf the script forks through a virtual forkVm() and testWiring runs on LocalRegisterConfig over LocalForkVm, with the registry deployed locally. With no RPC variables and no .env (122 tests), testWiring kills S01-S04, R17, R18, the seam itself (S05 forkVm returning no cheatcodes, S06 and S07 run and verify bypassing it), S08 (the networks variable ignored), S09 (verify ignoring the selection) and K03 (no fork ids returned).",
+      "At 5eba0b2 LibConfigRegistryRegisterTest.testRegisterOnNetworksRefusesTheSignerBeforeTheVm kills R13 through a Vm with no code, whether or not RPC endpoints resolve, and testRegisterOnNetworksReturnsEachForkAndTheRecord kills K01, K02 and K05 (the loops pinned to the first fork or network) and K04 (an empty record). 37/37 killed offline.",
+      "R01 was re-probed at 5eba0b2 because a pre-commit stash briefly removed its applied mutant during the 01f2adf run: killed by testWiring and testRegisterOnForksRefusesInputsBeforeSelecting.",
+      "The fail-pattern was widened to one level of nested brackets after kills whose fuzz counterexamples carry brackets were reported without names; R13, K01, K02 and K05 were re-probed under it.",
+      "audit/known-false-positives.md drops the rows these offline kills replace (R28, R32, R10, the first-fork and first-network loop rows, the empty record, and script S01-S03); D10 in LibRainDeploy is outside this scope and stays.",
+      "Adversarial pass: the signer must be the authority the variable names and binds land under it (testWiring, under the script as authority since the local broadcast is a no-op), every refusal precedes any Vm call, and each selected network is bound and checked on its own fork in selection order, all derived from the RegisterConfig and LibConfigRegistryRegister NatSpec; no candidate."
+    ]
   }
 ]
