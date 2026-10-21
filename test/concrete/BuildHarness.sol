@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {Build, GeneratedContract, RetiredContract} from "../../script/Build.sol";
 import {DeployCandidate, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ParameterisedContract} from "../../src/abstract/RegistryDeploySuites.sol";
+import {BuildScript} from "../../src/abstract/BuildScript.sol";
 
 /// Thrown when a harness left pointed at `Build`'s own lib directory is asked
 /// to run the lib half of a build. That write lands on the committed libs the
@@ -31,7 +32,7 @@ contract BuildHarness is Build {
         sLibDir = libDirectory;
     }
 
-    /// @inheritdoc Build
+    /// @inheritdoc BuildScript
     function libDir() internal view override returns (string memory) {
         return bytes(sLibDir).length > 0 ? sLibDir : super.libDir();
     }
@@ -79,6 +80,11 @@ contract BuildHarness is Build {
     /// @return The snapshot contract names.
     function externalSnapshotContractNames() external pure returns (string[] memory) {
         return snapshotContractNames();
+    }
+
+    /// @return The paths `run()` declares.
+    function externalGeneratedPaths() external view returns (string[] memory) {
+        return generatedPaths();
     }
 
     /// The deploy declaration's list, through the same guarded reader every
