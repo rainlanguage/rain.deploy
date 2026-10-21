@@ -52,7 +52,8 @@ import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
 /// Only the authority decides who writes under it. An approval names one
 /// delegate for one name under the approving authority: it covers no other
 /// name, and approving a delegate under one authority never lets it write
-/// under another.
+/// under another. The events and errors are `IRegistryDelegatesV1`'s, whose
+/// account is the authority and whose scope is the name.
 ///
 /// This decouples an authority from whichever account sends its binds. A Safe
 /// or timelock authority approves a hardware-wallet key, which then binds under

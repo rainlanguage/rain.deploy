@@ -296,7 +296,9 @@ struct Prerequisite {
 /// Only `writer` decides who writes its line. An approval names one namespace
 /// under the approving writer and nothing else, so approving a delegate for one
 /// line never lets it write another, and anyone may own a namespace of the same
-/// name under their own address.
+/// name under their own address. The events and errors are
+/// `IRegistryDelegatesV1`'s, whose account is the writer and whose scope is
+/// the namespace.
 ///
 /// This decouples a line from whichever account executes a migration. A Safe
 /// that changes contracts directly and a timelock that executes scheduled
