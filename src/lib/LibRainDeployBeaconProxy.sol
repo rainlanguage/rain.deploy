@@ -63,6 +63,8 @@ library LibRainDeployBeaconProxy {
 
     /// Thrown when a beacon proxy deployed on the fork answers `owner()` with a first word whose
     /// low 160 bits are the deploy key.
+    /// Only `owner()` is read: roles, `AccessControl` admins and pending owners the implementation's
+    /// `initialize` grants are not, so assert those yourself.
     /// @param network The network.
     /// @param proxy The proxy.
     error BeaconProxySeatsDeployKey(string network, address proxy);

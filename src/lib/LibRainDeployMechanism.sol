@@ -96,6 +96,8 @@ error ExtendedNetworkUnfrozen(string suite, string network, address deployedAddr
 /// Thrown when a storage slot of any account but the clone and the accounts created under it is read while the clone
 /// is deployed locally: the factory call and the clone's `initialize`. A full-slot write is not refused; a write to
 /// part of a slot reads the slot first and is refused like a read.
+/// For a beacon proxy the `initialize` that runs is the stand-in implementation's, which reads no storage, not the
+/// beacon's real implementation's.
 /// @param suite The suite being deployed.
 /// @param account The account whose storage was read.
 /// @param slot The slot read.
@@ -150,7 +152,7 @@ library LibRainDeployMechanism {
             : LibRainDeployClone.cloneDeployedAddress(target);
     }
 
-    /// A clone suite's `CloneTarget`, with its factory and implementation held to being declared
+    /// A clone or beacon proxy suite's `CloneTarget`, with its factory and implementation held to being declared
     /// dependencies of the same suite.
     /// @param suite A suite whose mechanism is `Clone`.
     /// @return The decoded target.
@@ -160,7 +162,7 @@ library LibRainDeployMechanism {
         return target;
     }
 
-    /// A per-network clone suite's `CloneNetworks`, held to `LibRainDeployClone.checkCloneNetworks`
+    /// A per-network clone or beacon proxy suite's `CloneNetworks`, held to `LibRainDeployClone.checkCloneNetworks`
     /// and to carrying no `storedDeployedAddress`.
     /// @param suite A suite whose mechanism is `ClonePerNetwork`.
     /// @return The decoded per-network clone.
@@ -173,8 +175,8 @@ library LibRainDeployMechanism {
         return clones;
     }
 
-    /// The `CloneTarget` a clone suite deploys on one network.
-    /// @param suite A suite whose mechanism is `Clone` or `ClonePerNetwork`.
+    /// The `CloneTarget` a clone or beacon proxy suite deploys on one network.
+    /// @param suite A suite whose mechanism is `Clone`, `ClonePerNetwork`, `BeaconProxy` or `BeaconProxyPerNetwork`.
     /// @param chainId The network's chain id.
     /// @return The target on that network.
     function cloneTargetOn(DeploySuite memory suite, uint256 chainId) internal pure returns (CloneTarget memory) {
@@ -490,6 +492,9 @@ library LibRainDeployMechanism {
     /// The clone MUST NOT have been deployed earlier in the same EVM without its state reverted since: a `Create` that
     /// collides with an account already there is recorded as creating it, so reads of that account are exempt.
     /// Each clone is deployed under a state-diff recording, which ends any recording the caller started.
+    /// For a beacon proxy the beacon is etched with `BeaconProxyStandInBeacon` and `BEACON_PROXY_STAND_IN_IMPLEMENTATION`
+    /// with `BeaconProxyStandInImplementation` first, so the `initialize` that runs is the stand-in's, and both stay
+    /// etched after this returns.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy.
     /// @return Where the mechanism deployed it, in the suite's address order — the derived

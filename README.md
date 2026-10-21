@@ -384,6 +384,10 @@ The broadcast step asks the factory where it would put the proxy and refuses
 `BeaconProxyFactoryPredictionMismatch` if it disagrees with the derivation. It
 then calls `beaconProxyDeterministicOpenSalt` and refuses
 `BeaconProxySeatsDeployKey` if the proxy answers `owner()` with the deploy key.
+That is the beacon proxy's only real seat check: the pre-fork
+`SuiteSeatsDeployKey` one reaches the stand-in, which has no `owner()`. It reads
+`owner()` only, so roles and `AccessControl` admins the implementation's
+`initialize` grants are not read.
 
 The chain group checks the proxy's code at its address and its dependencies as
 for a clone. The code says nothing about what the beacon serves, so on every
@@ -467,7 +471,10 @@ suite's constructor runs on the local EVM with only its declared dependencies
 etched, so it MUST succeed there under each target's chain id: one that reverts
 locally refuses the broadcast to every network. That check reads `owner()` only:
 roles, pending owners, admin slots and contracts a constructor creates are not
-read, so assert those yourself.
+read, so assert those yourself. A beacon proxy suite is the exception: locally
+it deploys over the stand-ins, so its seat check is the per-network one in the
+broadcast step (`BeaconProxySeatsDeployKey`), on each network's fork, not this
+pre-fork one.
 
 Declare transitions in the order their migrations are applied: each applied
 transition's record MUST reach the latest earlier-declared applied one through
@@ -1426,8 +1433,11 @@ it. In order:
    `src/interface/deprecated/`. The registry has a new address, so migrations
    recorded in the 0.1.18 registry stay there and read as unapplied in V3: apply
    them again, with `applyMigrationHistoryV3` for one that already ran.
-9. Regenerate: `forge script ./script/Build.sol` followed by
-   `./script/build.sh`.
+9. A contract that inherits `cloneDeploys()` from an abstract of its own as well
+   as from `RainDeployCloneSuitesBase`, which now gives it a default body, names
+   both in its override: `override(MyCloneDeploys, RainDeployCloneSuitesBase)`.
+10. Regenerate: `forge script ./script/Build.sol` followed by
+    `./script/build.sh`.
 
 `LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,
 `RainDeployBroadcast.broadcastSuite` and
