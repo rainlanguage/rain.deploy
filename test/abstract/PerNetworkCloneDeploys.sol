@@ -181,7 +181,8 @@ abstract contract PerNetworkCloneDeploys is RainDeployCloneSuitesBase {
             artifactPath: CLONE_ARTIFACT_PATH,
             dependencies: abi.decode(PER_NETWORK_CLONE_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.ClonePerNetwork,
-            mechanismData: PER_NETWORK_CLONE_MECHANISM_DATA
+            mechanismData: PER_NETWORK_CLONE_MECHANISM_DATA,
+            describedByMeta: ""
         });
         return suites;
     }

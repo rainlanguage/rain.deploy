@@ -59,7 +59,8 @@ contract StaleCodeHashDeploy is RainDeployBroadcast {
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: "",
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });

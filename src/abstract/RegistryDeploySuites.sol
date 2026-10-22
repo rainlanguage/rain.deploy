@@ -201,7 +201,8 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: "",
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });
@@ -231,7 +232,8 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
                 dependencies: new DeployDependency[](0),
                 mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: "",
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });

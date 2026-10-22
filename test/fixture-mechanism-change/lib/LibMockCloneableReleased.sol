@@ -35,12 +35,13 @@ import {
 /// @notice Every frozen release of `MockCloneable`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
 ///
-/// The deploy address, code hash, creation code, runtime code and dependency
-/// list of each entry are aliased from that release's own frozen snapshot, so
-/// what a release deployed, and what it required to already be on chain, are
-/// read from the immutable file and from nowhere else. A dependency dropped
-/// from current source stays required by the releases cut with it, and one
-/// added is not imposed on releases cut without it.
+/// The deploy address, code hash, creation code, runtime code, dependency
+/// list and described-by meta of each entry are aliased from that release's
+/// own frozen snapshot, so what a release deployed, and what it required to
+/// already be on chain, are read from the immutable file and from nowhere
+/// else. A dependency dropped from current source stays required by the
+/// releases cut with it, and one added is not imposed on releases cut
+/// without it.
 ///
 /// The key and the artifact path are explorer and ordering metadata
 /// regenerated from the CURRENT declaration, and are not part of that
@@ -61,7 +62,8 @@ library LibMockCloneableReleased {
             artifactPath: "rain-factory/EIP1167Clone.sol:EIP1167Clone",
             dependencies: abi.decode(MockCloneable_0_0_1_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         suites[1] = DeploySuite({
             suite: "mock-cloneable@0_0_2",
@@ -72,7 +74,8 @@ library LibMockCloneableReleased {
             artifactPath: "rain-factory/EIP1167Clone.sol:EIP1167Clone",
             dependencies: abi.decode(MockCloneable_0_0_2_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Clone,
-            mechanismData: MockCloneable_0_0_2_MECHANISM_DATA
+            mechanismData: MockCloneable_0_0_2_MECHANISM_DATA,
+            describedByMeta: ""
         });
         suites[2] = DeploySuite({
             suite: "mock-cloneable@0_0_3",
@@ -83,7 +86,8 @@ library LibMockCloneableReleased {
             artifactPath: "rain-factory/EIP1167Clone.sol:EIP1167Clone",
             dependencies: abi.decode(MockCloneable_0_0_3_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.ClonePerNetwork,
-            mechanismData: MockCloneable_0_0_3_MECHANISM_DATA
+            mechanismData: MockCloneable_0_0_3_MECHANISM_DATA,
+            describedByMeta: ""
         });
         return suites;
     }

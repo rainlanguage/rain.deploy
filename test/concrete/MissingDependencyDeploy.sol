@@ -66,7 +66,8 @@ contract MissingDependencyDeploy is RainDeployBroadcast {
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: dependencies,
                 mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: "",
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });

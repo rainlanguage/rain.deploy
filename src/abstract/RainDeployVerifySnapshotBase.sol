@@ -4,7 +4,8 @@ pragma solidity ^0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
-import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
+import {DerivationSnapshotRevertFailed, LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
+import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// Thrown when the deploy address recorded for a version is not the address its own mechanism
@@ -92,6 +93,24 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         bytes32 runtimeCodeHash = keccak256(suite.storedRuntimeCode);
         if (suite.storedBytecodeHash != runtimeCodeHash) {
             revert StoredRuntimeCodeHashMismatch(suite.suite, suite.storedBytecodeHash, runtimeCodeHash);
+        }
+
+        checkDescribedByMeta(suite);
+    }
+
+    /// A suite carrying a described-by meta MUST name a `metaBoard()`, and its local deployment MUST answer
+    /// `describedByMetaV1()` with the meta's hash.
+    /// @param suite The suite to check.
+    function checkDescribedByMeta(DeploySuite memory suite) internal {
+        checkedMetaBoard(suite);
+        if (suite.describedByMeta.length == 0) {
+            return;
+        }
+        uint256 snapshotId = vm.snapshotState();
+        address[] memory deployed = LibRainDeployMechanism.deployLocally(vm, suite);
+        LibRainDeployDescribedByMeta.checkDescribes(suite.suite, deployed[0], suite.describedByMeta);
+        if (!vm.revertToState(snapshotId)) {
+            revert DerivationSnapshotRevertFailed(suite.suite, snapshotId);
         }
     }
 

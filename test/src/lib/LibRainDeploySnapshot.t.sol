@@ -1390,7 +1390,8 @@ contract LibRainDeploySnapshotTest is Test {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
     }
 
@@ -1436,12 +1437,12 @@ contract LibRainDeploySnapshotTest is Test {
     string constant EXPECTED_LIBRARY_HEADER = "/// @title LibAddressRegistryReleased\n"
         "/// @notice Every frozen release of `AddressRegistry`: one entry per file in\n"
         "/// the append-only `src/generated/<tag>/` record, in tag order.\n" "///\n"
-        "/// The deploy address, code hash, creation code, runtime code and dependency\n"
-        "/// list of each entry are aliased from that release's own frozen snapshot, so\n"
-        "/// what a release deployed, and what it required to already be on chain, are\n"
-        "/// read from the immutable file and from nowhere else. A dependency dropped\n"
-        "/// from current source stays required by the releases cut with it, and one\n"
-        "/// added is not imposed on releases cut without it.\n" "///\n"
+        "/// The deploy address, code hash, creation code, runtime code, dependency\n"
+        "/// list and described-by meta of each entry are aliased from that release's\n"
+        "/// own frozen snapshot, so what a release deployed, and what it required to\n"
+        "/// already be on chain, are read from the immutable file and from nowhere\n"
+        "/// else. A dependency dropped from current source stays required by the\n"
+        "/// releases cut with it, and one added is not imposed on releases cut\n" "/// without it.\n" "///\n"
         "/// The key and the artifact path are explorer and ordering metadata\n"
         "/// regenerated from the CURRENT declaration, and are not part of that\n"
         "/// record. A moved source path retroactively updates every entry's artifact\n"
@@ -1471,7 +1472,7 @@ contract LibRainDeploySnapshotTest is Test {
             "_RUNTIME_CODE,\n            artifactPath: \"src/concrete/AddressRegistry.sol:AddressRegistry\",\n",
             "            dependencies: abi.decode(AddressRegistry_",
             tag,
-            "_DEPENDENCIES, (DeployDependency[])),\n            mechanism: DeployMechanism.Zoltu,\n            mechanismData: \"\"\n        });\n"
+            "_DEPENDENCIES, (DeployDependency[])),\n            mechanism: DeployMechanism.Zoltu,\n            mechanismData: \"\",\n            describedByMeta: \"\"\n        });\n"
         );
     }
 
@@ -2032,7 +2033,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// type and silently retypes an append-only record.
     function testSnapshotConstantsDocumentEveryConstant() external view {
         string memory constants =
-            LibRainDeploySnapshot.snapshotConstants(vm, address(this), hex"00", new DeployDependency[](0));
+            LibRainDeploySnapshot.snapshotConstants(vm, address(this), hex"00", new DeployDependency[](0), "");
 
         assertTrue(
             vm.contains(
@@ -3739,7 +3740,8 @@ contract LibRainDeploySnapshotTest is Test {
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: hex"00"
+            mechanismData: hex"00",
+            describedByMeta: ""
         });
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
         this.externalWriteSuiteSnapshot(suite);
@@ -3870,7 +3872,8 @@ contract LibRainDeploySnapshotTest is Test {
         "            artifactPath: \"rain-factory/EIP1167Clone.sol:EIP1167Clone\",\n"
         "            dependencies: abi.decode(PerNetworkClone_0_0_1_DEPENDENCIES, (DeployDependency[])),\n"
         "            mechanism: DeployMechanism.ClonePerNetwork,\n"
-        "            mechanismData: PerNetworkClone_0_0_1_MECHANISM_DATA\n" "        });\n";
+        "            mechanismData: PerNetworkClone_0_0_1_MECHANISM_DATA,\n" "            describedByMeta: \"\"\n"
+        "        });\n";
 
     /// The committed `per-network-clone` record's path, as `frozenSnapshotPaths` spells it.
     /// @return The one record file.

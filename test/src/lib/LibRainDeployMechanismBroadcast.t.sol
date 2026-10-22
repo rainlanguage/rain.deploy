@@ -57,7 +57,8 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
             artifactPath: CLONE_ARTIFACT_PATH,
             dependencies: dependencies,
             mechanism: DeployMechanism.Clone,
-            mechanismData: abi.encode(clone)
+            mechanismData: abi.encode(clone),
+            describedByMeta: ""
         });
     }
 
@@ -88,7 +89,8 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
             artifactPath: CLONE_ARTIFACT_PATH,
             dependencies: exampleCloneDependencies(),
             mechanism: DeployMechanism.ClonePerNetwork,
-            mechanismData: abi.encode(clones)
+            mechanismData: abi.encode(clones),
+            describedByMeta: ""
         });
     }
 
@@ -102,7 +104,8 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
             artifactPath: "test/concrete/MockCloneable.sol:MockCloneable",
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
     }
 

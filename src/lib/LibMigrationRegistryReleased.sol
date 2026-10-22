@@ -98,12 +98,13 @@ import {
 /// @notice Every frozen release of `MigrationRegistry`: one entry per file in
 /// the append-only `src/generated/<tag>/` record, in tag order.
 ///
-/// The deploy address, code hash, creation code, runtime code and dependency
-/// list of each entry are aliased from that release's own frozen snapshot, so
-/// what a release deployed, and what it required to already be on chain, are
-/// read from the immutable file and from nowhere else. A dependency dropped
-/// from current source stays required by the releases cut with it, and one
-/// added is not imposed on releases cut without it.
+/// The deploy address, code hash, creation code, runtime code, dependency
+/// list and described-by meta of each entry are aliased from that release's
+/// own frozen snapshot, so what a release deployed, and what it required to
+/// already be on chain, are read from the immutable file and from nowhere
+/// else. A dependency dropped from current source stays required by the
+/// releases cut with it, and one added is not imposed on releases cut
+/// without it.
 ///
 /// The key and the artifact path are explorer and ordering metadata
 /// regenerated from the CURRENT declaration, and are not part of that
@@ -124,7 +125,8 @@ library LibMigrationRegistryReleased {
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_7_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         suites[1] = DeploySuite({
             suite: "migration-registry@0_1_8",
@@ -135,7 +137,8 @@ library LibMigrationRegistryReleased {
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_8_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         suites[2] = DeploySuite({
             suite: "migration-registry@0_1_10",
@@ -146,7 +149,8 @@ library LibMigrationRegistryReleased {
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_10_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         suites[3] = DeploySuite({
             suite: "migration-registry@0_1_11",
@@ -157,7 +161,8 @@ library LibMigrationRegistryReleased {
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_11_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         suites[4] = DeploySuite({
             suite: "migration-registry@0_1_12",
@@ -168,7 +173,8 @@ library LibMigrationRegistryReleased {
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_12_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         suites[5] = DeploySuite({
             suite: "migration-registry@0_1_14",
@@ -179,7 +185,8 @@ library LibMigrationRegistryReleased {
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_14_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         suites[6] = DeploySuite({
             suite: "migration-registry@0_1_15",
@@ -190,7 +197,8 @@ library LibMigrationRegistryReleased {
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_15_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         suites[7] = DeploySuite({
             suite: "migration-registry@0_1_17",
@@ -201,7 +209,8 @@ library LibMigrationRegistryReleased {
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_17_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         suites[8] = DeploySuite({
             suite: "migration-registry@0_1_18",
@@ -212,7 +221,8 @@ library LibMigrationRegistryReleased {
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_18_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         suites[9] = DeploySuite({
             suite: "migration-registry@0_1_19",
@@ -223,7 +233,8 @@ library LibMigrationRegistryReleased {
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_19_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         suites[10] = DeploySuite({
             suite: "migration-registry@0_1_20",
@@ -234,7 +245,8 @@ library LibMigrationRegistryReleased {
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_20_DEPENDENCIES, (DeployDependency[])),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
         return suites;
     }

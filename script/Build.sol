@@ -164,7 +164,8 @@ contract Build is BuildScript, RegistryDeploySuites {
             artifactPath: retired.artifactPath,
             dependencies: new DeployDependency[](0),
             mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: "",
+            describedByMeta: ""
         });
     }
 

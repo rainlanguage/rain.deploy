@@ -453,7 +453,8 @@ library LibRainDeployMechanism {
             artifactPath: suite.artifactPath,
             dependencies: suite.dependencies,
             mechanism: suite.mechanism,
-            mechanismData: mechanismData
+            mechanismData: mechanismData,
+            describedByMeta: suite.describedByMeta
         });
     }
 
@@ -868,7 +869,8 @@ library LibRainDeployMechanism {
             artifactPath: "",
             dependencies: clone.dependencies,
             mechanism: mechanism,
-            mechanismData: mechanismData
+            mechanismData: mechanismData,
+            describedByMeta: ""
         });
         if (beaconProxy) {
             snapshot.creationCode = LibRainDeployBeaconProxy.beaconProxyCreationCode(clone.implementation);

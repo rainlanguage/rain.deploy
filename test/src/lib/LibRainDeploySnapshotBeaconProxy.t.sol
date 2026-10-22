@@ -292,7 +292,7 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
         string memory entry = LibRainDeploySnapshot.releasedSuiteEntry(vm, 0, path, suite);
         assertTrue(vm.contains(entry, "storedDeployedAddress: BeaconProxyRecord_0_0_1_DEPLOYED_ADDRESS,\n"));
         assertTrue(vm.contains(entry, "mechanism: DeployMechanism.BeaconProxy,\n"));
-        assertTrue(vm.contains(entry, "mechanismData: BeaconProxyRecord_0_0_1_MECHANISM_DATA\n"));
+        assertTrue(vm.contains(entry, "mechanismData: BeaconProxyRecord_0_0_1_MECHANISM_DATA,\n"));
         assertTrue(vm.contains(entry, string.concat("artifactPath: \"", BEACON_PROXY_ARTIFACT_PATH, "\"")));
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(string.concat(ROOT, "/0_0_1"), true);
@@ -338,7 +338,7 @@ contract LibRainDeploySnapshotBeaconProxyTest is Test {
         string memory entry = LibRainDeploySnapshot.releasedSuiteEntry(vm, 0, path, suite);
         assertTrue(vm.contains(entry, "storedDeployedAddress: address(0),\n"));
         assertTrue(vm.contains(entry, "mechanism: DeployMechanism.BeaconProxyPerNetwork,\n"));
-        assertTrue(vm.contains(entry, "mechanismData: BeaconProxyRecord_0_0_2_MECHANISM_DATA\n"));
+        assertTrue(vm.contains(entry, "mechanismData: BeaconProxyRecord_0_0_2_MECHANISM_DATA,\n"));
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(string.concat(ROOT, "/0_0_2"), true);
     }
