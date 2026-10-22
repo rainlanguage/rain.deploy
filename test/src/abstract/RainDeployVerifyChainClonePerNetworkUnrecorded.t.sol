@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {ICloneableFactoryV4} from "rain-factory-0.2.4/src/interface/deprecated/ICloneableFactoryV4.sol";
+import {ICloneableFactoryV4} from "rain-factory-0.2.5/src/interface/deprecated/ICloneableFactoryV4.sol";
 import {RainDeployVerifyChain, SuiteRequiredNowhere} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {ExtendedNetworkUnfrozen} from "../../../src/lib/LibRainDeployMechanism.sol";

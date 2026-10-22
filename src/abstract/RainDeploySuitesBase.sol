@@ -133,7 +133,7 @@ enum DeployMechanism {
     /// An EIP-1167 clone through an `ICloneableFactoryV4` at its open salt, with init data — and
     /// therefore an address — per network.
     ClonePerNetwork,
-    /// An OpenZeppelin `BeaconProxy` through an `ICloneableFactoryV5` at its beacon-proxy open
+    /// An OpenZeppelin `BeaconProxy` through an `ICloneableFactoryV6` at its beacon-proxy open
     /// salt. Its `CloneTarget.implementation` is the beacon.
     BeaconProxy,
     /// `BeaconProxy` with init data — and therefore an address — per network.
