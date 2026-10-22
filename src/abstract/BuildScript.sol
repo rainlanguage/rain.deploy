@@ -38,9 +38,8 @@ import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 /// generated from it could cover networks nothing verifies with nothing red.
 ///
 /// `run()` stages those two files rather than writing them, because foundry
-/// refuses a cheatcode write to the project root's own `foundry.toml`. A repo
-/// inheriting this needs `script/build.sh` to install what was staged — see
-/// `LibRainDeployConfig`.
+/// refuses a cheatcode write to the project root's own `foundry.toml`.
+/// `rainix-copy-artifacts` installs what was staged — see `LibRainDeployConfig`.
 abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// Rewrite the rolling `candidate/` snapshots from what this repo currently
     /// compiles. Run by `cutRelease()` inside `freeze`, after its guards and
@@ -100,15 +99,12 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// so a tree whose config has drifted from the declaration it pins fails
     /// there.
     ///
-    /// This STAGES the files; `script/build.sh` installs them. See
+    /// This STAGES the files; `rainix-copy-artifacts` installs them. See
     /// `LibRainDeployConfig` for why a script cannot write `foundry.toml`
     /// itself.
     function regenerateConfig() internal {
         LibRainDeployConfig.writeStagedConfig(
-            vm,
-            configRoot(),
-            LibRainDeployConfig.BUILD_HOOK_PATH,
-            LibRainDeploy.declaredNetworkConfigs(supportedNetworks())
+            vm, configRoot(), LibRainDeploy.declaredNetworkConfigs(supportedNetworks())
         );
     }
 
@@ -190,8 +186,8 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         return new string[](0);
     }
 
-    /// Every path `run()` must rewrite, `script/build.sh`'s installs of the
-    /// staged config and the extended networks records included.
+    /// Every path `run()` must rewrite, the installed staged config and the
+    /// extended networks records included.
     /// @return The paths.
     function generatedPaths() internal view returns (string[] memory) {
         string[] memory base =
