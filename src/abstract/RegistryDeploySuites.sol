@@ -148,18 +148,18 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
 
     /// @inheritdoc RainDeploySuitesBase
     /// @dev One entry per contract this repo deploys. A third deployed contract
-    /// is a third named candidate below and a third entry here, each enforced
-    /// by a test:
+    /// is a third named candidate below and:
     ///
-    /// - a third entry in `script/Build.sol`'s generated-contract list
+    /// - a third entry in `script/Build.sol`'s `generatedContracts()`, which
+    ///   `BuildScript.checkedGeneratedContracts` refuses to build without
     /// - a third `suite` option in `.github/workflows/manual-sol-artifacts.yaml`
     ///   and the matching length and key in
     ///   `testCandidateKeysAreTheDispatchOptions`
     /// - a third `compilation_restrictions` entry in `foundry.toml`
     ///
     /// The released declaration follows from the generated-contract entry:
-    /// `script/Build.sol` generates the per-contract released lib from that
-    /// list, and the aggregate `releasedSuites()` reads from
+    /// `BuildScript` generates the per-contract released lib from that list,
+    /// and the aggregate `releasedSuites()` reads from
     /// `releasedContractNames()`, its retired contracts then that list.
     function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);

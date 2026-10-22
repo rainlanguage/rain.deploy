@@ -2,25 +2,35 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {BuildScript} from "../../src/abstract/BuildScript.sol";
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {BuildScript, GeneratedContract} from "../../src/abstract/BuildScript.sol";
+import {
+    DeployCandidate,
+    DeployDependency,
+    DeployMechanism,
+    DeploySuite,
+    RainDeploySuitesBase
+} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
+import {MockDeployableV2} from "./MockDeployableV2.sol";
+
+/// @dev The contract the harness's one candidate snapshots.
+string constant BUILD_SCRIPT_HARNESS_CONTRACT = "MockDeployableV2";
+
+/// @dev The harness's one candidate's key.
+string constant BUILD_SCRIPT_HARNESS_SUITE = "harness-candidate";
 
 /// @title BuildScriptHarness
-/// @notice A `BuildScript` whose hooks write markers into a fixture record
-/// instead of real generated sources, so `run()` and `cutRelease()` can be
-/// called and what each one wrote — and what the record held when it wrote it —
-/// read back.
-///
-/// The markers are comment-only `.sol` files, because a failing test leaves its
-/// fixture behind and `forge test` compiles everything under `test/`.
+/// @notice A `BuildScript` over a fixture record root with one candidate, so
+/// `run()` and `cutRelease()` can be called and what each one wrote read back.
+/// Its libs go under `fixture-lib/`, which nothing compiles.
 contract BuildScriptHarness is BuildScript {
     /// The fixture record root. Empty defers to `BuildScript`'s own.
     string internal sRoot;
 
-    /// The single contract this fixture release freezes.
-    string internal sContractName;
+    /// The fixture lib directory. Empty defers to `BuildScript`'s own.
+    string internal sLibDir;
 
     /// The declared network set, or empty for `RainDeploySuitesBase`'s own
     /// default. Set by `declareNetworks` and only by it, so the default case is
@@ -28,10 +38,14 @@ contract BuildScriptHarness is BuildScript {
     string[] internal sNetworks;
 
     /// @param root The fixture record root, or empty for `BuildScript`'s own.
-    /// @param contractName The contract the fixture snapshot describes.
-    constructor(string memory root, string memory contractName) {
+    constructor(string memory root) {
         sRoot = root;
-        sContractName = contractName;
+        if (bytes(root).length > 0) {
+            string[] memory components = vm.split(root, "/");
+            sLibDir = string.concat("fixture-lib/buildscript-harness/", components[components.length - 1]);
+            //forge-lint: disable-next-line(unsafe-cheatcode)
+            vm.createDir(sLibDir, true);
+        }
     }
 
     /// Narrows what this harness declares, which is what the config is
@@ -47,10 +61,6 @@ contract BuildScriptHarness is BuildScript {
     }
 
     /// @inheritdoc RainDeploySuitesBase
-    /// @dev A fixture with no suites at all. Nothing `run()` or `cutRelease()`
-    /// reaches asks for one — the subject here is the wiring and the config —
-    /// and a declaration this harness does not drive is one a reader would take
-    /// for an assertion.
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);
         return suites;
@@ -58,8 +68,31 @@ contract BuildScriptHarness is BuildScript {
 
     /// @inheritdoc RainDeploySuitesBase
     function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
-        DeployCandidate[] memory candidates = new DeployCandidate[](0);
+        DeployCandidate[] memory candidates = new DeployCandidate[](1);
+        candidates[0] = DeployCandidate({
+            snapshot: DeploySuite({
+                suite: BUILD_SCRIPT_HARNESS_SUITE,
+                creationCode: type(MockDeployableV2).creationCode,
+                storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
+                storedBytecodeHash: keccak256(type(MockDeployableV2).runtimeCode),
+                storedRuntimeCode: type(MockDeployableV2).runtimeCode,
+                artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
+                dependencies: new DeployDependency[](0),
+                mechanism: DeployMechanism.Zoltu,
+                mechanismData: ""
+            }),
+            unanchorableReason: ""
+        });
         return candidates;
+    }
+
+    /// @inheritdoc BuildScript
+    function generatedContracts() internal pure override returns (GeneratedContract[] memory) {
+        GeneratedContract[] memory generated = new GeneratedContract[](1);
+        generated[0] = GeneratedContract({
+            contractName: BUILD_SCRIPT_HARNESS_CONTRACT, constantPrefix: "", candidate: candidateSuites()[0]
+        });
+        return generated;
     }
 
     /// @inheritdoc BuildScript
@@ -67,10 +100,20 @@ contract BuildScriptHarness is BuildScript {
         return bytes(sRoot).length > 0 ? sRoot : super.recordRoot();
     }
 
+    /// @inheritdoc BuildScript
+    function libDir() internal view override returns (string memory) {
+        return bytes(sLibDir).length > 0 ? sLibDir : super.libDir();
+    }
+
     /// The root a release cut from this harness is frozen into.
     /// @return The record root.
     function externalRecordRoot() external view returns (string memory) {
         return recordRoot();
+    }
+
+    /// @return The lib directory.
+    function externalLibDir() external view returns (string memory) {
+        return libDir();
     }
 
     /// @return The paths `run()` declares.
@@ -149,23 +192,34 @@ contract BuildScriptHarness is BuildScript {
     /// Where `regenerateSnapshots` writes.
     /// @return The rolling snapshot path.
     function rollingPath() public view returns (string memory) {
-        return LibRainDeploySnapshot.pathForSnapshot(recordRoot(), LibRainDeploySnapshot.CANDIDATE, sContractName);
+        return LibRainDeploySnapshot.pathForSnapshot(
+            recordRoot(), LibRainDeploySnapshot.CANDIDATE, BUILD_SCRIPT_HARNESS_CONTRACT
+        );
     }
 
     /// Where the release freezes that snapshot to.
     /// @return The frozen snapshot path.
     function frozenPath() external view returns (string memory) {
-        return LibRainDeploySnapshot.pathForSnapshot(recordRoot(), LibRainDeploySnapshot.deployTag(vm), sContractName);
+        return LibRainDeploySnapshot.pathForSnapshot(
+            recordRoot(), LibRainDeploySnapshot.deployTag(vm), BUILD_SCRIPT_HARNESS_CONTRACT
+        );
     }
 
-    /// Where `regenerateLibs` writes. Directly under the root, so the record
-    /// walk — which reads tag directories — never sees it.
-    /// @return The lib marker path.
-    function libsPath() public view returns (string memory) {
-        return string.concat(recordRoot(), "/libs.sol");
+    /// Where `regenerateLibs` writes the candidate's released-suites lib.
+    /// @return The released lib path.
+    function releasedLibPath() external view returns (string memory) {
+        return LibRainDeploySnapshot.pathForLib(
+            libDir(), LibRainDeploySnapshot.releasedLibraryName(BUILD_SCRIPT_HARNESS_CONTRACT)
+        );
     }
 
-    /// A fixture file's content.
+    /// Where `regenerateLibs` writes the aggregate.
+    /// @return The aggregate path.
+    function aggregatePath() external view returns (string memory) {
+        return LibRainDeploySnapshot.pathForLib(libDir(), LibRainDeploySnapshot.RELEASED_SUITES_LIBRARY);
+    }
+
+    /// A comment-only fixture file.
     /// @param body What distinguishes this marker from the others.
     /// @return The marker.
     function marker(string memory body) public pure returns (string memory) {
@@ -174,47 +228,21 @@ contract BuildScriptHarness is BuildScript {
         return string.concat("// SPDX-License", "-Identifier: LicenseRef-DCL-1.0\n// ", body, "\n");
     }
 
-    /// What `regenerateSnapshots` writes over whatever was there.
-    /// @return The regenerated rolling snapshot.
-    function regeneratedSnapshot() public pure returns (string memory) {
-        return marker("regenerated");
-    }
-
-    /// What `regenerateLibs` writes: the record it could see, and whether the
-    /// rolling snapshot had been regenerated, at the moment it ran.
-    /// @param frozenCount Frozen record files visible to it.
-    /// @param rollingExists Whether the rolling snapshot existed.
-    /// @return The lib marker.
-    function libsMarker(uint256 frozenCount, bool rollingExists) public pure returns (string memory) {
-        return
-            marker(
-                string.concat("frozen ", vm.toString(frozenCount), " rolling ", rollingExists ? "present" : "absent")
-            );
-    }
-
-    /// @inheritdoc BuildScript
-    function snapshotContractNames() internal view override returns (string[] memory) {
-        string[] memory contractNames = new string[](1);
-        contractNames[0] = sContractName;
-        return contractNames;
-    }
-
     /// @inheritdoc BuildScript
     function regenerateSnapshots() internal override {
-        writeFixture(rollingPath(), regeneratedSnapshot());
-    }
-
-    /// @inheritdoc BuildScript
-    function regenerateLibs() internal override {
-        writeFixture(
-            libsPath(),
-            libsMarker(LibRainDeploySnapshot.frozenSnapshotPaths(vm, recordRoot()).length, vm.exists(rollingPath()))
+        LibRainDeploySnapshot.writeSnapshot(
+            vm,
+            recordRoot(),
+            LibRainDeploySnapshot.CANDIDATE,
+            BUILD_SCRIPT_HARNESS_CONTRACT,
+            type(MockDeployableV2).creationCode,
+            new DeployDependency[](0)
         );
     }
 
-    /// Writes a marker, creating the directories above it.
+    /// Writes a fixture file, creating the directories above it.
     /// @param path The file to write.
-    /// @param content The marker to write there.
+    /// @param content The content to write there.
     function writeFixture(string memory path, string memory content) internal {
         string[] memory components = vm.split(path, "/");
         string memory dir = components[0];

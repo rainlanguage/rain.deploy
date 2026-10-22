@@ -26,9 +26,6 @@ import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
 /// `ExampleDeployNarrowNetworks` gives: it is neither the first nor the last
 /// entry the catalogue lists.
 contract BuildScriptNarrowNetworksTest is Test {
-    /// The contract the fixture snapshots describe.
-    string constant FIXTURE_CONTRACT = "Fixture";
-
     /// Where the narrowed-declaration fixture is built.
     string constant NARROW_FIXTURE_ROOT = "test/generated-buildscript-narrow";
 
@@ -56,7 +53,7 @@ contract BuildScriptNarrowNetworksTest is Test {
             //forge-lint: disable-next-line(unsafe-cheatcode)
             vm.removeDir(root, true);
         }
-        BuildScriptHarness harness = new BuildScriptHarness(root, FIXTURE_CONTRACT);
+        BuildScriptHarness harness = new BuildScriptHarness(root);
         harness.declareNetworks(networks);
         harness.seedConfig();
         return harness;

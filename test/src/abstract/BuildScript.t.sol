@@ -18,6 +18,7 @@ import {
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
+import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {CloneBuildScriptHarness} from "../../concrete/CloneBuildScriptHarness.sol";
 import {PerNetworkCloneBuildScriptHarness} from "../../concrete/PerNetworkCloneBuildScriptHarness.sol";
 import {
@@ -38,13 +39,6 @@ import {
     EXAMPLE_CLONE_RELEASE_TAG
 } from "../../abstract/ExampleCloneDeploys.sol";
 
-/// A memory struct so a recursion into a subtree writes what it finds where the
-/// caller can read it: every frame of the walk shares this one accumulator.
-struct AstReferences {
-    int256[] ids;
-    uint256 count;
-}
-
 /// @title BuildScriptTest
 /// @notice The split between the two entry points every deploy repo inherits.
 ///
@@ -58,9 +52,6 @@ struct AstReferences {
 /// asserted from the compiler's AST instead, and against the base's own
 /// declarations rather than a list of the hooks it holds today.
 contract BuildScriptTest is Test {
-    /// The contract the fixture snapshots describe.
-    string constant FIXTURE_CONTRACT = "Fixture";
-
     /// Where the `run()` fixture's record is built.
     string constant RUN_FIXTURE_ROOT = "test/generated-buildscript-run";
 
@@ -122,26 +113,27 @@ contract BuildScriptTest is Test {
     /// This is the entry point CI calls on every push. A `run()` that cut a
     /// release would freeze whatever a branch happened to compile under the
     /// repo's current tag, and that tag can then never be cut again for real.
-    ///
-    /// The lib marker also carries the order: the libs are written after the
-    /// snapshots, from a record that holds no release.
     function testRunRegeneratesAndFreezesNothing() external {
         resetFixture(RUN_FIXTURE_ROOT);
-        BuildScriptHarness harness = new BuildScriptHarness(RUN_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        BuildScriptHarness harness = new BuildScriptHarness(RUN_FIXTURE_ROOT);
         harness.seedConfig();
         harness.run();
 
         // Read while the fixture is still there, asserted once it is gone.
         string memory rolling = vm.readFile(harness.rollingPath());
-        string memory libs = vm.readFile(harness.libsPath());
+        string memory released = vm.readFile(harness.releasedLibPath());
+        bool aggregateExists = vm.exists(harness.aggregatePath());
         string[] memory record = LibRainDeploySnapshot.frozenSnapshotPaths(vm, RUN_FIXTURE_ROOT);
         bool frozenExists = vm.exists(harness.frozenPath());
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(RUN_FIXTURE_ROOT, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(harness.externalLibDir(), true);
 
-        assertEq(rolling, harness.regeneratedSnapshot());
-        assertEq(libs, harness.libsMarker(0, true));
+        assertTrue(vm.contains(rolling, vm.toString(keccak256(type(MockDeployableV2).runtimeCode))));
+        assertTrue(vm.contains(released, "new DeploySuite[](0)"));
+        assertTrue(aggregateExists);
         assertEq(record.length, 0);
         assertFalse(frozenExists);
     }
@@ -149,14 +141,14 @@ contract BuildScriptTest is Test {
     /// PROPERTY: `run()` declares the rolling snapshot its hook writes, the
     /// contract's released-suites lib and the aggregate.
     function testRunDeclaresTheRollingSnapshotAndTheReleasedLibs() external {
-        BuildScriptHarness harness = new BuildScriptHarness(RUN_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        BuildScriptHarness harness = new BuildScriptHarness(RUN_FIXTURE_ROOT);
         string[] memory paths = harness.externalGeneratedPaths();
 
         assertEq(paths.length, 5);
         assertEq(paths[0], harness.rollingPath());
-        assertEq(paths[0], "test/generated-buildscript-run/candidate/Fixture.sol");
-        assertEq(paths[1], "src/lib/LibFixtureReleased.sol");
-        assertEq(paths[2], "src/lib/LibReleasedSuites.sol");
+        assertEq(paths[0], "test/generated-buildscript-run/candidate/MockDeployableV2.sol");
+        assertEq(paths[1], "fixture-lib/buildscript-harness/generated-buildscript-run/LibMockDeployableV2Released.sol");
+        assertEq(paths[2], "fixture-lib/buildscript-harness/generated-buildscript-run/LibReleasedSuites.sol");
         assertEq(paths[3], "foundry.toml");
         assertEq(paths[4], ".env.example");
     }
@@ -171,7 +163,7 @@ contract BuildScriptTest is Test {
     /// afterwards — the immutability guard only fires on a re-cut.
     function testCutReleaseFreezesTheRegeneratedSnapshot() external {
         resetFixture(CUT_FIXTURE_ROOT);
-        BuildScriptHarness harness = new BuildScriptHarness(CUT_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        BuildScriptHarness harness = new BuildScriptHarness(CUT_FIXTURE_ROOT);
         string memory stale = harness.marker("stale");
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.createDir(LibRainDeploySnapshot.dirForSnapshot(CUT_FIXTURE_ROOT, LibRainDeploySnapshot.CANDIDATE), true);
@@ -188,11 +180,13 @@ contract BuildScriptTest is Test {
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(CUT_FIXTURE_ROOT, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(harness.externalLibDir(), true);
 
         assertTrue(frozenExists);
-        assertEq(frozen, harness.regeneratedSnapshot());
+        assertEq(frozen, rolling);
         assertNotEq(frozen, stale);
-        assertEq(rolling, harness.regeneratedSnapshot());
+        assertTrue(vm.contains(frozen, vm.toString(keccak256(type(MockDeployableV2).runtimeCode))));
         assertEq(record.length, 1);
     }
 
@@ -204,16 +198,23 @@ contract BuildScriptTest is Test {
     /// every check downstream then reads as a release nobody ever made.
     function testCutReleaseRegeneratesLibsFromTheRecordJustCut() external {
         resetFixture(LIBS_FIXTURE_ROOT);
-        BuildScriptHarness harness = new BuildScriptHarness(LIBS_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        BuildScriptHarness harness = new BuildScriptHarness(LIBS_FIXTURE_ROOT);
         harness.cutRelease();
 
         // Read while the fixture is still there, asserted once it is gone.
-        string memory libs = vm.readFile(harness.libsPath());
+        string memory released = vm.readFile(harness.releasedLibPath());
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(LIBS_FIXTURE_ROOT, true);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(harness.externalLibDir(), true);
 
-        assertEq(libs, harness.libsMarker(1, true));
+        assertTrue(vm.contains(released, "new DeploySuite[](1)"));
+        assertTrue(
+            vm.contains(
+                released, string.concat("suite: \"harness-candidate@", LibRainDeploySnapshot.deployTag(vm), "\"")
+            )
+        );
     }
 
     /// PROPERTY.
@@ -370,7 +371,7 @@ contract BuildScriptTest is Test {
     function testRunWritesTheExtendedNetworksRecord() external {
         string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-run");
         resetFixture(root);
-        new BuildScriptHarness(root, FIXTURE_CONTRACT).seedConfig();
+        new BuildScriptHarness(root).seedConfig();
         PerNetworkCloneBuildScriptHarness harness = new PerNetworkCloneBuildScriptHarness(root, root);
         CloneNetwork[] memory networks = new CloneNetwork[](1);
         networks[0] = extendedNetwork(8453, hex"00aa");
@@ -396,7 +397,7 @@ contract BuildScriptTest is Test {
     function testRunDeclaresTheExtendedNetworksRecordsItWrites() external {
         string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-run-declared");
         resetFixture(root);
-        new BuildScriptHarness(root, FIXTURE_CONTRACT).seedConfig();
+        new BuildScriptHarness(root).seedConfig();
         TwoReleasePerNetworkCloneBuildScriptHarness harness =
             new TwoReleasePerNetworkCloneBuildScriptHarness(root, root);
         CloneNetwork[] memory second = new CloneNetwork[](1);
@@ -553,7 +554,7 @@ contract BuildScriptTest is Test {
 
     function testRunStagesTheNetworkConfig() external {
         resetFixture(RUN_CONFIG_FIXTURE_ROOT);
-        BuildScriptHarness harness = new BuildScriptHarness(RUN_CONFIG_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        BuildScriptHarness harness = new BuildScriptHarness(RUN_CONFIG_FIXTURE_ROOT);
         harness.seedConfig();
         harness.run();
 
@@ -604,7 +605,7 @@ contract BuildScriptTest is Test {
     /// which is the config change happening anyway, one step later.
     function testCutReleaseLeavesTheConfigAlone() external {
         resetFixture(CUT_CONFIG_FIXTURE_ROOT);
-        BuildScriptHarness harness = new BuildScriptHarness(CUT_CONFIG_FIXTURE_ROOT, FIXTURE_CONTRACT);
+        BuildScriptHarness harness = new BuildScriptHarness(CUT_CONFIG_FIXTURE_ROOT);
         harness.seedConfig();
         harness.cutRelease();
 
@@ -628,7 +629,7 @@ contract BuildScriptTest is Test {
     /// releases from, and a default pointing anywhere else writes releases
     /// nothing enumerates.
     function testRecordRootDefaultsToTheRepoRecord() external {
-        BuildScriptHarness harness = new BuildScriptHarness("", FIXTURE_CONTRACT);
+        BuildScriptHarness harness = new BuildScriptHarness("");
         assertEq(harness.externalRecordRoot(), LibRainDeploySnapshot.LIB_FS_ROOT);
     }
 
@@ -691,9 +692,8 @@ contract BuildScriptTest is Test {
     /// nothing declares would land.
     ///
     /// Order is not asserted here and cannot be: declaration order is not call
-    /// order, and the order that is observable —
-    /// `regenerateSnapshots` before `regenerateLibs` — is already pinned by
-    /// `testRunRegeneratesAndFreezesNothing` through the harness's markers.
+    /// order. The order a release depends on — the libs regenerated after the
+    /// freeze — is pinned by `testCutReleaseRegeneratesLibsFromTheRecordJustCut`.
     ///
     /// A function that only reads is not `run()`'s to call: `recordRoot()`,
     /// `configRoot()` and `snapshotContractNames()` answer questions for
@@ -955,61 +955,39 @@ contract BuildScriptTest is Test {
             references[i] = referencedIds(json, members[i]);
         }
 
-        // One pass per member: a pass that changes nothing has closed the set,
-        // and a pass that changes something adds at least one member to it.
-        for (uint256 pass = 0; pass < members.length; pass++) {
+        // A pass that adds nothing has closed the set.
+        bool changed = true;
+        while (changed) {
+            changed = false;
             for (uint256 i = 0; i < members.length; i++) {
                 if (!reached[i]) {
                     continue;
                 }
                 for (uint256 j = 0; j < members.length; j++) {
-                    reached[j] = reached[j] || referencesId(references[i], ids[j]);
+                    if (!reached[j] && referencesId(references[i], ids[j])) {
+                        reached[j] = true;
+                        changed = true;
+                    }
                 }
             }
         }
         return reached;
     }
 
+    /// One query, not a walk: every cheatcode call is handed the whole artifact.
     function referencedIds(string memory json, string memory path) internal view returns (int256[] memory) {
-        AstReferences memory references = AstReferences(new int256[](256), 0);
-        collectReferences(json, path, references);
-
-        int256[] memory ids = new int256[](references.count);
-        for (uint256 i = 0; i < references.count; i++) {
-            ids[i] = references.ids[i];
+        string memory key = string.concat(path, "..[?(@.nodeType == 'Identifier')].referencedDeclaration");
+        if (!vm.keyExistsJson(json, key)) {
+            return new int256[](0);
         }
-        return ids;
-    }
-
-    /// Generic over node shapes rather than a walk of the expressions the base
-    /// happens to hold today: a hook handed to a library as a function pointer
-    /// is a reference several levels inside an argument list, and a call moved
-    /// inside a block is one level inside a statement. Neither is a hook that
-    /// nothing wires, so neither may read as one here.
-    function collectReferences(string memory json, string memory path, AstReferences memory references) internal view {
-        string memory nodeType = string.concat(path, ".nodeType");
-        if (!vm.keyExistsJson(json, nodeType)) {
-            return;
+        bytes memory raw = vm.parseJson(json, key);
+        // One match decodes as a value, several as an array.
+        if (raw.length == 32) {
+            int256[] memory one = new int256[](1);
+            one[0] = abi.decode(raw, (int256));
+            return one;
         }
-        if (keccak256(bytes(vm.parseJsonString(json, nodeType))) == keccak256("Identifier")) {
-            references.ids[references.count] = vm.parseJsonInt(json, string.concat(path, ".referencedDeclaration"));
-            references.count++;
-        }
-
-        string[] memory keys = vm.parseJsonKeys(json, path);
-        for (uint256 i = 0; i < keys.length; i++) {
-            string memory child = string.concat(path, ".", keys[i]);
-            collectReferences(json, child, references);
-            // An object child is a node, walked above; only an array child is indexed. JSONPath indexes an object
-            // as well, so indexing a node such as a `for` loop's `initializationExpression` would select its
-            // fields rather than array elements.
-            if (vm.keyExistsJson(json, string.concat(child, ".nodeType"))) {
-                continue;
-            }
-            for (uint256 j = 0; vm.keyExistsJson(json, string.concat(child, "[", vm.toString(j), "].nodeType")); j++) {
-                collectReferences(json, string.concat(child, "[", vm.toString(j), "]"), references);
-            }
-        }
+        return abi.decode(raw, (int256[]));
     }
 
     function referencesId(int256[] memory ids, int256 id) internal pure returns (bool) {
