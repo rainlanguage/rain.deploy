@@ -6,6 +6,8 @@ pragma solidity ^0.8.25;
 
 import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 
+import {LibDeploySuiteConcat} from "../lib/LibDeploySuiteConcat.sol";
+
 import {LibAddressRegistryReleased} from "./LibAddressRegistryReleased.sol";
 
 import {LibConfigRegistryReleased} from "./LibConfigRegistryReleased.sol";
@@ -33,22 +35,6 @@ library LibReleasedSuites {
         released[0] = LibAddressRegistryReleased.releasedSuites();
         released[1] = LibConfigRegistryReleased.releasedSuites();
         released[2] = LibMigrationRegistryReleased.releasedSuites();
-
-        uint256 total = 0;
-        for (uint256 i = 0; i < released.length; i++) {
-            total += released[i].length;
-        }
-
-        DeploySuite[] memory suites = new DeploySuite[](total);
-
-        uint256 offset = 0;
-        for (uint256 i = 0; i < released.length; i++) {
-            for (uint256 j = 0; j < released[i].length; j++) {
-                suites[offset + j] = released[i][j];
-            }
-            offset += released[i].length;
-        }
-
-        return suites;
+        return LibDeploySuiteConcat.concat(released);
     }
 }

@@ -1552,25 +1552,51 @@ contract LibRainDeploySnapshotTest is Test {
         assertTrue(vm.contains(clone, "MECHANISM_DATA as "));
     }
 
-    /// The aggregate's `DeploySuite` import MUST be the caller's path too, for
-    /// the reason the released lib's is: both are emitted into the consumer's
-    /// `LIB_DIR`, so both are uncompilable there under a parent-relative
-    /// default. The sibling `./Lib<Contract>Released.sol` imports MUST NOT
-    /// move, because those ARE siblings wherever `LIB_DIR` is.
-    function testAggregateImportBlockTakesTheSuitesImportPath() external pure {
-        string memory consumerPath = "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol";
-
+    /// The aggregate's `DeploySuite` and `LibDeploySuiteConcat` imports MUST be
+    /// the caller's paths too, for the reason the released lib's is: both are
+    /// emitted into the consumer's `LIB_DIR`, so both are uncompilable there
+    /// under a parent-relative default. The sibling `./Lib<Contract>Released.sol`
+    /// imports MUST NOT move, because those ARE siblings wherever `LIB_DIR` is.
+    function testAggregateImportBlockTakesTheImportPaths() external pure {
         assertEq(
-            LibRainDeploySnapshot.aggregateImportBlock(aggregateNames(0), consumerPath),
+            LibRainDeploySnapshot.aggregateImportBlock(
+                aggregateNames(1),
+                "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol",
+                "rain-deploy-0.1.11/src/lib/LibDeploySuiteConcat.sol"
+            ),
             "import {DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n"
+            "import {LibDeploySuiteConcat} from \"rain-deploy-0.1.11/src/lib/LibDeploySuiteConcat.sol\";\n\n"
+            "import {LibAddressRegistryReleased} from \"./LibAddressRegistryReleased.sol\";\n\n"
         );
 
         assertEq(
             LibRainDeploySnapshot.aggregateImportBlock(aggregateNames(1)),
             LibRainDeploySnapshot.aggregateImportBlock(
-                aggregateNames(1), LibRainDeploySnapshot.suitesImportPathInThisRepo()
+                aggregateNames(1),
+                LibRainDeploySnapshot.suitesImportPathInThisRepo(),
+                LibRainDeploySnapshot.concatImportPathInThisRepo()
             )
         );
+    }
+
+    /// The concat import MUST follow the consumer's pin, as the suites import
+    /// does, and fall back to the parent-relative path with no pin.
+    function testConcatImportPathForTomlFollowsThePin() external view {
+        assertEq(
+            LibRainDeploySnapshot.concatImportPathForToml(vm, "[dependencies]\nrain-deploy = \"0.2.0\"\n"),
+            "rain-deploy-0.2.0/src/lib/LibDeploySuiteConcat.sol"
+        );
+        assertEq(
+            LibRainDeploySnapshot.concatImportPathForToml(
+                vm, "[dependencies]\nrain-deploy = { version = \"0.1.11\" }\n"
+            ),
+            "rain-deploy-0.1.11/src/lib/LibDeploySuiteConcat.sol"
+        );
+        assertEq(
+            LibRainDeploySnapshot.concatImportPathForToml(vm, "[profile.default]\n"), "../lib/LibDeploySuiteConcat.sol"
+        );
+        assertEq(LibRainDeploySnapshot.concatImportPathInThisRepo(), "../lib/LibDeploySuiteConcat.sol");
+        assertEq(LibRainDeploySnapshot.derivedConcatImportPath(vm), "../lib/LibDeploySuiteConcat.sol");
     }
 
     /// A consumer's pin MUST produce that consumer's remapped path.
@@ -2275,7 +2301,8 @@ contract LibRainDeploySnapshotTest is Test {
     }
 
     /// The import every aggregate carries whatever it aggregates.
-    string constant AGGREGATE_SUITE_IMPORT = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n";
+    string constant AGGREGATE_SUITE_IMPORT = "import {DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n"
+        "import {LibDeploySuiteConcat} from \"../lib/LibDeploySuiteConcat.sol\";\n\n";
 
     /// The aggregate's text from its title down to the line that opens
     /// `releasedSuites`. The same whatever it aggregates, so the assertions
@@ -2295,18 +2322,7 @@ contract LibRainDeploySnapshotTest is Test {
         "    /// @return The released suites.\n"
         "    function releasedSuites() internal pure returns (DeploySuite[] memory) {\n";
 
-    /// The aggregate's text from below the released libs it reads to the end of
-    /// `releasedSuites`: the sum of their lengths, the array that sum
-    /// allocates, and the copy of each lib into it at the offset the ones
-    /// before it end at. The same whatever it aggregates, which is what keeps
-    /// every line the same width however many contracts there are.
-    string constant EXPECTED_AGGREGATE_CONCATENATION = "\n        uint256 total = 0;\n"
-        "        for (uint256 i = 0; i < released.length; i++) {\n" "            total += released[i].length;\n"
-        "        }\n\n" "        DeploySuite[] memory suites = new DeploySuite[](total);\n\n"
-        "        uint256 offset = 0;\n" "        for (uint256 i = 0; i < released.length; i++) {\n"
-        "            for (uint256 j = 0; j < released[i].length; j++) {\n"
-        "                suites[offset + j] = released[i][j];\n" "            }\n"
-        "            offset += released[i].length;\n" "        }\n\n" "        return suites;\n";
+    string constant EXPECTED_AGGREGATE_CONCATENATION = "        return LibDeploySuiteConcat.concat(released);\n";
 
     /// The aggregate MUST import the released lib of EVERY contract it is
     /// handed, by the sibling path the released writer wrote it to, and nothing
@@ -2344,25 +2360,23 @@ contract LibRainDeploySnapshotTest is Test {
     /// That is the state of a deploy repo whose declaration is not written yet,
     /// and the aggregate is imported by ordinary source — so a repo that could
     /// not emit one could not build to the point of declaring anything. It is
-    /// also the only shape with no locals to sum, which is why it is a case
-    /// rather than a corner.
+    /// also the only shape with no released libs to read.
     function testAggregateLibraryBlockDeclaresNothingForNoContracts() external pure {
         assertEq(
             LibRainDeploySnapshot.aggregateLibraryBlock(vm, aggregateNames(0)),
-            string.concat(EXPECTED_AGGREGATE_HEADER, "        return new DeploySuite[](0);\n", "    }\n}\n")
+            string.concat(
+                EXPECTED_AGGREGATE_HEADER,
+                "        DeploySuite[][] memory released = new DeploySuite[][](0);\n",
+                EXPECTED_AGGREGATE_CONCATENATION,
+                "    }\n}\n"
+            )
         );
     }
 
-    /// The aggregate MUST read every released lib once, each into its own slot
-    /// of the array it walks, and copy all of it at the offset the libs before
-    /// it end at, in declaration order.
-    ///
-    /// The slots are the whole of what varies with the list, and the sum and
-    /// copy that read them are spelled here literally rather than computed,
-    /// because a test that derived them the way the emitter does would agree
-    /// with it about a wrong answer. A slot that repeated would overwrite one
-    /// contract's releases with another's; an offset that skipped would leave a
-    /// zeroed entry the chain group then asserts is deployed.
+    /// The aggregate MUST read every released lib once, each into its own slot,
+    /// in declaration order, and hand the slots to `LibDeploySuiteConcat`. A
+    /// slot that repeated would overwrite one contract's releases with
+    /// another's.
     function testAggregateLibraryBlockConcatenatesEveryReleasedLib() external pure {
         assertEq(
             LibRainDeploySnapshot.aggregateLibraryBlock(vm, aggregateNames(1)),
