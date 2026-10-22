@@ -420,6 +420,10 @@ library LibRainDeploySnapshot {
     /// consumer build could not catch it.
     string constant SUITES_SOURCE_SUBPATH = "abstract/RainDeploySuitesBase.sol";
 
+    /// Where `LibDeploySuiteConcat` is declared inside this package, below the
+    /// source root.
+    string constant CONCAT_SOURCE_SUBPATH = "lib/LibDeploySuiteConcat.sol";
+
     /// The source root both this package and a consumer put Solidity under, and
     /// the directory `LIB_DIR` sits in.
     string constant SOURCE_ROOT = "src";
@@ -437,7 +441,20 @@ library LibRainDeploySnapshot {
     /// one back is the duplication `SUITES_SOURCE_SUBPATH` exists to remove.
     /// @return The path.
     function suitesImportPathInThisRepo() internal pure returns (string memory) {
-        return string.concat("../", SUITES_SOURCE_SUBPATH);
+        return importPathInThisRepo(SUITES_SOURCE_SUBPATH);
+    }
+
+    /// `suitesImportPathInThisRepo` for `LibDeploySuiteConcat`.
+    /// @return The path.
+    function concatImportPathInThisRepo() internal pure returns (string memory) {
+        return importPathInThisRepo(CONCAT_SOURCE_SUBPATH);
+    }
+
+    /// The path a lib in THIS repo's `LIB_DIR` reaches a file of this package by.
+    /// @param subpath The file, below `SOURCE_ROOT`.
+    /// @return The path.
+    function importPathInThisRepo(string memory subpath) internal pure returns (string memory) {
+        return string.concat("../", subpath);
     }
 
     /// This library's own soldeer package name, which is also the remapping
@@ -475,12 +492,37 @@ library LibRainDeploySnapshot {
     /// @param toml The manifest contents to read the pin from.
     /// @return The import path.
     function suitesImportPathForToml(Vm vm, string memory toml) internal view returns (string memory) {
+        return importPathForToml(vm, toml, SUITES_SOURCE_SUBPATH);
+    }
+
+    /// `derivedSuitesImportPath` for `LibDeploySuiteConcat`.
+    /// @param vm The Vm instance for file operations.
+    /// @return The import path.
+    function derivedConcatImportPath(Vm vm) internal view returns (string memory) {
+        return concatImportPathForToml(vm, vm.readFile("foundry.toml"));
+    }
+
+    /// `suitesImportPathForToml` for `LibDeploySuiteConcat`.
+    /// @param vm The Vm instance for TOML operations.
+    /// @param toml The manifest contents to read the pin from.
+    /// @return The import path.
+    function concatImportPathForToml(Vm vm, string memory toml) internal view returns (string memory) {
+        return importPathForToml(vm, toml, CONCAT_SOURCE_SUBPATH);
+    }
+
+    /// The path a generated lib reaches a file of this package by, read from a
+    /// given `foundry.toml`.
+    /// @param vm The Vm instance for TOML operations.
+    /// @param toml The manifest contents to read the pin from.
+    /// @param subpath The file, below `SOURCE_ROOT`.
+    /// @return The import path.
+    function importPathForToml(Vm vm, string memory toml, string memory subpath) internal view returns (string memory) {
         // Unquoted, hyphen and all: a quoted path component is a path error
         // rather than a lookup, and TOML has already normalised the quoted key
         // a consumer spells this pin with.
         string memory key = string.concat(".dependencies.", PACKAGE_NAME);
         if (!vm.keyExistsToml(toml, key)) {
-            return suitesImportPathInThisRepo();
+            return importPathInThisRepo(subpath);
         }
         // Soldeer takes a pin either as a bare version string or as an inline
         // table carrying `version` beside a git or path source, so the version
@@ -491,7 +533,7 @@ library LibRainDeploySnapshot {
         string memory versionKey = string.concat(key, ".version");
         string memory version =
             vm.keyExistsToml(toml, versionKey) ? vm.parseTomlString(toml, versionKey) : vm.parseTomlString(toml, key);
-        return string.concat(PACKAGE_NAME, "-", version, "/", SOURCE_ROOT, "/", SUITES_SOURCE_SUBPATH);
+        return string.concat(PACKAGE_NAME, "-", version, "/", SOURCE_ROOT, "/", subpath);
     }
 
     /// The generated aggregate's library name, and the file it is written to.
@@ -2049,13 +2091,21 @@ library LibRainDeploySnapshot {
     /// @param suitesImportPath The path the emitted lib reaches `DeploySuite`
     /// by — `suitesImportPathInThisRepo` for a lib written into this repo's own
     /// `LIB_DIR`, and the consumer's remapped path otherwise.
+    /// @param concatImportPath The path the emitted lib reaches
+    /// `LibDeploySuiteConcat` by, on the same terms.
     /// @return The import block.
-    function aggregateImportBlock(string[] memory contractNames, string memory suitesImportPath)
-        internal
-        pure
-        returns (string memory)
-    {
-        string memory imports = string.concat("import {DeploySuite} from \"", suitesImportPath, "\";\n\n");
+    function aggregateImportBlock(
+        string[] memory contractNames,
+        string memory suitesImportPath,
+        string memory concatImportPath
+    ) internal pure returns (string memory) {
+        string memory imports = string.concat(
+            "import {DeploySuite} from \"",
+            suitesImportPath,
+            "\";\n\nimport {LibDeploySuiteConcat} from \"",
+            concatImportPath,
+            "\";\n\n"
+        );
         for (uint256 i = 0; i < contractNames.length; i++) {
             string memory libraryName = releasedLibraryName(contractNames[i]);
             imports = string.concat(imports, "import {", libraryName, "} from \"./", libraryName, ".sol\";\n\n");
@@ -2063,29 +2113,23 @@ library LibRainDeploySnapshot {
         return imports;
     }
 
-    /// `aggregateImportBlock` applied to this repo's own `suitesImportPathInThisRepo`.
+    /// `aggregateImportBlock` applied to this repo's own
+    /// `suitesImportPathInThisRepo` and `concatImportPathInThisRepo`.
     /// @param contractNames The contracts whose released libs to aggregate.
     /// @return The import block.
     function aggregateImportBlock(string[] memory contractNames) internal pure returns (string memory) {
-        return aggregateImportBlock(contractNames, suitesImportPathInThisRepo());
+        return aggregateImportBlock(contractNames, suitesImportPathInThisRepo(), concatImportPathInThisRepo());
     }
 
     /// The library block of the generated aggregate lib: every per-contract
     /// released lib read once and copied into one array, in the order given.
     ///
-    /// It emits the concatenation rather than computing one, because the
-    /// entries are only known when the emitted source RUNS: a released lib
-    /// declares its own releases, and how many it has is not a thing this
-    /// emitter can see or should have to. So the emitted code reads every
-    /// released lib into one array of arrays, sums their lengths at runtime,
-    /// and copies each one in at the offset the libs before it end at.
-    ///
-    /// That sum and that copy are loops over the array of arrays rather than
-    /// expressions naming every contract, so no emitted line is wider for a
-    /// repo with more contracts in it. The emitted file is committed, and both
-    /// `forge fmt --check` and a byte-for-byte comparison against what this
-    /// emits read it: a line wide enough for the formatter to wrap is a file
-    /// that cannot satisfy them both.
+    /// The emitted code reads every released lib into one array of arrays and
+    /// hands it to `LibDeploySuiteConcat.concat`, one line per contract, so no
+    /// emitted line is wider for a repo with more contracts in it. The emitted
+    /// file is committed, and both `forge fmt --check` and a byte-for-byte
+    /// comparison against what this emits read it: a line wide enough for the
+    /// formatter to wrap is a file that cannot satisfy them both.
     ///
     /// A repo with no generated contracts emits a lib returning an empty array.
     /// That is the state of a deploy repo whose declaration is not written yet,
@@ -2129,27 +2173,13 @@ library LibRainDeploySnapshot {
             " {\n    /// Every released suite, in the order the build script lists them.\n",
             "    /// @return The released suites.\n",
             "    function releasedSuites() internal pure returns (DeploySuite[] memory) {\n",
-            contractNames.length == 0
-                ? "        return new DeploySuite[](0);\n"
-                : string.concat(
-                    "        DeploySuite[][] memory released = new DeploySuite[][](",
-                    vm.toString(contractNames.length),
-                    ");\n",
-                    reads,
-                    "\n        uint256 total = 0;\n",
-                    "        for (uint256 i = 0; i < released.length; i++) {\n",
-                    "            total += released[i].length;\n",
-                    "        }\n\n",
-                    "        DeploySuite[] memory suites = new DeploySuite[](total);\n\n",
-                    "        uint256 offset = 0;\n",
-                    "        for (uint256 i = 0; i < released.length; i++) {\n",
-                    "            for (uint256 j = 0; j < released[i].length; j++) {\n",
-                    "                suites[offset + j] = released[i][j];\n",
-                    "            }\n",
-                    "            offset += released[i].length;\n",
-                    "        }\n\n",
-                    "        return suites;\n"
-                ),
+            string.concat(
+                "        DeploySuite[][] memory released = new DeploySuite[][](",
+                vm.toString(contractNames.length),
+                ");\n",
+                reads,
+                "        return LibDeploySuiteConcat.concat(released);\n"
+            ),
             "    }\n}\n"
         );
     }
@@ -2192,6 +2222,8 @@ library LibRainDeploySnapshot {
     /// @param copyrightText The copyright text the written lib declares.
     /// @param contractNames The contracts whose released libs to aggregate.
     /// @param suitesImportPath The path the emitted lib reaches `DeploySuite` by.
+    /// @param concatImportPath The path the emitted lib reaches
+    /// `LibDeploySuiteConcat` by.
     /// @return The path written.
     function writeReleasedSuitesAggregate(
         Vm vm,
@@ -2199,7 +2231,8 @@ library LibRainDeploySnapshot {
         string memory spdxLicenseIdentifier,
         string memory copyrightText,
         string[] memory contractNames,
-        string memory suitesImportPath
+        string memory suitesImportPath,
+        string memory concatImportPath
     ) internal returns (string memory) {
         string memory path = pathForLib(libDir, RELEASED_SUITES_LIBRARY);
 
@@ -2209,7 +2242,7 @@ library LibRainDeploySnapshot {
             string.concat(
                 LibCodeGen.filePrefix(spdxLicenseIdentifier, copyrightText),
                 "\n",
-                aggregateImportBlock(contractNames, suitesImportPath),
+                aggregateImportBlock(contractNames, suitesImportPath, concatImportPath),
                 aggregateLibraryBlock(vm, contractNames)
             )
         );
@@ -2224,15 +2257,24 @@ library LibRainDeploySnapshot {
     /// arity above states — `LIB_DIR` for a repo's real libs.
     /// @param contractNames The contracts whose released libs to aggregate.
     /// @param suitesImportPath The path the emitted lib reaches `DeploySuite` by.
+    /// @param concatImportPath The path the emitted lib reaches
+    /// `LibDeploySuiteConcat` by.
     /// @return The path written.
     function writeReleasedSuitesAggregate(
         Vm vm,
         string memory libDir,
         string[] memory contractNames,
-        string memory suitesImportPath
+        string memory suitesImportPath,
+        string memory concatImportPath
     ) internal returns (string memory) {
         return writeReleasedSuitesAggregate(
-            vm, libDir, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, contractNames, suitesImportPath
+            vm,
+            libDir,
+            RAIN_SPDX_LICENSE_IDENTIFIER,
+            RAIN_COPYRIGHT_TEXT,
+            contractNames,
+            suitesImportPath,
+            concatImportPath
         );
     }
 
@@ -2253,7 +2295,13 @@ library LibRainDeploySnapshot {
         string[] memory contractNames
     ) internal returns (string memory) {
         return writeReleasedSuitesAggregate(
-            vm, libDir, spdxLicenseIdentifier, copyrightText, contractNames, derivedSuitesImportPath(vm)
+            vm,
+            libDir,
+            spdxLicenseIdentifier,
+            copyrightText,
+            contractNames,
+            derivedSuitesImportPath(vm),
+            derivedConcatImportPath(vm)
         );
     }
 
@@ -2269,7 +2317,9 @@ library LibRainDeploySnapshot {
         internal
         returns (string memory)
     {
-        return writeReleasedSuitesAggregate(vm, libDir, contractNames, derivedSuitesImportPath(vm));
+        return writeReleasedSuitesAggregate(
+            vm, libDir, contractNames, derivedSuitesImportPath(vm), derivedConcatImportPath(vm)
+        );
     }
 
     /// The newest release in a record: the greatest tag any of its files sits
