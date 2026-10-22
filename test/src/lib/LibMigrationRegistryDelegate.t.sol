@@ -7,6 +7,7 @@ import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {IMigrationRegistryV3, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV3.sol";
+import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
 import {LibAccountCode} from "../../lib/LibAccountCode.sol";
@@ -75,13 +76,13 @@ contract LibMigrationRegistryDelegateTest is Test {
         deployRegistry();
         (address to, bytes memory data) = LibMigrationRegistry.approveV3Call(NAMESPACE, DELEGATE);
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
-        assertEq(data, abi.encodeCall(IMigrationRegistryV3.approveV3, (NAMESPACE, DELEGATE)));
+        assertEq(data, abi.encodeCall(IRegistryDelegatesV1.approveV3, (NAMESPACE, DELEGATE)));
         send(WRITER, to, data);
         assertTrue(LibMigrationRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
 
         (to, data) = LibMigrationRegistry.revokeV3Call(NAMESPACE, DELEGATE);
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
-        assertEq(data, abi.encodeCall(IMigrationRegistryV3.revokeV3, (NAMESPACE, DELEGATE)));
+        assertEq(data, abi.encodeCall(IRegistryDelegatesV1.revokeV3, (NAMESPACE, DELEGATE)));
         send(WRITER, to, data);
         assertFalse(LibMigrationRegistry.approvedV3(WRITER, NAMESPACE, DELEGATE));
     }

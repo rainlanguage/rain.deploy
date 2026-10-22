@@ -56,4 +56,28 @@ abstract contract RegistryDelegates is IRegistryDelegatesV1 {
             revert NotApproved(account, scope, msg.sender);
         }
     }
+
+    /// Refuses an account and scope this registry does not key. Nothing by
+    /// default; a registry that keys fewer overrides it.
+    /// @param account The account.
+    /// @param scope The scope under it.
+    function checkScope(address account, bytes32 scope) internal view virtual {}
+
+    /// @inheritdoc IRegistryDelegatesV1
+    function approveV3(bytes32 scope, address delegate) external {
+        checkScope(msg.sender, scope);
+        approveWithin(scope, delegate);
+    }
+
+    /// @inheritdoc IRegistryDelegatesV1
+    function revokeV3(bytes32 scope, address delegate) external {
+        checkScope(msg.sender, scope);
+        revokeWithin(scope, delegate);
+    }
+
+    /// @inheritdoc IRegistryDelegatesV1
+    function approvedV3(address account, bytes32 scope, address delegate) external view returns (bool) {
+        checkScope(account, scope);
+        return approvedWithin(account, scope, delegate);
+    }
 }

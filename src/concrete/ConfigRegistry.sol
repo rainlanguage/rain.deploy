@@ -80,21 +80,6 @@ contract ConfigRegistry is IConfigRegistryV2, RegistryDelegates {
     }
 
     /// @inheritdoc IConfigRegistryV2
-    function approveV2(bytes32 name, address delegate) external {
-        approveWithin(name, delegate);
-    }
-
-    /// @inheritdoc IConfigRegistryV2
-    function revokeV2(bytes32 name, address delegate) external {
-        revokeWithin(name, delegate);
-    }
-
-    /// @inheritdoc IConfigRegistryV2
-    function approvedV2(address authority, bytes32 name, address delegate) external view returns (bool) {
-        return approvedWithin(authority, name, delegate);
-    }
-
-    /// @inheritdoc IConfigRegistryV2
     /// @dev Bound-ness is read off `value`, not the moment: the value is the
     /// binding and the moment is metadata about when it was written.
     function getV2(address authority, bytes32 name) external view returns (bytes memory, uint256) {

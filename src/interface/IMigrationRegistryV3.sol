@@ -647,29 +647,6 @@ interface IMigrationRegistryV3 is IRegistryDelegatesV1 {
         Prerequisite[] calldata prerequisites
     ) external;
 
-    /// Approves `delegate` to write the caller's line in `namespace` and emits
-    /// `Approved`. Approving an approved delegate leaves it approved and still
-    /// emits. Refuses `ZeroNamespace`, then `ZeroDelegate`.
-    /// @param namespace The line under the caller. MUST NOT be zero.
-    /// @param delegate The account to approve. MUST NOT be zero.
-    function approveV3(bytes32 namespace, address delegate) external;
-
-    /// Revokes `delegate`'s approval for the caller's line in `namespace` and
-    /// emits `Revoked`. Revoking an unapproved delegate leaves it unapproved
-    /// and still emits. Refuses `ZeroNamespace`, then `ZeroDelegate`.
-    /// @param namespace The line under the caller. MUST NOT be zero.
-    /// @param delegate The account to revoke. MUST NOT be zero.
-    function revokeV3(bytes32 namespace, address delegate) external;
-
-    /// Whether `writer` has approved `delegate` for its line in `namespace`.
-    /// Refuses `ZeroWriter`, then `ZeroNamespace`, then `ZeroDelegate` rather
-    /// than answering false about a question the caller did not mean to ask.
-    /// @param writer The line's writer.
-    /// @param namespace The line under the writer.
-    /// @param delegate The account asked about.
-    /// @return True when approved.
-    function approvedV3(address writer, bytes32 namespace, address delegate) external view returns (bool);
-
     /// When `writer`'s line in `namespace` applied `migration`, as the moment
     /// recorded with the record. Zero if it never did.
     ///

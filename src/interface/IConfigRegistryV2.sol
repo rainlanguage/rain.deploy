@@ -10,8 +10,8 @@ import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
 /// that authority, or an account it has approved, binds a name there
 /// (`registerV2`); anyone reads a name under an authority it names (`getV2`).
 /// An authority may re-bind a name it has already bound. An authority approves
-/// and revokes delegates (`approveV2`, `revokeV2`), and anyone reads an
-/// approval (`approvedV2`). There is no removal, no upgrade, and no way for
+/// and revokes delegates (`approveV3`, `revokeV3`), and anyone reads an
+/// approval (`approvedV3`). There is no removal, no upgrade, and no way for
 /// one account to write under another that has not approved it, and an
 /// implementation MUST NOT add any.
 ///
@@ -68,7 +68,7 @@ import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
 /// wrote each binding. Approve only accounts held to the authority's own
 /// custody, and revoke before rotating one out. Approvals cannot be enumerated
 /// here, only asked about one delegate at a time, so a consumer's prod tests
-/// assert `approvedV2` is false for every retired delegate beside the true
+/// assert `approvedV3` is false for every retired delegate beside the true
 /// answers for the live ones. Approvals are per-chain state, like a contract
 /// authority's controllers: an approval or revocation is made on every chain
 /// the authority's names are consumed on.
@@ -189,30 +189,6 @@ interface IConfigRegistryV2 is IRegistryDelegatesV1 {
     /// @param name The name to bind.
     /// @param value The ABI-encoded value to bind it to.
     function registerV2(address authority, bytes32 name, bytes calldata value) external;
-
-    /// Approves `delegate` to bind `name` under the caller and emits
-    /// `Approved`. Approving an approved delegate leaves it approved and still
-    /// emits. Refuses `ZeroDelegate`.
-    /// @param name The name the approval covers.
-    /// @param delegate The account to approve. MUST NOT be zero.
-    function approveV2(bytes32 name, address delegate) external;
-
-    /// Revokes `delegate`'s approval to bind `name` under the caller and emits
-    /// `Revoked`. Revoking an unapproved delegate leaves it unapproved and
-    /// still emits. Refuses `ZeroDelegate`.
-    /// @param name The name the revocation covers.
-    /// @param delegate The account to revoke. MUST NOT be zero.
-    function revokeV2(bytes32 name, address delegate) external;
-
-    /// Whether `authority` has approved `delegate` to bind `name` under it. Refuses
-    /// `ZeroDelegate` rather than answering false about a question the caller
-    /// did not mean to ask. The zero authority answers false for every
-    /// delegate, as it answers `NameNotRegistered` for every name.
-    /// @param authority The approving authority.
-    /// @param name The name asked about.
-    /// @param delegate The account asked about.
-    /// @return True when approved.
-    function approvedV2(address authority, bytes32 name, address delegate) external view returns (bool);
 
     /// The value `authority` currently binds `name` to, and when it bound it.
     ///

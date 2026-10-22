@@ -127,22 +127,9 @@ contract MigrationRegistry is IMigrationRegistryV3, RegistryDelegates {
         applyMigrationRecord(writer, namespace, migration, appliedAt, prerequisites);
     }
 
-    /// @inheritdoc IMigrationRegistryV3
-    function approveV3(bytes32 namespace, address delegate) external {
-        checkLineKey(msg.sender, namespace);
-        approveWithin(namespace, delegate);
-    }
-
-    /// @inheritdoc IMigrationRegistryV3
-    function revokeV3(bytes32 namespace, address delegate) external {
-        checkLineKey(msg.sender, namespace);
-        revokeWithin(namespace, delegate);
-    }
-
-    /// @inheritdoc IMigrationRegistryV3
-    function approvedV3(address writer, bytes32 namespace, address delegate) external view returns (bool) {
-        checkLineKey(writer, namespace);
-        return approvedWithin(writer, namespace, delegate);
+    /// A line is keyed by a writer and a namespace, neither zero.
+    function checkScope(address account, bytes32 scope) internal pure override {
+        checkLineKey(account, scope);
     }
 
     /// Refuses a write whose caller is neither `writer` nor approved by it for

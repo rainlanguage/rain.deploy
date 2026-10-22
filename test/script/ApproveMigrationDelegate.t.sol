@@ -69,7 +69,8 @@ contract ApproveMigrationDelegateTest is Test {
         // registry yet.
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibMigrationRegistry.UnexpectedMigrationRegistryCodeHash.selector,
+                LibRegistryDelegatesApprove.UnexpectedRegistryCodeHash.selector,
+                LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
                 LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_CODEHASH,
                 bytes32(0)
             )

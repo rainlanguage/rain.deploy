@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {IMigrationRegistryV3, Prerequisite} from "../interface/IMigrationRegistryV3.sol";
+import {IRegistryDelegatesV1} from "../interface/IRegistryDelegatesV1.sol";
 import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 
 /// @title LibMigrationRegistry
@@ -484,12 +485,12 @@ library LibMigrationRegistry {
     /// @param namespace The line under the sending account. Never zero.
     /// @param delegate The account to approve. Never the zero address.
     /// @return The registry address.
-    /// @return The `IMigrationRegistryV3.approveV3` calldata.
+    /// @return The `IRegistryDelegatesV1.approveV3` calldata.
     function approveV3Call(bytes32 namespace, address delegate) internal view returns (address, bytes memory) {
         checkCodeHash();
         return (
             LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
-            abi.encodeCall(IMigrationRegistryV3.approveV3, (namespace, delegate))
+            abi.encodeCall(IRegistryDelegatesV1.approveV3, (namespace, delegate))
         );
     }
 
@@ -499,12 +500,12 @@ library LibMigrationRegistry {
     /// @param namespace The line under the sending account. Never zero.
     /// @param delegate The account to revoke. Never the zero address.
     /// @return The registry address.
-    /// @return The `IMigrationRegistryV3.revokeV3` calldata.
+    /// @return The `IRegistryDelegatesV1.revokeV3` calldata.
     function revokeV3Call(bytes32 namespace, address delegate) internal view returns (address, bytes memory) {
         checkCodeHash();
         return (
             LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
-            abi.encodeCall(IMigrationRegistryV3.revokeV3, (namespace, delegate))
+            abi.encodeCall(IRegistryDelegatesV1.revokeV3, (namespace, delegate))
         );
     }
 }

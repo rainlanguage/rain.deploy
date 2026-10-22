@@ -68,7 +68,8 @@ contract ApproveConfigDelegateTest is Test {
         // registry yet.
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
+                LibRegistryDelegatesApprove.UnexpectedRegistryCodeHash.selector,
+                LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS,
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
                 bytes32(0)
             )
@@ -84,7 +85,7 @@ contract ApproveConfigDelegateTest is Test {
         for (uint256 i = 0; i < forkIds.length; i++) {
             assertEq(forkIds[i], LibRainDeploy.declaredNetworkConfigs(supported)[i].chainId);
         }
-        assertTrue(registry.approvedV2(authority, hashed, delegate));
+        assertTrue(registry.approvedV3(authority, hashed, delegate));
         script.verify();
 
         // A run already in the target state sends nothing.
@@ -124,13 +125,13 @@ contract ApproveConfigDelegateTest is Test {
         forkIds = script.runAsItself();
         assertEq(forkIds.length, 1);
         assertEq(forkIds[0], LibRainDeploy.declaredNetworkConfigs(supported)[0].chainId);
-        assertFalse(registry.approvedV2(authority, hashed, delegate));
+        assertFalse(registry.approvedV3(authority, hashed, delegate));
         script.verify();
 
         // `true` approves again.
         vm.setEnv("CONFIG_DELEGATE_APPROVED", "true");
         script.runAsItself();
-        assertTrue(registry.approvedV2(authority, hashed, delegate));
+        assertTrue(registry.approvedV3(authority, hashed, delegate));
         script.verify();
     }
 

@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {IConfigRegistryV2} from "../../../src/interface/IConfigRegistryV2.sol";
+import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
 
@@ -140,9 +141,9 @@ contract ConfigRegistryGetTest is Test {
     function testGetNoOtherEntryPoint(bytes4 selector, bytes32 name) external {
         vm.assume(selector != IConfigRegistryV2.getV2.selector);
         vm.assume(selector != IConfigRegistryV2.registerV2.selector);
-        vm.assume(selector != IConfigRegistryV2.approveV2.selector);
-        vm.assume(selector != IConfigRegistryV2.revokeV2.selector);
-        vm.assume(selector != IConfigRegistryV2.approvedV2.selector);
+        vm.assume(selector != IRegistryDelegatesV1.approveV3.selector);
+        vm.assume(selector != IRegistryDelegatesV1.revokeV3.selector);
+        vm.assume(selector != IRegistryDelegatesV1.approvedV3.selector);
 
         (bool success,) = address(sRegistry).call(abi.encodeWithSelector(selector, name, abi.encode(address(this))));
         assertFalse(success);
@@ -155,11 +156,11 @@ contract ConfigRegistryGetTest is Test {
             vm.parseJsonKeys(vm.readFile("out/ConfigRegistry.sol/ConfigRegistry.json"), "$.methodIdentifiers");
 
         assertEq(signatures.length, 5);
-        assertEq(signatures[0], "approveV2(bytes32,address)");
-        assertEq(signatures[1], "approvedV2(address,bytes32,address)");
+        assertEq(signatures[0], "approveV3(bytes32,address)");
+        assertEq(signatures[1], "approvedV3(address,bytes32,address)");
         assertEq(signatures[2], "getV2(address,bytes32)");
         assertEq(signatures[3], "registerV2(address,bytes32,bytes)");
-        assertEq(signatures[4], "revokeV2(bytes32,address)");
+        assertEq(signatures[4], "revokeV3(bytes32,address)");
     }
 
     /// The registry takes no value on any path: ether sent with or without

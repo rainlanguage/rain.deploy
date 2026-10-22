@@ -9,28 +9,13 @@ import {IRegistryDelegatesV1} from "../interface/IRegistryDelegatesV1.sol";
 import {LibConfigRegistryRegister} from "./LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 
-/// One registry's delegation surface, as `LibRegistryDelegatesApprove` drives
-/// it: where it is, how its code hash is checked, and its approval read and
-/// write for a scope.
-/// @param scopeLabel What the registry calls a scope, capitalised, for the
-/// inputs record: `Name` or `Namespace`.
-/// @param scopeNoun The same, lowercase.
+/// A registry `LibRegistryDelegatesApprove` drives through
+/// `IRegistryDelegatesV1`, which every registry implements identically.
 /// @param registry The pinned registry.
-/// @param checkCodeHash Reverts unless the selected chain's registry holds the
-/// pinned code hash.
-/// @param approved Whether a delegate is approved for a scope under an
-/// account, read from the registry.
-/// @param approveCalldata The calldata of the approval, or the revocation when
-/// false: what the account's device signs.
-/// @param setApproval Approves, or revokes when false, as the caller.
+/// @param codehash Its pinned code hash.
 struct RegistryDelegation {
-    string scopeLabel;
-    string scopeNoun;
     address registry;
-    function() view checkCodeHash;
-    function(address, bytes32, address) view returns (bool) approved;
-    function(bytes32, address, bool) pure returns (bytes memory) approveCalldata;
-    function(bytes32, address, bool) setApproval;
+    bytes32 codehash;
 }
 
 /// @title LibRegistryDelegatesApprove
@@ -80,6 +65,24 @@ library LibRegistryDelegatesApprove {
     /// @param expected Whether it should be approved.
     error UnexpectedApproval(string network, address authority, bytes32 scope, address delegate, bool expected);
 
+    /// Thrown when the selected chain's registry does not hold its pinned code
+    /// hash.
+    /// @param registry The registry.
+    /// @param expected The pinned code hash.
+    /// @param actual The code hash there.
+    error UnexpectedRegistryCodeHash(address registry, bytes32 expected, bytes32 actual);
+
+    /// The calldata of the approval or revocation: what the device signs.
+    /// @param scope The hashed scope.
+    /// @param delegate The delegate.
+    /// @param approve True for `approveV3`, false for `revokeV3`.
+    /// @return The calldata.
+    function approveCalldata(bytes32 scope, address delegate, bool approve) internal pure returns (bytes memory) {
+        return approve
+            ? abi.encodeCall(IRegistryDelegatesV1.approveV3, (scope, delegate))
+            : abi.encodeCall(IRegistryDelegatesV1.revokeV3, (scope, delegate));
+    }
+
     /// Reverts unless the selected chain is the network's and its registry is
     /// the pinned one.
     /// @param r The registry.
@@ -91,7 +94,9 @@ library LibRegistryDelegatesApprove {
         if (chainId != network.chainId) {
             revert LibConfigRegistryRegister.UnexpectedChainId(network.name, network.chainId, chainId);
         }
-        r.checkCodeHash();
+        if (r.registry.codehash != r.codehash) {
+            revert UnexpectedRegistryCodeHash(r.registry, r.codehash, r.registry.codehash);
+        }
     }
 
     /// The record of a run's inputs, printed before any network: everything
@@ -112,11 +117,10 @@ library LibRegistryDelegatesApprove {
         bool approve
     ) internal pure returns (string memory) {
         bytes32 hashed = LibConfigRegistryRegister.nameHash(scope);
-        string memory scopeLines = string.concat(
-            r.scopeLabel, ": ", scope, "\n", r.scopeLabel, " hash (keccak256 of the ", r.scopeNoun, "): "
-        );
         return string.concat(
-            scopeLines,
+            "Scope: ",
+            scope,
+            "\nScope hash (keccak256 of the scope): ",
             vm.toString(hashed),
             "\nAuthority (signer): ",
             vm.toString(authority),
@@ -145,7 +149,7 @@ library LibRegistryDelegatesApprove {
             "\nRegistry: ",
             vm.toString(r.registry),
             "\nCalldata: ",
-            vm.toString(r.approveCalldata(scope, delegate, approve))
+            vm.toString(approveCalldata(scope, delegate, approve))
         );
     }
 
@@ -210,7 +214,7 @@ library LibRegistryDelegatesApprove {
         bool approve
     ) internal returns (bool, string memory) {
         checkChain(r, vm, network);
-        bool approved = r.approved(authority, scope, delegate);
+        bool approved = IRegistryDelegatesV1(r.registry).approvedV3(authority, scope, delegate);
 
         string memory record =
             describeNetwork(vm, network.name, network.chainId, delegate.code.length, approved, approve);
@@ -218,7 +222,11 @@ library LibRegistryDelegatesApprove {
         bool sends = approved != approve;
         if (sends) {
             vm.startBroadcast(authority);
-            r.setApproval(scope, delegate, approve);
+            if (approve) {
+                IRegistryDelegatesV1(r.registry).approveV3(scope, delegate);
+            } else {
+                IRegistryDelegatesV1(r.registry).revokeV3(scope, delegate);
+            }
             vm.stopBroadcast();
         }
         return (sends, record);
@@ -346,7 +354,7 @@ library LibRegistryDelegatesApprove {
         bool approve
     ) internal view {
         checkChain(r, vm, network);
-        if (r.approved(authority, scope, delegate) != approve) {
+        if (IRegistryDelegatesV1(r.registry).approvedV3(authority, scope, delegate) != approve) {
             revert UnexpectedApproval(network.name, authority, scope, delegate, approve);
         }
     }

@@ -9,6 +9,7 @@ import {
     Prerequisite,
     MIGRATION_HEAD_GENESIS
 } from "../../../src/interface/IMigrationRegistryV3.sol";
+import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
@@ -295,9 +296,9 @@ contract MigrationRegistryAppliedTest is Test {
         vm.assume(selector != IMigrationRegistryV3.applyMigrationV3.selector);
         vm.assume(selector != IMigrationRegistryV3.applyMigrationHistoryV3.selector);
         vm.assume(selector != IMigrationRegistryV3.headV3.selector);
-        vm.assume(selector != IMigrationRegistryV3.approveV3.selector);
-        vm.assume(selector != IMigrationRegistryV3.revokeV3.selector);
-        vm.assume(selector != IMigrationRegistryV3.approvedV3.selector);
+        vm.assume(selector != IRegistryDelegatesV1.approveV3.selector);
+        vm.assume(selector != IRegistryDelegatesV1.revokeV3.selector);
+        vm.assume(selector != IRegistryDelegatesV1.approvedV3.selector);
 
         (bool success,) = address(sRegistry).call(abi.encodeWithSelector(selector, address(this), namespace, migration));
         assertFalse(success);

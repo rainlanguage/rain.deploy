@@ -265,11 +265,11 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(sender != AUTHORITY && sender != address(0));
         IConfigRegistryV2 registry = deployRegistry();
         vm.prank(AUTHORITY);
-        registry.approveV2(NAME, sender);
+        registry.approveV3(NAME, sender);
         this.externalCheckSender(sender, AUTHORITY);
 
         vm.prank(AUTHORITY);
-        registry.revokeV2(NAME, sender);
+        registry.revokeV3(NAME, sender);
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
@@ -283,7 +283,7 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(sender != AUTHORITY && sender != address(0) && other != AUTHORITY);
         IConfigRegistryV2 registry = deployRegistry();
         vm.prank(other);
-        registry.approveV2(NAME, sender);
+        registry.approveV3(NAME, sender);
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
@@ -297,7 +297,7 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(sender != AUTHORITY && sender != address(0) && other != NAME);
         IConfigRegistryV2 registry = deployRegistry();
         vm.prank(AUTHORITY);
-        registry.approveV2(other, sender);
+        registry.approveV3(other, sender);
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
@@ -453,7 +453,7 @@ contract LibConfigRegistryRegisterTest is Test {
         string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
         bytes memory value = abi.encode(address(1));
         vm.prank(AUTHORITY);
-        registry.approveV2(keccak256("a.b"), address(this));
+        registry.approveV3(keccak256("a.b"), address(this));
 
         (, string memory record) =
             this.externalRegisterOnNetworksWith(forkVm, selected, address(this), AUTHORITY, "a.b", value);
@@ -706,7 +706,7 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(sender != address(this));
         IConfigRegistryV2 registry = deployRegistry();
         vm.prank(AUTHORITY);
-        registry.approveV2(keccak256("a"), sender);
+        registry.approveV3(keccak256("a"), sender);
         bytes32 name = keccak256("a");
         bytes memory value = abi.encode(address(1));
         vm.warp(1);
@@ -750,7 +750,7 @@ contract LibConfigRegistryRegisterTest is Test {
     }
 
     /// The zero address as the sender is refused on the selected chain by the
-    /// registry's own `ZeroDelegate`, which `approvedV2` raises before any
+    /// registry's own `ZeroDelegate`, which `approvedV3` raises before any
     /// approval is read, and nothing is bound.
     function testRegisterRefusesTheZeroSender() external {
         IConfigRegistryV2 registry = deployRegistry();
