@@ -38,11 +38,11 @@ contract ApproveMigrationDelegateTest is Test {
         IMigrationRegistryV3 registry =
             IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
 
-        vm.setEnv("MIGRATION_DELEGATE_WRITER", "not-an-address");
-        vm.setEnv("MIGRATION_DELEGATE_NAMESPACE", name);
+        vm.setEnv("MIGRATION_DELEGATE_AUTHORITY", "not-an-address");
+        vm.setEnv("MIGRATION_DELEGATE_SCOPE", name);
         vm.setEnv("MIGRATION_DELEGATE_ADDRESS", vm.toString(delegate));
-        assertEnvAddressRefused(script, "MIGRATION_DELEGATE_WRITER");
-        vm.setEnv("MIGRATION_DELEGATE_WRITER", vm.toString(authority));
+        assertEnvAddressRefused(script, "MIGRATION_DELEGATE_AUTHORITY");
+        vm.setEnv("MIGRATION_DELEGATE_AUTHORITY", vm.toString(authority));
 
         vm.setEnv("MIGRATION_DELEGATE_ADDRESS", "not-an-address");
         assertEnvAddressRefused(script, "MIGRATION_DELEGATE_ADDRESS");
@@ -51,12 +51,12 @@ contract ApproveMigrationDelegateTest is Test {
         script.runAsItself();
         vm.setEnv("MIGRATION_DELEGATE_ADDRESS", vm.toString(delegate));
 
-        vm.setEnv("MIGRATION_DELEGATE_NAMESPACE", "Not.Canonical");
+        vm.setEnv("MIGRATION_DELEGATE_SCOPE", "Not.Canonical");
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
         script.runAsItself();
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
         script.verify();
-        vm.setEnv("MIGRATION_DELEGATE_NAMESPACE", name);
+        vm.setEnv("MIGRATION_DELEGATE_SCOPE", name);
 
         // The signer is the script's `msg.sender`: this test contract is not
         // the authority.
@@ -106,14 +106,14 @@ contract ApproveMigrationDelegateTest is Test {
         script.verify();
         vm.setEnv("MIGRATION_DELEGATE_NETWORKS", network);
         address otherAuthority = address(0xB0B);
-        vm.setEnv("MIGRATION_DELEGATE_WRITER", vm.toString(otherAuthority));
+        vm.setEnv("MIGRATION_DELEGATE_AUTHORITY", vm.toString(otherAuthority));
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRegistryDelegatesApprove.UnexpectedApproval.selector, network, otherAuthority, hashed, delegate, true
             )
         );
         script.verify();
-        vm.setEnv("MIGRATION_DELEGATE_WRITER", vm.toString(authority));
+        vm.setEnv("MIGRATION_DELEGATE_AUTHORITY", vm.toString(authority));
 
         // `false` revokes, on exactly the selected network.
         vm.setEnv("MIGRATION_DELEGATE_APPROVED", "false");

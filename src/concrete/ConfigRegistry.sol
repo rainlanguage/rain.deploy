@@ -57,7 +57,7 @@ contract ConfigRegistry is IConfigRegistryV2, RegistryDelegates {
     /// @inheritdoc IConfigRegistryV2
     function registerV2(address authority, bytes32 name, bytes calldata value) external {
         // Who may write is settled before anything about the write.
-        checkCallerWritesUnder(authority, name);
+        checkWrite(authority, name);
         // Rejected so that a name can never be both bound and unreadable.
         if (value.length == 0) {
             revert EmptyValue(name);

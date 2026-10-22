@@ -928,7 +928,7 @@ signer.
 
 ```sh
 export CONFIG_DELEGATE_AUTHORITY=0x... # the authority, which signs
-export CONFIG_DELEGATE_NAME=st0x.token-owner-safe
+export CONFIG_DELEGATE_SCOPE=st0x.token-owner-safe
 export CONFIG_DELEGATE_ADDRESS=0x... # the delegate, such as the Safe
 # Optional: false revokes. Unset approves.
 # export CONFIG_DELEGATE_APPROVED=false
@@ -1226,8 +1226,8 @@ the dry run's record and `SKIP` — is "Approving a delegate" above, with the
 writer as the signer and the migration registry as the recipient.
 
 ```sh
-export MIGRATION_DELEGATE_WRITER=0x... # the writer, which signs
-export MIGRATION_DELEGATE_NAMESPACE=st0x.deploy
+export MIGRATION_DELEGATE_AUTHORITY=0x... # the writer, which signs
+export MIGRATION_DELEGATE_SCOPE=st0x.deploy
 export MIGRATION_DELEGATE_ADDRESS=0x... # the delegate, such as a Safe or timelock
 # Optional: false revokes. Unset approves.
 # export MIGRATION_DELEGATE_APPROVED=false
@@ -1236,11 +1236,11 @@ export MIGRATION_DELEGATE_ADDRESS=0x... # the delegate, such as a Safe or timelo
 
 # 1. Dry run.
 nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate \
-  --sender "$MIGRATION_DELEGATE_WRITER" --trezor --legacy
+  --sender "$MIGRATION_DELEGATE_AUTHORITY" --trezor --legacy
 
 # 2. The same command with --broadcast.
 nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate \
-  --sender "$MIGRATION_DELEGATE_WRITER" --trezor --legacy --broadcast
+  --sender "$MIGRATION_DELEGATE_AUTHORITY" --trezor --legacy --broadcast
 
 # 3. Once every transaction is mined.
 nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate --sig "verify()"

@@ -38,7 +38,7 @@ contract ApproveConfigDelegateTest is Test {
         IConfigRegistryV2 registry = IConfigRegistryV2(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
         vm.setEnv("CONFIG_DELEGATE_AUTHORITY", "not-an-address");
-        vm.setEnv("CONFIG_DELEGATE_NAME", name);
+        vm.setEnv("CONFIG_DELEGATE_SCOPE", name);
         vm.setEnv("CONFIG_DELEGATE_ADDRESS", vm.toString(delegate));
         assertEnvAddressRefused(script, "CONFIG_DELEGATE_AUTHORITY");
         vm.setEnv("CONFIG_DELEGATE_AUTHORITY", vm.toString(authority));
@@ -50,12 +50,12 @@ contract ApproveConfigDelegateTest is Test {
         script.runAsItself();
         vm.setEnv("CONFIG_DELEGATE_ADDRESS", vm.toString(delegate));
 
-        vm.setEnv("CONFIG_DELEGATE_NAME", "Not.Canonical");
+        vm.setEnv("CONFIG_DELEGATE_SCOPE", "Not.Canonical");
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
         script.runAsItself();
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
         script.verify();
-        vm.setEnv("CONFIG_DELEGATE_NAME", name);
+        vm.setEnv("CONFIG_DELEGATE_SCOPE", name);
 
         // The signer is the script's `msg.sender`: this test contract is not
         // the authority.

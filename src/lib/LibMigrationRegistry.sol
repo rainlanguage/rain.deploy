@@ -4,6 +4,7 @@ pragma solidity ^0.8.25;
 
 import {IMigrationRegistryV3, Prerequisite} from "../interface/IMigrationRegistryV3.sol";
 import {IRegistryDelegatesV1} from "../interface/IRegistryDelegatesV1.sol";
+import {LibRegistryDelegates} from "./LibRegistryDelegates.sol";
 import {LibMigrationRegistryDeploy} from "./LibMigrationRegistryDeploy.sol";
 
 /// @title LibMigrationRegistry
@@ -490,7 +491,7 @@ library LibMigrationRegistry {
         checkCodeHash();
         return (
             LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
-            abi.encodeCall(IRegistryDelegatesV1.approveV3, (namespace, delegate))
+            LibRegistryDelegates.approveCalldata(namespace, delegate, true)
         );
     }
 
@@ -505,7 +506,7 @@ library LibMigrationRegistry {
         checkCodeHash();
         return (
             LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
-            abi.encodeCall(IRegistryDelegatesV1.revokeV3, (namespace, delegate))
+            LibRegistryDelegates.approveCalldata(namespace, delegate, false)
         );
     }
 }

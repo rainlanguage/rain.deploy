@@ -6,6 +6,7 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 
 import {IRegistryDelegatesV1} from "../interface/IRegistryDelegatesV1.sol";
+import {LibRegistryDelegates} from "./LibRegistryDelegates.sol";
 import {LibConfigRegistryRegister} from "./LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 
@@ -71,17 +72,6 @@ library LibRegistryDelegatesApprove {
     /// @param expected The pinned code hash.
     /// @param actual The code hash there.
     error UnexpectedRegistryCodeHash(address registry, bytes32 expected, bytes32 actual);
-
-    /// The calldata of the approval or revocation: what the device signs.
-    /// @param scope The hashed scope.
-    /// @param delegate The delegate.
-    /// @param approve True for `approveV3`, false for `revokeV3`.
-    /// @return The calldata.
-    function approveCalldata(bytes32 scope, address delegate, bool approve) internal pure returns (bytes memory) {
-        return approve
-            ? abi.encodeCall(IRegistryDelegatesV1.approveV3, (scope, delegate))
-            : abi.encodeCall(IRegistryDelegatesV1.revokeV3, (scope, delegate));
-    }
 
     /// Reverts unless the selected chain is the network's and its registry is
     /// the pinned one.
@@ -149,7 +139,7 @@ library LibRegistryDelegatesApprove {
             "\nRegistry: ",
             vm.toString(r.registry),
             "\nCalldata: ",
-            vm.toString(approveCalldata(scope, delegate, approve))
+            vm.toString(LibRegistryDelegates.approveCalldata(scope, delegate, approve))
         );
     }
 

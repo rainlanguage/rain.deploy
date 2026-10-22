@@ -10,6 +10,7 @@ import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.
 import {LibConfigRegistry} from "../../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryApprove} from "../../../src/lib/LibConfigRegistryApprove.sol";
 import {LibRegistryDelegatesApprove} from "../../../src/lib/LibRegistryDelegatesApprove.sol";
+import {LibRegistryDelegates} from "../../../src/lib/LibRegistryDelegates.sol";
 import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibConfigRegistryRegister} from "../../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
@@ -144,8 +145,8 @@ contract LibConfigRegistryApproveTest is Test {
         vm.assume(delegate != address(0));
         bytes memory approveData = abi.encodePacked(bytes4(0xd04b1603), name, uint256(uint160(delegate)));
         bytes memory revokeData = abi.encodePacked(bytes4(0x786d07ab), name, uint256(uint160(delegate)));
-        assertEq(LibRegistryDelegatesApprove.approveCalldata(name, delegate, true), approveData);
-        assertEq(LibRegistryDelegatesApprove.approveCalldata(name, delegate, false), revokeData);
+        assertEq(LibRegistryDelegates.approveCalldata(name, delegate, true), approveData);
+        assertEq(LibRegistryDelegates.approveCalldata(name, delegate, false), revokeData);
 
         deployRegistry();
         vm.expectCall(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS, approveData, 1);
