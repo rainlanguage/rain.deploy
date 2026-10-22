@@ -4,14 +4,14 @@ pragma solidity ^0.8.25;
 
 import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
 
-/// @title IConfigRegistryV2
+/// @title IConfigRegistryV3
 /// @notice A registry of `bytes32` names to ABI-encoded values, keyed by the
 /// authority that bound them. A write names the authority it binds under, and
 /// that authority, or an account it has approved, binds a name there
-/// (`registerV2`); anyone reads a name under an authority it names (`getV2`).
+/// (`registerV3`); anyone reads a name under an authority it names (`getV3`).
 /// An authority may re-bind a name it has already bound. An authority approves
-/// and revokes delegates (`approveV2`, `revokeV2`), and anyone reads an
-/// approval (`approvedV2`). There is no removal, no upgrade, and no way for
+/// and revokes delegates (`approveV3`, `revokeV3`), and anyone reads an
+/// approval (`approvedV3`). There is no removal, no upgrade, and no way for
 /// one account to write under another that has not approved it, and an
 /// implementation MUST NOT add any.
 ///
@@ -68,7 +68,7 @@ import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
 /// wrote each binding. Approve only accounts held to the authority's own
 /// custody, and revoke before rotating one out. Approvals cannot be enumerated
 /// here, only asked about one delegate at a time, so a consumer's prod tests
-/// assert `approvedV2` is false for every retired delegate beside the true
+/// assert `approvedV3` is false for every retired delegate beside the true
 /// answers for the live ones. Approvals are per-chain state, like a contract
 /// authority's controllers: an approval or revocation is made on every chain
 /// the authority's names are consumed on.
@@ -114,20 +114,20 @@ import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
 /// `LibRainDeploy.checkResolvedValues` is that check for a value of any type,
 /// compared as the exact bytes the deployment answers.
 ///
-/// `getV2` also answers with the moment a binding was made, because a value alone
+/// `getV3` also answers with the moment a binding was made, because a value alone
 /// cannot say that it has just moved. The registry reports the moment and
 /// imposes nothing on it: a fresh binding is live at once, and an
 /// implementation MUST NOT withhold one. What counts as too fresh belongs to
 /// the caller.
-interface IConfigRegistryV2 is IRegistryDelegatesV1 {
-    /// Thrown when `registerV2` is called with an empty value. Empty is how an
+interface IConfigRegistryV3 is IRegistryDelegatesV1 {
+    /// Thrown when `registerV3` is called with an empty value. Empty is how an
     /// unbound name reads, so binding it would produce a name that is both
     /// bound and unreadable. A name cannot be unbound once bound; the closest
     /// thing is binding it to something deliberately inert.
     /// @param name The name that was being bound to an empty value.
     error EmptyValue(bytes32 name);
 
-    /// Thrown by `getV2` when `authority` has never bound `name`, so that a
+    /// Thrown by `getV3` when `authority` has never bound `name`, so that a
     /// caller cannot silently proceed on an empty value by forgetting to check.
     /// The zero authority is one of these for every name: nothing calls from
     /// it, so it neither binds nor approves, and nothing is ever bound under
@@ -136,7 +136,7 @@ interface IConfigRegistryV2 is IRegistryDelegatesV1 {
     /// @param name The name that is not bound under it.
     error NameNotRegistered(address authority, bytes32 name);
 
-    /// Thrown by `registerV2` when the clock is not strictly after the moment the
+    /// Thrown by `registerV3` when the clock is not strictly after the moment the
     /// name already carries under the authority.
     ///
     /// Behind it would lower the moment, and a caller measuring
@@ -188,31 +188,7 @@ interface IConfigRegistryV2 is IRegistryDelegatesV1 {
     /// approved it for `name`.
     /// @param name The name to bind.
     /// @param value The ABI-encoded value to bind it to.
-    function registerV2(address authority, bytes32 name, bytes calldata value) external;
-
-    /// Approves `delegate` to bind `name` under the caller and emits
-    /// `Approved`. Approving an approved delegate leaves it approved and still
-    /// emits. Refuses `ZeroDelegate`.
-    /// @param name The name the approval covers.
-    /// @param delegate The account to approve. MUST NOT be zero.
-    function approveV2(bytes32 name, address delegate) external;
-
-    /// Revokes `delegate`'s approval to bind `name` under the caller and emits
-    /// `Revoked`. Revoking an unapproved delegate leaves it unapproved and
-    /// still emits. Refuses `ZeroDelegate`.
-    /// @param name The name the revocation covers.
-    /// @param delegate The account to revoke. MUST NOT be zero.
-    function revokeV2(bytes32 name, address delegate) external;
-
-    /// Whether `authority` has approved `delegate` to bind `name` under it. Refuses
-    /// `ZeroDelegate` rather than answering false about a question the caller
-    /// did not mean to ask. The zero authority answers false for every
-    /// delegate, as it answers `NameNotRegistered` for every name.
-    /// @param authority The approving authority.
-    /// @param name The name asked about.
-    /// @param delegate The account asked about.
-    /// @return True when approved.
-    function approvedV2(address authority, bytes32 name, address delegate) external view returns (bool);
+    function registerV3(address authority, bytes32 name, bytes calldata value) external;
 
     /// The value `authority` currently binds `name` to, and when it bound it.
     ///
@@ -229,7 +205,7 @@ interface IConfigRegistryV2 is IRegistryDelegatesV1 {
     /// @param name The name to read.
     /// @return The value bound to `name` under `authority`, byte for byte as it
     /// was bound. Never empty.
-    /// @return The `block.timestamp` of the most recent `registerV2` of `name`
+    /// @return The `block.timestamp` of the most recent `registerV3` of `name`
     /// under `authority`. Never zero.
-    function getV2(address authority, bytes32 name) external view returns (bytes memory, uint256);
+    function getV3(address authority, bytes32 name) external view returns (bytes memory, uint256);
 }

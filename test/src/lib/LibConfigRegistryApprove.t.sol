@@ -5,10 +5,12 @@ pragma solidity =0.8.25;
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
-import {IConfigRegistryV2} from "../../../src/interface/IConfigRegistryV2.sol";
+import {IConfigRegistryV3} from "../../../src/interface/IConfigRegistryV3.sol";
 import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
 import {LibConfigRegistry} from "../../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryApprove} from "../../../src/lib/LibConfigRegistryApprove.sol";
+import {LibRegistryDelegatesApprove} from "../../../src/lib/LibRegistryDelegatesApprove.sol";
+import {LibRegistryDelegates} from "../../../src/lib/LibRegistryDelegates.sol";
 import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibConfigRegistryRegister} from "../../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
@@ -31,12 +33,12 @@ contract LibConfigRegistryApproveTest is Test {
         return LibRainDeploy.declaredNetworkConfigs(names)[0];
     }
 
-    function deployRegistry() internal returns (IConfigRegistryV2) {
+    function deployRegistry() internal returns (IConfigRegistryV3) {
         vm.chainId(base().chainId);
         LibRainDeploy.etchZoltuFactory(vm);
         address registry = LibRainDeploy.deployZoltu(type(ConfigRegistry).creationCode);
         assertEq(registry, LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
-        return IConfigRegistryV2(registry);
+        return IConfigRegistryV3(registry);
     }
 
     function list(string memory first, string memory second) internal pure returns (string[] memory) {
@@ -46,15 +48,13 @@ contract LibConfigRegistryApproveTest is Test {
         return networks;
     }
 
-    function externalCheckInputs(
-        string[] memory selected,
-        address sender,
-        string memory name,
-        address delegate,
-        bool approve
-    ) external pure returns (bytes32, SupportedNetwork[] memory, string memory) {
-        return LibConfigRegistryApprove.checkInputs(
-            vm, selected, LibRainDeploy.supportedNetworks(), sender, AUTHORITY, name, delegate, approve
+    function externalCheckInputs(string[] memory selected, address sender, string memory name, address delegate)
+        external
+        pure
+        returns (bytes32, SupportedNetwork[] memory)
+    {
+        return LibRegistryDelegatesApprove.checkInputs(
+            selected, LibRainDeploy.supportedNetworks(), sender, AUTHORITY, name, delegate
         );
     }
 
@@ -62,31 +62,60 @@ contract LibConfigRegistryApproveTest is Test {
         external
         returns (bool, string memory)
     {
-        return LibConfigRegistryApprove.approveOnSelectedChain(vm, base(), authority, name, delegate, approve);
+        return LibRegistryDelegatesApprove.approveOnSelectedChain(
+            LibConfigRegistryApprove.delegation(), vm, base(), authority, name, delegate, approve
+        );
     }
 
     function externalCheckApprovalOnSelectedChain(bytes32 name, address delegate, bool approve) external view {
-        LibConfigRegistryApprove.checkApprovalOnSelectedChain(vm, base(), AUTHORITY, name, delegate, approve);
+        LibRegistryDelegatesApprove.checkApprovalOnSelectedChain(
+            LibConfigRegistryApprove.delegation(), vm, base(), AUTHORITY, name, delegate, approve
+        );
     }
 
     function externalApproveOnNetworks(Vm forkVm, string[] memory selected, address authority, bool approve)
         external
         returns (uint256[] memory, string memory)
     {
-        return LibConfigRegistryApprove.approveOnNetworks(
-            forkVm, selected, LibRainDeploy.supportedNetworks(), authority, authority, "a.b", DELEGATE, approve
+        return LibRegistryDelegatesApprove.approveOnNetworks(
+            LibConfigRegistryApprove.delegation(),
+            forkVm,
+            selected,
+            LibRainDeploy.supportedNetworks(),
+            authority,
+            authority,
+            "a.b",
+            DELEGATE,
+            approve
         );
     }
 
     function externalApproveOnForks(Vm forkVm, string[] memory selected, uint256[] memory forkIds) external {
-        LibConfigRegistryApprove.approveOnForks(
-            forkVm, selected, LibRainDeploy.supportedNetworks(), forkIds, AUTHORITY, AUTHORITY, "a.b", DELEGATE, true
+        LibRegistryDelegatesApprove.approveOnForks(
+            LibConfigRegistryApprove.delegation(),
+            forkVm,
+            selected,
+            LibRainDeploy.supportedNetworks(),
+            forkIds,
+            AUTHORITY,
+            AUTHORITY,
+            "a.b",
+            DELEGATE,
+            true
         );
     }
 
     function externalCheckApprovalOnForks(Vm forkVm, string[] memory selected, uint256[] memory forkIds) external {
-        LibConfigRegistryApprove.checkApprovalOnForks(
-            forkVm, selected, LibRainDeploy.supportedNetworks(), forkIds, AUTHORITY, "a.b", DELEGATE, true
+        LibRegistryDelegatesApprove.checkApprovalOnForks(
+            LibConfigRegistryApprove.delegation(),
+            forkVm,
+            selected,
+            LibRainDeploy.supportedNetworks(),
+            forkIds,
+            AUTHORITY,
+            "a.b",
+            DELEGATE,
+            true
         );
     }
 
@@ -97,20 +126,27 @@ contract LibConfigRegistryApproveTest is Test {
         string memory name,
         bool approve
     ) external {
-        LibConfigRegistryApprove.checkApprovalOnNetworks(
-            forkVm, selected, LibRainDeploy.supportedNetworks(), authority, name, DELEGATE, approve
+        LibRegistryDelegatesApprove.checkApprovalOnNetworks(
+            LibConfigRegistryApprove.delegation(),
+            forkVm,
+            selected,
+            LibRainDeploy.supportedNetworks(),
+            authority,
+            name,
+            DELEGATE,
+            approve
         );
     }
 
-    /// The calldata is `approveV2` or `revokeV2`, selectors from
-    /// `cast sig "approveV2(bytes32,address)"` and
-    /// `cast sig "revokeV2(bytes32,address)"`, and it is the call sent.
+    /// The calldata is `approveV3` or `revokeV3`, selectors from
+    /// `cast sig "approveV3(bytes32,address)"` and
+    /// `cast sig "revokeV3(bytes32,address)"`, and it is the call sent.
     function testApproveCalldataIsTheCallSent(bytes32 name, address delegate) external {
         vm.assume(delegate != address(0));
-        bytes memory approveData = abi.encodePacked(bytes4(0xfc7dfd2e), name, uint256(uint160(delegate)));
-        bytes memory revokeData = abi.encodePacked(bytes4(0x2026c9f1), name, uint256(uint160(delegate)));
-        assertEq(LibConfigRegistryApprove.approveCalldata(name, delegate, true), approveData);
-        assertEq(LibConfigRegistryApprove.approveCalldata(name, delegate, false), revokeData);
+        bytes memory approveData = abi.encodePacked(bytes4(0xd04b1603), name, uint256(uint160(delegate)));
+        bytes memory revokeData = abi.encodePacked(bytes4(0x786d07ab), name, uint256(uint160(delegate)));
+        assertEq(LibRegistryDelegates.approveCalldata(name, delegate, true), approveData);
+        assertEq(LibRegistryDelegates.approveCalldata(name, delegate, false), revokeData);
 
         deployRegistry();
         vm.expectCall(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS, approveData, 1);
@@ -124,43 +160,43 @@ contract LibConfigRegistryApproveTest is Test {
     function testCheckInputsRefusesInOrder(address sender) external {
         vm.assume(sender != AUTHORITY);
         string[] memory none = new string[](0);
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryApprove.SenderNotAuthority.selector, sender, AUTHORITY));
-        this.externalCheckInputs(none, sender, "A", address(0), true);
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRegistryDelegatesApprove.SenderNotAuthority.selector, sender, AUTHORITY)
+        );
+        this.externalCheckInputs(none, sender, "A", address(0));
         vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.ZeroDelegate.selector));
-        this.externalCheckInputs(none, AUTHORITY, "A", address(0), false);
+        this.externalCheckInputs(none, AUTHORITY, "A", address(0));
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "A"));
-        this.externalCheckInputs(none, AUTHORITY, "A", DELEGATE, true);
+        this.externalCheckInputs(none, AUTHORITY, "A", DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
-        this.externalCheckInputs(none, AUTHORITY, "a.b", DELEGATE, true);
+        this.externalCheckInputs(none, AUTHORITY, "a.b", DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
-        this.externalCheckInputs(list(LibRainDeploy.BASE, "nowhere"), AUTHORITY, "a.b", DELEGATE, true);
+        this.externalCheckInputs(list(LibRainDeploy.BASE, "nowhere"), AUTHORITY, "a.b", DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.DuplicateNetwork.selector, LibRainDeploy.BASE));
-        this.externalCheckInputs(list(LibRainDeploy.BASE, LibRainDeploy.BASE), AUTHORITY, "a.b", DELEGATE, true);
+        this.externalCheckInputs(list(LibRainDeploy.BASE, LibRainDeploy.BASE), AUTHORITY, "a.b", DELEGATE);
     }
 
-    /// Valid inputs return the name's hash, the selected networks in order and
-    /// the inputs record.
-    function testCheckInputsReturns(bool approve) external pure {
+    /// Valid inputs return the name's hash and the selected networks in order.
+    function testCheckInputsReturns() external pure {
         string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
-        (bytes32 hashed, SupportedNetwork[] memory networks, string memory record) = LibConfigRegistryApprove.checkInputs(
-            vm, selected, LibRainDeploy.supportedNetworks(), AUTHORITY, AUTHORITY, "a.b", DELEGATE, approve
+        (bytes32 hashed, SupportedNetwork[] memory networks) = LibRegistryDelegatesApprove.checkInputs(
+            selected, LibRainDeploy.supportedNetworks(), AUTHORITY, AUTHORITY, "a.b", DELEGATE
         );
         assertEq(hashed, NAME);
         assertEq(networks.length, 2);
         assertEq(networks[0].name, LibRainDeploy.ARBITRUM_ONE);
         assertEq(networks[1].name, LibRainDeploy.BASE);
-        assertEq(record, LibConfigRegistryApprove.describeInputs(vm, "a.b", AUTHORITY, DELEGATE, approve));
     }
 
     /// The inputs record, field for field, for st0x's token-owner Safe name
     /// and a delegate of `0x…dEaD`. The hash and calldata are
     /// `cast keccak st0x.token-owner-safe` and
-    /// `cast calldata "approveV2(bytes32,address)" <hash> 0x…dEaD`, and
-    /// `revokeV2` likewise.
+    /// `cast calldata "approveV3(bytes32,address)" <hash> 0x…dEaD`, and
+    /// `revokeV3` likewise.
     function testDescribeInputs() external pure {
         string memory head = string.concat(
-            "Name: st0x.token-owner-safe\n",
-            "Name hash (keccak256 of the name): 0xba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8\n",
+            "Scope: st0x.token-owner-safe\n",
+            "Scope hash (keccak256 of the scope): 0xba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8\n",
             "Authority (signer): ",
             vm.toString(AUTHORITY),
             "\nDelegate: 0x000000000000000000000000000000000000dEaD\n"
@@ -170,12 +206,16 @@ contract LibConfigRegistryApproveTest is Test {
         string memory args =
             "ba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8000000000000000000000000000000000000000000000000000000000000dead";
         assertEq(
-            LibConfigRegistryApprove.describeInputs(vm, "st0x.token-owner-safe", AUTHORITY, address(0xdEaD), true),
-            string.concat(head, "Target: approved", registry, "\nCalldata: 0xfc7dfd2e", args)
+            LibRegistryDelegatesApprove.describeInputs(
+                LibConfigRegistryApprove.delegation(), vm, "st0x.token-owner-safe", AUTHORITY, address(0xdEaD), true
+            ),
+            string.concat(head, "Target: approved", registry, "\nCalldata: 0xd04b1603", args)
         );
         assertEq(
-            LibConfigRegistryApprove.describeInputs(vm, "st0x.token-owner-safe", AUTHORITY, address(0xdEaD), false),
-            string.concat(head, "Target: revoked", registry, "\nCalldata: 0x2026c9f1", args)
+            LibRegistryDelegatesApprove.describeInputs(
+                LibConfigRegistryApprove.delegation(), vm, "st0x.token-owner-safe", AUTHORITY, address(0xdEaD), false
+            ),
+            string.concat(head, "Target: revoked", registry, "\nCalldata: 0x786d07ab", args)
         );
     }
 
@@ -183,19 +223,19 @@ contract LibConfigRegistryApproveTest is Test {
     function testDescribeNetwork() external pure {
         string memory prefix = "Network: base\n  chain id: 8453\n  delegate code: ";
         assertEq(
-            LibConfigRegistryApprove.describeNetwork(vm, "base", 8453, 0, false, true),
+            LibRegistryDelegatesApprove.describeNetwork(vm, "base", 8453, 0, false, true),
             string.concat(prefix, "none\n  current: not approved\n  APPROVE")
         );
         assertEq(
-            LibConfigRegistryApprove.describeNetwork(vm, "base", 8453, 171, true, true),
+            LibRegistryDelegatesApprove.describeNetwork(vm, "base", 8453, 171, true, true),
             string.concat(prefix, "171 bytes\n  current: approved\n  SKIP: already approved")
         );
         assertEq(
-            LibConfigRegistryApprove.describeNetwork(vm, "base", 8453, 1, true, false),
+            LibRegistryDelegatesApprove.describeNetwork(vm, "base", 8453, 1, true, false),
             string.concat(prefix, "1 bytes\n  current: approved\n  REVOKE")
         );
         assertEq(
-            LibConfigRegistryApprove.describeNetwork(vm, "base", 8453, 0, false, false),
+            LibRegistryDelegatesApprove.describeNetwork(vm, "base", 8453, 0, false, false),
             string.concat(prefix, "none\n  current: not approved\n  SKIP: already not approved")
         );
     }
@@ -206,17 +246,17 @@ contract LibConfigRegistryApproveTest is Test {
         assumeNotPrecompile(delegate);
         assumeNotForgeAddress(delegate);
         vm.assume(delegate != address(0));
-        IConfigRegistryV2 registry = deployRegistry();
+        IConfigRegistryV3 registry = deployRegistry();
         uint64 nonce = vm.getNonce(AUTHORITY);
         vm.expectEmit(address(registry));
         emit IRegistryDelegatesV1.Approved(AUTHORITY, NAME, delegate);
         (bool sent, string memory record) = this.externalApproveOnSelectedChain(AUTHORITY, NAME, delegate, true);
         assertTrue(sent);
         assertEq(vm.getNonce(AUTHORITY), nonce + 1);
-        assertTrue(registry.approvedV2(AUTHORITY, NAME, delegate));
+        assertTrue(registry.approvedV3(AUTHORITY, NAME, delegate));
         assertEq(
             record,
-            LibConfigRegistryApprove.describeNetwork(vm, "base", base().chainId, delegate.code.length, false, true)
+            LibRegistryDelegatesApprove.describeNetwork(vm, "base", base().chainId, delegate.code.length, false, true)
         );
         this.externalCheckApprovalOnSelectedChain(NAME, delegate, true);
     }
@@ -224,26 +264,26 @@ contract LibConfigRegistryApproveTest is Test {
     /// An approved delegate is revoked: one transaction from the authority,
     /// emitting `Revoked`.
     function testRevokeRevokes() external {
-        IConfigRegistryV2 registry = deployRegistry();
+        IConfigRegistryV3 registry = deployRegistry();
         vm.prank(AUTHORITY);
-        registry.approveV2(NAME, DELEGATE);
+        registry.approveV3(NAME, DELEGATE);
         uint64 nonce = vm.getNonce(AUTHORITY);
         vm.expectEmit(address(registry));
         emit IRegistryDelegatesV1.Revoked(AUTHORITY, NAME, DELEGATE);
         (bool sent, string memory record) = this.externalApproveOnSelectedChain(AUTHORITY, NAME, DELEGATE, false);
         assertTrue(sent);
         assertEq(vm.getNonce(AUTHORITY), nonce + 1);
-        assertFalse(registry.approvedV2(AUTHORITY, NAME, DELEGATE));
-        assertEq(record, LibConfigRegistryApprove.describeNetwork(vm, "base", base().chainId, 0, true, false));
+        assertFalse(registry.approvedV3(AUTHORITY, NAME, DELEGATE));
+        assertEq(record, LibRegistryDelegatesApprove.describeNetwork(vm, "base", base().chainId, 0, true, false));
         this.externalCheckApprovalOnSelectedChain(NAME, DELEGATE, false);
     }
 
     /// Already in the target state, either way, sends nothing.
     function testSkipsTargetState(bool approve) external {
-        IConfigRegistryV2 registry = deployRegistry();
+        IConfigRegistryV3 registry = deployRegistry();
         if (approve) {
             vm.prank(AUTHORITY);
-            registry.approveV2(NAME, DELEGATE);
+            registry.approveV3(NAME, DELEGATE);
         }
         uint64 nonce = vm.getNonce(AUTHORITY);
         vm.recordLogs();
@@ -254,8 +294,8 @@ contract LibConfigRegistryApproveTest is Test {
         }
         assertFalse(sent);
         assertEq(vm.getNonce(AUTHORITY), nonce);
-        assertEq(registry.approvedV2(AUTHORITY, NAME, DELEGATE), approve);
-        assertEq(record, LibConfigRegistryApprove.describeNetwork(vm, "base", base().chainId, 0, approve, approve));
+        assertEq(registry.approvedV3(AUTHORITY, NAME, DELEGATE), approve);
+        assertEq(record, LibRegistryDelegatesApprove.describeNetwork(vm, "base", base().chainId, 0, approve, approve));
     }
 
     /// The approval read is under the authority and name given: another
@@ -263,32 +303,32 @@ contract LibConfigRegistryApproveTest is Test {
     function testApprovalIsPerAuthorityAndName(address other, bytes32 otherName) external {
         vm.assume(other != AUTHORITY && other != address(0));
         vm.assume(otherName != NAME);
-        IConfigRegistryV2 registry = deployRegistry();
+        IConfigRegistryV3 registry = deployRegistry();
         vm.prank(other);
-        registry.approveV2(NAME, DELEGATE);
+        registry.approveV3(NAME, DELEGATE);
         vm.prank(AUTHORITY);
-        registry.approveV2(otherName, DELEGATE);
+        registry.approveV3(otherName, DELEGATE);
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistryApprove.UnexpectedApproval.selector, "base", AUTHORITY, NAME, DELEGATE, true
+                LibRegistryDelegatesApprove.UnexpectedApproval.selector, "base", AUTHORITY, NAME, DELEGATE, true
             )
         );
         this.externalCheckApprovalOnSelectedChain(NAME, DELEGATE, true);
         (bool sent,) = this.externalApproveOnSelectedChain(AUTHORITY, NAME, DELEGATE, true);
         assertTrue(sent);
-        assertTrue(registry.approvedV2(AUTHORITY, NAME, DELEGATE));
+        assertTrue(registry.approvedV3(AUTHORITY, NAME, DELEGATE));
     }
 
     /// The confirmed check refuses the opposite state, naming it.
     function testCheckApprovalRefusesTheOtherState(bool approve) external {
-        IConfigRegistryV2 registry = deployRegistry();
+        IConfigRegistryV3 registry = deployRegistry();
         if (!approve) {
             vm.prank(AUTHORITY);
-            registry.approveV2(NAME, DELEGATE);
+            registry.approveV3(NAME, DELEGATE);
         }
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistryApprove.UnexpectedApproval.selector, "base", AUTHORITY, NAME, DELEGATE, approve
+                LibRegistryDelegatesApprove.UnexpectedApproval.selector, "base", AUTHORITY, NAME, DELEGATE, approve
             )
         );
         this.externalCheckApprovalOnSelectedChain(NAME, DELEGATE, approve);
@@ -314,7 +354,8 @@ contract LibConfigRegistryApproveTest is Test {
     function testWithoutRegistry() external {
         vm.chainId(base().chainId);
         bytes memory expected = abi.encodeWithSelector(
-            LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,
+            LibRegistryDelegatesApprove.UnexpectedRegistryCodeHash.selector,
+            LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS,
             LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_CODEHASH,
             bytes32(0)
         );
@@ -330,7 +371,7 @@ contract LibConfigRegistryApproveTest is Test {
     /// The seam's broadcast is a no-op, so this contract signs and is the
     /// authority.
     function testApproveOnNetworks() external {
-        IConfigRegistryV2 registry = deployRegistry();
+        IConfigRegistryV3 registry = deployRegistry();
         Vm forkVm = Vm(address(new LocalForkVm()));
         string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
         SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(selected);
@@ -341,12 +382,17 @@ contract LibConfigRegistryApproveTest is Test {
         assertEq(forkIds[0], networks[0].chainId);
         assertEq(forkIds[1], networks[1].chainId);
         assertEq(block.chainid, networks[1].chainId);
-        assertEq(record, LibConfigRegistryApprove.describeInputs(vm, "a.b", address(this), DELEGATE, true));
-        assertTrue(registry.approvedV2(address(this), NAME, DELEGATE));
+        assertEq(
+            record,
+            LibRegistryDelegatesApprove.describeInputs(
+                LibConfigRegistryApprove.delegation(), vm, "a.b", address(this), DELEGATE, true
+            )
+        );
+        assertTrue(registry.approvedV3(address(this), NAME, DELEGATE));
         this.externalCheckApprovalOnNetworks(forkVm, selected, address(this), "a.b", true);
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistryApprove.UnexpectedApproval.selector,
+                LibRegistryDelegatesApprove.UnexpectedApproval.selector,
                 LibRainDeploy.ARBITRUM_ONE,
                 address(this),
                 NAME,
@@ -357,7 +403,7 @@ contract LibConfigRegistryApproveTest is Test {
         this.externalCheckApprovalOnNetworks(forkVm, selected, address(this), "a.b", false);
 
         this.externalApproveOnNetworks(forkVm, selected, address(this), false);
-        assertFalse(registry.approvedV2(address(this), NAME, DELEGATE));
+        assertFalse(registry.approvedV3(address(this), NAME, DELEGATE));
         this.externalCheckApprovalOnNetworks(forkVm, selected, address(this), "a.b", false);
     }
 

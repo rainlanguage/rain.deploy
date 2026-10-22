@@ -703,19 +703,19 @@ wrong explorer.
 address, a role id, a threshold, a list of accounts, anything a deployment would
 otherwise compile in. Bindings are keyed by authority: any account binds a name
 under its own address, or under an authority that approved it as a delegate for
-that name (`approveV2`, `revokeV2`, read by `approvedV2`); anyone reads a name
+that name (`approveV3`, `revokeV3`, read by `approvedV3`); anyone reads a name
 under an authority it names, and reading a name that authority has not bound
-reverts rather than answering empty. The interface is `IConfigRegistryV2`. There
+reverts rather than answering empty. The interface is `IConfigRegistryV3`. There
 is no removal, no upgrade, and no way to write under an account that has not
 approved the writer.
 
 A consumer names the authority it trusts beside the name it resolves, both in
 its own creation code, and gets only what that authority bound. What the
 consumer then trusts, and what a contract authority must do on every network, is
-in `IConfigRegistryV2`'s NatSpec under "The authority and its delegates are the
+in `IConfigRegistryV3`'s NatSpec under "The authority and its delegates are the
 whole access control" and "Delegation is per authority and name". A delegate can
 rebind the name it was approved for, so a consumer's prod tests assert
-`approvedV2` is false for every retired delegate beside the true answers for the
+`approvedV3` is false for every retired delegate beside the true answers for the
 live ones.
 
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
@@ -791,13 +791,13 @@ it.
 
 The script signs as an EOA. A Safe or timelock authority either approves that
 EOA as a delegate, once per network through its own execution path
-(`approveV2(name, delegate)`), after which the EOA runs the script with
+(`approveV3(name, delegate)`), after which the EOA runs the script with
 `--sender` set to itself, or submits
-`registerV2(authority, keccak256("<org>.<name>"),
+`registerV3(authority, keccak256("<org>.<name>"),
 value)` to the registry itself
 and then runs step 3 below (`verify`), which reads under any authority. An
 approval lets the delegate rebind that one name under the authority until it is
-revoked (`revokeV2(name, delegate)`) on that network. An EOA authority approves
+revoked (`revokeV3(name, delegate)`) on that network. An EOA authority approves
 or revokes a delegate, such as a Safe, with `script/ApproveConfigDelegate.sol`
 ("Approving a delegate" below).
 
@@ -906,10 +906,10 @@ record to approve against. For each transaction the device shows:
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
-- **Data**: exactly the `Calldata:` line the dry run printed: `registerV2`'s
+- **Data**: exactly the `Calldata:` line the dry run printed: `registerV3`'s
   selector, the authority, the name hash, the offset `0x60`, the value's length
   and the value padded to a multiple of 32 bytes. The device cannot decode
-  `registerV2`, so it shows the raw bytes; open the full data on the device to
+  `registerV3`, so it shows the raw bytes; open the full data on the device to
   compare them.
 
 Labels vary by firmware; whatever they are called, the recipient, amount, chain
@@ -919,8 +919,8 @@ them differs.
 ### Approving a delegate
 
 `script/ApproveConfigDelegate.sol` approves a delegate for one name under the
-authority, or revokes it, on every declared network by default. `approveV2` and
-`revokeV2` act under their caller, so the signer is the authority itself, and
+authority, or revokes it, on every declared network by default. `approveV3` and
+`revokeV3` act under their caller, so the signer is the authority itself, and
 the run refuses any other `--sender` (`SenderNotAuthority`) before forking. It
 takes its own variables, so nothing exported for `RegisterConfig` carries over.
 The Trezor setup is "Before the first run" above, with the authority as the
@@ -928,7 +928,7 @@ signer.
 
 ```sh
 export CONFIG_DELEGATE_AUTHORITY=0x... # the authority, which signs
-export CONFIG_DELEGATE_NAME=st0x.token-owner-safe
+export CONFIG_DELEGATE_SCOPE=st0x.token-owner-safe
 export CONFIG_DELEGATE_ADDRESS=0x... # the delegate, such as the Safe
 # Optional: false revokes. Unset approves.
 # export CONFIG_DELEGATE_APPROVED=false
@@ -960,11 +960,11 @@ the registry address and the exact calldata, then for each network its chain id,
 the size of the code at the delegate (`none` where the delegate has no code
 there: a Safe not yet deployed on that network), whether it is approved now, and
 `APPROVE`, `REVOKE` or `SKIP`. The device shows the registry as recipient,
-amount 0, the network, and the `Calldata:` line as data: `approveV2`'s selector
-`0xfc7dfd2e` or `revokeV2`'s `0x2026c9f1`, then the name hash and the delegate.
+amount 0, the network, and the `Calldata:` line as data: `approveV3`'s selector
+`0xd04b1603` or `revokeV3`'s `0x786d07ab`, then the name hash and the delegate.
 
 A Safe delegate then binds by executing
-`registerV2(authority, keccak256("<org>.<name>"), value)` on the registry from
+`registerV3(authority, keccak256("<org>.<name>"), value)` on the registry from
 the Safe, on each network, and `RegisterConfig`'s `verify()` checks the binding
 under the authority.
 
@@ -1213,6 +1213,42 @@ deliberately **no broadcast runner**: the dominant real shape is a Safe
 executing a bundle that never broadcasts, and such a script appends the
 `applyMigrationV3Call` output to the bundle it is already emitting, which makes
 the record atomic with the migration it describes.
+
+## Managing the migration registry
+
+`script/ApproveMigrationDelegate.sol` approves a delegate to write one
+namespace's line under the writer, or revokes it, on every declared network by
+default. `approveV3` and `revokeV3` act under their caller, so the signer is the
+writer itself, and the run refuses any other `--sender` (`SenderNotAuthority`)
+before forking. The namespace is the string the consumer hashes, refused unless
+canonical as a config name is. Everything else — the Trezor setup, the refusals,
+the dry run's record and `SKIP` — is "Approving a delegate" above, with the
+writer as the signer and the migration registry as the recipient.
+
+```sh
+export MIGRATION_DELEGATE_AUTHORITY=0x... # the writer, which signs
+export MIGRATION_DELEGATE_SCOPE=st0x.deploy
+export MIGRATION_DELEGATE_ADDRESS=0x... # the delegate, such as a Safe or timelock
+# Optional: false revokes. Unset approves.
+# export MIGRATION_DELEGATE_APPROVED=false
+# Optional, to act on fewer networks than all of them:
+# export MIGRATION_DELEGATE_NETWORKS=base,arbitrum
+
+# 1. Dry run.
+nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate \
+  --sender "$MIGRATION_DELEGATE_AUTHORITY" --trezor --legacy
+
+# 2. The same command with --broadcast.
+nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate \
+  --sender "$MIGRATION_DELEGATE_AUTHORITY" --trezor --legacy --broadcast
+
+# 3. Once every transaction is mined.
+nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate --sig "verify()"
+```
+
+The device shows `approveV3`'s selector `0xd04b1603` or `revokeV3`'s
+`0x786d07ab`, then the namespace hash and the delegate. An approval covers that
+one namespace; each delegate is a run of its own.
 
 ## Deploying, and then releasing
 

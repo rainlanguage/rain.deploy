@@ -127,32 +127,15 @@ contract MigrationRegistry is IMigrationRegistryV3, RegistryDelegates {
         applyMigrationRecord(writer, namespace, migration, appliedAt, prerequisites);
     }
 
-    /// @inheritdoc IMigrationRegistryV3
-    function approveV3(bytes32 namespace, address delegate) external {
-        checkLineKey(msg.sender, namespace);
-        approveWithin(namespace, delegate);
+    /// A line is keyed by a writer and a namespace, neither zero.
+    function checkScope(address account, bytes32 scope) internal pure override {
+        checkLineKey(account, scope);
     }
 
-    /// @inheritdoc IMigrationRegistryV3
-    function revokeV3(bytes32 namespace, address delegate) external {
-        checkLineKey(msg.sender, namespace);
-        revokeWithin(namespace, delegate);
-    }
-
-    /// @inheritdoc IMigrationRegistryV3
-    function approvedV3(address writer, bytes32 namespace, address delegate) external view returns (bool) {
-        checkLineKey(writer, namespace);
-        return approvedWithin(writer, namespace, delegate);
-    }
-
-    /// Refuses a write whose caller is neither `writer` nor approved by it for
-    /// `namespace`. The zero writer is refused first: nothing can call as it or
-    /// be approved by it.
-    /// @param writer The line's writer.
-    /// @param namespace The line under the writer.
-    function checkDelegate(address writer, bytes32 namespace) internal view {
-        checkWriter(writer);
-        checkCallerWritesUnder(writer, namespace);
+    /// The zero writer is refused first: nothing can call as it or be approved
+    /// by it.
+    function checkAccount(address account) internal pure override {
+        checkWriter(account);
     }
 
     /// Reached by every write, so both share one refusal order.
@@ -169,7 +152,7 @@ contract MigrationRegistry is IMigrationRegistryV3, RegistryDelegates {
         uint256 appliedAt,
         Prerequisite[] calldata prerequisites
     ) internal {
-        checkDelegate(writer, namespace);
+        checkWrite(writer, namespace);
         checkMigrationArguments(namespace, migration, appliedAt);
         checkPrerequisites(writer, namespace, prerequisites);
         writeMigrationRecord(writer, namespace, migration, appliedAt, prerequisites);
@@ -266,7 +249,7 @@ contract MigrationRegistry is IMigrationRegistryV3, RegistryDelegates {
     /// that describes the record at its head, to the one that describes the
     /// block — which is the order in which a caller can do something about
     /// them.
-    /// @param writer The line's writer, which `checkDelegate` has already
+    /// @param writer The line's writer, which `checkWrite` has already
     /// refused as zero.
     /// @param namespace The line under `writer` to apply in.
     /// @param migration The migration to apply.
@@ -355,7 +338,7 @@ contract MigrationRegistry is IMigrationRegistryV3, RegistryDelegates {
     }
 
     /// Refuses the zero writer. The one copy of that refusal, reached by
-    /// `checkLineKey` and by `checkDelegate`, which must refuse it before
+    /// `checkLineKey` and by `checkWrite`, which must refuse it before
     /// `NotApproved` and before the namespace.
     /// @param writer The line's writer.
     function checkWriter(address writer) internal pure {
@@ -408,7 +391,7 @@ contract MigrationRegistry is IMigrationRegistryV3, RegistryDelegates {
     /// applied nothing is.
     ///
     /// A write reaches it as `headV3(writer, namespace)`, whose writer is never
-    /// the zero address (`checkDelegate` refuses it) and whose namespace
+    /// the zero address (`checkWrite` refuses it) and whose namespace
     /// `checkMigrationArguments` has already refused as zero, so both refusals
     /// are redundant on that path.
     /// It is one function, so it is one pair of refusals, and the reachable
