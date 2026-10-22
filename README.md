@@ -1416,8 +1416,8 @@ forge soldeer install rain-deploy~<version>
 ```
 
 **You also need `forge-std` 1.17.0, `rain-sol-codegen` 0.1.39 and `rain-factory`
-0.2.4**, remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
-`rain-factory-0.2.4/`. The published package ships `src/`, `script/` and the
+0.2.5**, remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
+`rain-factory-0.2.5/`. The published package ships `src/`, `script/` and the
 licence and README files — no `test/`, no `foundry.toml`, no `remappings.txt`,
 no `soldeer.lock`, no `dependencies/` — so a consumer resolves all three itself.
 The requirement is transitive rather than incidental: the deployed contract
@@ -1434,7 +1434,7 @@ beneath both, `LibICloneableFactoryV5` and the generated
 [dependencies]
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
-rain-factory = "0.2.4"
+rain-factory = "0.2.5"
 rain-deploy = "<version>"
 ```
 
@@ -1517,7 +1517,7 @@ it. In order:
 1. Add `mechanism: DeployMechanism.Zoltu, mechanismData: ""` to every entry of
    the generated released libs, and import `DeployMechanism` beside
    `DeploySuite`.
-2. Add `rain-factory` 0.2.4 and its remapping, as above.
+2. Add `rain-factory` 0.2.5 and its remapping, as above.
 3. Make `view` every function of yours that calls `checkedCandidateSuites`,
    `allSuites`, `suiteNames`, `suiteByName` or `candidateSuites`, which are
    `view` now. A `pure` override of `candidateSuites` still compiles.

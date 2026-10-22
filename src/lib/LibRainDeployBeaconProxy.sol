@@ -6,9 +6,9 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
-import {ICloneableFactoryV5} from "rain-factory-0.2.4/src/interface/ICloneableFactoryV5.sol";
-import {BEACON_PROXY_CREATION_CODE} from "rain-factory-0.2.4/src/generated/BeaconProxy.sol";
-import {LibICloneableFactoryV5} from "rain-factory-0.2.4/src/lib/LibICloneableFactoryV5.sol";
+import {ICloneableFactoryV5} from "rain-factory-0.2.5/src/interface/deprecated/ICloneableFactoryV5.sol";
+import {BEACON_PROXY_CREATION_CODE} from "rain-factory-0.2.5/src/generated/BeaconProxy.sol";
+import {LibICloneableFactoryV5} from "rain-factory-0.2.5/src/lib/LibICloneableFactoryV5.sol";
 
 import {DeployDependency} from "./LibRainDeploy.sol";
 import {CloneTarget} from "./LibRainDeployClone.sol";

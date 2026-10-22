@@ -101,7 +101,7 @@ safe-global-safe-smart-account = "1.4.1-3"
 # is where the deployed factory's address and code hash are pinned — DOES depend
 # on `rain-deploy`, which is why a clone's factory address is a parameter here
 # rather than a constant.
-rain-factory = "0.2.4"
+rain-factory = "0.2.5"
 
 [soldeer]
 recursive_deps = false
