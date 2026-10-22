@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IConfigRegistryV2} from "../interface/IConfigRegistryV2.sol";
+import {IConfigRegistryV3} from "../interface/IConfigRegistryV3.sol";
 import {LibConfigRegistryDeploy} from "./LibConfigRegistryDeploy.sol";
 
 /// @title LibConfigRegistry
@@ -112,7 +112,7 @@ library LibConfigRegistry {
         // visibly used: a passed-through tuple reads to the analysers as a
         // return value nobody looked at.
         (bytes memory value, uint256 registeredAt) =
-            IConfigRegistryV2(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV2(authority, name);
+            IConfigRegistryV3(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV3(authority, name);
         return (value, registeredAt);
     }
 

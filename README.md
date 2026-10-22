@@ -705,14 +705,14 @@ otherwise compile in. Bindings are keyed by authority: any account binds a name
 under its own address, or under an authority that approved it as a delegate for
 that name (`approveV3`, `revokeV3`, read by `approvedV3`); anyone reads a name
 under an authority it names, and reading a name that authority has not bound
-reverts rather than answering empty. The interface is `IConfigRegistryV2`. There
+reverts rather than answering empty. The interface is `IConfigRegistryV3`. There
 is no removal, no upgrade, and no way to write under an account that has not
 approved the writer.
 
 A consumer names the authority it trusts beside the name it resolves, both in
 its own creation code, and gets only what that authority bound. What the
 consumer then trusts, and what a contract authority must do on every network, is
-in `IConfigRegistryV2`'s NatSpec under "The authority and its delegates are the
+in `IConfigRegistryV3`'s NatSpec under "The authority and its delegates are the
 whole access control" and "Delegation is per authority and name". A delegate can
 rebind the name it was approved for, so a consumer's prod tests assert
 `approvedV3` is false for every retired delegate beside the true answers for the
@@ -793,7 +793,7 @@ The script signs as an EOA. A Safe or timelock authority either approves that
 EOA as a delegate, once per network through its own execution path
 (`approveV3(name, delegate)`), after which the EOA runs the script with
 `--sender` set to itself, or submits
-`registerV2(authority, keccak256("<org>.<name>"),
+`registerV3(authority, keccak256("<org>.<name>"),
 value)` to the registry itself
 and then runs step 3 below (`verify`), which reads under any authority. An
 approval lets the delegate rebind that one name under the authority until it is
@@ -906,10 +906,10 @@ record to approve against. For each transaction the device shows:
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
-- **Data**: exactly the `Calldata:` line the dry run printed: `registerV2`'s
+- **Data**: exactly the `Calldata:` line the dry run printed: `registerV3`'s
   selector, the authority, the name hash, the offset `0x60`, the value's length
   and the value padded to a multiple of 32 bytes. The device cannot decode
-  `registerV2`, so it shows the raw bytes; open the full data on the device to
+  `registerV3`, so it shows the raw bytes; open the full data on the device to
   compare them.
 
 Labels vary by firmware; whatever they are called, the recipient, amount, chain
@@ -964,7 +964,7 @@ amount 0, the network, and the `Calldata:` line as data: `approveV3`'s selector
 `0xd04b1603` or `revokeV3`'s `0x786d07ab`, then the name hash and the delegate.
 
 A Safe delegate then binds by executing
-`registerV2(authority, keccak256("<org>.<name>"), value)` on the registry from
+`registerV3(authority, keccak256("<org>.<name>"), value)` on the registry from
 the Safe, on each network, and `RegisterConfig`'s `verify()` checks the binding
 under the authority.
 

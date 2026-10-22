@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
-import {IConfigRegistryV2} from "../../../src/interface/IConfigRegistryV2.sol";
+import {IConfigRegistryV3} from "../../../src/interface/IConfigRegistryV3.sol";
 import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
 import {LibConfigRegistry} from "../../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryApprove} from "../../../src/lib/LibConfigRegistryApprove.sol";
@@ -33,12 +33,12 @@ contract LibConfigRegistryApproveTest is Test {
         return LibRainDeploy.declaredNetworkConfigs(names)[0];
     }
 
-    function deployRegistry() internal returns (IConfigRegistryV2) {
+    function deployRegistry() internal returns (IConfigRegistryV3) {
         vm.chainId(base().chainId);
         LibRainDeploy.etchZoltuFactory(vm);
         address registry = LibRainDeploy.deployZoltu(type(ConfigRegistry).creationCode);
         assertEq(registry, LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
-        return IConfigRegistryV2(registry);
+        return IConfigRegistryV3(registry);
     }
 
     function list(string memory first, string memory second) internal pure returns (string[] memory) {
@@ -246,7 +246,7 @@ contract LibConfigRegistryApproveTest is Test {
         assumeNotPrecompile(delegate);
         assumeNotForgeAddress(delegate);
         vm.assume(delegate != address(0));
-        IConfigRegistryV2 registry = deployRegistry();
+        IConfigRegistryV3 registry = deployRegistry();
         uint64 nonce = vm.getNonce(AUTHORITY);
         vm.expectEmit(address(registry));
         emit IRegistryDelegatesV1.Approved(AUTHORITY, NAME, delegate);
@@ -264,7 +264,7 @@ contract LibConfigRegistryApproveTest is Test {
     /// An approved delegate is revoked: one transaction from the authority,
     /// emitting `Revoked`.
     function testRevokeRevokes() external {
-        IConfigRegistryV2 registry = deployRegistry();
+        IConfigRegistryV3 registry = deployRegistry();
         vm.prank(AUTHORITY);
         registry.approveV3(NAME, DELEGATE);
         uint64 nonce = vm.getNonce(AUTHORITY);
@@ -280,7 +280,7 @@ contract LibConfigRegistryApproveTest is Test {
 
     /// Already in the target state, either way, sends nothing.
     function testSkipsTargetState(bool approve) external {
-        IConfigRegistryV2 registry = deployRegistry();
+        IConfigRegistryV3 registry = deployRegistry();
         if (approve) {
             vm.prank(AUTHORITY);
             registry.approveV3(NAME, DELEGATE);
@@ -303,7 +303,7 @@ contract LibConfigRegistryApproveTest is Test {
     function testApprovalIsPerAuthorityAndName(address other, bytes32 otherName) external {
         vm.assume(other != AUTHORITY && other != address(0));
         vm.assume(otherName != NAME);
-        IConfigRegistryV2 registry = deployRegistry();
+        IConfigRegistryV3 registry = deployRegistry();
         vm.prank(other);
         registry.approveV3(NAME, DELEGATE);
         vm.prank(AUTHORITY);
@@ -321,7 +321,7 @@ contract LibConfigRegistryApproveTest is Test {
 
     /// The confirmed check refuses the opposite state, naming it.
     function testCheckApprovalRefusesTheOtherState(bool approve) external {
-        IConfigRegistryV2 registry = deployRegistry();
+        IConfigRegistryV3 registry = deployRegistry();
         if (!approve) {
             vm.prank(AUTHORITY);
             registry.approveV3(NAME, DELEGATE);
@@ -371,7 +371,7 @@ contract LibConfigRegistryApproveTest is Test {
     /// The seam's broadcast is a no-op, so this contract signs and is the
     /// authority.
     function testApproveOnNetworks() external {
-        IConfigRegistryV2 registry = deployRegistry();
+        IConfigRegistryV3 registry = deployRegistry();
         Vm forkVm = Vm(address(new LocalForkVm()));
         string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
         SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(selected);
