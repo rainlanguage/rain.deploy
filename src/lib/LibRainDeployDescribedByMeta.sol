@@ -7,7 +7,6 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {IDescribedByMetaV1} from "rain-metadata-0.1.43/src/interface/IDescribedByMetaV1.sol";
 import {IMetaBoardV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaBoardV1_2.sol";
 import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
-import {LibDescribedByMeta} from "rain-metadata-0.1.43/src/lib/LibDescribedByMeta.sol";
 
 /// @notice A suite carrying a described-by meta MUST be declared with a `metaBoard()`.
 /// @param suite The suite.
@@ -51,7 +50,7 @@ library LibRainDeployDescribedByMeta {
     function isEmitted(Vm vm, address metaBoard, address described, bytes memory meta) internal view returns (bool) {
         bytes32[] memory topics = new bytes32[](1);
         topics[0] = IMetaV1_2.MetaV1_2.selector;
-        Vm.EthGetLogs[] memory logs = vm.eth_getLogs(0, block.number, metaBoard, topics);
+        Vm.EthGetLogs[] memory logs = vm.eth_getLogs(0, vm.getBlockNumber(), metaBoard, topics);
         bytes32 subject = bytes32(uint256(uint160(described)));
         bytes32 metaHash = keccak256(meta);
         for (uint256 i = 0; i < logs.length; i++) {
@@ -72,10 +71,10 @@ library LibRainDeployDescribedByMeta {
         }
     }
 
-    /// On the selected fork, broadcasts `meta` about `described` on `metaBoard` as `deployer`, through
-    /// `LibDescribedByMeta.emitForDescribedAddress`, unless the metaboard already holds that emission. Nothing for an
-    /// empty `meta`.
+    /// On the selected fork, broadcasts `meta` about `described` on `metaBoard` as `deployer`, unless the metaboard
+    /// already holds that emission, once `checkDescribes` holds. Nothing for an empty `meta`.
     /// @param vm The Vm instance to read logs and broadcast with.
+    /// @param suite The suite, for the refusal.
     /// @param network The network, for the refusal and the log.
     /// @param metaBoard The metaboard.
     /// @param described The deployment the meta describes.
@@ -83,6 +82,7 @@ library LibRainDeployDescribedByMeta {
     /// @param deployer The address to broadcast as.
     function emitUnlessEmitted(
         Vm vm,
+        string memory suite,
         string memory network,
         address metaBoard,
         address described,
@@ -97,9 +97,10 @@ library LibRainDeployDescribedByMeta {
             console2.log(" - Described-by meta already emitted, skipping:", network);
             return;
         }
+        checkDescribes(suite, described, meta);
         console2.log(" - Emitting described-by meta:", network);
         vm.startBroadcast(deployer);
-        LibDescribedByMeta.emitForDescribedAddress(IMetaBoardV1_2(metaBoard), IDescribedByMetaV1(described), meta);
+        IMetaBoardV1_2(metaBoard).emitMeta(bytes32(uint256(uint160(described))), meta);
         vm.stopBroadcast();
     }
 
@@ -151,9 +152,8 @@ library LibRainDeployDescribedByMeta {
         // slither-disable-next-line low-level-calls
         (bool success, bytes memory answer) =
             described.staticcall(abi.encodeCall(IDescribedByMetaV1.describedByMetaV1, ()));
-        if (!success || answer.length < 0x20) {
-            return (false, bytes32(0));
-        }
-        return (true, abi.decode(answer, (bytes32)));
+        bool answered = success && answer.length >= 0x20;
+        bytes32 describedByMetaHash = answered ? abi.decode(answer, (bytes32)) : bytes32(0);
+        return (answered, describedByMetaHash);
     }
 }

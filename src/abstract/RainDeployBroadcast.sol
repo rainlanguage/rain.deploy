@@ -129,7 +129,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             for (uint256 i = 0; i < networks.length; i++) {
                 vm.selectFork(forkIds[i]);
                 LibRainDeployDescribedByMeta.emitUnlessEmitted(
-                    vm, networks[i], board, deployed[i], frozen.describedByMeta, deployer
+                    vm, frozen.suite, networks[i], board, deployed[i], frozen.describedByMeta, deployer
                 );
             }
         }
