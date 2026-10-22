@@ -432,8 +432,7 @@ contract LibRainDeployConfigTest is Test {
     }
 
     /// PROPERTY: staging puts BOTH generated files in the staging directory and
-    /// changes neither of the files it read, under a root with no
-    /// `script/build.sh`.
+    /// changes neither of the files it read.
     function testWriteStagedConfigStagesBothFiles() external {
         resetFixtures(STAGED_FIXTURE_ROOT);
         string memory configSource = "# rain-deploy:generated:rpc_endpoints:begin\n" "STALE\n"
@@ -442,8 +441,6 @@ contract LibRainDeployConfigTest is Test {
         string memory envSource = "# rain-deploy:generated:env:begin\n" "STALE=1\n" "# rain-deploy:generated:env:end\n";
         writeFixture(STAGED_FIXTURE_ROOT, LibRainDeployConfig.configPath(STAGED_FIXTURE_ROOT), configSource);
         writeFixture(STAGED_FIXTURE_ROOT, LibRainDeployConfig.envExamplePath(STAGED_FIXTURE_ROOT), envSource);
-
-        assertFalse(vm.exists(string.concat(STAGED_FIXTURE_ROOT, "/script/build.sh")));
 
         LibRainDeployConfig.writeStagedConfig(vm, STAGED_FIXTURE_ROOT, singleRoster("alpha", 11));
 

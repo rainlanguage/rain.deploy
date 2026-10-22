@@ -186,7 +186,8 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         return new string[](0);
     }
 
-    /// Every path `run()` must rewrite, the installs of the staged config and the extended networks records included.
+    /// Every path `run()` must rewrite, the installed staged config and the
+    /// extended networks records included.
     /// @return The paths.
     function generatedPaths() internal view returns (string[] memory) {
         string[] memory base =

@@ -52,10 +52,10 @@ error EmptyRoster();
 /// the whole reason this is possible at all.
 ///
 /// So the spliced file is written to `<root>/.staged-config/` and installed by
-/// rainix's `rainix-copy-artifacts`, after `forge script ./script/Build.sol`
-/// and before the `git diff` that fails a stale tree. FFI is the other way to reach a shell from a
-/// script, and is not taken: the invocation that matters passes no `--ffi`, and
-/// granting it there would hand FFI to every consumer's build.
+/// rainix's `install-staged-config`, which `rainix-copy-artifacts` runs after
+/// `forge script ./script/Build.sol` and before the `git diff` that fails a
+/// stale tree. Not FFI: granting `--ffi` would hand it to every consumer's
+/// build.
 ///
 /// `.env.example` is staged too, though foundry would allow that one written
 /// directly. One mechanism, so which file foundry happens to guard is not
@@ -76,10 +76,9 @@ library LibRainDeployConfig {
     /// the root.
     string constant ENV_EXAMPLE_NAME = ".env.example";
 
-    /// The directory under the root that a generated file is staged in. Git
-    /// ignored: `rainix-copy-artifacts` removes it once it has installed what
-    /// is in it, and a run that failed between the two must not leave a tracked file
-    /// behind.
+    /// The directory under the root that a generated file is staged in.
+    /// Gitignored: rainix removes it once installed, and a run that fails
+    /// before then must not leave a tracked file behind.
     string constant STAGED_DIR_NAME = ".staged-config";
 
     /// The `[rpc_endpoints]` block, as it is named in its markers.
@@ -257,8 +256,8 @@ library LibRainDeployConfig {
     }
 
     /// Where a generated file is staged, named as it will be installed.
-    /// `rainix-copy-artifacts` copies by name, so a staged file lands on the file of
-    /// the same name under the root and nowhere else.
+    /// rainix installs by name, so a staged file lands on the file of the same
+    /// name under the root and nowhere else.
     /// @param root The project root.
     /// @param name The file name under the root.
     /// @return The path.

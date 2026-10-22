@@ -1230,13 +1230,13 @@ Four separate steps, in this order. Nothing automatic ever broadcasts.
    version first, because `cutRelease()` freezes under that version's tag. Then
    run `nix develop -c forge script ./script/Build.sol --sig 'cutRelease()'`,
    then `nix develop -c forge script ./script/Build.sol` FOLLOWED BY
-   `nix develop -c ./script/build.sh`, and open the release PR. Its CI checks
-   the newly released suites on chain, so merge it only once step 1 has landed
-   on every supported network. A release freezes every contract the release
-   before it froze, unless `Build.retiredContracts()` lists it:
-   `testNoReleaseDropsAContract` refuses any other drop. Retiring a contract is
-   moving it from `generatedContracts()` to `retiredContracts()`, as
-   `AddressRegistry` was.
+   `nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`,
+   and open the release PR. Its CI checks the newly released suites on chain, so
+   merge it only once step 1 has landed on every supported network. A release
+   freezes every contract the release before it froze, unless
+   `Build.retiredContracts()` lists it: `testNoReleaseDropsAContract` refuses
+   any other drop. Retiring a contract is moving it from `generatedContracts()`
+   to `retiredContracts()`, as `AddressRegistry` was.
 3. **Verify.** `RegistryDeployVerifyTest` passes only once every **released**
    suite is live on every supported network, with the code that release froze.
 4. **Tag.** Push a `sol-v*` tag on the release PR's merge commit, the sole
@@ -1425,7 +1425,7 @@ result to `.staged-config/` under the same name.
 
 What installs it is rainix's `rainix-copy-artifacts`, after
 `forge script ./script/Build.sol` and before the `git diff` that fails a stale
-tree, so the repo needs no `script/build.sh`. Locally:
+tree. Locally:
 `nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`.
 
 ```sh
@@ -1555,7 +1555,7 @@ it. In order:
    recorded in the 0.1.18 registry stay there and read as unapplied in V3: apply
    them again, with `applyMigrationHistoryV3` for one that already ran.
 9. Regenerate: `forge script ./script/Build.sol` followed by
-   `./script/build.sh`.
+   `nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`.
 
 `LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,
 `RainDeployBroadcast.broadcastSuite` and
@@ -1586,7 +1586,7 @@ optional — the first only stages the network config:
 
 ```sh
 nix develop -c forge script ./script/Build.sol
-./script/build.sh
+nix run github:rainlanguage/rainix#rainix-static -- install-staged-config
 ```
 
 Three of the CI jobs are rainix reusable workflows, not commands in the shell,

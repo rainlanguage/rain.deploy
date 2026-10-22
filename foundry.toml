@@ -54,9 +54,8 @@ compilation_restrictions = [
 ast = true
 
 # Build reads the version and the network sections from foundry.toml, stages the
-# regenerated sections under .staged-config/ for rainix-copy-artifacts to
-# install, and
-# writes the generated per-tag snapshots + the current-pin lib under src/.
+# regenerated sections under .staged-config/ for rainix to install, and writes
+# the generated per-tag snapshots + the current-pin lib under src/.
 # Nothing else in this repo touches the filesystem.
 fs_permissions = [
   # READ, not read-write. `BuildScript.regenerateConfig` reads these two and
@@ -65,8 +64,8 @@ fs_permissions = [
   # not a permission this list can hand out.
   { access = "read", path = "./foundry.toml" },
   { access = "read", path = "./.env.example" },
-  # Where the spliced files are staged, for rainix-copy-artifacts to install over
-  # the two above. Gitignored; removed once installed.
+  # Where the spliced files are staged, for rainix to install over the two
+  # above. Gitignored; removed once installed.
   { access = "read-write", path = "./.staged-config" },
   { access = "read-write", path = "./src" },
   # LibRainDeploySnapshotTest builds a record tree of its own under
