@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
-import {ICloneableFactoryV4} from "rain-factory-0.2.5/src/interface/deprecated/ICloneableFactoryV4.sol";
+import {ICloneableFactoryV6} from "rain-factory-0.2.5/src/interface/ICloneableFactoryV6.sol";
 import {LibICloneableFactoryV5} from "rain-factory-0.2.5/src/lib/LibICloneableFactoryV5.sol";
 
 import {DeployDependency} from "./LibRainDeploy.sol";
@@ -20,7 +20,7 @@ string constant CLONE_UNANCHORABLE_REASON = "An EIP-1167 minimal proxy, assemble
 
 /// What a clone factory is asked to deploy.
 struct CloneTarget {
-    /// The factory that deploys the target: an `ICloneableFactoryV4` for a clone, an `ICloneableFactoryV5` for a
+    /// The factory that deploys the target: an `ICloneableFactoryV6` for a clone or a
     /// beacon proxy.
     address factory;
     /// The contract a clone delegates into, or for a beacon proxy the beacon it reads its implementation from.
@@ -236,7 +236,7 @@ library LibRainDeployClone {
 
         console2.log(" - Clone Factory:", target.factory);
         address expectedAddress = cloneDeployedAddress(target);
-        address factoryPredictedAddress = ICloneableFactoryV4(target.factory)
+        address factoryPredictedAddress = ICloneableFactoryV6(target.factory)
             .predictDeterministicAddressOpenSalt(target.implementation, target.data, target.salt);
         if (factoryPredictedAddress != expectedAddress) {
             revert CloneFactoryPredictionMismatch(network, target.factory, expectedAddress, factoryPredictedAddress);
@@ -244,7 +244,7 @@ library LibRainDeployClone {
 
         console2.log(" - Cloning implementation:", target.implementation);
         vm.startBroadcast(deployer);
-        address cloneDeployedAddr = ICloneableFactoryV4(target.factory)
+        address cloneDeployedAddr = ICloneableFactoryV6(target.factory)
             .cloneDeterministicOpenSalt(target.implementation, target.data, target.salt);
         vm.stopBroadcast();
         return cloneDeployedAddr;
