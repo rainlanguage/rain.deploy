@@ -163,6 +163,14 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVeri
         this.externalCheckDependenciesAreNonZeroAndUnique();
     }
 
+    function testAdjacentRepeatedDependency() external {
+        sDefect = DeclarationDefect.AdjacentRepeatedDependency;
+        vm.expectRevert(
+            abi.encodeWithSelector(RepeatedDependency.selector, "mock-reaching-deployable", MOCK_EXTERNAL_ADDRESS)
+        );
+        this.externalCheckDependenciesAreNonZeroAndUnique();
+    }
+
     function testUndeclaredSibling() external {
         sDefect = DeclarationDefect.UndeclaredSibling;
         vm.expectRevert(

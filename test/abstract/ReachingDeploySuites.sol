@@ -29,6 +29,7 @@ enum DeclarationDefect {
     ArtifactPathOfOtherSource,
     ZeroDependency,
     RepeatedDependency,
+    AdjacentRepeatedDependency,
     UndeclaredSibling,
     UndeclaredExternal,
     UndeclaredMechanismDependency,
@@ -127,6 +128,12 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
             deps[0] = reaching.dependencies[0];
             deps[1] = reaching.dependencies[1];
             deps[2] = reaching.dependencies[0];
+            reaching.dependencies = deps;
+        } else if (defect == DeclarationDefect.AdjacentRepeatedDependency) {
+            DeployDependency[] memory deps = new DeployDependency[](3);
+            deps[0] = reaching.dependencies[0];
+            deps[1] = reaching.dependencies[1];
+            deps[2] = reaching.dependencies[1];
             reaching.dependencies = deps;
         } else if (defect == DeclarationDefect.UndeclaredSibling) {
             DeployDependency[] memory deps = new DeployDependency[](1);
