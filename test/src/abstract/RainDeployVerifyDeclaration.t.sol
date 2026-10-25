@@ -8,6 +8,7 @@ import {
     DispatchChoiceNotDeclared,
     DispatchChoiceRepeated,
     DispatchChoicesUnreadable,
+    RainDeployDeclarationChecks,
     RainDeployVerifyDeclaration,
     RepeatedDependency,
     RuntimeCodeExceedsEip170,
@@ -18,7 +19,11 @@ import {
     ZeroDependency
 } from "../../../src/abstract/RainDeployVerifyDeclaration.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {DeclarationDefect, MOCK_EXTERNAL_RUNTIME_CODE, ReachingDeploySuites} from "../../abstract/ReachingDeploySuites.sol";
+import {
+    DeclarationDefect,
+    MOCK_EXTERNAL_RUNTIME_CODE,
+    ReachingDeploySuites
+} from "../../abstract/ReachingDeploySuites.sol";
 import {exampleCloneFactory} from "../../abstract/ExampleCloneDeploys.sol";
 import {
     DefectiveReleaseDeploySuites,
@@ -33,7 +38,16 @@ import {
     MockReachingDeployable
 } from "../../concrete/MockReachingDeployable.sol";
 
-contract RainDeployVerifyDeclarationTest is ReachingDeploySuites {
+contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVerifyDeclaration {
+    function dispatchWorkflow()
+        internal
+        view
+        override(ReachingDeploySuites, RainDeployDeclarationChecks)
+        returns (string memory)
+    {
+        return ReachingDeploySuites.dispatchWorkflow();
+    }
+
     function externalCheckDispatchChoicesAreTheSuiteKeys() external view {
         checkDispatchChoicesAreTheSuiteKeys();
     }
@@ -67,7 +81,7 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites {
     }
 
     function testDispatchDefaultsToTheManualArtifactsWorkflow() external {
-        sWorkflow = RainDeployVerifyDeclaration.dispatchWorkflow();
+        sWorkflow = RainDeployDeclarationChecks.dispatchWorkflow();
         string[] memory choices = dispatchChoices();
         assertEq(choices.length, 2);
         assertEq(choices[0], "config-registry");
@@ -260,5 +274,32 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites {
         assertFalse(containsAddress(hex"c0ffee0000000000000000000000000000c0df", MOCK_EXTERNAL_ADDRESS));
         assertFalse(containsAddress(abi.encodePacked(MOCK_EXTERNAL_ADDRESS), address(0)));
         assertFalse(containsAddress("", MOCK_EXTERNAL_ADDRESS));
+    }
+
+    function testEveryEntryPointRunsItsCheck() external {
+        sWorkflow = "test/fixture-dispatch/undeclared-choice.yaml";
+        vm.expectRevert(abi.encodeWithSelector(DispatchChoiceNotDeclared.selector, "mock-undeclared"));
+        this.testDispatchChoicesAreTheSuiteKeys();
+        sWorkflow = "test/fixture-dispatch/dispatchable.yaml";
+
+        sDefect = DeclarationDefect.ArtifactPathOfOtherSource;
+        vm.expectPartialRevert(CandidateArtifactNotSource.selector);
+        this.testCandidateArtifactPathsAreSource();
+
+        sDefect = DeclarationDefect.ZeroDependency;
+        vm.expectPartialRevert(ZeroDependency.selector);
+        this.testDependenciesAreNonZeroAndUnique();
+
+        sDefect = DeclarationDefect.UndeclaredSibling;
+        vm.expectPartialRevert(UndeclaredDependency.selector);
+        this.testDependenciesAreTheEmbeddedDeployments();
+
+        sDefect = DeclarationDefect.UnknownDependency;
+        vm.expectPartialRevert(UnknownDependency.selector);
+        this.testDependencyRuntimeCodeIsKnown();
+
+        sDefect = DeclarationDefect.RuntimeCodeOverEip170;
+        vm.expectPartialRevert(RuntimeCodeExceedsEip170.selector);
+        this.testCandidateRuntimeCodeFitsEip170();
     }
 }

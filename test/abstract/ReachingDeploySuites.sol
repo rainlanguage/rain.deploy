@@ -9,7 +9,7 @@ import {
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
-import {ExternalDeployment, RainDeployVerifyDeclaration} from "../../src/abstract/RainDeployVerifyDeclaration.sol";
+import {ExternalDeployment, RainDeployDeclarationChecks} from "../../src/abstract/RainDeployVerifyDeclaration.sol";
 import {CloneDeploy, LibRainDeployClone} from "../../src/lib/LibRainDeployClone.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../../src/lib/LibRainDeployMechanism.sol";
@@ -44,7 +44,7 @@ enum DeclarationDefect {
 /// @notice A declaration whose suites embed a sibling, an external deployment
 /// with a leading zero byte, and a clone factory reached only through
 /// mechanism data, with one `DeclarationDefect` applied to its candidates.
-abstract contract ReachingDeploySuites is RainDeployVerifyDeclaration {
+abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
     DeclarationDefect internal sDefect;
     string internal sWorkflow = "test/fixture-dispatch/dispatchable.yaml";
 
@@ -160,7 +160,7 @@ abstract contract ReachingDeploySuites is RainDeployVerifyDeclaration {
         return candidates;
     }
 
-    /// @inheritdoc RainDeployVerifyDeclaration
+    /// @inheritdoc RainDeployDeclarationChecks
     function sourceCreationCode(string memory suite) internal pure override returns (bytes memory) {
         bytes32 key = keccak256(bytes(suite));
         if (key == keccak256("mock-deployable")) return type(MockDeployable).creationCode;
@@ -168,19 +168,20 @@ abstract contract ReachingDeploySuites is RainDeployVerifyDeclaration {
         revert(string.concat("no source for suite: ", suite));
     }
 
-    /// @inheritdoc RainDeployVerifyDeclaration
+    /// @inheritdoc RainDeployDeclarationChecks
     function externalDeployments() internal pure override returns (ExternalDeployment[] memory) {
         ExternalDeployment[] memory externals = new ExternalDeployment[](2);
-        externals[0] =
-            ExternalDeployment({deployedAddress: MOCK_EXTERNAL_ADDRESS, codeHash: keccak256(MOCK_EXTERNAL_RUNTIME_CODE)});
+        externals[0] = ExternalDeployment({
+            deployedAddress: MOCK_EXTERNAL_ADDRESS, codeHash: keccak256(MOCK_EXTERNAL_RUNTIME_CODE)
+        });
         externals[1] = ExternalDeployment({
             deployedAddress: exampleCloneFactory(), codeHash: keccak256(type(MockCloneFactory).runtimeCode)
         });
         return externals;
     }
 
-    /// @inheritdoc RainDeployVerifyDeclaration
-    function dispatchWorkflow() internal view override returns (string memory) {
+    /// @inheritdoc RainDeployDeclarationChecks
+    function dispatchWorkflow() internal view virtual override returns (string memory) {
         return sWorkflow;
     }
 }

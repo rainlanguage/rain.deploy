@@ -60,12 +60,12 @@ error DependencyRuntimeCodeMismatch(
 /// @param length Its runtime code length.
 error RuntimeCodeExceedsEip170(string suite, uint256 length);
 
-/// @title RainDeployVerifyDeclaration
+/// @title RainDeployDeclarationChecks
 /// @notice Offline checks of the declaration fields only a dispatch, a verifier
 /// or a broadcast reads: suite keys against the dispatch workflow, candidate
 /// artifact paths against source, and dependency lists against the addresses
 /// each suite's code embeds.
-abstract contract RainDeployVerifyDeclaration is RainDeploySuitesBase, Test {
+abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     uint256 constant EIP170_MAX_RUNTIME_CODE_SIZE = 0x6000;
 
     /// @param suite An anchored candidate's key.
@@ -267,10 +267,7 @@ abstract contract RainDeployVerifyDeclaration is RainDeploySuitesBase, Test {
     /// @param dependency The dependency.
     /// @param declared The hash of the runtime code declared at it.
     /// @param expected The hash recorded for it.
-    function checkCodeHash(string memory suite, address dependency, bytes32 declared, bytes32 expected)
-        internal
-        pure
-    {
+    function checkCodeHash(string memory suite, address dependency, bytes32 declared, bytes32 expected) internal pure {
         if (declared != expected) {
             revert DependencyRuntimeCodeMismatch(suite, dependency, declared, expected);
         }
@@ -335,7 +332,11 @@ abstract contract RainDeployVerifyDeclaration is RainDeploySuitesBase, Test {
         }
         return false;
     }
+}
 
+/// @title RainDeployVerifyDeclaration
+/// @notice Runs every `RainDeployDeclarationChecks` check as a test.
+abstract contract RainDeployVerifyDeclaration is RainDeployDeclarationChecks {
     function testDispatchChoicesAreTheSuiteKeys() external view {
         checkDispatchChoicesAreTheSuiteKeys();
     }
