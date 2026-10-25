@@ -9,7 +9,6 @@ import {
     DispatchChoiceRepeated,
     DispatchChoicesUnreadable,
     RainDeployDeclarationChecks,
-    RainDeployVerifyDeclaration,
     RepeatedDependency,
     RuntimeCodeExceedsEip170,
     SuiteNotDispatchable,
@@ -17,7 +16,8 @@ import {
     UnknownDependency,
     UnreachedDependency,
     ZeroDependency
-} from "../../../src/abstract/RainDeployVerifyDeclaration.sol";
+} from "../../../src/abstract/RainDeployDeclarationChecks.sol";
+import {RainDeployVerifyDeclaration} from "../../../src/abstract/RainDeployVerifyDeclaration.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {
     DeclarationDefect,
@@ -25,12 +25,10 @@ import {
     ReachingDeploySuites
 } from "../../abstract/ReachingDeploySuites.sol";
 import {exampleCloneFactory} from "../../abstract/ExampleCloneDeploys.sol";
-import {
-    DefectiveReleaseDeploySuites,
-    UndeclaredSiblingReleaseDeploySuites,
-    UnknownDependencyReleaseDeploySuites,
-    ZeroDependencyReleaseDeploySuites
-} from "../../concrete/DefectiveReleaseDeploySuites.sol";
+import {DefectiveReleaseDeploySuites} from "../../abstract/DefectiveReleaseDeploySuites.sol";
+import {UndeclaredSiblingReleaseDeploySuites} from "../../concrete/UndeclaredSiblingReleaseDeploySuites.sol";
+import {UnknownDependencyReleaseDeploySuites} from "../../concrete/UnknownDependencyReleaseDeploySuites.sol";
+import {ZeroDependencyReleaseDeploySuites} from "../../concrete/ZeroDependencyReleaseDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {
     MOCK_DEPLOYABLE_ADDRESS,

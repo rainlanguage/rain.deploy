@@ -9,7 +9,7 @@ import {
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
-import {ExternalDeployment, RainDeployDeclarationChecks} from "../../src/abstract/RainDeployVerifyDeclaration.sol";
+import {ExternalDeployment, RainDeployDeclarationChecks} from "../../src/abstract/RainDeployDeclarationChecks.sol";
 import {CloneDeploy, LibRainDeployClone} from "../../src/lib/LibRainDeployClone.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployMechanism} from "../../src/lib/LibRainDeployMechanism.sol";
