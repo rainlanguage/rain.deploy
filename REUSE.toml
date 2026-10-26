@@ -16,6 +16,7 @@ path = [
   "slither.config.json",
   "REUSE.toml",
   "soldeer.lock",
+  "test/fixture-dispatch/**",
   "tools/hyperliquid-big-blocks/Cargo.lock",
   "tools/hyperliquid-big-blocks/Cargo.toml",
 ]
