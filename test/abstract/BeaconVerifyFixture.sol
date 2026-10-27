@@ -12,7 +12,7 @@ import {
 import {RainDeployVerifyBase} from "../../src/abstract/RainDeployVerifyBase.sol";
 import {BeaconState, BeaconTransition, ChainBeacon, DeployBeacon} from "../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../src/lib/LibRainDeploy.sol";
-import {Prerequisite} from "../../src/interface/IMigrationRegistryV3.sol";
+import {Prerequisite} from "../../src/interface/IMigrationRegistryV4.sol";
 import {MigrationRegistry} from "../../src/concrete/MigrationRegistry.sol";
 import {MockDeployable} from "../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";

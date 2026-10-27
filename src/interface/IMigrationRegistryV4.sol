@@ -687,7 +687,7 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1 {
         Prerequisite[] calldata prerequisites
     ) external;
 
-    /// When `writer`'s line in `namespace` applied `migration`, as the moment
+    /// When `writer`'s line in `namespaceHash` applied `migrationHash`, as the moment
     /// recorded with the record. Zero if it never did.
     ///
     /// The implementation MUST revert `ZeroWriter`, `ZeroNamespace`,
@@ -708,16 +708,16 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1 {
     /// a write refuses a prerequisite on: a prerequisite is this read, made by
     /// the registry, with the zero answer turned into a revert.
     /// @param writer The writer to read. Never the zero address.
-    /// @param namespace The line under `writer` to read. Never zero.
-    /// @param migration The migration to ask about. Never zero, never
+    /// @param namespaceHash The hash of the namespace to read under `writer`. Never zero.
+    /// @param migrationHash The hash of the migration to ask about. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @return The moment `migration` was applied in the line, or zero if it
+    /// @return The moment `migrationHash` was applied in the line, or zero if it
     /// has not been.
-    function appliedV4(address writer, bytes32 namespace, bytes32 migration) external view returns (uint256);
+    function appliedV4(address writer, bytes32 namespaceHash, bytes32 migrationHash) external view returns (uint256);
 
-    /// What `migration` was applied ONTO in `writer`'s line in `namespace`:
+    /// What `migrationHash` was applied ONTO in `writer`'s line in `namespaceHash`:
     /// the head that line was at when the record was written, which is the
-    /// first entry of `appliedAfterV4`. Zero if `migration` was never applied
+    /// first entry of `appliedAfterV4`. Zero if `migrationHash` was never applied
     /// there.
     ///
     /// The implementation MUST revert `ZeroWriter`, `ZeroNamespace`,
@@ -733,18 +733,18 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1 {
     /// the walk ends at `MIGRATION_HEAD_GENESIS`, which is the order the
     /// migrations ran in whatever moments they carry.
     /// @param writer The writer to read. Never the zero address.
-    /// @param namespace The line under `writer` to read. Never zero.
-    /// @param migration The migration to ask about. Never zero, never
+    /// @param namespaceHash The hash of the namespace to read under `writer`. Never zero.
+    /// @param migrationHash The hash of the migration to ask about. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @return The head `migration` was applied onto in the line, or zero if
+    /// @return The head `migrationHash` was applied onto in the line, or zero if
     /// it has not been applied there.
-    function appliedOntoV4(address writer, bytes32 namespace, bytes32 migration) external view returns (bytes32);
+    function appliedOntoV4(address writer, bytes32 namespaceHash, bytes32 migrationHash) external view returns (bytes32);
 
-    /// What `migration` was applied AFTER in `writer`'s line in `namespace`:
+    /// What `migrationHash` was applied AFTER in `writer`'s line in `namespaceHash`:
     /// the list the write gave, exactly as given. The first entry is `writer`
-    /// in `namespace` at the head it was applied onto, and every later entry is
+    /// in `namespaceHash` at the head it was applied onto, and every later entry is
     /// a record it waited on, in the order listed, duplicates included. Never
-    /// empty for an applied migration, and empty if `migration` was never
+    /// empty for an applied migration, and empty if `migrationHash` was never
     /// applied there.
     ///
     /// The implementation MUST revert `ZeroWriter`, `ZeroNamespace`,
@@ -760,26 +760,26 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1 {
     /// entry was applied when the record was written and nothing can be
     /// unrecorded, so every other entry names a record that exists.
     /// @param writer The writer to read. Never the zero address.
-    /// @param namespace The line under `writer` to read. Never zero.
-    /// @param migration The migration to ask about. Never zero, never
+    /// @param namespaceHash The hash of the namespace to read under `writer`. Never zero.
+    /// @param migrationHash The hash of the migration to ask about. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
-    /// @return The list `migration` was applied after in the line, as the
+    /// @return The list `migrationHash` was applied after in the line, as the
     /// write gave it.
-    function appliedAfterV4(address writer, bytes32 namespace, bytes32 migration)
+    function appliedAfterV4(address writer, bytes32 namespaceHash, bytes32 migrationHash)
         external
         view
         returns (Prerequisite[] memory);
 
-    /// The account that wrote `writer`'s record of `migration` in `namespace`:
+    /// The account that wrote `writer`'s record of `migrationHash` in `namespaceHash`:
     /// `writer`, or a delegate it had approved when the write landed. Refuses
     /// the inputs `appliedV4` refuses.
     /// @param writer The line's writer.
-    /// @param namespace The line under the writer.
-    /// @param migration The migration asked about.
+    /// @param namespaceHash The hash of the namespace under the writer.
+    /// @param migrationHash The hash of the migration asked about.
     /// @return The account that wrote the record, zero if never applied.
-    function appliedByV4(address writer, bytes32 namespace, bytes32 migration) external view returns (address);
+    function appliedByV4(address writer, bytes32 namespaceHash, bytes32 migrationHash) external view returns (address);
 
-    /// Where `writer`'s line in `namespace` currently is: the migration
+    /// Where `writer`'s line in `namespaceHash` currently is: the migration
     /// applied there most recently, or `MIGRATION_HEAD_GENESIS` if none has
     /// been.
     ///
@@ -794,7 +794,7 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1 {
     /// script decides that its predecessor ran — that is `appliedV4`, per
     /// migration, because a head says only what was last, not what was ever.
     /// @param writer The writer to read. Never the zero address.
-    /// @param namespace The line under `writer` to read. Never zero.
-    /// @return The head of `writer`'s line in `namespace`. Never zero.
-    function headV4(address writer, bytes32 namespace) external view returns (bytes32);
+    /// @param namespaceHash The hash of the namespace to read under `writer`. Never zero.
+    /// @return The head of `writer`'s line in `namespaceHash`. Never zero.
+    function headV4(address writer, bytes32 namespaceHash) external view returns (bytes32);
 }

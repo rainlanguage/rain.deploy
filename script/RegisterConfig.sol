@@ -9,7 +9,8 @@ import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibConfigRegistryRegister} from "../src/lib/LibConfigRegistryRegister.sol";
 
 /// @title RegisterConfig
-/// @notice Binds `CONFIG_REGISTRY_NAME` to `CONFIG_REGISTRY_VALUE` under
+/// @notice Binds `CONFIG_REGISTRY_NAME` to `CONFIG_REGISTRY_VALUE` of type
+/// `CONFIG_REGISTRY_VALUE_TYPE` under
 /// `CONFIG_REGISTRY_AUTHORITY` in the `ConfigRegistry` on every network the
 /// declaration supports, or on the comma-separated subset
 /// `CONFIG_REGISTRY_NETWORKS` names, signed on a Trezor by that authority or
@@ -45,6 +46,10 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     /// `cast abi-encode "f(address)" <account>`.
     string constant VALUE_VAR = "CONFIG_REGISTRY_VALUE";
 
+    /// The environment variable holding the ABI type string of the value's
+    /// encoding, such as `address`.
+    string constant VALUE_TYPE_VAR = "CONFIG_REGISTRY_VALUE_TYPE";
+
     /// The environment variable narrowing the networks, comma separated.
     string constant NETWORKS_VAR = "CONFIG_REGISTRY_NETWORKS";
 
@@ -75,13 +80,14 @@ contract RegisterConfig is RegistryDeploySuites, Script {
             msg.sender,
             vm.envAddress(AUTHORITY_VAR),
             vm.envString(NAME_VAR),
+            vm.envString(VALUE_TYPE_VAR),
             vm.envBytes(VALUE_VAR)
         );
         return forkIds;
     }
 
     /// Reads every selected network fresh and reverts unless the name resolves
-    /// to the value under the authority on each.
+    /// to the value of the value type under the authority on each.
     function verify() external {
         LibConfigRegistryRegister.checkRegisteredOnNetworks(
             forkVm(),
@@ -89,6 +95,7 @@ contract RegisterConfig is RegistryDeploySuites, Script {
             supportedNetworks(),
             vm.envAddress(AUTHORITY_VAR),
             vm.envString(NAME_VAR),
+            vm.envString(VALUE_TYPE_VAR),
             vm.envBytes(VALUE_VAR)
         );
     }

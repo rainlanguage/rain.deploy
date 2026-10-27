@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
-import {Prerequisite} from "../../src/interface/IMigrationRegistryV3.sol";
+import {Prerequisite} from "../../src/interface/IMigrationRegistryV4.sol";
 
 /// @title MockMigrationApplier
 /// @notice A consumer in the shape `LibMigrationRegistry`'s writes are designed
@@ -28,13 +28,13 @@ contract MockMigrationApplier {
     /// @param migration The migration to apply.
     /// @param prerequisites `writer` in `namespace` at the head it is believed
     /// to be at, then the migrations that must already be applied.
-    function applyMigrationV3(
+    function applyMigrationV4(
         address writer,
-        bytes32 namespace,
-        bytes32 migration,
+        string calldata namespace,
+        string calldata migration,
         Prerequisite[] calldata prerequisites
     ) external {
-        LibMigrationRegistry.applyMigrationV3(writer, namespace, migration, prerequisites);
+        LibMigrationRegistry.applyMigrationV4(writer, namespace, migration, prerequisites);
     }
 
     /// Applies `migration` in `writer`'s line in `namespace`, at `appliedAt`,
@@ -45,66 +45,70 @@ contract MockMigrationApplier {
     /// @param appliedAt The moment the migration was applied.
     /// @param prerequisites `writer` in `namespace` at the head it is believed
     /// to be at, then the migrations that must already be applied.
-    function applyMigrationHistoryV3(
+    function applyMigrationHistoryV4(
         address writer,
-        bytes32 namespace,
-        bytes32 migration,
+        string calldata namespace,
+        string calldata migration,
         uint256 appliedAt,
         Prerequisite[] calldata prerequisites
     ) external {
-        LibMigrationRegistry.applyMigrationHistoryV3(writer, namespace, migration, appliedAt, prerequisites);
+        LibMigrationRegistry.applyMigrationHistoryV4(writer, namespace, migration, appliedAt, prerequisites);
     }
 
-    /// Approves `delegate` for this contract's line in `namespace`.
-    /// @param namespace The line under this contract.
+    /// Approves `delegate` for this contract's line in `namespaceHash`.
+    /// @param namespaceHash The line under this contract.
     /// @param delegate The account to approve.
-    function approveV3(bytes32 namespace, address delegate) external {
-        LibMigrationRegistry.approveV3(namespace, delegate);
+    function approveV3(bytes32 namespaceHash, address delegate) external {
+        LibMigrationRegistry.approveV3(namespaceHash, delegate);
     }
 
-    /// Revokes `delegate` for this contract's line in `namespace`.
-    /// @param namespace The line under this contract.
+    /// Revokes `delegate` for this contract's line in `namespaceHash`.
+    /// @param namespaceHash The line under this contract.
     /// @param delegate The account to revoke.
-    function revokeV3(bytes32 namespace, address delegate) external {
-        LibMigrationRegistry.revokeV3(namespace, delegate);
+    function revokeV3(bytes32 namespaceHash, address delegate) external {
+        LibMigrationRegistry.revokeV3(namespaceHash, delegate);
     }
 
-    /// When `writer` applied `migration` in `namespace`.
+    /// When `writer` applied `migrationHash` in `namespaceHash`.
     /// @param writer The writer to read.
-    /// @param namespace The line under `writer` to read.
-    /// @param migration The migration to ask about.
+    /// @param namespaceHash The line under `writer` to read.
+    /// @param migrationHash The migration to ask about.
     /// @return The moment it was applied at, or zero.
-    function appliedV3(address writer, bytes32 namespace, bytes32 migration) external view returns (uint256) {
-        return LibMigrationRegistry.appliedV3(writer, namespace, migration);
+    function appliedV4(address writer, bytes32 namespaceHash, bytes32 migrationHash) external view returns (uint256) {
+        return LibMigrationRegistry.appliedV4(writer, namespaceHash, migrationHash);
     }
 
-    /// What `writer` applied `migration` onto in `namespace`.
+    /// What `writer` applied `migrationHash` onto in `namespaceHash`.
     /// @param writer The writer to read.
-    /// @param namespace The line under `writer` to read.
-    /// @param migration The migration to ask about.
+    /// @param namespaceHash The line under `writer` to read.
+    /// @param migrationHash The migration to ask about.
     /// @return The head it was applied onto, or zero.
-    function appliedOntoV3(address writer, bytes32 namespace, bytes32 migration) external view returns (bytes32) {
-        return LibMigrationRegistry.appliedOntoV3(writer, namespace, migration);
+    function appliedOntoV4(address writer, bytes32 namespaceHash, bytes32 migrationHash)
+        external
+        view
+        returns (bytes32)
+    {
+        return LibMigrationRegistry.appliedOntoV4(writer, namespaceHash, migrationHash);
     }
 
-    /// What `writer` applied `migration` after in `namespace`.
+    /// What `writer` applied `migrationHash` after in `namespaceHash`.
     /// @param writer The writer to read.
-    /// @param namespace The line under `writer` to read.
-    /// @param migration The migration to ask about.
+    /// @param namespaceHash The line under `writer` to read.
+    /// @param migrationHash The migration to ask about.
     /// @return The list the write gave, or empty.
-    function appliedAfterV3(address writer, bytes32 namespace, bytes32 migration)
+    function appliedAfterV4(address writer, bytes32 namespaceHash, bytes32 migrationHash)
         external
         view
         returns (Prerequisite[] memory)
     {
-        return LibMigrationRegistry.appliedAfterV3(writer, namespace, migration);
+        return LibMigrationRegistry.appliedAfterV4(writer, namespaceHash, migrationHash);
     }
 
-    /// The head of `writer`'s line in `namespace`.
+    /// The head of `writer`'s line in `namespaceHash`.
     /// @param writer The writer to read.
-    /// @param namespace The line under `writer` to read.
+    /// @param namespaceHash The line under `writer` to read.
     /// @return The head.
-    function headV3(address writer, bytes32 namespace) external view returns (bytes32) {
-        return LibMigrationRegistry.headV3(writer, namespace);
+    function headV4(address writer, bytes32 namespaceHash) external view returns (bytes32) {
+        return LibMigrationRegistry.headV4(writer, namespaceHash);
     }
 }

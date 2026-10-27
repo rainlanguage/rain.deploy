@@ -12,13 +12,13 @@ contract MockSafeResolvedOwner {
     address public immutable iOwner;
 
     /// @param authority The authority to resolve the name under.
-    /// @param name The name to resolve, once.
+    /// @param nameHash The hash of the name to resolve, once, as an `address`.
     /// @param minAge The binding must have stood for longer than this for
     /// this contract to accept it.
     // The authority is read through, never stored, and nothing is bound under
     // a zero one, so the read refuses it as unbound.
     //forge-lint: disable-next-line(missing-zero-check)
-    constructor(address authority, bytes32 name, uint256 minAge) {
-        iOwner = abi.decode(LibConfigRegistry.resolveSafe(authority, name, minAge), (address));
+    constructor(address authority, bytes32 nameHash, uint256 minAge) {
+        iOwner = abi.decode(LibConfigRegistry.resolveSafe(authority, nameHash, keccak256("address"), minAge), (address));
     }
 }

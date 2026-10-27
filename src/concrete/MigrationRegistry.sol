@@ -94,15 +94,16 @@ contract MigrationRegistry is IMigrationRegistryV4, RegistryDelegates {
     /// `appliedAt` means never applied. Not `public`: the only external readers are
     /// `appliedV4`, `appliedOntoV4`, `appliedAfterV4` and `appliedByV4`, which
     /// refuse the inputs that can only be mistakes.
-    mapping(address writer => mapping(bytes32 namespace => mapping(bytes32 migration => MigrationRecord record)))
-        internal sRecords;
+    mapping(
+        address writer => mapping(bytes32 namespaceHash => mapping(bytes32 migrationHash => MigrationRecord record))
+    ) internal sRecords;
 
     /// The most recent migration applied in each line. Zero means the line is
     /// empty, which reads out as `MIGRATION_HEAD_GENESIS` — the only place
     /// that translation happens is `headV4`, so no reader and no writer can
     /// disagree about where an empty line is. Not `public`, for the same
     /// reason as the records: the untranslated zero is not a head.
-    mapping(address writer => mapping(bytes32 namespace => bytes32 head)) internal sHead;
+    mapping(address writer => mapping(bytes32 namespaceHash => bytes32 head)) internal sHead;
 
     /// @inheritdoc IMigrationRegistryV4
     /// @dev The block is the moment, so a caller that has nothing to say about
@@ -172,9 +173,9 @@ contract MigrationRegistry is IMigrationRegistryV4, RegistryDelegates {
     /// no record is read until every entry has been checked, refused if nobody
     /// has written it.
     /// @param writer The line's writer.
-    /// @param namespace The line under the writer being written.
+    /// @param namespaceHash The hash of the namespace under the writer being written.
     /// @param prerequisites The head, then the records that must exist.
-    function checkPrerequisites(address writer, bytes32 namespace, Prerequisite[] calldata prerequisites)
+    function checkPrerequisites(address writer, bytes32 namespaceHash, Prerequisite[] calldata prerequisites)
         internal
         view
     {
@@ -183,14 +184,14 @@ contract MigrationRegistry is IMigrationRegistryV4, RegistryDelegates {
         // which no line can be at; a first entry under anyone but the writer,
         // or in any namespace but the one being written, is not this line's
         // head whatever migration it names.
-        bytes32 actualHead = headV4(writer, namespace);
+        bytes32 actualHead = headV4(writer, namespaceHash);
         if (
-            prerequisites.length == 0 || prerequisites[0].writer != writer || prerequisites[0].namespace != namespace
-                || prerequisites[0].migration != actualHead
+            prerequisites.length == 0 || prerequisites[0].writer != writer
+                || prerequisites[0].namespace != namespaceHash || prerequisites[0].migration != actualHead
         ) {
             revert UnexpectedMigrationHead(
                 writer,
-                namespace,
+                namespaceHash,
                 prerequisites.length == 0 ? address(0) : prerequisites[0].writer,
                 prerequisites.length == 0 ? bytes32(0) : prerequisites[0].namespace,
                 prerequisites.length == 0 ? bytes32(0) : prerequisites[0].migration,
@@ -199,7 +200,7 @@ contract MigrationRegistry is IMigrationRegistryV4, RegistryDelegates {
         }
         for (uint256 i = 1; i < prerequisites.length; i++) {
             checkRecordKey(prerequisites[i].writer, prerequisites[i].namespace, prerequisites[i].migration);
-            if (prerequisites[i].writer == writer && prerequisites[i].namespace == namespace) {
+            if (prerequisites[i].writer == writer && prerequisites[i].namespace == namespaceHash) {
                 revert OwnPrerequisite(prerequisites[i].migration);
             }
         }
@@ -264,26 +265,26 @@ contract MigrationRegistry is IMigrationRegistryV4, RegistryDelegates {
     /// them.
     /// @param writer The line's writer, which `checkWrite` has already
     /// refused as zero.
-    /// @param namespace The line under `writer` to apply in.
-    /// @param migration The migration to apply.
+    /// @param namespaceHash The hash of the namespace under `writer` to apply in.
+    /// @param migrationHash The hash of the migration to apply.
     /// @param appliedAt The moment to record against it.
     /// @param prerequisites The head the caller believes `writer`'s line is at,
     /// then the records it was applied after, every one of which
     /// `checkPrerequisites` has found to exist.
     function writeMigrationRecord(
         address writer,
-        bytes32 namespace,
-        bytes32 migration,
+        bytes32 namespaceHash,
+        bytes32 migrationHash,
         uint256 appliedAt,
         Prerequisite[] calldata prerequisites
     ) internal {
-        MigrationRecord storage record = sRecords[writer][namespace][migration];
+        MigrationRecord storage record = sRecords[writer][namespaceHash][migrationHash];
         if (record.appliedAt != 0) {
-            revert MigrationAlreadyApplied(writer, namespace, migration);
+            revert MigrationAlreadyApplied(writer, namespaceHash, migrationHash);
         }
         bytes32 actualHead = prerequisites[0].migration;
         // Genesis is never applied, so its record reads zero and this passes.
-        uint256 headAppliedAt = sRecords[writer][namespace][actualHead].appliedAt;
+        uint256 headAppliedAt = sRecords[writer][namespaceHash][actualHead].appliedAt;
         if (appliedAt < headAppliedAt) {
             revert TimestampBeforeHead(appliedAt, headAppliedAt);
         }
@@ -301,20 +302,20 @@ contract MigrationRegistry is IMigrationRegistryV4, RegistryDelegates {
         for (uint256 i = 0; i < prerequisites.length; i++) {
             record.appliedAfter.push(prerequisites[i]);
         }
-        sHead[writer][namespace] = migration;
+        sHead[writer][namespaceHash] = migrationHash;
     }
 
     /// @inheritdoc IMigrationRegistryV4
     /// @dev All four refusals are about a caller that has not supplied what it
     /// thinks it has. None can ever be a real record: nothing originates from
-    /// the zero address, no write names the zero namespace, and neither write
-    /// records the zero id or the genesis one — so answering zero for any of
+    /// the zero address, no known string hashes to the zero namespace
+    /// or the zero id, and neither write records the genesis one — so answering zero for any of
     /// them would be answering a question the caller did not mean to ask, and
     /// answering it with the value that sends it down its pre-migration
     /// branch.
-    function appliedV4(address writer, bytes32 namespace, bytes32 migration) external view returns (uint256) {
-        checkRecordKey(writer, namespace, migration);
-        return sRecords[writer][namespace][migration].appliedAt;
+    function appliedV4(address writer, bytes32 namespaceHash, bytes32 migrationHash) external view returns (uint256) {
+        checkRecordKey(writer, namespaceHash, migrationHash);
+        return sRecords[writer][namespaceHash][migrationHash].appliedAt;
     }
 
     /// @inheritdoc IMigrationRegistryV4
@@ -322,9 +323,13 @@ contract MigrationRegistry is IMigrationRegistryV4, RegistryDelegates {
     /// the same key: a zero answer here reads as "never applied" exactly as a
     /// zero moment does. The head is the first entry of the stored list, and
     /// the list is empty exactly when the record is.
-    function appliedOntoV4(address writer, bytes32 namespace, bytes32 migration) external view returns (bytes32) {
-        checkRecordKey(writer, namespace, migration);
-        Prerequisite[] storage appliedAfterList = sRecords[writer][namespace][migration].appliedAfter;
+    function appliedOntoV4(address writer, bytes32 namespaceHash, bytes32 migrationHash)
+        external
+        view
+        returns (bytes32)
+    {
+        checkRecordKey(writer, namespaceHash, migrationHash);
+        Prerequisite[] storage appliedAfterList = sRecords[writer][namespaceHash][migrationHash].appliedAfter;
         return appliedAfterList.length == 0 ? bytes32(0) : appliedAfterList[0].migration;
     }
 
@@ -332,21 +337,21 @@ contract MigrationRegistry is IMigrationRegistryV4, RegistryDelegates {
     /// @dev The same four refusals again: an empty answer for a key that can
     /// never hold a record would read as "never applied" about a record the
     /// caller did not mean to ask for.
-    function appliedAfterV4(address writer, bytes32 namespace, bytes32 migration)
+    function appliedAfterV4(address writer, bytes32 namespaceHash, bytes32 migrationHash)
         external
         view
         returns (Prerequisite[] memory)
     {
-        checkRecordKey(writer, namespace, migration);
-        return sRecords[writer][namespace][migration].appliedAfter;
+        checkRecordKey(writer, namespaceHash, migrationHash);
+        return sRecords[writer][namespaceHash][migrationHash].appliedAfter;
     }
 
     /// @inheritdoc IMigrationRegistryV4
     /// @dev The same four refusals as `appliedV4`: a zero answer here reads as
     /// "never applied" exactly as a zero moment does.
-    function appliedByV4(address writer, bytes32 namespace, bytes32 migration) external view returns (address) {
-        checkRecordKey(writer, namespace, migration);
-        return sRecords[writer][namespace][migration].writtenBy;
+    function appliedByV4(address writer, bytes32 namespaceHash, bytes32 migrationHash) external view returns (address) {
+        checkRecordKey(writer, namespaceHash, migrationHash);
+        return sRecords[writer][namespaceHash][migrationHash].writtenBy;
     }
 
     /// Refuses the zero writer. The one copy of that refusal, reached by
@@ -363,10 +368,10 @@ contract MigrationRegistry is IMigrationRegistryV4, RegistryDelegates {
     /// One function, so every key naming a line refuses the same two things in
     /// the same order.
     /// @param writer The line's writer.
-    /// @param namespace The line under the writer.
-    function checkLineKey(address writer, bytes32 namespace) internal pure {
+    /// @param namespaceHash The hash of the namespace under the writer.
+    function checkLineKey(address writer, bytes32 namespaceHash) internal pure {
         checkWriter(writer);
-        if (namespace == bytes32(0)) {
+        if (namespaceHash == bytes32(0)) {
             revert ZeroNamespace();
         }
     }
@@ -376,14 +381,14 @@ contract MigrationRegistry is IMigrationRegistryV4, RegistryDelegates {
     /// and the check on every entry after the head cannot drift into refusing
     /// different things.
     /// @param writer The writer being read.
-    /// @param namespace The line under the writer being read.
-    /// @param migration The migration being asked about.
-    function checkRecordKey(address writer, bytes32 namespace, bytes32 migration) internal pure {
-        checkLineKey(writer, namespace);
-        if (migration == bytes32(0)) {
+    /// @param namespaceHash The hash of the namespace under the writer being read.
+    /// @param migrationHash The hash of the migration being asked about.
+    function checkRecordKey(address writer, bytes32 namespaceHash, bytes32 migrationHash) internal pure {
+        checkLineKey(writer, namespaceHash);
+        if (migrationHash == bytes32(0)) {
             revert ZeroMigration();
         }
-        if (migration == MIGRATION_HEAD_GENESIS) {
+        if (migrationHash == MIGRATION_HEAD_GENESIS) {
             revert GenesisMigration();
         }
     }
@@ -402,15 +407,15 @@ contract MigrationRegistry is IMigrationRegistryV4, RegistryDelegates {
     /// the two cannot drift into different ideas of where a line that has
     /// applied nothing is.
     ///
-    /// A write reaches it as `headV4(writer, namespace)`, whose writer is never
-    /// the zero address (`checkWrite` refuses it) and whose namespace
-    /// `checkMigrationArguments` has already refused as zero, so both refusals
-    /// are redundant on that path.
+    /// A write reaches it as `headV4(writer, namespaceHash)`, whose writer is
+    /// never the zero address (`checkWrite` refuses it) and whose namespace hash
+    /// is the hash of a namespace string, which no known string hashes to zero, so
+    /// both refusals are redundant on that path.
     /// It is one function, so it is one pair of refusals, and the reachable
     /// path is the one they are there for.
-    function headV4(address writer, bytes32 namespace) public view returns (bytes32) {
-        checkLineKey(writer, namespace);
-        bytes32 storedHead = sHead[writer][namespace];
+    function headV4(address writer, bytes32 namespaceHash) public view returns (bytes32) {
+        checkLineKey(writer, namespaceHash);
+        bytes32 storedHead = sHead[writer][namespaceHash];
         return storedHead == bytes32(0) ? MIGRATION_HEAD_GENESIS : storedHead;
     }
 }

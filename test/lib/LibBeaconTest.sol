@@ -8,7 +8,7 @@ import {DeployDependency, DeployMechanism, DeploySuite} from "../../src/abstract
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../src/lib/LibMigrationRegistryDeploy.sol";
-import {IMigrationRegistryV3, Prerequisite} from "../../src/interface/IMigrationRegistryV3.sol";
+import {IMigrationRegistryV4, Prerequisite} from "../../src/interface/IMigrationRegistryV4.sol";
 
 /// @title LibBeaconTest
 /// @notice The fixtures and assertions the beacon tests share.
@@ -74,13 +74,13 @@ library LibBeaconTest {
     function applyMigration(
         Vm vm,
         address writer,
-        bytes32 namespace,
-        bytes32 migration,
+        string memory namespace,
+        string memory migration,
         Prerequisite[] memory prerequisites
     ) internal {
         vm.prank(writer);
-        IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigrationV3(writer, namespace, migration, prerequisites);
+        IMigrationRegistryV4(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .applyMigrationV4(writer, namespace, migration, prerequisites);
     }
 
     /// Applies `migration` as `writer` on the deployed `MigrationRegistry`, onto `head` in `namespace`.
@@ -88,8 +88,12 @@ library LibBeaconTest {
     /// @param writer The writer.
     /// @param namespace The namespace.
     /// @param migration The migration.
-    /// @param head The writer's head in `namespace`.
-    function applyMigration(Vm vm, address writer, bytes32 namespace, bytes32 migration, bytes32 head) internal {
-        applyMigration(vm, writer, namespace, migration, LibMigrationRegistry.onto(writer, namespace, head));
+    /// @param head The hash of the writer's head in `namespace`.
+    function applyMigration(Vm vm, address writer, string memory namespace, string memory migration, bytes32 head)
+        internal
+    {
+        applyMigration(
+            vm, writer, namespace, migration, LibMigrationRegistry.onto(writer, keccak256(bytes(namespace)), head)
+        );
     }
 }
