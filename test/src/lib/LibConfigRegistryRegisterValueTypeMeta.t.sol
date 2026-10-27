@@ -158,7 +158,11 @@ contract LibConfigRegistryRegisterValueTypeMetaTest is Test {
         (bool success,) = address(registry).call(data);
         assertTrue(success);
         assertEq(
-            countMeta(vm.getRecordedLogs(), address(registry), abi.encode(AUTHORITY, keccak256(abi.encode(AUTHORITY, name)), meta)),
+            countMeta(
+                vm.getRecordedLogs(),
+                address(registry),
+                abi.encode(AUTHORITY, keccak256(abi.encode(AUTHORITY, name)), meta)
+            ),
             meta.length > 0 ? 1 : 0
         );
         (bytes memory bound,, bytes32 boundTypeHash) = registry.getV4(AUTHORITY, name);

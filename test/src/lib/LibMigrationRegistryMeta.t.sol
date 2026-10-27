@@ -92,7 +92,9 @@ contract LibMigrationRegistryMetaTest is Test {
         registry.approveV4(namespace, executor);
         Prerequisite[] memory list = onto(registry, writer, namespace);
         (address to, bytes memory data) = history
-            ? LibMigrationRegistry.applyMigrationHistoryV4Call(writer, namespace, migration, block.timestamp, list, meta)
+            ? LibMigrationRegistry.applyMigrationHistoryV4Call(
+                writer, namespace, migration, block.timestamp, list, meta
+            )
             : LibMigrationRegistry.applyMigrationV4Call(writer, namespace, migration, list, meta);
         vm.recordLogs();
         vm.prank(executor);
