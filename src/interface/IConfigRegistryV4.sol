@@ -131,8 +131,9 @@ import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.s
 ///
 /// A bind may carry rain metadata, emitted as `MetaV1_2` with subject
 /// `keccak256(abi.encode(authority, name))`, so every bind of a name under an
-/// authority shares one subject. Metadata is never stored or validated, and an
-/// empty one emits nothing.
+/// authority shares one subject. Non-empty metadata without the rain meta magic
+/// number reverts `NotRainMetaV1`; metadata is never stored and its body never
+/// validated, and an empty one emits nothing.
 interface IConfigRegistryV4 is IRegistryDelegatesV2, IMetaV1_2 {
     /// Thrown when `registerV4` is called with an empty value. Empty is how an
     /// unbound name reads, so binding it would produce a name that is both
@@ -204,7 +205,9 @@ interface IConfigRegistryV4 is IRegistryDelegatesV2, IMetaV1_2 {
     /// already bound, which is a bind like any other — and, when `meta` is
     /// non-empty, emit `MetaV1_2(msg.sender, subject, meta)` with subject
     /// `keccak256(abi.encode(authority, name))`. The moment
-    /// dates the write, not the value. It MUST NOT store or validate `meta`.
+    /// dates the write, not the value. A non-empty `meta` that
+    /// `LibMeta.isRainMetaV1` rejects MUST revert `NotRainMetaV1`, after every
+    /// other refusal. It MUST NOT store `meta` or validate its body.
     /// An implementation storing the moment narrower than `block.timestamp`
     /// MUST revert on a clock that does not fit rather than truncate it, since a
     /// truncated moment reads as older.

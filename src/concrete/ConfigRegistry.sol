@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {IConfigRegistryV4} from "../interface/IConfigRegistryV4.sol";
 import {RegistryDelegates} from "../abstract/RegistryDelegates.sol";
+import {LibIMetaBoardV1_2} from "rain-metadata-0.1.43/src/lib/LibIMetaBoardV1_2.sol";
 
 /// @title ConfigRegistry
 /// @notice The whole of `IConfigRegistryV4`: any account binds a `bytes32` name
@@ -90,7 +91,7 @@ contract ConfigRegistry is IConfigRegistryV4, RegistryDelegates {
             Binding({value: value, registeredAt: block.timestamp, valueTypeHash: keccak256(bytes(valueType))});
         emit Register(msg.sender, authority, name, valueType, value);
         if (meta.length > 0) {
-            emit MetaV1_2(msg.sender, keccak256(abi.encode(authority, name)), meta);
+            LibIMetaBoardV1_2.emitMeta(keccak256(abi.encode(authority, name)), meta);
         }
     }
 
