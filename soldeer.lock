@@ -27,6 +27,13 @@ checksum = "0c00f59f04a2f4c654c8378e66eb1a5acecc33a1cf58052c511b28d0165ce978"
 integrity = "96bc0001f9e06624eb273ab18433846d2a251ed35e26eca5867d08e0b9e343c4"
 
 [[dependencies]]
+name = "rain-metadata"
+version = "0.1.43"
+url = "https://soldeer-revisions.s3.amazonaws.com/rain-metadata/0_1_43_03-09-2026_09:14:04_rain.zip"
+checksum = "554ca7c1c9ecdafc69252f887cb57f7fac96d0ba7d6f2078f0cd0b626b77511f"
+integrity = "56d91b5dc7e097d013009d2dd6a8d07dcd2db481ea745f53910696dcaaa7fd24"
+
+[[dependencies]]
 name = "rain-sol-codegen"
 version = "0.1.39"
 url = "https://soldeer-revisions.s3.amazonaws.com/rain-sol-codegen/0_1_39_01-10-2026_22:33:18_rain.sol.zip"
