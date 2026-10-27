@@ -36,7 +36,9 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         external
         returns (uint256[] memory, string memory)
     {
-        return LibConfigRegistryRegister.registerOnNetworks(vm, networks, networks, AUTHORITY, AUTHORITY, configBinding(name, value));
+        return LibConfigRegistryRegister.registerOnNetworks(
+            vm, networks, networks, AUTHORITY, AUTHORITY, configBinding(name, value)
+        );
     }
 
     function externalRegisterOnForks(
@@ -45,7 +47,9 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         string memory name,
         bytes memory value
     ) external {
-        LibConfigRegistryRegister.registerOnForks(vm, networks, networks, forkIds, AUTHORITY, AUTHORITY, configBinding(name, value));
+        LibConfigRegistryRegister.registerOnForks(
+            vm, networks, networks, forkIds, AUTHORITY, AUTHORITY, configBinding(name, value)
+        );
     }
 
     function externalRegisterOnForksFrom(
@@ -55,7 +59,9 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         string memory name,
         bytes memory value
     ) external {
-        LibConfigRegistryRegister.registerOnForks(vm, networks, networks, forkIds, sender, AUTHORITY, configBinding(name, value));
+        LibConfigRegistryRegister.registerOnForks(
+            vm, networks, networks, forkIds, sender, AUTHORITY, configBinding(name, value)
+        );
     }
 
     function externalCheckRegisteredOnForks(
@@ -64,13 +70,17 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         string memory name,
         bytes memory value
     ) external {
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, configBinding(name, value));
+        LibConfigRegistryRegister.checkRegisteredOnForks(
+            vm, networks, networks, forkIds, AUTHORITY, configBinding(name, value)
+        );
     }
 
     function externalCheckRegisteredOnNetworks(string[] memory networks, string memory name, bytes memory value)
         external
     {
-        LibConfigRegistryRegister.checkRegisteredOnNetworks(vm, networks, networks, AUTHORITY, configBinding(name, value));
+        LibConfigRegistryRegister.checkRegisteredOnNetworks(
+            vm, networks, networks, AUTHORITY, configBinding(name, value)
+        );
     }
 
     /// A fresh name, its hash, and a fresh address value.
@@ -100,8 +110,9 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         uint256[] memory forkIds = forksWithRegistry(networks);
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
-            (bool broadcast,) =
-                LibConfigRegistryRegister.registerOnSelectedChain(vm, configs[i], AUTHORITY, AUTHORITY, hashed, configBinding("", value));
+            (bool broadcast,) = LibConfigRegistryRegister.registerOnSelectedChain(
+                vm, configs[i], AUTHORITY, AUTHORITY, hashed, configBinding("", value)
+            );
             assertTrue(broadcast);
         }
 
@@ -117,7 +128,9 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
             );
         }
 
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, configBinding(name, value));
+        LibConfigRegistryRegister.checkRegisteredOnForks(
+            vm, networks, networks, forkIds, AUTHORITY, configBinding(name, value)
+        );
 
         bytes memory other = abi.encodePacked(value, bytes1(0));
         vm.expectRevert(
@@ -157,10 +170,13 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         }
         (uint256[] memory forkIds, string memory record) = this.externalRegisterOnNetworks(networks, name, value);
         assertEq(forkIds.length, networks.length);
-        (,, string memory inputs) =
-            LibConfigRegistryRegister.checkInputs(vm, networks, networks, AUTHORITY, AUTHORITY, configBinding(name, value));
+        (,, string memory inputs) = LibConfigRegistryRegister.checkInputs(
+            vm, networks, networks, AUTHORITY, AUTHORITY, configBinding(name, value)
+        );
         assertEq(record, inputs);
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, configBinding(name, value));
+        LibConfigRegistryRegister.checkRegisteredOnForks(
+            vm, networks, networks, forkIds, AUTHORITY, configBinding(name, value)
+        );
     }
 
     /// `registerOnNetworks` forks every selected network in declaration order;
@@ -176,12 +192,15 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         LibConfigRegistryFork.ensureDeployed(vm);
         vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
-        (,, string memory inputs) =
-            LibConfigRegistryRegister.checkInputs(vm, networks, networks, AUTHORITY, AUTHORITY, configBinding(name, value));
+        (,, string memory inputs) = LibConfigRegistryRegister.checkInputs(
+            vm, networks, networks, AUTHORITY, AUTHORITY, configBinding(name, value)
+        );
         (uint256[] memory forkIds, string memory record) = this.externalRegisterOnNetworks(networks, name, value);
         assertEq(forkIds.length, 2);
         assertEq(record, inputs);
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, configBinding(name, value));
+        LibConfigRegistryRegister.checkRegisteredOnForks(
+            vm, networks, networks, forkIds, AUTHORITY, configBinding(name, value)
+        );
     }
 
     /// `registerOnForks` binds on every given fork's own registry, with
@@ -253,13 +272,17 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         uint256[] memory forkIds = forksWithRegistry(networks);
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
-            LibConfigRegistryRegister.registerOnSelectedChain(vm, configs[i], AUTHORITY, AUTHORITY, hashed, configBinding("", value));
+            LibConfigRegistryRegister.registerOnSelectedChain(
+                vm, configs[i], AUTHORITY, AUTHORITY, hashed, configBinding("", value)
+            );
         }
         vm.selectFork(forkIds[0]);
         assertEq(vm.getChainId(), 8453);
         vm.selectFork(forkIds[1]);
         assertEq(vm.getChainId(), 42161);
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, configBinding(name, value));
+        LibConfigRegistryRegister.checkRegisteredOnForks(
+            vm, networks, networks, forkIds, AUTHORITY, configBinding(name, value)
+        );
 
         // Forks paired with the wrong networks are refused on the chain id,
         // even though both registries hold the binding.
