@@ -26,6 +26,26 @@ import {VALUE_TYPE, VALUE_TYPE_HASH} from "../lib/ConfigTestBinding.sol";
 /// writes these names, and the unset-networks cases run before the variable is
 /// first set, since a set variable cannot be unset.
 contract RegisterConfigTest is Test {
+    struct Pair {
+        address account;
+        uint256 amount;
+    }
+
+    struct PairWithHashes {
+        Pair pair;
+        bytes32[] hashes;
+    }
+
+    struct Flag {
+        address account;
+        bool on;
+    }
+
+    struct Entry {
+        uint256 id;
+        Flag[] flags;
+    }
+
     function testWiring() external {
         // The no-op broadcast leaves the script signing, so deployed at the
         // root authority the script signs as it.
@@ -145,27 +165,89 @@ contract RegisterConfigTest is Test {
         assertEq(registeredAt, block.timestamp);
         assertEq(boundTypeHash, VALUE_TYPE_HASH);
 
-        runAsUint256(script, name);
+        runAsValueTypes(script, name);
         runAsDelegate(name);
         runWithMeta(script, name);
     }
 
-    /// `CONFIG_REGISTRY_VALUE_TYPE` is the type the bind records.
+    /// `CONFIG_REGISTRY_VALUE_TYPE` is the type the bind records, scalar or
+    /// structured.
     /// @param script The script.
     /// @param name The test's base name.
-    function runAsUint256(LocalRegisterConfig script, string memory name) internal {
-        string memory uintName = string.concat(name, "-uint256");
-        bytes memory uintValue = abi.encode(uint256(42));
-        vm.setEnv("CONFIG_REGISTRY_VALUE_TYPE", "uint256");
-        vm.setEnv("CONFIG_REGISTRY_NAME", uintName);
-        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(uintValue));
-        script.runAsItself();
-        (bytes memory bound,, bytes32 boundTypeHash) = IConfigRegistryV4(
-                LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS
-            ).getV4(address(script), keccak256(bytes(uintName)));
-        assertEq(bound, uintValue);
-        assertEq(boundTypeHash, keccak256("uint256"));
+    function runAsValueTypes(LocalRegisterConfig script, string memory name) internal {
+        bytes memory bound = bindAs(script, string.concat(name, "-uint256"), "uint256", abi.encode(uint256(42)));
+        assertEq(abi.decode(bound, (uint256)), 42);
+
+        Pair memory pair = Pair(address(0xA), 7);
+        bound = bindAs(script, string.concat(name, "-tuple"), "(address,uint256)", abi.encode(pair));
+        Pair memory decodedPair = abi.decode(bound, (Pair));
+        assertEq(decodedPair.account, pair.account);
+        assertEq(decodedPair.amount, pair.amount);
+
+        bytes32[] memory hashes = new bytes32[](2);
+        hashes[0] = keccak256("a");
+        hashes[1] = keccak256("b");
+        PairWithHashes memory nested = PairWithHashes(pair, hashes);
+        bound = bindAs(script, string.concat(name, "-nested"), "((address,uint256),bytes32[])", abi.encode(nested));
+        PairWithHashes memory decodedNested = abi.decode(bound, (PairWithHashes));
+        assertEq(decodedNested.pair.account, pair.account);
+        assertEq(decodedNested.pair.amount, pair.amount);
+        assertEq(decodedNested.hashes, hashes);
+
+        Entry[] memory entries = new Entry[](2);
+        entries[0].id = 1;
+        entries[0].flags = new Flag[](2);
+        entries[0].flags[0] = Flag(address(0xB), true);
+        entries[0].flags[1] = Flag(address(0xC), false);
+        entries[1].id = 2;
+        entries[1].flags = new Flag[](1);
+        entries[1].flags[0] = Flag(address(0xD), true);
+        bound = bindAs(script, string.concat(name, "-entries"), "(uint256,(address,bool)[])[]", abi.encode(entries));
+        Entry[] memory decodedEntries = abi.decode(bound, (Entry[]));
+        assertEq(decodedEntries.length, entries.length);
+        for (uint256 i = 0; i < entries.length; i++) {
+            assertEq(decodedEntries[i].id, entries[i].id);
+            assertEq(decodedEntries[i].flags.length, entries[i].flags.length);
+            for (uint256 j = 0; j < entries[i].flags.length; j++) {
+                assertEq(decodedEntries[i].flags[j].account, entries[i].flags[j].account);
+                assertEq(decodedEntries[i].flags[j].on, entries[i].flags[j].on);
+            }
+        }
+
         vm.setEnv("CONFIG_REGISTRY_VALUE_TYPE", VALUE_TYPE);
+    }
+
+    /// Runs the script binding `name` to `value` as `valueType` and checks the
+    /// type hash and the `Register` type string.
+    /// @return The bound value.
+    function bindAs(LocalRegisterConfig script, string memory name, string memory valueType, bytes memory value)
+        internal
+        returns (bytes memory)
+    {
+        address registry = LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS;
+        vm.setEnv("CONFIG_REGISTRY_VALUE_TYPE", valueType);
+        vm.setEnv("CONFIG_REGISTRY_NAME", name);
+        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(value));
+        vm.recordLogs();
+        script.runAsItself();
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        bytes32 registerTopic = keccak256("Register(address,address,bytes32,string,bytes)");
+        uint256 registers = 0;
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].emitter == registry && entries[i].topics[0] == registerTopic) {
+                registers++;
+                assertEq(
+                    entries[i].data,
+                    abi.encode(address(script), address(script), keccak256(bytes(name)), valueType, value)
+                );
+            }
+        }
+        assertEq(registers, 1);
+        (bytes memory bound,, bytes32 boundTypeHash) =
+            IConfigRegistryV4(registry).getV4(address(script), keccak256(bytes(name)));
+        assertEq(boundTypeHash, keccak256(bytes(valueType)));
+        assertEq(bound, value);
+        return bound;
     }
 
     /// `CONFIG_REGISTRY_META` is sent with the bind: unset, none is emitted;
