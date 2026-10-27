@@ -11,6 +11,7 @@ import {LibConfigRegistryRegister} from "../../src/lib/LibConfigRegistryRegister
 import {LibConfigRegistryFork} from "../lib/LibConfigRegistryFork.sol";
 import {LibConfigRegistryRead} from "../lib/LibConfigRegistryRead.sol";
 import {LocalRegisterConfig} from "../concrete/LocalRegisterConfig.sol";
+import {VALUE_TYPE, VALUE_TYPE_HASH} from "../lib/ConfigTestBinding.sol";
 
 /// @title RegisterConfigTest
 /// The script's wiring: which variables it reads, that the signer is the
@@ -37,6 +38,7 @@ contract RegisterConfigTest is Test {
         vm.setEnv("CONFIG_REGISTRY_AUTHORITY", "not-an-address");
         vm.setEnv("CONFIG_REGISTRY_NAME", name);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
+        vm.setEnv("CONFIG_REGISTRY_VALUE_TYPE", VALUE_TYPE);
         assertEnvAddressRefused(script);
         vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(authority));
 
@@ -91,7 +93,7 @@ contract RegisterConfigTest is Test {
         bytes memory value = abi.encode(address(1));
         vm.prank(authority);
         IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-            .registerV4(authority, keccak256(bytes(name)), value);
+            .registerV4(authority, keccak256(bytes(name)), VALUE_TYPE, value, "");
         vm.setEnv("CONFIG_REGISTRY_NETWORKS", network);
         vm.setEnv("CONFIG_REGISTRY_NAME", name);
         script.verify();
@@ -128,11 +130,12 @@ contract RegisterConfigTest is Test {
         assertEq(forkIds.length, 1);
         assertEq(forkIds[0], LibRainDeploy.declaredNetworkConfigs(LibRainDeploy.supportedNetworks())[0].chainId);
         assertEq(block.chainid, forkIds[0]);
-        (bytes memory bound, uint256 registeredAt) = IConfigRegistryV4(
+        (bytes memory bound, uint256 registeredAt, bytes32 boundTypeHash) = IConfigRegistryV4(
                 LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS
             ).getV4(authority, keccak256(bytes(freshName)));
         assertEq(bound, freshValue);
         assertEq(registeredAt, vm.getBlockTimestamp());
+        assertEq(boundTypeHash, VALUE_TYPE_HASH);
 
         assertRunSkips(script, authority, keccak256(bytes(freshName)), freshValue, registeredAt);
 
@@ -143,16 +146,18 @@ contract RegisterConfigTest is Test {
         vm.warp(vm.getBlockTimestamp() + 1);
         vm.prank(authority);
         IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-            .registerV4(authority, keccak256(bytes(rotateName)), freshValue);
+            .registerV4(authority, keccak256(bytes(rotateName)), VALUE_TYPE, freshValue, "");
         vm.warp(vm.getBlockTimestamp() + 1);
         vm.setEnv("CONFIG_REGISTRY_NAME", rotateName);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(rotateValue));
         forkIds = script.runAsItself();
         assertEq(forkIds.length, 1);
-        (bound, registeredAt) = IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-            .getV4(authority, keccak256(bytes(rotateName)));
+        (bound, registeredAt, boundTypeHash) = IConfigRegistryV4(
+                LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS
+            ).getV4(authority, keccak256(bytes(rotateName)));
         assertEq(bound, rotateValue);
         assertEq(registeredAt, block.timestamp);
+        assertEq(boundTypeHash, VALUE_TYPE_HASH);
 
         runAsDelegate(script, name);
     }
