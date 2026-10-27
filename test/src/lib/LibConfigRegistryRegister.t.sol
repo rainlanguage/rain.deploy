@@ -15,6 +15,7 @@ import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockRevertingRegistry} from "../../concrete/MockRevertingRegistry.sol";
 import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
 import {VALUE_TYPE, VALUE_TYPE_HASH, configBinding} from "../../lib/ConfigTestBinding.sol";
+import {rainMeta} from "../../lib/RainMeta.sol";
 
 /// @title LibConfigRegistryRegisterTest
 /// Every guard `LibConfigRegistryRegister` makes before a bind, and the bind
@@ -1109,7 +1110,8 @@ contract LibConfigRegistryRegisterTest is Test {
     /// The binding's meta is sent with the bind, as `MetaV1_2` about the
     /// authority's name.
     function testRegisterSendsMeta(bytes32 name, bytes memory value, bytes memory meta) external {
-        vm.assume(value.length > 0 && meta.length > 0);
+        vm.assume(value.length > 0);
+        meta = rainMeta(meta);
         IConfigRegistryV4 registry = deployRegistry();
         vm.warp(1);
         ConfigBinding memory binding = configBinding("", value);
@@ -1133,7 +1135,8 @@ contract LibConfigRegistryRegisterTest is Test {
 
     /// A skip sends nothing, so its meta is not emitted.
     function testRegisterSkipSendsNoMeta(bytes32 name, bytes memory value, bytes memory meta) external {
-        vm.assume(value.length > 0 && meta.length > 0);
+        vm.assume(value.length > 0);
+        meta = rainMeta(meta);
         IConfigRegistryV4 registry = deployRegistry();
         vm.warp(1);
         vm.prank(AUTHORITY);

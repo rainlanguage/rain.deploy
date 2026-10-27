@@ -8,6 +8,8 @@ import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 import {IMigrationRegistryV4, Prerequisite} from "../../../src/interface/IMigrationRegistryV4.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
+import {rainMeta, isNotRainMeta} from "../../lib/RainMeta.sol";
+import {NotRainMetaV1} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
 
 /// @title MigrationRegistryMetaTest
 /// @notice The migration writes' `meta`: emitted as `MetaV1_2` by the writer
@@ -70,7 +72,7 @@ contract MigrationRegistryMetaTest is Test {
         bytes memory meta
     ) external {
         assumeKey(writer, namespace, migration);
-        vm.assume(meta.length > 0);
+        meta = rainMeta(meta);
         vm.recordLogs();
         write(sRegistry, writer, writer, namespace, migration, history, meta);
         Vm.Log[] memory entries = vm.getRecordedLogs();
@@ -90,7 +92,8 @@ contract MigrationRegistryMetaTest is Test {
         bytes memory meta
     ) external {
         assumeKey(writer, namespace, migration);
-        vm.assume(delegate != address(0) && delegate != writer && meta.length > 0);
+        vm.assume(delegate != address(0) && delegate != writer);
+        meta = rainMeta(meta);
         vm.prank(writer);
         sRegistry.approveV4(namespace, delegate);
         vm.recordLogs();
@@ -122,7 +125,8 @@ contract MigrationRegistryMetaTest is Test {
     ) external {
         assumeKey(writer, namespace, first);
         LibMigrationFuzz.assumeMigration(vm, second);
-        vm.assume(first != second && meta.length > 0);
+        vm.assume(first != second);
+        meta = rainMeta(meta);
         vm.recordLogs();
         write(sRegistry, writer, writer, namespace, first, false, meta);
         write(sRegistry, writer, writer, namespace, second, true, meta);
@@ -142,7 +146,8 @@ contract MigrationRegistryMetaTest is Test {
         bytes memory meta
     ) external {
         assumeKey(writer, namespace, migration);
-        vm.assume(sender != writer && meta.length > 0);
+        vm.assume(sender != writer);
+        meta = rainMeta(meta);
         Prerequisite[] memory list = onto(sRegistry, writer, namespace);
         vm.recordLogs();
         vm.prank(sender);
@@ -155,6 +160,56 @@ contract MigrationRegistryMetaTest is Test {
         assertEq(vm.getRecordedLogs().length, 0);
     }
 
+    /// Non-empty meta without the magic number reverts `NotRainMetaV1` on both
+    /// writes and records nothing.
+    function testApplyMigrationNotRainMetaReverts(
+        address writer,
+        bytes32 namespace,
+        bytes32 migration,
+        bool history,
+        bytes memory meta
+    ) external {
+        assumeKey(writer, namespace, migration);
+        vm.assume(isNotRainMeta(meta));
+        bytes32 head = sRegistry.headV4(writer, namespace);
+        Prerequisite[] memory list = onto(sRegistry, writer, namespace);
+        vm.recordLogs();
+        vm.prank(writer);
+        vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, meta));
+        if (history) {
+            sRegistry.applyMigrationHistoryV4(writer, namespace, migration, block.timestamp, list, meta);
+        } else {
+            sRegistry.applyMigrationV4(writer, namespace, migration, list, meta);
+        }
+        assertEq(vm.getRecordedLogs().length, 0);
+        assertEq(sRegistry.appliedV4(writer, namespace, migration), 0);
+        assertEq(sRegistry.appliedByV4(writer, namespace, migration), address(0));
+        assertEq(sRegistry.headV4(writer, namespace), head);
+    }
+
+    /// The magic number alone is rain meta, and anything short of it is not.
+    function testApplyMigrationMetaBoundary(address writer, bytes32 namespace, bytes32 migration, bool history)
+        external
+    {
+        assumeKey(writer, namespace, migration);
+        bytes[3] memory refused = [bytes(hex"01"), bytes(hex"ff0a89c674ee78"), bytes(hex"ff0a89c674ee787500")];
+        for (uint256 i = 0; i < refused.length; i++) {
+            Prerequisite[] memory list = onto(sRegistry, writer, namespace);
+            vm.prank(writer);
+            vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, refused[i]));
+            if (history) {
+                sRegistry.applyMigrationHistoryV4(writer, namespace, migration, block.timestamp, list, refused[i]);
+            } else {
+                sRegistry.applyMigrationV4(writer, namespace, migration, list, refused[i]);
+            }
+        }
+        vm.recordLogs();
+        write(sRegistry, writer, writer, namespace, migration, history, hex"ff0a89c674ee7874");
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        assertEq(entries.length, 2);
+        assertMetaLog(entries[1], writer, keccak256(abi.encode(writer, namespace, migration)), hex"ff0a89c674ee7874");
+    }
+
     /// Meta is not stored: the write touches the same slots with the same
     /// values whatever the meta.
     function testApplyMigrationMetaNotStored(
@@ -165,7 +220,7 @@ contract MigrationRegistryMetaTest is Test {
         bytes memory meta
     ) external {
         assumeKey(writer, namespace, migration);
-        vm.assume(meta.length > 0);
+        meta = rainMeta(meta);
         MigrationRegistry plain = new MigrationRegistry();
         MigrationRegistry withMeta = new MigrationRegistry();
 

@@ -10,6 +10,7 @@ import {IMigrationRegistryV4, Prerequisite} from "../../../src/interface/IMigrat
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
+import {rainMeta} from "../../lib/RainMeta.sol";
 
 /// @title LibMigrationRegistryMetaTest
 /// @notice `LibMigrationRegistry`'s writes and write calls send their `meta`
@@ -60,6 +61,7 @@ contract LibMigrationRegistryMetaTest is Test {
     {
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
+        if (meta.length > 0) meta = rainMeta(meta);
         IMigrationRegistryV4 registry = deployRegistry();
         MockMigrationApplier applier = new MockMigrationApplier();
         address writer = address(applier);
@@ -86,6 +88,7 @@ contract LibMigrationRegistryMetaTest is Test {
         vm.assume(writer != address(0) && executor != address(0) && executor != writer);
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
+        if (meta.length > 0) meta = rainMeta(meta);
         IMigrationRegistryV4 registry = deployRegistry();
         vm.assume(executor != address(registry) && executor != address(vm));
         vm.prank(writer);
