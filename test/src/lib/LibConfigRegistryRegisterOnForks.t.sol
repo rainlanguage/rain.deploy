@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
-import {IConfigRegistryV3} from "../../../src/interface/IConfigRegistryV3.sol";
+import {IConfigRegistryV4} from "../../../src/interface/IConfigRegistryV4.sol";
 import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibConfigRegistryRegister} from "../../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
@@ -30,12 +30,15 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
     /// The authority every run here binds under and reads under. Any account
     /// is one.
     address internal constant AUTHORITY = address(0xA11CE);
+    string internal constant VALUE_TYPE = "address";
 
     function externalRegisterOnNetworks(string[] memory networks, string memory name, bytes memory value)
         external
         returns (uint256[] memory, string memory)
     {
-        return LibConfigRegistryRegister.registerOnNetworks(vm, networks, networks, AUTHORITY, AUTHORITY, name, value);
+        return LibConfigRegistryRegister.registerOnNetworks(
+            vm, networks, networks, AUTHORITY, AUTHORITY, name, VALUE_TYPE, value
+        );
     }
 
     function externalRegisterOnForks(
@@ -44,7 +47,9 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         string memory name,
         bytes memory value
     ) external {
-        LibConfigRegistryRegister.registerOnForks(vm, networks, networks, forkIds, AUTHORITY, AUTHORITY, name, value);
+        LibConfigRegistryRegister.registerOnForks(
+            vm, networks, networks, forkIds, AUTHORITY, AUTHORITY, name, VALUE_TYPE, value
+        );
     }
 
     function externalRegisterOnForksFrom(
@@ -54,7 +59,9 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         string memory name,
         bytes memory value
     ) external {
-        LibConfigRegistryRegister.registerOnForks(vm, networks, networks, forkIds, sender, AUTHORITY, name, value);
+        LibConfigRegistryRegister.registerOnForks(
+            vm, networks, networks, forkIds, sender, AUTHORITY, name, VALUE_TYPE, value
+        );
     }
 
     function externalCheckRegisteredOnForks(
@@ -63,13 +70,15 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         string memory name,
         bytes memory value
     ) external {
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
+        LibConfigRegistryRegister.checkRegisteredOnForks(
+            vm, networks, networks, forkIds, AUTHORITY, name, VALUE_TYPE, value
+        );
     }
 
     function externalCheckRegisteredOnNetworks(string[] memory networks, string memory name, bytes memory value)
         external
     {
-        LibConfigRegistryRegister.checkRegisteredOnNetworks(vm, networks, networks, AUTHORITY, name, value);
+        LibConfigRegistryRegister.checkRegisteredOnNetworks(vm, networks, networks, AUTHORITY, name, VALUE_TYPE, value);
     }
 
     /// A fresh name, its hash, and a fresh address value.
@@ -99,8 +108,9 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         uint256[] memory forkIds = forksWithRegistry(networks);
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
-            (bool broadcast,) =
-                LibConfigRegistryRegister.registerOnSelectedChain(vm, configs[i], AUTHORITY, AUTHORITY, hashed, value);
+            (bool broadcast,) = LibConfigRegistryRegister.registerOnSelectedChain(
+                vm, configs[i], AUTHORITY, AUTHORITY, name, VALUE_TYPE, value
+            );
             assertTrue(broadcast);
         }
 
@@ -109,14 +119,16 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
             assertEq(vm.getChainId(), configs[i].chainId, networks[i]);
             assertEq(
                 LibConfigRegistryRead.getValue(
-                    IConfigRegistryV3(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), AUTHORITY, hashed
+                    IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), AUTHORITY, hashed
                 ),
                 value,
                 networks[i]
             );
         }
 
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
+        LibConfigRegistryRegister.checkRegisteredOnForks(
+            vm, networks, networks, forkIds, AUTHORITY, name, VALUE_TYPE, value
+        );
 
         bytes memory other = abi.encodePacked(value, bytes1(0));
         vm.expectRevert(
@@ -156,10 +168,12 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         }
         (uint256[] memory forkIds, string memory record) = this.externalRegisterOnNetworks(networks, name, value);
         assertEq(forkIds.length, networks.length);
-        (,, string memory inputs) =
-            LibConfigRegistryRegister.checkInputs(vm, networks, networks, AUTHORITY, AUTHORITY, name, value);
+        (, string memory inputs) =
+            LibConfigRegistryRegister.checkInputs(vm, networks, networks, AUTHORITY, AUTHORITY, name, VALUE_TYPE, value);
         assertEq(record, inputs);
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
+        LibConfigRegistryRegister.checkRegisteredOnForks(
+            vm, networks, networks, forkIds, AUTHORITY, name, VALUE_TYPE, value
+        );
     }
 
     /// `registerOnNetworks` forks every selected network in declaration order;
@@ -175,31 +189,33 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         LibConfigRegistryFork.ensureDeployed(vm);
         vm.makePersistent(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
-        (,, string memory inputs) =
-            LibConfigRegistryRegister.checkInputs(vm, networks, networks, AUTHORITY, AUTHORITY, name, value);
+        (, string memory inputs) =
+            LibConfigRegistryRegister.checkInputs(vm, networks, networks, AUTHORITY, AUTHORITY, name, VALUE_TYPE, value);
         (uint256[] memory forkIds, string memory record) = this.externalRegisterOnNetworks(networks, name, value);
         assertEq(forkIds.length, 2);
         assertEq(record, inputs);
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
+        LibConfigRegistryRegister.checkRegisteredOnForks(
+            vm, networks, networks, forkIds, AUTHORITY, name, VALUE_TYPE, value
+        );
     }
 
     /// `registerOnForks` binds on every given fork's own registry, with
     /// nothing persistent: one `Register` log per network, and each fork's
-    /// registry holds the value bound at that fork's own moment.
+    /// registry holds the value and its type bound at that fork's own moment.
     function testRegisterOnForksBindsOnEachFork() external {
         (string memory name, bytes32 hashed, bytes memory value) = fresh();
         string[] memory networks = LibRainDeploy.supportedNetworks();
         uint256[] memory forkIds = forksWithRegistry(networks);
-        IConfigRegistryV3 registry = IConfigRegistryV3(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+        IConfigRegistryV4 registry = IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
         vm.recordLogs();
         this.externalRegisterOnForks(networks, forkIds, name, value);
         Vm.Log[] memory logs = vm.getRecordedLogs();
         uint256 registers = 0;
         for (uint256 i = 0; i < logs.length; i++) {
-            if (logs[i].emitter == address(registry) && logs[i].topics[0] == IConfigRegistryV3.Register.selector) {
+            if (logs[i].emitter == address(registry) && logs[i].topics[0] == IConfigRegistryV4.Register.selector) {
                 assertEq(logs[i].topics.length, 1);
-                assertEq(logs[i].data, abi.encode(AUTHORITY, AUTHORITY, hashed, value));
+                assertEq(logs[i].data, abi.encode(AUTHORITY, AUTHORITY, hashed, name, VALUE_TYPE, value));
                 registers++;
             }
         }
@@ -209,6 +225,11 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
             vm.selectFork(forkIds[i]);
             assertEq(LibConfigRegistryRead.getValue(registry, AUTHORITY, hashed), value, networks[i]);
             assertEq(LibConfigRegistryRead.getMoment(registry, AUTHORITY, hashed), vm.getBlockTimestamp(), networks[i]);
+            assertEq(
+                LibConfigRegistryRead.getValueTypeHash(registry, AUTHORITY, hashed),
+                keccak256(bytes(VALUE_TYPE)),
+                networks[i]
+            );
         }
     }
 
@@ -252,13 +273,17 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         uint256[] memory forkIds = forksWithRegistry(networks);
         for (uint256 i = 0; i < forkIds.length; i++) {
             vm.selectFork(forkIds[i]);
-            LibConfigRegistryRegister.registerOnSelectedChain(vm, configs[i], AUTHORITY, AUTHORITY, hashed, value);
+            LibConfigRegistryRegister.registerOnSelectedChain(
+                vm, configs[i], AUTHORITY, AUTHORITY, name, VALUE_TYPE, value
+            );
         }
         vm.selectFork(forkIds[0]);
         assertEq(vm.getChainId(), 8453);
         vm.selectFork(forkIds[1]);
         assertEq(vm.getChainId(), 42161);
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, networks, networks, forkIds, AUTHORITY, name, value);
+        LibConfigRegistryRegister.checkRegisteredOnForks(
+            vm, networks, networks, forkIds, AUTHORITY, name, VALUE_TYPE, value
+        );
 
         // Forks paired with the wrong networks are refused on the chain id,
         // even though both registries hold the binding.
@@ -271,7 +296,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         this.externalCheckRegisteredOnForks(networks, swapped, name, value);
         assertEq(
             LibConfigRegistryRead.getValue(
-                IConfigRegistryV3(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), AUTHORITY, hashed
+                IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS), AUTHORITY, hashed
             ),
             value
         );
