@@ -14,7 +14,7 @@ import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.so
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockRevertingRegistry} from "../../concrete/MockRevertingRegistry.sol";
 import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
-import {VALUE_TYPE, configBinding} from "../../lib/ConfigTestBinding.sol";
+import {VALUE_TYPE, VALUE_TYPE_HASH, configBinding} from "../../lib/ConfigTestBinding.sol";
 
 /// @title LibConfigRegistryRegisterTest
 /// Every guard `LibConfigRegistryRegister` makes before a bind, and the bind
@@ -91,7 +91,7 @@ contract LibConfigRegistryRegisterTest is Test {
         LibConfigRegistryRegister.checkSender(base(), sender, authority, NAME);
     }
 
-    function externalCurrentBinding(bytes32 name) external view returns (bytes memory, uint256) {
+    function externalCurrentBinding(bytes32 name) external view returns (bytes memory, uint256, bytes32) {
         return LibConfigRegistryRegister.currentBinding(AUTHORITY, name);
     }
 
@@ -102,7 +102,9 @@ contract LibConfigRegistryRegisterTest is Test {
         bytes32 name,
         bytes memory value
     ) external returns (bool, string memory) {
-        return LibConfigRegistryRegister.registerOnSelectedChain(vm, network, sender, authority, name, configBinding("", value));
+        return LibConfigRegistryRegister.registerOnSelectedChain(
+            vm, network, sender, authority, name, configBinding("", value)
+        );
     }
 
     function externalRegisterOnNetworks(
@@ -112,7 +114,9 @@ contract LibConfigRegistryRegisterTest is Test {
         string memory name,
         bytes memory value
     ) external returns (uint256[] memory, string memory) {
-        return LibConfigRegistryRegister.registerOnNetworks(vm, selected, declared, sender, AUTHORITY, configBinding(name, value));
+        return LibConfigRegistryRegister.registerOnNetworks(
+            vm, selected, declared, sender, AUTHORITY, configBinding(name, value)
+        );
     }
 
     function externalCheckRegisteredOnForks(
@@ -122,7 +126,9 @@ contract LibConfigRegistryRegisterTest is Test {
         string memory name,
         bytes memory value
     ) external {
-        LibConfigRegistryRegister.checkRegisteredOnForks(vm, selected, declared, forkIds, AUTHORITY, configBinding(name, value));
+        LibConfigRegistryRegister.checkRegisteredOnForks(
+            vm, selected, declared, forkIds, AUTHORITY, configBinding(name, value)
+        );
     }
 
     function externalCheckRegisteredOnSelectedChain(SupportedNetwork memory network, bytes32 name, bytes memory value)
@@ -130,7 +136,9 @@ contract LibConfigRegistryRegisterTest is Test {
         view
         returns (uint256)
     {
-        return LibConfigRegistryRegister.checkRegisteredOnSelectedChain(vm, network, AUTHORITY, name, configBinding("", value));
+        return LibConfigRegistryRegister.checkRegisteredOnSelectedChain(
+            vm, network, AUTHORITY, name, configBinding("", value)
+        );
     }
 
     function externalCheckRegisteredOnNetworks(
@@ -139,7 +147,9 @@ contract LibConfigRegistryRegisterTest is Test {
         string memory name,
         bytes memory value
     ) external {
-        LibConfigRegistryRegister.checkRegisteredOnNetworks(vm, selected, declared, AUTHORITY, configBinding(name, value));
+        LibConfigRegistryRegister.checkRegisteredOnNetworks(
+            vm, selected, declared, AUTHORITY, configBinding(name, value)
+        );
     }
 
     /// The name is the `keccak256` of its string, the derivation consumers
@@ -370,7 +380,9 @@ contract LibConfigRegistryRegisterTest is Test {
         string memory name,
         bytes memory value
     ) external pure returns (bytes32, SupportedNetwork[] memory, string memory) {
-        return LibConfigRegistryRegister.checkInputs(vm, selected, declared, sender, AUTHORITY, configBinding(name, value));
+        return LibConfigRegistryRegister.checkInputs(
+            vm, selected, declared, sender, AUTHORITY, configBinding(name, value)
+        );
     }
 
     /// Inputs that pass every refusal give the hashed name, the selected
@@ -387,7 +399,9 @@ contract LibConfigRegistryRegisterTest is Test {
         assertEq(networks.length, 2);
         assertEq(networks[0].name, LibRainDeploy.ARBITRUM_ONE);
         assertEq(networks[1].name, LibRainDeploy.BASE);
-        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, configBinding("a.b", value), AUTHORITY, AUTHORITY));
+        assertEq(
+            record, LibConfigRegistryRegister.describeInputs(vm, configBinding("a.b", value), AUTHORITY, AUTHORITY)
+        );
     }
 
     function externalRegisterOnNetworksWith(
@@ -399,8 +413,8 @@ contract LibConfigRegistryRegisterTest is Test {
         bytes memory value
     ) external returns (uint256[] memory, string memory) {
         return LibConfigRegistryRegister.registerOnNetworks(
-            forkVm, selected, LibRainDeploy.supportedNetworks(), sender, authority, configBinding(name, value
-        ));
+            forkVm, selected, LibRainDeploy.supportedNetworks(), sender, authority, configBinding(name, value)
+        );
     }
 
     function externalCheckRegisteredOnNetworksWith(
@@ -411,8 +425,8 @@ contract LibConfigRegistryRegisterTest is Test {
         bytes memory value
     ) external {
         LibConfigRegistryRegister.checkRegisteredOnNetworks(
-            forkVm, selected, LibRainDeploy.supportedNetworks(), authority, configBinding(name, value
-        ));
+            forkVm, selected, LibRainDeploy.supportedNetworks(), authority, configBinding(name, value)
+        );
     }
 
     /// On the local fork seam, a signer the authority has not approved is
@@ -458,7 +472,9 @@ contract LibConfigRegistryRegisterTest is Test {
 
         (, string memory record) =
             this.externalRegisterOnNetworksWith(forkVm, selected, address(this), AUTHORITY, "a.b", value);
-        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, configBinding("a.b", value), address(this), AUTHORITY));
+        assertEq(
+            record, LibConfigRegistryRegister.describeInputs(vm, configBinding("a.b", value), address(this), AUTHORITY)
+        );
         assertEq(LibConfigRegistryRead.getValue(registry, AUTHORITY, keccak256("a.b")), value);
         vm.expectRevert(
             abi.encodeWithSelector(IConfigRegistryV4.NameNotRegistered.selector, address(this), keccak256("a.b"))
@@ -483,7 +499,10 @@ contract LibConfigRegistryRegisterTest is Test {
         assertEq(forkIds.length, 2);
         assertEq(forkIds[0], networks[0].chainId);
         assertEq(forkIds[1], networks[1].chainId);
-        assertEq(record, LibConfigRegistryRegister.describeInputs(vm, configBinding("a.b", value), address(this), address(this)));
+        assertEq(
+            record,
+            LibConfigRegistryRegister.describeInputs(vm, configBinding("a.b", value), address(this), address(this))
+        );
         assertEq(block.chainid, networks[1].chainId);
         assertEq(LibConfigRegistryRead.getValue(registry, address(this), keccak256("a.b")), value);
 
@@ -670,7 +689,12 @@ contract LibConfigRegistryRegisterTest is Test {
         (bool broadcast, string memory record) =
             this.externalRegisterOnSelectedChain(base(), AUTHORITY, AUTHORITY, name, value);
         assertTrue(broadcast);
-        assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, "", 0, value));
+        assertEq(
+            record,
+            LibConfigRegistryRegister.describeNetwork(
+                vm, base().name, base().chainId, "", 0, bytes32(0), configBinding("", value)
+            )
+        );
         (bytes memory boundValue, uint256 registeredAt,) = registry.getV4(AUTHORITY, name);
         assertEq(boundValue, value);
         assertEq(registeredAt, time);
@@ -777,7 +801,12 @@ contract LibConfigRegistryRegisterTest is Test {
         (bool broadcast, string memory record) =
             this.externalRegisterOnSelectedChain(base(), AUTHORITY, AUTHORITY, name, value);
         assertTrue(broadcast);
-        assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, previous, 1, value));
+        assertEq(
+            record,
+            LibConfigRegistryRegister.describeNetwork(
+                vm, base().name, base().chainId, previous, 1, VALUE_TYPE_HASH, configBinding("", value)
+            )
+        );
         (bytes memory boundValue, uint256 registeredAt,) = registry.getV4(AUTHORITY, name);
         assertEq(boundValue, value);
         assertEq(registeredAt, 2);
@@ -818,7 +847,12 @@ contract LibConfigRegistryRegisterTest is Test {
         (bool broadcast, string memory record) =
             this.externalRegisterOnSelectedChain(base(), AUTHORITY, AUTHORITY, name, value);
         assertFalse(broadcast);
-        assertEq(record, LibConfigRegistryRegister.describeNetwork(vm, base().name, base().chainId, value, 1, value));
+        assertEq(
+            record,
+            LibConfigRegistryRegister.describeNetwork(
+                vm, base().name, base().chainId, value, 1, VALUE_TYPE_HASH, configBinding("", value)
+            )
+        );
         (bytes memory boundValue, uint256 registeredAt,) = registry.getV4(AUTHORITY, name);
         assertEq(boundValue, value);
         assertEq(registeredAt, 1);
@@ -830,19 +864,23 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(value.length > 0);
         vm.assume(name != other);
         IConfigRegistryV4 registry = deployRegistry();
-        (bytes memory boundValue, uint256 registeredAt) = LibConfigRegistryRegister.currentBinding(AUTHORITY, name);
+        (bytes memory boundValue, uint256 registeredAt, bytes32 boundTypeHash) =
+            LibConfigRegistryRegister.currentBinding(AUTHORITY, name);
         assertEq(boundValue, "");
         assertEq(registeredAt, 0);
+        assertEq(boundTypeHash, bytes32(0));
 
         vm.warp(7);
         vm.prank(AUTHORITY);
         registry.registerV4(AUTHORITY, name, VALUE_TYPE, value, "");
-        (boundValue, registeredAt) = LibConfigRegistryRegister.currentBinding(AUTHORITY, name);
+        (boundValue, registeredAt, boundTypeHash) = LibConfigRegistryRegister.currentBinding(AUTHORITY, name);
         assertEq(boundValue, value);
         assertEq(registeredAt, 7);
-        (boundValue, registeredAt) = LibConfigRegistryRegister.currentBinding(AUTHORITY, other);
+        assertEq(boundTypeHash, VALUE_TYPE_HASH);
+        (boundValue, registeredAt, boundTypeHash) = LibConfigRegistryRegister.currentBinding(AUTHORITY, other);
         assertEq(boundValue, "");
         assertEq(registeredAt, 0);
+        assertEq(boundTypeHash, bytes32(0));
     }
 
     /// Only the registry's `NameNotRegistered` for THIS authority and name
@@ -885,25 +923,33 @@ contract LibConfigRegistryRegisterTest is Test {
         deployCodeTo(
             "MockRevertingRegistry.sol", abi.encode(thisName), LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS
         );
-        (bytes memory boundValue, uint256 registeredAt) = this.externalCurrentBinding(name);
+        (bytes memory boundValue, uint256 registeredAt, bytes32 boundTypeHash) = this.externalCurrentBinding(name);
         assertEq(boundValue, "");
         assertEq(registeredAt, 0);
+        assertEq(boundTypeHash, bytes32(0));
     }
 
-    /// The bind's calldata is `registerV4(address,bytes32,bytes)` — selector
-    /// `0xfb2baae9`, from `cast sig` — over the authority, the name hash and
-    /// the value as a dynamic argument: its offset, its length and its bytes
-    /// right-padded to a word. It is exactly the call the bind makes.
+    /// The bind's calldata is `registerV4(address,bytes32,string,bytes,bytes)`
+    /// — selector `0x41f0fc94`, from `cast sig` — over the authority, the name
+    /// hash, then the offsets of the value type, the value and the empty meta,
+    /// then each dynamic argument's length and its bytes right-padded to a
+    /// word. It is exactly the call the bind makes.
     function testRegisterCalldataIsTheCallSent(bytes32 name, bytes memory value) external {
         vm.assume(value.length > 0);
+        uint256 paddedValueLength = value.length + (32 - value.length % 32) % 32;
         bytes memory expected = abi.encodePacked(
-            bytes4(0xfb2baae9),
+            bytes4(0x41f0fc94),
             uint256(uint160(AUTHORITY)),
             name,
-            uint256(0x60),
+            uint256(0xa0),
+            uint256(0xe0),
+            uint256(0x100 + paddedValueLength),
+            uint256(7),
+            bytes32("address"),
             uint256(value.length),
             value,
-            new bytes((32 - value.length % 32) % 32)
+            new bytes(paddedValueLength - value.length),
+            uint256(0)
         );
         assertEq(LibConfigRegistryRegister.registerCalldata(AUTHORITY, name, configBinding("", value)), expected);
 
@@ -917,7 +963,8 @@ contract LibConfigRegistryRegisterTest is Test {
     /// to `0x…dEaD`. The hash, value and calldata are
     /// `cast keccak st0x.token-owner-safe`,
     /// `cast abi-encode "f(address)" 0x…dEaD` and
-    /// `cast calldata "registerV4(address,bytes32,bytes)" <authority> <hash> <value>`.
+    /// `cast calldata "registerV4(address,bytes32,string,bytes,bytes)" <authority> <hash> address <value> 0x`;
+    /// the type hash is `cast keccak address`.
     function testDescribeInputs() external pure {
         assertEq(
             LibConfigRegistryRegister.describeInputs(
@@ -926,7 +973,10 @@ contract LibConfigRegistryRegisterTest is Test {
             string.concat(
                 "Name: st0x.token-owner-safe\n",
                 "Name hash (keccak256 of the name): 0xba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8\n",
+                "Value type: address\n",
+                "Value type hash (keccak256 of the value type): 0x421683f821a0574472445355be6d2b769119e8515f8376a1d7878523dfdecf7b\n",
                 "Value: 0x000000000000000000000000000000000000000000000000000000000000dead\n",
+                "Meta: 0x\n",
                 "Authority: ",
                 vm.toString(AUTHORITY),
                 "\n",
@@ -936,12 +986,17 @@ contract LibConfigRegistryRegisterTest is Test {
                 "Registry: ",
                 vm.toString(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
                 "\n",
-                "Calldata: 0xfb2baae9",
+                "Calldata: 0x41f0fc94",
                 "00000000000000000000000000000000000000000000000000000000000a11ce",
                 "ba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
-                "0000000000000000000000000000000000000000000000000000000000000060",
+                "00000000000000000000000000000000000000000000000000000000000000a0",
+                "00000000000000000000000000000000000000000000000000000000000000e0",
+                "0000000000000000000000000000000000000000000000000000000000000120",
+                "0000000000000000000000000000000000000000000000000000000000000007",
+                "6164647265737300000000000000000000000000000000000000000000000000",
                 "0000000000000000000000000000000000000000000000000000000000000020",
-                "000000000000000000000000000000000000000000000000000000000000dead"
+                "000000000000000000000000000000000000000000000000000000000000dead",
+                "0000000000000000000000000000000000000000000000000000000000000000"
             )
         );
     }
@@ -953,14 +1008,18 @@ contract LibConfigRegistryRegisterTest is Test {
     }
 
     function externalDescribeInputs(string memory name) external pure returns (string memory) {
-        return LibConfigRegistryRegister.describeInputs(vm, configBinding(name, abi.encode(address(0xdEaD))), AUTHORITY, AUTHORITY);
+        return LibConfigRegistryRegister.describeInputs(
+            vm, configBinding(name, abi.encode(address(0xdEaD))), AUTHORITY, AUTHORITY
+        );
     }
 
     /// An unbound name is a BIND.
     function testDescribeNetworkUnbound() external pure {
         assertEq(
-            LibConfigRegistryRegister.describeNetwork(vm, "base", 8453, "", 0, hex"dead"),
-            "Network: base\n  chain id: 8453\n  current: unbound\n  BIND: -> 0xdead"
+            LibConfigRegistryRegister.describeNetwork(
+                vm, "base", 8453, "", 0, bytes32(0), configBinding("", hex"dead")
+            ),
+            "Network: base\n  chain id: 8453\n  current: unbound\n  BIND: -> 0xdead as address"
         );
     }
 
@@ -968,9 +1027,13 @@ contract LibConfigRegistryRegisterTest is Test {
     /// was made.
     function testDescribeNetworkRebind() external pure {
         assertEq(
-            LibConfigRegistryRegister.describeNetwork(vm, "arbitrum", 42161, hex"0b30", 7, hex"dead"),
+            LibConfigRegistryRegister.describeNetwork(
+                vm, "arbitrum", 42161, hex"0b30", 7, VALUE_TYPE_HASH, configBinding("", hex"dead")
+            ),
             string.concat(
-                "Network: arbitrum\n  chain id: 42161\n", "  current: 0x0b30 (bound at 7)\n", "  REBIND: -> 0xdead"
+                "Network: arbitrum\n  chain id: 42161\n",
+                "  current: 0x0b30 (type hash 0x421683f821a0574472445355be6d2b769119e8515f8376a1d7878523dfdecf7b, bound at 7)\n",
+                "  REBIND: -> 0xdead as address"
             )
         );
     }
@@ -978,11 +1041,13 @@ contract LibConfigRegistryRegisterTest is Test {
     /// A name bound to the value already is a SKIP.
     function testDescribeNetworkSkip() external pure {
         assertEq(
-            LibConfigRegistryRegister.describeNetwork(vm, "flare", 14, hex"dead", 7, hex"dead"),
+            LibConfigRegistryRegister.describeNetwork(
+                vm, "flare", 14, hex"dead", 7, VALUE_TYPE_HASH, configBinding("", hex"dead")
+            ),
             string.concat(
                 "Network: flare\n  chain id: 14\n",
-                "  current: 0xdead (bound at 7)\n",
-                "  SKIP: already bound to 0xdead"
+                "  current: 0xdead (type hash 0x421683f821a0574472445355be6d2b769119e8515f8376a1d7878523dfdecf7b, bound at 7)\n",
+                "  SKIP: already bound to 0xdead as address"
             )
         );
     }
@@ -991,9 +1056,13 @@ contract LibConfigRegistryRegisterTest is Test {
     /// REBIND, not a SKIP.
     function testDescribeNetworkLengthMismatchIsRebind() external pure {
         assertEq(
-            LibConfigRegistryRegister.describeNetwork(vm, "flare", 14, hex"dead00", 7, hex"dead"),
+            LibConfigRegistryRegister.describeNetwork(
+                vm, "flare", 14, hex"dead00", 7, VALUE_TYPE_HASH, configBinding("", hex"dead")
+            ),
             string.concat(
-                "Network: flare\n  chain id: 14\n", "  current: 0xdead00 (bound at 7)\n", "  REBIND: -> 0xdead"
+                "Network: flare\n  chain id: 14\n",
+                "  current: 0xdead00 (type hash 0x421683f821a0574472445355be6d2b769119e8515f8376a1d7878523dfdecf7b, bound at 7)\n",
+                "  REBIND: -> 0xdead as address"
             )
         );
     }
