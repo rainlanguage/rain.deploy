@@ -275,7 +275,9 @@ contract MigrationRegistryHeadTest is Test {
             )
         );
         vm.prank(writer);
-        sRegistry.applyMigrationV4(writer, namespace, migration, onto(writer, otherNamespace, MIGRATION_HEAD_GENESIS), "");
+        sRegistry.applyMigrationV4(
+            writer, namespace, migration, onto(writer, otherNamespace, MIGRATION_HEAD_GENESIS), ""
+        );
 
         assertEq(sRegistry.headV3(writer, namespace), MIGRATION_HEAD_GENESIS);
         assertEq(sRegistry.headV3(writer, otherNamespace), MIGRATION_HEAD_GENESIS);
