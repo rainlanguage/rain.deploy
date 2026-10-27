@@ -6,7 +6,11 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {IMigrationRegistryV3, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV3.sol";
+import {
+    IMigrationRegistryV4,
+    MIGRATION_HEAD_GENESIS,
+    Prerequisite
+} from "../../../src/interface/IMigrationRegistryV4.sol";
 import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
@@ -19,9 +23,12 @@ import {LibAccountCode} from "../../lib/LibAccountCode.sol";
 contract LibMigrationRegistryDelegateTest is Test {
     address internal constant WRITER = address(0x1111);
     address internal constant DELEGATE = address(0x2222);
-    bytes32 internal constant NAMESPACE = keccak256("namespace");
-    bytes32 internal constant MIGRATION = keccak256("migration");
-    bytes32 internal constant SECOND = keccak256("second");
+    string internal constant NAMESPACE_NAME = "namespace";
+    string internal constant MIGRATION_NAME = "migration";
+    string internal constant SECOND_NAME = "second";
+    bytes32 internal constant NAMESPACE = keccak256(bytes(NAMESPACE_NAME));
+    bytes32 internal constant MIGRATION = keccak256(bytes(MIGRATION_NAME));
+    bytes32 internal constant SECOND = keccak256(bytes(SECOND_NAME));
 
     function deployRegistry() internal {
         LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode);
@@ -67,7 +74,7 @@ contract LibMigrationRegistryDelegateTest is Test {
     }
 
     function externalAppliedBy() external view returns (address) {
-        return LibMigrationRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION);
+        return LibMigrationRegistry.appliedByV4(WRITER, NAMESPACE, MIGRATION);
     }
 
     /// Approve then revoke, built and sent by the writer, are what `approvedV3`
@@ -93,19 +100,24 @@ contract LibMigrationRegistryDelegateTest is Test {
         deployRegistry();
         (address to, bytes memory data) = LibMigrationRegistry.approveV3Call(NAMESPACE, DELEGATE);
         send(WRITER, to, data);
-        (to, data) = LibMigrationRegistry.applyMigrationV3Call(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        (to, data) = LibMigrationRegistry.applyMigrationV4Call(
+            WRITER, NAMESPACE_NAME, MIGRATION_NAME, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
         );
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         assertEq(
             data,
             abi.encodeCall(
-                IMigrationRegistryV3.applyMigrationV3,
-                (WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS))
+                IMigrationRegistryV4.applyMigrationV4,
+                (
+                    WRITER,
+                    NAMESPACE_NAME,
+                    MIGRATION_NAME,
+                    LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+                )
             )
         );
         send(DELEGATE, to, data);
-        assertEq(LibMigrationRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), block.timestamp);
+        assertEq(LibMigrationRegistry.appliedV4(WRITER, NAMESPACE, MIGRATION), block.timestamp);
     }
 
     /// A delegated history write carries its moment into the writer's line.
@@ -115,10 +127,10 @@ contract LibMigrationRegistryDelegateTest is Test {
         deployRegistry();
         (address to, bytes memory data) = LibMigrationRegistry.approveV3Call(NAMESPACE, DELEGATE);
         send(WRITER, to, data);
-        (to, data) = LibMigrationRegistry.applyMigrationHistoryV3Call(
+        (to, data) = LibMigrationRegistry.applyMigrationHistoryV4Call(
             WRITER,
-            NAMESPACE,
-            MIGRATION,
+            NAMESPACE_NAME,
+            MIGRATION_NAME,
             appliedAt,
             LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
         );
@@ -126,18 +138,18 @@ contract LibMigrationRegistryDelegateTest is Test {
         assertEq(
             data,
             abi.encodeCall(
-                IMigrationRegistryV3.applyMigrationHistoryV3,
+                IMigrationRegistryV4.applyMigrationHistoryV4,
                 (
                     WRITER,
-                    NAMESPACE,
-                    MIGRATION,
+                    NAMESPACE_NAME,
+                    MIGRATION_NAME,
                     appliedAt,
                     LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
                 )
             )
         );
         send(DELEGATE, to, data);
-        assertEq(LibMigrationRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), appliedAt);
+        assertEq(LibMigrationRegistry.appliedV4(WRITER, NAMESPACE, MIGRATION), appliedAt);
     }
 
     /// The direct writes, made from a contract the writer approved, land in
@@ -148,17 +160,21 @@ contract LibMigrationRegistryDelegateTest is Test {
         vm.prank(WRITER);
         LibMigrationRegistry.approveV3(NAMESPACE, address(this));
 
-        LibMigrationRegistry.applyMigrationV3(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        LibMigrationRegistry.applyMigrationV4(
+            WRITER, NAMESPACE_NAME, MIGRATION_NAME, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
         );
-        assertEq(LibMigrationRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), block.timestamp);
+        assertEq(LibMigrationRegistry.appliedV4(WRITER, NAMESPACE, MIGRATION), block.timestamp);
 
-        LibMigrationRegistry.applyMigrationHistoryV3(
-            WRITER, NAMESPACE, SECOND, block.timestamp, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION)
+        LibMigrationRegistry.applyMigrationHistoryV4(
+            WRITER,
+            NAMESPACE_NAME,
+            SECOND_NAME,
+            block.timestamp,
+            LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION)
         );
-        assertEq(LibMigrationRegistry.appliedV3(WRITER, NAMESPACE, SECOND), block.timestamp);
-        assertEq(LibMigrationRegistry.headV3(WRITER, NAMESPACE), SECOND);
-        assertEq(LibMigrationRegistry.headV3(address(this), NAMESPACE), MIGRATION_HEAD_GENESIS);
+        assertEq(LibMigrationRegistry.appliedV4(WRITER, NAMESPACE, SECOND), block.timestamp);
+        assertEq(LibMigrationRegistry.headV4(WRITER, NAMESPACE), SECOND);
+        assertEq(LibMigrationRegistry.headV4(address(this), NAMESPACE), MIGRATION_HEAD_GENESIS);
     }
 
     /// The approval builders and the read refuse a chain with no registry.
@@ -206,20 +222,20 @@ contract LibMigrationRegistryDelegateTest is Test {
         applier.revokeV3(NAMESPACE, DELEGATE);
     }
 
-    /// `appliedByV3` reads the account that wrote the record.
+    /// `appliedByV4` reads the account that wrote the record.
     function testAppliedByReadsTheDelegate() external {
         deployRegistry();
         (address to, bytes memory data) = LibMigrationRegistry.approveV3Call(NAMESPACE, DELEGATE);
         send(WRITER, to, data);
-        (to, data) = LibMigrationRegistry.applyMigrationV3Call(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+        (to, data) = LibMigrationRegistry.applyMigrationV4Call(
+            WRITER, NAMESPACE_NAME, MIGRATION_NAME, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
         );
         send(DELEGATE, to, data);
-        assertEq(LibMigrationRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), DELEGATE);
-        assertEq(LibMigrationRegistry.appliedByV3(WRITER, NAMESPACE, SECOND), address(0));
+        assertEq(LibMigrationRegistry.appliedByV4(WRITER, NAMESPACE, MIGRATION), DELEGATE);
+        assertEq(LibMigrationRegistry.appliedByV4(WRITER, NAMESPACE, SECOND), address(0));
     }
 
-    /// `appliedByV3` refuses an address with no registry.
+    /// `appliedByV4` refuses an address with no registry.
     function testAppliedByNoRegistryIsRefused() external {
         expectCodeHash(bytes32(0));
         this.externalAppliedBy();
@@ -246,5 +262,36 @@ contract LibMigrationRegistryDelegateTest is Test {
         applier.approveV3(NAMESPACE, DELEGATE);
         expectCodeHash(keccak256(designator));
         applier.revokeV3(NAMESPACE, DELEGATE);
+    }
+
+    /// An approval is scoped to the namespace's hash: a delegate approved on
+    /// `keccak256(bytes(namespace))` writes under the string `namespace`, and
+    /// one approved on any other scope is refused `NotApproved` naming that
+    /// hash.
+    function testDelegateScopeBindsToTheNamespaceHash(string memory namespace, bytes32 otherScope) external {
+        vm.assume(bytes(namespace).length != 0);
+        bytes32 namespaceHash = keccak256(bytes(namespace));
+        vm.assume(otherScope != namespaceHash);
+        vm.assume(otherScope != bytes32(0));
+        deployRegistry();
+        MockMigrationApplier wrongScope = new MockMigrationApplier();
+        MockMigrationApplier rightScope = new MockMigrationApplier();
+
+        vm.startPrank(WRITER);
+        LibMigrationRegistry.approveV3(otherScope, address(wrongScope));
+        LibMigrationRegistry.approveV3(namespaceHash, address(rightScope));
+        vm.stopPrank();
+
+        Prerequisite[] memory ontoGenesis = LibMigrationRegistry.onto(WRITER, namespaceHash, MIGRATION_HEAD_GENESIS);
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                IRegistryDelegatesV1.NotApproved.selector, WRITER, namespaceHash, address(wrongScope)
+            )
+        );
+        wrongScope.applyMigrationV4(WRITER, namespace, MIGRATION_NAME, ontoGenesis);
+
+        rightScope.applyMigrationV4(WRITER, namespace, MIGRATION_NAME, ontoGenesis);
+        assertEq(LibMigrationRegistry.appliedV4(WRITER, namespaceHash, MIGRATION), block.timestamp);
+        assertEq(LibMigrationRegistry.appliedByV4(WRITER, namespaceHash, MIGRATION), address(rightScope));
     }
 }

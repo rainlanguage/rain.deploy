@@ -29,9 +29,13 @@ abstract contract BeaconVerifyFixture is RainDeployVerifyBase {
     /// The migration writer.
     address constant WRITER = address(0x5AFE);
     /// The migration namespace.
-    bytes32 constant NAMESPACE = keccak256("beacons");
+    string constant NAMESPACE_NAME = "beacons";
+    /// `NAMESPACE_NAME`'s hash, as the registry keys it.
+    bytes32 constant NAMESPACE = keccak256(bytes(NAMESPACE_NAME));
     /// The migration `migrating` names.
-    bytes32 constant MIGRATION = keccak256("migration");
+    string constant MIGRATION_NAME = "migration";
+    /// `MIGRATION_NAME`'s hash, as the registry keys it.
+    bytes32 constant MIGRATION = keccak256(bytes(MIGRATION_NAME));
     /// The implementation suite's dependency.
     address constant DEPENDENCY = address(0xDE9);
     /// `DEPENDENCY`'s code.
