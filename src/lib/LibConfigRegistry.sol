@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IConfigRegistryV3} from "../interface/IConfigRegistryV3.sol";
+import {IConfigRegistryV4} from "../interface/IConfigRegistryV4.sol";
 import {LibConfigRegistryDeploy} from "./LibConfigRegistryDeploy.sol";
 
 /// @title LibConfigRegistry
@@ -15,9 +15,10 @@ import {LibConfigRegistryDeploy} from "./LibConfigRegistryDeploy.sol";
 ///
 /// That is the whole library. It resolves a name under an authority to the
 /// ABI-encoded value that authority bound it to and the moment it was bound,
-/// and will refuse a binding younger than the caller says it will accept. It
-/// never decodes the value: only the caller knows the type it expects, so the
-/// caller decodes, as `abi.decode(value, (address))` for an address binding.
+/// and will refuse a binding made as a type other than the caller expects, or
+/// younger than the caller says it will accept. It never decodes the value:
+/// the caller decodes, as `abi.decode(value, (address))` for a binding resolved
+/// with `keccak256("address")`.
 /// What a consumer resolves a name for, and when, is entirely the consumer's
 /// business and none of this library's.
 ///
@@ -69,6 +70,16 @@ library LibConfigRegistry {
     /// @param name The name that was being resolved.
     error ZeroMinAge(address authority, bytes32 name);
 
+    /// Thrown by `resolve` and `resolveSafe` when the binding was made as a
+    /// type other than the one the caller decodes it as.
+    /// @param authority The authority the name was resolved under.
+    /// @param name The name that was being resolved.
+    /// @param expectedValueTypeHash The hash of the type the caller expects.
+    /// @param actualValueTypeHash The hash of the type the binding was made as.
+    error ValueTypeMismatch(
+        address authority, bytes32 name, bytes32 expectedValueTypeHash, bytes32 actualValueTypeHash
+    );
+
     /// Reverts unless the registry address holds the code this library was
     /// compiled against: the check `resolve` makes before every read, for a
     /// caller that has to know it is talking to the pinned registry before
@@ -84,7 +95,8 @@ library LibConfigRegistry {
     }
 
     /// The value `authority` currently binds `name` to in the registry, and
-    /// when it bound it.
+    /// when it bound it, refusing a binding made as any type but the one the
+    /// caller expects.
     ///
     /// Verifies the registry's code hash before reading, so a chain where the
     /// registry is absent, or where something else occupies its address, is a
@@ -93,7 +105,9 @@ library LibConfigRegistry {
     /// always a real binding and is never empty.
     ///
     /// The value is returned exactly as the authority bound it. The caller
-    /// decodes it with the type it expects. `abi.decode` refuses some wrongly
+    /// decodes it with the type it expects. The type hash is the authority's
+    /// statement of that type, and the registry never checks the value
+    /// against it. `abi.decode` refuses some wrongly
     /// shaped values, such as one shorter than the type's encoding or one with
     /// bits a narrow type cannot hold, but it ignores trailing bytes and
     /// decodes any word that is valid for the requested type. A caller that must
@@ -103,16 +117,22 @@ library LibConfigRegistry {
     /// trusts for `name`.
     /// @param name The name to resolve. Opaque; the registry constrains nothing
     /// about how it was derived.
+    /// @param valueTypeHash `keccak256` of the normalized ABI type the caller
+    /// decodes the value as, e.g. `keccak256("address")`.
     /// @return The ABI-encoded value `authority` bound `name` to.
     /// @return The `block.timestamp` at which `authority` most recently bound
     /// `name`.
-    function resolve(address authority, bytes32 name) internal view returns (bytes memory, uint256) {
+    function resolve(address authority, bytes32 name, bytes32 valueTypeHash)
+        internal
+        view
+        returns (bytes memory, uint256)
+    {
         checkCodeHash();
-        // Destructured rather than returned straight through, so both halves are
-        // visibly used: a passed-through tuple reads to the analysers as a
-        // return value nobody looked at.
-        (bytes memory value, uint256 registeredAt) =
-            IConfigRegistryV3(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV3(authority, name);
+        (bytes memory value, uint256 registeredAt, bytes32 actualValueTypeHash) =
+            IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV4(authority, name);
+        if (actualValueTypeHash != valueTypeHash) {
+            revert ValueTypeMismatch(authority, name, valueTypeHash, actualValueTypeHash);
+        }
         return (value, registeredAt);
     }
 
@@ -133,17 +153,23 @@ library LibConfigRegistry {
     /// fail-safe reading of the edge.
     /// @param authority The account whose binding to read, as in `resolve`.
     /// @param name The name to resolve. Opaque, as in `resolve`.
+    /// @param valueTypeHash The hash of the type the caller expects, as in
+    /// `resolve`.
     /// @param minAge The time, in seconds, the binding must have stood for.
     /// Never zero.
     /// @return The ABI-encoded value `authority` bound `name` to, for the
     /// caller to decode as in `resolve`.
-    function resolveSafe(address authority, bytes32 name, uint256 minAge) internal view returns (bytes memory) {
+    function resolveSafe(address authority, bytes32 name, bytes32 valueTypeHash, uint256 minAge)
+        internal
+        view
+        returns (bytes memory)
+    {
         // First, so a caller that asked for no threshold is told so whatever the
         // registry would have said.
         if (minAge == 0) {
             revert ZeroMinAge(authority, name);
         }
-        (bytes memory value, uint256 registeredAt) = resolve(authority, name);
+        (bytes memory value, uint256 registeredAt) = resolve(authority, name, valueTypeHash);
         // Checked before the subtraction, so a future stamp is reported as what
         // it is rather than underflowing. These comparisons really are about a
         // moment; a validator's seconds of slack cannot matter to a `minAge`

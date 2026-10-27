@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
+import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
 
 /// @dev The head of a line that has never applied a migration. The first
 /// migration applied in a line names this, and every later one names the
@@ -51,14 +52,14 @@ struct Prerequisite {
     bytes32 migration;
 }
 
-/// @title IMigrationRegistryV3
+/// @title IMigrationRegistryV4
 /// @notice A record of which migrations have been applied, when and after
 /// what, keyed by writer, namespace and migration. A write names the writer
 /// whose line it writes, and that writer, or an account it has approved for
 /// the namespace, applies a migration in the line after one list — the head
 /// it believes that line is at, then the migrations in any line it waits on —
-/// either as applied now (`applyMigrationV3`) or as already applied at a
-/// moment it supplies (`applyMigrationHistoryV3`). Anyone reads when a given
+/// either as applied now (`applyMigrationV4`) or as already applied at a
+/// moment it supplies (`applyMigrationHistoryV4`). Anyone reads when a given
 /// writer's line in a given namespace applied a given migration (`appliedV3`),
 /// what it applied it onto (`appliedOntoV3`), what it applied it after
 /// (`appliedAfterV3`), which account wrote the record (`appliedByV3`), and
@@ -69,9 +70,9 @@ struct Prerequisite {
 /// and an implementation MUST NOT add any.
 ///
 /// The two writes differ only in where the recorded moment comes from.
-/// `applyMigrationV3` records the block it lands in, for a script applying its
+/// `applyMigrationV4` records the block it lands in, for a script applying its
 /// own migration in the same atomic unit as the migration.
-/// `applyMigrationHistoryV3` takes the moment as an argument, for a migration
+/// `applyMigrationHistoryV4` takes the moment as an argument, for a migration
 /// that already ran — one that ran before this registry reached the chain, or
 /// before its writer started recording at all.
 ///
@@ -151,7 +152,7 @@ struct Prerequisite {
 ///
 /// That distinction is only sound while a real record can never BE zero, which
 /// is what `ZeroTimestamp` is for. It refuses a caller that supplies zero, and
-/// it refuses `applyMigrationV3` in a block whose timestamp is zero — neither
+/// it refuses `applyMigrationV4` in a block whose timestamp is zero — neither
 /// hypothetical, because a test can `vm.warp(0)` and a chain can be configured
 /// from a zero genesis.
 ///
@@ -253,7 +254,7 @@ struct Prerequisite {
 /// writer's data, and a bound against them would let one writer's invented
 /// moment refuse another writer's record. What is checked is that the record
 /// EXISTS when this write lands, which is the chain's order and not the
-/// moments'; a moment supplied to `applyMigrationHistoryV3` is bounded by the
+/// moments'; a moment supplied to `applyMigrationHistoryV4` is bounded by the
 /// line being written and the block, and by nothing else.
 ///
 /// Every entry after the first is a record key in another line, and is
@@ -346,7 +347,14 @@ struct Prerequisite {
 /// and follows the same convention: one named constant per repo, beside its
 /// migration ids, named by every write in that repo and by every reader of
 /// its line.
-interface IMigrationRegistryV3 is IRegistryDelegatesV1 {
+///
+/// ## Metadata
+///
+/// A write may carry rain metadata, emitted as `MetaV1_2` with subject
+/// `keccak256(abi.encode(writer, namespace, migration))`, the record it
+/// describes. Metadata is never stored or validated, and an empty one emits
+/// nothing.
+interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     /// Thrown when a write is called with the zero migration id or given a
     /// prerequisite naming it, and by `appliedV3`, `appliedOntoV3`,
     /// `appliedAfterV3` and `appliedByV3` when asked about one. The zero id is
@@ -452,7 +460,7 @@ interface IMigrationRegistryV3 is IRegistryDelegatesV1 {
     );
 
     /// Thrown when a write would record a zero moment:
-    /// `applyMigrationHistoryV3` given zero, or `applyMigrationV3` in a block
+    /// `applyMigrationHistoryV4` given zero, or `applyMigrationV4` in a block
     /// whose timestamp is zero. A record IS its moment, so a zero one would
     /// read back through `appliedV3` as no record at all, while the head moved
     /// and the migration cannot be re-applied — the worst of every branch at
@@ -460,7 +468,7 @@ interface IMigrationRegistryV3 is IRegistryDelegatesV1 {
     /// refused for the same reason `ZeroMigration` is.
     error ZeroTimestamp();
 
-    /// Thrown when `applyMigrationHistoryV3` is given an `appliedAt` after the
+    /// Thrown when `applyMigrationHistoryV4` is given an `appliedAt` after the
     /// timestamp of the block it is called in. A record says a migration HAS
     /// run, so a moment that has not arrived is not a record of anything — and
     /// a consumer measuring an interval since the migration would be
@@ -469,7 +477,7 @@ interface IMigrationRegistryV3 is IRegistryDelegatesV1 {
     /// @param blockTimestamp The timestamp of the block the call landed in.
     error FutureTimestamp(uint256 appliedAt, uint256 blockTimestamp);
 
-    /// Thrown when `applyMigrationHistoryV3` is given an `appliedAt` before the
+    /// Thrown when `applyMigrationHistoryV4` is given an `appliedAt` before the
     /// moment recorded against the head it is being applied onto. A record
     /// says its migration ran after the one before it in the chain, so an
     /// earlier moment contradicts the sequence the same call just named, and a
@@ -559,7 +567,7 @@ interface IMigrationRegistryV3 is IRegistryDelegatesV1 {
     /// possible. A record that landed for a migration that did not is the
     /// harder state to get out of.
     ///
-    /// It records the same record as `applyMigrationHistoryV3` and makes the
+    /// It records the same record as `applyMigrationHistoryV4` and makes the
     /// same refusals in the same order, against `block.timestamp` as the moment
     /// — so a block whose timestamp is zero is `ZeroTimestamp`, and the moment
     /// can never be in the future.
@@ -576,11 +584,13 @@ interface IMigrationRegistryV3 is IRegistryDelegatesV1 {
     /// write to land: none naming the zero writer, the zero namespace, the
     /// zero migration or `MIGRATION_HEAD_GENESIS`, and none in the line being
     /// written. The head alone for a migration that waits on nothing else.
-    function applyMigrationV3(
+    /// @param meta Rain metadata about the record, or empty for none.
+    function applyMigrationV4(
         address writer,
         bytes32 namespace,
         bytes32 migration,
-        Prerequisite[] calldata prerequisites
+        Prerequisite[] calldata prerequisites,
+        bytes calldata meta
     ) external;
 
     /// Applies `migration` in `writer`'s line in `namespace`, after
@@ -610,7 +620,9 @@ interface IMigrationRegistryV3 is IRegistryDelegatesV1 {
     /// to move a head backwards, or to move a record once written. On success
     /// it MUST record `appliedAt`, `prerequisites` and the caller against
     /// `migration` in the line, make `migration` that line's new head, and
-    /// emit `Migrated`.
+    /// emit `Migrated`, then, when `meta` is non-empty, `MetaV1_2(msg.sender,
+    /// keccak256(abi.encode(writer, namespace, migration)), meta)`. It MUST
+    /// NOT store or validate `meta`.
     ///
     /// Who may write is settled before anything else. The caller's own
     /// arguments are refused next, before anything is read, because a
@@ -638,13 +650,15 @@ interface IMigrationRegistryV3 is IRegistryDelegatesV1 {
     /// after the block this call lands in. Not bounded by any prerequisite's
     /// moment.
     /// @param prerequisites What `migration` is applied after, in the shape
-    /// `applyMigrationV3` takes.
-    function applyMigrationHistoryV3(
+    /// `applyMigrationV4` takes.
+    /// @param meta Rain metadata about the record, or empty for none.
+    function applyMigrationHistoryV4(
         address writer,
         bytes32 namespace,
         bytes32 migration,
         uint256 appliedAt,
-        Prerequisite[] calldata prerequisites
+        Prerequisite[] calldata prerequisites,
+        bytes calldata meta
     ) external;
 
     /// When `writer`'s line in `namespace` applied `migration`, as the moment

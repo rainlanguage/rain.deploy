@@ -8,17 +8,17 @@ import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {
-    IMigrationRegistryV3,
+    IMigrationRegistryV4,
     MIGRATION_HEAD_GENESIS,
     Prerequisite
-} from "../../../src/interface/IMigrationRegistryV3.sol";
+} from "../../../src/interface/IMigrationRegistryV4.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibAccountCode} from "../../lib/LibAccountCode.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
 /// @title LibMigrationRegistryWriteCallTest
-/// Tests for `LibMigrationRegistry.applyMigrationV3Call` and
-/// `applyMigrationHistoryV3Call`: the `(to, data)` a Safe bundle or a timelock
+/// Tests for `LibMigrationRegistry.applyMigrationV4Call` and
+/// `applyMigrationHistoryV4Call`: the `(to, data)` a Safe bundle or a timelock
 /// batch sends to write a record into the writer it names, by the account
 /// that executes it.
 ///
@@ -56,7 +56,7 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assertTrue(success);
     }
 
-    /// External wrapper for `applyMigrationV3Call` so that `vm.expectRevert`
+    /// External wrapper for `applyMigrationV4Call` so that `vm.expectRevert`
     /// works at the correct call depth.
     /// @param namespace The line to apply in.
     /// @param migration The migration to apply.
@@ -68,10 +68,10 @@ contract LibMigrationRegistryWriteCallTest is Test {
         view
         returns (address, bytes memory)
     {
-        return LibMigrationRegistry.applyMigrationV3Call(address(this), namespace, migration, prerequisites);
+        return LibMigrationRegistry.applyMigrationV4Call(address(this), namespace, migration, prerequisites, "");
     }
 
-    /// External wrapper for `applyMigrationHistoryV3Call` so that
+    /// External wrapper for `applyMigrationHistoryV4Call` so that
     /// `vm.expectRevert` works at the correct call depth.
     /// @param namespace The line to apply in.
     /// @param migration The migration to apply.
@@ -85,9 +85,9 @@ contract LibMigrationRegistryWriteCallTest is Test {
         uint256 appliedAt,
         Prerequisite[] memory prerequisites
     ) external view returns (address, bytes memory) {
-        return LibMigrationRegistry.applyMigrationHistoryV3Call(
+        return LibMigrationRegistry.applyMigrationHistoryV4Call(
             address(this), namespace, migration, appliedAt, prerequisites
-        );
+        , "");
     }
 
     /// The built call, sent by the writer it names, records the migration
@@ -114,20 +114,20 @@ contract LibMigrationRegistryWriteCallTest is Test {
         deployRegistry();
         vm.warp(landedAt);
         vm.prank(upstream);
-        IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigrationV3(
+        IMigrationRegistryV4(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .applyMigrationV4(
                 upstream,
                 upstreamNamespace,
                 prerequisite,
                 LibMigrationRegistry.onto(upstream, upstreamNamespace, MIGRATION_HEAD_GENESIS)
-            );
+            , "");
 
         Prerequisite[] memory prerequisites = new Prerequisite[](2);
         prerequisites[0] = Prerequisite({writer: sender, namespace: namespace, migration: MIGRATION_HEAD_GENESIS});
         prerequisites[1] = Prerequisite({writer: upstream, namespace: upstreamNamespace, migration: prerequisite});
 
         (address to, bytes memory data) =
-            LibMigrationRegistry.applyMigrationV3Call(sender, namespace, migration, prerequisites);
+            LibMigrationRegistry.applyMigrationV4Call(sender, namespace, migration, prerequisites, "");
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         // Building writes nothing.
         assertEq(LibMigrationRegistry.appliedV3(sender, namespace, migration), 0);
@@ -170,10 +170,10 @@ contract LibMigrationRegistryWriteCallTest is Test {
 
         Prerequisite[] memory ontoGenesis = LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS);
         (address toA, bytes memory dataA) =
-            LibMigrationRegistry.applyMigrationHistoryV3Call(sender, namespace, migrationA, appliedAt, ontoGenesis);
+            LibMigrationRegistry.applyMigrationHistoryV4Call(sender, namespace, migrationA, appliedAt, ontoGenesis, "");
         Prerequisite[] memory ontoA = LibMigrationRegistry.onto(sender, namespace, migrationA);
         (address toB, bytes memory dataB) =
-            LibMigrationRegistry.applyMigrationHistoryV3Call(sender, namespace, migrationB, appliedAt, ontoA);
+            LibMigrationRegistry.applyMigrationHistoryV4Call(sender, namespace, migrationB, appliedAt, ontoA, "");
         assertEq(toA, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         assertEq(toB, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
 
@@ -200,12 +200,12 @@ contract LibMigrationRegistryWriteCallTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
 
-        (address to, bytes memory data) = LibMigrationRegistry.applyMigrationV3Call(
+        (address to, bytes memory data) = LibMigrationRegistry.applyMigrationV4Call(
             address(this),
             namespace,
             migration,
             LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS)
-        );
+        , "");
 
         vm.prank(sender);
         (bool success, bytes memory returnData) = to.call(data);
@@ -226,8 +226,8 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assumeSender(sender);
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
         bytes memory data = abi.encodeCall(
-            IMigrationRegistryV3.applyMigrationV3,
-            (sender, namespace, migration, LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS))
+            IMigrationRegistryV4.applyMigrationV4,
+            (sender, namespace, migration, LibMigrationRegistry.onto(sender, namespace, MIGRATION_HEAD_GENESIS), "")
         );
         send(sender, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, data);
 

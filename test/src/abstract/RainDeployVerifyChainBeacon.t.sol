@@ -14,7 +14,7 @@ import {
     LibRainDeployBeacon
 } from "../../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
-import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../../../src/interface/IMigrationRegistryV3.sol";
+import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../../../src/interface/IMigrationRegistryV4.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";

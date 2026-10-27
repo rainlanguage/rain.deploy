@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {IBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/IBeacon.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
 import {Ownable2Step} from "@openzeppelin-contracts-5.7.0/access/Ownable2Step.sol";
-import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../interface/IMigrationRegistryV3.sol";
+import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../interface/IMigrationRegistryV4.sol";
 import {LibMigrationRegistry} from "./LibMigrationRegistry.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 

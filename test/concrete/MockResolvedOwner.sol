@@ -21,7 +21,7 @@ contract MockResolvedOwner {
         // The moment the name was bound is discarded: this mock exists to show
         // that the VALUE cannot move afterwards, and a consumer that wanted to
         // refuse a freshly bound answer would read it here instead.
-        (bytes memory value,) = LibConfigRegistry.resolve(authority, name);
+        (bytes memory value,) = LibConfigRegistry.resolve(authority, name, keccak256("address"));
         iOwner = abi.decode(value, (address));
     }
 }

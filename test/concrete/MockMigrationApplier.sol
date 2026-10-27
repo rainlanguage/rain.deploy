@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
-import {Prerequisite} from "../../src/interface/IMigrationRegistryV3.sol";
+import {Prerequisite} from "../../src/interface/IMigrationRegistryV4.sol";
 
 /// @title MockMigrationApplier
 /// @notice A consumer in the shape `LibMigrationRegistry`'s writes are designed
@@ -28,13 +28,15 @@ contract MockMigrationApplier {
     /// @param migration The migration to apply.
     /// @param prerequisites `writer` in `namespace` at the head it is believed
     /// to be at, then the migrations that must already be applied.
-    function applyMigrationV3(
+    /// @param meta Rain metadata the registry emits with the record.
+    function applyMigrationV4(
         address writer,
         bytes32 namespace,
         bytes32 migration,
-        Prerequisite[] calldata prerequisites
+        Prerequisite[] calldata prerequisites,
+        bytes calldata meta
     ) external {
-        LibMigrationRegistry.applyMigrationV3(writer, namespace, migration, prerequisites);
+        LibMigrationRegistry.applyMigrationV4(writer, namespace, migration, prerequisites, meta);
     }
 
     /// Applies `migration` in `writer`'s line in `namespace`, at `appliedAt`,
@@ -45,14 +47,16 @@ contract MockMigrationApplier {
     /// @param appliedAt The moment the migration was applied.
     /// @param prerequisites `writer` in `namespace` at the head it is believed
     /// to be at, then the migrations that must already be applied.
-    function applyMigrationHistoryV3(
+    /// @param meta Rain metadata the registry emits with the record.
+    function applyMigrationHistoryV4(
         address writer,
         bytes32 namespace,
         bytes32 migration,
         uint256 appliedAt,
-        Prerequisite[] calldata prerequisites
+        Prerequisite[] calldata prerequisites,
+        bytes calldata meta
     ) external {
-        LibMigrationRegistry.applyMigrationHistoryV3(writer, namespace, migration, appliedAt, prerequisites);
+        LibMigrationRegistry.applyMigrationHistoryV4(writer, namespace, migration, appliedAt, prerequisites, meta);
     }
 
     /// Approves `delegate` for this contract's line in `namespace`.

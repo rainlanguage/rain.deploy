@@ -515,7 +515,7 @@ transition, across lines, in fewer steps than the earlier one, and every
 reachable record back to each line's genesis when the earlier one is not
 reached. Apply a transition's migration in the same transaction as the beacon
 change it describes (one Safe batch: `upgradeTo` or `transferOwnership`, then
-`applyMigrationV3`; for an `Ownable2Step` beacon the handover's migration goes
+`applyMigrationV4`; for an `Ownable2Step` beacon the handover's migration goes
 in the batch that calls `acceptOwnership`, as `owner()` moves only then).
 Between two separate transactions the chain group refuses the network, as the
 chain and the registry disagree.
@@ -705,14 +705,14 @@ otherwise compile in. Bindings are keyed by authority: any account binds a name
 under its own address, or under an authority that approved it as a delegate for
 that name (`approveV3`, `revokeV3`, read by `approvedV3`); anyone reads a name
 under an authority it names, and reading a name that authority has not bound
-reverts rather than answering empty. The interface is `IConfigRegistryV3`. There
+reverts rather than answering empty. The interface is `IConfigRegistryV4`. There
 is no removal, no upgrade, and no way to write under an account that has not
 approved the writer.
 
 A consumer names the authority it trusts beside the name it resolves, both in
 its own creation code, and gets only what that authority bound. What the
 consumer then trusts, and what a contract authority must do on every network, is
-in `IConfigRegistryV3`'s NatSpec under "The authority and its delegates are the
+in `IConfigRegistryV4`'s NatSpec under "The authority and its delegates are the
 whole access control" and "Delegation is per authority and name". A delegate can
 rebind the name it was approved for, so a consumer's prod tests assert
 `approvedV3` is false for every retired delegate beside the true answers for the
@@ -793,7 +793,7 @@ The script signs as an EOA. A Safe or timelock authority either approves that
 EOA as a delegate, once per network through its own execution path
 (`approveV3(name, delegate)`), after which the EOA runs the script with
 `--sender` set to itself, or submits
-`registerV3(authority, keccak256("<org>.<name>"),
+`registerV4(authority, keccak256("<org>.<name>"),
 value)` to the registry itself
 and then runs step 3 below (`verify`), which reads under any authority. An
 approval lets the delegate rebind that one name under the authority until it is
@@ -906,10 +906,10 @@ record to approve against. For each transaction the device shows:
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
-- **Data**: exactly the `Calldata:` line the dry run printed: `registerV3`'s
+- **Data**: exactly the `Calldata:` line the dry run printed: `registerV4`'s
   selector, the authority, the name hash, the offset `0x60`, the value's length
   and the value padded to a multiple of 32 bytes. The device cannot decode
-  `registerV3`, so it shows the raw bytes; open the full data on the device to
+  `registerV4`, so it shows the raw bytes; open the full data on the device to
   compare them.
 
 Labels vary by firmware; whatever they are called, the recipient, amount, chain
@@ -964,7 +964,7 @@ amount 0, the network, and the `Calldata:` line as data: `approveV3`'s selector
 `0xd04b1603` or `revokeV3`'s `0x786d07ab`, then the name hash and the delegate.
 
 A Safe delegate then binds by executing
-`registerV3(authority, keccak256("<org>.<name>"), value)` on the registry from
+`registerV4(authority, keccak256("<org>.<name>"), value)` on the registry from
 the Safe, on each network, and `RegisterConfig`'s `verify()` checks the binding
 under the authority.
 
@@ -974,19 +974,19 @@ under the authority.
 what: a write names its writer and a namespace, and that writer or a delegate it
 approved for the namespace applies one migration in that line after one list —
 the migration it believes ran last in that line, then the migrations in any
-other line it waits on (`applyMigrationV3`, or `applyMigrationHistoryV3` for one
+other line it waits on (`applyMigrationV4`, or `applyMigrationHistoryV4` for one
 that already ran). Anyone reads when a given writer's line in a given namespace
 applied a given one (`appliedV3`), what it applied it onto (`appliedOntoV3`),
 what it applied it after (`appliedAfterV3`), which account wrote the record
 (`appliedByV3`), and where that line has got to (`headV3`). A writer approves
 and revokes delegates per namespace (`approveV3`, `revokeV3`, read by
 `approvedV3`). There is no removal and no upgrade. The interface is
-`IMigrationRegistryV3`.
+`IMigrationRegistryV4`.
 
 The two writes differ in exactly one thing: where the recorded moment comes
-from. `applyMigrationV3` stamps the block the record lands in, for a script
+from. `applyMigrationV4` stamps the block the record lands in, for a script
 applying its own migration in the same atomic unit as the migration itself.
-`applyMigrationHistoryV3` takes the moment as an argument, so a migration that
+`applyMigrationHistoryV4` takes the moment as an argument, so a migration that
 ran before the registry reached the chain is recordable with the time it
 actually ran. They write the same record, into the same line, and make the same
 refusals.
@@ -1060,7 +1060,7 @@ total order comes from `appliedOntoV3`, and the bound above only stops a record
 claiming to predate the one it is chained onto.
 
 Both writes get all three, `block.timestamp` included: a block whose timestamp
-is zero is `ZeroTimestamp` on `applyMigrationV3`, which a test that warps to
+is zero is `ZeroTimestamp` on `applyMigrationV4`, which a test that warps to
 zero and a chain configured from a zero genesis both reach.
 
 **A set of applied migrations, not a high-water mark.** A mark needs a total
@@ -1087,13 +1087,13 @@ everything about that line, so every later entry names a record in another line.
 Prerequisite[] memory prerequisites = new Prerequisite[](1);
 // The first migration in a line, applied in this transaction.
 prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
-LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V1, prerequisites);
+LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V1, prerequisites);
 // Every later one names its predecessor.
 prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V1});
-LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V2, prerequisites);
+LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V2, prerequisites);
 // One that ran before the registry reached this chain names the moment it ran.
 prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
-LibMigrationRegistry.applyMigrationHistoryV3(address(this), NAMESPACE, MIGRATION_V3, 1750000000, prerequisites);
+LibMigrationRegistry.applyMigrationHistoryV4(address(this), NAMESPACE, MIGRATION_V3, 1750000000, prerequisites);
 ```
 
 Each record keeps that first entry, which `appliedOntoV3` reads back, so a line
@@ -1150,7 +1150,7 @@ and the head still orders its own line exactly as before.
 Prerequisite[] memory prerequisites = new Prerequisite[](2);
 prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
 prerequisites[1] = Prerequisite({writer: FLEET_SAFE, namespace: FLEET_NAMESPACE, migration: FLEET_UPGRADE});
-LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V3, prerequisites);
+LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V3, prerequisites);
 ```
 
 The list is the record, and `appliedAfterV3` reads it back exactly as the write
@@ -1169,7 +1169,7 @@ the record existed when this write landed, which is chain order, and the moments
 in another line are that writer's data.
 
 The refusals and their order are specified once, on
-`IMigrationRegistryV3.applyMigrationHistoryV3`. Duplicates are ordinary index
+`IMigrationRegistryV4.applyMigrationHistoryV4`. Duplicates are ordinary index
 checks.
 
 **The writer decides who writes its lines, and that is the whole access
@@ -1206,12 +1206,12 @@ pins with it trades a clock-guess for a bookkeeping-guess.
 
 `LibMigrationRegistry` is the surface — `appliedV3`, `appliedOntoV3`,
 `appliedAfterV3`, `appliedByV3`, `headV3`, `approvedV3`, `approveV3`,
-`revokeV3`, `applyMigrationV3` and `applyMigrationHistoryV3`, plus the `*Call`
+`revokeV3`, `applyMigrationV4` and `applyMigrationHistoryV4`, plus the `*Call`
 builders for a bundle, each verifying the registry's code hash before it reads
 or writes, and the pure `onto`, which builds the head-only list. There is
 deliberately **no broadcast runner**: the dominant real shape is a Safe
 executing a bundle that never broadcasts, and such a script appends the
-`applyMigrationV3Call` output to the bundle it is already emitting, which makes
+`applyMigrationV4Call` output to the bundle it is already emitting, which makes
 the record atomic with the migration it describes.
 
 ## Managing the migration registry
@@ -1582,14 +1582,14 @@ it. In order:
 8. Move to the V3 migration registry. `LibMigrationRegistry.applied`,
    `appliedOnto`, `appliedAfter` and `head` are `appliedV3`, `appliedOntoV3`,
    `appliedAfterV3` and `headV3`. `applyMigration` and `applyMigrationHistory`
-   are `applyMigrationV3` and `applyMigrationHistoryV3`, and take the
+   are `applyMigrationV4` and `applyMigrationHistoryV4`, and take the
    `address writer` first; `applyMigrationCall` and `applyMigrationHistoryCall`
-   are `applyMigrationV3Call` and `applyMigrationHistoryV3Call`, likewise.
-   Import `Prerequisite` from `src/interface/IMigrationRegistryV3.sol`;
+   are `applyMigrationV4Call` and `applyMigrationHistoryV4Call`, likewise.
+   Import `Prerequisite` from `src/interface/IMigrationRegistryV4.sol`;
    `IMigrationRegistryV1` and `IMigrationRegistryV2` moved to
    `src/interface/deprecated/`. The registry has a new address, so migrations
    recorded in the 0.1.18 registry stay there and read as unapplied in V3: apply
-   them again, with `applyMigrationHistoryV3` for one that already ran.
+   them again, with `applyMigrationHistoryV4` for one that already ran.
 9. Regenerate: `forge script ./script/Build.sol` followed by
    `nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`.
 

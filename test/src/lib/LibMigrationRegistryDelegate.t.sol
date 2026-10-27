@@ -6,7 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {IMigrationRegistryV3, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV3.sol";
+import {IMigrationRegistryV4, MIGRATION_HEAD_GENESIS} from "../../../src/interface/IMigrationRegistryV4.sol";
 import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
@@ -93,15 +93,15 @@ contract LibMigrationRegistryDelegateTest is Test {
         deployRegistry();
         (address to, bytes memory data) = LibMigrationRegistry.approveV3Call(NAMESPACE, DELEGATE);
         send(WRITER, to, data);
-        (to, data) = LibMigrationRegistry.applyMigrationV3Call(
+        (to, data) = LibMigrationRegistry.applyMigrationV4Call(
             WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        );
+        , "");
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         assertEq(
             data,
             abi.encodeCall(
-                IMigrationRegistryV3.applyMigrationV3,
-                (WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS))
+                IMigrationRegistryV4.applyMigrationV4,
+                (WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS), "")
             )
         );
         send(DELEGATE, to, data);
@@ -115,25 +115,25 @@ contract LibMigrationRegistryDelegateTest is Test {
         deployRegistry();
         (address to, bytes memory data) = LibMigrationRegistry.approveV3Call(NAMESPACE, DELEGATE);
         send(WRITER, to, data);
-        (to, data) = LibMigrationRegistry.applyMigrationHistoryV3Call(
+        (to, data) = LibMigrationRegistry.applyMigrationHistoryV4Call(
             WRITER,
             NAMESPACE,
             MIGRATION,
             appliedAt,
             LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        );
+        , "");
         assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
         assertEq(
             data,
             abi.encodeCall(
-                IMigrationRegistryV3.applyMigrationHistoryV3,
+                IMigrationRegistryV4.applyMigrationHistoryV4,
                 (
                     WRITER,
                     NAMESPACE,
                     MIGRATION,
                     appliedAt,
                     LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-                )
+                , "")
             )
         );
         send(DELEGATE, to, data);
@@ -148,14 +148,14 @@ contract LibMigrationRegistryDelegateTest is Test {
         vm.prank(WRITER);
         LibMigrationRegistry.approveV3(NAMESPACE, address(this));
 
-        LibMigrationRegistry.applyMigrationV3(
+        LibMigrationRegistry.applyMigrationV4(
             WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        );
+        , "");
         assertEq(LibMigrationRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), block.timestamp);
 
-        LibMigrationRegistry.applyMigrationHistoryV3(
+        LibMigrationRegistry.applyMigrationHistoryV4(
             WRITER, NAMESPACE, SECOND, block.timestamp, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION)
-        );
+        , "");
         assertEq(LibMigrationRegistry.appliedV3(WRITER, NAMESPACE, SECOND), block.timestamp);
         assertEq(LibMigrationRegistry.headV3(WRITER, NAMESPACE), SECOND);
         assertEq(LibMigrationRegistry.headV3(address(this), NAMESPACE), MIGRATION_HEAD_GENESIS);
@@ -211,9 +211,9 @@ contract LibMigrationRegistryDelegateTest is Test {
         deployRegistry();
         (address to, bytes memory data) = LibMigrationRegistry.approveV3Call(NAMESPACE, DELEGATE);
         send(WRITER, to, data);
-        (to, data) = LibMigrationRegistry.applyMigrationV3Call(
+        (to, data) = LibMigrationRegistry.applyMigrationV4Call(
             WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        );
+        , "");
         send(DELEGATE, to, data);
         assertEq(LibMigrationRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), DELEGATE);
         assertEq(LibMigrationRegistry.appliedByV3(WRITER, NAMESPACE, SECOND), address(0));
