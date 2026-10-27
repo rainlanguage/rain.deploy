@@ -14,10 +14,10 @@ import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {
-    IMigrationRegistryV3,
+    IMigrationRegistryV4,
     MIGRATION_HEAD_GENESIS,
     Prerequisite
-} from "../../../src/interface/IMigrationRegistryV3.sol";
+} from "../../../src/interface/IMigrationRegistryV4.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {MockOwnable2StepBeacon} from "../../concrete/MockOwnable2StepBeacon.sol";
@@ -81,8 +81,8 @@ contract LibRainDeployBeaconTest is Test {
 
     function applyAt(bytes32 namespace, bytes32 migration, uint256 moment, Prerequisite[] memory list) internal {
         vm.prank(WRITER);
-        IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigrationHistoryV3(WRITER, namespace, migration, moment, list);
+        IMigrationRegistryV4(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .applyMigrationHistoryV4(WRITER, namespace, migration, moment, list, "");
     }
 
     function expectOutOfOrder(uint256 index) internal {
@@ -252,7 +252,7 @@ contract LibRainDeployBeaconTest is Test {
         applyIn(THIRD, UPGRADE, onto(THIRD, MIGRATION_HEAD_GENESIS));
         vm.expectCall(
             LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
-            abi.encodeCall(IMigrationRegistryV3.appliedAfterV3, (WRITER, NAMESPACE, INTERIM)),
+            abi.encodeCall(IMigrationRegistryV4.appliedAfterV4, (WRITER, NAMESPACE, INTERIM)),
             1
         );
         assertFalse(this.externalRecordedBefore(record(THIRD, UPGRADE), record(OTHER, HANDOVER)));
@@ -272,7 +272,7 @@ contract LibRainDeployBeaconTest is Test {
         );
         vm.expectCall(
             LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
-            abi.encodeCall(IMigrationRegistryV3.appliedAfterV3, (WRITER, NAMESPACE, INTERIM)),
+            abi.encodeCall(IMigrationRegistryV4.appliedAfterV4, (WRITER, NAMESPACE, INTERIM)),
             1
         );
         assertFalse(this.externalRecordedBefore(record(THIRD, HANDOVER), record(OTHER, HANDOVER)));

@@ -4,10 +4,11 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
-import {IRegistryDelegatesV1} from "../../src/interface/IRegistryDelegatesV1.sol";
+import {IRegistryDelegatesV2} from "../../src/interface/IRegistryDelegatesV2.sol";
 import {LibRegistryDelegatesApprove} from "../../src/lib/LibRegistryDelegatesApprove.sol";
 import {LibConfigRegistryRegister} from "../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRegistryAuthority} from "../../src/lib/LibRegistryAuthority.sol";
 
 /// The local script harness both registries' wiring tests drive.
 interface ILocalApproveRegistryDelegate {
@@ -50,24 +51,22 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         ILocalApproveRegistryDelegate script = newScript();
         (address registryAddress, bytes32 registryCodehash) = pinned();
         assertEq(address(script.baseForkVm()), address(vm));
-        // The no-op broadcast leaves the script signing, so the script is the
-        // authority.
-        address authority = address(script);
+        // The no-op broadcast leaves the script signing, and the script is
+        // deployed at the root authority, so it signs as it.
+        address authority = LibRegistryAuthority.ROOT_AUTHORITY;
+        assertEq(address(script), authority);
         address delegate = address(0x5AFE);
         string memory name = string.concat("rain.deploy.approve-test.", vm.toString(vm.randomUint()));
         bytes32 hashed = keccak256(bytes(name));
-        IRegistryDelegatesV1 registry = IRegistryDelegatesV1(registryAddress);
+        IRegistryDelegatesV2 registry = IRegistryDelegatesV2(registryAddress);
 
-        vm.setEnv(e("AUTHORITY"), "not-an-address");
         vm.setEnv(e("SCOPE"), name);
         vm.setEnv(e("ADDRESS"), vm.toString(delegate));
-        assertEnvAddressRefused(script, e("AUTHORITY"));
-        vm.setEnv(e("AUTHORITY"), vm.toString(authority));
 
         vm.setEnv(e("ADDRESS"), "not-an-address");
         assertEnvAddressRefused(script, e("ADDRESS"));
         vm.setEnv(e("ADDRESS"), vm.toString(address(0)));
-        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.ZeroDelegate.selector));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV2.ZeroDelegate.selector));
         script.runAsItself();
         vm.setEnv(e("ADDRESS"), vm.toString(delegate));
 
@@ -106,7 +105,7 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         for (uint256 i = 0; i < forkIds.length; i++) {
             assertEq(forkIds[i], LibRainDeploy.declaredNetworkConfigs(supported)[i].chainId);
         }
-        assertTrue(registry.approvedV3(authority, hashed, delegate));
+        assertTrue(registry.approvedV4(authority, hashed, delegate));
         script.verify();
 
         // A run already in the target state sends nothing.
@@ -117,7 +116,6 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
             assertTrue(entries[i].emitter != address(registry));
         }
 
-        // The approval is under the authority the variable names.
         string memory network = supported[0];
         vm.setEnv(e("NETWORKS"), string.concat(network, ",nowhere"));
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
@@ -125,15 +123,6 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
         script.verify();
         vm.setEnv(e("NETWORKS"), network);
-        address otherAuthority = address(0xB0B);
-        vm.setEnv(e("AUTHORITY"), vm.toString(otherAuthority));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRegistryDelegatesApprove.UnexpectedApproval.selector, network, otherAuthority, hashed, delegate, true
-            )
-        );
-        script.verify();
-        vm.setEnv(e("AUTHORITY"), vm.toString(authority));
 
         // `false` revokes, on exactly the selected network.
         vm.setEnv(e("APPROVED"), "false");
@@ -146,13 +135,13 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         forkIds = script.runAsItself();
         assertEq(forkIds.length, 1);
         assertEq(forkIds[0], LibRainDeploy.declaredNetworkConfigs(supported)[0].chainId);
-        assertFalse(registry.approvedV3(authority, hashed, delegate));
+        assertFalse(registry.approvedV4(authority, hashed, delegate));
         script.verify();
 
         // `true` approves again.
         vm.setEnv(e("APPROVED"), "true");
         script.runAsItself();
-        assertTrue(registry.approvedV3(authority, hashed, delegate));
+        assertTrue(registry.approvedV4(authority, hashed, delegate));
         script.verify();
     }
 

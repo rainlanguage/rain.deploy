@@ -27,7 +27,7 @@ import {
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibBeaconDeclarations} from "../../lib/LibBeaconDeclarations.sol";
 import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
-import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../../../src/interface/IMigrationRegistryV3.sol";
+import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../../../src/interface/IMigrationRegistryV4.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 
 /// @title RainDeployVerifySnapshotBaseBeaconTest

@@ -9,13 +9,16 @@ import {
 import {LibMigrationRegistryDeploy} from "../../src/lib/LibMigrationRegistryDeploy.sol";
 import {MigrationRegistry} from "../../src/concrete/MigrationRegistry.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
-import {LocalApproveMigrationDelegate} from "../concrete/LocalApproveMigrationDelegate.sol";
+import {LibRegistryAuthority} from "../../src/lib/LibRegistryAuthority.sol";
 
 /// @title ApproveMigrationDelegateTest
 /// `ApproveRegistryDelegateWiringTest` on `ApproveMigrationDelegate`.
 contract ApproveMigrationDelegateTest is ApproveRegistryDelegateWiringTest {
     function newScript() internal override returns (ILocalApproveRegistryDelegate) {
-        return ILocalApproveRegistryDelegate(address(new LocalApproveMigrationDelegate()));
+        deployCodeTo(
+            "LocalApproveMigrationDelegate.sol:LocalApproveMigrationDelegate", LibRegistryAuthority.ROOT_AUTHORITY
+        );
+        return ILocalApproveRegistryDelegate(LibRegistryAuthority.ROOT_AUTHORITY);
     }
 
     function prefix() internal pure override returns (string memory) {

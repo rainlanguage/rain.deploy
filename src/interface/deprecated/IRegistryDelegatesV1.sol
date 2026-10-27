@@ -4,8 +4,8 @@ pragma solidity ^0.8.25;
 
 /// @title IRegistryDelegatesV1
 /// @notice The delegation `IConfigRegistryV3` and `IMigrationRegistryV3` share,
-/// identically. An account approves a delegate to write under
-/// it within one scope: a name in the config registry, a namespace in the
+/// identically. Superseded by `IRegistryDelegatesV2`. An account approves a
+/// delegate to write under it within one scope: a name in the config registry, a namespace in the
 /// migration registry. An approval covers no other scope and no other account,
 /// and does not chain.
 interface IRegistryDelegatesV1 {

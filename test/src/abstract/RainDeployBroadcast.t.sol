@@ -30,7 +30,7 @@ import {ZoltuDeployOrAdopt} from "../../abstract/ZoltuDeployOrAdopt.sol";
 import {LibRainDeployMechanism} from "../../../src/lib/LibRainDeployMechanism.sol";
 import {BeaconOwnedByDeployKey, SuiteSeatsDeployKey} from "../../../src/abstract/RainDeployBroadcast.sol";
 import {BeaconState, BeaconTransition, DeployBeacon} from "../../../src/lib/LibRainDeployBeacon.sol";
-import {Prerequisite} from "../../../src/interface/IMigrationRegistryV3.sol";
+import {Prerequisite} from "../../../src/interface/IMigrationRegistryV4.sol";
 import {BeaconOwnerDeploy} from "../../concrete/BeaconOwnerDeploy.sol";
 import {MockOriginOwned} from "../../concrete/MockOriginOwned.sol";
 import {MockOriginRevertingOwner} from "../../concrete/MockOriginRevertingOwner.sol";

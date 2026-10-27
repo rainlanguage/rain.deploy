@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeployDependency, LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
-import {IConfigRegistryV3} from "../../../src/interface/IConfigRegistryV3.sol";
+import {IConfigRegistryV4} from "../../../src/interface/IConfigRegistryV4.sol";
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
@@ -21,6 +21,7 @@ import {MockUncloneableMispredictingCloneFactory} from "../../concrete/MockUnclo
 import {MOCK_DEPLOYABLE_OWNER} from "../../concrete/MockDeployableOwner.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
 import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
+import {VALUE_TYPE} from "../../lib/ConfigTestBinding.sol";
 
 /// @title LibRainDeployTest
 /// Tests for `LibRainDeploy`. External wrappers are used for library functions
@@ -1424,12 +1425,12 @@ contract LibRainDeployTest is Test {
     /// @return The deployed consumer holding the resolved address.
     function deployRegistryAndConsumer(bytes32 name, address account)
         internal
-        returns (IConfigRegistryV3, MockResolvedOwner)
+        returns (IConfigRegistryV4, MockResolvedOwner)
     {
-        IConfigRegistryV3 registry =
-            IConfigRegistryV3(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
+        IConfigRegistryV4 registry =
+            IConfigRegistryV4(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
         vm.prank(CONFIG_AUTHORITY);
-        registry.registerV3(CONFIG_AUTHORITY, name, abi.encode(account));
+        registry.registerV4(CONFIG_AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
         MockResolvedOwner consumer = new MockResolvedOwner(CONFIG_AUTHORITY, name);
         return (registry, consumer);
     }
@@ -1493,13 +1494,13 @@ contract LibRainDeployTest is Test {
         vm.assume(account != address(0));
         vm.assume(rebound != address(0));
         vm.assume(rebound != account);
-        (IConfigRegistryV3 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+        (IConfigRegistryV4 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
         // A re-bind needs a later block: a name's moment strictly increases.
         vm.warp(block.timestamp + 1);
         vm.prank(CONFIG_AUTHORITY);
-        registry.registerV3(CONFIG_AUTHORITY, name, abi.encode(rebound));
-        (bytes memory nowBound,) = registry.getV3(CONFIG_AUTHORITY, name);
+        registry.registerV4(CONFIG_AUTHORITY, name, VALUE_TYPE, abi.encode(rebound), "");
+        (bytes memory nowBound,,) = registry.getV4(CONFIG_AUTHORITY, name);
         assertEq(nowBound, abi.encode(rebound));
 
         assertEq(consumer.iOwner(), account);

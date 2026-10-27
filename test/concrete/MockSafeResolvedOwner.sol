@@ -19,6 +19,6 @@ contract MockSafeResolvedOwner {
     // a zero one, so the read refuses it as unbound.
     //forge-lint: disable-next-line(missing-zero-check)
     constructor(address authority, bytes32 name, uint256 minAge) {
-        iOwner = abi.decode(LibConfigRegistry.resolveSafe(authority, name, minAge), (address));
+        iOwner = abi.decode(LibConfigRegistry.resolveSafe(authority, name, keccak256("address"), minAge), (address));
     }
 }

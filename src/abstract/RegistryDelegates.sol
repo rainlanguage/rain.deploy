@@ -2,13 +2,13 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IRegistryDelegatesV1} from "../interface/IRegistryDelegatesV1.sol";
+import {IRegistryDelegatesV2} from "../interface/IRegistryDelegatesV2.sol";
 
 /// @title RegistryDelegates
 /// @notice The delegation `ConfigRegistry` and `MigrationRegistry` share, as
-/// `IRegistryDelegatesV1` describes it. Each registry checks its own other keys
+/// `IRegistryDelegatesV2` describes it. Each registry checks its own other keys
 /// before calling in.
-abstract contract RegistryDelegates is IRegistryDelegatesV1 {
+abstract contract RegistryDelegates is IRegistryDelegatesV2 {
     mapping(address account => mapping(bytes32 scope => mapping(address delegate => bool))) internal sApproved;
 
     /// Refuses the zero delegate with `ZeroDelegate`.
@@ -42,24 +42,24 @@ abstract contract RegistryDelegates is IRegistryDelegatesV1 {
     /// @param scope The scope under it.
     function checkScope(address account, bytes32 scope) internal pure virtual {}
 
-    /// @inheritdoc IRegistryDelegatesV1
-    function approveV3(bytes32 scope, address delegate) external {
+    /// @inheritdoc IRegistryDelegatesV2
+    function approveV4(bytes32 scope, address delegate) external {
         checkScope(msg.sender, scope);
         checkDelegateKey(delegate);
         sApproved[msg.sender][scope][delegate] = true;
         emit Approved(msg.sender, scope, delegate);
     }
 
-    /// @inheritdoc IRegistryDelegatesV1
-    function revokeV3(bytes32 scope, address delegate) external {
+    /// @inheritdoc IRegistryDelegatesV2
+    function revokeV4(bytes32 scope, address delegate) external {
         checkScope(msg.sender, scope);
         checkDelegateKey(delegate);
         sApproved[msg.sender][scope][delegate] = false;
         emit Revoked(msg.sender, scope, delegate);
     }
 
-    /// @inheritdoc IRegistryDelegatesV1
-    function approvedV3(address account, bytes32 scope, address delegate) external view returns (bool) {
+    /// @inheritdoc IRegistryDelegatesV2
+    function approvedV4(address account, bytes32 scope, address delegate) external view returns (bool) {
         checkScope(account, scope);
         checkDelegateKey(delegate);
         return sApproved[account][scope][delegate];
