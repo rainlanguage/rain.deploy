@@ -7,11 +7,12 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
 import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibConfigRegistryRegister, ConfigBinding} from "../src/lib/LibConfigRegistryRegister.sol";
+import {LibRegistryAuthority} from "../src/lib/LibRegistryAuthority.sol";
 
 /// @title RegisterConfig
 /// @notice Binds `CONFIG_REGISTRY_NAME` to `CONFIG_REGISTRY_VALUE`, as
 /// `CONFIG_REGISTRY_VALUE_TYPE` and with the optional `CONFIG_REGISTRY_META`, under
-/// `CONFIG_REGISTRY_AUTHORITY` in the `ConfigRegistry` on every network the
+/// `LibRegistryAuthority.ROOT_AUTHORITY` in the `ConfigRegistry` on every network the
 /// declaration supports, or on the comma-separated subset
 /// `CONFIG_REGISTRY_NETWORKS` names, signed on a Trezor by that authority or
 /// by a delegate it approved for the name with `approveV4` on every selected
@@ -33,10 +34,6 @@ import {LibConfigRegistryRegister, ConfigBinding} from "../src/lib/LibConfigRegi
 /// in foundry-rs/foundry `crates/script/src/broadcast.rs`).
 /// `LibConfigRegistryRegister` carries every guard.
 contract RegisterConfig is RegistryDeploySuites, Script {
-    /// The environment variable holding the authority to bind under and read
-    /// under: the account consumers resolve the name under.
-    string constant AUTHORITY_VAR = "CONFIG_REGISTRY_AUTHORITY";
-
     /// The environment variable holding the name, as a consumer writes it
     /// before hashing.
     string constant NAME_VAR = "CONFIG_REGISTRY_NAME";
@@ -89,7 +86,12 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     /// @return The fork each selected network was simulated on.
     function run() external returns (uint256[] memory) {
         (uint256[] memory forkIds,) = LibConfigRegistryRegister.registerOnNetworks(
-            forkVm(), selectedNetworks(), supportedNetworks(), msg.sender, vm.envAddress(AUTHORITY_VAR), binding()
+            forkVm(),
+            selectedNetworks(),
+            supportedNetworks(),
+            msg.sender,
+            LibRegistryAuthority.ROOT_AUTHORITY,
+            binding()
         );
         return forkIds;
     }
@@ -98,7 +100,7 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     /// to the value as its type under the authority on each.
     function verify() external {
         LibConfigRegistryRegister.checkRegisteredOnNetworks(
-            forkVm(), selectedNetworks(), supportedNetworks(), vm.envAddress(AUTHORITY_VAR), binding()
+            forkVm(), selectedNetworks(), supportedNetworks(), LibRegistryAuthority.ROOT_AUTHORITY, binding()
         );
     }
 }
