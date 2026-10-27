@@ -228,9 +228,7 @@ contract ConfigRegistryRegisterTest is Test {
         vm.prank(AUTHORITY);
         sRegistry.registerV4(AUTHORITY, name, VALUE_TYPE, "");
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IConfigRegistryV4.TimestampNotAfterBinding.selector, nameHash, 0, 0)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.TimestampNotAfterBinding.selector, nameHash, 0, 0));
         vm.prank(AUTHORITY);
         sRegistry.registerV4(AUTHORITY, name, VALUE_TYPE, hex"01");
     }
