@@ -145,8 +145,27 @@ contract RegisterConfigTest is Test {
         assertEq(registeredAt, block.timestamp);
         assertEq(boundTypeHash, VALUE_TYPE_HASH);
 
+        runAsUint256(script, name);
         runAsDelegate(name);
         runWithMeta(script, name);
+    }
+
+    /// `CONFIG_REGISTRY_VALUE_TYPE` is the type the bind records.
+    /// @param script The script.
+    /// @param name The test's base name.
+    function runAsUint256(LocalRegisterConfig script, string memory name) internal {
+        string memory uintName = string.concat(name, "-uint256");
+        bytes memory uintValue = abi.encode(uint256(42));
+        vm.setEnv("CONFIG_REGISTRY_VALUE_TYPE", "uint256");
+        vm.setEnv("CONFIG_REGISTRY_NAME", uintName);
+        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(uintValue));
+        script.runAsItself();
+        (bytes memory bound,, bytes32 boundTypeHash) = IConfigRegistryV4(
+                LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS
+            ).getV4(address(script), keccak256(bytes(uintName)));
+        assertEq(bound, uintValue);
+        assertEq(boundTypeHash, keccak256("uint256"));
+        vm.setEnv("CONFIG_REGISTRY_VALUE_TYPE", VALUE_TYPE);
     }
 
     /// `CONFIG_REGISTRY_META` is sent with the bind: unset, none is emitted;
