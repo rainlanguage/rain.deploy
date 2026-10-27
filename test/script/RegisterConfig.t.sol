@@ -182,7 +182,9 @@ contract RegisterConfigTest is Test {
                 metas++;
                 assertEq(
                     entries[i].data,
-                    abi.encode(address(script), keccak256(abi.encode(address(script), keccak256(bytes(metaName)))), meta)
+                    abi.encode(
+                        address(script), keccak256(abi.encode(address(script), keccak256(bytes(metaName)))), meta
+                    )
                 );
             }
         }

@@ -1067,7 +1067,10 @@ contract LibConfigRegistryRegisterTest is Test {
         );
     }
 
-    function externalRegisterBinding(bytes32 name, ConfigBinding memory binding) external returns (bool, string memory) {
+    function externalRegisterBinding(bytes32 name, ConfigBinding memory binding)
+        external
+        returns (bool, string memory)
+    {
         return LibConfigRegistryRegister.registerOnSelectedChain(vm, base(), AUTHORITY, AUTHORITY, name, binding);
     }
 
@@ -1117,8 +1120,10 @@ contract LibConfigRegistryRegisterTest is Test {
         Vm.Log[] memory entries = vm.getRecordedLogs();
         uint256 metas = 0;
         for (uint256 i = 0; i < entries.length; i++) {
-            if (entries[i].emitter == address(registry) && entries[i].topics[0] == keccak256("MetaV1_2(address,bytes32,bytes)"))
-            {
+            if (
+                entries[i].emitter == address(registry)
+                    && entries[i].topics[0] == keccak256("MetaV1_2(address,bytes32,bytes)")
+            ) {
                 metas++;
                 assertEq(entries[i].data, abi.encode(AUTHORITY, keccak256(abi.encode(AUTHORITY, name)), meta));
             }

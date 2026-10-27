@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {IRegistryDelegatesV2} from "../../../src/interface/IRegistryDelegatesV2.sol";
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {IConfigRegistryV4} from "../../../src/interface/IConfigRegistryV4.sol";
@@ -28,9 +29,7 @@ contract ConfigRegistryMetaTest is Test {
 
     /// Non-empty meta is one `MetaV1_2` after `Register`, from the writer, about
     /// the authority's name.
-    function testRegisterMetaEmitted(address authority, bytes32 name, bytes memory value, bytes memory meta)
-        external
-    {
+    function testRegisterMetaEmitted(address authority, bytes32 name, bytes memory value, bytes memory meta) external {
         vm.assume(value.length > 0 && meta.length > 0);
         vm.recordLogs();
         vm.prank(authority);
@@ -121,7 +120,7 @@ contract ConfigRegistryMetaTest is Test {
         vm.assume(sender != authority && meta.length > 0);
         vm.recordLogs();
         vm.prank(sender);
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.NotApproved.selector, authority, name, sender));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV2.NotApproved.selector, authority, name, sender));
         sRegistry.registerV4(authority, name, VALUE_TYPE, hex"01", meta);
         vm.prank(authority);
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.EmptyValue.selector, name));

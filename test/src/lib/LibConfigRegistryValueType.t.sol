@@ -54,9 +54,8 @@ contract LibConfigRegistryValueTypeTest is Test {
         vm.warp(10);
         bind(name, valueType);
         vm.warp(20);
-        bytes memory err = abi.encodeWithSelector(
-            LibConfigRegistry.ValueTypeMismatch.selector, AUTHORITY, name, expected, actual
-        );
+        bytes memory err =
+            abi.encodeWithSelector(LibConfigRegistry.ValueTypeMismatch.selector, AUTHORITY, name, expected, actual);
         vm.expectRevert(err);
         this.externalResolve(name, expected);
         vm.expectRevert(err);

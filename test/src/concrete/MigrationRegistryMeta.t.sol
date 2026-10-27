@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {IRegistryDelegatesV2} from "../../../src/interface/IRegistryDelegatesV2.sol";
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {IMigrationRegistryV4, Prerequisite} from "../../../src/interface/IMigrationRegistryV4.sol";
@@ -100,12 +101,9 @@ contract MigrationRegistryMetaTest is Test {
     }
 
     /// Empty meta emits `Migrated` alone.
-    function testApplyMigrationEmptyMetaEmitsNoMeta(
-        address writer,
-        bytes32 namespace,
-        bytes32 migration,
-        bool history
-    ) external {
+    function testApplyMigrationEmptyMetaEmitsNoMeta(address writer, bytes32 namespace, bytes32 migration, bool history)
+        external
+    {
         assumeKey(writer, namespace, migration);
         vm.recordLogs();
         write(sRegistry, writer, writer, namespace, migration, history, "");
@@ -148,9 +146,7 @@ contract MigrationRegistryMetaTest is Test {
         Prerequisite[] memory list = onto(sRegistry, writer, namespace);
         vm.recordLogs();
         vm.prank(sender);
-        vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV4.NotApproved.selector, writer, namespace, sender)
-        );
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV2.NotApproved.selector, writer, namespace, sender));
         if (history) {
             sRegistry.applyMigrationHistoryV4(writer, namespace, migration, block.timestamp, list, meta);
         } else {

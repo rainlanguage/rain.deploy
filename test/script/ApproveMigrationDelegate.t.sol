@@ -15,7 +15,9 @@ import {LibRegistryAuthority} from "../../src/lib/LibRegistryAuthority.sol";
 /// `ApproveRegistryDelegateWiringTest` on `ApproveMigrationDelegate`.
 contract ApproveMigrationDelegateTest is ApproveRegistryDelegateWiringTest {
     function newScript() internal override returns (ILocalApproveRegistryDelegate) {
-        deployCodeTo("LocalApproveMigrationDelegate.sol:LocalApproveMigrationDelegate", LibRegistryAuthority.ROOT_AUTHORITY);
+        deployCodeTo(
+            "LocalApproveMigrationDelegate.sol:LocalApproveMigrationDelegate", LibRegistryAuthority.ROOT_AUTHORITY
+        );
         return ILocalApproveRegistryDelegate(LibRegistryAuthority.ROOT_AUTHORITY);
     }
 
