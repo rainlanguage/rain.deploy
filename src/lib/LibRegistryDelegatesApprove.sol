@@ -5,13 +5,13 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 
-import {IRegistryDelegatesV1} from "../interface/IRegistryDelegatesV1.sol";
+import {IRegistryDelegatesV2} from "../interface/IRegistryDelegatesV2.sol";
 import {LibRegistryDelegates} from "./LibRegistryDelegates.sol";
 import {LibConfigRegistryRegister} from "./LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 
 /// A registry `LibRegistryDelegatesApprove` drives through
-/// `IRegistryDelegatesV1`, which every registry implements identically.
+/// `IRegistryDelegatesV2`, which every registry implements identically.
 /// @param registry The pinned registry.
 /// @param codehash Its pinned code hash.
 struct RegistryDelegation {
@@ -21,7 +21,7 @@ struct RegistryDelegation {
 
 /// @title LibRegistryDelegatesApprove
 /// @notice An account's delegation side of a registry with
-/// `IRegistryDelegatesV1` delegation: approves one delegate for one scope under
+/// `IRegistryDelegatesV2` delegation: approves one delegate for one scope under
 /// the account on every network it is given, or revokes it, signed by the
 /// account itself, and reads the approval back. The registry is a
 /// `RegistryDelegation`: `LibConfigRegistryApprove` and
@@ -204,7 +204,7 @@ library LibRegistryDelegatesApprove {
         bool approve
     ) internal returns (bool, string memory) {
         checkChain(r, vm, network);
-        bool approved = IRegistryDelegatesV1(r.registry).approvedV3(authority, scope, delegate);
+        bool approved = IRegistryDelegatesV2(r.registry).approvedV4(authority, scope, delegate);
 
         string memory record =
             describeNetwork(vm, network.name, network.chainId, delegate.code.length, approved, approve);
@@ -213,9 +213,9 @@ library LibRegistryDelegatesApprove {
         if (sends) {
             vm.startBroadcast(authority);
             if (approve) {
-                IRegistryDelegatesV1(r.registry).approveV3(scope, delegate);
+                IRegistryDelegatesV2(r.registry).approveV4(scope, delegate);
             } else {
-                IRegistryDelegatesV1(r.registry).revokeV3(scope, delegate);
+                IRegistryDelegatesV2(r.registry).revokeV4(scope, delegate);
             }
             vm.stopBroadcast();
         }
@@ -244,7 +244,7 @@ library LibRegistryDelegatesApprove {
             revert SenderNotAuthority(sender, authority);
         }
         if (delegate == address(0)) {
-            revert IRegistryDelegatesV1.ZeroDelegate();
+            revert IRegistryDelegatesV2.ZeroDelegate();
         }
         bytes32 hashed = LibConfigRegistryRegister.nameHash(scope);
         SupportedNetwork[] memory networks = LibConfigRegistryRegister.selectNetworks(selected, declared);
@@ -344,7 +344,7 @@ library LibRegistryDelegatesApprove {
         bool approve
     ) internal view {
         checkChain(r, vm, network);
-        if (IRegistryDelegatesV1(r.registry).approvedV3(authority, scope, delegate) != approve) {
+        if (IRegistryDelegatesV2(r.registry).approvedV4(authority, scope, delegate) != approve) {
             revert UnexpectedApproval(network.name, authority, scope, delegate, approve);
         }
     }

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
+import {IRegistryDelegatesV2} from "./IRegistryDelegatesV2.sol";
 import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
 
 /// @dev The head of a line that has never applied a migration. The first
@@ -33,11 +33,11 @@ import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.s
 bytes32 constant MIGRATION_HEAD_GENESIS = keccak256("rain.migration-registry.head.genesis");
 
 /// @dev One entry in the list a record was applied after. A write takes the
-/// list and `appliedAfterV3` answers it, and they are the same list: the first
+/// list and `appliedAfterV4` answers it, and they are the same list: the first
 /// entry is the head the record is applied onto, under the writer in the
 /// namespace it is writing, and every later entry is a record in some other
-/// line the write waited on. A later entry is the key `appliedV3` takes, so
-/// anything `appliedV3` refuses to answer about is refused as a prerequisite.
+/// line the write waited on. A later entry is the key `appliedV4` takes, so
+/// anything `appliedV4` refuses to answer about is refused as a prerequisite.
 struct Prerequisite {
     /// The writer. Never the zero address; in the first entry, the write's
     /// `writer`, whoever calls: a delegate names the writer that approved it.
@@ -60,12 +60,12 @@ struct Prerequisite {
 /// it believes that line is at, then the migrations in any line it waits on —
 /// either as applied now (`applyMigrationV4`) or as already applied at a
 /// moment it supplies (`applyMigrationHistoryV4`). Anyone reads when a given
-/// writer's line in a given namespace applied a given migration (`appliedV3`),
-/// what it applied it onto (`appliedOntoV3`), what it applied it after
-/// (`appliedAfterV3`), which account wrote the record (`appliedByV3`), and
-/// where a given writer's line in a given namespace currently is (`headV3`).
-/// A writer approves and revokes delegates per namespace (`approveV3`,
-/// `revokeV3`), and anyone reads an approval (`approvedV3`). There is no
+/// writer's line in a given namespace applied a given migration (`appliedV4`),
+/// what it applied it onto (`appliedOntoV4`), what it applied it after
+/// (`appliedAfterV4`), which account wrote the record (`appliedByV4`), and
+/// where a given writer's line in a given namespace currently is (`headV4`).
+/// A writer approves and revokes delegates per namespace (`approveV4`,
+/// `revokeV4`), and anyone reads an approval (`approvedV4`). There is no
 /// removal, no upgrade and no authority beyond the writer over its own lines,
 /// and an implementation MUST NOT add any.
 ///
@@ -113,12 +113,12 @@ struct Prerequisite {
 /// invent the moment. An implementation MUST bound it anyway, however it
 /// arrived:
 ///
-/// - NEVER ZERO (`ZeroTimestamp`). Zero is what `appliedV3` answers for a
+/// - NEVER ZERO (`ZeroTimestamp`). Zero is what `appliedV4` answers for a
 ///   migration nobody applied, so a record carrying it would read back as no
 ///   record while the head had moved and the migration could never be applied
 ///   again.
 /// - NEVER AFTER THE BLOCK IT IS WRITTEN IN (`FutureTimestamp`). A record says
-///   a migration HAS run. `appliedV3` therefore never answers a moment later
+///   a migration HAS run. `appliedV4` therefore never answers a moment later
 ///   than the block asking, and a consumer whose invariant is an interval since
 ///   the migration — a cliff, a grace period, a rate that changes a week later
 ///   — subtracts it from the current block without underflowing.
@@ -136,9 +136,9 @@ struct Prerequisite {
 /// moment, so forcing them apart would demand a precision the moments do not
 /// have. Which of them ran first is the chain, not the moments.
 ///
-/// ## `appliedV3` answers WHEN, and zero still means "not applied"
+/// ## `appliedV4` answers WHEN, and zero still means "not applied"
 ///
-/// `appliedV3` is a timestamp rather than a flag because "which invariant
+/// `appliedV4` is a timestamp rather than a flag because "which invariant
 /// applies" is frequently "which invariant applies YET": a migration that
 /// starts a vesting cliff, a rate change, a grace period. A flag forces a
 /// consumer that needs the moment to go and find the log for it, or — worse —
@@ -166,8 +166,8 @@ struct Prerequisite {
 /// becomes the new head.
 ///
 /// Each record keeps that first entry with the rest of its list, and
-/// `appliedOntoV3` reads it back. A line's records are therefore a chain in
-/// storage: from `headV3`, each `appliedOntoV3` names the record before it,
+/// `appliedOntoV4` reads it back. A line's records are therefore a chain in
+/// storage: from `headV4`, each `appliedOntoV4` names the record before it,
 /// down to `MIGRATION_HEAD_GENESIS`. That chain IS the order the migrations
 /// ran in, and it is exact whatever moments the records carry.
 ///
@@ -232,7 +232,7 @@ struct Prerequisite {
 ///
 /// Every write takes a list of `Prerequisite`s whose first entry is the head
 /// of the line being written, and reverts `PrerequisiteNotApplied` for the
-/// first entry after it whose `appliedV3` is zero. A list of the head alone is
+/// first entry after it whose `appliedV4` is zero. A list of the head alone is
 /// a migration that waits on nothing but its own predecessor.
 ///
 /// A prerequisite is still an index, not proof. It says the other writer
@@ -242,10 +242,10 @@ struct Prerequisite {
 /// dependent script carrying a hand-written copy of its prerequisite's
 /// post-state read.
 ///
-/// The list is the record, and `appliedAfterV3` reads it back exactly as the
+/// The list is the record, and `appliedAfterV4` reads it back exactly as the
 /// write gave it: the head of the line written first, then what it waited on,
-/// as listed. Within one line `appliedOntoV3` walks the chain back to genesis;
-/// `appliedAfterV3` walks from any record to every record it waited on, its
+/// as listed. Within one line `appliedOntoV4` walks the chain back to genesis;
+/// `appliedAfterV4` walks from any record to every record it waited on, its
 /// predecessor included, so the order across lines is on chain and not only in
 /// the log. It says which records EXISTED when this one was written, which is
 /// a fact about the record and nothing about the state around it.
@@ -258,7 +258,7 @@ struct Prerequisite {
 /// line being written and the block, and by nothing else.
 ///
 /// Every entry after the first is a record key in another line, and is
-/// refused as `appliedV3` refuses one: `ZeroWriter`, `ZeroNamespace`,
+/// refused as `appliedV4` refuses one: `ZeroWriter`, `ZeroNamespace`,
 /// `ZeroMigration` or `GenesisMigration`, none of which can name a record and
 /// each of which is a constant nobody set or set to the wrong one. One in the
 /// line being written — the write's `writer` AND its namespace — is
@@ -298,7 +298,7 @@ struct Prerequisite {
 /// under the approving writer and nothing else, so approving a delegate for one
 /// line never lets it write another, and anyone may own a namespace of the same
 /// name under their own address. The events and errors are
-/// `IRegistryDelegatesV1`'s, whose account is the writer and whose scope is
+/// `IRegistryDelegatesV2`'s, whose account is the writer and whose scope is
 /// the namespace.
 ///
 /// This decouples a line from whichever account executes a migration. A Safe
@@ -310,7 +310,7 @@ struct Prerequisite {
 /// later writes and nothing else: records a delegate wrote while approved
 /// stay, as every record does. So a line is only as trustworthy as every
 /// delegate it has ever had, revoked ones included, and each record keeps the
-/// account that wrote it (`appliedByV3`) so a reader can say which of them it
+/// account that wrote it (`appliedByV4`) so a reader can say which of them it
 /// trusts.
 ///
 /// An approved delegate can also move the line's head onto any id, which no
@@ -318,7 +318,7 @@ struct Prerequisite {
 /// against the line, leaving a new namespace as the only way out. Approve only
 /// accounts held to the writer's own custody, and revoke before rotating one
 /// out. Approvals cannot be enumerated here, only asked about one delegate at
-/// a time, so a consumer's prod tests assert `approvedV3` is false for every
+/// a time, so a consumer's prod tests assert `approvedV4` is false for every
 /// retired delegate beside the true answers for the live ones.
 ///
 /// ## Identity is opaque
@@ -354,10 +354,10 @@ struct Prerequisite {
 /// `keccak256(abi.encode(writer, namespace, migration))`, the record it
 /// describes. Metadata is never stored or validated, and an empty one emits
 /// nothing.
-interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
+interface IMigrationRegistryV4 is IRegistryDelegatesV2, IMetaV1_2 {
     /// Thrown when a write is called with the zero migration id or given a
-    /// prerequisite naming it, and by `appliedV3`, `appliedOntoV3`,
-    /// `appliedAfterV3` and `appliedByV3` when asked about one. The zero id is
+    /// prerequisite naming it, and by `appliedV4`, `appliedOntoV4`,
+    /// `appliedAfterV4` and `appliedByV4` when asked about one. The zero id is
     /// what an uninitialised `bytes32` constant reads as, and an uninitialised
     /// id is never a migration anybody meant to name. Rejected in every
     /// direction because the read is the dangerous one: answering zero would
@@ -374,11 +374,11 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     error ZeroMigration();
 
     /// Thrown when a write is called with `MIGRATION_HEAD_GENESIS` as the
-    /// migration or given a prerequisite naming it, and by `appliedV3`,
-    /// `appliedOntoV3`, `appliedAfterV3` and `appliedByV3` when asked about it.
+    /// migration or given a prerequisite naming it, and by `appliedV4`,
+    /// `appliedOntoV4`, `appliedAfterV4` and `appliedByV4` when asked about it.
     /// Genesis is a head, not a migration: applying it would leave a line that
     /// has applied something at a head no different from one that has applied
-    /// nothing, and asking `appliedV3` about it would answer zero forever for a
+    /// nothing, and asking `appliedV4` about it would answer zero forever for a
     /// caller that has confused a head for a migration and will read that as
     /// its pre-migration branch.
     ///
@@ -390,7 +390,7 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
 
     /// Thrown by a write naming the zero writer, before anything else; by a
     /// write given a prerequisite naming it; by every read when asked about it,
-    /// `approvedV3` included. No transaction can originate from the zero
+    /// `approvedV4` included. No transaction can originate from the zero
     /// address, so it can neither write nor approve, every line under it is
     /// provably empty, and the answer would always be "nothing applied, at
     /// genesis" — an unresolved or unset writer constant would therefore read
@@ -405,7 +405,7 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     /// Thrown by every write that `writer` makes with the zero namespace (any
     /// other caller is `NotApproved` first, as no approval names it) or that is
     /// given a prerequisite naming it, by every read when asked about it, and by
-    /// `approveV3`, `revokeV3` and `approvedV3` when given it. Zero is what an
+    /// `approveV4`, `revokeV4` and `approvedV4` when given it. Zero is what an
     /// uninitialised `bytes32` constant reads as, so it is never a namespace
     /// anybody meant to name: a write into it would put a record where no
     /// reader that set its constant will look, a read of it would answer a
@@ -417,7 +417,7 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     /// Thrown when a migration already applied in a line is applied in it
     /// again. This is what makes running a migration twice structurally
     /// impossible rather than a warning in a workflow dropdown asking a human
-    /// not to re-dispatch it: a script consults `appliedV3` before it acts, and
+    /// not to re-dispatch it: a script consults `appliedV4` before it acts, and
     /// this is the backstop under that consultation.
     ///
     /// Checked AFTER the head and the entries after it, so it is reached only
@@ -462,7 +462,7 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     /// Thrown when a write would record a zero moment:
     /// `applyMigrationHistoryV4` given zero, or `applyMigrationV4` in a block
     /// whose timestamp is zero. A record IS its moment, so a zero one would
-    /// read back through `appliedV3` as no record at all, while the head moved
+    /// read back through `appliedV4` as no record at all, while the head moved
     /// and the migration cannot be re-applied — the worst of every branch at
     /// once. Zero is also what an uninitialised `uint256` holds, so it is
     /// refused for the same reason `ZeroMigration` is.
@@ -502,7 +502,7 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     error TimestampBeforeHead(uint256 appliedAt, uint256 headAppliedAt);
 
     /// Thrown when an entry after the first of a write's list has not been
-    /// applied: `appliedV3(writer, namespace, migration)` is zero. The first
+    /// applied: `appliedV4(writer, namespace, migration)` is zero. The first
     /// such entry in list order is the one named, and nothing after it has
     /// been read, so a caller waiting on several is told about one at a time
     /// — the one it has to wait for first.
@@ -540,7 +540,7 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     /// in order ARE that line's chain of heads — each entry's migration is the
     /// head the next one was applied onto, and the first was applied onto
     /// `MIGRATION_HEAD_GENESIS`. It carries no list either: the list is the
-    /// record, read back by `appliedAfterV3`.
+    /// record, read back by `appliedAfterV4`.
     ///
     /// It does carry `appliedAt`, which the log does not otherwise hold: the
     /// block a log entry sits in says when the record was written, and
@@ -576,7 +576,7 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     /// @param migration The migration to apply. Never zero, never
     /// `MIGRATION_HEAD_GENESIS`.
     /// @param prerequisites What `migration` is applied after, which is what
-    /// `appliedAfterV3` will answer for it. The first entry is `writer`, in
+    /// `appliedAfterV4` will answer for it. The first entry is `writer`, in
     /// `namespace`, at the head the caller believes that line is at: the
     /// migration it is applying onto, or `MIGRATION_HEAD_GENESIS` for the
     /// first migration in the line. Every later entry is a migration, under
@@ -611,7 +611,7 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     /// `ZeroWriter`, `ZeroNamespace`, `ZeroMigration`, `GenesisMigration` or
     /// `OwnPrerequisite` for the first entry after the head that is not a
     /// record key in another line; then `PrerequisiteNotApplied` for the
-    /// first entry after the head whose `appliedV3` is zero. Only then does it
+    /// first entry after the head whose `appliedV4` is zero. Only then does it
     /// make the refusals about the line's record and the moment, in this
     /// order: `MigrationAlreadyApplied` if `migration` is already applied in
     /// the line, `TimestampBeforeHead` if `appliedAt` is before the moment
@@ -687,11 +687,11 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     /// `MIGRATION_HEAD_GENESIS`.
     /// @return The moment `migration` was applied in the line, or zero if it
     /// has not been.
-    function appliedV3(address writer, bytes32 namespace, bytes32 migration) external view returns (uint256);
+    function appliedV4(address writer, bytes32 namespace, bytes32 migration) external view returns (uint256);
 
     /// What `migration` was applied ONTO in `writer`'s line in `namespace`:
     /// the head that line was at when the record was written, which is the
-    /// first entry of `appliedAfterV3`. Zero if `migration` was never applied
+    /// first entry of `appliedAfterV4`. Zero if `migration` was never applied
     /// there.
     ///
     /// The implementation MUST revert `ZeroWriter`, `ZeroNamespace`,
@@ -703,7 +703,7 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     /// applied id, both nonzero, so zero is never something a record holds.
     ///
     /// This is what makes a line's records a chain rather than a set.
-    /// Walked from `headV3` back, each answer names the record before it and
+    /// Walked from `headV4` back, each answer names the record before it and
     /// the walk ends at `MIGRATION_HEAD_GENESIS`, which is the order the
     /// migrations ran in whatever moments they carry.
     /// @param writer The writer to read. Never the zero address.
@@ -712,7 +712,7 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     /// `MIGRATION_HEAD_GENESIS`.
     /// @return The head `migration` was applied onto in the line, or zero if
     /// it has not been applied there.
-    function appliedOntoV3(address writer, bytes32 namespace, bytes32 migration) external view returns (bytes32);
+    function appliedOntoV4(address writer, bytes32 namespace, bytes32 migration) external view returns (bytes32);
 
     /// What `migration` was applied AFTER in `writer`'s line in `namespace`:
     /// the list the write gave, exactly as given. The first entry is `writer`
@@ -739,19 +739,19 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     /// `MIGRATION_HEAD_GENESIS`.
     /// @return The list `migration` was applied after in the line, as the
     /// write gave it.
-    function appliedAfterV3(address writer, bytes32 namespace, bytes32 migration)
+    function appliedAfterV4(address writer, bytes32 namespace, bytes32 migration)
         external
         view
         returns (Prerequisite[] memory);
 
     /// The account that wrote `writer`'s record of `migration` in `namespace`:
     /// `writer`, or a delegate it had approved when the write landed. Refuses
-    /// the inputs `appliedV3` refuses.
+    /// the inputs `appliedV4` refuses.
     /// @param writer The line's writer.
     /// @param namespace The line under the writer.
     /// @param migration The migration asked about.
     /// @return The account that wrote the record, zero if never applied.
-    function appliedByV3(address writer, bytes32 namespace, bytes32 migration) external view returns (address);
+    function appliedByV4(address writer, bytes32 namespace, bytes32 migration) external view returns (address);
 
     /// Where `writer`'s line in `namespace` currently is: the migration
     /// applied there most recently, or `MIGRATION_HEAD_GENESIS` if none has
@@ -765,10 +765,10 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     ///
     /// This is a read for authoring and for diagnosis: which migration a chain
     /// is at, and therefore what the next script must name. It is NOT how a
-    /// script decides that its predecessor ran — that is `appliedV3`, per
+    /// script decides that its predecessor ran — that is `appliedV4`, per
     /// migration, because a head says only what was last, not what was ever.
     /// @param writer The writer to read. Never the zero address.
     /// @param namespace The line under `writer` to read. Never zero.
     /// @return The head of `writer`'s line in `namespace`. Never zero.
-    function headV3(address writer, bytes32 namespace) external view returns (bytes32);
+    function headV4(address writer, bytes32 namespace) external view returns (bytes32);
 }

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
+import {IRegistryDelegatesV2} from "./IRegistryDelegatesV2.sol";
 import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
 
 /// @title IConfigRegistryV4
@@ -11,8 +11,8 @@ import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.s
 /// that authority, or an account it has approved, binds a name there
 /// (`registerV4`); anyone reads a name under an authority it names (`getV4`).
 /// An authority may re-bind a name it has already bound. An authority approves
-/// and revokes delegates (`approveV3`, `revokeV3`), and anyone reads an
-/// approval (`approvedV3`). There is no removal, no upgrade, and no way for
+/// and revokes delegates (`approveV4`, `revokeV4`), and anyone reads an
+/// approval (`approvedV4`). There is no removal, no upgrade, and no way for
 /// one account to write under another that has not approved it, and an
 /// implementation MUST NOT add any.
 ///
@@ -53,7 +53,7 @@ import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.s
 /// Only the authority decides who writes under it. An approval names one
 /// delegate for one name under the approving authority: it covers no other
 /// name, and approving a delegate under one authority never lets it write
-/// under another. The events and errors are `IRegistryDelegatesV1`'s, whose
+/// under another. The events and errors are `IRegistryDelegatesV2`'s, whose
 /// account is the authority and whose scope is the name.
 ///
 /// This decouples an authority from whichever account sends its binds. A Safe
@@ -69,7 +69,7 @@ import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.s
 /// wrote each binding. Approve only accounts held to the authority's own
 /// custody, and revoke before rotating one out. Approvals cannot be enumerated
 /// here, only asked about one delegate at a time, so a consumer's prod tests
-/// assert `approvedV3` is false for every retired delegate beside the true
+/// assert `approvedV4` is false for every retired delegate beside the true
 /// answers for the live ones. Approvals are per-chain state, like a contract
 /// authority's controllers: an approval or revocation is made on every chain
 /// the authority's names are consumed on.
@@ -130,10 +130,10 @@ import {IMetaV1_2} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.s
 /// against the type.
 ///
 /// A bind may carry rain metadata, emitted as `MetaV1_2` with subject
-/// `keccak256(abi.encode(authority, name, registeredAt))`, so each rebind has
-/// its own subject. Metadata is never stored or validated, and an empty one
-/// emits nothing.
-interface IConfigRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
+/// `keccak256(abi.encode(authority, name))`, so every bind of a name under an
+/// authority shares one subject. Metadata is never stored or validated, and an
+/// empty one emits nothing.
+interface IConfigRegistryV4 is IRegistryDelegatesV2, IMetaV1_2 {
     /// Thrown when `registerV4` is called with an empty value. Empty is how an
     /// unbound name reads, so binding it would produce a name that is both
     /// bound and unreadable. A name cannot be unbound once bound; the closest
@@ -203,7 +203,7 @@ interface IConfigRegistryV4 is IRegistryDelegatesV1, IMetaV1_2 {
     /// `block.timestamp` as the moment — including when `value` is the value
     /// already bound, which is a bind like any other — and, when `meta` is
     /// non-empty, emit `MetaV1_2(msg.sender, subject, meta)` with subject
-    /// `keccak256(abi.encode(authority, name, block.timestamp))`. The moment
+    /// `keccak256(abi.encode(authority, name))`. The moment
     /// dates the write, not the value. It MUST NOT store or validate `meta`.
     /// An implementation storing the moment narrower than `block.timestamp`
     /// MUST revert on a clock that does not fit rather than truncate it, since a

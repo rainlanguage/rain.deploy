@@ -14,7 +14,7 @@ import {LibConfigRegistryRegister, ConfigBinding} from "../src/lib/LibConfigRegi
 /// `CONFIG_REGISTRY_AUTHORITY` in the `ConfigRegistry` on every network the
 /// declaration supports, or on the comma-separated subset
 /// `CONFIG_REGISTRY_NETWORKS` names, signed on a Trezor by that authority or
-/// by a delegate it approved for the name with `approveV3` on every selected
+/// by a delegate it approved for the name with `approveV4` on every selected
 /// network.
 ///
 /// Local only. The signer this is written for is a hardware wallet, so

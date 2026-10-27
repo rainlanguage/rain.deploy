@@ -118,7 +118,7 @@ library LibRainDeployBeacon {
         uint256 state = 0;
         for (uint256 i = 0; i < beacon.transitions.length; i++) {
             Prerequisite memory migration = beacon.transitions[i].migration;
-            if (LibMigrationRegistry.appliedV3(migration.writer, migration.namespace, migration.migration) == 0) {
+            if (LibMigrationRegistry.appliedV4(migration.writer, migration.namespace, migration.migration) == 0) {
                 continue;
             }
             if (state != 0 && !recordedBefore(beacon.transitions[state - 1].migration, migration)) {
@@ -146,7 +146,7 @@ library LibRainDeployBeacon {
         keys[0] = keccak256(abi.encode(later));
         uint256 count = 1;
         for (uint256 next = 0; next < count; next++) {
-            Prerequisite[] memory entries = LibMigrationRegistry.appliedAfterV3(
+            Prerequisite[] memory entries = LibMigrationRegistry.appliedAfterV4(
                 reached[next].writer, reached[next].namespace, reached[next].migration
             );
             for (uint256 i = 0; i < entries.length; i++) {

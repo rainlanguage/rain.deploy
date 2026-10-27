@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IRegistryDelegatesV1} from "../IRegistryDelegatesV1.sol";
+import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
 
 /// @title IConfigRegistryV3
 /// @notice A registry of `bytes32` names to ABI-encoded values, keyed by the

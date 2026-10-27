@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IRegistryDelegatesV1} from "../IRegistryDelegatesV1.sol";
+import {IRegistryDelegatesV1} from "./IRegistryDelegatesV1.sol";
 
 /// @dev The head of a line that has never applied a migration. The first
 /// migration applied in a line names this, and every later one names the

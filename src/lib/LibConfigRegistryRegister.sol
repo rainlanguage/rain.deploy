@@ -245,7 +245,7 @@ library LibConfigRegistryRegister {
         if (
             sender != authority
                 && !IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-                    .approvedV3(authority, name, sender)
+                    .approvedV4(authority, name, sender)
         ) {
             revert SenderNotApproved(network.name, sender, authority, name);
         }

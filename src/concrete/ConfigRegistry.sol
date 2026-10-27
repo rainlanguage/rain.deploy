@@ -90,7 +90,7 @@ contract ConfigRegistry is IConfigRegistryV4, RegistryDelegates {
             Binding({value: value, registeredAt: block.timestamp, valueTypeHash: keccak256(bytes(valueType))});
         emit Register(msg.sender, authority, name, valueType, value);
         if (meta.length > 0) {
-            emit MetaV1_2(msg.sender, keccak256(abi.encode(authority, name, block.timestamp)), meta);
+            emit MetaV1_2(msg.sender, keccak256(abi.encode(authority, name)), meta);
         }
     }
 
