@@ -9,12 +9,12 @@ import {
     Prerequisite,
     MIGRATION_HEAD_GENESIS
 } from "../../../src/interface/IMigrationRegistryV4.sol";
-import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
+import {IRegistryDelegatesV2} from "../../../src/interface/IRegistryDelegatesV2.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 
 /// @title MigrationRegistryAppliedTest
-/// @notice A test suite for `MigrationRegistry.appliedV3`: it answers an applied
+/// @notice A test suite for `MigrationRegistry.appliedV4`: it answers an applied
 /// migration with the moment recorded against it, an unapplied one with zero,
 /// refuses the four inputs that can only be mistakes, and is the only reader of
 /// a record's moment.
@@ -26,7 +26,7 @@ contract MigrationRegistryAppliedTest is Test {
         sRegistry = new MigrationRegistry();
     }
 
-    /// The list a write under `writer` in `namespace` onto `headV3` after
+    /// The list a write under `writer` in `namespace` onto `headV4` after
     /// nothing else passes.
     /// @param writer The writer the record is under.
     /// @param namespace The line the record is in.
@@ -50,7 +50,7 @@ contract MigrationRegistryAppliedTest is Test {
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
 
-        assertEq(sRegistry.appliedV3(writer, namespace, migration), 0);
+        assertEq(sRegistry.appliedV4(writer, namespace, migration), 0);
     }
 
     /// An applied migration answers the moment recorded against it, and keeps
@@ -79,10 +79,10 @@ contract MigrationRegistryAppliedTest is Test {
         );
 
         vm.warp(readAt);
-        assertEq(sRegistry.appliedV3(writer, namespace, migration), appliedAt);
+        assertEq(sRegistry.appliedV4(writer, namespace, migration), appliedAt);
     }
 
-    /// The moment `appliedV3` answers never exceeds the block that asks, whichever
+    /// The moment `appliedV4` answers never exceeds the block that asks, whichever
     /// form wrote it. That is what lets a consumer measuring an interval since a
     /// migration subtract the answer from the current block without
     /// underflowing.
@@ -108,7 +108,7 @@ contract MigrationRegistryAppliedTest is Test {
         );
 
         vm.warp(readAt);
-        assertLe(sRegistry.appliedV3(writer, namespace, migration), block.timestamp);
+        assertLe(sRegistry.appliedV4(writer, namespace, migration), block.timestamp);
     }
 
     /// Reading does not consume or alter a record, so the same question asked
@@ -121,8 +121,8 @@ contract MigrationRegistryAppliedTest is Test {
         vm.prank(writer);
         sRegistry.applyMigrationV4(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS), "");
 
-        assertEq(sRegistry.appliedV3(writer, namespace, migration), block.timestamp);
-        assertEq(sRegistry.appliedV3(writer, namespace, migration), block.timestamp);
+        assertEq(sRegistry.appliedV4(writer, namespace, migration), block.timestamp);
+        assertEq(sRegistry.appliedV4(writer, namespace, migration), block.timestamp);
     }
 
     /// A record is keyed by its line. A migration applied in one namespace is
@@ -147,9 +147,9 @@ contract MigrationRegistryAppliedTest is Test {
         vm.prank(writer);
         sRegistry.applyMigrationV4(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS), "");
 
-        assertEq(sRegistry.appliedV3(writer, namespace, migration), block.timestamp);
-        assertEq(sRegistry.appliedV3(writer, otherNamespace, migration), 0);
-        assertEq(sRegistry.appliedV3(other, namespace, migration), 0);
+        assertEq(sRegistry.appliedV4(writer, namespace, migration), block.timestamp);
+        assertEq(sRegistry.appliedV4(writer, otherNamespace, migration), 0);
+        assertEq(sRegistry.appliedV4(other, namespace, migration), 0);
     }
 
     /// The zero writer is refused rather than answered. No transaction
@@ -163,7 +163,7 @@ contract MigrationRegistryAppliedTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroWriter.selector));
-        sRegistry.appliedV3(address(0), namespace, migration);
+        sRegistry.appliedV4(address(0), namespace, migration);
     }
 
     /// The zero namespace is refused for the same reason: no write names it,
@@ -177,15 +177,15 @@ contract MigrationRegistryAppliedTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroNamespace.selector));
-        sRegistry.appliedV3(writer, bytes32(0), migration);
+        sRegistry.appliedV4(writer, bytes32(0), migration);
 
         vm.prank(writer);
         sRegistry.applyMigrationV4(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS), "");
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroNamespace.selector));
-        sRegistry.appliedV3(writer, bytes32(0), migration);
+        sRegistry.appliedV4(writer, bytes32(0), migration);
 
-        assertEq(sRegistry.appliedV3(writer, namespace, migration), block.timestamp);
+        assertEq(sRegistry.appliedV4(writer, namespace, migration), block.timestamp);
     }
 
     /// The zero migration id is refused for the same reason in the other
@@ -195,7 +195,7 @@ contract MigrationRegistryAppliedTest is Test {
         vm.assume(namespace != bytes32(0));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroMigration.selector));
-        sRegistry.appliedV3(writer, namespace, bytes32(0));
+        sRegistry.appliedV4(writer, namespace, bytes32(0));
     }
 
     /// The genesis head is refused as a migration for the same reason again:
@@ -207,7 +207,7 @@ contract MigrationRegistryAppliedTest is Test {
         vm.assume(namespace != bytes32(0));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.GenesisMigration.selector));
-        sRegistry.appliedV3(writer, namespace, MIGRATION_HEAD_GENESIS);
+        sRegistry.appliedV4(writer, namespace, MIGRATION_HEAD_GENESIS);
     }
 
     /// The writer is checked before the namespace and the migration, so a
@@ -216,10 +216,10 @@ contract MigrationRegistryAppliedTest is Test {
     /// happens to run.
     function testAppliedZeroWriterCheckedFirst() external {
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroWriter.selector));
-        sRegistry.appliedV3(address(0), bytes32(0), bytes32(0));
+        sRegistry.appliedV4(address(0), bytes32(0), bytes32(0));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroWriter.selector));
-        sRegistry.appliedV3(address(0), bytes32(0), MIGRATION_HEAD_GENESIS);
+        sRegistry.appliedV4(address(0), bytes32(0), MIGRATION_HEAD_GENESIS);
     }
 
     /// The namespace is checked after the writer and before the migration:
@@ -230,13 +230,13 @@ contract MigrationRegistryAppliedTest is Test {
         LibMigrationFuzz.assumeMigration(vm, migration);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroWriter.selector));
-        sRegistry.appliedV3(address(0), bytes32(0), migration);
+        sRegistry.appliedV4(address(0), bytes32(0), migration);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroNamespace.selector));
-        sRegistry.appliedV3(writer, bytes32(0), bytes32(0));
+        sRegistry.appliedV4(writer, bytes32(0), bytes32(0));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroNamespace.selector));
-        sRegistry.appliedV3(writer, bytes32(0), MIGRATION_HEAD_GENESIS);
+        sRegistry.appliedV4(writer, bytes32(0), MIGRATION_HEAD_GENESIS);
     }
 
     /// A refusal is not a state change: the refused cases revert on a registry
@@ -251,22 +251,22 @@ contract MigrationRegistryAppliedTest is Test {
         sRegistry.applyMigrationV4(writer, namespace, migration, onto(writer, namespace, MIGRATION_HEAD_GENESIS), "");
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroWriter.selector));
-        sRegistry.appliedV3(address(0), namespace, migration);
+        sRegistry.appliedV4(address(0), namespace, migration);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroNamespace.selector));
-        sRegistry.appliedV3(writer, bytes32(0), migration);
+        sRegistry.appliedV4(writer, bytes32(0), migration);
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroMigration.selector));
-        sRegistry.appliedV3(writer, namespace, bytes32(0));
+        sRegistry.appliedV4(writer, namespace, bytes32(0));
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.GenesisMigration.selector));
-        sRegistry.appliedV3(writer, namespace, MIGRATION_HEAD_GENESIS);
+        sRegistry.appliedV4(writer, namespace, MIGRATION_HEAD_GENESIS);
 
-        assertEq(sRegistry.appliedV3(writer, namespace, migration), block.timestamp);
-        assertEq(sRegistry.headV3(writer, namespace), migration);
+        assertEq(sRegistry.appliedV4(writer, namespace, migration), block.timestamp);
+        assertEq(sRegistry.headV4(writer, namespace), migration);
     }
 
-    /// `appliedV3`, `appliedOntoV3`, `appliedAfterV3` and `appliedByV3` are the only readers of the
+    /// `appliedV4`, `appliedOntoV4`, `appliedAfterV4` and `appliedByV4` are the only readers of the
     /// records. The records mapping is not `public`, so the getter a `public`
     /// mapping would generate — which answers the zero writer, the zero
     /// namespace and both refused ids with zero, the exact silent wrong-branch
@@ -289,16 +289,16 @@ contract MigrationRegistryAppliedTest is Test {
     /// nothing beyond the `IMigrationRegistryV4` functions, so an unknown
     /// selector reverts instead of being silently absorbed.
     function testAppliedNoOtherEntryPoint(bytes4 selector, bytes32 namespace, bytes32 migration) external {
-        vm.assume(selector != IMigrationRegistryV4.appliedV3.selector);
-        vm.assume(selector != IMigrationRegistryV4.appliedOntoV3.selector);
-        vm.assume(selector != IMigrationRegistryV4.appliedAfterV3.selector);
-        vm.assume(selector != IMigrationRegistryV4.appliedByV3.selector);
+        vm.assume(selector != IMigrationRegistryV4.appliedV4.selector);
+        vm.assume(selector != IMigrationRegistryV4.appliedOntoV4.selector);
+        vm.assume(selector != IMigrationRegistryV4.appliedAfterV4.selector);
+        vm.assume(selector != IMigrationRegistryV4.appliedByV4.selector);
         vm.assume(selector != IMigrationRegistryV4.applyMigrationV4.selector);
         vm.assume(selector != IMigrationRegistryV4.applyMigrationHistoryV4.selector);
-        vm.assume(selector != IMigrationRegistryV4.headV3.selector);
-        vm.assume(selector != IRegistryDelegatesV1.approveV3.selector);
-        vm.assume(selector != IRegistryDelegatesV1.revokeV3.selector);
-        vm.assume(selector != IRegistryDelegatesV1.approvedV3.selector);
+        vm.assume(selector != IMigrationRegistryV4.headV4.selector);
+        vm.assume(selector != IRegistryDelegatesV2.approveV4.selector);
+        vm.assume(selector != IRegistryDelegatesV2.revokeV4.selector);
+        vm.assume(selector != IRegistryDelegatesV2.approvedV4.selector);
 
         (bool success,) = address(sRegistry).call(abi.encodeWithSelector(selector, address(this), namespace, migration));
         assertFalse(success);

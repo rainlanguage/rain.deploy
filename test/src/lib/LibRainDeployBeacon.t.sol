@@ -252,7 +252,7 @@ contract LibRainDeployBeaconTest is Test {
         applyIn(THIRD, UPGRADE, onto(THIRD, MIGRATION_HEAD_GENESIS));
         vm.expectCall(
             LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
-            abi.encodeCall(IMigrationRegistryV4.appliedAfterV3, (WRITER, NAMESPACE, INTERIM)),
+            abi.encodeCall(IMigrationRegistryV4.appliedAfterV4, (WRITER, NAMESPACE, INTERIM)),
             1
         );
         assertFalse(this.externalRecordedBefore(record(THIRD, UPGRADE), record(OTHER, HANDOVER)));
@@ -272,7 +272,7 @@ contract LibRainDeployBeaconTest is Test {
         );
         vm.expectCall(
             LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS,
-            abi.encodeCall(IMigrationRegistryV4.appliedAfterV3, (WRITER, NAMESPACE, INTERIM)),
+            abi.encodeCall(IMigrationRegistryV4.appliedAfterV4, (WRITER, NAMESPACE, INTERIM)),
             1
         );
         assertFalse(this.externalRecordedBefore(record(THIRD, HANDOVER), record(OTHER, HANDOVER)));

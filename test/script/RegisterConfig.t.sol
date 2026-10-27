@@ -173,7 +173,7 @@ contract RegisterConfigTest is Test {
         bytes memory delegatedValue = abi.encode(address(6));
         vm.prank(delegator);
         IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-            .approveV3(keccak256(bytes(delegatedName)), address(script));
+            .approveV4(keccak256(bytes(delegatedName)), address(script));
         vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(delegator));
         vm.setEnv("CONFIG_REGISTRY_NAME", delegatedName);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(delegatedValue));

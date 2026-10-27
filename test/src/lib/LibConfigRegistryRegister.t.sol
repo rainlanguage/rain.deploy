@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
+import {IRegistryDelegatesV2} from "../../../src/interface/IRegistryDelegatesV2.sol";
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
@@ -276,11 +276,11 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(sender != AUTHORITY && sender != address(0));
         IConfigRegistryV4 registry = deployRegistry();
         vm.prank(AUTHORITY);
-        registry.approveV3(NAME, sender);
+        registry.approveV4(NAME, sender);
         this.externalCheckSender(sender, AUTHORITY);
 
         vm.prank(AUTHORITY);
-        registry.revokeV3(NAME, sender);
+        registry.revokeV4(NAME, sender);
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
@@ -294,7 +294,7 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(sender != AUTHORITY && sender != address(0) && other != AUTHORITY);
         IConfigRegistryV4 registry = deployRegistry();
         vm.prank(other);
-        registry.approveV3(NAME, sender);
+        registry.approveV4(NAME, sender);
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
@@ -308,7 +308,7 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(sender != AUTHORITY && sender != address(0) && other != NAME);
         IConfigRegistryV4 registry = deployRegistry();
         vm.prank(AUTHORITY);
-        registry.approveV3(other, sender);
+        registry.approveV4(other, sender);
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibConfigRegistryRegister.SenderNotApproved.selector, "base", sender, AUTHORITY, NAME
@@ -468,7 +468,7 @@ contract LibConfigRegistryRegisterTest is Test {
         string[] memory selected = list(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE);
         bytes memory value = abi.encode(address(1));
         vm.prank(AUTHORITY);
-        registry.approveV3(keccak256("a.b"), address(this));
+        registry.approveV4(keccak256("a.b"), address(this));
 
         (, string memory record) =
             this.externalRegisterOnNetworksWith(forkVm, selected, address(this), AUTHORITY, "a.b", value);
@@ -731,7 +731,7 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(sender != address(this));
         IConfigRegistryV4 registry = deployRegistry();
         vm.prank(AUTHORITY);
-        registry.approveV3(keccak256("a"), sender);
+        registry.approveV4(keccak256("a"), sender);
         bytes32 name = keccak256("a");
         bytes memory value = abi.encode(address(1));
         vm.warp(1);
@@ -775,13 +775,13 @@ contract LibConfigRegistryRegisterTest is Test {
     }
 
     /// The zero address as the sender is refused on the selected chain by the
-    /// registry's own `ZeroDelegate`, which `approvedV3` raises before any
+    /// registry's own `ZeroDelegate`, which `approvedV4` raises before any
     /// approval is read, and nothing is bound.
     function testRegisterRefusesTheZeroSender() external {
         IConfigRegistryV4 registry = deployRegistry();
         bytes32 name = keccak256("a");
         vm.warp(1);
-        vm.expectRevert(IRegistryDelegatesV1.ZeroDelegate.selector);
+        vm.expectRevert(IRegistryDelegatesV2.ZeroDelegate.selector);
         this.externalRegisterOnSelectedChain(base(), address(0), AUTHORITY, name, abi.encode(address(1)));
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.NameNotRegistered.selector, AUTHORITY, name));
         registry.getV4(AUTHORITY, name);

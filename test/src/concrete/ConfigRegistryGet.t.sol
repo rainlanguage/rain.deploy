@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
 import {IConfigRegistryV4} from "../../../src/interface/IConfigRegistryV4.sol";
-import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
+import {IRegistryDelegatesV2} from "../../../src/interface/IRegistryDelegatesV2.sol";
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
 import {VALUE_TYPE} from "../../lib/ConfigTestBinding.sol";
@@ -142,9 +142,9 @@ contract ConfigRegistryGetTest is Test {
     function testGetNoOtherEntryPoint(bytes4 selector, bytes32 name) external {
         vm.assume(selector != IConfigRegistryV4.getV4.selector);
         vm.assume(selector != IConfigRegistryV4.registerV4.selector);
-        vm.assume(selector != IRegistryDelegatesV1.approveV3.selector);
-        vm.assume(selector != IRegistryDelegatesV1.revokeV3.selector);
-        vm.assume(selector != IRegistryDelegatesV1.approvedV3.selector);
+        vm.assume(selector != IRegistryDelegatesV2.approveV4.selector);
+        vm.assume(selector != IRegistryDelegatesV2.revokeV4.selector);
+        vm.assume(selector != IRegistryDelegatesV2.approvedV4.selector);
 
         (bool success,) = address(sRegistry).call(abi.encodeWithSelector(selector, name, abi.encode(address(this))));
         assertFalse(success);

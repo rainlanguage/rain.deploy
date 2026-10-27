@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
+import {IRegistryDelegatesV2} from "../../../src/interface/IRegistryDelegatesV2.sol";
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
 import {IConfigRegistryV4} from "../../../src/interface/IConfigRegistryV4.sol";
@@ -39,9 +39,9 @@ contract ConfigRegistryRegisterTest is Test {
     {
         assertEq(entry.emitter, address(sRegistry));
         assertEq(entry.topics.length, 1);
-        assertEq(entry.topics[0], keccak256("Register(address,address,bytes32,bytes)"));
+        assertEq(entry.topics[0], keccak256("Register(address,address,bytes32,string,bytes)"));
         assertEq(entry.topics[0], IConfigRegistryV4.Register.selector);
-        assertEq(entry.data, abi.encode(sender, authority, name, value));
+        assertEq(entry.data, abi.encode(sender, authority, name, VALUE_TYPE, value));
     }
 
     /// Any caller binds, with no permission asked, and the binding lands under
@@ -117,7 +117,7 @@ contract ConfigRegistryRegisterTest is Test {
         vm.prank(sender, AUTHORITY);
         sRegistry.registerV4(sender, name, VALUE_TYPE, value, "");
 
-        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, AUTHORITY, name, sender));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV2.NotApproved.selector, AUTHORITY, name, sender));
         vm.prank(sender, AUTHORITY);
         sRegistry.registerV4(AUTHORITY, name, VALUE_TYPE, value, "");
 
