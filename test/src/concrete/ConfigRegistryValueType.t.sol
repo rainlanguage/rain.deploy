@@ -12,6 +12,26 @@ import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 /// @notice `registerV4`'s `valueType`: refused empty, stored as its hash only,
 /// replaced by a rebind, carried as the string in `Register`.
 contract ConfigRegistryValueTypeTest is Test {
+    struct Pair {
+        address account;
+        uint256 amount;
+    }
+
+    struct PairWithHashes {
+        Pair pair;
+        bytes32[] hashes;
+    }
+
+    struct Flag {
+        address account;
+        bool on;
+    }
+
+    struct Entry {
+        uint256 id;
+        Flag[] flags;
+    }
+
     ConfigRegistry internal sRegistry;
 
     function setUp() external {
@@ -99,6 +119,64 @@ contract ConfigRegistryValueTypeTest is Test {
         assertEq(value, hex"01");
         assertEq(registeredAt, 2);
         assertEq(valueTypeHash, keccak256("uint256"));
+    }
+
+    /// Binds `value` as `valueType` and checks the type hash, the `Register`
+    /// type string and the value.
+    function registerStructured(address authority, bytes32 name, string memory valueType, bytes memory value)
+        internal
+        returns (bytes memory)
+    {
+        vm.recordLogs();
+        vm.prank(authority);
+        sRegistry.registerV4(authority, name, valueType, value, "");
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        assertEq(entries.length, 1);
+        assertEq(entries[0].data, abi.encode(authority, authority, name, valueType, value));
+        (bytes memory bound,, bytes32 valueTypeHash) = sRegistry.getV4(authority, name);
+        assertEq(valueTypeHash, keccak256(bytes(valueType)));
+        assertEq(bound, value);
+        return bound;
+    }
+
+    function testRegisterTupleValueType(address authority, bytes32 name, Pair memory pair) external {
+        bytes memory bound = registerStructured(authority, name, "(address,uint256)", abi.encode(pair));
+        Pair memory decoded = abi.decode(bound, (Pair));
+        assertEq(decoded.account, pair.account);
+        assertEq(decoded.amount, pair.amount);
+    }
+
+    function testRegisterNestedTupleWithArrayValueType(address authority, bytes32 name, PairWithHashes memory value)
+        external
+    {
+        bytes memory bound = registerStructured(authority, name, "((address,uint256),bytes32[])", abi.encode(value));
+        PairWithHashes memory decoded = abi.decode(bound, (PairWithHashes));
+        assertEq(decoded.pair.account, value.pair.account);
+        assertEq(decoded.pair.amount, value.pair.amount);
+        assertEq(decoded.hashes, value.hashes);
+    }
+
+    function testRegisterArrayOfTuplesWithTupleArraysValueType(address authority, bytes32 name) external {
+        Entry[] memory entries = new Entry[](2);
+        entries[0].id = 1;
+        entries[0].flags = new Flag[](2);
+        entries[0].flags[0] = Flag(address(0xA), true);
+        entries[0].flags[1] = Flag(address(0xB), false);
+        entries[1].id = type(uint256).max;
+        entries[1].flags = new Flag[](1);
+        entries[1].flags[0] = Flag(address(0xC), true);
+
+        bytes memory bound = registerStructured(authority, name, "(uint256,(address,bool)[])[]", abi.encode(entries));
+        Entry[] memory decoded = abi.decode(bound, (Entry[]));
+        assertEq(decoded.length, entries.length);
+        for (uint256 i = 0; i < entries.length; i++) {
+            assertEq(decoded[i].id, entries[i].id);
+            assertEq(decoded[i].flags.length, entries[i].flags.length);
+            for (uint256 j = 0; j < entries[i].flags.length; j++) {
+                assertEq(decoded[i].flags[j].account, entries[i].flags[j].account);
+                assertEq(decoded[i].flags[j].on, entries[i].flags[j].on);
+            }
+        }
     }
 
     /// Types are per authority and name.
