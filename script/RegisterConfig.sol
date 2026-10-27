@@ -89,12 +89,7 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     /// @return The fork each selected network was simulated on.
     function run() external returns (uint256[] memory) {
         (uint256[] memory forkIds,) = LibConfigRegistryRegister.registerOnNetworks(
-            forkVm(),
-            selectedNetworks(),
-            supportedNetworks(),
-            msg.sender,
-            vm.envAddress(AUTHORITY_VAR),
-            binding()
+            forkVm(), selectedNetworks(), supportedNetworks(), msg.sender, vm.envAddress(AUTHORITY_VAR), binding()
         );
         return forkIds;
     }
@@ -103,11 +98,7 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     /// to the value as its type under the authority on each.
     function verify() external {
         LibConfigRegistryRegister.checkRegisteredOnNetworks(
-            forkVm(),
-            selectedNetworks(),
-            supportedNetworks(),
-            vm.envAddress(AUTHORITY_VAR),
-            binding()
+            forkVm(), selectedNetworks(), supportedNetworks(), vm.envAddress(AUTHORITY_VAR), binding()
         );
     }
 }
