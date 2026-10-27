@@ -7,9 +7,11 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
 import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibRegistryDelegatesApprove, RegistryDelegation} from "../src/lib/LibRegistryDelegatesApprove.sol";
+import {LibRegistryAuthority} from "../src/lib/LibRegistryAuthority.sol";
 
 /// @title ApproveRegistryDelegate
-/// @notice Approves `<PREFIX>_ADDRESS` to write under `<PREFIX>_AUTHORITY`
+/// @notice Approves `<PREFIX>_ADDRESS` to write under
+/// `LibRegistryAuthority.ROOT_AUTHORITY`
 /// within `<PREFIX>_SCOPE` in a registry, on every network the declaration
 /// supports or on the comma-separated subset `<PREFIX>_NETWORKS` names,
 /// signed on a Trezor by that authority. `<PREFIX>_APPROVED=false` revokes
@@ -65,7 +67,7 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
             selectedNetworks(),
             supportedNetworks(),
             msg.sender,
-            vm.envAddress(envName("AUTHORITY")),
+            LibRegistryAuthority.ROOT_AUTHORITY,
             vm.envString(envName("SCOPE")),
             vm.envAddress(envName("ADDRESS")),
             targetApproved()
@@ -81,7 +83,7 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
             forkVm(),
             selectedNetworks(),
             supportedNetworks(),
-            vm.envAddress(envName("AUTHORITY")),
+            LibRegistryAuthority.ROOT_AUTHORITY,
             vm.envString(envName("SCOPE")),
             vm.envAddress(envName("ADDRESS")),
             targetApproved()

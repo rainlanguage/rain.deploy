@@ -799,14 +799,18 @@ for an `address[]`.
 
 ## Managing the config registry
 
-An authority, or a delegate it approved, binds a name with
+Both registries have one root authority, the same on every network:
+`LibRegistryAuthority.ROOT_AUTHORITY`,
+`0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c`. Consumers import it rather than
+redefining it. The scripts below act under it only; nothing selects another.
+
+The authority, or a delegate it approved, binds a name with
 `script/RegisterConfig.sol`, signed on the Trezor that holds it: the script
-binds under `CONFIG_REGISTRY_AUTHORITY` and, on each network, refuses a signer
-that is neither the authority nor a delegate the authority approved there for
-the name (`SenderNotApproved`), since the registry refuses that bind. It is run
-by hand on the machine the Trezor is plugged into, never in CI: forge's own
-`--trezor` signer asks the device for each signature, and the key never leaves
-it.
+binds under the root authority and, on each network, refuses a signer that is
+neither the authority nor a delegate the authority approved there for the name
+(`SenderNotApproved`), since the registry refuses that bind. It is run by hand
+on the machine the Trezor is plugged into, never in CI: forge's own `--trezor`
+signer asks the device for each signature, and the key never leaves it.
 
 The script signs as an EOA. A Safe or timelock authority either approves that
 EOA as a delegate, once per network through its own execution path
@@ -851,19 +855,11 @@ those.
 
 - The Trezor: unlocked, with the passphrase of the authority's wallet if it has
   one, and Trezor Suite closed (it holds the USB connection).
-- Name the authority consumers resolve the name under, copied from the consuming
-  repo's source constant beside the name it resolves, never typed. The dry run's
-  authority line must match that constant:
+- Name the signer: the root authority itself, or a delegate it approved on every
+  network the run binds on:
 
   ```sh
-  export CONFIG_REGISTRY_AUTHORITY=0x...
-  ```
-
-- Name the signer: the authority itself, or a delegate the authority approved on
-  every network the run binds on:
-
-  ```sh
-  export CONFIG_REGISTRY_SENDER="$CONFIG_REGISTRY_AUTHORITY" # or the delegate
+  export CONFIG_REGISTRY_SENDER=0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c # or the delegate
   ```
 
 - Check the device answers as the signer (add
@@ -952,15 +948,14 @@ them differs.
 ### Approving a delegate
 
 `script/ApproveConfigDelegate.sol` approves a delegate for one name under the
-authority, or revokes it, on every declared network by default. `approveV4` and
-`revokeV4` act under their caller, so the signer is the authority itself, and
+root authority, or revokes it, on every declared network by default. `approveV4`
+and `revokeV4` act under their caller, so the signer is the root authority, and
 the run refuses any other `--sender` (`SenderNotAuthority`) before forking. It
 takes its own variables, so nothing exported for `RegisterConfig` carries over.
 The Trezor setup is "Before the first run" above, with the authority as the
 signer.
 
 ```sh
-export CONFIG_DELEGATE_AUTHORITY=0x... # the authority, which signs
 export CONFIG_DELEGATE_SCOPE=st0x.token-owner-safe
 export CONFIG_DELEGATE_ADDRESS=0x... # the delegate, such as the Safe
 # Optional: false revokes. Unset approves.
@@ -970,12 +965,12 @@ export CONFIG_DELEGATE_ADDRESS=0x... # the delegate, such as the Safe
 
 # 1. Dry run.
 nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelegate \
-  --sender "$CONFIG_DELEGATE_AUTHORITY" --trezor --legacy
+  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy
 
 # 2. The same command with --broadcast. The device asks once per network the
 #    dry run marked APPROVE or REVOKE.
 nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelegate \
-  --sender "$CONFIG_DELEGATE_AUTHORITY" --trezor --legacy --broadcast
+  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy --broadcast
 
 # 3. Once every transaction is mined: reads every network fresh and fails
 #    unless the delegate is approved (or, with false, not approved) on each.
@@ -1255,16 +1250,15 @@ the record atomic with the migration it describes.
 ## Managing the migration registry
 
 `script/ApproveMigrationDelegate.sol` approves a delegate to write one
-namespace's line under the writer, or revokes it, on every declared network by
-default. `approveV4` and `revokeV4` act under their caller, so the signer is the
-writer itself, and the run refuses any other `--sender` (`SenderNotAuthority`)
-before forking. The namespace is the string the consumer hashes, refused unless
-canonical as a config name is. Everything else — the Trezor setup, the refusals,
-the dry run's record and `SKIP` — is "Approving a delegate" above, with the
-writer as the signer and the migration registry as the recipient.
+namespace's line under the root authority, or revokes it, on every declared
+network by default. `approveV4` and `revokeV4` act under their caller, so the
+signer is the root authority, and the run refuses any other `--sender`
+(`SenderNotAuthority`) before forking. The namespace is the string the consumer
+hashes, refused unless canonical as a config name is. Everything else — the
+Trezor setup, the refusals, the dry run's record and `SKIP` — is "Approving a
+delegate" above, with the migration registry as the recipient.
 
 ```sh
-export MIGRATION_DELEGATE_AUTHORITY=0x... # the writer, which signs
 export MIGRATION_DELEGATE_SCOPE=st0x.deploy
 export MIGRATION_DELEGATE_ADDRESS=0x... # the delegate, such as a Safe or timelock
 # Optional: false revokes. Unset approves.
@@ -1274,11 +1268,11 @@ export MIGRATION_DELEGATE_ADDRESS=0x... # the delegate, such as a Safe or timelo
 
 # 1. Dry run.
 nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate \
-  --sender "$MIGRATION_DELEGATE_AUTHORITY" --trezor --legacy
+  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy
 
 # 2. The same command with --broadcast.
 nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate \
-  --sender "$MIGRATION_DELEGATE_AUTHORITY" --trezor --legacy --broadcast
+  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy --broadcast
 
 # 3. Once every transaction is mined.
 nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate --sig "verify()"
