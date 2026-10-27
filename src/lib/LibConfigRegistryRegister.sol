@@ -287,11 +287,7 @@ library LibConfigRegistryRegister {
     /// @return The bound value, or empty.
     /// @return The moment it was bound, or zero.
     /// @return The hash of the type it was bound as, or zero.
-    function currentBinding(address authority, bytes32 hashed)
-        internal
-        view
-        returns (bytes memory, uint256, bytes32)
-    {
+    function currentBinding(address authority, bytes32 hashed) internal view returns (bytes memory, uint256, bytes32) {
         try IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
             .getV4(authority, hashed) returns (
             bytes memory value, uint256 registeredAt, bytes32 valueTypeHash
