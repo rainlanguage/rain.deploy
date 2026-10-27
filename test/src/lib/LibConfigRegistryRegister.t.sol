@@ -945,7 +945,7 @@ contract LibConfigRegistryRegisterTest is Test {
             uint256(0xe0),
             uint256(0x100 + paddedValueLength),
             uint256(7),
-            bytes32("address"),
+            bytes.concat(bytes("address"), new bytes(25)),
             uint256(value.length),
             value,
             new bytes(paddedValueLength - value.length),
