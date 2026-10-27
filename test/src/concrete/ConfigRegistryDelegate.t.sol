@@ -185,7 +185,9 @@ contract ConfigRegistryDelegateTest is Test {
 
         vm.prank(AUTHORITY);
         sRegistry.approveV3(raw, DELEGATE);
-        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, AUTHORITY, nameHash, DELEGATE));
+        vm.expectRevert(
+            abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, AUTHORITY, nameHash, DELEGATE)
+        );
         vm.prank(DELEGATE);
         sRegistry.registerV4(AUTHORITY, name, VALUE_TYPE, hex"01");
 
@@ -285,7 +287,9 @@ contract ConfigRegistryDelegateTest is Test {
     /// nothing is approved under it.
     function testZeroAuthorityRefusesEveryCaller(address caller) external {
         vm.assume(caller != address(0));
-        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, address(0), NAME_HASH, caller));
+        vm.expectRevert(
+            abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, address(0), NAME_HASH, caller)
+        );
         vm.prank(caller);
         sRegistry.registerV4(address(0), NAME, VALUE_TYPE, hex"01");
     }
@@ -333,7 +337,9 @@ contract ConfigRegistryDelegateTest is Test {
         sRegistry.revokeV3(NAME_HASH, DELEGATE);
 
         vm.warp(2);
-        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, AUTHORITY, NAME_HASH, DELEGATE));
+        vm.expectRevert(
+            abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, AUTHORITY, NAME_HASH, DELEGATE)
+        );
         vm.prank(DELEGATE);
         sRegistry.registerV4(AUTHORITY, NAME, VALUE_TYPE, hex"02");
 
@@ -353,7 +359,9 @@ contract ConfigRegistryDelegateTest is Test {
         vm.prank(AUTHORITY);
         sRegistry.registerV4(AUTHORITY, NAME, VALUE_TYPE, hex"01");
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.TimestampNotAfterBinding.selector, NAME_HASH, time, time));
+        vm.expectRevert(
+            abi.encodeWithSelector(IConfigRegistryV4.TimestampNotAfterBinding.selector, NAME_HASH, time, time)
+        );
         vm.prank(DELEGATE);
         sRegistry.registerV4(AUTHORITY, NAME, VALUE_TYPE, hex"02");
 
