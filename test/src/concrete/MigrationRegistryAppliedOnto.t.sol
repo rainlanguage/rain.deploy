@@ -185,14 +185,16 @@ contract MigrationRegistryAppliedOntoTest is Test {
             )
         );
         vm.prank(writer);
-        sRegistry.applyMigrationV4(writer, namespace, migrationA, onto(writer, otherNamespace, MIGRATION_HEAD_GENESIS), "");
+        sRegistry.applyMigrationV4(
+            writer, namespace, migrationA, onto(writer, otherNamespace, MIGRATION_HEAD_GENESIS), ""
+        );
         assertEq(sRegistry.appliedOntoV3(writer, namespace, migrationA), bytes32(0));
         assertEq(sRegistry.appliedOntoV3(writer, otherNamespace, migrationA), bytes32(0));
 
         vm.prank(writer);
         sRegistry.applyMigrationV4(
-            writer, otherNamespace, migrationA, onto(writer, otherNamespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            writer, otherNamespace, migrationA, onto(writer, otherNamespace, MIGRATION_HEAD_GENESIS), ""
+        );
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -341,8 +343,8 @@ contract MigrationRegistryAppliedOntoTest is Test {
 
         vm.prank(writer);
         sRegistry.applyMigrationV4(
-            writer, otherNamespace, migrationB, onto(writer, otherNamespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            writer, otherNamespace, migrationB, onto(writer, otherNamespace, MIGRATION_HEAD_GENESIS), ""
+        );
 
         assertEq(sRegistry.appliedOntoV3(writer, otherNamespace, migrationB), MIGRATION_HEAD_GENESIS);
         assertEq(sRegistry.appliedOntoV3(writer, namespace, migrationB), bytes32(0));
