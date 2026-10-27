@@ -276,12 +276,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.appliedV4(writer, hashOf(namespace), hashOf(migration)), 1);
     }
 
-    /// The zero moment is checked after the two id refusals and before anything
-    /// about the line, on `applyMigrationV4` as on `applyMigrationHistoryV4`. An id is
+    /// The zero moment is checked after the two migration refusals and before anything
+    /// about the line, on `applyMigrationV4` as on `applyMigrationHistoryV4`. The migration is
     /// what a record is ABOUT, so a call with no subject has nothing to say a
     /// moment for; everything after describes a line no writable record
     /// will reach.
-    function testApplyMigrationZeroBlockCheckedAfterIdsAndBeforeTheLine(
+    function testApplyMigrationZeroBlockCheckedAfterMigrationAndBeforeTheLine(
         address writer,
         string memory namespace,
         string memory migrationA,
@@ -353,9 +353,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.appliedV4(other, hashOf(namespace), hashOf(migration)), 0);
     }
 
-    /// Two writers may apply the same migration id independently, and each
-    /// answers only for itself. Ids are opaque and writers are unrelated, so
-    /// a shared id is not a collision — including for the head, which each
+    /// Two writers may apply the same migration independently, and each
+    /// answers only for itself. Migrations are opaque and writers are unrelated, so
+    /// a shared migration is not a collision — including for the head, which each
     /// writer advances from its own genesis.
     function testApplyMigrationSameMigrationUnderTwoWriters(
         address writer,
@@ -739,7 +739,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
     /// A migration another writer has already applied is still a FIRST record
     /// for this one. The refusal is per line, not global, or one consumer
-    /// choosing a common id would lock every other consumer out of it.
+    /// choosing a common migration would lock every other consumer out of it.
     function testApplyMigrationTwiceIsPerWriter(
         address writer,
         string memory namespace,
@@ -763,11 +763,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.appliedV4(other, hashOf(namespace), hashOf(migration)), block.timestamp);
     }
 
-    /// The zero migration id is refused. It is what an uninitialised `bytes32`
-    /// constant reads as, and there is deliberately no way to apply one, which
-    /// is what lets `appliedV4` refuse it as a mistake rather than have to answer
-    /// about it.
-    function testApplyMigrationZeroMigrationReverts(address writer, string memory namespace) external {
+    /// The empty migration is refused: it names nothing that ran, and nothing
+    /// is recorded for it.
+    function testApplyMigrationEmptyMigrationReverts(address writer, string memory namespace) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeNamespace(vm, namespace);
 
@@ -776,9 +774,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigrationV4(writer, namespace, "", onto(writer, hashOf(namespace), MIGRATION_HEAD_GENESIS));
     }
 
-    /// The zero id is refused BEFORE the already-applied read and before the
-    /// head, so it is always reported as `ZeroMigration` and never as anything
-    /// about where the line is.
+    /// The empty migration is refused BEFORE the already-applied read and
+    /// before the head, so it is always reported as `EmptyMigration` and never
+    /// as anything about where the line is.
     ///
     /// Fuzzed over the head against BOTH an empty line and one that has
     /// moved on, for the same reason
@@ -787,12 +785,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// happens to be at is accepted whichever check runs first, and the two
     /// states here have different heads so no fuzzed head matches both.
     ///
-    /// The already-applied read can never answer anything but zero for this id
-    /// — this refusal is what keeps the zero id out of the records in the first
-    /// place — so what the second call pins is the reachable half of the same
-    /// claim: the refusal is a fact about the ID, not about the state of the
-    /// line it arrives at.
-    function testApplyMigrationZeroMigrationCheckedFirst(
+    /// The already-applied read can never answer anything but zero for the
+    /// empty migration — this refusal keeps it out of the records — so what
+    /// the second call pins is the reachable half of the same claim: the
+    /// refusal is a fact about the argument, not about the state of the line
+    /// it arrives at.
+    function testApplyMigrationEmptyMigrationCheckedFirst(
         address writer,
         string memory namespace,
         bytes32 anyHead,
@@ -806,8 +804,8 @@ contract MigrationRegistryApplyMigrationTest is Test {
         vm.prank(writer);
         sRegistry.applyMigrationV4(writer, namespace, "", onto(writer, hashOf(namespace), anyHead));
 
-        // A line that has moved on: the zero id is still reported as
-        // `ZeroMigration` rather than as anything about the head or about what
+        // A line that has moved on: the empty migration is still reported as
+        // `EmptyMigration` rather than as anything about the head or about what
         // has already been applied.
         vm.prank(writer);
         sRegistry.applyMigrationV4(
@@ -837,7 +835,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.headV4(writer, hashOf(namespace)), MIGRATION_HEAD_GENESIS);
     }
 
-    /// Refused whatever head it is applied onto, so it is a fact about the id
+    /// Refused whatever head it is applied onto, so it is a fact about the migration
     /// rather than about where the line happens to be. That means a head
     /// the line is NOT at as much as one it is: the refusal is checked
     /// before the head, so a caller that has confused a head for a migration is
@@ -845,7 +843,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
     /// line has got to.
     ///
     /// Fuzzed over the head for the same reason
-    /// `testApplyMigrationZeroMigrationCheckedFirst` is: a matching head alone
+    /// `testApplyMigrationEmptyMigrationCheckedFirst` is: a matching head alone
     /// cannot tell the two orderings apart.
     function testApplyMigrationGenesisMigrationRevertsOnAnyHead(
         address writer,
@@ -885,7 +883,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
 
     /// Migrations are opaque: nothing about a migration's bytes changes how it
     /// is stored or read, including bytes that are not UTF-8.
-    function testApplyMigrationOpaqueMigrationIds(address writer, string memory namespace) external {
+    function testApplyMigrationOpaqueMigrations(address writer, string memory namespace) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeNamespace(vm, namespace);
 
@@ -1295,12 +1293,15 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigrationHistoryV4(writer, namespace, migrationB, 0, onto(writer, hashOf(namespace), anyHead));
     }
 
-    /// The two id refusals come before the moment, so a caller that has zeroed
-    /// both an id and a moment is told about the id: an id is what the record is
-    /// ABOUT, and a call with no subject has nothing to say a moment for.
-    function testApplyMigrationHistoryIdCheckedBeforeTimestamp(address writer, string memory namespace, bytes32 anyHead)
-        external
-    {
+    /// The two migration refusals come before the moment, so a caller that has
+    /// left out both a migration and a moment is told about the migration: it
+    /// is what the record is ABOUT, and a call with no subject has nothing to
+    /// say a moment for.
+    function testApplyMigrationHistoryMigrationCheckedBeforeTimestamp(
+        address writer,
+        string memory namespace,
+        bytes32 anyHead
+    ) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeNamespace(vm, namespace);
 
@@ -1786,11 +1787,9 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.appliedOntoV4(other, hashOf(namespace), hashOf(migrationA)), hashOf(migrationB));
     }
 
-    /// The zero namespace is refused on the write's own argument. It is what
-    /// an uninitialised constant reads as, so a write into it would put a
-    /// record where no reader that set its constant will look. Nothing is
-    /// recorded and nothing is logged.
-    function testApplyMigrationZeroNamespaceReverts(address writer, string memory migration) external {
+    /// The empty namespace is refused on the write's own argument: it names
+    /// no line. Nothing is recorded and nothing is logged.
+    function testApplyMigrationEmptyNamespaceReverts(address writer, string memory migration) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
 
@@ -1801,14 +1800,12 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigrationV4(writer, "", migration, list);
         assertEq(vm.getRecordedLogs().length, 0);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroNamespace.selector));
-        sRegistry.appliedV4(writer, bytes32(0), hashOf(migration));
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroNamespace.selector));
-        sRegistry.headV4(writer, bytes32(0));
+        assertEq(sRegistry.appliedV4(writer, hashOf(""), hashOf(migration)), 0);
+        assertEq(sRegistry.headV4(writer, hashOf("")), MIGRATION_HEAD_GENESIS);
     }
 
     /// And on `applyMigrationHistoryV4`, whatever moment it supplies.
-    function testApplyMigrationHistoryZeroNamespaceReverts(address writer, string memory migration, uint32 appliedAt)
+    function testApplyMigrationHistoryEmptyNamespaceReverts(address writer, string memory migration, uint32 appliedAt)
         external
     {
         vm.assume(writer != address(0));
@@ -1823,15 +1820,14 @@ contract MigrationRegistryApplyMigrationTest is Test {
         sRegistry.applyMigrationHistoryV4(writer, "", migration, appliedAt, list);
         assertEq(vm.getRecordedLogs().length, 0);
 
-        vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.ZeroNamespace.selector));
-        sRegistry.appliedV4(writer, bytes32(0), hashOf(migration));
+        assertEq(sRegistry.appliedV4(writer, hashOf(""), hashOf(migration)), 0);
     }
 
-    /// For the writer itself, the zero namespace is the first argument
-    /// refusal: it wins over the zero id, over genesis as the id, over a zero
-    /// moment and over an empty list, so a writer that has zeroed everything
-    /// else is told about the namespace.
-    function testApplyMigrationZeroNamespaceCheckedFirst(address writer, string memory migration, bytes32 anyHead)
+    /// For the writer itself, the empty namespace is the first argument
+    /// refusal: it wins over the empty migration, over genesis as the
+    /// migration, over a zero moment and over an empty list, so a writer that
+    /// has left everything else out is told about the namespace.
+    function testApplyMigrationEmptyNamespaceCheckedFirst(address writer, string memory migration, bytes32 anyHead)
         external
     {
         vm.assume(writer != address(0));
@@ -1936,7 +1932,7 @@ contract MigrationRegistryApplyMigrationTest is Test {
         assertEq(sRegistry.headV4(writer, hashOf(otherNamespace)), hashOf(migrationA));
     }
 
-    /// One writer may apply the same migration id in two namespaces, and each
+    /// One writer may apply the same migration in two namespaces, and each
     /// line answers for itself: its own moment, its own head.
     function testApplyMigrationSameMigrationUnderTwoNamespaces(
         address writer,
