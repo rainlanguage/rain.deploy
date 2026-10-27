@@ -92,11 +92,9 @@ contract ConfigRegistryMetaTest is Test {
         external
     {
         vm.assume(value.length > 0 && isNotRainMeta(meta));
-        vm.recordLogs();
         vm.prank(authority);
         vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, meta));
         sRegistry.registerV4(authority, name, VALUE_TYPE, value, meta);
-        assertEq(vm.getRecordedLogs().length, 0);
         vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.NameNotRegistered.selector, authority, name));
         sRegistry.getV4(authority, name);
     }

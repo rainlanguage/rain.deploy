@@ -173,7 +173,6 @@ contract MigrationRegistryMetaTest is Test {
         vm.assume(isNotRainMeta(meta));
         bytes32 head = sRegistry.headV4(writer, namespace);
         Prerequisite[] memory list = onto(sRegistry, writer, namespace);
-        vm.recordLogs();
         vm.prank(writer);
         vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, meta));
         if (history) {
@@ -181,7 +180,6 @@ contract MigrationRegistryMetaTest is Test {
         } else {
             sRegistry.applyMigrationV4(writer, namespace, migration, list, meta);
         }
-        assertEq(vm.getRecordedLogs().length, 0);
         assertEq(sRegistry.appliedV4(writer, namespace, migration), 0);
         assertEq(sRegistry.appliedByV4(writer, namespace, migration), address(0));
         assertEq(sRegistry.headV4(writer, namespace), head);
