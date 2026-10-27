@@ -146,6 +146,47 @@ contract RegisterConfigTest is Test {
         assertEq(boundTypeHash, VALUE_TYPE_HASH);
 
         runAsDelegate(name);
+        runWithMeta(script, name);
+    }
+
+    /// `CONFIG_REGISTRY_META` is sent with the bind: unset, none is emitted;
+    /// set, it is emitted as `MetaV1_2` about the root authority's name.
+    /// @param script The script.
+    /// @param name The test's base name.
+    function runWithMeta(LocalRegisterConfig script, string memory name) internal {
+        address registry = LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS;
+        bytes32 metaTopic = keccak256("MetaV1_2(address,bytes32,bytes)");
+        string memory plainName = string.concat(name, "-plain");
+        vm.setEnv("CONFIG_REGISTRY_NAME", plainName);
+        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(7))));
+        vm.recordLogs();
+        script.runAsItself();
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        uint256 registers = 0;
+        for (uint256 i = 0; i < entries.length; i++) {
+            assertTrue(entries[i].emitter != registry || entries[i].topics[0] != metaTopic);
+            if (entries[i].emitter == registry) registers++;
+        }
+        assertEq(registers, 1);
+
+        string memory metaName = string.concat(name, "-meta");
+        bytes memory meta = hex"ff0a89c674ee7874";
+        vm.setEnv("CONFIG_REGISTRY_NAME", metaName);
+        vm.setEnv("CONFIG_REGISTRY_META", vm.toString(meta));
+        vm.recordLogs();
+        script.runAsItself();
+        entries = vm.getRecordedLogs();
+        uint256 metas = 0;
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].emitter == registry && entries[i].topics[0] == metaTopic) {
+                metas++;
+                assertEq(
+                    entries[i].data,
+                    abi.encode(address(script), keccak256(abi.encode(address(script), keccak256(bytes(metaName)))), meta)
+                );
+            }
+        }
+        assertEq(metas, 1);
     }
 
     /// Runs as a delegate: refused until the root authority approves the

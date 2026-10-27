@@ -9,7 +9,7 @@ import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {IConfigRegistryV4} from "../../../src/interface/IConfigRegistryV4.sol";
 import {LibConfigRegistry} from "../../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.sol";
-import {LibConfigRegistryRegister} from "../../../src/lib/LibConfigRegistryRegister.sol";
+import {LibConfigRegistryRegister, ConfigBinding} from "../../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockRevertingRegistry} from "../../concrete/MockRevertingRegistry.sol";
@@ -1065,5 +1065,83 @@ contract LibConfigRegistryRegisterTest is Test {
                 "  REBIND: -> 0xdead as address"
             )
         );
+    }
+
+    function externalRegisterBinding(bytes32 name, ConfigBinding memory binding) external returns (bool, string memory) {
+        return LibConfigRegistryRegister.registerOnSelectedChain(vm, base(), AUTHORITY, AUTHORITY, name, binding);
+    }
+
+    /// A bound value that differs from the one to bind only in type is a
+    /// REBIND, not a SKIP.
+    function testDescribeNetworkTypeMismatchIsRebind() external pure {
+        assertEq(
+            LibConfigRegistryRegister.describeNetwork(
+                vm, "flare", 14, hex"dead", 7, keccak256("uint256"), configBinding("", hex"dead")
+            ),
+            string.concat(
+                "Network: flare\n  chain id: 14\n  current: 0xdead (type hash ",
+                vm.toString(keccak256("uint256")),
+                ", bound at 7)\n  REBIND: -> 0xdead as address"
+            )
+        );
+    }
+
+    /// A name bound to the value as another type is re-bound as the new type.
+    function testRegisterRebindsOnTypeOnlyChange(bytes32 name, bytes memory value) external {
+        vm.assume(value.length > 0);
+        IConfigRegistryV4 registry = deployRegistry();
+        vm.warp(1);
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, "uint256", value, "");
+        vm.warp(2);
+
+        (bool broadcast,) = this.externalRegisterBinding(name, configBinding("", value));
+        assertTrue(broadcast);
+        (bytes memory boundValue, uint256 registeredAt, bytes32 boundTypeHash) = registry.getV4(AUTHORITY, name);
+        assertEq(boundValue, value);
+        assertEq(registeredAt, 2);
+        assertEq(boundTypeHash, VALUE_TYPE_HASH);
+    }
+
+    /// The binding's meta is sent with the bind, as `MetaV1_2` about the
+    /// authority's name.
+    function testRegisterSendsMeta(bytes32 name, bytes memory value, bytes memory meta) external {
+        vm.assume(value.length > 0 && meta.length > 0);
+        IConfigRegistryV4 registry = deployRegistry();
+        vm.warp(1);
+        ConfigBinding memory binding = configBinding("", value);
+        binding.meta = meta;
+        vm.recordLogs();
+        (bool broadcast,) = this.externalRegisterBinding(name, binding);
+        assertTrue(broadcast);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        uint256 metas = 0;
+        for (uint256 i = 0; i < entries.length; i++) {
+            if (entries[i].emitter == address(registry) && entries[i].topics[0] == keccak256("MetaV1_2(address,bytes32,bytes)"))
+            {
+                metas++;
+                assertEq(entries[i].data, abi.encode(AUTHORITY, keccak256(abi.encode(AUTHORITY, name)), meta));
+            }
+        }
+        assertEq(metas, 1);
+    }
+
+    /// A skip sends nothing, so its meta is not emitted.
+    function testRegisterSkipSendsNoMeta(bytes32 name, bytes memory value, bytes memory meta) external {
+        vm.assume(value.length > 0 && meta.length > 0);
+        IConfigRegistryV4 registry = deployRegistry();
+        vm.warp(1);
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, value, "");
+        vm.warp(2);
+        ConfigBinding memory binding = configBinding("", value);
+        binding.meta = meta;
+        vm.recordLogs();
+        (bool broadcast,) = this.externalRegisterBinding(name, binding);
+        assertFalse(broadcast);
+        Vm.Log[] memory entries = vm.getRecordedLogs();
+        for (uint256 i = 0; i < entries.length; i++) {
+            assertTrue(entries[i].emitter != address(registry));
+        }
     }
 }

@@ -148,6 +148,7 @@ contract ConfigRegistryMetaTest is Test {
         withMeta.registerV4(authority, name, VALUE_TYPE, value, meta);
         (, bytes32[] memory metaWrites) = vm.accesses(address(withMeta));
 
+        assertGt(plainWrites.length, 0);
         assertEq(metaWrites.length, plainWrites.length);
         for (uint256 i = 0; i < metaWrites.length; i++) {
             assertEq(metaWrites[i], plainWrites[i]);
