@@ -147,6 +147,23 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assertEq(LibMigrationRegistry.appliedV4(address(this), namespaceHash, migrationHash), 0);
     }
 
+    /// Builds the history call for `migration` onto `head`, checked to
+    /// target the pinned registry.
+    /// @return The call data.
+    function historyCallOnto(
+        address sender,
+        string memory namespace,
+        string memory migration,
+        uint256 appliedAt,
+        bytes32 head
+    ) internal view returns (bytes memory) {
+        Prerequisite[] memory prerequisites = LibMigrationRegistry.onto(sender, keccak256(bytes(namespace)), head);
+        (address to, bytes memory data) =
+            LibMigrationRegistry.applyMigrationHistoryV4Call(sender, namespace, migration, appliedAt, prerequisites);
+        assertEq(to, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
+        return data;
+    }
+
     /// The history call records the moment it was GIVEN, not the block it
     /// landed in, under the writer it names. The moment is bounded by the
     /// block the write lands in, so a call built before that moment still
@@ -175,18 +192,13 @@ contract LibMigrationRegistryWriteCallTest is Test {
         deployRegistry();
         vm.warp(builtAt);
 
-        Prerequisite[] memory ontoGenesis = LibMigrationRegistry.onto(sender, namespaceHash, MIGRATION_HEAD_GENESIS);
-        (address toA, bytes memory dataA) =
-            LibMigrationRegistry.applyMigrationHistoryV4Call(sender, namespace, migrationA, appliedAt, ontoGenesis);
-        Prerequisite[] memory ontoA = LibMigrationRegistry.onto(sender, namespaceHash, migrationAHash);
-        (address toB, bytes memory dataB) =
-            LibMigrationRegistry.applyMigrationHistoryV4Call(sender, namespace, migrationB, appliedAt, ontoA);
-        assertEq(toA, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
-        assertEq(toB, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS);
+        bytes memory dataA = historyCallOnto(sender, namespace, migrationA, appliedAt, MIGRATION_HEAD_GENESIS);
+        bytes memory dataB = historyCallOnto(sender, namespace, migrationB, appliedAt, migrationAHash);
 
         vm.warp(landedAt);
-        send(sender, toA, dataA);
-        send(sender, toB, dataB);
+        send(sender, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, dataA);
+        send(sender, LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS, dataB);
+        Prerequisite[] memory ontoA = LibMigrationRegistry.onto(sender, namespaceHash, migrationAHash);
 
         assertEq(LibMigrationRegistry.appliedV4(sender, namespaceHash, migrationAHash), appliedAt);
         assertEq(LibMigrationRegistry.appliedV4(sender, namespaceHash, migrationBHash), appliedAt);

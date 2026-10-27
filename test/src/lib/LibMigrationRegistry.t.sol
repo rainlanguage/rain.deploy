@@ -666,25 +666,17 @@ contract LibMigrationRegistryTest is Test {
         LibMigrationFuzz.assumeMigration(vm, prerequisite);
         vm.assume(migrationHash != prerequisiteHash);
         deployRegistry();
-
-        vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV4.PrerequisiteNotApplied.selector, other, namespaceHash, prerequisiteHash)
-        );
-        this.externalApplyMigration(
-            namespace,
-            migration,
-            headThen(address(this), namespaceHash, MIGRATION_HEAD_GENESIS, one(other, namespaceHash, prerequisiteHash))
+        Prerequisite[] memory prerequisites =
+            headThen(address(this), namespaceHash, MIGRATION_HEAD_GENESIS, one(other, namespaceHash, prerequisiteHash));
+        bytes memory err = abi.encodeWithSelector(
+            IMigrationRegistryV4.PrerequisiteNotApplied.selector, other, namespaceHash, prerequisiteHash
         );
 
-        vm.expectRevert(
-            abi.encodeWithSelector(IMigrationRegistryV4.PrerequisiteNotApplied.selector, other, namespaceHash, prerequisiteHash)
-        );
-        this.externalApplyMigrationHistory(
-            namespace,
-            migration,
-            block.timestamp,
-            headThen(address(this), namespaceHash, MIGRATION_HEAD_GENESIS, one(other, namespaceHash, prerequisiteHash))
-        );
+        vm.expectRevert(err);
+        this.externalApplyMigration(namespace, migration, prerequisites);
+
+        vm.expectRevert(err);
+        this.externalApplyMigrationHistory(namespace, migration, block.timestamp, prerequisites);
 
         assertEq(LibMigrationRegistry.appliedV4(address(this), namespaceHash, migrationHash), 0);
         assertEq(LibMigrationRegistry.appliedAfterV4(address(this), namespaceHash, migrationHash).length, 0);
@@ -1154,7 +1146,6 @@ contract LibMigrationRegistryTest is Test {
     /// none.
     function testApplyMigrationHistoryZeroTimestampReverts(string memory namespace, string memory migration) external {
         bytes32 namespaceHash = keccak256(bytes(namespace));
-        bytes32 migrationHash = keccak256(bytes(migration));
         LibMigrationFuzz.assumeNamespace(vm, namespace);
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
@@ -1171,7 +1162,6 @@ contract LibMigrationRegistryTest is Test {
         external
     {
         bytes32 namespaceHash = keccak256(bytes(namespace));
-        bytes32 migrationHash = keccak256(bytes(migration));
         LibMigrationFuzz.assumeNamespace(vm, namespace);
         LibMigrationFuzz.assumeMigration(vm, migration);
         deployRegistry();
