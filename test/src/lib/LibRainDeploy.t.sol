@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeployDependency, LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
-import {IConfigRegistryV3} from "../../../src/interface/IConfigRegistryV3.sol";
+import {IConfigRegistryV4} from "../../../src/interface/IConfigRegistryV4.sol";
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
@@ -1422,15 +1422,16 @@ contract LibRainDeployTest is Test {
     /// @param account The address to bind it to.
     /// @return The deployed registry.
     /// @return The deployed consumer holding the resolved address.
-    function deployRegistryAndConsumer(bytes32 name, address account)
+    function deployRegistryAndConsumer(string memory name, address account)
         internal
-        returns (IConfigRegistryV3, MockResolvedOwner)
+        returns (IConfigRegistryV4, MockResolvedOwner)
     {
-        IConfigRegistryV3 registry =
-            IConfigRegistryV3(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
+        vm.assume(bytes(name).length != 0);
+        IConfigRegistryV4 registry =
+            IConfigRegistryV4(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
         vm.prank(CONFIG_AUTHORITY);
-        registry.registerV3(CONFIG_AUTHORITY, name, abi.encode(account));
-        MockResolvedOwner consumer = new MockResolvedOwner(CONFIG_AUTHORITY, name);
+        registry.registerV4(CONFIG_AUTHORITY, name, "address", abi.encode(account));
+        MockResolvedOwner consumer = new MockResolvedOwner(CONFIG_AUTHORITY, keccak256(bytes(name)));
         return (registry, consumer);
     }
 
@@ -1475,7 +1476,7 @@ contract LibRainDeployTest is Test {
 
     /// `checkResolvedAddresses` MUST pass when the deployed contract holds the
     /// address the deployment expects.
-    function testCheckResolvedAddressesMatch(bytes32 name, address account) external {
+    function testCheckResolvedAddressesMatch(string memory name, address account) external {
         vm.assume(account != address(0));
         (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
@@ -1489,17 +1490,17 @@ contract LibRainDeployTest is Test {
     /// changes what the registry answers but cannot change what the deployed
     /// contract holds, so the check still passes against the address the
     /// deployment actually took.
-    function testCheckResolvedAddressesUnaffectedByRebinding(bytes32 name, address account, address rebound) external {
+    function testCheckResolvedAddressesUnaffectedByRebinding(string memory name, address account, address rebound) external {
         vm.assume(account != address(0));
         vm.assume(rebound != address(0));
         vm.assume(rebound != account);
-        (IConfigRegistryV3 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+        (IConfigRegistryV4 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
         // A re-bind needs a later block: a name's moment strictly increases.
         vm.warp(block.timestamp + 1);
         vm.prank(CONFIG_AUTHORITY);
-        registry.registerV3(CONFIG_AUTHORITY, name, abi.encode(rebound));
-        (bytes memory nowBound,) = registry.getV3(CONFIG_AUTHORITY, name);
+        registry.registerV4(CONFIG_AUTHORITY, name, "address", abi.encode(rebound));
+        (bytes memory nowBound,,) = registry.getV4(CONFIG_AUTHORITY, keccak256(bytes(name)));
         assertEq(nowBound, abi.encode(rebound));
 
         assertEq(consumer.iOwner(), account);
@@ -1527,7 +1528,7 @@ contract LibRainDeployTest is Test {
     /// `checkResolvedAddresses` MUST revert with `UnexpectedResolvedAddress`
     /// when the deployed contract holds something else, naming the network and
     /// which read disagreed.
-    function testCheckResolvedAddressesMismatchReverts(bytes32 name, address account, address wrong) external {
+    function testCheckResolvedAddressesMismatchReverts(string memory name, address account, address wrong) external {
         vm.assume(account != address(0));
         vm.assume(wrong != account);
         (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
@@ -1549,7 +1550,7 @@ contract LibRainDeployTest is Test {
 
     /// `checkResolvedAddresses` MUST check every read, not only the first, so a
     /// later value that disagrees is still caught.
-    function testCheckResolvedAddressesChecksEveryRead(bytes32 name, address account, address wrong) external {
+    function testCheckResolvedAddressesChecksEveryRead(string memory name, address account, address wrong) external {
         vm.assume(account != address(0));
         vm.assume(wrong != account);
         (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
@@ -1624,7 +1625,7 @@ contract LibRainDeployTest is Test {
     /// consumer handed index 0 for a failure at index 1 is sent to a read that
     /// is working. The first read here answers correctly for that reason — a
     /// list whose first read also failed could not tell the two apart.
-    function testCheckResolvedAddressesReadFailureNamesTheFailingRead(bytes32 name, address account) external {
+    function testCheckResolvedAddressesReadFailureNamesTheFailingRead(string memory name, address account) external {
         vm.assume(account != address(0));
         (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
@@ -1702,7 +1703,7 @@ contract LibRainDeployTest is Test {
     }
 
     /// A read that reverts is never a pass either.
-    function testCheckResolvedAddressesRevertingReadReverts(bytes32 name, address account) external {
+    function testCheckResolvedAddressesRevertingReadReverts(string memory name, address account) external {
         vm.assume(account != address(0));
         (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
@@ -1879,7 +1880,7 @@ contract LibRainDeployTest is Test {
     /// error. Empty reads against a non-empty expected list stays a mismatch,
     /// pinning that pairing is still checked first, and a single real read
     /// still passes, so emptiness alone is what is refused.
-    function testCheckResolvedAddressesEmptyPairIsNotALengthMismatch(bytes32 name, address account) external {
+    function testCheckResolvedAddressesEmptyPairIsNotALengthMismatch(string memory name, address account) external {
         vm.assume(account != address(0));
         (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
@@ -1963,7 +1964,7 @@ contract LibRainDeployTest is Test {
     /// These are the two networks the rest of this suite forks, so the test does
     /// not depend on the reliability of RPC endpoints nothing else here touches.
     function testCheckResolvedAddressesOnNetworksEachNetwork() external {
-        bytes32 name = keccak256("testCheckResolvedAddressesOnNetworksEachNetwork");
+        string memory name = "testCheckResolvedAddressesOnNetworksEachNetwork";
         address account = address(0xf00);
         (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
         vm.makePersistent(address(consumer));
@@ -1980,7 +1981,7 @@ contract LibRainDeployTest is Test {
     /// `checkResolvedAddressesOnNetworks` MUST fail on the network that
     /// disagrees, and MUST name it.
     function testCheckResolvedAddressesOnNetworksMismatchReverts() external {
-        bytes32 name = keccak256("testCheckResolvedAddressesOnNetworksMismatchReverts");
+        string memory name = "testCheckResolvedAddressesOnNetworksMismatchReverts";
         address account = address(0xf00);
         address wrong = address(0xba4);
         (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
@@ -2053,7 +2054,7 @@ contract LibRainDeployTest is Test {
     /// from outside. The loop never reached the second network, so a fork of it
     /// exists only if it was created up front.
     function testCheckResolvedAddressesOnNetworksCreatesEveryForkFirst() external {
-        bytes32 name = keccak256("testCheckResolvedAddressesOnNetworksCreatesEveryForkFirst");
+        string memory name = "testCheckResolvedAddressesOnNetworksCreatesEveryForkFirst";
         address account = address(0xf00);
         address wrong = address(0xba4);
         (, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);

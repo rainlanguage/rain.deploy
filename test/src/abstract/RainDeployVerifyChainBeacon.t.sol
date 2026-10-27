@@ -14,7 +14,7 @@ import {
     LibRainDeployBeacon
 } from "../../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
-import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../../../src/interface/IMigrationRegistryV3.sol";
+import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../../../src/interface/IMigrationRegistryV4.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
@@ -37,7 +37,8 @@ import {
 contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerifyChain {
     using LibBeaconDeclarations for ChainBeacon[];
 
-    bytes32 constant ROLLBACK = keccak256("rollback");
+    string constant ROLLBACK_NAME = "rollback";
+    bytes32 constant ROLLBACK = keccak256(bytes(ROLLBACK_NAME));
 
     /// @inheritdoc RainDeploySuitesBase
     function beacons()
@@ -60,11 +61,11 @@ contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerif
     }
 
     function applyMigration() internal {
-        applyMigration(MIGRATION, MIGRATION_HEAD_GENESIS);
+        applyMigration(MIGRATION_NAME, MIGRATION_HEAD_GENESIS);
     }
 
-    function applyMigration(bytes32 migration, bytes32 head) internal {
-        LibBeaconTest.applyMigration(vm, WRITER, NAMESPACE, migration, head);
+    function applyMigration(string memory migration, bytes32 head) internal {
+        LibBeaconTest.applyMigration(vm, WRITER, NAMESPACE_NAME, migration, head);
     }
 
     function rollingBack() internal view returns (DeployBeacon memory) {
@@ -540,7 +541,7 @@ contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerif
         sBeacons.declare(42161, rollingBack());
         applyMigration();
         vm.warp(block.timestamp + 1);
-        applyMigration(ROLLBACK, MIGRATION);
+        applyMigration(ROLLBACK_NAME, MIGRATION);
         vm.prank(OWNER);
         UpgradeableBeacon(sBeacon).transferOwnership(NEW_OWNER);
         this.externalCheckDeployedOnNetworks(arbitrum());
@@ -550,16 +551,16 @@ contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerif
         sBeacons.declare(42161, rollingBack());
         applyMigration();
         vm.warp(block.timestamp + 1);
-        applyMigration(ROLLBACK, MIGRATION);
+        applyMigration(ROLLBACK_NAME, MIGRATION);
         expectUnexpected(1, NEW_OWNER, OWNER);
         this.externalCheckDeployedOnNetworks(arbitrum());
     }
 
     function testTransitionsAppliedOutOfDeclaredOrderAreRefusedOnTheNetwork() external {
         sBeacons.declare(42161, rollingBack());
-        applyMigration(ROLLBACK, MIGRATION_HEAD_GENESIS);
+        applyMigration(ROLLBACK_NAME, MIGRATION_HEAD_GENESIS);
         vm.warp(block.timestamp + 1);
-        applyMigration(MIGRATION, ROLLBACK);
+        applyMigration(MIGRATION_NAME, ROLLBACK);
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeployBeacon.BeaconTransitionsOutOfOrder.selector, LibRainDeploy.ARBITRUM_ONE, sBeacon, 1
@@ -706,7 +707,7 @@ contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerif
         sBeacons.declare(42161, rollingBack());
         applyMigration();
         vm.warp(block.timestamp + 1);
-        applyMigration(ROLLBACK, MIGRATION);
+        applyMigration(ROLLBACK_NAME, MIGRATION);
         expectUnexpected(1, NEW_OWNER, OWNER);
         this.externalCheckBeaconsOnNetwork(arbitrum(), 0);
     }
