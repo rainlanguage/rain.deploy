@@ -86,8 +86,8 @@ contract LibMigrationRegistryWriteCallTest is Test {
         Prerequisite[] memory prerequisites
     ) external view returns (address, bytes memory) {
         return LibMigrationRegistry.applyMigrationHistoryV4Call(
-            address(this), namespace, migration, appliedAt, prerequisites
-        , "");
+            address(this), namespace, migration, appliedAt, prerequisites, ""
+        );
     }
 
     /// The built call, sent by the writer it names, records the migration
@@ -119,8 +119,9 @@ contract LibMigrationRegistryWriteCallTest is Test {
                 upstream,
                 upstreamNamespace,
                 prerequisite,
-                LibMigrationRegistry.onto(upstream, upstreamNamespace, MIGRATION_HEAD_GENESIS)
-            , "");
+                LibMigrationRegistry.onto(upstream, upstreamNamespace, MIGRATION_HEAD_GENESIS),
+                ""
+            );
 
         Prerequisite[] memory prerequisites = new Prerequisite[](2);
         prerequisites[0] = Prerequisite({writer: sender, namespace: namespace, migration: MIGRATION_HEAD_GENESIS});
@@ -204,8 +205,9 @@ contract LibMigrationRegistryWriteCallTest is Test {
             address(this),
             namespace,
             migration,
-            LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS),
+            ""
+        );
 
         vm.prank(sender);
         (bool success, bytes memory returnData) = to.call(data);
