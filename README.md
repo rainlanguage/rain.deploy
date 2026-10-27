@@ -709,6 +709,22 @@ reverts rather than answering empty. The interface is `IConfigRegistryV4`. There
 is no removal, no upgrade, and no way to write under an account that has not
 approved the writer.
 
+A bind is `registerV4(authority, name, valueType, value, meta)`. `valueType` is
+the value's normalized ABI type as a string — `address`, `uint256`,
+`(address,uint256)` — and an empty one is refused (`EmptyValueType`). The
+registry stores only its hash, `keccak256(bytes(valueType))`, beside the value
+and the moment it was bound, replacing all three on a rebind, and `getV4`
+returns `(value, registeredAt, valueTypeHash)`. The string itself appears only
+in the `Register(sender, authority, name, valueType, value)` event. The registry
+never checks a type against its value and never canonicalises it: the hash is of
+the exact string bound.
+
+`meta` is optional rain metadata. When it is non-empty the same write emits
+`MetaV1_2(sender, subject, meta)` (`IMetaV1_2` from `rain.metadata`), with
+`sender` the caller and `subject` `keccak256(abi.encode(authority, name))`, the
+same for every bind of that name under that authority. An empty `meta` emits
+nothing. It is never stored and never validated: it lives in the logs only.
+
 A consumer names the authority it trusts beside the name it resolves, both in
 its own creation code, and gets only what that authority bound. What the
 consumer then trusts, and what a contract authority must do on every network, is
@@ -721,11 +737,11 @@ live ones.
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
 registry is deployed on a network, an authority binds each name its consumers
 resolve with `script/RegisterConfig.sol` (value
-`cast abi-encode "f(address)" <account>`, and `CONFIG_REGISTRY_NETWORKS` naming
-the networks it is deployed on until that is every declared one) before those
-consumers deploy against it. Which names and which authority are each consumer's
-to declare; until a name is bound under that authority, its
-`LibConfigRegistry.resolve` reverts.
+`cast abi-encode "f(address)" <account>`, value type `address`, and
+`CONFIG_REGISTRY_NETWORKS` naming the networks it is deployed on until that is
+every declared one) before those consumers deploy against it. Which names and
+which authority are each consumer's to declare; until a name is bound under that
+authority, its `LibConfigRegistry.resolve` reverts.
 
 Bindings are **mutable**, because the configuration they name is. Rotating an
 owning multisig is ordinary business and has to be expressible without moving
@@ -740,12 +756,15 @@ re-binding a name changes what the _next_ deployment resolves and nothing else,
 which makes a rotation a deliberate migration rather than a silent change to
 live contracts.
 
-`LibConfigRegistry.resolve(authority, name)` is the read, verifying the
-registry's code hash first, the same way `LibRainDeploy` verifies the Zoltu
-factory's. It resolves a name under an authority to the bound bytes and never
-decodes them: only the consumer knows the type it expects, so the consumer
-decodes, as `abi.decode(value, (address))` for an address. What it does with the
-value, and when, is the consumer's business.
+`LibConfigRegistry.resolve(authority, name, valueTypeHash)` is the read,
+verifying the registry's code hash first, the same way `LibRainDeploy` verifies
+the Zoltu factory's. It resolves a name under an authority to the bound bytes
+and the moment they were bound, and reverts `ValueTypeMismatch` unless the name
+is bound as the type whose hash the consumer passes, `keccak256("address")` for
+an address; `resolveSafe(authority, name, valueTypeHash, minAge)` takes the same
+hash. Neither decodes the value: the consumer decodes, as
+`abi.decode(value, (address))` for an address. What it does with the value, and
+when, is the consumer's business.
 
 `LibRainDeploy` carries the **post-deploy** verification: on every target
 network, the deployed contract must hold the value the deployment expected. It
@@ -793,13 +812,12 @@ The script signs as an EOA. A Safe or timelock authority either approves that
 EOA as a delegate, once per network through its own execution path
 (`approveV4(name, delegate)`), after which the EOA runs the script with
 `--sender` set to itself, or submits
-`registerV4(authority, keccak256("<org>.<name>"),
-value)` to the registry itself
-and then runs step 3 below (`verify`), which reads under any authority. An
-approval lets the delegate rebind that one name under the authority until it is
-revoked (`revokeV4(name, delegate)`) on that network. An EOA authority approves
-or revokes a delegate, such as a Safe, with `script/ApproveConfigDelegate.sol`
-("Approving a delegate" below).
+`registerV4(authority, keccak256("<org>.<name>"), valueType, value, meta)` to
+the registry itself and then runs step 3 below (`verify`), which reads under any
+authority. An approval lets the delegate rebind that one name under the
+authority until it is revoked (`revokeV4(name, delegate)`) on that network. An
+EOA authority approves or revokes a delegate, such as a Safe, with
+`script/ApproveConfigDelegate.sol` ("Approving a delegate" below).
 
 **The name is the string consumers hash.** Consumers derive a name as
 `keccak256("<org>.<name>")` — st0x resolves its token-owner Safe as
@@ -815,13 +833,19 @@ is a near miss of a real name that no consumer resolves.
 refuses one that is not a whole number of 32-byte words, though the registry
 itself binds any non-empty bytes.
 
+**The value type is named.** `CONFIG_REGISTRY_VALUE_TYPE` is the value's
+normalized ABI type, `address` for an address, bound as given; the run refuses
+it empty. `CONFIG_REGISTRY_META`, optional, is `0x` hex rain metadata emitted
+with each bind; unset, the binds carry none.
+
 It binds on every declared network by default — one binding everywhere, as the
 deployment is the same everywhere — and a network already bound to the same
-value is skipped, so a run that stopped partway is fixed by running it again.
-The default needs the registry deployed on every declared network: it checks the
-registry's code hash on each and reverts `UnexpectedConfigRegistryCodeHash` on
-the first one without it, binding nothing. While the registry is on only some
-networks, set `CONFIG_REGISTRY_NETWORKS` to those.
+value as the same type is skipped, so a run that stopped partway is fixed by
+running it again. The default needs the registry deployed on every declared
+network: it checks the registry's code hash on each and reverts
+`UnexpectedConfigRegistryCodeHash` on the first one without it, binding nothing.
+While the registry is on only some networks, set `CONFIG_REGISTRY_NETWORKS` to
+those.
 
 ### Before the first run
 
@@ -862,6 +886,10 @@ networks, set `CONFIG_REGISTRY_NETWORKS` to those.
 export CONFIG_REGISTRY_NAME=st0x.token-owner-safe
 # The value, as 0x hex of its ABI encoding. For an address:
 export CONFIG_REGISTRY_VALUE=$(nix develop -c cast abi-encode "f(address)" 0x...)
+# Its normalized ABI type:
+export CONFIG_REGISTRY_VALUE_TYPE=address
+# Optional rain metadata, as 0x hex, emitted with each bind:
+# export CONFIG_REGISTRY_META=0x...
 # Optional, to bind on fewer networks than all of them:
 # export CONFIG_REGISTRY_NETWORKS=base,arbitrum
 
@@ -876,7 +904,8 @@ nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
   --sender "$CONFIG_REGISTRY_SENDER" --trezor --legacy --broadcast
 
 # 3. Once every transaction is mined: reads every network fresh and fails
-#    unless the name resolves to the value under the authority on each.
+#    unless the name resolves to the value, as the type, under the authority
+#    on each.
 nix develop -c forge script script/RegisterConfig.sol:RegisterConfig --sig "verify()"
 ```
 
@@ -886,20 +915,22 @@ itself.
 
 Before anything is signed the run refuses, with an error naming what is wrong: a
 non-canonical name, an empty value, a value that is not a whole number of
-32-byte words (a bare 20-byte address, say, rather than its ABI encoding), a
-network the repo does not support or one named twice, a network whose endpoint
-reports another chain id than the catalogue states for it, a registry address
-that does not hold the pinned registry code, and a signer that is neither the
-authority nor a delegate the authority approved on that network. With
-`--broadcast`, forge itself is a second layer: it refuses a device that is not
-the signer before sending on any network, with
+32-byte words (a bare 20-byte address, say, rather than its ABI encoding), an
+empty value type, a network the repo does not support or one named twice, a
+network whose endpoint reports another chain id than the catalogue states for
+it, a registry address that does not hold the pinned registry code, and a signer
+that is neither the authority nor a delegate the authority approved on that
+network. With `--broadcast`, forge itself is a second layer: it refuses a device
+that is not the signer before sending on any network, with
 `No associated wallet for addresses: [<signer>]`. A refused run signs nothing.
 
-The dry run prints the name, its hash, the value, the authority, the signer, the
-registry address and the exact calldata, then for each network its chain id, the
-authority's current binding (`unbound`, or the value and the moment it was
-bound) and what will happen: `BIND`, `REBIND` (old → new) or `SKIP`. That is the
-record to approve against. For each transaction the device shows:
+The dry run prints the name, its hash, the value type, its hash, the value, the
+meta, the authority, the signer, the registry address and the exact calldata,
+then for each network its chain id, the authority's current binding (`unbound`,
+or the value, its type hash and the moment it was bound) and what will happen:
+`BIND` or `REBIND` to the value as the type, or `SKIP` where the name is bound
+to both already. That is the record to approve against. For each transaction the
+device shows:
 
 - **Recipient**: the registry address the dry run printed
   (`LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS`);
@@ -907,8 +938,10 @@ record to approve against. For each transaction the device shows:
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
 - **Data**: exactly the `Calldata:` line the dry run printed: `registerV4`'s
-  selector, the authority, the name hash, the offset `0x60`, the value's length
-  and the value padded to a multiple of 32 bytes. The device cannot decode
+  selector `0x41f0fc94`, the authority, the name hash, the offsets of the value
+  type, the value and the meta (the first is `0xa0`), then the value type's
+  length and bytes, the value's length and bytes, and the meta's length and
+  bytes, each padded to a multiple of 32 bytes. The device cannot decode
   `registerV4`, so it shows the raw bytes; open the full data on the device to
   compare them.
 
@@ -964,9 +997,9 @@ amount 0, the network, and the `Calldata:` line as data: `approveV4`'s selector
 `0xeb34d125` or `revokeV4`'s `0x8f02e4a5`, then the name hash and the delegate.
 
 A Safe delegate then binds by executing
-`registerV4(authority, keccak256("<org>.<name>"), value)` on the registry from
-the Safe, on each network, and `RegisterConfig`'s `verify()` checks the binding
-under the authority.
+`registerV4(authority, keccak256("<org>.<name>"), valueType, value, meta)` on
+the registry from the Safe, on each network, and `RegisterConfig`'s `verify()`
+checks the binding under the authority.
 
 ## Migration registry
 
@@ -990,6 +1023,11 @@ applying its own migration in the same atomic unit as the migration itself.
 ran before the registry reached the chain is recordable with the time it
 actually ran. They write the same record, into the same line, and make the same
 refusals.
+
+Both take a trailing `bytes meta`, as `registerV4` does: non-empty, the same
+write emits `MetaV1_2(sender, subject, meta)` with `sender` the caller and
+`subject` `keccak256(abi.encode(writer, namespace, migration))`; empty, nothing.
+It is never stored and never validated.
 
 It exists because prod-state tests otherwise decide what to assert by reading
 the **clock**. The pattern that emerges without it is a dual-state invariant —
@@ -1087,13 +1125,13 @@ everything about that line, so every later entry names a record in another line.
 Prerequisite[] memory prerequisites = new Prerequisite[](1);
 // The first migration in a line, applied in this transaction.
 prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
-LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V1, prerequisites);
+LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V1, prerequisites, "");
 // Every later one names its predecessor.
 prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V1});
-LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V2, prerequisites);
+LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V2, prerequisites, "");
 // One that ran before the registry reached this chain names the moment it ran.
 prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
-LibMigrationRegistry.applyMigrationHistoryV4(address(this), NAMESPACE, MIGRATION_V3, 1750000000, prerequisites);
+LibMigrationRegistry.applyMigrationHistoryV4(address(this), NAMESPACE, MIGRATION_V3, 1750000000, prerequisites, "");
 ```
 
 Each record keeps that first entry, which `appliedOntoV4` reads back, so a line
@@ -1150,7 +1188,7 @@ and the head still orders its own line exactly as before.
 Prerequisite[] memory prerequisites = new Prerequisite[](2);
 prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
 prerequisites[1] = Prerequisite({writer: FLEET_SAFE, namespace: FLEET_NAMESPACE, migration: FLEET_UPGRADE});
-LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V3, prerequisites);
+LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V3, prerequisites, "");
 ```
 
 The list is the record, and `appliedAfterV4` reads it back exactly as the write
@@ -1583,8 +1621,9 @@ it. In order:
    `appliedOnto`, `appliedAfter` and `head` are `appliedV4`, `appliedOntoV4`,
    `appliedAfterV4` and `headV4`. `applyMigration` and `applyMigrationHistory`
    are `applyMigrationV4` and `applyMigrationHistoryV4`, and take the
-   `address writer` first; `applyMigrationCall` and `applyMigrationHistoryCall`
-   are `applyMigrationV4Call` and `applyMigrationHistoryV4Call`, likewise.
+   `address writer` first and a trailing `bytes meta` (`""` for none);
+   `applyMigrationCall` and `applyMigrationHistoryCall` are
+   `applyMigrationV4Call` and `applyMigrationHistoryV4Call`, likewise.
    Delegation is `IRegistryDelegatesV2`: `approveV4`, `revokeV4` and
    `approvedV4`. Import `Prerequisite` from
    `src/interface/IMigrationRegistryV4.sol`; `IMigrationRegistryV1`,
