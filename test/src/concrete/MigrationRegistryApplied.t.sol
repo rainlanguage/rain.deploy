@@ -235,9 +235,7 @@ contract MigrationRegistryAppliedTest is Test {
     /// The namespace is checked after the writer and before the migration:
     /// a zero writer wins over a zero namespace, and a zero namespace wins
     /// over either refused migration hash.
-    function testAppliedZeroNamespaceCheckedAfterWriterBeforeMigration(address writer, bytes32 migrationHash)
-        external
-    {
+    function testAppliedZeroNamespaceCheckedAfterWriterBeforeMigration(address writer, bytes32 migrationHash) external {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeMigration(vm, migrationHash);
 

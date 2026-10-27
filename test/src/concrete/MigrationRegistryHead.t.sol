@@ -71,7 +71,6 @@ contract MigrationRegistryHeadTest is Test {
         assertEq(sRegistry.headV4(writer, namespaceHash), keccak256("rain.migration-registry.head.genesis"));
     }
 
-
     /// The head is the migration applied most recently, and it moves with each
     /// one.
     function testHeadFollowsTheRecords(

@@ -324,12 +324,9 @@ contract MigrationRegistryAppliedOntoTest is Test {
 
     /// A record is confined to the writer's line here as everywhere else:
     /// one writer's chain says nothing about another's.
-    function testAppliedOntoIsPerWriter(
-        address writer,
-        string memory namespace,
-        address other,
-        string memory migration
-    ) external {
+    function testAppliedOntoIsPerWriter(address writer, string memory namespace, address other, string memory migration)
+        external
+    {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeNamespace(vm, namespace);
         vm.assume(other != address(0));
@@ -461,11 +458,9 @@ contract MigrationRegistryAppliedOntoTest is Test {
     /// A refusal is not a state change: the refused cases revert on a registry
     /// that holds records exactly as they do on an empty one, and leave those
     /// records intact.
-    function testAppliedOntoRefusalLeavesRecordsIntact(
-        address writer,
-        string memory namespace,
-        string memory migration
-    ) external {
+    function testAppliedOntoRefusalLeavesRecordsIntact(address writer, string memory namespace, string memory migration)
+        external
+    {
         vm.assume(writer != address(0));
         LibMigrationFuzz.assumeNamespace(vm, namespace);
         LibMigrationFuzz.assumeMigration(vm, migration);
