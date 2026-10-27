@@ -8,13 +8,14 @@ import {
 } from "../abstract/ApproveRegistryDelegateWiringTest.sol";
 import {LibConfigRegistryDeploy} from "../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibConfigRegistryFork} from "../lib/LibConfigRegistryFork.sol";
-import {LocalApproveConfigDelegate} from "../concrete/LocalApproveConfigDelegate.sol";
+import {LibRegistryAuthority} from "../../src/lib/LibRegistryAuthority.sol";
 
 /// @title ApproveConfigDelegateTest
 /// `ApproveRegistryDelegateWiringTest` on `ApproveConfigDelegate`.
 contract ApproveConfigDelegateTest is ApproveRegistryDelegateWiringTest {
     function newScript() internal override returns (ILocalApproveRegistryDelegate) {
-        return ILocalApproveRegistryDelegate(address(new LocalApproveConfigDelegate()));
+        deployCodeTo("LocalApproveConfigDelegate.sol:LocalApproveConfigDelegate", LibRegistryAuthority.ROOT_AUTHORITY);
+        return ILocalApproveRegistryDelegate(LibRegistryAuthority.ROOT_AUTHORITY);
     }
 
     function prefix() internal pure override returns (string memory) {

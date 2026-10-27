@@ -10,6 +10,7 @@ import {LibConfigRegistryDeploy} from "../../src/lib/LibConfigRegistryDeploy.sol
 import {LibConfigRegistryRegister} from "../../src/lib/LibConfigRegistryRegister.sol";
 import {LibConfigRegistryFork} from "../lib/LibConfigRegistryFork.sol";
 import {LibConfigRegistryRead} from "../lib/LibConfigRegistryRead.sol";
+import {LibRegistryAuthority} from "../../src/lib/LibRegistryAuthority.sol";
 import {LocalRegisterConfig} from "../concrete/LocalRegisterConfig.sol";
 import {VALUE_TYPE, VALUE_TYPE_HASH} from "../lib/ConfigTestBinding.sol";
 
@@ -26,22 +27,15 @@ import {VALUE_TYPE, VALUE_TYPE_HASH} from "../lib/ConfigTestBinding.sol";
 /// first set, since a set variable cannot be unset.
 contract RegisterConfigTest is Test {
     function testWiring() external {
-        LocalRegisterConfig script = new LocalRegisterConfig();
+        // The no-op broadcast leaves the script signing, so deployed at the
+        // root authority the script signs as it.
+        address authority = LibRegistryAuthority.ROOT_AUTHORITY;
+        deployCodeTo("LocalRegisterConfig.sol:LocalRegisterConfig", authority);
+        LocalRegisterConfig script = LocalRegisterConfig(authority);
         assertEq(address(script.baseForkVm()), address(vm));
-        // The no-op broadcast leaves the script signing, so the script is the
-        // authority a bind lands under.
-        address authority = address(script);
         string memory name = string.concat("rain.deploy.register-test.", vm.toString(vm.randomUint()));
 
-        // Authority not an address, set here so an exported one cannot leak
-        // in: every other input is valid, so the run stops on reading it.
-        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", "not-an-address");
-        vm.setEnv("CONFIG_REGISTRY_NAME", name);
-        vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
         vm.setEnv("CONFIG_REGISTRY_VALUE_TYPE", VALUE_TYPE);
-        assertEnvAddressRefused(script);
-        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(authority));
-
         vm.setEnv("CONFIG_REGISTRY_NAME", "Not.Canonical");
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(abi.encode(address(1))));
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
@@ -98,14 +92,6 @@ contract RegisterConfigTest is Test {
         vm.setEnv("CONFIG_REGISTRY_NAME", name);
         script.verify();
 
-        // The binding is under the authority the variable names; under any
-        // other the name is unbound.
-        address otherAuthority = address(0xB0B);
-        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(otherAuthority));
-        vm.expectRevert(LibConfigRegistryFork.unboundResolveRevert(otherAuthority, keccak256(bytes(name))));
-        script.verify();
-        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(authority));
-
         bytes memory other = abi.encode(address(2));
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(other));
         vm.expectRevert(
@@ -159,38 +145,38 @@ contract RegisterConfigTest is Test {
         assertEq(registeredAt, block.timestamp);
         assertEq(boundTypeHash, VALUE_TYPE_HASH);
 
-        runAsDelegate(script, name);
+        runAsDelegate(name);
     }
 
-    /// Runs as a delegate: another authority approves the script, which then
-    /// binds under that authority and not under itself, and the confirmed
-    /// check under that authority passes.
-    /// @param script The script.
+    /// Runs as a delegate: refused until the root authority approves the
+    /// script for the name, then it binds under the root authority and not
+    /// under itself, and the confirmed check passes.
     /// @param name The test's base name.
-    function runAsDelegate(LocalRegisterConfig script, string memory name) internal {
-        address delegator = address(0xD0D0);
+    function runAsDelegate(string memory name) internal {
+        LocalRegisterConfig delegate = new LocalRegisterConfig();
+        address authority = LibRegistryAuthority.ROOT_AUTHORITY;
+        IConfigRegistryV4 registry = IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
         string memory delegatedName = string.concat(name, "-delegated");
+        bytes32 hashed = keccak256(bytes(delegatedName));
         bytes memory delegatedValue = abi.encode(address(6));
-        vm.prank(delegator);
-        IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS)
-            .approveV4(keccak256(bytes(delegatedName)), address(script));
-        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(delegator));
         vm.setEnv("CONFIG_REGISTRY_NAME", delegatedName);
         vm.setEnv("CONFIG_REGISTRY_VALUE", vm.toString(delegatedValue));
-        script.runAsItself();
-        assertEq(
-            LibConfigRegistryRead.getValue(
-                IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
-                delegator,
-                keccak256(bytes(delegatedName))
-            ),
-            delegatedValue
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibConfigRegistryRegister.SenderNotApproved.selector,
+                LibRainDeploy.supportedNetworks()[0],
+                address(delegate),
+                authority,
+                hashed
+            )
         );
-        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(address(script)));
-        vm.expectRevert(LibConfigRegistryFork.unboundResolveRevert(address(script), keccak256(bytes(delegatedName))));
-        script.verify();
-        vm.setEnv("CONFIG_REGISTRY_AUTHORITY", vm.toString(delegator));
-        script.verify();
+        delegate.runAsItself();
+        vm.prank(authority);
+        registry.approveV4(hashed, address(delegate));
+        delegate.runAsItself();
+        assertEq(LibConfigRegistryRead.getValue(registry, authority, hashed), delegatedValue);
+        assertEq(LibConfigRegistryRead.getMoment(registry, address(delegate), hashed), 0);
+        delegate.verify();
     }
 
     /// Deploys the registry, then runs as the authority with networks unset,
@@ -223,37 +209,6 @@ contract RegisterConfigTest is Test {
             );
         }
         script.verify();
-    }
-
-    /// `run()` stops on forge's own refusal to parse
-    /// `CONFIG_REGISTRY_AUTHORITY`. Forge raises it as `CheatcodeError(string)`,
-    /// and only the prefix naming the variable is pinned; the parser's wording
-    /// after it is forge's.
-    /// @param script The script.
-    function assertEnvAddressRefused(LocalRegisterConfig script) internal {
-        try script.run() {
-            revert("run() did not revert");
-        } catch (bytes memory reason) {
-            bytes memory expectedSelector = abi.encodeWithSignature("CheatcodeError(string)");
-            assertGe(reason.length, expectedSelector.length);
-            bytes memory selector = new bytes(expectedSelector.length);
-            for (uint256 i = 0; i < selector.length; i++) {
-                selector[i] = reason[i];
-            }
-            assertEq(selector, expectedSelector);
-            bytes memory payload = new bytes(reason.length - 4);
-            for (uint256 i = 0; i < payload.length; i++) {
-                payload[i] = reason[i + 4];
-            }
-            bytes memory message = bytes(abi.decode(payload, (string)));
-            bytes memory prefix = bytes("vm.envAddress: failed parsing $CONFIG_REGISTRY_AUTHORITY");
-            assertGe(message.length, prefix.length);
-            bytes memory head = new bytes(prefix.length);
-            for (uint256 i = 0; i < head.length; i++) {
-                head[i] = message[i];
-            }
-            assertEq(string(head), string(prefix));
-        }
     }
 
     /// Runs again as the authority with `name` bound to `value` already, which

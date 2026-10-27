@@ -8,6 +8,7 @@ import {IRegistryDelegatesV2} from "../../src/interface/IRegistryDelegatesV2.sol
 import {LibRegistryDelegatesApprove} from "../../src/lib/LibRegistryDelegatesApprove.sol";
 import {LibConfigRegistryRegister} from "../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRegistryAuthority} from "../../src/lib/LibRegistryAuthority.sol";
 
 /// The local script harness both registries' wiring tests drive.
 interface ILocalApproveRegistryDelegate {
@@ -50,19 +51,17 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         ILocalApproveRegistryDelegate script = newScript();
         (address registryAddress, bytes32 registryCodehash) = pinned();
         assertEq(address(script.baseForkVm()), address(vm));
-        // The no-op broadcast leaves the script signing, so the script is the
-        // authority.
-        address authority = address(script);
+        // The no-op broadcast leaves the script signing, and the script is
+        // deployed at the root authority, so it signs as it.
+        address authority = LibRegistryAuthority.ROOT_AUTHORITY;
+        assertEq(address(script), authority);
         address delegate = address(0x5AFE);
         string memory name = string.concat("rain.deploy.approve-test.", vm.toString(vm.randomUint()));
         bytes32 hashed = keccak256(bytes(name));
         IRegistryDelegatesV2 registry = IRegistryDelegatesV2(registryAddress);
 
-        vm.setEnv(e("AUTHORITY"), "not-an-address");
         vm.setEnv(e("SCOPE"), name);
         vm.setEnv(e("ADDRESS"), vm.toString(delegate));
-        assertEnvAddressRefused(script, e("AUTHORITY"));
-        vm.setEnv(e("AUTHORITY"), vm.toString(authority));
 
         vm.setEnv(e("ADDRESS"), "not-an-address");
         assertEnvAddressRefused(script, e("ADDRESS"));
@@ -117,7 +116,6 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
             assertTrue(entries[i].emitter != address(registry));
         }
 
-        // The approval is under the authority the variable names.
         string memory network = supported[0];
         vm.setEnv(e("NETWORKS"), string.concat(network, ",nowhere"));
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
@@ -125,15 +123,6 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
         script.verify();
         vm.setEnv(e("NETWORKS"), network);
-        address otherAuthority = address(0xB0B);
-        vm.setEnv(e("AUTHORITY"), vm.toString(otherAuthority));
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRegistryDelegatesApprove.UnexpectedApproval.selector, network, otherAuthority, hashed, delegate, true
-            )
-        );
-        script.verify();
-        vm.setEnv(e("AUTHORITY"), vm.toString(authority));
 
         // `false` revokes, on exactly the selected network.
         vm.setEnv(e("APPROVED"), "false");
