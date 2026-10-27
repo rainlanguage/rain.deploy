@@ -1786,6 +1786,41 @@ contract LibMigrationRegistryTest is Test {
         assertEq(LibMigrationRegistry.headV4(writer, namespaceHash), migrationHash);
     }
 
+    /// `Migrated` names the caller as the sender and the line's owner as the
+    /// writer, which differ when an approved delegate writes, on both write
+    /// paths.
+    function testMigratedNamesTheDelegateAsSenderAndTheLineAsWriter(
+        string memory namespace,
+        string memory migrationA,
+        string memory migrationB
+    ) external {
+        LibMigrationFuzz.assumeNamespace(vm, namespace);
+        LibMigrationFuzz.assumeMigration(vm, migrationA);
+        LibMigrationFuzz.assumeMigration(vm, migrationB);
+        vm.assume(keccak256(bytes(migrationA)) != keccak256(bytes(migrationB)));
+        bytes32 namespaceHash = keccak256(bytes(namespace));
+        deployRegistry();
+        MockMigrationApplier applier = new MockMigrationApplier();
+        LibMigrationRegistry.approveV3(namespaceHash, address(applier));
+
+        vm.recordLogs();
+        applier.applyMigrationV4(
+            address(this), namespace, migrationA, one(address(this), namespaceHash, MIGRATION_HEAD_GENESIS)
+        );
+        (address sender, address writer) =
+            abi.decode(migratedData(vm.getRecordedLogs()), (address, address));
+        assertEq(sender, address(applier));
+        assertEq(writer, address(this));
+
+        vm.recordLogs();
+        applier.applyMigrationHistoryV4(
+            address(this), namespace, migrationB, block.timestamp, one(address(this), namespaceHash, keccak256(bytes(migrationA)))
+        );
+        (sender, writer) = abi.decode(migratedData(vm.getRecordedLogs()), (address, address));
+        assertEq(sender, address(applier));
+        assertEq(writer, address(this));
+    }
+
     /// An empty namespace is refused before an empty migration, and an empty
     /// migration before the moment, on both write paths.
     function testApplyMigrationEmptyStringsRefusalOrder(string memory namespace) external {
