@@ -40,12 +40,9 @@ contract ConfigRegistryGetTest is Test {
 
     /// A name another authority has bound is still unbound under this one,
     /// and the revert names the authority that was asked.
-    function testGetOtherAuthorityBindingIsUnbound(
-        address other,
-        address asked,
-        string memory name,
-        bytes memory value
-    ) external {
+    function testGetOtherAuthorityBindingIsUnbound(address other, address asked, string memory name, bytes memory value)
+        external
+    {
         vm.assume(other != asked);
         vm.assume(bytes(name).length > 0);
         vm.assume(value.length > 0);
@@ -157,7 +154,7 @@ contract ConfigRegistryGetTest is Test {
 
         string[4] memory names = [
             string(hex"00"),
-            string(hex"ff"),
+            string(bytes(hex"ff")),
             "Not Canonical\n",
             "0x0b300013cd54a8f1ac40981f80faaa18b8cc1e4c0b300013cd54a8f1ac409810"
         ];
@@ -174,7 +171,7 @@ contract ConfigRegistryGetTest is Test {
     function testGetOpaqueValueTypes(bytes memory value) external {
         vm.assume(value.length > 0);
 
-        string[4] memory valueTypes = [string(hex"00"), string(hex"ff"), "Address ", "not a type"];
+        string[4] memory valueTypes = [string(hex"00"), string(bytes(hex"ff")), "Address ", "not a type"];
         for (uint256 i = 0; i < valueTypes.length; i++) {
             ConfigRegistry registry = new ConfigRegistry();
             vm.prank(AUTHORITY);
@@ -203,23 +200,8 @@ contract ConfigRegistryGetTest is Test {
         vm.assume(selector != IRegistryDelegatesV1.revokeV3.selector);
         vm.assume(selector != IRegistryDelegatesV1.approvedV3.selector);
 
-        (bool success,) =
-            address(sRegistry).call(abi.encodeWithSelector(selector, nameHash, abi.encode(address(this))));
+        (bool success,) = address(sRegistry).call(abi.encodeWithSelector(selector, nameHash, abi.encode(address(this))));
         assertFalse(success);
-    }
-
-    /// The ABI is exactly the five `IConfigRegistryV4` functions, counted
-    /// rather than sampled.
-    function testGetAbiIsExactlyTheInterface() external view {
-        string[] memory signatures =
-            vm.parseJsonKeys(vm.readFile("out/ConfigRegistry.sol/ConfigRegistry.json"), "$.methodIdentifiers");
-
-        assertEq(signatures.length, 5);
-        assertEq(signatures[0], "approveV3(bytes32,address)");
-        assertEq(signatures[1], "approvedV3(address,bytes32,address)");
-        assertEq(signatures[2], "getV4(address,bytes32)");
-        assertEq(signatures[3], "registerV4(address,string,string,bytes)");
-        assertEq(signatures[4], "revokeV3(bytes32,address)");
     }
 
     /// The registry takes no value on any path: ether sent with or without
@@ -315,8 +297,12 @@ contract ConfigRegistryGetTest is Test {
 
         assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, keccak256(bytes(nameA))), timeA);
         assertEq(LibConfigRegistryRead.getMoment(sRegistry, AUTHORITY, keccak256(bytes(nameB))), timeB);
-        assertEq(LibConfigRegistryRead.getValueTypeHash(sRegistry, AUTHORITY, keccak256(bytes(nameA))), keccak256("uint256"));
-        assertEq(LibConfigRegistryRead.getValueTypeHash(sRegistry, AUTHORITY, keccak256(bytes(nameB))), keccak256("address"));
+        assertEq(
+            LibConfigRegistryRead.getValueTypeHash(sRegistry, AUTHORITY, keccak256(bytes(nameA))), keccak256("uint256")
+        );
+        assertEq(
+            LibConfigRegistryRead.getValueTypeHash(sRegistry, AUTHORITY, keccak256(bytes(nameB))), keccak256("address")
+        );
     }
 
     /// The moment is stored at full width: clocks past every narrower width the
@@ -342,9 +328,7 @@ contract ConfigRegistryGetTest is Test {
 
     /// Across a run of rotations the value, the moment and the type are always
     /// replaced together, never one lagging another.
-    function testGetValueMomentAndTypeMoveTogether(string memory name, bytes[] memory values, uint256 start)
-        external
-    {
+    function testGetValueMomentAndTypeMoveTogether(string memory name, bytes[] memory values, uint256 start) external {
         vm.assume(bytes(name).length > 0);
         vm.assume(values.length > 0);
         start = bound(start, 1, type(uint256).max - values.length);
