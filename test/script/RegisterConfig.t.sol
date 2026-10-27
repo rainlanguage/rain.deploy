@@ -175,7 +175,8 @@ contract RegisterConfigTest is Test {
         registry.approveV4(hashed, address(delegate));
         delegate.runAsItself();
         assertEq(LibConfigRegistryRead.getValue(registry, authority, hashed), delegatedValue);
-        assertEq(LibConfigRegistryRead.getMoment(registry, address(delegate), hashed), 0);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.NameNotRegistered.selector, address(delegate), hashed));
+        registry.getV4(address(delegate), hashed);
         delegate.verify();
     }
 

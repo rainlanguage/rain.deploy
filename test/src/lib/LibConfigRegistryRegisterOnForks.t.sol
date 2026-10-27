@@ -11,7 +11,7 @@ import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.so
 import {LibConfigRegistryFork} from "../../lib/LibConfigRegistryFork.sol";
 import {LibConfigRegistryRead} from "../../lib/LibConfigRegistryRead.sol";
 import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
-import {configBinding} from "../../lib/ConfigTestBinding.sol";
+import {VALUE_TYPE, configBinding} from "../../lib/ConfigTestBinding.sol";
 
 /// @title LibConfigRegistryRegisterOnForksTest
 /// The fork loops of `LibConfigRegistryRegister`, against every supported
@@ -219,7 +219,7 @@ contract LibConfigRegistryRegisterOnForksTest is Test {
         for (uint256 i = 0; i < logs.length; i++) {
             if (logs[i].emitter == address(registry) && logs[i].topics[0] == IConfigRegistryV4.Register.selector) {
                 assertEq(logs[i].topics.length, 1);
-                assertEq(logs[i].data, abi.encode(AUTHORITY, AUTHORITY, hashed, value));
+                assertEq(logs[i].data, abi.encode(AUTHORITY, AUTHORITY, hashed, VALUE_TYPE, value));
                 registers++;
             }
         }
