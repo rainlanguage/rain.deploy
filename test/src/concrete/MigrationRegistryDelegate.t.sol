@@ -97,8 +97,9 @@ contract MigrationRegistryDelegateTest is Test {
             otherNamespace,
             MIGRATION,
             1,
-            LibMigrationRegistry.onto(WRITER, otherNamespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            LibMigrationRegistry.onto(WRITER, otherNamespace, MIGRATION_HEAD_GENESIS),
+            ""
+        );
         assertEq(sRegistry.headV3(WRITER, otherNamespace), MIGRATION);
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION_HEAD_GENESIS);
     }
@@ -186,8 +187,8 @@ contract MigrationRegistryDelegateTest is Test {
         emit IMigrationRegistryV4.Migrated(DELEGATE, WRITER, NAMESPACE, MIGRATION, moment);
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV4(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS), ""
+        );
         assertEq(sRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), moment);
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION);
         assertEq(sRegistry.appliedV3(DELEGATE, NAMESPACE, MIGRATION), 0);
@@ -209,8 +210,9 @@ contract MigrationRegistryDelegateTest is Test {
             NAMESPACE,
             MIGRATION,
             appliedAt,
-            LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS),
+            ""
+        );
         assertEq(sRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION), appliedAt);
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), MIGRATION);
     }
@@ -223,10 +225,12 @@ contract MigrationRegistryDelegateTest is Test {
         sRegistry.approveV3(NAMESPACE, other);
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV4(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS), ""
+        );
         vm.prank(other);
-        sRegistry.applyMigrationV4(WRITER, NAMESPACE, SECOND, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION), "");
+        sRegistry.applyMigrationV4(
+            WRITER, NAMESPACE, SECOND, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION), ""
+        );
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), SECOND);
         assertEq(sRegistry.appliedOntoV3(WRITER, NAMESPACE, SECOND), MIGRATION);
     }
@@ -236,11 +240,11 @@ contract MigrationRegistryDelegateTest is Test {
     function testTheWriterNeedsNoApproval() external {
         vm.startPrank(WRITER);
         sRegistry.applyMigrationV4(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS), ""
+        );
         sRegistry.applyMigrationHistoryV4(
-            WRITER, NAMESPACE, SECOND, block.timestamp, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION)
-        , "");
+            WRITER, NAMESPACE, SECOND, block.timestamp, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION), ""
+        );
         vm.stopPrank();
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), SECOND);
     }
@@ -296,8 +300,8 @@ contract MigrationRegistryDelegateTest is Test {
         approveDelegate();
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV4(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS), ""
+        );
         Prerequisite[] memory ontoMigration = LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION);
         vm.expectRevert(
             abi.encodeWithSelector(IMigrationRegistryV4.MigrationAlreadyApplied.selector, WRITER, NAMESPACE, MIGRATION)
@@ -313,13 +317,13 @@ contract MigrationRegistryDelegateTest is Test {
         approveDelegate();
         vm.prank(WRITER);
         sRegistry.applyMigrationV4(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS), ""
+        );
         vm.warp(2000);
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV4(
-            DELEGATE, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(DELEGATE, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            DELEGATE, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(DELEGATE, NAMESPACE, MIGRATION_HEAD_GENESIS), ""
+        );
         Prerequisite[] memory ontoMigration = LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION);
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.TimestampBeforeHead.selector, 999, 1000));
         vm.prank(DELEGATE);
@@ -344,13 +348,15 @@ contract MigrationRegistryDelegateTest is Test {
         approveDelegate();
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV4(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS), ""
+        );
         vm.prank(WRITER);
         sRegistry.revokeV3(NAMESPACE, DELEGATE);
         vm.prank(DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV1.NotApproved.selector, WRITER, NAMESPACE, DELEGATE));
-        sRegistry.applyMigrationV4(WRITER, NAMESPACE, SECOND, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION), "");
+        sRegistry.applyMigrationV4(
+            WRITER, NAMESPACE, SECOND, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION), ""
+        );
         assertTrue(sRegistry.appliedV3(WRITER, NAMESPACE, MIGRATION) != 0);
     }
 
@@ -384,8 +390,8 @@ contract MigrationRegistryDelegateTest is Test {
             )
         );
         sRegistry.applyMigrationV4(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(DELEGATE, NAMESPACE, genesis)
-        , "");
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(DELEGATE, NAMESPACE, genesis), ""
+        );
     }
 
     /// A later entry in the writer's own line is the writer's own
@@ -394,8 +400,8 @@ contract MigrationRegistryDelegateTest is Test {
         approveDelegate();
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV4(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS), ""
+        );
         Prerequisite[] memory prerequisites = new Prerequisite[](2);
         prerequisites[0] = Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: MIGRATION});
         prerequisites[1] = Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: MIGRATION});
@@ -409,8 +415,8 @@ contract MigrationRegistryDelegateTest is Test {
         approveDelegate();
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV4(
-            DELEGATE, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(DELEGATE, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            DELEGATE, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(DELEGATE, NAMESPACE, MIGRATION_HEAD_GENESIS), ""
+        );
         Prerequisite[] memory prerequisites = new Prerequisite[](2);
         prerequisites[0] = Prerequisite({writer: WRITER, namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
         prerequisites[1] = Prerequisite({writer: DELEGATE, namespace: NAMESPACE, migration: MIGRATION});
@@ -428,10 +434,12 @@ contract MigrationRegistryDelegateTest is Test {
         approveDelegate();
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV4(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS), ""
+        );
         vm.prank(WRITER);
-        sRegistry.applyMigrationV4(WRITER, NAMESPACE, SECOND, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION), "");
+        sRegistry.applyMigrationV4(
+            WRITER, NAMESPACE, SECOND, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION), ""
+        );
         assertEq(sRegistry.headV3(WRITER, NAMESPACE), SECOND);
     }
 
@@ -444,16 +452,16 @@ contract MigrationRegistryDelegateTest is Test {
         assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), address(0));
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV4(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS), ""
+        );
         vm.prank(WRITER);
         sRegistry.applyMigrationHistoryV4(
-            WRITER, NAMESPACE, SECOND, 1000, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION)
-        , "");
+            WRITER, NAMESPACE, SECOND, 1000, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION), ""
+        );
         vm.prank(DELEGATE);
         sRegistry.applyMigrationHistoryV4(
-            WRITER, NAMESPACE, third, 1000, LibMigrationRegistry.onto(WRITER, NAMESPACE, SECOND)
-        , "");
+            WRITER, NAMESPACE, third, 1000, LibMigrationRegistry.onto(WRITER, NAMESPACE, SECOND), ""
+        );
         assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), DELEGATE);
         assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, SECOND), WRITER);
         assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, third), DELEGATE);
@@ -465,8 +473,8 @@ contract MigrationRegistryDelegateTest is Test {
         approveDelegate();
         vm.prank(DELEGATE);
         sRegistry.applyMigrationV4(
-            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
-        , "");
+            WRITER, NAMESPACE, MIGRATION, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS), ""
+        );
         vm.prank(WRITER);
         sRegistry.revokeV3(NAMESPACE, DELEGATE);
         assertEq(sRegistry.appliedByV3(WRITER, NAMESPACE, MIGRATION), DELEGATE);
