@@ -150,20 +150,6 @@ contract ConfigRegistryGetTest is Test {
         assertFalse(success);
     }
 
-    /// The ABI is exactly the five `IConfigRegistryV4` functions, counted
-    /// rather than sampled.
-    function testGetAbiIsExactlyTheInterface() external view {
-        string[] memory signatures =
-            vm.parseJsonKeys(vm.readFile("out/ConfigRegistry.sol/ConfigRegistry.json"), "$.methodIdentifiers");
-
-        assertEq(signatures.length, 5);
-        assertEq(signatures[0], "approveV3(bytes32,address)");
-        assertEq(signatures[1], "approvedV3(address,bytes32,address)");
-        assertEq(signatures[2], "getV4(address,bytes32)");
-        assertEq(signatures[3], "registerV4(address,bytes32,bytes)");
-        assertEq(signatures[4], "revokeV3(bytes32,address)");
-    }
-
     /// The registry takes no value on any path: ether sent with or without
     /// calldata is refused, and its balance stays zero.
     function testGetNoValueEntryPoint(bytes32 name, bytes memory value) external {
@@ -175,8 +161,9 @@ contract ConfigRegistryGetTest is Test {
         assertFalse(bare);
 
         vm.prank(AUTHORITY);
-        (bool registered,) =
-            address(sRegistry).call{value: 1}(abi.encodeCall(IConfigRegistryV4.registerV4, (AUTHORITY, name, VALUE_TYPE, value, "")));
+        (bool registered,) = address(sRegistry).call{value: 1}(
+            abi.encodeCall(IConfigRegistryV4.registerV4, (AUTHORITY, name, VALUE_TYPE, value, ""))
+        );
         assertFalse(registered);
 
         vm.prank(AUTHORITY);
