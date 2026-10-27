@@ -8,6 +8,8 @@ import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 import {IConfigRegistryV4} from "../../../src/interface/IConfigRegistryV4.sol";
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {VALUE_TYPE} from "../../lib/ConfigTestBinding.sol";
+import {rainMeta, isNotRainMeta} from "../../lib/RainMeta.sol";
+import {NotRainMetaV1} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
 
 /// @title ConfigRegistryMetaTest
 /// @notice `registerV4`'s `meta`: emitted as `MetaV1_2` by the writer about
@@ -30,7 +32,8 @@ contract ConfigRegistryMetaTest is Test {
     /// Non-empty meta is one `MetaV1_2` after `Register`, from the writer, about
     /// the authority's name.
     function testRegisterMetaEmitted(address authority, bytes32 name, bytes memory value, bytes memory meta) external {
-        vm.assume(value.length > 0 && meta.length > 0);
+        vm.assume(value.length > 0);
+        meta = rainMeta(meta);
         vm.recordLogs();
         vm.prank(authority);
         sRegistry.registerV4(authority, name, VALUE_TYPE, value, meta);
@@ -49,7 +52,8 @@ contract ConfigRegistryMetaTest is Test {
         bytes memory value,
         bytes memory meta
     ) external {
-        vm.assume(value.length > 0 && meta.length > 0);
+        vm.assume(value.length > 0);
+        meta = rainMeta(meta);
         vm.assume(delegate != address(0) && delegate != authority);
         vm.prank(authority);
         sRegistry.approveV4(name, delegate);
@@ -72,14 +76,54 @@ contract ConfigRegistryMetaTest is Test {
         assertEq(entries[0].topics[0], IConfigRegistryV4.Register.selector);
     }
 
-    /// A one-byte meta is non-empty.
-    function testRegisterOneByteMetaEmitted(address authority, bytes32 name, bytes1 b) external {
+    /// The magic number alone is rain meta.
+    function testRegisterBareMagicNumberMetaEmitted(address authority, bytes32 name) external {
         vm.recordLogs();
         vm.prank(authority);
-        sRegistry.registerV4(authority, name, VALUE_TYPE, hex"01", abi.encodePacked(b));
+        sRegistry.registerV4(authority, name, VALUE_TYPE, hex"01", hex"ff0a89c674ee7874");
         Vm.Log[] memory entries = vm.getRecordedLogs();
         assertEq(entries.length, 2);
-        assertMetaLog(entries[1], authority, keccak256(abi.encode(authority, name)), abi.encodePacked(b));
+        assertMetaLog(entries[1], authority, keccak256(abi.encode(authority, name)), hex"ff0a89c674ee7874");
+    }
+
+    /// Non-empty meta without the magic number reverts `NotRainMetaV1` and
+    /// binds nothing.
+    function testRegisterNotRainMetaReverts(address authority, bytes32 name, bytes memory value, bytes memory meta)
+        external
+    {
+        vm.assume(value.length > 0 && isNotRainMeta(meta));
+        vm.prank(authority);
+        vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, meta));
+        sRegistry.registerV4(authority, name, VALUE_TYPE, value, meta);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.NameNotRegistered.selector, authority, name));
+        sRegistry.getV4(authority, name);
+    }
+
+    /// A rebind refused for its meta leaves the earlier binding as it was.
+    function testRegisterNotRainMetaKeepsBinding(address authority, bytes32 name, bytes memory meta) external {
+        vm.assume(isNotRainMeta(meta));
+        vm.warp(10);
+        vm.prank(authority);
+        sRegistry.registerV4(authority, name, VALUE_TYPE, hex"01", "");
+        vm.warp(20);
+        vm.prank(authority);
+        vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, meta));
+        sRegistry.registerV4(authority, name, "uint256", hex"02", meta);
+        (bytes memory value, uint256 registeredAt, bytes32 valueTypeHash) = sRegistry.getV4(authority, name);
+        assertEq(value, hex"01");
+        assertEq(registeredAt, 10);
+        assertEq(valueTypeHash, keccak256(bytes(VALUE_TYPE)));
+    }
+
+    /// A short meta and one whose first bytes are almost the magic number are
+    /// both refused.
+    function testRegisterNearMissMetaReverts(address authority, bytes32 name) external {
+        bytes[3] memory metas = [bytes(hex"01"), bytes(hex"ff0a89c674ee78"), bytes(hex"ff0a89c674ee787500")];
+        for (uint256 i = 0; i < metas.length; i++) {
+            vm.prank(authority);
+            vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, metas[i]));
+            sRegistry.registerV4(authority, name, VALUE_TYPE, hex"01", metas[i]);
+        }
     }
 
     /// Every rebind of a name carries the same subject, and distinct names or
@@ -91,7 +135,7 @@ contract ConfigRegistryMetaTest is Test {
         bytes32 otherName,
         bytes memory meta
     ) external {
-        vm.assume(meta.length > 0);
+        meta = rainMeta(meta);
         vm.assume(other != authority && otherName != name);
         bytes32 subject = keccak256(abi.encode(authority, name));
         vm.warp(10);
@@ -117,7 +161,8 @@ contract ConfigRegistryMetaTest is Test {
     function testRegisterRefusedEmitsNoMeta(address authority, address sender, bytes32 name, bytes memory meta)
         external
     {
-        vm.assume(sender != authority && meta.length > 0);
+        vm.assume(sender != authority);
+        meta = rainMeta(meta);
         vm.recordLogs();
         vm.prank(sender);
         vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV2.NotApproved.selector, authority, name, sender));
@@ -133,7 +178,8 @@ contract ConfigRegistryMetaTest is Test {
     function testRegisterMetaNotStored(address authority, bytes32 name, bytes memory value, bytes memory meta)
         external
     {
-        vm.assume(value.length > 0 && meta.length > 0);
+        vm.assume(value.length > 0);
+        meta = rainMeta(meta);
         ConfigRegistry plain = new ConfigRegistry();
         ConfigRegistry withMeta = new ConfigRegistry();
 

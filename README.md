@@ -723,7 +723,9 @@ the exact string bound.
 `MetaV1_2(sender, subject, meta)` (`IMetaV1_2` from `rain.metadata`), with
 `sender` the caller and `subject` `keccak256(abi.encode(authority, name))`, the
 same for every bind of that name under that authority. An empty `meta` emits
-nothing. It is never stored and never validated: it lives in the logs only.
+nothing. A non-empty `meta` without the rain meta magic number reverts
+`NotRainMetaV1`, as `LibIMetaBoardV1_2.emitMeta` checks it. It is never stored,
+and nothing past that prefix is validated: it lives in the logs only.
 
 A consumer names the authority it trusts beside the name it resolves, both in
 its own creation code, and gets only what that authority bound. What the
@@ -1022,7 +1024,8 @@ refusals.
 Both take a trailing `bytes meta`, as `registerV4` does: non-empty, the same
 write emits `MetaV1_2(sender, subject, meta)` with `sender` the caller and
 `subject` `keccak256(abi.encode(writer, namespace, migration))`; empty, nothing.
-It is never stored and never validated.
+Non-empty `meta` without the rain meta magic number reverts `NotRainMetaV1`; it
+is never stored, and nothing past that prefix is validated.
 
 It exists because prod-state tests otherwise decide what to assert by reading
 the **clock**. The pattern that emerges without it is a dual-state invariant —

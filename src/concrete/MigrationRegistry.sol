@@ -4,6 +4,7 @@ pragma solidity =0.8.25;
 
 import {IMigrationRegistryV4, Prerequisite, MIGRATION_HEAD_GENESIS} from "../interface/IMigrationRegistryV4.sol";
 import {RegistryDelegates} from "../abstract/RegistryDelegates.sol";
+import {LibIMetaBoardV1_2} from "rain-metadata-0.1.43/src/lib/LibIMetaBoardV1_2.sol";
 
 /// @dev One line's record of one migration. Written in one call, so a record
 /// can never hold one half of itself.
@@ -161,7 +162,7 @@ contract MigrationRegistry is IMigrationRegistryV4, RegistryDelegates {
         checkPrerequisites(writer, namespace, prerequisites);
         writeMigrationRecord(writer, namespace, migration, appliedAt, prerequisites);
         if (meta.length > 0) {
-            emit MetaV1_2(msg.sender, keccak256(abi.encode(writer, namespace, migration)), meta);
+            LibIMetaBoardV1_2.emitMeta(keccak256(abi.encode(writer, namespace, migration)), meta);
         }
     }
 

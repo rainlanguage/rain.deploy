@@ -11,6 +11,7 @@ import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.
 import {LibConfigRegistryRegister, ConfigBinding} from "../../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {VALUE_TYPE_HASH, configBinding} from "../../lib/ConfigTestBinding.sol";
+import {rainMeta} from "../../lib/RainMeta.sol";
 
 /// @title LibConfigRegistryRegisterValueTypeMetaTest
 /// @notice `LibConfigRegistryRegister` refuses an empty value type before any
@@ -149,6 +150,7 @@ contract LibConfigRegistryRegisterValueTypeMetaTest is Test {
         bytes memory meta
     ) external {
         vm.assume(bytes(valueType).length > 0 && value.length > 0);
+        if (meta.length > 0) meta = rainMeta(meta);
         IConfigRegistryV4 registry = deployRegistry();
         vm.warp(1);
         bytes memory data =

@@ -352,8 +352,9 @@ struct Prerequisite {
 ///
 /// A write may carry rain metadata, emitted as `MetaV1_2` with subject
 /// `keccak256(abi.encode(writer, namespace, migration))`, the record it
-/// describes. Metadata is never stored or validated, and an empty one emits
-/// nothing.
+/// describes. Non-empty metadata without the rain meta magic number reverts
+/// `NotRainMetaV1`; metadata is never stored and its body never validated, and
+/// an empty one emits nothing.
 interface IMigrationRegistryV4 is IRegistryDelegatesV2, IMetaV1_2 {
     /// Thrown when a write is called with the zero migration id or given a
     /// prerequisite naming it, and by `appliedV4`, `appliedOntoV4`,
@@ -621,8 +622,10 @@ interface IMigrationRegistryV4 is IRegistryDelegatesV2, IMetaV1_2 {
     /// it MUST record `appliedAt`, `prerequisites` and the caller against
     /// `migration` in the line, make `migration` that line's new head, and
     /// emit `Migrated`, then, when `meta` is non-empty, `MetaV1_2(msg.sender,
-    /// keccak256(abi.encode(writer, namespace, migration)), meta)`. It MUST
-    /// NOT store or validate `meta`.
+    /// keccak256(abi.encode(writer, namespace, migration)), meta)`. A non-empty
+    /// `meta` that `LibMeta.isRainMetaV1` rejects MUST revert `NotRainMetaV1`,
+    /// after every other refusal. It MUST NOT store `meta` or validate its
+    /// body.
     ///
     /// Who may write is settled before anything else. The caller's own
     /// arguments are refused next, before anything is read, because a
