@@ -201,8 +201,8 @@ contract LibMigrationRegistryTest is Test {
         vm.warp(appliedAt);
 
         LibMigrationRegistry.applyMigrationV4(
-            address(this), namespace, migration, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            address(this), namespace, migration, one(address(this), namespace, MIGRATION_HEAD_GENESIS), ""
+        );
 
         assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migration), appliedAt);
         assertEq(
@@ -224,13 +224,13 @@ contract LibMigrationRegistryTest is Test {
         assertEq(LibMigrationRegistry.headV3(address(this), namespace), MIGRATION_HEAD_GENESIS);
 
         LibMigrationRegistry.applyMigrationV4(
-            address(this), namespace, migrationA, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            address(this), namespace, migrationA, one(address(this), namespace, MIGRATION_HEAD_GENESIS), ""
+        );
         assertEq(LibMigrationRegistry.headV3(address(this), namespace), migrationA);
 
         LibMigrationRegistry.applyMigrationV4(
-            address(this), namespace, migrationB, one(address(this), namespace, migrationA)
-        , "");
+            address(this), namespace, migrationB, one(address(this), namespace, migrationA), ""
+        );
         assertEq(LibMigrationRegistry.headV3(address(this), namespace), migrationB);
     }
 
@@ -248,20 +248,20 @@ contract LibMigrationRegistryTest is Test {
         deployRegistry();
 
         LibMigrationRegistry.applyMigrationV4(
-            address(this), namespace, migrationA, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            address(this), namespace, migrationA, one(address(this), namespace, MIGRATION_HEAD_GENESIS), ""
+        );
         assertEq(LibMigrationRegistry.headV3(address(this), namespace), migrationA);
         assertEq(LibMigrationRegistry.headV3(address(this), otherNamespace), MIGRATION_HEAD_GENESIS);
 
         LibMigrationRegistry.applyMigrationV4(
-            address(this), otherNamespace, migrationB, one(address(this), otherNamespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            address(this), otherNamespace, migrationB, one(address(this), otherNamespace, MIGRATION_HEAD_GENESIS), ""
+        );
         assertEq(LibMigrationRegistry.headV3(address(this), namespace), migrationA);
         assertEq(LibMigrationRegistry.headV3(address(this), otherNamespace), migrationB);
 
         LibMigrationRegistry.applyMigrationV4(
-            address(this), namespace, migrationB, one(address(this), namespace, migrationA)
-        , "");
+            address(this), namespace, migrationB, one(address(this), namespace, migrationA), ""
+        );
         assertEq(LibMigrationRegistry.headV3(address(this), namespace), migrationB);
         assertEq(LibMigrationRegistry.headV3(address(this), otherNamespace), migrationB);
         assertEq(LibMigrationRegistry.appliedOntoV3(address(this), namespace, migrationB), migrationA);
@@ -366,8 +366,8 @@ contract LibMigrationRegistryTest is Test {
         MockMigrationApplier upstream = new MockMigrationApplier();
         MockMigrationApplier applier = new MockMigrationApplier();
         upstream.applyMigrationV4(
-            address(upstream), namespace, prerequisite, one(address(upstream), namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            address(upstream), namespace, prerequisite, one(address(upstream), namespace, MIGRATION_HEAD_GENESIS), ""
+        );
 
         applier.applyMigrationV4(
             address(applier),
@@ -375,8 +375,9 @@ contract LibMigrationRegistryTest is Test {
             migration,
             headThen(
                 address(applier), namespace, MIGRATION_HEAD_GENESIS, one(address(upstream), namespace, prerequisite)
-            )
-        , "");
+            ),
+            ""
+        );
 
         assertEq(LibMigrationRegistry.appliedV3(address(applier), namespace, migration), block.timestamp);
         assertEq(LibMigrationRegistry.appliedOntoV3(address(applier), namespace, migration), MIGRATION_HEAD_GENESIS);
@@ -397,8 +398,8 @@ contract LibMigrationRegistryTest is Test {
         MockMigrationApplier other = new MockMigrationApplier();
 
         applier.applyMigrationV4(
-            address(applier), namespace, migration, one(address(applier), namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            address(applier), namespace, migration, one(address(applier), namespace, MIGRATION_HEAD_GENESIS), ""
+        );
 
         assertEq(other.appliedV3(address(applier), namespace, migration), block.timestamp);
         assertEq(other.appliedV3(address(other), namespace, migration), 0);
@@ -416,8 +417,8 @@ contract LibMigrationRegistryTest is Test {
         deployRegistry();
 
         LibMigrationRegistry.applyMigrationV4(
-            address(this), namespace, migration, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            address(this), namespace, migration, one(address(this), namespace, MIGRATION_HEAD_GENESIS), ""
+        );
 
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -550,8 +551,8 @@ contract LibMigrationRegistryTest is Test {
         assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migrationB), 0);
 
         LibMigrationRegistry.applyMigrationV4(
-            address(this), otherNamespace, migrationA, one(address(this), otherNamespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            address(this), otherNamespace, migrationA, one(address(this), otherNamespace, MIGRATION_HEAD_GENESIS), ""
+        );
         LibMigrationRegistry.applyMigrationV4(address(this), namespace, migrationB, list, "");
 
         assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migrationB), block.timestamp);
@@ -982,8 +983,8 @@ contract LibMigrationRegistryTest is Test {
         vm.warp(writtenAt);
 
         LibMigrationRegistry.applyMigrationHistoryV4(
-            address(this), namespace, migration, appliedAt, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            address(this), namespace, migration, appliedAt, one(address(this), namespace, MIGRATION_HEAD_GENESIS), ""
+        );
 
         assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migration), appliedAt);
         assertEq(
@@ -1045,14 +1046,14 @@ contract LibMigrationRegistryTest is Test {
         vm.warp(9000);
 
         LibMigrationRegistry.applyMigrationHistoryV4(
-            address(this), namespace, migrationA, 1000, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            address(this), namespace, migrationA, 1000, one(address(this), namespace, MIGRATION_HEAD_GENESIS), ""
+        );
         LibMigrationRegistry.applyMigrationHistoryV4(
-            address(this), namespace, migrationB, 2000, one(address(this), namespace, migrationA)
-        , "");
+            address(this), namespace, migrationB, 2000, one(address(this), namespace, migrationA), ""
+        );
         LibMigrationRegistry.applyMigrationHistoryV4(
-            address(this), namespace, migrationC, 3000, one(address(this), namespace, migrationB)
-        , "");
+            address(this), namespace, migrationC, 3000, one(address(this), namespace, migrationB), ""
+        );
 
         assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migrationA), 1000);
         assertEq(LibMigrationRegistry.appliedV3(address(this), namespace, migrationB), 2000);
@@ -1119,8 +1120,8 @@ contract LibMigrationRegistryTest is Test {
         vm.warp(9000);
 
         LibMigrationRegistry.applyMigrationHistoryV4(
-            address(this), namespace, migrationA, 2000, one(address(this), namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            address(this), namespace, migrationA, 2000, one(address(this), namespace, MIGRATION_HEAD_GENESIS), ""
+        );
 
         vm.expectRevert(abi.encodeWithSelector(IMigrationRegistryV4.TimestampBeforeHead.selector, 1999, 2000));
         this.externalApplyMigrationHistory(namespace, migrationB, 1999, one(address(this), namespace, migrationA));
@@ -1148,8 +1149,8 @@ contract LibMigrationRegistryTest is Test {
         MockMigrationApplier upstream = new MockMigrationApplier();
         MockMigrationApplier applier = new MockMigrationApplier();
         upstream.applyMigrationV4(
-            address(upstream), namespace, prerequisite, one(address(upstream), namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            address(upstream), namespace, prerequisite, one(address(upstream), namespace, MIGRATION_HEAD_GENESIS), ""
+        );
 
         Prerequisite[] memory prerequisites = headThen(
             address(applier), namespace, MIGRATION_HEAD_GENESIS, one(address(upstream), namespace, prerequisite)
@@ -1601,8 +1602,9 @@ contract LibMigrationRegistryTest is Test {
             address(this),
             namespace,
             migrationA,
-            LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            LibMigrationRegistry.onto(address(this), namespace, MIGRATION_HEAD_GENESIS),
+            ""
+        );
 
         vm.expectRevert(
             abi.encodeWithSelector(
