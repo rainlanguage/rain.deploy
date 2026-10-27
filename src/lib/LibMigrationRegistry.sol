@@ -310,9 +310,7 @@ library LibMigrationRegistry {
         bytes32 migration,
         Prerequisite[] memory prerequisites,
         bytes memory meta
-    )
-        internal
-    {
+    ) internal {
         checkCodeHash();
         IMigrationRegistryV4(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .applyMigrationV4(writer, namespace, migration, prerequisites, meta);
