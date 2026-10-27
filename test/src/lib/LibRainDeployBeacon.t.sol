@@ -86,7 +86,9 @@ contract LibRainDeployBeaconTest is Test {
         LibBeaconTest.applyMigration(vm, WRITER, namespace, migration, list);
     }
 
-    function applyAt(string memory namespace, string memory migration, uint256 moment, Prerequisite[] memory list) internal {
+    function applyAt(string memory namespace, string memory migration, uint256 moment, Prerequisite[] memory list)
+        internal
+    {
         vm.prank(WRITER);
         IMigrationRegistryV4(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
             .applyMigrationHistoryV4(WRITER, namespace, migration, moment, list);

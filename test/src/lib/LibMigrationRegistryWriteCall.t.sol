@@ -63,11 +63,11 @@ contract LibMigrationRegistryWriteCallTest is Test {
     /// @param prerequisites The list.
     /// @return The call's target.
     /// @return The call's data.
-    function externalApplyMigrationCall(string memory namespace, string memory migration, Prerequisite[] memory prerequisites)
-        external
-        view
-        returns (address, bytes memory)
-    {
+    function externalApplyMigrationCall(
+        string memory namespace,
+        string memory migration,
+        Prerequisite[] memory prerequisites
+    ) external view returns (address, bytes memory) {
         return LibMigrationRegistry.applyMigrationV4Call(address(this), namespace, migration, prerequisites);
     }
 
@@ -128,7 +128,8 @@ contract LibMigrationRegistryWriteCallTest is Test {
 
         Prerequisite[] memory prerequisites = new Prerequisite[](2);
         prerequisites[0] = Prerequisite({writer: sender, namespace: namespaceHash, migration: MIGRATION_HEAD_GENESIS});
-        prerequisites[1] = Prerequisite({writer: upstream, namespace: upstreamNamespaceHash, migration: prerequisiteHash});
+        prerequisites[1] =
+            Prerequisite({writer: upstream, namespace: upstreamNamespaceHash, migration: prerequisiteHash});
 
         (address to, bytes memory data) =
             LibMigrationRegistry.applyMigrationV4Call(sender, namespace, migration, prerequisites);
@@ -142,7 +143,8 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assertEq(LibMigrationRegistry.headV4(sender, namespaceHash), migrationHash);
         assertEq(LibMigrationRegistry.appliedOntoV4(sender, namespaceHash, migrationHash), MIGRATION_HEAD_GENESIS);
         assertEq(
-            abi.encode(LibMigrationRegistry.appliedAfterV4(sender, namespaceHash, migrationHash)), abi.encode(prerequisites)
+            abi.encode(LibMigrationRegistry.appliedAfterV4(sender, namespaceHash, migrationHash)),
+            abi.encode(prerequisites)
         );
         assertEq(LibMigrationRegistry.appliedV4(address(this), namespaceHash, migrationHash), 0);
     }
@@ -204,16 +206,20 @@ contract LibMigrationRegistryWriteCallTest is Test {
         assertEq(LibMigrationRegistry.appliedV4(sender, namespaceHash, migrationBHash), appliedAt);
         assertEq(LibMigrationRegistry.headV4(sender, namespaceHash), migrationBHash);
         assertEq(LibMigrationRegistry.appliedOntoV4(sender, namespaceHash, migrationBHash), migrationAHash);
-        assertEq(abi.encode(LibMigrationRegistry.appliedAfterV4(sender, namespaceHash, migrationBHash)), abi.encode(ontoA));
+        assertEq(
+            abi.encode(LibMigrationRegistry.appliedAfterV4(sender, namespaceHash, migrationBHash)), abi.encode(ontoA)
+        );
         assertEq(LibMigrationRegistry.appliedV4(address(this), namespaceHash, migrationAHash), 0);
     }
 
     /// A call that names the account that BUILT it as the writer, sent by
     /// another, is refused: the script is nobody's writer, and the sender has
     /// no approval for its line.
-    function testApplyMigrationCallNamingTheBuilderIsRefused(address sender, string memory namespace, string memory migration)
-        external
-    {
+    function testApplyMigrationCallNamingTheBuilderIsRefused(
+        address sender,
+        string memory namespace,
+        string memory migration
+    ) external {
         bytes32 namespaceHash = keccak256(bytes(namespace));
         bytes32 migrationHash = keccak256(bytes(migration));
         assumeSender(sender);
@@ -243,7 +249,9 @@ contract LibMigrationRegistryWriteCallTest is Test {
     /// empty registry address SUCCEEDS, so a bundle executed there records
     /// nothing and reports nothing. Building the call refuses that chain,
     /// naming the empty account's code hash.
-    function testApplyMigrationCallNoRegistry(address sender, string memory namespace, string memory migration) external {
+    function testApplyMigrationCallNoRegistry(address sender, string memory namespace, string memory migration)
+        external
+    {
         bytes32 namespaceHash = keccak256(bytes(namespace));
         assumeSender(sender);
         assertEq(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);

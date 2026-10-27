@@ -1490,7 +1490,9 @@ contract LibRainDeployTest is Test {
     /// changes what the registry answers but cannot change what the deployed
     /// contract holds, so the check still passes against the address the
     /// deployment actually took.
-    function testCheckResolvedAddressesUnaffectedByRebinding(string memory name, address account, address rebound) external {
+    function testCheckResolvedAddressesUnaffectedByRebinding(string memory name, address account, address rebound)
+        external
+    {
         vm.assume(account != address(0));
         vm.assume(rebound != address(0));
         vm.assume(rebound != account);

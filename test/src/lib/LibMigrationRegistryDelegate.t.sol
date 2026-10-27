@@ -6,7 +6,11 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {IMigrationRegistryV4, MIGRATION_HEAD_GENESIS, Prerequisite} from "../../../src/interface/IMigrationRegistryV4.sol";
+import {
+    IMigrationRegistryV4,
+    MIGRATION_HEAD_GENESIS,
+    Prerequisite
+} from "../../../src/interface/IMigrationRegistryV4.sol";
 import {IRegistryDelegatesV1} from "../../../src/interface/IRegistryDelegatesV1.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
@@ -104,7 +108,12 @@ contract LibMigrationRegistryDelegateTest is Test {
             data,
             abi.encodeCall(
                 IMigrationRegistryV4.applyMigrationV4,
-                (WRITER, NAMESPACE_NAME, MIGRATION_NAME, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS))
+                (
+                    WRITER,
+                    NAMESPACE_NAME,
+                    MIGRATION_NAME,
+                    LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION_HEAD_GENESIS)
+                )
             )
         );
         send(DELEGATE, to, data);
@@ -157,7 +166,11 @@ contract LibMigrationRegistryDelegateTest is Test {
         assertEq(LibMigrationRegistry.appliedV4(WRITER, NAMESPACE, MIGRATION), block.timestamp);
 
         LibMigrationRegistry.applyMigrationHistoryV4(
-            WRITER, NAMESPACE_NAME, SECOND_NAME, block.timestamp, LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION)
+            WRITER,
+            NAMESPACE_NAME,
+            SECOND_NAME,
+            block.timestamp,
+            LibMigrationRegistry.onto(WRITER, NAMESPACE, MIGRATION)
         );
         assertEq(LibMigrationRegistry.appliedV4(WRITER, NAMESPACE, SECOND), block.timestamp);
         assertEq(LibMigrationRegistry.headV4(WRITER, NAMESPACE), SECOND);
