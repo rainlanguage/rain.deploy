@@ -1024,8 +1024,8 @@ refusals.
 Both take a trailing `bytes meta`, as `registerV4` does: non-empty, the same
 write emits `MetaV1_2(sender, subject, meta)` with `sender` the caller and
 `subject` `keccak256(abi.encode(writer, namespace, migration))`; empty, nothing.
-Non-empty `meta` without the rain meta magic number reverts `NotRainMetaV1`;
-it is never stored, and nothing past that prefix is validated.
+Non-empty `meta` without the rain meta magic number reverts `NotRainMetaV1`; it
+is never stored, and nothing past that prefix is validated.
 
 It exists because prod-state tests otherwise decide what to assert by reading
 the **clock**. The pattern that emerges without it is a dual-state invariant —
