@@ -75,8 +75,8 @@ contract MigrationRegistryAppliedTest is Test {
         vm.warp(writtenAt);
         vm.prank(writer);
         sRegistry.applyMigrationHistoryV4(
-            writer, namespace, migration, appliedAt, onto(writer, namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            writer, namespace, migration, appliedAt, onto(writer, namespace, MIGRATION_HEAD_GENESIS), ""
+        );
 
         vm.warp(readAt);
         assertEq(sRegistry.appliedV3(writer, namespace, migration), appliedAt);
@@ -104,8 +104,8 @@ contract MigrationRegistryAppliedTest is Test {
         vm.warp(writtenAt);
         vm.prank(writer);
         sRegistry.applyMigrationHistoryV4(
-            writer, namespace, migration, appliedAt, onto(writer, namespace, MIGRATION_HEAD_GENESIS)
-        , "");
+            writer, namespace, migration, appliedAt, onto(writer, namespace, MIGRATION_HEAD_GENESIS), ""
+        );
 
         vm.warp(readAt);
         assertLe(sRegistry.appliedV3(writer, namespace, migration), block.timestamp);
