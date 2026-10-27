@@ -432,7 +432,7 @@ function beacons() internal view override returns (ChainBeacon[] memory) {
     beacon.initial = BeaconState({implementation: "vault@0_1_1", owner: ARBITRUM_TIMELOCK});
     beacon.transitions = new BeaconTransition[](1);
     beacon.transitions[0] = BeaconTransition({
-        migration: Prerequisite({writer: SAFE, namespace: NAMESPACE, migration: UPGRADE_0_2_0}),
+        migration: Prerequisite({writer: SAFE, namespace: NAMESPACE_HASH, migration: UPGRADE_0_2_0_HASH}),
         state: BeaconState({implementation: "vault@0_2_0", owner: ARBITRUM_TIMELOCK})
     });
     return chainBeacons;
@@ -440,7 +440,7 @@ function beacons() internal view override returns (ChainBeacon[] memory) {
 ```
 
 On each network's fork the chain group expects the state of the latest
-transition the network's registry reports `appliedV3`, else `initial`: the
+transition the network's registry reports `appliedV4`, else `initial`: the
 beacon at its code hash, `implementation()` at that suite's address on the
 network, `owner()` at that owner, and the beacon's own suite, when it names one,
 and that state's implementation suite live there as any suite is. A suite a
@@ -500,7 +500,7 @@ pre-fork one.
 
 Declare transitions in the order their migrations are applied: each applied
 transition's record MUST reach the latest earlier-declared applied one through
-`appliedAfterV3` (its line's head, then its prerequisites), refused otherwise
+`appliedAfterV4` (its line's head, then its prerequisites), refused otherwise
 with `BeaconTransitionsOutOfOrder`; moments are never compared. Each transition
 names a distinct migration, refused otherwise with
 `BeaconTransitionMigrationRepeated`, and one the registry can record (nonzero
@@ -515,7 +515,7 @@ transition, across lines, in fewer steps than the earlier one, and every
 reachable record back to each line's genesis when the earlier one is not
 reached. Apply a transition's migration in the same transaction as the beacon
 change it describes (one Safe batch: `upgradeTo` or `transferOwnership`, then
-`applyMigrationV3`; for an `Ownable2Step` beacon the handover's migration goes
+`applyMigrationV4`; for an `Ownable2Step` beacon the handover's migration goes
 in the batch that calls `acceptOwnership`, as `owner()` moves only then).
 Between two separate transactions the chain group refuses the network, as the
 chain and the registry disagree.
@@ -699,20 +699,31 @@ wrong explorer.
 
 ## Config registry
 
-`ConfigRegistry` binds an opaque `bytes32` name to ABI-encoded `bytes`: an
-address, a role id, a threshold, a list of accounts, anything a deployment would
-otherwise compile in. Bindings are keyed by authority: any account binds a name
-under its own address, or under an authority that approved it as a delegate for
-that name (`approveV3`, `revokeV3`, read by `approvedV3`); anyone reads a name
-under an authority it names, and reading a name that authority has not bound
-reverts rather than answering empty. The interface is `IConfigRegistryV3`. There
-is no removal, no upgrade, and no way to write under an account that has not
-approved the writer.
+`ConfigRegistry` binds a string name to ABI-encoded `bytes` of a named ABI type:
+an address, a role id, a threshold, a list of accounts, anything a deployment
+would otherwise compile in. A write
+(`registerV4(authority, name, valueType,
+value)`) takes the name and the type as
+strings, such as `"st0x.token-owner-safe"` and `"address"`; the registry hashes
+each with `keccak256(bytes(...))`, keys the binding by the name's hash, stores
+the type's hash beside the value, and emits both strings in `Register` beside
+the name's hash, so the log says what every binding is called and how to decode
+it. An empty name, type or value is refused (`EmptyName`, `EmptyValueType`,
+`EmptyValue`). A read (`getV4(authority, nameHash)`) takes the name's hash and
+answers the value, the moment it was bound and the type's hash.
+
+Bindings are keyed by authority: any account binds a name under its own address,
+or under an authority that approved it as a delegate for that name's hash
+(`approveV3`, `revokeV3`, read by `approvedV3`); anyone reads a name under an
+authority it names, and reading a name that authority has not bound reverts
+rather than answering empty. The interface is `IConfigRegistryV4`. There is no
+removal, no upgrade, and no way to write under an account that has not approved
+the writer.
 
 A consumer names the authority it trusts beside the name it resolves, both in
 its own creation code, and gets only what that authority bound. What the
 consumer then trusts, and what a contract authority must do on every network, is
-in `IConfigRegistryV3`'s NatSpec under "The authority and its delegates are the
+in `IConfigRegistryV4`'s NatSpec under "The authority and its delegates are the
 whole access control" and "Delegation is per authority and name". A delegate can
 rebind the name it was approved for, so a consumer's prod tests assert
 `approvedV3` is false for every retired delegate beside the true answers for the
@@ -721,11 +732,11 @@ live ones.
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
 registry is deployed on a network, an authority binds each name its consumers
 resolve with `script/RegisterConfig.sol` (value
-`cast abi-encode "f(address)" <account>`, and `CONFIG_REGISTRY_NETWORKS` naming
-the networks it is deployed on until that is every declared one) before those
-consumers deploy against it. Which names and which authority are each consumer's
-to declare; until a name is bound under that authority, its
-`LibConfigRegistry.resolve` reverts.
+`cast abi-encode "f(address)" <account>` of type `address`, and
+`CONFIG_REGISTRY_NETWORKS` naming the networks it is deployed on until that is
+every declared one) before those consumers deploy against it. Which names and
+which authority are each consumer's to declare; until a name is bound under that
+authority, its `LibConfigRegistry.resolve` reverts.
 
 Bindings are **mutable**, because the configuration they name is. Rotating an
 owning multisig is ordinary business and has to be expressible without moving
@@ -740,12 +751,20 @@ re-binding a name changes what the _next_ deployment resolves and nothing else,
 which makes a rotation a deliberate migration rather than a silent change to
 live contracts.
 
-`LibConfigRegistry.resolve(authority, name)` is the read, verifying the
-registry's code hash first, the same way `LibRainDeploy` verifies the Zoltu
-factory's. It resolves a name under an authority to the bound bytes and never
-decodes them: only the consumer knows the type it expects, so the consumer
-decodes, as `abi.decode(value, (address))` for an address. What it does with the
-value, and when, is the consumer's business.
+`LibConfigRegistry.resolve(authority, nameHash, valueTypeHash)` is the read,
+verifying the registry's code hash first, the same way `LibRainDeploy` verifies
+the Zoltu factory's. It resolves a name's hash under an authority to the bound
+bytes and the moment they were bound, and reverts `UnexpectedValueType` unless
+the binding was made as the type whose hash the consumer passes, such as
+`keccak256("address")`. It never decodes the bytes: the consumer decodes, as
+`abi.decode(value, (address))` for an `address` binding. The type is the
+authority's statement and is never parsed, so `abi.decode` remains the only
+check on the bytes themselves.
+`resolveSafe(authority, nameHash, valueTypeHash,
+minAge)` is `resolve` that also
+refuses a binding that has not stood for longer than `minAge`
+(`BindingTooFresh`, `BindingStampedInFuture`, `ZeroMinAge`) and returns the
+value alone. What the consumer does with the value, and when, is its business.
 
 `LibRainDeploy` carries the **post-deploy** verification: on every target
 network, the deployed contract must hold the value the deployment expected. It
@@ -793,31 +812,42 @@ The script signs as an EOA. A Safe or timelock authority either approves that
 EOA as a delegate, once per network through its own execution path
 (`approveV3(name, delegate)`), after which the EOA runs the script with
 `--sender` set to itself, or submits
-`registerV3(authority, keccak256("<org>.<name>"),
-value)` to the registry itself
+`registerV4(authority, "<org>.<name>", valueType, value)` to the registry itself
 and then runs step 3 below (`verify`), which reads under any authority. An
 approval lets the delegate rebind that one name under the authority until it is
-revoked (`revokeV3(name, delegate)`) on that network. An EOA authority approves
-or revokes a delegate, such as a Safe, with `script/ApproveConfigDelegate.sol`
-("Approving a delegate" below).
+revoked (`revokeV3(name, delegate)`) on that network; both take the name's hash
+`keccak256("<org>.<name>")`. An EOA authority approves or revokes a delegate,
+such as a Safe, with `script/ApproveConfigDelegate.sol` ("Approving a delegate"
+below).
 
-**The name is the string consumers hash.** Consumers derive a name as
+**The name is the string consumers hash.** Consumers resolve a name as
 `keccak256("<org>.<name>")` — st0x resolves its token-owner Safe as
-`keccak256("st0x.token-owner-safe")` — so the script takes that string and
-hashes it itself. There is no `bytes32` input, so there is no other encoding to
-bind under by mistake. The string must be lowercase letters and digits with
-single `.` or `-` separators, starting with a letter and containing the `.`
-after its `<org>`; anything else (a capital, a stray space or newline, an
-already-hashed `0x…`, a name with its `<org>.` dropped) is refused, because it
-is a near miss of a real name that no consumer resolves.
+`keccak256("st0x.token-owner-safe")` — and the registry derives that hash from
+the string a write names, so the script takes the string. There is no `bytes32`
+input, so there is no other encoding to bind under by mistake. The string must
+be lowercase letters and digits with single `.` or `-` separators, starting with
+a letter and containing the `.` after its `<org>`; anything else (a capital, a
+stray space or newline, an already-hashed `0x…`, a name with its `<org>.`
+dropped) is refused, because it is a near miss of a real name that no consumer
+resolves.
 
 **The value is ABI-encoded.** The script binds ABI-encoded values only and
 refuses one that is not a whole number of 32-byte words, though the registry
 itself binds any non-empty bytes.
 
+**The value type is the ABI type consumers decode as.**
+`CONFIG_REGISTRY_VALUE_TYPE` is the ABI type string of the value's encoding —
+`address` for `cast abi-encode "f(address)" <account>`, `uint256`, `address[]`,
+`(address,uint256)` — which the registry hashes and stores beside the value, and
+which a consumer's `resolve` refuses unless its hash is the one the consumer
+compiled in. The script refuses a type that is empty or uses any character but
+lowercase letters, digits, `(`, `)`, `,`, `[` and `]` (`NonCanonicalValueType`):
+a space, a capital or a pasted newline is a type no consumer decodes as.
+
 It binds on every declared network by default — one binding everywhere, as the
 deployment is the same everywhere — and a network already bound to the same
-value is skipped, so a run that stopped partway is fixed by running it again.
+value as the same type is skipped, so a run that stopped partway is fixed by
+running it again. A network bound to the same value as another type is rebound.
 The default needs the registry deployed on every declared network: it checks the
 registry's code hash on each and reverts `UnexpectedConfigRegistryCodeHash` on
 the first one without it, binding nothing. While the registry is on only some
@@ -862,6 +892,8 @@ networks, set `CONFIG_REGISTRY_NETWORKS` to those.
 export CONFIG_REGISTRY_NAME=st0x.token-owner-safe
 # The value, as 0x hex of its ABI encoding. For an address:
 export CONFIG_REGISTRY_VALUE=$(nix develop -c cast abi-encode "f(address)" 0x...)
+# The ABI type of that encoding:
+export CONFIG_REGISTRY_VALUE_TYPE=address
 # Optional, to bind on fewer networks than all of them:
 # export CONFIG_REGISTRY_NETWORKS=base,arbitrum
 
@@ -876,7 +908,8 @@ nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
   --sender "$CONFIG_REGISTRY_SENDER" --trezor --legacy --broadcast
 
 # 3. Once every transaction is mined: reads every network fresh and fails
-#    unless the name resolves to the value under the authority on each.
+#    unless the name resolves to the value, as the value type, under the
+#    authority on each.
 nix develop -c forge script script/RegisterConfig.sol:RegisterConfig --sig "verify()"
 ```
 
@@ -885,32 +918,33 @@ estimation asks for. No `--rpc-url`: the script forks each network's alias
 itself.
 
 Before anything is signed the run refuses, with an error naming what is wrong: a
-non-canonical name, an empty value, a value that is not a whole number of
-32-byte words (a bare 20-byte address, say, rather than its ABI encoding), a
-network the repo does not support or one named twice, a network whose endpoint
-reports another chain id than the catalogue states for it, a registry address
-that does not hold the pinned registry code, and a signer that is neither the
-authority nor a delegate the authority approved on that network. With
-`--broadcast`, forge itself is a second layer: it refuses a device that is not
-the signer before sending on any network, with
+non-canonical name, a non-canonical value type, an empty value, a value that is
+not a whole number of 32-byte words (a bare 20-byte address, say, rather than
+its ABI encoding), a network the repo does not support or one named twice, a
+network whose endpoint reports another chain id than the catalogue states for
+it, a registry address that does not hold the pinned registry code, and a signer
+that is neither the authority nor a delegate the authority approved on that
+network. With `--broadcast`, forge itself is a second layer: it refuses a device
+that is not the signer before sending on any network, with
 `No associated wallet for addresses: [<signer>]`. A refused run signs nothing.
 
-The dry run prints the name, its hash, the value, the authority, the signer, the
-registry address and the exact calldata, then for each network its chain id, the
-authority's current binding (`unbound`, or the value and the moment it was
-bound) and what will happen: `BIND`, `REBIND` (old → new) or `SKIP`. That is the
-record to approve against. For each transaction the device shows:
+The dry run prints the name, its hash, the value type, its hash, the value, the
+authority, the signer, the registry address and the exact calldata, then for
+each network its chain id, the authority's current binding (`unbound`, or the
+value, its type hash and the moment it was bound) and what will happen: `BIND`,
+`REBIND` or `SKIP`, each naming the value and the type. That is the record to
+approve against. For each transaction the device shows:
 
 - **Recipient**: the registry address the dry run printed
   (`LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS`);
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
-- **Data**: exactly the `Calldata:` line the dry run printed: `registerV3`'s
-  selector, the authority, the name hash, the offset `0x60`, the value's length
-  and the value padded to a multiple of 32 bytes. The device cannot decode
-  `registerV3`, so it shows the raw bytes; open the full data on the device to
-  compare them.
+- **Data**: exactly the `Calldata:` line the dry run printed: `registerV4`'s
+  selector `0xff7a399f`, the authority, the offsets of the name, the value type
+  and the value, then each of those as its length followed by its bytes padded
+  to a multiple of 32 bytes. The device cannot decode `registerV4`, so it shows
+  the raw bytes; open the full data on the device to compare them.
 
 Labels vary by firmware; whatever they are called, the recipient, amount, chain
 and raw calldata must each match the dry run. Reject on the device if any of
@@ -964,9 +998,9 @@ amount 0, the network, and the `Calldata:` line as data: `approveV3`'s selector
 `0xd04b1603` or `revokeV3`'s `0x786d07ab`, then the name hash and the delegate.
 
 A Safe delegate then binds by executing
-`registerV3(authority, keccak256("<org>.<name>"), value)` on the registry from
-the Safe, on each network, and `RegisterConfig`'s `verify()` checks the binding
-under the authority.
+`registerV4(authority, "<org>.<name>", valueType, value)` on the registry from
+the Safe, on each network, and `RegisterConfig`'s `verify()` checks the binding,
+value and type, under the authority.
 
 ## Migration registry
 
@@ -974,19 +1008,29 @@ under the authority.
 what: a write names its writer and a namespace, and that writer or a delegate it
 approved for the namespace applies one migration in that line after one list —
 the migration it believes ran last in that line, then the migrations in any
-other line it waits on (`applyMigrationV3`, or `applyMigrationHistoryV3` for one
+other line it waits on (`applyMigrationV4`, or `applyMigrationHistoryV4` for one
 that already ran). Anyone reads when a given writer's line in a given namespace
-applied a given one (`appliedV3`), what it applied it onto (`appliedOntoV3`),
-what it applied it after (`appliedAfterV3`), which account wrote the record
-(`appliedByV3`), and where that line has got to (`headV3`). A writer approves
+applied a given one (`appliedV4`), what it applied it onto (`appliedOntoV4`),
+what it applied it after (`appliedAfterV4`), which account wrote the record
+(`appliedByV4`), and where that line has got to (`headV4`). A writer approves
 and revokes delegates per namespace (`approveV3`, `revokeV3`, read by
 `approvedV3`). There is no removal and no upgrade. The interface is
-`IMigrationRegistryV3`.
+`IMigrationRegistryV4`.
+
+A write takes the namespace and the migration as strings, such as the namespace
+`"st0x.deploy"`. The registry hashes each with `keccak256(bytes(...))`, keys the
+record, the head and the delegate scope by those hashes, and emits both strings
+in `Migrated` beside their hashes, so the log says what every line and record is
+called. An empty namespace or migration is refused (`EmptyNamespace`,
+`EmptyMigration`). Everything else — every read, every approval, every
+`Prerequisite` entry and every error — takes or names the hashes. In the
+examples below, `NAMESPACE` and `MIGRATION_V1` are a repo's string constants,
+and `NAMESPACE_HASH` and `MIGRATION_V1_HASH` their `keccak256(bytes(...))`.
 
 The two writes differ in exactly one thing: where the recorded moment comes
-from. `applyMigrationV3` stamps the block the record lands in, for a script
+from. `applyMigrationV4` stamps the block the record lands in, for a script
 applying its own migration in the same atomic unit as the migration itself.
-`applyMigrationHistoryV3` takes the moment as an argument, so a migration that
+`applyMigrationHistoryV4` takes the moment as an argument, so a migration that
 ran before the registry reached the chain is recordable with the time it
 actually ran. They write the same record, into the same line, and make the same
 refusals.
@@ -1001,18 +1045,18 @@ rather than on a fact. What you actually want is "**exactly** the value implied
 by the migrations that have run", which needs the chain to hold which ones have:
 
 ```solidity
-if (LibMigrationRegistry.appliedV3(SAFE, NAMESPACE, MIGRATION_V2) != 0) {
+if (LibMigrationRegistry.appliedV4(SAFE, NAMESPACE_HASH, MIGRATION_V2_HASH) != 0) {
     assertEq(vault.owner(), NEW_OWNER);
 } else {
     assertEq(vault.owner(), OLD_OWNER);
 }
 ```
 
-Both branches assert exactly. Neither skips, and `appliedV3` answering zero is
+Both branches assert exactly. Neither skips, and `appliedV4` answering zero is
 an ordinary expected answer rather than a revert — it is the state of every
 migration before it runs, and of every migration on a chain that never got it.
 
-**`appliedV3` is a timestamp, not a flag.** "Which invariant applies" is
+**`appliedV4` is a timestamp, not a flag.** "Which invariant applies" is
 frequently "which invariant applies _yet_": a cliff that starts at the
 migration, a rate that changes a week after it. A flag sends a consumer that
 needs the moment back to a hardcoded date, which is the thing this registry
@@ -1038,7 +1082,7 @@ that `appliedAt` is the block the record landed in. Everything else is kept, by
 three refusals:
 
 - **Never zero** (`ZeroTimestamp`), or the record would read back through
-  `appliedV3` as no record while the head had moved and the migration could
+  `appliedV4` as no record while the head had moved and the migration could
   never be applied again.
 - **Never after the block it is written in** (`FutureTimestamp`). A migration
   that has run has run, so a moment still to come is not a late record of
@@ -1056,11 +1100,11 @@ block it is written in, and two records may carry the same moment: two
 migrations applied in one transaction share a block, and two backfilled to the
 same day share a moment, so forcing them apart would demand a precision the
 moments do not have. Which of them ran first is the chain, not the moments —
-total order comes from `appliedOntoV3`, and the bound above only stops a record
+total order comes from `appliedOntoV4`, and the bound above only stops a record
 claiming to predate the one it is chained onto.
 
 Both writes get all three, `block.timestamp` included: a block whose timestamp
-is zero is `ZeroTimestamp` on `applyMigrationV3`, which a test that warps to
+is zero is `ZeroTimestamp` on `applyMigrationV4`, which a test that warps to
 zero and a chain configured from a zero genesis both reach.
 
 **A set of applied migrations, not a high-water mark.** A mark needs a total
@@ -1068,7 +1112,7 @@ order consumers do not have: two migrations authored on one day collide, and one
 migration split across two scripts because it landed on two networks a week
 apart cannot be one comparable value at all. A set represents both exactly, and
 the ordering between migrations moves into the assertion —
-`appliedV3(V5) != 0 ? … : appliedV3(V4) != 0 ? … : …` — which is where the
+`appliedV4(V5) != 0 ? … : appliedV4(V4) != 0 ? … : …` — which is where the
 semantic dependency actually lives.
 
 **A head, so a step cannot be skipped or repeated.** A line — one writer's
@@ -1086,18 +1130,18 @@ everything about that line, so every later entry names a record in another line.
 ```solidity
 Prerequisite[] memory prerequisites = new Prerequisite[](1);
 // The first migration in a line, applied in this transaction.
-prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
-LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V1, prerequisites);
+prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE_HASH, migration: MIGRATION_HEAD_GENESIS});
+LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V1, prerequisites);
 // Every later one names its predecessor.
-prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V1});
-LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V2, prerequisites);
+prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE_HASH, migration: MIGRATION_V1_HASH});
+LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V2, prerequisites);
 // One that ran before the registry reached this chain names the moment it ran.
-prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
-LibMigrationRegistry.applyMigrationHistoryV3(address(this), NAMESPACE, MIGRATION_V3, 1750000000, prerequisites);
+prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE_HASH, migration: MIGRATION_V2_HASH});
+LibMigrationRegistry.applyMigrationHistoryV4(address(this), NAMESPACE, MIGRATION_V3, 1750000000, prerequisites);
 ```
 
-Each record keeps that first entry, which `appliedOntoV3` reads back, so a line
-is a chain in storage rather than a set of moments to sort: from `headV3`, each
+Each record keeps that first entry, which `appliedOntoV4` reads back, so a line
+is a chain in storage rather than a set of moments to sort: from `headV4`, each
 answer names the record before it, down to `MIGRATION_HEAD_GENESIS`. That chain
 is the order the migrations ran in whatever moments the records carry.
 
@@ -1122,14 +1166,15 @@ repo would name, as its head, whatever the last migration in some other repo
 was, every dispatch across the repos would contend on one compare-and-set, and a
 stalled line in one repo would hold the head for all of them. So records are
 keyed by `(writer, namespace, migration)`, with a head per writer and namespace,
-and the same key keeps one line per repo. A namespace is an opaque `bytes32` the
-repo declares beside its migration ids, one named constant per repo; the
-registry refuses only zero (`ZeroNamespace`), on every read and on every write
-by the writer itself (any other caller is `NotApproved` first, since no approval
-names zero), for the same reason it refuses the zero writer. There is no plain
-line outside the namespaces: every write names one, and the writer's other
-namespaces are other lines, which a write may wait on exactly as it waits on
-another writer's.
+and the same key keeps one line per repo. A namespace is a string the repo
+declares beside its migration names, one named constant per repo, and the
+registry constrains it no further than a write refusing it empty
+(`EmptyNamespace`, after `ZeroWriter` and `NotApproved`). Where its hash is
+taken rather than derived — a read, a prerequisite, an approval — the zero hash
+is refused (`ZeroNamespace`): it is what an uninitialised `bytes32` constant
+reads as, and no known string hashes to it. There is no plain line outside the
+namespaces: every write names one, and the writer's other namespaces are other
+lines, which a write may wait on exactly as it waits on another writer's.
 
 **A migration may wait on migrations in other lines.** Every entry after the
 head in the list of `Prerequisite { writer, namespace, migration }` is one, and
@@ -1145,20 +1190,20 @@ and the head still orders its own line exactly as before.
 
 ```solidity
 // Lands only once FLEET_SAFE has recorded FLEET_UPGRADE in FLEET_NAMESPACE;
-// refused with `PrerequisiteNotApplied(FLEET_SAFE, FLEET_NAMESPACE, FLEET_UPGRADE)`
+// refused with `PrerequisiteNotApplied(FLEET_SAFE, FLEET_NAMESPACE_HASH, FLEET_UPGRADE_HASH)`
 // until then.
 Prerequisite[] memory prerequisites = new Prerequisite[](2);
-prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
-prerequisites[1] = Prerequisite({writer: FLEET_SAFE, namespace: FLEET_NAMESPACE, migration: FLEET_UPGRADE});
-LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V3, prerequisites);
+prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE_HASH, migration: MIGRATION_V2_HASH});
+prerequisites[1] = Prerequisite({writer: FLEET_SAFE, namespace: FLEET_NAMESPACE_HASH, migration: FLEET_UPGRADE_HASH});
+LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V3, prerequisites);
 ```
 
-The list is the record, and `appliedAfterV3` reads it back exactly as the write
+The list is the record, and `appliedAfterV4` reads it back exactly as the write
 gave it: the head under the writer's own line first, then the prerequisites as
 listed, duplicates included. A line's first migration's answer starts with
 `MIGRATION_HEAD_GENESIS`, the one entry that is a head and not a record. Empty
-only for a migration never applied. Within a line `appliedOntoV3` walks the
-chain back to genesis; `appliedAfterV3` walks from a record to every record it
+only for a migration never applied. Within a line `appliedOntoV4` walks the
+chain back to genesis; `appliedAfterV4` walks from a record to every record it
 waited on, its predecessor included, so the cross-line order is on chain and not
 only in the log. `Migrated` says nothing about the list: it is in the record,
 not beside it. A prerequisite is an index check, not proof: it says the other
@@ -1169,7 +1214,7 @@ the record existed when this write landed, which is chain order, and the moments
 in another line are that writer's data.
 
 The refusals and their order are specified once, on
-`IMigrationRegistryV3.applyMigrationHistoryV3`. Duplicates are ordinary index
+`IMigrationRegistryV4.applyMigrationHistoryV4`. Duplicates are ordinary index
 checks.
 
 **The writer decides who writes its lines, and that is the whole access
@@ -1184,35 +1229,35 @@ lines of an authority it already trusts is reading something only that authority
 or a delegate it approved could have written; every other writer's lines hold
 unforgeable claims nobody asks about. A line is therefore only as trustworthy as
 every delegate it has ever had, revoked ones included, so each record keeps the
-account that wrote it (`appliedByV3`). An approved delegate can also move the
-line's head onto any id, which no write can undo, so a compromised delegate can
-stop every script queued against the line, leaving a new namespace as the only
-way out. Approve only accounts held to the writer's own custody, and revoke
-before rotating one out. Approvals cannot be enumerated on chain, only asked
-about one delegate at a time, so a consumer's prod tests assert `approvedV3` is
-false for every retired delegate beside the true answers for the live ones. A
-namespace is not an authority: it is the writer's to name, and a record in it is
-that writer's claim. A root would have to be welded into the creation code — and
-the account that applies a migration is a different Safe, deployer or timelock
-for every consumer and every chain, so one root would have to be all of them,
-and baking each consumer's authority in would give each a different address for
-what is meant to be one shared registry. With nothing to configure there is also
-no rollout state in which it is inert.
+account that wrote it (`appliedByV4`). An approved delegate can also move the
+line's head onto any migration, which no write can undo, so a compromised
+delegate can stop every script queued against the line, leaving a new namespace
+as the only way out. Approve only accounts held to the writer's own custody, and
+revoke before rotating one out. Approvals cannot be enumerated on chain, only
+asked about one delegate at a time, so a consumer's prod tests assert
+`approvedV3` is false for every retired delegate beside the true answers for the
+live ones. A namespace is not an authority: it is the writer's to name, and a
+record in it is that writer's claim. A root would have to be welded into the
+creation code — and the account that applies a migration is a different Safe,
+deployer or timelock for every consumer and every chain, so one root would have
+to be all of them, and baking each consumer's authority in would give each a
+different address for what is meant to be one shared registry. With nothing to
+configure there is also no rollout state in which it is inert.
 
 **An index, not proof.** The registry says which invariant applies. It does not
 say the invariant holds — a multisig can act out of band and nothing here moves.
 Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
-`LibMigrationRegistry` is the surface — `appliedV3`, `appliedOntoV3`,
-`appliedAfterV3`, `appliedByV3`, `headV3`, `approvedV3`, `approveV3`,
-`revokeV3`, `applyMigrationV3` and `applyMigrationHistoryV3`, plus the `*Call`
+`LibMigrationRegistry` is the surface — `appliedV4`, `appliedOntoV4`,
+`appliedAfterV4`, `appliedByV4`, `headV4`, `approvedV3`, `approveV3`,
+`revokeV3`, `applyMigrationV4` and `applyMigrationHistoryV4`, plus the `*Call`
 builders for a bundle, each verifying the registry's code hash before it reads
-or writes, and the pure `onto`, which builds the head-only list. There is
-deliberately **no broadcast runner**: the dominant real shape is a Safe
-executing a bundle that never broadcasts, and such a script appends the
-`applyMigrationV3Call` output to the bundle it is already emitting, which makes
-the record atomic with the migration it describes.
+or writes, and the pure `onto(writer, namespaceHash, headMigration)`, which
+builds the head-only list. There is deliberately **no broadcast runner**: the
+dominant real shape is a Safe executing a bundle that never broadcasts, and such
+a script appends the `applyMigrationV4Call` output to the bundle it is already
+emitting, which makes the record atomic with the migration it describes.
 
 ## Managing the migration registry
 
@@ -1590,8 +1635,42 @@ it. In order:
    `src/interface/deprecated/`. The registry has a new address, so migrations
    recorded in the 0.1.18 registry stay there and read as unapplied in V3: apply
    them again, with `applyMigrationHistoryV3` for one that already ran.
-9. Regenerate: `forge script ./script/Build.sol` followed by
-   `nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`.
+9. Move to the V4 registries, whose writes take strings and whose reads take
+   their hashes. `IConfigRegistryV3` and `IMigrationRegistryV3` moved to
+   `src/interface/deprecated/`; import `Prerequisite` and
+   `MIGRATION_HEAD_GENESIS` from `src/interface/IMigrationRegistryV4.sol`.
+   Declare each namespace and migration, and each config name, as the string
+   constant whose `keccak256(bytes(...))` is the `bytes32` it replaces, so every
+   hash a reader or a `Prerequisite` names stays the same.
+   - `LibMigrationRegistry.appliedV3`, `appliedOntoV3`, `appliedAfterV3`,
+     `appliedByV3` and `headV3` are `appliedV4`, `appliedOntoV4`,
+     `appliedAfterV4`, `appliedByV4` and `headV4`, with the same `bytes32`
+     arguments. `applyMigrationV3`, `applyMigrationHistoryV3`,
+     `applyMigrationV3Call` and `applyMigrationHistoryV3Call` are
+     `applyMigrationV4`, `applyMigrationHistoryV4`, `applyMigrationV4Call` and
+     `applyMigrationHistoryV4Call`, and take the namespace and the migration as
+     `string`s. An empty one is refused with `EmptyNamespace` or
+     `EmptyMigration`. `onto`, `approveV3`, `revokeV3`, `approvedV3` and the
+     `Prerequisite` entries keep taking the hashes. `Migrated` carries both
+     strings beside their hashes.
+   - `LibConfigRegistry.resolve(authority, nameHash)` is
+     `resolve(authority, nameHash, valueTypeHash)`, and
+     `resolveSafe(authority, nameHash, minAge)` is
+     `resolveSafe(authority, nameHash, valueTypeHash, minAge)`. Pass the hash of
+     the ABI type the value is decoded as, such as `keccak256("address")`; a
+     binding made as any other type reverts `UnexpectedValueType`.
+     `registerV3(authority, nameHash, value)` is
+     `registerV4(authority, name, valueType, value)`, and `getV3` is `getV4`,
+     which also answers the type's hash. `Register` carries the name and the
+     type strings beside the name's hash. `script/RegisterConfig.sol` reads
+     `CONFIG_REGISTRY_VALUE_TYPE`, and `LibConfigRegistryRegister`'s binding and
+     checking functions take the value type after the name.
+   - Both registries have new addresses, so bindings, records and approvals in
+     the V3 registries stay there: bind each name again with its type, approve
+     each delegate again, and apply each migration again, with
+     `applyMigrationHistoryV4` for one that already ran.
+10. Regenerate: `forge script ./script/Build.sol` followed by
+    `nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`.
 
 `LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,
 `RainDeployBroadcast.broadcastSuite` and

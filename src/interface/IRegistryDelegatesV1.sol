@@ -3,11 +3,12 @@
 pragma solidity ^0.8.25;
 
 /// @title IRegistryDelegatesV1
-/// @notice The delegation `IConfigRegistryV3` and `IMigrationRegistryV3` share,
-/// identically. An account approves a delegate to write under
-/// it within one scope: a name in the config registry, a namespace in the
-/// migration registry. An approval covers no other scope and no other account,
-/// and does not chain.
+/// @notice The delegation `IConfigRegistryV4` and `IMigrationRegistryV4` share,
+/// identically. An account approves a delegate to write under it within one
+/// scope: a name's hash in the config registry, a namespace's hash in the
+/// migration registry, each `keccak256(bytes(...))` of the string a write
+/// names. An approval covers no other scope and no other account, and does not
+/// chain.
 interface IRegistryDelegatesV1 {
     /// Thrown when an approve, revoke or approved is given the zero delegate,
     /// which nothing can call from and which is what an uninitialised
