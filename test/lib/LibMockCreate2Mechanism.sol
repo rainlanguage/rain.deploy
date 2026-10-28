@@ -63,6 +63,8 @@ library LibMockCreate2Mechanism {
             checkNetworkFrozen: checkNetworkFrozen,
             checkOnChain: checkOnChain,
             checkBroadcastSeat: checkBroadcastSeat,
+            checkDeclaration: checkDeclaration,
+            checkNetwork: checkNetwork,
             logVerification: logVerification,
             writeSuiteSnapshot: writeSuiteSnapshot,
             releasedMechanismData: releasedMechanismData,
@@ -323,6 +325,14 @@ library LibMockCreate2Mechanism {
     }
 
     function checkBroadcastSeat(DeployDeclaration memory, DeploySuite memory, uint256, address) internal pure {}
+
+    function checkDeclaration(DeployDeclaration memory) internal view {
+        LibMockMechanismProbe.checkDeclaration(MOCK_CREATE2_MECHANISM_ID);
+    }
+
+    function checkNetwork(DeployDeclaration memory, string memory onNetwork, uint256 chainId) internal view {
+        LibMockMechanismProbe.checkNetwork(MOCK_CREATE2_MECHANISM_ID, onNetwork, chainId);
+    }
 
     function logVerification(Vm, string[] memory networks, DeploySuite memory suite, address[] memory deployed)
         internal
