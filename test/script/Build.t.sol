@@ -3,39 +3,15 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {GeneratedContract, RetiredContract} from "../../script/Build.sol";
-import {DeployCandidate, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {GeneratedContract, RetiredContract} from "../../src/abstract/BuildScript.sol";
 import {LibCodeGen} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
-import {LibReleasedSuitesAggregate} from "../lib/LibReleasedSuitesAggregate.sol";
 import {BuildHarness, BuildHarnessWouldWriteTheCommittedLibs} from "../concrete/BuildHarness.sol";
-import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.2.0/src/lib/LibMemoryKV.sol";
 
 /// @title BuildTest
-/// @notice `script/Build.sol`'s own declaration.
-///
-/// `Build`'s NatSpec argues that "one list, three readers" makes a contract
-/// silently absent from a release impossible. That is true of the readers
-/// INSIDE `Build` — the regeneration, both lib writers and the freeze all read
-/// `generatedContracts()` — and false of the boundary: what this repo deploys
-/// is declared in `RegistryDeploySuites.candidateSuites()`, and the generator's
-/// list is a second hard-coded array in a second file.
-///
-/// A candidate dropped from `generatedContracts()` by a refactor or a merge
-/// still compiles, because its committed snapshot is still there and still
-/// imported. `cutRelease()` then freezes only the contracts the generator
-/// names, `regenerateLibs()` writes a released-suites lib only for those, and
-/// the release permanently omits that contract. Nothing downstream can see it:
-/// `testEveryFrozenSnapshotIsReleased` walks record -> declaration, so a record
-/// entry never written is invisible to it; `RegistryDeployVerifyTest` is never
-/// handed the omitted suite; and `testEveryCandidateHasASnapshot` compares the
-/// candidate DIRECTORY against the declaration, where the stale committed file
-/// keeps both sides equal. `SnapshotAlreadyFrozen` then makes the hole
-/// unrepairable, because the tag has been cut.
-///
-/// So the agreement of the two lists is asserted here, along with the three
-/// properties of the generator's own entries that decide which file each
-/// contract's pins are written into.
+/// @notice `script/Build.sol`'s committed libs against what its declaration
+/// generates. The declaration's own consistency is `BuildScript`'s, enforced
+/// by the build.
 ///
 /// Deliberately nothing here calls `run()` or `cutRelease()`. Both rewrite the
 /// committed `src/generated/` snapshots that other test contracts read, and
@@ -43,196 +19,10 @@ import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.
 /// one is reading is a race, not a check. `regenerateLibs()` is run, and only
 /// into a fixture directory nothing compiles; the one write below is that.
 contract BuildTest is Test {
-    using LibMemoryKV for MemoryKV;
-
-    /// The harness the two declarations are read through.
     BuildHarness internal sBuild;
 
     function setUp() external {
         sBuild = new BuildHarness("");
-    }
-
-    /// PROPERTY: the generator's list and the deploy declaration are the SAME
-    /// SET of contracts, matched both ways. A candidate the generator does not
-    /// name is a contract silently absent from every release cut from here, and
-    /// neither the frozen-record check nor the chain check can see it, because
-    /// both are only ever handed what was written.
-    ///
-    /// Matched by the suite key rather than by index, because `Build` reaches
-    /// candidates by name for exactly this reason and a positional pass would
-    /// go green on a reordered list that had silently swapped two contracts.
-    function testGeneratedContractsAreExactlyTheDeclaredCandidates() external view {
-        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
-        DeployCandidate[] memory candidates = sBuild.externalCandidateSuites();
-
-        assertEq(
-            generated.length, candidates.length, "a candidate is not generated, or a generated contract is not declared"
-        );
-
-        for (uint256 i = 0; i < generated.length; i++) {
-            bool found = false;
-            for (uint256 j = 0; j < candidates.length; j++) {
-                if (
-                    keccak256(bytes(generated[i].candidate.snapshot.suite))
-                        == keccak256(bytes(candidates[j].snapshot.suite))
-                ) {
-                    assertEq(
-                        keccak256(generated[i].candidate.snapshot.creationCode),
-                        keccak256(candidates[j].snapshot.creationCode),
-                        "generated entry carries another contract's creation code"
-                    );
-                    found = true;
-                    break;
-                }
-            }
-            assertTrue(
-                found, string.concat("generated contract is not a declared candidate: ", generated[i].contractName)
-            );
-        }
-
-        for (uint256 j = 0; j < candidates.length; j++) {
-            bool found = false;
-            for (uint256 i = 0; i < generated.length; i++) {
-                if (
-                    keccak256(bytes(generated[i].candidate.snapshot.suite))
-                        == keccak256(bytes(candidates[j].snapshot.suite))
-                ) {
-                    found = true;
-                    break;
-                }
-            }
-            assertTrue(found, string.concat("declared candidate is not generated: ", candidates[j].snapshot.suite));
-        }
-    }
-
-    /// PROPERTY: the names a release freezes are EXACTLY the generator's
-    /// contracts.
-    ///
-    /// `snapshotContractNames()` is the list `cutRelease()` hands `freeze`, and
-    /// it is the only thing that decides what a release records. A generated
-    /// contract missing from it is regenerated on every push and then absent
-    /// from the frozen tag, which `SnapshotAlreadyFrozen` makes unrepairable.
-    function testSnapshotContractNamesAreTheGeneratedContracts() external view {
-        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
-        string[] memory names = sBuild.externalSnapshotContractNames();
-
-        assertEq(
-            names.length, generated.length, "a generated contract is not frozen, or a frozen name is not generated"
-        );
-
-        MemoryKV nameSet = MemoryKV.wrap(0);
-        for (uint256 i = 0; i < names.length; i++) {
-            nameSet = nameSet.set(MemoryKVKey.wrap(keccak256(bytes(names[i]))), MemoryKVVal.wrap(0));
-        }
-
-        for (uint256 i = 0; i < generated.length; i++) {
-            assertTrue(
-                nameSet.has(MemoryKVKey.wrap(keccak256(bytes(generated[i].contractName)))),
-                string.concat("generated contract is not frozen by a release: ", generated[i].contractName)
-            );
-        }
-    }
-
-    /// PROPERTY: `contractName` is the name the snapshot path and both
-    /// generated libs are built from, and it MUST be the contract the
-    /// candidate's artifact path names. A disagreement writes one contract's
-    /// pins into another contract's file, which every downstream check then
-    /// reads as self-consistent.
-    function testGeneratedContractNameMatchesTheArtifactPath() external view {
-        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
-        for (uint256 i = 0; i < generated.length; i++) {
-            string[] memory components = vm.split(generated[i].candidate.snapshot.artifactPath, ":");
-            assertEq(
-                components[components.length - 1],
-                generated[i].contractName,
-                "generated name is not the artifact's contract"
-            );
-        }
-    }
-
-    /// PROPERTY: no two entries name one contract. Two entries sharing a
-    /// `contractName` write one snapshot file twice and freeze one file for two
-    /// declarations, so the second silently replaces the first.
-    function testGeneratedContractNamesAreUnique() external view {
-        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
-        for (uint256 i = 0; i < generated.length; i++) {
-            for (uint256 j = i + 1; j < generated.length; j++) {
-                assertNotEq(
-                    generated[i].contractName, generated[j].contractName, "two generated entries name one contract"
-                );
-            }
-        }
-    }
-
-    /// PROPERTY: the constant prefix is non-empty and distinct per contract. It
-    /// names every constant both generated libs export, so a shared prefix is
-    /// two libs exporting colliding names.
-    function testConstantPrefixesAreNonEmptyAndUnique() external view {
-        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
-        for (uint256 i = 0; i < generated.length; i++) {
-            assertGt(bytes(generated[i].constantPrefix).length, 0, "empty constant prefix");
-            for (uint256 j = i + 1; j < generated.length; j++) {
-                assertNotEq(
-                    generated[i].constantPrefix, generated[j].constantPrefix, "two entries share a constant prefix"
-                );
-            }
-        }
-    }
-
-    /// PROPERTY: the committed aggregate imports releasedContractNames() in
-    /// ORDER (retired first, then generatedContracts()), not merely as a set.
-    ///
-    /// Declaration order is claimed twice — the emitted library documents its
-    /// entries as "in the order the build script lists them" and
-    /// `snapshotContractNames()` documents itself as "In declaration order" —
-    /// and nothing else pins it.
-    /// `testTheCommittedAggregateIsWhatTheGeneratorEmits` takes the contract
-    /// list from the committed file itself, so it holds for any permutation of
-    /// it, and `testEverySnapshotIsInTheReleasedAggregate` matches sets. So the
-    /// two imports and the two `released<N>` locals can be swapped in the
-    /// committed file — byte-exactly what the generator emits for the reversed
-    /// list — and the whole suite stays green while the aggregate returns the
-    /// releases in an order the declaration does not give, which is the order
-    /// `suiteNames()` reports them in.
-    ///
-    /// Positional, because the SET is already matched by the two tests this
-    /// names and the order is the whole of what is left.
-    function testTheCommittedAggregateIsInDeclarationOrder() external view {
-        string[] memory released = sBuild.externalReleasedContractNames();
-        string[] memory imported = LibReleasedSuitesAggregate.declaredContractNames(
-            vm, vm.readFile(LibRainDeploySnapshot.pathForLib(LibRainDeploySnapshot.RELEASED_SUITES_LIBRARY))
-        );
-
-        assertEq(
-            imported.length,
-            released.length,
-            "the committed aggregate imports a different number of contracts than the generator names"
-        );
-
-        for (uint256 i = 0; i < released.length; i++) {
-            assertEq(imported[i], released[i], "the committed aggregate is not in the generator's declaration order");
-        }
-    }
-
-    /// PROPERTY: `snapshotContractNames()` is every `generatedContracts()`
-    /// entry's `contractName`, positionally.
-    ///
-    /// It is the list `cutRelease` freezes and, after the retired names, the
-    /// list the aggregate is emitted from, and both reach it only through
-    /// `forge script`. A name list shorter than the declaration freezes one
-    /// contract fewer and emits an aggregate that declares that contract's
-    /// releases as nothing at all, and every other assertion here is still
-    /// green: the tests above read `generatedContracts()` and the committed
-    /// file, neither of which this list passes through.
-    function testSnapshotContractNamesAreTheDeclarationInOrder() external view {
-        GeneratedContract[] memory generated = sBuild.externalGeneratedContracts();
-        string[] memory names = sBuild.externalSnapshotContractNames();
-
-        assertEq(names.length, generated.length, "a different number of names than generated contracts");
-
-        for (uint256 i = 0; i < generated.length; i++) {
-            assertEq(names[i], generated[i].contractName, "the names are not the declaration in order");
-        }
     }
 
     /// PROPERTY: EVERY generated contract's committed alias lib is byte-exactly
@@ -330,42 +120,12 @@ contract BuildTest is Test {
                     "\n",
                     sBuild.externalReleasedImportBlock(paths),
                     sBuild.externalReleasedLibraryBlock(
-                        libraryName, retired[i].contractName, paths, sBuild.externalRetiredTemplate(retired[i])
+                        libraryName, retired[i].contractName, paths, retired[i].template
                     )
                 ),
                 string.concat("committed retired lib is not what the generator emits: ", retired[i].contractName)
             );
         }
-    }
-
-    /// The retired names are `retiredContracts()` in order, and lead the
-    /// released names.
-    function testReleasedContractNamesLeadWithTheRetired() external view {
-        RetiredContract[] memory retired = sBuild.externalRetiredContracts();
-        string[] memory released = sBuild.externalReleasedContractNames();
-        string[] memory current = sBuild.externalSnapshotContractNames();
-        assertEq(released.length, retired.length + current.length);
-        for (uint256 i = 0; i < retired.length; i++) {
-            assertEq(released[i], retired[i].contractName);
-        }
-        for (uint256 i = 0; i < current.length; i++) {
-            assertEq(released[retired.length + i], current[i]);
-        }
-    }
-
-    /// The retired template carries the key and artifact path and nothing the
-    /// record holds.
-    function testRetiredTemplateIsKeyAndArtifactPathOnly() external view {
-        RetiredContract memory retired =
-            RetiredContract({contractName: "Retired", suite: "retired-suite", artifactPath: "src/R.sol:Retired"});
-        DeploySuite memory template = sBuild.externalRetiredTemplate(retired);
-        assertEq(template.suite, "retired-suite");
-        assertEq(template.artifactPath, "src/R.sol:Retired");
-        assertEq(template.creationCode.length, 0);
-        assertEq(template.storedRuntimeCode.length, 0);
-        assertEq(template.storedDeployedAddress, address(0));
-        assertEq(template.storedBytecodeHash, bytes32(0));
-        assertEq(template.dependencies.length, 0);
     }
 
     /// PROPERTY: a build with nothing overridden writes its libs into the
@@ -492,14 +252,14 @@ contract BuildTest is Test {
             "rainix-codegen owns src/generated/candidate/ConfigRegistry.sol",
             "rainix-codegen owns src/generated/candidate/MigrationRegistry.sol",
             "rainix-codegen owns src/generated/candidate/TimelockController.sol",
+            "rainix-codegen owns src/lib/LibAddressRegistryReleased.sol",
             "rainix-codegen owns src/lib/LibConfigRegistryReleased.sol",
             "rainix-codegen owns src/lib/LibMigrationRegistryReleased.sol",
             "rainix-codegen owns src/lib/LibReleasedSuites.sol",
-            "rainix-codegen owns foundry.toml",
-            "rainix-codegen owns .env.example",
-            "rainix-codegen owns src/lib/LibAddressRegistryReleased.sol",
             "rainix-codegen owns src/lib/LibConfigRegistryDeploy.sol",
-            "rainix-codegen owns src/lib/LibMigrationRegistryDeploy.sol"
+            "rainix-codegen owns src/lib/LibMigrationRegistryDeploy.sol",
+            "rainix-codegen owns foundry.toml",
+            "rainix-codegen owns .env.example"
         ];
         assertEq(lines.length, expected.length);
         for (uint256 i = 0; i < expected.length; i++) {
@@ -513,11 +273,11 @@ contract BuildTest is Test {
         string[] memory paths = new BuildHarness(LIBS_FIXTURE_DIR).externalGeneratedPaths();
 
         assertEq(paths.length, 11);
-        assertEq(paths[3], string.concat(LIBS_FIXTURE_DIR, "/LibConfigRegistryReleased.sol"));
-        assertEq(paths[4], string.concat(LIBS_FIXTURE_DIR, "/LibMigrationRegistryReleased.sol"));
-        assertEq(paths[5], string.concat(LIBS_FIXTURE_DIR, "/LibReleasedSuites.sol"));
-        assertEq(paths[8], string.concat(LIBS_FIXTURE_DIR, "/LibAddressRegistryReleased.sol"));
-        assertEq(paths[9], string.concat(LIBS_FIXTURE_DIR, "/LibConfigRegistryDeploy.sol"));
-        assertEq(paths[10], string.concat(LIBS_FIXTURE_DIR, "/LibMigrationRegistryDeploy.sol"));
+        assertEq(paths[3], string.concat(LIBS_FIXTURE_DIR, "/LibAddressRegistryReleased.sol"));
+        assertEq(paths[4], string.concat(LIBS_FIXTURE_DIR, "/LibConfigRegistryReleased.sol"));
+        assertEq(paths[5], string.concat(LIBS_FIXTURE_DIR, "/LibMigrationRegistryReleased.sol"));
+        assertEq(paths[6], string.concat(LIBS_FIXTURE_DIR, "/LibReleasedSuites.sol"));
+        assertEq(paths[7], string.concat(LIBS_FIXTURE_DIR, "/LibConfigRegistryDeploy.sol"));
+        assertEq(paths[8], string.concat(LIBS_FIXTURE_DIR, "/LibMigrationRegistryDeploy.sol"));
     }
 }
