@@ -185,11 +185,11 @@ library LibMockCreate2Mechanism {
         vm.etch(decode(suite).factory, type(MockCreate2Factory).runtimeCode);
     }
 
-    function deployedAddress(DeploySuite memory suite, uint256 chainId) internal pure returns (address) {
+    function deployedAddress(DeployDeclaration memory, DeploySuite memory suite, uint256 chainId) internal pure returns (address) {
         return create2Address(decode(suite).factory, salt(suite, chainId), suite.creationCode);
     }
 
-    function recordedAddress(DeploySuite memory suite, uint256 chainId) internal pure returns (address) {
+    function recordedAddress(DeployDeclaration memory, DeploySuite memory suite, uint256 chainId) internal pure returns (address) {
         MockCreate2Mechanism memory mechanism = decode(suite);
         if (!mechanism.perNetwork) {
             return suite.storedDeployedAddress;
@@ -201,11 +201,11 @@ library LibMockCreate2Mechanism {
         return mechanism.networks[index].deployedAddress;
     }
 
-    function deployStepData(DeploySuite memory suite, uint256 chainId) internal pure returns (bytes memory) {
+    function deployStepData(DeployDeclaration memory, DeploySuite memory suite, uint256 chainId) internal pure returns (bytes memory) {
         return abi.encode(decode(suite).factory, salt(suite, chainId), suite.creationCode);
     }
 
-    function deployStep(DeploySuite memory)
+    function deployStep(DeployDeclaration memory, DeploySuite memory)
         internal
         pure
         returns (function(Vm, string memory, address, bytes memory) internal returns (address))
@@ -214,13 +214,13 @@ library LibMockCreate2Mechanism {
     }
 
     /// @return One address per each of its `networks`; a single-address suite is deployed once.
-    function deployLocally(Vm vm, DeploySuite memory suite) internal returns (address[] memory) {
+    function deployLocally(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal returns (address[] memory) {
         etchFactory(vm, suite);
         uint256[] memory chainIds = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(suite.networks));
         address[] memory deployed = new address[](chainIds.length);
         bool perNetwork = decode(suite).perNetwork;
         for (uint256 i = 0; i < deployed.length; i++) {
-            deployed[i] = deployedAddress(suite, chainIds[i]);
+            deployed[i] = deployedAddress(d, suite, chainIds[i]);
             if (perNetwork || i == 0) {
                 deployAt(vm, suite, salt(suite, chainIds[i]), deployed[i]);
             }
@@ -228,14 +228,14 @@ library LibMockCreate2Mechanism {
         return deployed;
     }
 
-    function deployLocallyOnChain(Vm vm, DeploySuite memory suite) internal {
+    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
         etchFactory(vm, suite);
-        deployAt(vm, suite, salt(suite, block.chainid), deployedAddress(suite, block.chainid));
+        deployAt(vm, suite, salt(suite, block.chainid), deployedAddress(d, suite, block.chainid));
     }
 
     /// Per-network: adds to `suite` each of `chainIds` its candidate deploys to and it records nothing on, at the
     /// address `suite`'s own salt derives there. A single-address suite has nothing to add.
-    function addUnrecordedNetworks(DeploySuite memory suite, DeploySuite memory candidate, uint256[] memory chainIds)
+    function addUnrecordedNetworks(DeployDeclaration memory, DeploySuite memory suite, DeploySuite memory candidate, uint256[] memory chainIds)
         internal
         pure
     {
@@ -263,7 +263,7 @@ library LibMockCreate2Mechanism {
     }
 
     /// Probes, then per-network adds to `suite` the networks recorded for it under its `root`.
-    function addRecordedNetworks(DeploySuite memory suite) internal view {
+    function addRecordedNetworks(DeployDeclaration memory, DeploySuite memory suite) internal view {
         LibMockMechanismProbe.addRecordedNetworks(MOCK_CREATE2_MECHANISM_ID, suite.suite);
         MockCreate2Mechanism memory mechanism = decode(suite);
         if (!mechanism.perNetwork || bytes(mechanism.root).length == 0) {
@@ -300,7 +300,7 @@ library LibMockCreate2Mechanism {
         suite.mechanismData = encode(mechanism);
     }
 
-    function checkNetworkFrozen(DeploySuite memory frozen, string memory frozenNetwork, uint256 chainId, address where)
+    function checkNetworkFrozen(DeployDeclaration memory, DeploySuite memory frozen, string memory frozenNetwork, uint256 chainId, address where)
         internal
         pure
     {
@@ -334,13 +334,13 @@ library LibMockCreate2Mechanism {
         LibMockMechanismProbe.checkNetwork(MOCK_CREATE2_MECHANISM_ID, onNetwork, chainId);
     }
 
-    function logVerification(Vm, string[] memory networks, DeploySuite memory suite, address[] memory deployed)
+    function logVerification(DeployDeclaration memory, Vm, string[] memory networks, DeploySuite memory suite, address[] memory deployed)
         internal
     {
         emit MockCreate2Verification(networks, suite.suite, deployed);
     }
 
-    function writeSuiteSnapshot(Vm vm, SnapshotFile memory file, DeploySuite memory suite)
+    function writeSuiteSnapshot(DeployDeclaration memory, Vm vm, SnapshotFile memory file, DeploySuite memory suite)
         internal
         returns (string memory)
     {
@@ -363,11 +363,11 @@ library LibMockCreate2Mechanism {
         return path;
     }
 
-    function releasedMechanismData(Vm, string memory, string memory prefix) internal pure returns (string memory) {
+    function releasedMechanismData(DeployDeclaration memory, Vm, string memory, string memory prefix) internal pure returns (string memory) {
         return string.concat(prefix, "_MECHANISM_DATA");
     }
 
-    function releasedImport(string memory) internal pure returns (string memory) {
+    function releasedImport(DeployDeclaration memory, string memory) internal pure returns (string memory) {
         return "";
     }
 }
