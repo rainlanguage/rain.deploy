@@ -18,6 +18,7 @@ import {
 } from "../../src/generated/candidate/ConfigRegistry.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 
 /// @title ExampleDeploySuites
@@ -49,14 +50,12 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 /// candidate side is the source anchor's, which loops over the candidates
 /// alone and would otherwise be a loop with one thing in it.
 abstract contract ExampleDeploySuites is RainDeploySuitesBase {
-    /// @return Zoltu over every Rain network, declaring `exampleReleased()` and `exampleCandidates()`.
-    function exampleDeclaration() internal pure returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
-        declared.released = exampleReleased();
-        declared.candidates = exampleCandidates();
-        return declared;
+    /// Adds `exampleReleased()` and `exampleCandidates()` to `d`.
+    /// @param d The declaration, mutated.
+    function addExample(DeployDeclaration memory d) internal pure {
+        LibRainDeployDeclaration.addReleased(d, exampleReleased());
+        LibRainDeployDeclaration.addCandidates(d, exampleCandidates());
     }
-
 
     function exampleReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](2);
@@ -69,7 +68,7 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
             storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
         suites[1] = DeploySuite({
             networks: new string[](0),
@@ -80,7 +79,7 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
             storedRuntimeCode: type(MockDeployableV2).runtimeCode,
             artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
             dependencies: new DeployDependency[](0),
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
         return suites;
     }
@@ -103,7 +102,7 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
@@ -117,7 +116,7 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });

@@ -2,11 +2,11 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
-import {ExampleDeploySuites} from "../abstract/ExampleDeploySuites.sol";
-import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {ExampleDeployScript} from "../abstract/ExampleDeployScript.sol";
 
 /// @title ExampleDeployNarrowNetworks
 /// A repo that deploys to FEWER networks than Rain supports at all, which is
@@ -25,16 +25,14 @@ import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 /// this declaration and took the library's nine would end up on polygon, and one
 /// that read the library's first entry would be on arbitrum. Neither reads as
 /// base.
-contract ExampleDeployNarrowNetworks is ExampleDeploySuites, ExternalDeploySuites, RainDeployBroadcast {
+contract ExampleDeployNarrowNetworks is ExampleDeployScript {
     function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = exampleDeclaration();
-        declared.networks = new string[](1);
-        declared.networks[0] = LibRainDeploy.BASE;
-        return declared;
-    }
-
-    /// @return The networks a broadcast would go to.
-    function externalDeployNetworks() external view returns (string[] memory) {
-        return deployNetworks();
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        d.networks = new string[](1);
+        d.networks[0] = LibRainDeploy.BASE;
+        LibRainDeployZoltuMechanism.extend(d);
+        addExample(d);
+        return d;
     }
 }
