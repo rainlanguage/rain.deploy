@@ -57,7 +57,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
 
         uint256 deployerPrivateKey = vm.envUint("DEPLOYMENT_KEY");
 
-        broadcastSuite(d, suite, d.deployNetworks(d), deployerPrivateKey);
+        broadcastSuite(d, suite, d.deployNetworks, deployerPrivateKey);
     }
 
     /// Refuses `checkSeatsNoDeployKey`'s refusals before reading any network (so the suite's constructor MUST succeed
