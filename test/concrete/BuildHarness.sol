@@ -122,4 +122,11 @@ contract BuildHarness is Build {
     ) external view returns (string memory) {
         return LibRainDeploySnapshot.releasedLibraryBlock(vm, libraryName, contractName, paths, template, declaration());
     }
+
+    /// `LibRainDeploySnapshot.releasedImportBlock` under this build's declaration.
+    /// @param paths The record paths.
+    /// @return The import block.
+    function externalReleasedImportBlock(string[] memory paths) external view returns (string memory) {
+        return LibRainDeploySnapshot.releasedImportBlock(vm, paths, declaration());
+    }
 }
