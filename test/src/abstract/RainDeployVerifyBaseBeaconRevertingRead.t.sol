@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {ChainBeacon} from "../../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
@@ -16,9 +16,15 @@ import {BeaconVerifyFixture} from "../../abstract/BeaconVerifyFixture.sol";
 contract RainDeployVerifyBaseBeaconRevertingReadTest is BeaconVerifyFixture {
     using LibBeaconDeclarations for ChainBeacon[];
 
-    /// @inheritdoc BeaconVerifyFixture
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
-        DeploySuite[] memory fixture = super.releasedSuites();
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = fixtureDeclaration();
+        declared.released = declaredReleased();
+        return declared;
+    }
+
+    /// @return The fixture's releases and this test's.
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
+        DeploySuite[] memory fixture = fixtureReleased();
         DeploySuite[] memory released = new DeploySuite[](fixture.length + 2);
         for (uint256 i = 0; i < fixture.length; i++) {
             released[i] = fixture[i];

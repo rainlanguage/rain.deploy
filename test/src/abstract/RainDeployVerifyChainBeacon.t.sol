@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
-import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {
     BeaconState,
@@ -39,24 +39,8 @@ contract RainDeployVerifyChainBeaconTest is BeaconVerifyFixture, RainDeployVerif
 
     bytes32 constant ROLLBACK = keccak256("rollback");
 
-    /// @inheritdoc RainDeploySuitesBase
-    function beacons()
-        internal
-        view
-        override(BeaconVerifyFixture, RainDeploySuitesBase)
-        returns (ChainBeacon[] memory)
-    {
-        return BeaconVerifyFixture.beacons();
-    }
-
-    /// @inheritdoc RainDeploySuitesBase
-    function supportedNetworks()
-        internal
-        view
-        override(BeaconVerifyFixture, RainDeploySuitesBase)
-        returns (string[] memory)
-    {
-        return BeaconVerifyFixture.supportedNetworks();
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        return fixtureDeclaration();
     }
 
     function applyMigration() internal {

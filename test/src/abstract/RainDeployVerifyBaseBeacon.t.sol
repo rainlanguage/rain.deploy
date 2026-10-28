@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
-import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     BeaconOnUncheckedNetwork,
     BeaconSeatedImplementation,
@@ -25,6 +25,10 @@ import {BeaconVerifyFixture} from "../../abstract/BeaconVerifyFixture.sol";
 /// @title RainDeployVerifyBaseBeaconTest
 /// @notice `RainDeployVerifyBase`'s resolution of each declared beacon, before any network is read.
 contract RainDeployVerifyBaseBeaconTest is BeaconVerifyFixture {
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        return fixtureDeclaration();
+    }
+
     using LibBeaconDeclarations for ChainBeacon[];
 
     /// External wrapper for `resolveBeacons`.

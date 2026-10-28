@@ -3,17 +3,11 @@
 pragma solidity ^0.8.25;
 
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
-import {
-    DeployCandidate,
-    DeployDependency,
-    DeployMechanismHandler,
-    DeploySuite,
-    RainDeploySuitesBase
-} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployCandidate, DeployDeclaration, DeployDependency, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyBase} from "../../src/abstract/RainDeployVerifyBase.sol";
 import {BeaconState, BeaconTransition, ChainBeacon, DeployBeacon} from "../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {Prerequisite} from "../../src/interface/IMigrationRegistryV4.sol";
 import {MigrationRegistry} from "../../src/concrete/MigrationRegistry.sol";
 import {MockDeployable} from "../concrete/MockDeployable.sol";
@@ -24,11 +18,6 @@ import {LibBeaconTest} from "../lib/LibBeaconTest.sol";
 /// @notice Released implementation, upgrade and beacon suites live locally, a beacon at the implementation, and the
 /// declarations the beacon resolution and chain tests build from them.
 abstract contract BeaconVerifyFixture is RainDeployVerifyBase {
-    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
-        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
-        handlers[0] = LibRainDeployZoltuMechanism.handler();
-        return handlers;
-    }
 
     /// The initial owner.
     address constant OWNER = address(0xB0B);
@@ -49,7 +38,7 @@ abstract contract BeaconVerifyFixture is RainDeployVerifyBase {
     /// `BEACON_DEPENDENCY`'s code.
     bytes constant BEACON_DEPENDENCY_CODE = hex"02";
 
-    /// The declarations `beacons()` returns.
+    /// The declarations `fixtureBeacons()` returns.
     ChainBeacon[] internal sBeacons;
     /// A beacon at `sImplementation`, owned by `OWNER`.
     address internal sBeacon;
@@ -59,13 +48,12 @@ abstract contract BeaconVerifyFixture is RainDeployVerifyBase {
     address internal sUpgrade;
     /// The beacon suite, live.
     address internal sSuiteBeacon;
-    /// The networks `supportedNetworks()` returns.
+    /// The networks `fixtureDeclaration()` declares.
     string[] internal sSupported;
-    /// Whether `beacons()` gives every declaration the first one's beacon.
+    /// Whether `fixtureBeacons()` gives every declaration the first one's beacon.
     bool internal sShareFirstBeacon;
 
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure virtual override returns (DeploySuite[] memory) {
+    function fixtureReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory released = new DeploySuite[](3);
         released[0] = LibBeaconTest.zoltuSuite(
             "beacon-implementation@0_0_1",
@@ -90,8 +78,7 @@ abstract contract BeaconVerifyFixture is RainDeployVerifyBase {
         return released;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function fixtureCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: LibBeaconTest.zoltuSuite(
@@ -113,8 +100,7 @@ abstract contract BeaconVerifyFixture is RainDeployVerifyBase {
         .creationCode;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function beacons() internal view virtual override returns (ChainBeacon[] memory) {
+    function fixtureBeacons() internal view returns (ChainBeacon[] memory) {
         ChainBeacon[] memory chainBeacons = sBeacons;
         if (sShareFirstBeacon) {
             for (uint256 i = 1; i < chainBeacons.length; i++) {
@@ -124,9 +110,14 @@ abstract contract BeaconVerifyFixture is RainDeployVerifyBase {
         return chainBeacons;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function supportedNetworks() internal view virtual override returns (string[] memory) {
-        return sSupported;
+    /// @return Zoltu over `sSupported`, declaring the fixture's suites and beacons.
+    function fixtureDeclaration() internal view returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
+        declared.released = fixtureReleased();
+        declared.candidates = fixtureCandidates();
+        declared.beacons = fixtureBeacons();
+        declared.networks = sSupported;
+        return declared;
     }
 
     function setUp() external {

@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {BeaconSeatedOwner} from "../../../src/abstract/RainDeployVerifyBase.sol";
 import {ChainBeacon} from "../../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
@@ -17,12 +17,18 @@ import {BeaconVerifyFixture} from "../../abstract/BeaconVerifyFixture.sol";
 contract RainDeployVerifyBaseBeaconChainSeatedTest is BeaconVerifyFixture {
     using LibBeaconDeclarations for ChainBeacon[];
 
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = fixtureDeclaration();
+        declared.released = declaredReleased();
+        return declared;
+    }
+
     /// The owner the chain-seated beacon suite seats on every chain but Arbitrum One.
     address constant ELSEWHERE_OWNER = address(0xE15E);
 
-    /// @inheritdoc BeaconVerifyFixture
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
-        DeploySuite[] memory fixture = super.releasedSuites();
+    /// @return The fixture's releases and this test's.
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
+        DeploySuite[] memory fixture = fixtureReleased();
         DeploySuite[] memory released = new DeploySuite[](fixture.length + 1);
         for (uint256 i = 0; i < fixture.length; i++) {
             released[i] = fixture[i];
