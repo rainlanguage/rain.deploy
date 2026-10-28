@@ -931,7 +931,7 @@ contract LibConfigRegistryRegisterTest is Test {
     }
 
     /// The bind's calldata is `registerV5(address,bytes32,string,bytes,bytes)`
-    /// — selector `0x41f0fc94`, from `cast sig` — over the authority, the name
+    /// — selector `0x5c3cfe72`, from `cast sig` — over the authority, the name
     /// hash, then the offsets of the value type, the value and the empty meta,
     /// then each dynamic argument's length and its bytes right-padded to a
     /// word. It is exactly the call the bind makes.
@@ -939,7 +939,7 @@ contract LibConfigRegistryRegisterTest is Test {
         vm.assume(value.length > 0);
         uint256 paddedValueLength = value.length + (32 - value.length % 32) % 32;
         bytes memory expected = abi.encodePacked(
-            bytes4(0x41f0fc94),
+            bytes4(0x5c3cfe72),
             uint256(uint160(AUTHORITY)),
             name,
             uint256(0xa0),
@@ -987,7 +987,7 @@ contract LibConfigRegistryRegisterTest is Test {
                 "Registry: ",
                 vm.toString(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
                 "\n",
-                "Calldata: 0x41f0fc94",
+                "Calldata: 0x5c3cfe72",
                 "00000000000000000000000000000000000000000000000000000000000a11ce",
                 "ba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
                 "00000000000000000000000000000000000000000000000000000000000000a0",

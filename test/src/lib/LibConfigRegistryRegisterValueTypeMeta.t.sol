@@ -197,7 +197,7 @@ contract LibConfigRegistryRegisterValueTypeMetaTest is Test {
                 vm.toString(address(0xB0B)),
                 "\nRegistry: ",
                 vm.toString(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS),
-                "\nCalldata: 0x41f0fc94",
+                "\nCalldata: 0x5c3cfe72",
                 "00000000000000000000000000000000000000000000000000000000000a11ce",
                 "ba1ec70c388d07ed204e3cfdcbdc2564f9aa2e5b310aeae3767c61a68306cfc8",
                 "00000000000000000000000000000000000000000000000000000000000000a0",

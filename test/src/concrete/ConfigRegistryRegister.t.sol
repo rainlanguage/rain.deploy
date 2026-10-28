@@ -173,8 +173,8 @@ contract ConfigRegistryRegisterTest is Test {
     }
 
     /// Asserts the raw storage of `authority`'s binding of `name`. `sBindings`
-    /// is slot 1, after the inherited `sApproved`, so the authority's inner
-    /// mapping is at `keccak256(authority . 1)` and the binding at `keccak256(name . that)`;
+    /// is slot 2, after the inherited `sApproved` and `sApprovedUnscoped`, so the
+    /// authority's inner mapping is at `keccak256(authority . 2)` and the binding at `keccak256(name . that)`;
     /// `value` is the struct's first slot and `registeredAt` its second. A
     /// value under 32 bytes is stored left-aligned with `length * 2` in the low
     /// byte; a longer one as `length * 2 + 1`, its bytes from
@@ -185,7 +185,7 @@ contract ConfigRegistryRegisterTest is Test {
     /// @param value The value it is bound to.
     /// @param moment The moment it was bound at.
     function assertStoredBinding(address authority, bytes32 name, bytes memory value, uint256 moment) internal view {
-        bytes32 base = keccak256(abi.encode(name, keccak256(abi.encode(authority, uint256(1)))));
+        bytes32 base = keccak256(abi.encode(name, keccak256(abi.encode(authority, uint256(2)))));
         uint256 data = uint256(keccak256(abi.encode(base)));
         bool short = value.length < 32;
         bytes memory padded = bytes.concat(value, new bytes(96));
