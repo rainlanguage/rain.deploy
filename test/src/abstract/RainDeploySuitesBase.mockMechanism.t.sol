@@ -20,7 +20,7 @@ import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 
 /// @title RainDeploySuitesBaseMockMechanismTest
-/// @notice Every hook dispatches to an overriding mechanism, and the base helpers read through the hooks.
+/// @notice Every mechanism step dispatches to the claiming non-Zoltu handler, and the base helpers read through it.
 contract RainDeploySuitesBaseMockMechanismTest is Test {
     event MockCreate2Verification(string[] networks, string suite, address[] deployed);
 

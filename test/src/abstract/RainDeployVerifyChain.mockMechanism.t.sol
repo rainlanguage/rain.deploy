@@ -18,7 +18,7 @@ import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 
 /// @title RainDeployVerifyChainMockMechanismTest
-/// @notice The chain group derives, freezes and reads beacons through an overriding mechanism's hooks.
+/// @notice The chain group derives, freezes and reads beacons through a non-Zoltu mechanism handler.
 contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, RainDeployVerifyChain {
     LocalForkVm internal sForkVm;
 

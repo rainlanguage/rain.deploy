@@ -12,7 +12,7 @@ import {ChainDeploy} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
 import {MockCreate2DeploySuites, MockCreate2Mechanism} from "../../abstract/MockCreate2DeploySuites.sol";
 
 /// @title RainDeployVerifySnapshotBaseMockMechanismTest
-/// @notice The snapshot group checks each network's recorded address through an overriding mechanism's hooks.
+/// @notice The snapshot group checks each network's recorded address through a non-Zoltu mechanism handler.
 contract RainDeployVerifySnapshotBaseMockMechanismTest is MockCreate2DeploySuites, RainDeployVerifySnapshotBase {
     function externalCheckInternallyConsistent(DeploySuite memory suite) external {
         checkInternallyConsistent(suite);
