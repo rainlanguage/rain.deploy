@@ -66,6 +66,9 @@ contract LibRainDeployDeclarationTest is Test {
         d.networks = oneNetwork("stale");
         LibRainDeployDeclaration.extend(d);
         assertNetworks(d.networks, LibRainDeploy.supportedNetworks(), "networks");
+        assertNetworks(d.deployNetworks, LibRainDeploy.supportedNetworks(), "deployNetworks");
+        d.networks[0] = "changed";
+        assertEq(d.deployNetworks[0], LibRainDeploy.supportedNetworks()[0], "deployNetworks aliases d.networks");
         assertEq(d.released.length, 0);
         assertEq(d.candidates.length, 0);
         assertEq(d.mechanisms.length, 0);
