@@ -42,6 +42,8 @@ library LibRainDeployZoltuMechanism {
             checkNetworkFrozen: checkNetworkFrozen,
             checkOnChain: checkOnChain,
             checkBroadcastSeat: checkBroadcastSeat,
+            checkDeclaration: checkDeclaration,
+            checkNetwork: checkNetwork,
             logVerification: logVerification,
             writeSuiteSnapshot: writeSuiteSnapshot,
             releasedMechanismData: releasedMechanismData,
@@ -140,6 +142,10 @@ library LibRainDeployZoltuMechanism {
     function checkBroadcastSeat(DeployDeclaration memory, DeploySuite memory suite, uint256, address) internal pure {
         checkMechanismData(suite);
     }
+
+    function checkDeclaration(DeployDeclaration memory) internal pure {}
+
+    function checkNetwork(DeployDeclaration memory, string memory, uint256) internal pure {}
 
     function logVerification(Vm vm, string[] memory networks, DeploySuite memory suite, address[] memory deployed)
         internal
