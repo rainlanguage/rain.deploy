@@ -1704,7 +1704,7 @@ library LibRainDeploySnapshot {
         bytes32[] memory ids,
         string memory root,
         DeployDeclaration memory d
-    ) internal view returns (string[] memory) {
+    ) internal pure returns (string[] memory) {
         string[] memory imports = new string[](paths.length);
         for (uint256 i = 0; i < paths.length; i++) {
             imports[i] = LibRainDeployDeclaration.mechanismById(d, ids[i], paths[i]).releasedImport(d, root);
