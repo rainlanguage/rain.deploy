@@ -48,7 +48,7 @@ contract BuildScriptHarness is BuildScript {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         if (sNetworks.length > 0) {
-            d.networks = sNetworks;
+            LibRainDeployDeclaration.setNetworks(d, sNetworks);
         }
         LibRainDeployZoltuMechanism.extend(d);
         return d;
