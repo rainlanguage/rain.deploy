@@ -266,9 +266,7 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
         vm.expectCall(address(sForkVm), abi.encodeWithSelector(LocalForkVm.createFork.selector), 0);
         vm.expectCall(address(sForkVm), abi.encodeWithSelector(LocalForkVm.selectFork.selector), 0);
         vm.expectCall(MOCK_MECHANISM_PROBE, abi.encodeWithSelector(IMockMechanismProbe.checkNetwork.selector), 0);
-        this.externalCheckAllOn(
-            networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), new DeploySuite[](0)
-        );
+        this.externalCheckAllOn(networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), new DeploySuite[](0));
     }
 
     /// With no suites but a mechanism with non-empty config, each checked network is forked and `checkNetwork` runs
@@ -279,9 +277,7 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
         vm.expectCall(address(sForkVm), abi.encodeCall(LocalForkVm.createFork, (LibRainDeploy.POLYGON)), 1);
         expectCheckNetwork(LibRainDeploy.ARBITRUM_ONE, 42161, 1);
         expectCheckNetwork(LibRainDeploy.POLYGON, 137, 1);
-        this.externalCheckAllOn(
-            networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), new DeploySuite[](0)
-        );
+        this.externalCheckAllOn(networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), new DeploySuite[](0));
     }
 
     /// A hook reads its mechanism's config through the declaration the caller passes it.
@@ -292,8 +288,6 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
             abi.encodeCall(IMockMechanismProbe.declaredConfig, (MOCK_SALT_MECHANISM_ID, hex"c0ffee")),
             2
         );
-        this.externalCheckAllOn(
-            networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), new DeploySuite[](0)
-        );
+        this.externalCheckAllOn(networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), new DeploySuite[](0));
     }
 }
