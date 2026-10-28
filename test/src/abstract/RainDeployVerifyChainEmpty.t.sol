@@ -47,7 +47,6 @@ contract RainDeployVerifyChainEmptyTest is RainDeployVerifyChain {
         return d;
     }
 
-
     /// @dev Nothing released. This is the whole fixture.
     function declaredReleased() internal pure returns (DeploySuite[] memory) {
         return new DeploySuite[](0);

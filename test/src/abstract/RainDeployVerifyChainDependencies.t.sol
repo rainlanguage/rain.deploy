@@ -24,7 +24,6 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
         return d;
     }
 
-
     /// Polygon's native token system contract.
     address constant POLYGON_SYSTEM_CONTRACT = 0x0000000000000000000000000000000000001010;
 
