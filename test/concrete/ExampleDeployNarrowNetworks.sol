@@ -10,7 +10,7 @@ import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 
 /// @title ExampleDeployNarrowNetworks
 /// A repo that deploys to FEWER networks than Rain supports at all, which is
-/// what `supportedNetworks()` is overridable for — `st0x.deploy` broadcasts to
+/// what a declaration's `networks` is for — `st0x.deploy` broadcasts to
 /// five of the nine, so every release of it would otherwise be held to four
 /// networks it never reaches.
 ///
@@ -22,7 +22,7 @@ import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 /// BASE rather than any other alias, deliberately. It is neither the FIRST nor
 /// the LAST network `supportedNetworks()` lists, and the deploy and the matrix
 /// both leave the last network they walked selected — so a reader that ignored
-/// this override and took the library's nine would end up on polygon, and one
+/// this declaration and took the library's nine would end up on polygon, and one
 /// that read the library's first entry would be on arbitrum. Neither reads as
 /// base.
 contract ExampleDeployNarrowNetworks is ExampleDeploySuites, ExternalDeploySuites, RainDeployBroadcast {

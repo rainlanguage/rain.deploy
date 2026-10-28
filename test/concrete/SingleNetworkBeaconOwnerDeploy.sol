@@ -3,12 +3,17 @@
 pragma solidity =0.8.25;
 
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
+import {DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
-import {BeaconOwnerDeploy} from "./BeaconOwnerDeploy.sol";
+import {BeaconOwnerDeployScript} from "../abstract/BeaconOwnerDeployScript.sol";
 
 /// @title SingleNetworkBeaconOwnerDeploy
-/// @notice `BeaconOwnerDeploy` with each dispatch narrowed to Arbitrum One.
-contract SingleNetworkBeaconOwnerDeploy is BeaconOwnerDeploy {
+/// @notice `BeaconOwnerDeployScript` on every Rain network with each dispatch narrowed to Arbitrum One.
+contract SingleNetworkBeaconOwnerDeploy is BeaconOwnerDeployScript {
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        return beaconOwnerDeclaration();
+    }
+
     /// @inheritdoc RainDeployBroadcast
     function deployNetworks() internal pure override returns (string[] memory) {
         string[] memory networks = new string[](1);
