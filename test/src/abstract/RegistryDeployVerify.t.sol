@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerify} from "../../../src/abstract/RainDeployVerify.sol";
 import {RainDeployVerifySnapshotBase} from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {RegistryDeploySuites, ParameterisedContract} from "../../../src/abstract/RegistryDeploySuites.sol";
@@ -29,7 +29,7 @@ error FrozenCodeRecordDeploysOtherCode(string path, bytes32 recorded, bytes32 de
 /// contract reaches every consumer that has bumped, and one that does not reach
 /// it never shipped.
 ///
-/// Everything is inherited but two overrides, which is the point:
+/// Everything is inherited but one override, which is the point:
 /// `RegistryDeploySuites` says which registries and which releases exist and
 /// `RainDeployVerify` says what is true of them. The first names the
 /// code records a release freezes beside the suites' — the parameterised
@@ -39,8 +39,8 @@ error FrozenCodeRecordDeploysOtherCode(string path, bytes32 recorded, bytes32 de
 /// carries, and pin against fixtures that the check walks every code record
 /// under its root and refuses a record whose creation code deploys other code.
 ///
-/// The second binds `registryRequiresSuiteOn`, so the retired `AddressRegistry`
-/// releases are required only on the networks they were live on at retirement.
+/// The retired `AddressRegistry` releases declare, as their own `networks`, the
+/// networks they were live on at retirement.
 ///
 /// The chain half is red until every release declared here is live on every
 /// supported network, which is why the deploy is dispatched before the tag is
@@ -323,18 +323,35 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
         return deployed.code;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function requiresSuiteOn(DeploySuite memory suite, string memory network) internal pure override returns (bool) {
-        return registryRequiresSuiteOn(suite, network);
+    /// The retired `AddressRegistry` releases are required only on the networks they were live on at retirement;
+    /// every other suite on every declared network.
+    function testAddressRegistryReleasesAreRequiredOnlyWhereTheyWereLive() external pure {
+        DeployDeclaration memory d = declaration();
+        DeploySuite[] memory suites = allSuites(d);
+        string[] memory live = addressRegistryNetworks();
+        uint256 retired = 0;
+        for (uint256 i = 0; i < suites.length; i++) {
+            bool isRetired = keccak256(bytes(suiteKeyName(suites[i].suite))) == keccak256(bytes(ADDRESS_REGISTRY_SUITE));
+            if (isRetired) {
+                retired++;
+                assertEq(keccak256(abi.encode(suites[i].networks)), keccak256(abi.encode(live)), suites[i].suite);
+            } else {
+                assertEq(keccak256(abi.encode(suites[i].networks)), keccak256(abi.encode(d.networks)), suites[i].suite);
+            }
+            for (uint256 j = 0; j < d.networks.length; j++) {
+                assertEq(requiresSuiteOn(suites[i], d.networks[j]), !isRetired || isListed(live, d.networks[j]));
+            }
+        }
+        assertGt(retired, 0, "no AddressRegistry release declared");
+        assertLt(live.length, d.networks.length, "the retired releases are required everywhere");
     }
 
-    /// The chain group reads the declaration's narrowing.
-    function testRequiresSuiteOnIsTheRegistryNarrowing() external pure {
-        DeploySuite memory suite;
-        suite.suite = "address-registry@0_1_18";
-        assertFalse(requiresSuiteOn(suite, "new_network"));
-        assertTrue(requiresSuiteOn(suite, LibRainDeploy.BASE));
-        suite.suite = "config-registry";
-        assertTrue(requiresSuiteOn(suite, "new_network"));
+    function isListed(string[] memory networks, string memory network) internal pure returns (bool) {
+        for (uint256 i = 0; i < networks.length; i++) {
+            if (keccak256(bytes(networks[i])) == keccak256(bytes(network))) {
+                return true;
+            }
+        }
+        return false;
     }
 }
