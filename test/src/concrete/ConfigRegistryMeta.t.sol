@@ -2,17 +2,17 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IRegistryDelegatesV2} from "../../../src/interface/IRegistryDelegatesV2.sol";
+import {IRegistryDelegatesV3} from "../../../src/interface/IRegistryDelegatesV3.sol";
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
-import {IConfigRegistryV4} from "../../../src/interface/IConfigRegistryV4.sol";
+import {IConfigRegistryV5} from "../../../src/interface/IConfigRegistryV5.sol";
 import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {VALUE_TYPE} from "../../lib/ConfigTestBinding.sol";
 import {rainMeta, isNotRainMeta} from "../../lib/RainMeta.sol";
 import {NotRainMetaV1} from "rain-metadata-0.1.43/src/interface/unstable/IMetaV1_2.sol";
 
 /// @title ConfigRegistryMetaTest
-/// @notice `registerV4`'s `meta`: emitted as `MetaV1_2` by the writer about
+/// @notice `registerV5`'s `meta`: emitted as `MetaV1_2` by the writer about
 /// `keccak256(abi.encode(authority, name))` when non-empty, never emitted when
 /// empty, never stored.
 contract ConfigRegistryMetaTest is Test {
@@ -36,10 +36,10 @@ contract ConfigRegistryMetaTest is Test {
         meta = rainMeta(meta);
         vm.recordLogs();
         vm.prank(authority);
-        sRegistry.registerV4(authority, name, VALUE_TYPE, value, meta);
+        sRegistry.registerV5(authority, name, VALUE_TYPE, value, meta);
         Vm.Log[] memory entries = vm.getRecordedLogs();
         assertEq(entries.length, 2);
-        assertEq(entries[0].topics[0], IConfigRegistryV4.Register.selector);
+        assertEq(entries[0].topics[0], IConfigRegistryV5.Register.selector);
         assertMetaLog(entries[1], authority, keccak256(abi.encode(authority, name)), meta);
     }
 
@@ -56,10 +56,10 @@ contract ConfigRegistryMetaTest is Test {
         meta = rainMeta(meta);
         vm.assume(delegate != address(0) && delegate != authority);
         vm.prank(authority);
-        sRegistry.approveV4(name, delegate);
+        sRegistry.approveV5(name, delegate);
         vm.recordLogs();
         vm.prank(delegate);
-        sRegistry.registerV4(authority, name, VALUE_TYPE, value, meta);
+        sRegistry.registerV5(authority, name, VALUE_TYPE, value, meta);
         Vm.Log[] memory entries = vm.getRecordedLogs();
         assertEq(entries.length, 2);
         assertMetaLog(entries[1], delegate, keccak256(abi.encode(authority, name)), meta);
@@ -70,17 +70,17 @@ contract ConfigRegistryMetaTest is Test {
         vm.assume(value.length > 0);
         vm.recordLogs();
         vm.prank(authority);
-        sRegistry.registerV4(authority, name, VALUE_TYPE, value, "");
+        sRegistry.registerV5(authority, name, VALUE_TYPE, value, "");
         Vm.Log[] memory entries = vm.getRecordedLogs();
         assertEq(entries.length, 1);
-        assertEq(entries[0].topics[0], IConfigRegistryV4.Register.selector);
+        assertEq(entries[0].topics[0], IConfigRegistryV5.Register.selector);
     }
 
     /// The magic number alone is rain meta.
     function testRegisterBareMagicNumberMetaEmitted(address authority, bytes32 name) external {
         vm.recordLogs();
         vm.prank(authority);
-        sRegistry.registerV4(authority, name, VALUE_TYPE, hex"01", hex"ff0a89c674ee7874");
+        sRegistry.registerV5(authority, name, VALUE_TYPE, hex"01", hex"ff0a89c674ee7874");
         Vm.Log[] memory entries = vm.getRecordedLogs();
         assertEq(entries.length, 2);
         assertMetaLog(entries[1], authority, keccak256(abi.encode(authority, name)), hex"ff0a89c674ee7874");
@@ -94,9 +94,9 @@ contract ConfigRegistryMetaTest is Test {
         vm.assume(value.length > 0 && isNotRainMeta(meta));
         vm.prank(authority);
         vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, meta));
-        sRegistry.registerV4(authority, name, VALUE_TYPE, value, meta);
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.NameNotRegistered.selector, authority, name));
-        sRegistry.getV4(authority, name);
+        sRegistry.registerV5(authority, name, VALUE_TYPE, value, meta);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV5.NameNotRegistered.selector, authority, name));
+        sRegistry.getV5(authority, name);
     }
 
     /// A rebind refused for its meta leaves the earlier binding as it was.
@@ -104,12 +104,12 @@ contract ConfigRegistryMetaTest is Test {
         vm.assume(isNotRainMeta(meta));
         vm.warp(10);
         vm.prank(authority);
-        sRegistry.registerV4(authority, name, VALUE_TYPE, hex"01", "");
+        sRegistry.registerV5(authority, name, VALUE_TYPE, hex"01", "");
         vm.warp(20);
         vm.prank(authority);
         vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, meta));
-        sRegistry.registerV4(authority, name, "uint256", hex"02", meta);
-        (bytes memory value, uint256 registeredAt, bytes32 valueTypeHash) = sRegistry.getV4(authority, name);
+        sRegistry.registerV5(authority, name, "uint256", hex"02", meta);
+        (bytes memory value, uint256 registeredAt, bytes32 valueTypeHash) = sRegistry.getV5(authority, name);
         assertEq(value, hex"01");
         assertEq(registeredAt, 10);
         assertEq(valueTypeHash, keccak256(bytes(VALUE_TYPE)));
@@ -122,7 +122,7 @@ contract ConfigRegistryMetaTest is Test {
         for (uint256 i = 0; i < metas.length; i++) {
             vm.prank(authority);
             vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, metas[i]));
-            sRegistry.registerV4(authority, name, VALUE_TYPE, hex"01", metas[i]);
+            sRegistry.registerV5(authority, name, VALUE_TYPE, hex"01", metas[i]);
         }
     }
 
@@ -141,14 +141,14 @@ contract ConfigRegistryMetaTest is Test {
         vm.warp(10);
         vm.recordLogs();
         vm.prank(authority);
-        sRegistry.registerV4(authority, name, VALUE_TYPE, hex"01", meta);
+        sRegistry.registerV5(authority, name, VALUE_TYPE, hex"01", meta);
         vm.warp(20);
         vm.prank(authority);
-        sRegistry.registerV4(authority, name, "uint256", hex"02", meta);
+        sRegistry.registerV5(authority, name, "uint256", hex"02", meta);
         vm.prank(authority);
-        sRegistry.registerV4(authority, otherName, VALUE_TYPE, hex"01", meta);
+        sRegistry.registerV5(authority, otherName, VALUE_TYPE, hex"01", meta);
         vm.prank(other);
-        sRegistry.registerV4(other, name, VALUE_TYPE, hex"01", meta);
+        sRegistry.registerV5(other, name, VALUE_TYPE, hex"01", meta);
         Vm.Log[] memory entries = vm.getRecordedLogs();
         assertEq(entries.length, 8);
         assertMetaLog(entries[1], authority, subject, meta);
@@ -165,11 +165,11 @@ contract ConfigRegistryMetaTest is Test {
         meta = rainMeta(meta);
         vm.recordLogs();
         vm.prank(sender);
-        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV2.NotApproved.selector, authority, name, sender));
-        sRegistry.registerV4(authority, name, VALUE_TYPE, hex"01", meta);
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV3.NotApproved.selector, authority, name, sender));
+        sRegistry.registerV5(authority, name, VALUE_TYPE, hex"01", meta);
         vm.prank(authority);
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.EmptyValue.selector, name));
-        sRegistry.registerV4(authority, name, VALUE_TYPE, "", meta);
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV5.EmptyValue.selector, name));
+        sRegistry.registerV5(authority, name, VALUE_TYPE, "", meta);
         assertEq(vm.getRecordedLogs().length, 0);
     }
 
@@ -185,12 +185,12 @@ contract ConfigRegistryMetaTest is Test {
 
         vm.record();
         vm.prank(authority);
-        plain.registerV4(authority, name, VALUE_TYPE, value, "");
+        plain.registerV5(authority, name, VALUE_TYPE, value, "");
         (, bytes32[] memory plainWrites) = vm.accesses(address(plain));
 
         vm.record();
         vm.prank(authority);
-        withMeta.registerV4(authority, name, VALUE_TYPE, value, meta);
+        withMeta.registerV5(authority, name, VALUE_TYPE, value, meta);
         (, bytes32[] memory metaWrites) = vm.accesses(address(withMeta));
 
         assertGt(plainWrites.length, 0);
@@ -199,8 +199,8 @@ contract ConfigRegistryMetaTest is Test {
             assertEq(metaWrites[i], plainWrites[i]);
             assertEq(vm.load(address(withMeta), metaWrites[i]), vm.load(address(plain), plainWrites[i]));
         }
-        (bytes memory a, uint256 aAt, bytes32 aType) = plain.getV4(authority, name);
-        (bytes memory b, uint256 bAt, bytes32 bType) = withMeta.getV4(authority, name);
+        (bytes memory a, uint256 aAt, bytes32 aType) = plain.getV5(authority, name);
+        (bytes memory b, uint256 bAt, bytes32 bType) = withMeta.getV5(authority, name);
         assertEq(b, a);
         assertEq(bAt, aAt);
         assertEq(bType, aType);

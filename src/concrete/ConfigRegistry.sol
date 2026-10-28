@@ -2,12 +2,12 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IConfigRegistryV4} from "../interface/IConfigRegistryV4.sol";
+import {IConfigRegistryV5} from "../interface/IConfigRegistryV5.sol";
 import {RegistryDelegates} from "../abstract/RegistryDelegates.sol";
 import {LibIMetaBoardV1_2} from "rain-metadata-0.1.43/src/lib/LibIMetaBoardV1_2.sol";
 
 /// @title ConfigRegistry
-/// @notice The whole of `IConfigRegistryV4`: any account binds a `bytes32` name
+/// @notice The whole of `IConfigRegistryV5`: any account binds a `bytes32` name
 /// to an ABI-encoded value of a named type under its own address or under an
 /// authority that approved it, anyone reads a name under an authority it names
 /// and gets back the value with the moment it was bound and the hash of its
@@ -34,31 +34,31 @@ import {LibIMetaBoardV1_2} from "rain-metadata-0.1.43/src/lib/LibIMetaBoardV1_2.
 /// The moment is reported and nothing more; this contract holds nothing
 /// pending. A binding's moment strictly increases, so an age derived from it
 /// never overstates the time that passed.
-contract ConfigRegistry is IConfigRegistryV4, RegistryDelegates {
+contract ConfigRegistry is IConfigRegistryV5, RegistryDelegates {
     /// @dev One binding. Declared in the contract because it is storage layout
-    /// and no part of anybody's ABI — `getV4` returns three flat values.
+    /// and no part of anybody's ABI — `getV5` returns three flat values.
     ///
     /// The moment is a full word: `value` occupies a slot of its own whatever
     /// its length, so there is nothing for a narrower moment to pack beside,
     /// and at full width there is nothing to truncate.
     struct Binding {
-        /// Empty if and only if the name is unbound, which is what `registerV4`
+        /// Empty if and only if the name is unbound, which is what `registerV5`
         /// rejecting an empty value preserves.
         bytes value;
-        /// The `block.timestamp` of the most recent `registerV4`. Never zero for
+        /// The `block.timestamp` of the most recent `registerV5`. Never zero for
         /// a bound name.
         uint256 registeredAt;
-        /// `keccak256` of the value type the most recent `registerV4` named.
+        /// `keccak256` of the value type the most recent `registerV5` named.
         bytes32 valueTypeHash;
     }
 
     /// The bindings, under the authority that wrote them. Not `public`: the
-    /// only reader is `getV4`, which reverts on an unbound name rather than
+    /// only reader is `getV5`, which reverts on an unbound name rather than
     /// answering empty.
     mapping(address authority => mapping(bytes32 name => Binding binding)) internal sBindings;
 
-    /// @inheritdoc IConfigRegistryV4
-    function registerV4(
+    /// @inheritdoc IConfigRegistryV5
+    function registerV5(
         address authority,
         bytes32 name,
         string calldata valueType,
@@ -95,14 +95,14 @@ contract ConfigRegistry is IConfigRegistryV4, RegistryDelegates {
         }
     }
 
-    /// @inheritdoc IConfigRegistryV4
+    /// @inheritdoc IConfigRegistryV5
     /// @dev Bound-ness is read off `value`, not the moment: the value is the
     /// binding and the moment is metadata about when it was written.
-    function getV4(address authority, bytes32 name) external view returns (bytes memory, uint256, bytes32) {
+    function getV5(address authority, bytes32 name) external view returns (bytes memory, uint256, bytes32) {
         Binding memory binding = sBindings[authority][name];
         // Slither reaches this because `value` shares a struct with a value
         // written from `block.timestamp`. There is no time in it, and the
-        // strict equality is the definition of unbound: `registerV4` refuses an
+        // strict equality is the definition of unbound: `registerV5` refuses an
         // empty value.
         // slither-disable-start timestamp,incorrect-equality
         if (binding.value.length == 0) {

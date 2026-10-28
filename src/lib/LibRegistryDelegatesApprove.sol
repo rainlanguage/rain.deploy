@@ -6,13 +6,13 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {Multicall} from "@openzeppelin-contracts-5.7.0/utils/Multicall.sol";
 
-import {IRegistryDelegatesV2} from "../interface/IRegistryDelegatesV2.sol";
+import {IRegistryDelegatesV3} from "../interface/IRegistryDelegatesV3.sol";
 import {LibRegistryDelegates} from "./LibRegistryDelegates.sol";
 import {LibConfigRegistryRegister} from "./LibConfigRegistryRegister.sol";
 import {LibRainDeploy, SupportedNetwork} from "./LibRainDeploy.sol";
 
 /// A registry `LibRegistryDelegatesApprove` drives through
-/// `IRegistryDelegatesV2`, which every registry implements identically.
+/// `IRegistryDelegatesV3`, which every registry implements identically.
 /// @param registry The pinned registry.
 /// @param codehash Its pinned code hash.
 struct RegistryDelegation {
@@ -22,7 +22,7 @@ struct RegistryDelegation {
 
 /// @title LibRegistryDelegatesApprove
 /// @notice An account's delegation side of a registry with
-/// `IRegistryDelegatesV2` delegation: approves one delegate for a list of
+/// `IRegistryDelegatesV3` delegation: approves one delegate for a list of
 /// scopes under the account on every network it is given, or revokes it, in
 /// one `multicall` per network signed by the account itself, and reads the
 /// approvals back. The registry is a
@@ -224,7 +224,7 @@ library LibRegistryDelegatesApprove {
         bytes[] memory calls = new bytes[](hashed.length);
         uint256 count = 0;
         for (uint256 i = 0; i < hashed.length; i++) {
-            bool approved = IRegistryDelegatesV2(r.registry).approvedV4(authority, hashed[i], delegate);
+            bool approved = IRegistryDelegatesV3(r.registry).approvedV5(authority, hashed[i], delegate);
             record = string.concat(record, describeScope(scopes[i], approved, approve));
             if (approved != approve) {
                 calls[count] = LibRegistryDelegates.approveCalldata(hashed[i], delegate, approve);
@@ -272,7 +272,7 @@ library LibRegistryDelegatesApprove {
             revert SenderNotAuthority(sender, authority);
         }
         if (delegate == address(0)) {
-            revert IRegistryDelegatesV2.ZeroDelegate();
+            revert IRegistryDelegatesV3.ZeroDelegate();
         }
         bytes32[] memory hashed = hashScopes(scopes);
         SupportedNetwork[] memory networks = LibConfigRegistryRegister.selectNetworks(selected, declared);
@@ -375,7 +375,7 @@ library LibRegistryDelegatesApprove {
     ) internal view {
         checkChain(r, vm, network);
         for (uint256 i = 0; i < hashed.length; i++) {
-            if (IRegistryDelegatesV2(r.registry).approvedV4(authority, hashed[i], delegate) != approve) {
+            if (IRegistryDelegatesV3(r.registry).approvedV5(authority, hashed[i], delegate) != approve) {
                 revert UnexpectedApproval(network.name, authority, hashed[i], delegate, approve);
             }
         }

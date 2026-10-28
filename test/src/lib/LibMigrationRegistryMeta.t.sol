@@ -6,7 +6,7 @@ import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 import {LibMigrationRegistry} from "../../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../../src/lib/LibMigrationRegistryDeploy.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {IMigrationRegistryV4, Prerequisite} from "../../../src/interface/IMigrationRegistryV4.sol";
+import {IMigrationRegistryV5, Prerequisite} from "../../../src/interface/IMigrationRegistryV5.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {MockMigrationApplier} from "../../concrete/MockMigrationApplier.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
@@ -19,17 +19,17 @@ import {rainMeta} from "../../lib/RainMeta.sol";
 contract LibMigrationRegistryMetaTest is Test {
     bytes32 internal constant META_TOPIC = keccak256("MetaV1_2(address,bytes32,bytes)");
 
-    function deployRegistry() internal returns (IMigrationRegistryV4) {
-        return IMigrationRegistryV4(LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode));
+    function deployRegistry() internal returns (IMigrationRegistryV5) {
+        return IMigrationRegistryV5(LibRainDeploy.etchAndDeployZoltu(vm, type(MigrationRegistry).creationCode));
     }
 
-    function onto(IMigrationRegistryV4 registry, address writer, bytes32 namespace)
+    function onto(IMigrationRegistryV5 registry, address writer, bytes32 namespace)
         internal
         view
         returns (Prerequisite[] memory)
     {
         Prerequisite[] memory list = new Prerequisite[](1);
-        list[0] = Prerequisite({writer: writer, namespace: namespace, migration: registry.headV4(writer, namespace)});
+        list[0] = Prerequisite({writer: writer, namespace: namespace, migration: registry.headV5(writer, namespace)});
         return list;
     }
 
@@ -62,15 +62,15 @@ contract LibMigrationRegistryMetaTest is Test {
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         if (meta.length > 0) meta = rainMeta(meta);
-        IMigrationRegistryV4 registry = deployRegistry();
+        IMigrationRegistryV5 registry = deployRegistry();
         MockMigrationApplier applier = new MockMigrationApplier();
         address writer = address(applier);
         Prerequisite[] memory list = onto(registry, writer, namespace);
         vm.recordLogs();
         if (history) {
-            applier.applyMigrationHistoryV4(writer, namespace, migration, block.timestamp, list, meta);
+            applier.applyMigrationHistoryV5(writer, namespace, migration, block.timestamp, list, meta);
         } else {
-            applier.applyMigrationV4(writer, namespace, migration, list, meta);
+            applier.applyMigrationV5(writer, namespace, migration, list, meta);
         }
         assertMeta(vm.getRecordedLogs(), writer, writer, namespace, migration, meta);
     }
@@ -89,10 +89,10 @@ contract LibMigrationRegistryMetaTest is Test {
         vm.assume(namespace != bytes32(0));
         LibMigrationFuzz.assumeMigration(vm, migration);
         if (meta.length > 0) meta = rainMeta(meta);
-        IMigrationRegistryV4 registry = deployRegistry();
+        IMigrationRegistryV5 registry = deployRegistry();
         vm.assume(executor != address(registry) && executor != address(vm));
         vm.prank(writer);
-        registry.approveV4(namespace, executor);
+        registry.approveV5(namespace, executor);
         Prerequisite[] memory list = onto(registry, writer, namespace);
         (address to, bytes memory data) = history
             ? LibMigrationRegistry.applyMigrationHistoryV4Call(
@@ -104,6 +104,6 @@ contract LibMigrationRegistryMetaTest is Test {
         (bool success,) = to.call(data);
         assertTrue(success);
         assertMeta(vm.getRecordedLogs(), executor, writer, namespace, migration, meta);
-        assertEq(registry.headV4(writer, namespace), migration);
+        assertEq(registry.headV5(writer, namespace), migration);
     }
 }

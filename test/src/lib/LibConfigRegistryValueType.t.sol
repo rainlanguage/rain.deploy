@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibConfigRegistry} from "../../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.sol";
-import {IConfigRegistryV4} from "../../../src/interface/IConfigRegistryV4.sol";
+import {IConfigRegistryV5} from "../../../src/interface/IConfigRegistryV5.sol";
 import {LibConfigRegistryFork} from "../../lib/LibConfigRegistryFork.sol";
 
 /// @title LibConfigRegistryValueTypeTest
@@ -14,11 +14,11 @@ import {LibConfigRegistryFork} from "../../lib/LibConfigRegistryFork.sol";
 contract LibConfigRegistryValueTypeTest is Test {
     address internal constant AUTHORITY = address(0xA11CE);
 
-    function bind(bytes32 name, string memory valueType) internal returns (IConfigRegistryV4) {
+    function bind(bytes32 name, string memory valueType) internal returns (IConfigRegistryV5) {
         LibConfigRegistryFork.ensureDeployed(vm);
-        IConfigRegistryV4 registry = IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+        IConfigRegistryV5 registry = IConfigRegistryV5(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
         vm.prank(AUTHORITY);
-        registry.registerV4(AUTHORITY, name, valueType, hex"01", "");
+        registry.registerV5(AUTHORITY, name, valueType, hex"01", "");
         return registry;
     }
 
@@ -82,10 +82,10 @@ contract LibConfigRegistryValueTypeTest is Test {
     /// A rebind as another type moves what resolves.
     function testResolveFollowsRebindType(bytes32 name) external {
         vm.warp(10);
-        IConfigRegistryV4 registry = bind(name, "address");
+        IConfigRegistryV5 registry = bind(name, "address");
         vm.warp(20);
         vm.prank(AUTHORITY);
-        registry.registerV4(AUTHORITY, name, "uint256", hex"01", "");
+        registry.registerV5(AUTHORITY, name, "uint256", hex"01", "");
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibConfigRegistry.ValueTypeMismatch.selector,

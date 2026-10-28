@@ -9,7 +9,7 @@ import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../src/lib/LibMigrationRegistryDeploy.sol";
-import {IMigrationRegistryV4, Prerequisite} from "../../src/interface/IMigrationRegistryV4.sol";
+import {IMigrationRegistryV5, Prerequisite} from "../../src/interface/IMigrationRegistryV5.sol";
 
 /// @title LibBeaconTest
 /// @notice The fixtures and assertions the beacon tests share.
@@ -80,8 +80,8 @@ library LibBeaconTest {
         Prerequisite[] memory prerequisites
     ) internal {
         vm.prank(writer);
-        IMigrationRegistryV4(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigrationV4(writer, namespace, migration, prerequisites, "");
+        IMigrationRegistryV5(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .applyMigrationV5(writer, namespace, migration, prerequisites, "");
     }
 
     /// Applies `migration` as `writer` on the deployed `MigrationRegistry`, onto `head` in `namespace`.
