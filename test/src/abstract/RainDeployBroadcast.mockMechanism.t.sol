@@ -2,33 +2,54 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {LibMockCreate2Mechanism} from "../../lib/LibMockCreate2Mechanism.sol";
-
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {SuiteSeatsDeployKey} from "../../../src/abstract/RainDeployBroadcast.sol";
-import {DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {ChainDeploy} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {ChainDeploy, LibRainDeployExtendedNetworks} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
 import {
+    LibMockCreate2Mechanism,
     MOCK_CREATE2_FACTORY,
+    MOCK_CREATE2_MECHANISM_ID,
     MOCK_CREATE2_SALT,
     MockCreate2Mechanism,
     MockCreate2NetworkUnfrozen
-} from "../../abstract/MockCreate2DeploySuites.sol";
+} from "../../lib/LibMockCreate2Mechanism.sol";
+import {IMockMechanismProbe, MOCK_MECHANISM_PROBE} from "../../lib/LibMockMechanismProbe.sol";
 import {MockCreate2Deploy} from "../../concrete/MockCreate2Deploy.sol";
 import {MockCreate2Factory} from "../../concrete/MockCreate2Factory.sol";
 import {MockChainOriginOwned} from "../../concrete/MockChainOriginOwned.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 
+/// `broadcastSuite` over a suite the caller still holds.
+contract CallerHeldMockBroadcast is MockCreate2Deploy {
+    /// @return The hashes of the caller's suite and declaration before, then after, the broadcast.
+    function broadcastRelease(string[] memory networks, uint256 key)
+        external
+        returns (bytes32, bytes32, bytes32, bytes32)
+    {
+        DeployDeclaration memory d = declaration();
+        DeploySuite memory suite = mockRelease();
+        bytes32 suiteBefore = keccak256(abi.encode(suite));
+        bytes32 declarationBefore = keccak256(abi.encode(d.released, d.candidates, d.networks));
+        broadcastSuite(d, suite, networks, key);
+        return (
+            suiteBefore,
+            keccak256(abi.encode(suite)),
+            declarationBefore,
+            keccak256(abi.encode(d.released, d.candidates, d.networks))
+        );
+    }
+}
+
 /// @title RainDeployBroadcastMockMechanismTest
-/// @notice `deployAndBroadcast` and the seat check over a per-network mechanism, offline on `LocalForkVm`.
+/// @notice `deployAndBroadcast`, `broadcastSuite` and the seat check over a per-network mechanism.
 contract RainDeployBroadcastMockMechanismTest is Test {
     event MockCreate2Verification(string[] networks, string suite, address[] deployed);
 
     MockCreate2Deploy internal sDeploy;
-
     LocalForkVm internal sForkVm;
 
     function setUp() external {
@@ -55,6 +76,13 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         networks[0] = a;
         networks[1] = b;
         return networks;
+    }
+
+    function arbitrumAndPolygonIds() internal pure returns (uint256[] memory) {
+        uint256[] memory chainIds = new uint256[](2);
+        chainIds[0] = 42161;
+        chainIds[1] = 137;
+        return chainIds;
     }
 
     function anyForkExists() internal returns (bool) {
@@ -88,8 +116,8 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         );
     }
 
-    /// A network the candidate adds but the release neither records nor extends is refused before any fork, at the
-    /// address the release's derivation gives it there.
+    /// A network the candidate adds but the release does not record is refused before any fork, at the address the
+    /// release's derivation gives it there.
     function testBroadcastRefusesAnUnfrozenCandidateNetworkBeforeAnyFork() external {
         DeploySuite memory release = sDeploy.externalMockRelease();
         DeploySuite memory candidate = sDeploy.externalMockCandidate();
@@ -104,13 +132,20 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         assertFalse(anyForkExists());
     }
 
-    /// An extended network broadcasts at its declared address.
-    function testBroadcastsADeclaredExtendedNetwork() external {
-        DeploySuite memory release = sDeploy.externalMockRelease();
-        ChainDeploy[] memory extended = new ChainDeploy[](1);
-        extended[0] =
+    /// A network the mechanism's own records add broadcasts at its recorded address.
+    function testBroadcastsARecordedNetwork() external {
+        string memory root = "test/generated-snapshot/broadcast-mock-recorded";
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        try vm.removeDir(root, true) {} catch {}
+        ChainDeploy[] memory recorded = new ChainDeploy[](1);
+        recorded[0] =
             ChainDeploy({chainId: 8453, data: abi.encode(uint256(8453)), deployedAddress: networkAddress(8453)});
-        DeploySuite memory frozen = sDeploy.externalAppendExtendedNetworks(release, extended);
+        sDeploy.setMockRecordRoot(root);
+        DeploySuite memory release = sDeploy.externalMockRelease();
+        LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, release.suite, recorded);
+        DeploySuite memory frozen = sDeploy.externalAddRecordedNetworks(release);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
         (address[] memory deployed,) = sDeploy.externalDeployAndBroadcast(
             Vm(address(sForkVm)),
             names(LibRainDeploy.BASE, LibRainDeploy.POLYGON),
@@ -126,7 +161,7 @@ contract RainDeployBroadcastMockMechanismTest is Test {
     /// The recorded address on each network is held to the mechanism's derivation there before any fork.
     function testBroadcastRefusesAStaleRecordedAddressBeforeAnyFork() external {
         DeploySuite memory release = sDeploy.externalMockRelease();
-        MockCreate2Mechanism memory mechanism = abi.decode(release.mechanismData, (MockCreate2Mechanism));
+        MockCreate2Mechanism memory mechanism = LibMockCreate2Mechanism.decode(release);
         mechanism.networks[1].deployedAddress = address(0x5a1e);
         release.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
         vm.expectRevert(
@@ -138,6 +173,42 @@ contract RainDeployBroadcastMockMechanismTest is Test {
             vm, names(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), 1, release, release
         );
         assertFalse(anyForkExists());
+    }
+
+    /// `broadcastSuite` asks the mechanism for its recorded networks exactly once.
+    function testBroadcastSuiteAddsRecordedNetworksOnce() external {
+        DeploySuite memory release = sDeploy.externalMockRelease();
+        vm.expectCall(
+            MOCK_MECHANISM_PROBE,
+            abi.encodeCall(IMockMechanismProbe.addRecordedNetworks, (MOCK_CREATE2_MECHANISM_ID, release.suite)),
+            1
+        );
+        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
+        sDeploy.externalBroadcastSuite(release, new string[](0), 1);
+    }
+
+    /// The mechanism's own records and the candidate's networks widen copies; the caller's suite and declaration are
+    /// what they were.
+    function testBroadcastSuiteLeavesTheCallersSuiteUnchanged() external {
+        string memory root = "test/generated-snapshot/broadcast-mock-caller-held";
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        try vm.removeDir(root, true) {} catch {}
+        CallerHeldMockBroadcast deploy = new CallerHeldMockBroadcast();
+        deploy.setMockRecordRoot(root);
+        ChainDeploy[] memory recorded = new ChainDeploy[](1);
+        recorded[0] = ChainDeploy({chainId: 56, data: abi.encode(uint256(56)), deployedAddress: networkAddress(56)});
+        LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, deploy.externalMockRelease().suite, recorded);
+        assertEq(deploy.externalAddRecordedNetworks(deploy.externalMockRelease()).networks.length, 3);
+        vm.makePersistent(MOCK_CREATE2_FACTORY);
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        (bytes32 suiteBefore, bytes32 suiteAfter, bytes32 declarationBefore, bytes32 declarationAfter) =
+            deploy.broadcastRelease(networks, 0xa11ce);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
+        assertEq(suiteAfter, suiteBefore);
+        assertEq(declarationAfter, declarationBefore);
+        assertEq(networkAddress(42161).code, type(MockDeployable).runtimeCode);
     }
 
     function originOwnedOnSuite(uint256 ownedOn) internal view returns (DeploySuite memory) {
@@ -152,9 +223,10 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         DeploySuite memory suite = sDeploy.externalMockRelease();
         suite.creationCode = creationCode;
         suite.dependencies = new DeployDependency[](0);
+        suite.networks = LibMockCreate2Mechanism.networkNames(networks);
         suite.mechanismData = LibMockCreate2Mechanism.encode(
             MockCreate2Mechanism({
-                factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, beacon: address(0), networks: networks
+                factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, perNetwork: true, networks: networks, root: ""
             })
         );
         return suite;
@@ -168,14 +240,12 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         vm.expectRevert(
             abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, networkAddress(137, suite.creationCode))
         );
-        sDeploy.externalCheckSeatsNoDeployKey(suite, names(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), deployer);
+        sDeploy.externalCheckSeatsNoDeployKey(suite, arbitrumAndPolygonIds(), deployer);
     }
 
     function testSeatCheckLeavesNothingDeployed() external {
         DeploySuite memory suite = originOwnedOnSuite(1);
-        sDeploy.externalCheckSeatsNoDeployKey(
-            suite, names(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), vm.addr(1)
-        );
+        sDeploy.externalCheckSeatsNoDeployKey(suite, arbitrumAndPolygonIds(), vm.addr(1));
         assertEq(networkAddress(42161, suite.creationCode).code.length, 0);
         assertEq(networkAddress(137, suite.creationCode).code.length, 0);
     }
@@ -183,8 +253,6 @@ contract RainDeployBroadcastMockMechanismTest is Test {
     function testSeatCheckDeploysOnlyTheChainsOwnNetworkPerChain() external {
         DeploySuite memory suite = originOwnedOnSuite(1);
         vm.expectCall(MOCK_CREATE2_FACTORY, abi.encodeWithSelector(MockCreate2Factory.deploy.selector), 2);
-        sDeploy.externalCheckSeatsNoDeployKey(
-            suite, names(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), vm.addr(1)
-        );
+        sDeploy.externalCheckSeatsNoDeployKey(suite, arbitrumAndPolygonIds(), vm.addr(1));
     }
 }

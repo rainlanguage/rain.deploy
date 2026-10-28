@@ -6,6 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
@@ -29,7 +30,7 @@ contract RainDeployBroadcastDeployAndBroadcastTest is Test {
             storedRuntimeCode: "",
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new DeployDependency[](0),
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
     }
 
