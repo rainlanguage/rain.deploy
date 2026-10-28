@@ -1480,9 +1480,11 @@ contract LibRainDeploySnapshotTest is Test {
             "_RUNTIME_CODE,\n            artifactPath: \"src/concrete/AddressRegistry.sol:AddressRegistry\",\n",
             "            dependencies: abi.decode(AddressRegistry_",
             tag,
-            "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: abi.encode(bytes32(",
-            vm.toString(ZOLTU_MECHANISM_ID),
-            ")),\n            networks: new string[](0)\n        });\n"
+            string.concat(
+                "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: abi.encode(bytes32(",
+                vm.toString(ZOLTU_MECHANISM_ID),
+                ")),\n            networks: new string[](0)\n        });\n"
+            )
         );
     }
 
