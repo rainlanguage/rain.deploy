@@ -19,7 +19,7 @@ import {
     SnapshotFile,
     UnexpectedMechanismData
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {LibRainDeployZoltuMechanism, ZOLTU_MECHANISM_ID} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {
     EmptyRelease,
     InvalidRecordRoot,
@@ -1480,7 +1480,9 @@ contract LibRainDeploySnapshotTest is Test {
             "_RUNTIME_CODE,\n            artifactPath: \"src/concrete/AddressRegistry.sol:AddressRegistry\",\n",
             "            dependencies: abi.decode(AddressRegistry_",
             tag,
-            "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: \"\",\n            networks: new string[](0)\n        });\n"
+            "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: abi.encode(bytes32(",
+            vm.toString(ZOLTU_MECHANISM_ID),
+            ")),\n            networks: new string[](0)\n        });\n"
         );
     }
 

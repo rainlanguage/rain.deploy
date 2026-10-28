@@ -229,7 +229,7 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         try vm.removeDir(root, true) {} catch {}
         ChainDeploy[] memory recorded = new ChainDeploy[](2);
         recorded[0] = network(8453, networkAddress(8453));
-        recorded[1] = network(10, networkAddress(10));
+        recorded[1] = network(56, networkAddress(56));
         sDeploy.setMockRecordRoot(root);
         DeploySuite memory release = sDeploy.externalMockRelease();
         LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, release.suite, recorded);
@@ -243,9 +243,9 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         vm.removeDir(root, true);
         assertEq(frozen.networks.length, 4);
         assertEq(frozen.networks[2], LibRainDeploy.BASE);
-        assertEq(frozen.networks[3], LibRainDeploy.OPTIMISM);
+        assertEq(frozen.networks[3], LibRainDeploy.BSC);
         assertEq(sDeploy.externalRecordedAddress(frozen, 8453), networkAddress(8453));
-        assertEq(sDeploy.externalRecordedAddress(frozen, 10), networkAddress(10));
+        assertEq(sDeploy.externalRecordedAddress(frozen, 56), networkAddress(56));
     }
 
     /// Without a record root the mock adds nothing, but the hook still runs.
