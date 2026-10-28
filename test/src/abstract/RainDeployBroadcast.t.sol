@@ -23,7 +23,8 @@ import {UnanchorableDeploy} from "../../concrete/UnanchorableDeploy.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {ZoltuDeployOrAdopt} from "../../abstract/ZoltuDeployOrAdopt.sol";
-import {SuiteSeatsDeployKey} from "../../../src/abstract/RainDeployBroadcast.sol";
+import {DeployNetworkUndeclared, SuiteSeatsDeployKey} from "../../../src/abstract/RainDeployBroadcast.sol";
+import {UndeclaredDeployNetworkDeploy} from "../../concrete/UndeclaredDeployNetworkDeploy.sol";
 import {ExternalDeployBroadcast} from "../../abstract/ExternalDeployBroadcast.sol";
 import {ExampleDeployArbitrumNetworks} from "../../concrete/ExampleDeployArbitrumNetworks.sol";
 import {MockOriginOwned} from "../../concrete/MockOriginOwned.sol";
@@ -229,6 +230,14 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
         // address it derives; the key itself is a test constant that has never
         // transacted anywhere.
         vm.setEnv("DEPLOYMENT_KEY", "0xa11ce");
+
+        // A deploy network outside the declaration's networks is refused before the broadcast forks or takes up
+        // the key: broadcasting first would fail on the unaliased network instead.
+        UndeclaredDeployNetworkDeploy undeclared = new UndeclaredDeployNetworkDeploy();
+        vm.expectRevert(abi.encodeWithSelector(DeployNetworkUndeclared.selector, LibRainDeploy.BASE));
+        undeclared.run();
+        assertEq(vm.getWallets().length, 0);
+        assertEq(expectedAddress.code.length, 0);
 
         single.run();
 
