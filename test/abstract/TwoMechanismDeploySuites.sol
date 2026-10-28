@@ -4,13 +4,13 @@ pragma solidity ^0.8.25;
 
 import {
     DeployCandidate,
+    DeployDeclaration,
     DeployDependency,
-    DeployMechanismHandler,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ChainDeploy} from "../../src/lib/LibRainDeployExtendedNetworks.sol";
-import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {
     LibMockCreate2Mechanism,
     MOCK_CREATE2_FACTORY,
@@ -24,33 +24,19 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 bytes32 constant TWO_MECHANISM_SALT = keccak256("rain.deploy.mock.salt");
 
 /// @title TwoMechanismDeploySuites
-/// @notice One declaration over two non-Zoltu mechanisms and Zoltu: a `LibMockCreate2Mechanism` candidate on Arbitrum
+/// @notice Candidates over two non-Zoltu mechanisms: a per-network `LibMockCreate2Mechanism` candidate on Arbitrum
 /// One and Polygon, and a `LibMockSaltMechanism` candidate.
 abstract contract TwoMechanismDeploySuites is RainDeploySuitesBase {
-    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
-        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](3);
-        handlers[0] = LibMockSaltMechanism.handler();
-        handlers[1] = LibMockCreate2Mechanism.handler();
-        handlers[2] = LibRainDeployZoltuMechanism.handler();
-        return handlers;
-    }
-
     function create2Candidate() internal pure returns (DeploySuite memory) {
         ChainDeploy[] memory networks = new ChainDeploy[](2);
-        for (uint256 i = 0; i < 2; i++) {
-            bytes memory data = abi.encode(i == 0 ? 42161 : 137);
-            networks[i] = ChainDeploy({
-                chainId: i == 0 ? 42161 : 137,
-                data: data,
-                deployedAddress: LibMockCreate2Mechanism.create2Address(
-                    MOCK_CREATE2_FACTORY,
-                    LibMockCreate2Mechanism.networkSalt(MOCK_CREATE2_SALT, data),
-                    type(MockDeployable).creationCode
-                )
-            });
-        }
+        networks[0] = LibMockCreate2Mechanism.network(
+            MOCK_CREATE2_FACTORY, MOCK_CREATE2_SALT, type(MockDeployable).creationCode, 42161, abi.encode(42161)
+        );
+        networks[1] = LibMockCreate2Mechanism.network(
+            MOCK_CREATE2_FACTORY, MOCK_CREATE2_SALT, type(MockDeployable).creationCode, 137, abi.encode(137)
+        );
         return DeploySuite({
-            networks: new string[](0),
+            networks: LibMockCreate2Mechanism.networkNames(networks),
             suite: "mock-create-two",
             creationCode: type(MockDeployable).creationCode,
             storedDeployedAddress: address(0),
@@ -60,7 +46,7 @@ abstract contract TwoMechanismDeploySuites is RainDeploySuitesBase {
             dependencies: new DeployDependency[](0),
             mechanismData: LibMockCreate2Mechanism.encode(
                 MockCreate2Mechanism({
-                    factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, beacon: address(0), networks: networks
+                    factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, perNetwork: true, networks: networks, root: ""
                 })
             )
         });
@@ -82,14 +68,12 @@ abstract contract TwoMechanismDeploySuites is RainDeploySuitesBase {
         });
     }
 
-    function releasedSuites() internal pure virtual override returns (DeploySuite[] memory) {
-        return new DeploySuite[](0);
-    }
-
-    function candidateSuites() internal view virtual override returns (DeployCandidate[] memory) {
+    /// Adds `create2Candidate()` and `saltCandidate()` to `d`.
+    /// @param d The declaration, mutated.
+    function addTwoMechanismCandidates(DeployDeclaration memory d) internal pure {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({snapshot: create2Candidate(), unanchorableReason: ""});
         candidates[1] = DeployCandidate({snapshot: saltCandidate(), unanchorableReason: ""});
-        return candidates;
+        LibRainDeployDeclaration.addCandidates(d, candidates);
     }
 }

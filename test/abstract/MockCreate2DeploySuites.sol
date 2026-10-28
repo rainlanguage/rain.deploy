@@ -4,124 +4,113 @@ pragma solidity ^0.8.25;
 
 import {
     DeployCandidate,
+    DeployDeclaration,
     DeployDependency,
-    DeployMechanismHandler,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ChainDeploy} from "../../src/lib/LibRainDeployExtendedNetworks.sol";
-import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
-import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {
     LibMockCreate2Mechanism,
     MOCK_CREATE2_FACTORY,
     MOCK_CREATE2_SALT,
-    MockCreate2DerivationMismatch,
-    MockCreate2Mechanism,
-    MockCreate2NetworkUndeclared,
-    MockCreate2NetworkUnfrozen
+    MockCreate2Mechanism
 } from "../lib/LibMockCreate2Mechanism.sol";
 import {MockDeployable} from "../concrete/MockDeployable.sol";
 
 /// @title MockCreate2DeploySuites
-/// @notice A test-only declaration of `LibMockCreate2Mechanism` suites, resolved before Zoltu. Its extended networks
-/// and their root are set from outside.
+/// @notice Test-only `LibMockCreate2Mechanism` suites: a per-network release and its candidate, whose payloads read
+/// their recorded networks under a root set from outside.
 abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
-    ChainDeploy[] internal sMockExtendedNetworks;
+    /// The record root every mock suite's payload names; empty reads no records.
+    string internal sMockRecordRoot;
 
-    string internal sMockExtendedNetworksRoot;
-
-    function setMockExtendedNetworksRoot(string memory root) external {
-        sMockExtendedNetworksRoot = root;
+    function setMockRecordRoot(string memory root) external {
+        sMockRecordRoot = root;
     }
-
-    function extendedNetworksRoot() internal view virtual override returns (string memory) {
-        if (bytes(sMockExtendedNetworksRoot).length == 0) {
-            return LibRainDeploySnapshot.LIB_FS_ROOT;
-        }
-        return sMockExtendedNetworksRoot;
-    }
-
-    function setMockExtendedNetworks(ChainDeploy[] memory networks) external {
-        delete sMockExtendedNetworks;
-        for (uint256 i = 0; i < networks.length; i++) {
-            sMockExtendedNetworks.push(networks[i]);
-        }
-    }
-
 
     function mockNetwork(uint256 chainId) internal pure returns (ChainDeploy memory) {
-        bytes memory data = abi.encode(chainId);
-        return ChainDeploy({
-            chainId: chainId,
-            data: data,
-            deployedAddress: LibMockCreate2Mechanism.create2Address(
-                MOCK_CREATE2_FACTORY, LibMockCreate2Mechanism.networkSalt(MOCK_CREATE2_SALT, data), type(MockDeployable).creationCode
-            )
-        });
+        return LibMockCreate2Mechanism.network(
+            MOCK_CREATE2_FACTORY, MOCK_CREATE2_SALT, type(MockDeployable).creationCode, chainId, abi.encode(chainId)
+        );
     }
 
-    function mockSuite(string memory key, address beacon, ChainDeploy[] memory networks)
-        internal
-        pure
-        returns (DeploySuite memory)
-    {
+    /// A per-network suite on exactly `networks`.
+    function mockSuite(string memory key, ChainDeploy[] memory networks) internal view returns (DeploySuite memory) {
+        DeploySuite memory suite = mockSingleSuite(key);
+        suite.storedDeployedAddress = address(0);
+        suite.networks = LibMockCreate2Mechanism.networkNames(networks);
+        suite.mechanismData = LibMockCreate2Mechanism.encode(
+            MockCreate2Mechanism({
+                factory: MOCK_CREATE2_FACTORY,
+                salt: MOCK_CREATE2_SALT,
+                perNetwork: true,
+                networks: networks,
+                root: sMockRecordRoot
+            })
+        );
+        return suite;
+    }
+
+    /// A single-address suite on the declaration's networks.
+    function mockSingleSuite(string memory key) internal view returns (DeploySuite memory) {
         return DeploySuite({
             networks: new string[](0),
             suite: key,
             creationCode: type(MockDeployable).creationCode,
-            storedDeployedAddress: networks.length == 0
-                ? LibMockCreate2Mechanism.create2Address(MOCK_CREATE2_FACTORY, MOCK_CREATE2_SALT, type(MockDeployable).creationCode)
-                : address(0),
+            storedDeployedAddress: LibMockCreate2Mechanism.create2Address(
+                MOCK_CREATE2_FACTORY, MOCK_CREATE2_SALT, type(MockDeployable).creationCode
+            ),
             storedBytecodeHash: keccak256(type(MockDeployable).runtimeCode),
             storedRuntimeCode: type(MockDeployable).runtimeCode,
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new DeployDependency[](0),
             mechanismData: LibMockCreate2Mechanism.encode(
                 MockCreate2Mechanism({
-                    factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, beacon: beacon, networks: networks
+                    factory: MOCK_CREATE2_FACTORY,
+                    salt: MOCK_CREATE2_SALT,
+                    perNetwork: false,
+                    networks: new ChainDeploy[](0),
+                    root: sMockRecordRoot
                 })
             )
         });
     }
 
     /// The per-network release, recording Arbitrum One and Polygon.
-    function mockRelease() internal pure returns (DeploySuite memory) {
+    function mockRelease() internal view returns (DeploySuite memory) {
         ChainDeploy[] memory networks = new ChainDeploy[](2);
         networks[0] = mockNetwork(42161);
         networks[1] = mockNetwork(137);
-        return mockSuite("mock-create-two@0_0_1", address(0), networks);
+        return mockSuite("mock-create-two@0_0_1", networks);
     }
 
     /// The release's candidate, on Arbitrum One, Polygon and Base.
-    function mockCandidate() internal pure returns (DeploySuite memory) {
+    function mockCandidate() internal view returns (DeploySuite memory) {
         ChainDeploy[] memory networks = new ChainDeploy[](3);
         networks[0] = mockNetwork(42161);
         networks[1] = mockNetwork(137);
         networks[2] = mockNetwork(8453);
-        return mockSuite("mock-create-two", address(0), networks);
+        return mockSuite("mock-create-two", networks);
     }
 
-    function releasedSuites() internal pure virtual override returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](1);
-        suites[0] = mockRelease();
-        return suites;
-    }
-
-    function candidateSuites() internal view virtual override returns (DeployCandidate[] memory) {
+    /// Adds `mockRelease()` and `mockCandidate()` to `d`.
+    /// @param d The declaration, mutated.
+    function addMockCreate2(DeployDeclaration memory d) internal view {
+        DeploySuite[] memory released = new DeploySuite[](1);
+        released[0] = mockRelease();
+        LibRainDeployDeclaration.addReleased(d, released);
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({snapshot: mockCandidate(), unanchorableReason: ""});
-        return candidates;
+        LibRainDeployDeclaration.addCandidates(d, candidates);
     }
 
-    function extendedNetworks(string memory) internal view virtual override returns (ChainDeploy[] memory) {
-        return sMockExtendedNetworks;
+    function externalMockRelease() external view returns (DeploySuite memory) {
+        return mockRelease();
     }
 
-    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
-        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](2);
-        handlers[0] = LibMockCreate2Mechanism.handler();
-        handlers[1] = LibRainDeployZoltuMechanism.handler();
-        return handlers;
+    function externalMockCandidate() external view returns (DeploySuite memory) {
+        return mockCandidate();
     }
 }

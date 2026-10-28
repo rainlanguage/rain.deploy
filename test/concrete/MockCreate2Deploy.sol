@@ -2,65 +2,20 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Vm} from "forge-std-1.17.0/src/Vm.sol";
-import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
-import {DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
-import {ChainDeploy} from "../../src/lib/LibRainDeployExtendedNetworks.sol";
-import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
+import {DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {ExternalDeployBroadcast} from "../abstract/ExternalDeployBroadcast.sol";
 import {MockCreate2DeploySuites} from "../abstract/MockCreate2DeploySuites.sol";
+import {LibMockCreate2Mechanism} from "../lib/LibMockCreate2Mechanism.sol";
 
-contract MockCreate2Deploy is MockCreate2DeploySuites, ExternalDeploySuites, RainDeployBroadcast {
-    function externalMockRelease() external pure returns (DeploySuite memory) {
-        return mockRelease();
-    }
-
-    function externalMockCandidate() external pure returns (DeploySuite memory) {
-        return mockCandidate();
-    }
-
-    function externalWithExtendedNetworks(DeploySuite memory suite) external view returns (DeploySuite memory) {
-        return withExtendedNetworks(suite);
-    }
-
-    function externalOnSupportedNetworks(DeploySuite memory frozen, uint256[] memory chainIds)
-        external
-        view
-        returns (DeploySuite memory)
-    {
-        return onSupportedNetworks(frozen, chainIds);
-    }
-
-    function externalDeployAndBroadcast(
-        Vm forkVm,
-        string[] memory networks,
-        uint256 deployerPrivateKey,
-        DeploySuite memory frozen,
-        DeploySuite memory candidate
-    ) external returns (address[] memory, uint256[] memory) {
-        return deployAndBroadcast(forkVm, networks, deployerPrivateKey, frozen, candidate);
-    }
-
-    function externalCheckSeatsNoDeployKey(DeploySuite memory suite, string[] memory networks, address deployer)
-        external
-    {
-        checkSeatsNoDeployKey(suite, networks, deployer);
-    }
-
-    function extendedNetworksRoot()
-        internal
-        view
-        override(RainDeploySuitesBase, MockCreate2DeploySuites)
-        returns (string memory)
-    {
-        return super.extendedNetworksRoot();
-    }
-
-    function extendedNetworks(string memory suite)
-        internal
-        view
-        override(RainDeploySuitesBase, MockCreate2DeploySuites)
-        returns (ChainDeploy[] memory)
-    {
-        return super.extendedNetworks(suite);
+contract MockCreate2Deploy is MockCreate2DeploySuites, ExternalDeployBroadcast {
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibMockCreate2Mechanism.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        addMockCreate2(d);
+        return d;
     }
 }
