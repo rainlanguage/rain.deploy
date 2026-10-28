@@ -58,14 +58,14 @@ library LibMockCreate2Mechanism {
         return suite.mechanismData.length > 32;
     }
 
-    function create2Address(address factory, bytes32 salt, bytes memory creationCode) internal pure returns (address) {
+    function create2Address(address factory, bytes32 create2Salt, bytes memory creationCode) internal pure returns (address) {
         return address(
-            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), factory, salt, keccak256(creationCode)))))
+            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), factory, create2Salt, keccak256(creationCode)))))
         );
     }
 
-    function networkSalt(bytes32 salt, bytes memory data) internal pure returns (bytes32) {
-        return keccak256(abi.encode(salt, data));
+    function networkSalt(bytes32 baseSalt, bytes memory data) internal pure returns (bytes32) {
+        return keccak256(abi.encode(baseSalt, data));
     }
 
     function decode(DeploySuite memory suite) internal pure returns (MockCreate2Mechanism memory) {
