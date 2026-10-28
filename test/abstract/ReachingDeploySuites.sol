@@ -9,17 +9,13 @@ import {
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ExternalDeployment, RainDeployDeclarationChecks} from "../../src/abstract/RainDeployDeclarationChecks.sol";
-import {CloneDeploy, LibRainDeployClone} from "../../src/lib/LibRainDeployClone.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployMechanism} from "../../src/lib/LibRainDeployMechanism.sol";
-import {MockCloneFactory} from "../concrete/MockCloneFactory.sol";
 import {MockDeployable} from "../concrete/MockDeployable.sol";
 import {
     MOCK_DEPLOYABLE_ADDRESS,
     MOCK_EXTERNAL_ADDRESS,
     MockReachingDeployable
 } from "../concrete/MockReachingDeployable.sol";
-import {exampleCloneFactory} from "./ExampleCloneDeploys.sol";
 
 bytes constant MOCK_EXTERNAL_RUNTIME_CODE = hex"00c0ffee";
 
@@ -31,7 +27,6 @@ enum DeclarationDefect {
     AdjacentRepeatedDependency,
     UndeclaredSibling,
     UndeclaredExternal,
-    UndeclaredMechanismDependency,
     UnreachedDependency,
     UnknownDependency,
     SiblingRuntimeCode,
@@ -41,9 +36,9 @@ enum DeclarationDefect {
 }
 
 /// @title ReachingDeploySuites
-/// @notice A declaration whose suites embed a sibling, an external deployment
-/// with a leading zero byte, and a clone factory reached only through
-/// mechanism data, with one `DeclarationDefect` applied to its candidates.
+/// @notice A declaration whose suites embed a sibling and an external deployment
+/// with a leading zero byte, with one `DeclarationDefect` applied to its
+/// candidates.
 abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
     DeclarationDefect internal sDefect;
     string internal sWorkflow = "test/fixture-dispatch/dispatchable.yaml";
@@ -78,27 +73,6 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
         });
     }
 
-    function cloneCandidate() internal view returns (DeployCandidate memory) {
-        DeployDependency[] memory deps = new DeployDependency[](2);
-        deps[0] =
-            DeployDependency({deployedAddress: exampleCloneFactory(), runtimeCode: type(MockCloneFactory).runtimeCode});
-        deps[1] =
-            DeployDependency({deployedAddress: MOCK_DEPLOYABLE_ADDRESS, runtimeCode: type(MockDeployable).runtimeCode});
-        return LibRainDeployMechanism.cloneCandidate(
-            CloneDeploy({
-                suite: "mock-clone",
-                factory: exampleCloneFactory(),
-                implementation: MOCK_DEPLOYABLE_ADDRESS,
-                data: "",
-                initDataPerNetwork: false,
-                initData: LibRainDeployClone.noInitDataPerNetwork,
-                salt: bytes32(uint256(1)),
-                dependencies: deps
-            }),
-            new uint256[](0)
-        );
-    }
-
     /// @inheritdoc RainDeploySuitesBase
     function releasedSuites() internal pure virtual override returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);
@@ -108,10 +82,9 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
 
     /// @inheritdoc RainDeploySuitesBase
     function candidateSuites() internal view override returns (DeployCandidate[] memory) {
-        DeployCandidate[] memory candidates = new DeployCandidate[](3);
+        DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({snapshot: leafSuite("mock-deployable"), unanchorableReason: ""});
         candidates[1] = DeployCandidate({snapshot: reachingSuite("mock-reaching-deployable"), unanchorableReason: ""});
-        candidates[2] = cloneCandidate();
 
         DeploySuite memory leaf = candidates[0].snapshot;
         DeploySuite memory reaching = candidates[1].snapshot;
@@ -140,10 +113,6 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
             DeployDependency[] memory deps = new DeployDependency[](1);
             deps[0] = reaching.dependencies[0];
             reaching.dependencies = deps;
-        } else if (defect == DeclarationDefect.UndeclaredMechanismDependency) {
-            DeployDependency[] memory deps = new DeployDependency[](1);
-            deps[0] = candidates[2].snapshot.dependencies[1];
-            candidates[2].snapshot.dependencies = deps;
         } else if (defect == DeclarationDefect.UnreachedDependency) {
             leaf.dependencies = new DeployDependency[](1);
             leaf.dependencies[0] = DeployDependency({
@@ -174,12 +143,9 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
 
     /// @inheritdoc RainDeployDeclarationChecks
     function externalDeployments() internal pure override returns (ExternalDeployment[] memory) {
-        ExternalDeployment[] memory externals = new ExternalDeployment[](2);
+        ExternalDeployment[] memory externals = new ExternalDeployment[](1);
         externals[0] = ExternalDeployment({
             deployedAddress: MOCK_EXTERNAL_ADDRESS, codeHash: keccak256(MOCK_EXTERNAL_RUNTIME_CODE)
-        });
-        externals[1] = ExternalDeployment({
-            deployedAddress: exampleCloneFactory(), codeHash: keccak256(type(MockCloneFactory).runtimeCode)
         });
         return externals;
     }

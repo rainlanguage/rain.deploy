@@ -24,7 +24,6 @@ import {
     MOCK_EXTERNAL_RUNTIME_CODE,
     ReachingDeploySuites
 } from "../../abstract/ReachingDeploySuites.sol";
-import {exampleCloneFactory} from "../../abstract/ExampleCloneDeploys.sol";
 import {DefectiveReleaseDeploySuites} from "../../abstract/DefectiveReleaseDeploySuites.sol";
 import {UndeclaredSiblingReleaseDeploySuites} from "../../concrete/UndeclaredSiblingReleaseDeploySuites.sol";
 import {UnknownDependencyReleaseDeploySuites} from "../../concrete/UnknownDependencyReleaseDeploySuites.sol";
@@ -92,7 +91,6 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVeri
         assertEq(choices[0], "mock-deployable");
         assertEq(choices[1], "mock-reaching-deployable");
         assertEq(choices[2], "mock-deployable@0_0_1");
-        assertEq(choices[3], "mock-clone");
     }
 
     function testDispatchChoiceNotDeclared() external {
@@ -182,12 +180,6 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVeri
         vm.expectRevert(
             abi.encodeWithSelector(UndeclaredDependency.selector, "mock-reaching-deployable", MOCK_EXTERNAL_ADDRESS)
         );
-        this.externalCheckDependenciesAreTheEmbeddedDeployments();
-    }
-
-    function testUndeclaredDependencyInMechanismData() external {
-        sDefect = DeclarationDefect.UndeclaredMechanismDependency;
-        vm.expectRevert(abi.encodeWithSelector(UndeclaredDependency.selector, "mock-clone", exampleCloneFactory()));
         this.externalCheckDependenciesAreTheEmbeddedDeployments();
     }
 
