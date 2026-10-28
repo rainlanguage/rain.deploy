@@ -241,25 +241,24 @@ library LibRainDeployDeclaration {
         while (i < candidates.length && keccak256(bytes(candidates[i].snapshot.suite)) != name) {
             i++;
         }
-        if (i == candidates.length) {
-            return (noSuite(), false);
+        bool found = i < candidates.length;
+        if (!found) {
+            return (
+                DeploySuite({
+                    suite: "",
+                    creationCode: "",
+                    storedDeployedAddress: address(0),
+                    storedBytecodeHash: bytes32(0),
+                    storedRuntimeCode: "",
+                    artifactPath: "",
+                    dependencies: new DeployDependency[](0),
+                    mechanismData: "",
+                    networks: new string[](0)
+                }),
+                found
+            );
         }
-        return (abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite)), true);
-    }
-
-    /// @return A suite with every field empty: what `candidateOf` returns beside `false`.
-    function noSuite() private pure returns (DeploySuite memory) {
-        return DeploySuite({
-            suite: "",
-            creationCode: "",
-            storedDeployedAddress: address(0),
-            storedBytecodeHash: bytes32(0),
-            storedRuntimeCode: "",
-            artifactPath: "",
-            dependencies: new DeployDependency[](0),
-            mechanismData: "",
-            networks: new string[](0)
-        });
+        return (abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite)), found);
     }
 
     /// The mechanism id a suite's `mechanismData` declares: its first word. Refuses `MechanismUnclaimed` for data
