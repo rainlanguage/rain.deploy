@@ -227,7 +227,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// snapshot.
     function testEveryDeclaredContractHasASnapshot() external view {
         string[] memory snapshots = snapshotContractNames();
-        DeployCandidate[] memory candidates = checkedCandidateSuites();
+        DeployCandidate[] memory candidates = checkedCandidateSuites(declaration());
         ParameterisedContract[] memory parameterised = parameterisedContracts();
 
         string[] memory declared = new string[](candidates.length + parameterised.length);
@@ -296,7 +296,7 @@ contract GeneratedSnapshotShapeTest is RegistryDeploySuites, Test {
     /// of kilobytes, and a failure message carrying two of them is a failure
     /// message nobody reads.
     function testEveryCandidateArtifactPathResolves() external view {
-        DeployCandidate[] memory candidates = checkedCandidateSuites();
+        DeployCandidate[] memory candidates = checkedCandidateSuites(declaration());
         for (uint256 i = 0; i < candidates.length; i++) {
             string memory declared = candidates[i].snapshot.artifactPath;
             string[] memory parts = vm.split(declared, ":");
