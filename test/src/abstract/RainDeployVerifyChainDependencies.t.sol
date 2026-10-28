@@ -17,7 +17,7 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
     function declaration() internal pure override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
-        d.networks = declaredNetworks();
+        LibRainDeployDeclaration.setNetworks(d, declaredNetworks());
         LibRainDeployZoltuMechanism.extend(d);
         LibRainDeployDeclaration.addReleased(d, declaredReleased());
         LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
