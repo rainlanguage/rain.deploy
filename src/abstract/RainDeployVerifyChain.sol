@@ -94,9 +94,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             for (uint256 j = 0; j < suites.length; j++) {
                 addresses[i][j] = deployedAddress(suites[j], networks[i].chainId);
                 if (requiresSuiteOn(suites[j], networks[i].name)) {
-                    checkNetworkFrozen(
-                        frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]
-                    );
+                    checkNetworkFrozen(frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]);
                     checkBeaconProxyBeaconDeclared(suites[j], networks[i], resolved);
                 }
             }

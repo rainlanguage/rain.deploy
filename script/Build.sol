@@ -3,11 +3,7 @@
 pragma solidity =0.8.25;
 
 import {BuildScript} from "../src/abstract/BuildScript.sol";
-import {
-    DeployCandidate,
-    DeployDependency,
-    DeploySuite
-} from "../src/abstract/RainDeploySuitesBase.sol";
+import {DeployCandidate, DeployDependency, DeploySuite} from "../src/abstract/RainDeploySuitesBase.sol";
 import {ParameterisedContract, RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../src/lib/LibRainDeploySnapshot.sol";
 

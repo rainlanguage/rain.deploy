@@ -105,13 +105,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         }
         DeploySuite memory frozen = withExtendedNetworks(suite);
         DeploySuite memory candidate = candidateOf(frozen);
-        checkSeatsNoDeployKey(
-            withUnrecordedNetworks(
-                frozen, candidate, addressChainIds(candidate)
-            ),
-            networks,
-            deployer
-        );
+        checkSeatsNoDeployKey(withUnrecordedNetworks(frozen, candidate, addressChainIds(candidate)), networks, deployer);
         return deployAndBroadcast(vm, networks, deployerPrivateKey, frozen, candidate);
     }
 

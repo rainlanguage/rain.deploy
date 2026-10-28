@@ -174,10 +174,12 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
     /// @param network The network's name.
     /// @param chainId The network's chain id.
     /// @param where The address checked on it.
-    function externalCheckNetworkFrozen(DeploySuite memory frozen, string memory network, uint256 chainId, address where)
-        external
-        view
-    {
+    function externalCheckNetworkFrozen(
+        DeploySuite memory frozen,
+        string memory network,
+        uint256 chainId,
+        address where
+    ) external view {
         checkNetworkFrozen(frozen, network, chainId, where);
     }
 

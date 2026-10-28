@@ -1575,9 +1575,7 @@ library LibRainDeploySnapshot {
             "_RUNTIME_CODE,\n    DEPENDENCIES as ",
             prefix,
             "_DEPENDENCIES",
-            !mechanismData
-                ? string("")
-                : string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA"),
+            !mechanismData ? string("") : string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA"),
             "\n} from \"../generated/",
             tagForRecordPath(vm, path),
             "/",
@@ -1598,8 +1596,8 @@ library LibRainDeploySnapshot {
         view
         returns (string memory)
     {
-        string memory imports = string.concat(
-            "import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n\n");
+        string memory imports =
+            string.concat("import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n\n");
         for (uint256 i = 0; i < paths.length; i++) {
             imports = string.concat(imports, releasedImport(vm, paths[i]));
         }
@@ -1633,8 +1631,7 @@ library LibRainDeploySnapshot {
         string memory mechanismData = releasedMechanismData(vm, path, prefix);
         {
             (, bool perNetwork) = recordedMechanismShape(vm, path);
-            storedDeployedAddress =
-                perNetwork ? string("address(0)") : string.concat(prefix, "_DEPLOYED_ADDRESS");
+            storedDeployedAddress = perNetwork ? string("address(0)") : string.concat(prefix, "_DEPLOYED_ADDRESS");
         }
         string memory head = string.concat(
             "        suites[",
@@ -1821,7 +1818,15 @@ library LibRainDeploySnapshot {
         // choice — the inlined form does not compile.
         string memory suitesImportPath = derivedSuitesImportPath(vm);
         return writeReleasedSuitesLib(
-            vm, libDir, recordRoot, contractName, spdxLicenseIdentifier, copyrightText, template, releasedMechanismData, suitesImportPath
+            vm,
+            libDir,
+            recordRoot,
+            contractName,
+            spdxLicenseIdentifier,
+            copyrightText,
+            template,
+            releasedMechanismData,
+            suitesImportPath
         );
     }
 
@@ -1846,7 +1851,9 @@ library LibRainDeploySnapshot {
         DeploySuite memory template,
         function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData
     ) internal returns (string memory) {
-        return writeReleasedSuitesLib(vm, libDir, recordRoot, contractName, template, releasedMechanismData, derivedSuitesImportPath(vm));
+        return writeReleasedSuitesLib(
+            vm, libDir, recordRoot, contractName, template, releasedMechanismData, derivedSuitesImportPath(vm)
+        );
     }
 
     /// The import block of the generated aggregate lib.

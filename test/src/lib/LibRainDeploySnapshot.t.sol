@@ -1726,8 +1726,9 @@ contract LibRainDeploySnapshotTest is Test {
         declared.dependencies[0] = DeployDependency({deployedAddress: address(0xdead), runtimeCode: hex"d0d0"});
         declared.dependencies[1] = DeployDependency({deployedAddress: address(0xbeef), runtimeCode: hex"b0b0"});
 
-        string memory emitted =
-            LibRainDeploySnapshot.releasedLibraryBlock(vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), declared, zoltuReleasedMechanismData);
+        string memory emitted = LibRainDeploySnapshot.releasedLibraryBlock(
+            vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), declared, zoltuReleasedMechanismData
+        );
 
         assertTrue(
             vm.contains(emitted, "dependencies: abi.decode(AddressRegistry_0_0_1_DEPENDENCIES, (DeployDependency[]))"),
@@ -1764,7 +1765,9 @@ contract LibRainDeploySnapshotTest is Test {
         declared.dependencies = dependencies;
 
         assertEq(
-            LibRainDeploySnapshot.releasedLibraryBlock(vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), declared, zoltuReleasedMechanismData),
+            LibRainDeploySnapshot.releasedLibraryBlock(
+                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), declared, zoltuReleasedMechanismData
+            ),
             LibRainDeploySnapshot.releasedLibraryBlock(
                 vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), emitterTemplate(), zoltuReleasedMechanismData
             ),
@@ -3636,7 +3639,12 @@ contract LibRainDeploySnapshotTest is Test {
 
         string memory defaulted = vm.readFile(
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, libDir, LibRainDeploySnapshot.LIB_FS_ROOT, FIXTURE_CONTRACT, emitterTemplate(), zoltuReleasedMechanismData
+                vm,
+                libDir,
+                LibRainDeploySnapshot.LIB_FS_ROOT,
+                FIXTURE_CONTRACT,
+                emitterTemplate(),
+                zoltuReleasedMechanismData
             )
         );
         string memory explicitly = vm.readFile(

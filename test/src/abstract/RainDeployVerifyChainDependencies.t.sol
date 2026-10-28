@@ -31,7 +31,8 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
     /// @return The suite.
     function dependentSuite(string memory key) internal pure returns (DeploySuite memory) {
         DeployDependency[] memory dependencies = new DeployDependency[](1);
-        dependencies[0] = DeployDependency({deployedAddress: DEPENDENCY, runtimeCode: type(MockDeployableV2).runtimeCode});
+        dependencies[0] =
+            DeployDependency({deployedAddress: DEPENDENCY, runtimeCode: type(MockDeployableV2).runtimeCode});
         return DeploySuite({
             suite: key,
             creationCode: type(MockDeployable).creationCode,
@@ -68,6 +69,7 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
         vm.etch(release.storedDeployedAddress, release.storedRuntimeCode);
         vm.makePersistent(release.storedDeployedAddress);
     }
+
     /// External wrapper for `checkDeployedOnSupportedNetworks`.
     /// @param suites The suites to check.
     function externalCheckDeployedOnSupportedNetworks(DeploySuite[] memory suites) external {
@@ -102,7 +104,9 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
     /// dependency, though the release is at its address.
     function testMissingDependencyIsRefusedNamingNetworkAndDependency() external {
         vm.etch(DEPENDENCY, hex"");
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.POLYGON, DEPENDENCY));
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.POLYGON, DEPENDENCY)
+        );
         this.testSuitesLiveOnEverySupportedNetwork();
     }
 
@@ -141,7 +145,9 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
     function testDependencyWithOtherCodeOnOneNetworkIsRefusedOnThatNetwork() external {
         bytes memory actual = polygonSystemContractCode();
         DeploySuite[] memory suites = releaseDeclaring(
-            DeployDependency({deployedAddress: POLYGON_SYSTEM_CONTRACT, runtimeCode: type(MockDeployableV2).runtimeCode})
+            DeployDependency({
+                deployedAddress: POLYGON_SYSTEM_CONTRACT, runtimeCode: type(MockDeployableV2).runtimeCode
+            })
         );
         vm.expectRevert(
             abi.encodeWithSelector(
@@ -187,7 +193,9 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
     function testDependencyRefusalPrecedesTheAddressRefusalOnOneNetwork() external {
         vm.etch(releasedSuites()[0].storedDeployedAddress, hex"");
         vm.etch(DEPENDENCY, hex"");
-        vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.POLYGON, DEPENDENCY));
+        vm.expectRevert(
+            abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.POLYGON, DEPENDENCY)
+        );
         this.externalCheckDeployedOnSupportedNetworks(releasedSuites());
     }
 }

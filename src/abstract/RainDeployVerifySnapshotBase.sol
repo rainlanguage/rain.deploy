@@ -104,12 +104,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     function checkFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released) internal view {
         bytes32[] memory releasedIdentities = new bytes32[](released.length);
         for (uint256 j = 0; j < released.length; j++) {
-            releasedIdentities[j] = keccak256(
-                abi.encode(
-                    addressChainIds(released[j]),
-                    deployedAddresses(released[j])
-                )
-            );
+            releasedIdentities[j] = keccak256(abi.encode(addressChainIds(released[j]), deployedAddresses(released[j])));
         }
 
         bytes32[] memory recorded = new bytes32[](paths.length);

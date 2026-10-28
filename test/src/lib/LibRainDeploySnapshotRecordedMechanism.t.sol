@@ -142,32 +142,38 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
         checkRead(
             "block-commented",
             string.concat(everyNetworkLine(address(1)), "/*\n", MECHANISM_DATA_LINE, "*/\n"),
-            false, false
+            false,
+            false
         );
         checkRead(
             "block-commented-second",
             string.concat(everyNetworkLine(address(1)), MECHANISM_DATA_LINE, "/*\n", MECHANISM_DATA_LINE, "*/\n"),
-            true, false
+            true,
+            false
         );
         checkRead(
             "nested-opener",
             string.concat(everyNetworkLine(address(1)), "/* a /* b */\n", MECHANISM_DATA_LINE),
-            true, false
+            true,
+            false
         );
         checkRead(
             "opener-in-line-comment",
             string.concat(everyNetworkLine(address(1)), "// /*\n", MECHANISM_DATA_LINE, "// */\n"),
-            true, false
+            true,
+            false
         );
         checkRead(
             "line-comment-backslash",
             string.concat(everyNetworkLine(address(1)), "// \\\n/*\n", MECHANISM_DATA_LINE, "*/\n"),
-            false, false
+            false,
+            false
         );
         checkRead(
             "lone-slash",
             string.concat(everyNetworkLine(address(1)), "// a / b\n/ /*\n", MECHANISM_DATA_LINE, "*/\n"),
-            false, false
+            false,
+            false
         );
     }
 
@@ -196,7 +202,8 @@ contract LibRainDeploySnapshotRecordedMechanismTest is Test {
         checkRead(
             "per-network",
             string.concat(perNetworkLine(137, address(2)), MECHANISM_DATA_LINE, perNetworkLine(42161, address(3))),
-            true, true
+            true,
+            true
         );
     }
 

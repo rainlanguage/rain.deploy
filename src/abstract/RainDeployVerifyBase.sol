@@ -236,8 +236,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
             uint256 releasedIndex =
                 resolveReleased(LibRainDeployBeacon.stateAt(beacon, state).implementation, released, derived);
             resolved.implementations[state] = released[releasedIndex];
-            resolved.implementationAddresses[state] =
-                deployedAddress(released[releasedIndex], chainId);
+            resolved.implementationAddresses[state] = deployedAddress(released[releasedIndex], chainId);
             resolved.implementationDerived[state] = derived[releasedIndex];
         }
         if (bytes(beacon.beaconSuite).length != 0) {

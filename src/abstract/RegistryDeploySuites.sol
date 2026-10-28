@@ -2,12 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {
-    DeployCandidate,
-    DeployDependency,
-    DeploySuite,
-    RainDeploySuitesBase
-} from "./RainDeploySuitesBase.sol";
+import {DeployCandidate, DeployDependency, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {
     CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE_CANDIDATE
