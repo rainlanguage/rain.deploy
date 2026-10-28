@@ -1903,7 +1903,9 @@ library LibRainDeploySnapshot {
         DeploySuite memory template,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
-        return releasedLibraryBlock(vm, libraryName, contractName, paths, recordedMechanismIds(d, vm, paths), template, d);
+        return releasedLibraryBlock(
+            vm, libraryName, contractName, paths, recordedMechanismIds(d, vm, paths), template, d
+        );
     }
 
     /// `releasedLibraryBlock` over the records' already-read `recordedMechanismIds`.
