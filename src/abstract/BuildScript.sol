@@ -3,10 +3,69 @@
 pragma solidity ^0.8.25;
 
 import {Script} from "forge-std-1.17.0/src/Script.sol";
-import {DeployDeclaration, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDeclaration,
+    DeploySuite,
+    DuplicateDeploySuite,
+    RainDeploySuitesBase
+} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
+
+/// One contract a deploy repo generates pins for.
+struct GeneratedContract {
+    /// Names its rolling snapshot and every lib generated for it. For an
+    /// anchored candidate, the contract its `artifactPath` names.
+    string contractName;
+    /// Prefix for the constants its alias lib exports, e.g. `CONFIG_REGISTRY`.
+    /// Empty for no alias lib.
+    string constantPrefix;
+    /// The declared candidate it is generated from.
+    DeployCandidate candidate;
+}
+
+/// A contract a repo no longer builds, whose released-suites lib is still
+/// generated from its frozen record.
+struct RetiredContract {
+    /// Names its record files and its released-suites lib.
+    string contractName;
+    /// The suite key and artifact path its released entries are emitted with.
+    /// Every other field is read from the record.
+    DeploySuite template;
+}
+
+/// Thrown when a generated contract's key is no declared candidate's.
+/// @param contractName The generated contract.
+/// @param suite Its key.
+error GeneratedContractNotDeclared(string contractName, string suite);
+
+/// Thrown when a declared candidate is not generated, so no release would
+/// freeze it.
+/// @param suite The candidate's key.
+error DeclaredCandidateNotGenerated(string suite);
+
+/// Thrown when a generated contract carries something other than the candidate
+/// declared under its key.
+/// @param suite The key.
+error GeneratedCandidateNotDeclared(string suite);
+
+/// Thrown when an anchored candidate is generated under a name other than the
+/// contract its artifact path names, so its pins land in another contract's
+/// files.
+/// @param contractName The generated name.
+/// @param artifactPath The candidate's artifact path.
+error GeneratedContractNameNotArtifact(string contractName, string artifactPath);
+
+/// Thrown when two generated or retired contracts share a name, so one file is
+/// written for both.
+/// @param contractName The shared name.
+error DuplicateGeneratedContractName(string contractName);
+
+/// Thrown when two alias libs would export their constants under one prefix.
+/// @param constantPrefix The shared prefix.
+error DuplicateConstantPrefix(string constantPrefix);
 
 /// @title BuildScript
 /// @notice The two entry points of a deploy repo's `script/Build.sol`, concrete
