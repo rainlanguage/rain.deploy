@@ -10,7 +10,13 @@ import {
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
-import {DeployDeclaration, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
+import {
+    DeployDeclaration,
+    DeployMechanismHandler,
+    DeploySuite,
+    LegacyRecordAmbiguous,
+    MechanismUnclaimed
+} from "../abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "./LibRainDeployDeclaration.sol";
 import {ZOLTU_MECHANISM_ID} from "./LibRainDeployZoltuMechanism.sol";
@@ -1570,26 +1576,72 @@ library LibRainDeploySnapshot {
         return mechanismData;
     }
 
-    /// The mechanism id a record declares: `ZOLTU_MECHANISM_ID` without `MECHANISM_DATA`, else its leading word. Refuses
-    /// `FrozenSnapshotUnreadable` for a `MECHANISM_DATA` not a `hex"..."` literal of at least a word, with
-    /// `recordedMechanismShape`'s refusals.
+    /// The mechanism id a record declares: `ZOLTU_MECHANISM_ID` without `MECHANISM_DATA`, else its leading word when
+    /// that is one of `d.mechanisms`' ids, else the one id of `d.mechanisms` whose `legacyRecordId` claims the record.
+    /// Refuses `MechanismUnclaimed` for no claim, `LegacyRecordAmbiguous` for more than one, `FrozenSnapshotUnreadable`
+    /// for a `MECHANISM_DATA` not a `hex"..."` literal of at least a word, with `recordedMechanismShape`'s refusals.
+    /// @param d The declaration whose mechanisms identify the record.
     /// @param vm The Vm instance for file and string operations.
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
     /// @return The id.
-    function recordedMechanismId(Vm vm, string memory path) internal view returns (bytes32) {
-        return recordedMechanismId(vm, path, recordLines(vm, path, vm.readFile(path)));
+    function recordedMechanismId(DeployDeclaration memory d, Vm vm, string memory path)
+        internal
+        view
+        returns (bytes32)
+    {
+        return recordedMechanismId(d, vm, path, recordLines(vm, path, vm.readFile(path)));
     }
 
     /// `recordedMechanismId` over a record's already-read `recordLines`.
+    /// @param d The declaration whose mechanisms identify the record.
     /// @param vm The Vm instance for string operations.
     /// @param path The record file the lines were read from.
     /// @param lines Its `recordLines`.
     /// @return The id.
-    function recordedMechanismId(Vm vm, string memory path, string[] memory lines) internal pure returns (bytes32) {
+    function recordedMechanismId(DeployDeclaration memory d, Vm vm, string memory path, string[] memory lines)
+        internal
+        view
+        returns (bytes32)
+    {
         (bool mechanismData,) = recordedMechanismShape(vm, path, lines);
         if (!mechanismData) {
             return ZOLTU_MECHANISM_ID;
         }
+        bytes32 leading = leadingMechanismDataWord(vm, path, lines);
+        DeployMechanismHandler[] memory handlers = d.mechanisms;
+        for (uint256 i = 0; i < handlers.length; i++) {
+            if (handlers[i].id == leading) {
+                return leading;
+            }
+        }
+        bytes32 claimed = 0;
+        for (uint256 i = 0; i < handlers.length; i++) {
+            bytes32 id = handlers[i].legacyRecordId(d, vm, path);
+            if (id == 0) {
+                continue;
+            }
+            if (claimed != 0) {
+                revert LegacyRecordAmbiguous(path);
+            }
+            claimed = id;
+        }
+        if (claimed == 0) {
+            revert MechanismUnclaimed(path);
+        }
+        return claimed;
+    }
+
+    /// The leading word of a record's `MECHANISM_DATA`, refusing `FrozenSnapshotUnreadable` for a value not a
+    /// `hex"..."` literal of at least a word.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file the lines were read from.
+    /// @param lines Its `recordLines`, declaring `MECHANISM_DATA`.
+    /// @return The word.
+    function leadingMechanismDataWord(Vm vm, string memory path, string[] memory lines)
+        internal
+        pure
+        returns (bytes32)
+    {
         uint256 line = 0;
         while (vm.indexOf(lines[line], MECHANISM_DATA_DECLARATION) != 0) {
             line++;
@@ -1652,17 +1704,22 @@ library LibRainDeploySnapshot {
         string memory suitesImportPath,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
-        return releasedImportBlock(vm, paths, recordedMechanismIds(vm, paths), suitesImportPath, d);
+        return releasedImportBlock(vm, paths, recordedMechanismIds(d, vm, paths), suitesImportPath, d);
     }
 
     /// Each record file's `recordedMechanismId`.
+    /// @param d The declaration whose mechanisms identify the records.
     /// @param vm The Vm instance for file and string operations.
     /// @param paths The record's files.
     /// @return The ids, index-aligned with `paths`.
-    function recordedMechanismIds(Vm vm, string[] memory paths) internal view returns (bytes32[] memory) {
+    function recordedMechanismIds(DeployDeclaration memory d, Vm vm, string[] memory paths)
+        internal
+        view
+        returns (bytes32[] memory)
+    {
         bytes32[] memory ids = new bytes32[](paths.length);
         for (uint256 i = 0; i < paths.length; i++) {
-            ids[i] = recordedMechanismId(vm, paths[i]);
+            ids[i] = recordedMechanismId(d, vm, paths[i]);
         }
         return ids;
     }
@@ -1775,7 +1832,7 @@ library LibRainDeploySnapshot {
         DeploySuite memory template,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
-        return releasedSuiteEntry(vm, i, path, recordedMechanismId(vm, path), template, d);
+        return releasedSuiteEntry(vm, i, path, recordedMechanismId(d, vm, path), template, d);
     }
 
     /// `releasedSuiteEntry` for a record whose `recordedMechanismId` is already read.
@@ -1846,7 +1903,7 @@ library LibRainDeploySnapshot {
         DeploySuite memory template,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
-        return releasedLibraryBlock(vm, libraryName, contractName, paths, recordedMechanismIds(vm, paths), template, d);
+        return releasedLibraryBlock(vm, libraryName, contractName, paths, recordedMechanismIds(d, vm, paths), template, d);
     }
 
     /// `releasedLibraryBlock` over the records' already-read `recordedMechanismIds`.
@@ -1919,7 +1976,7 @@ library LibRainDeploySnapshot {
         DeployDeclaration memory d,
         string memory suitesImportPath
     ) internal view returns (string memory) {
-        bytes32[] memory ids = recordedMechanismIds(vm, paths);
+        bytes32[] memory ids = recordedMechanismIds(d, vm, paths);
         return string.concat(
             releasedImportBlock(vm, paths, ids, suitesImportPath, d),
             releasedLibraryBlock(vm, libraryName, contractName, paths, ids, template, d)
