@@ -17,6 +17,7 @@ import {
     MockCreate2NetworkUnfrozen
 } from "../../lib/LibMockCreate2Mechanism.sol";
 import {IMockMechanismProbe, MOCK_MECHANISM_PROBE} from "../../lib/LibMockMechanismProbe.sol";
+import {LibMockSaltMechanism, MOCK_SALT_MECHANISM_ID} from "../../lib/LibMockSaltMechanism.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 
@@ -24,6 +25,8 @@ import {MockDeployable} from "../../concrete/MockDeployable.sol";
 /// @notice The chain group derives, freezes and checks on chain through a non-Zoltu mechanism handler.
 contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, RainDeployVerifyChain {
     LocalForkVm internal sForkVm;
+    /// The config the salt mechanism declares; empty unless a test sets it.
+    bytes internal sMockConfig;
 
     function setUp() external {
         sForkVm = new LocalForkVm();
@@ -37,6 +40,8 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
         networks[1] = LibRainDeploy.POLYGON;
         LibRainDeployDeclaration.setNetworks(d, networks);
         LibMockCreate2Mechanism.extend(d);
+        LibMockSaltMechanism.extend(d);
+        d.mechanisms[d.mechanisms.length - 1].config = sMockConfig;
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({snapshot: mockCandidate(), unanchorableReason: ""});
         LibRainDeployDeclaration.addCandidates(d, candidates);
@@ -225,5 +230,57 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
         assertEq(keccak256(abi.encode(suites)), before);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(root, true);
+    }
+
+    function setMockConfig(bytes memory config) external {
+        sMockConfig = config;
+    }
+
+    function checkNetworkCall(bytes32 mechanismId, string memory network, uint256 chainId)
+        internal
+        pure
+        returns (bytes memory)
+    {
+        return abi.encodeCall(IMockMechanismProbe.checkNetwork, (mechanismId, network, chainId, chainId));
+    }
+
+    function expectCheckNetwork(string memory network, uint256 chainId, uint64 count) internal {
+        vm.expectCall(MOCK_MECHANISM_PROBE, checkNetworkCall(MOCK_CREATE2_MECHANISM_ID, network, chainId), count);
+        vm.expectCall(MOCK_MECHANISM_PROBE, checkNetworkCall(MOCK_SALT_MECHANISM_ID, network, chainId), count);
+    }
+
+    /// `checkNetwork` runs once per mechanism on each checked network's fork, including a network no suite requires.
+    function testCheckNetworkRunsOncePerMechanismOnEachCheckedNetwork() external {
+        etchLive(42161);
+        DeploySuite[] memory suites = new DeploySuite[](1);
+        suites[0] = arbitrumOnlySuite();
+
+        expectCheckNetwork(LibRainDeploy.ARBITRUM_ONE, 42161, 1);
+        expectCheckNetwork(LibRainDeploy.POLYGON, 137, 1);
+        vm.expectCall(MOCK_MECHANISM_PROBE, checkOnChainCall(suites[0], LibRainDeploy.POLYGON, 137), 0);
+        this.externalCheckAllOn(networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), suites);
+    }
+
+    /// With no suites and every mechanism's config empty, no network is forked and no `checkNetwork` runs.
+    function testNoSuitesAndEmptyConfigsForksNothing() external {
+        vm.expectCall(address(sForkVm), abi.encodeWithSelector(LocalForkVm.createFork.selector), 0);
+        vm.expectCall(address(sForkVm), abi.encodeWithSelector(LocalForkVm.selectFork.selector), 0);
+        vm.expectCall(MOCK_MECHANISM_PROBE, abi.encodeWithSelector(IMockMechanismProbe.checkNetwork.selector), 0);
+        this.externalCheckAllOn(
+            networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), new DeploySuite[](0)
+        );
+    }
+
+    /// With no suites but a mechanism with non-empty config, each checked network is forked and `checkNetwork` runs
+    /// on it.
+    function testNoSuitesAndAConfiguredMechanismForksAndChecksEachNetwork() external {
+        this.setMockConfig(hex"01");
+        vm.expectCall(address(sForkVm), abi.encodeCall(LocalForkVm.createFork, (LibRainDeploy.ARBITRUM_ONE)), 1);
+        vm.expectCall(address(sForkVm), abi.encodeCall(LocalForkVm.createFork, (LibRainDeploy.POLYGON)), 1);
+        expectCheckNetwork(LibRainDeploy.ARBITRUM_ONE, 42161, 1);
+        expectCheckNetwork(LibRainDeploy.POLYGON, 137, 1);
+        this.externalCheckAllOn(
+            networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), new DeploySuite[](0)
+        );
     }
 }
