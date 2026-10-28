@@ -1,0 +1,19 @@
+name: Manual sol artifacts
+on:
+  workflow_dispatch:
+    inputs:
+      suite:
+        description: "The suite to deploy"
+        required: true
+        type: choice
+        options:
+          - mock-deployable
+          - mock-reaching-deployable
+          # Frozen releases.
+      verify:
+        type: boolean
+        default: true
+jobs:
+  deploy:
+    with:
+      suite: ${{ inputs.suite }}

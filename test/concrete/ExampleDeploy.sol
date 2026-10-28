@@ -2,18 +2,19 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
-import {ExampleDeploySuites} from "../abstract/ExampleDeploySuites.sol";
-import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
+import {DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {ExampleDeployScript} from "../abstract/ExampleDeployScript.sol";
 
 /// @title ExampleDeploy
-/// A deploy repo's whole script — a suite declaration plus `RainDeployBroadcast`
-/// and nothing else, which is exactly what `script/Deploy.sol` is. The external
-/// wrappers let a plain `Test` contract drive the internals without inheriting
-/// `Script`.
-contract ExampleDeploy is ExampleDeploySuites, ExternalDeploySuites, RainDeployBroadcast {
-    /// @return The networks a broadcast would go to.
-    function externalDeployNetworks() external view returns (string[] memory) {
-        return deployNetworks();
+/// `ExampleDeployScript` over the exemplar declaration as it stands.
+contract ExampleDeploy is ExampleDeployScript {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        addExample(d);
+        return d;
     }
 }

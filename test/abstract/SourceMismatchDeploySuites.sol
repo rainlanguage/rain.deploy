@@ -5,7 +5,6 @@ pragma solidity ^0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -17,6 +16,7 @@ import {
     RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE
 } from "../../src/generated/candidate/ConfigRegistry.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployable} from "../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 
@@ -46,17 +46,11 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 /// claim about. The keys are its own, shared with no other fixture, because
 /// `DEPLOYMENT_SUITE` is a process-wide variable other tests write.
 abstract contract SourceMismatchDeploySuites is RainDeploySuitesBase {
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](0);
-        return suites;
-    }
-
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function sourceMismatchCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "anchored-candidate",
                 creationCode: CONFIG_REGISTRY_CREATION_CODE,
                 storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
@@ -64,13 +58,13 @@ abstract contract SourceMismatchDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "mismatched-candidate",
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
@@ -79,8 +73,7 @@ abstract contract SourceMismatchDeploySuites is RainDeploySuitesBase {
                 // Deliberately NOT `MockDeployableV2`, which every recorded field above is.
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });

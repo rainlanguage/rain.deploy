@@ -16,8 +16,8 @@ import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.
 /// `virtual`, so a script that tried to broadcast a different set of suites
 /// than the verification contracts check would not compile.
 ///
-/// `deployNetworks` is the half that is left. It IS virtual — a repo
-/// bootstrapping onto one chain at a time overrides it — so this repo taking
+/// `deployNetworks` is the half that is left. It IS a declaration field — a repo
+/// bootstrapping onto one chain at a time narrows it — so this repo taking
 /// the inherited answer is a decision rather than a guarantee, and a narrowed
 /// one here is a dispatch that silently skips chains while every assertion in
 /// this repo stays green.

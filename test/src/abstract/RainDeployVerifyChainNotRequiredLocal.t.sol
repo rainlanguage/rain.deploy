@@ -3,9 +3,11 @@
 pragma solidity =0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
-import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain, SuiteRequiredNowhere} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
@@ -31,12 +33,18 @@ contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainD
         return LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
     }
 
-    /// @inheritdoc RainDeploySuitesBase
     /// @dev The second release on `sSecondRequiredOn` alone; everything else
     /// everywhere.
-    function requiresSuiteOn(DeploySuite memory suite, string memory network) internal view override returns (bool) {
-        return keccak256(bytes(suite.suite)) != keccak256("second-address")
-            || keccak256(bytes(network)) == keccak256(bytes(sSecondRequiredOn));
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        DeploySuite[] memory released = exampleReleased();
+        released[1].networks = new string[](1);
+        released[1].networks[0] = sSecondRequiredOn;
+        LibRainDeployDeclaration.addReleased(d, released);
+        LibRainDeployDeclaration.addCandidates(d, exampleCandidates());
+        return d;
     }
 
     /// Both releases live.
@@ -51,31 +59,32 @@ contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainD
     /// The released suites, second first so a skip precedes a required suite,
     /// against every supported network on the local seam.
     function checkLocally() external {
-        DeploySuite[] memory released = releasedSuites();
+        DeployDeclaration memory d = declaration();
+        DeploySuite[] memory released = d.released;
         DeploySuite[] memory suites = new DeploySuite[](2);
         suites[0] = released[1];
         suites[1] = released[0];
-        checkDeployedOnNetworks(Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
+        checkDeployedOnNetworks(d, Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(d.networks), suites);
     }
 
     /// The released suites in declared order, so the last suite is the second
     /// release, against every supported network on the local seam.
     function checkLocallyInDeclaredOrder() external {
-        checkDeployedOnNetworks(
-            Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), releasedSuites()
-        );
+        DeployDeclaration memory d = declaration();
+        checkDeployedOnNetworks(d, Vm(address(sForkVm)), LibRainDeploy.declaredNetworkConfigs(d.networks), d.released);
     }
 
     /// The released suites against `networks` on the local seam.
     /// @param networks The roster to check on.
     function checkOn(SupportedNetwork[] memory networks) external {
-        checkDeployedOnNetworks(Vm(address(sForkVm)), networks, releasedSuites());
+        DeployDeclaration memory d = declaration();
+        checkDeployedOnNetworks(d, Vm(address(sForkVm)), networks, d.released);
     }
 
     /// No suites against `networks` on the local seam.
     /// @param networks The roster to check on.
     function checkNothingOn(SupportedNetwork[] memory networks) external {
-        checkDeployedOnNetworks(Vm(address(sForkVm)), networks, new DeploySuite[](0));
+        checkDeployedOnNetworks(declaration(), Vm(address(sForkVm)), networks, new DeploySuite[](0));
     }
 
     /// An empty roster is refused as no networks, not as a suite required nowhere.
@@ -91,7 +100,7 @@ contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainD
 
     /// The fixture is only meaningful if base is not the first network walked.
     function testBaseIsNotTheFirstSupportedNetwork() external view {
-        assertNotEq(supportedNetworks()[0], LibRainDeploy.BASE);
+        assertNotEq(declaration().networks[0], LibRainDeploy.BASE);
     }
 
     /// Both releases live where they are required passes.
@@ -101,13 +110,13 @@ contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainD
 
     /// A release required on the first network alone is required somewhere.
     function testRequiredOnTheFirstNetworkAlonePasses() external {
-        sSecondRequiredOn = supportedNetworks()[0];
+        sSecondRequiredOn = declaration().networks[0];
         this.checkLocally();
     }
 
     /// A release required on the last network alone is required somewhere.
     function testRequiredOnTheLastNetworkAlonePasses() external {
-        string[] memory networks = supportedNetworks();
+        string[] memory networks = declaration().networks;
         sSecondRequiredOn = networks[networks.length - 1];
         this.checkLocally();
     }

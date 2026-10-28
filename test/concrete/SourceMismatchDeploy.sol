@@ -3,6 +3,9 @@
 pragma solidity =0.8.25;
 
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
+import {DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 import {SourceMismatchDeploySuites} from "../abstract/SourceMismatchDeploySuites.sol";
 
@@ -17,4 +20,12 @@ import {SourceMismatchDeploySuites} from "../abstract/SourceMismatchDeploySuites
 /// only on the path that tests. A fixture that could only be driven through
 /// external wrappers would leave `run()` — the irreversible, multi-chain,
 /// key-custody action — asserted about by nothing.
-contract SourceMismatchDeploy is SourceMismatchDeploySuites, ExternalDeploySuites, RainDeployBroadcast {}
+contract SourceMismatchDeploy is SourceMismatchDeploySuites, ExternalDeploySuites, RainDeployBroadcast {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addCandidates(d, sourceMismatchCandidates());
+        return d;
+    }
+}

@@ -6,8 +6,8 @@ import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBas
 import {
     CandidateSourceMismatch,
     DeployCandidate,
+    DeployDeclaration,
     DeployDependency,
-    DeployMechanism,
     DeploySuite
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
@@ -28,8 +28,9 @@ import {
     LibRainDeploySnapshot
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
-import {PER_NETWORK_CLONE_RECORD_ROOT} from "../../abstract/PerNetworkCloneDeploys.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
@@ -85,6 +86,14 @@ import {
 /// DECLARATION — `SourceMismatchDeploy` — which is also the shape a repo holding
 /// a stale generated file is actually in.
 contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVerifySnapshotBase {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        addExample(d);
+        return d;
+    }
+
     /// A declaration whose second candidate is a consistent snapshot of the
     /// wrong contract.
     ///
@@ -103,7 +112,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// works at the correct call depth.
     /// @param suite The suite to check.
     function externalCheckInternallyConsistent(DeploySuite memory suite) external {
-        checkInternallyConsistent(suite);
+        checkInternallyConsistent(declaration(), suite);
     }
 
     /// External wrapper for `checkFrozenSnapshotsReleased` so `vm.expectRevert`
@@ -111,7 +120,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// @param paths The frozen record's files.
     /// @param released The declared released suites.
     function externalCheckFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released) external view {
-        checkFrozenSnapshotsReleased(paths, released);
+        checkFrozenSnapshotsReleased(declaration(), paths, released);
     }
 
     /// External wrapper for `recordedDeployedAddresses` so `vm.expectRevert` works at the correct
@@ -158,6 +167,18 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         return partitionFrozenRecords(paths, codeRecordNames);
     }
 
+    /// External wrapper for `codeRecordIndex`.
+    /// @param path A frozen record file.
+    /// @param codeRecordNames The code records' names.
+    /// @return The index.
+    function externalCodeRecordIndex(string memory path, string[] memory codeRecordNames)
+        external
+        pure
+        returns (uint256)
+    {
+        return codeRecordIndex(path, codeRecordNames);
+    }
+
     /// The real generated snapshot, standing in for a frozen record. It is the
     /// same file a freeze copies into `src/generated/<tag>/`, and the exemplar's
     /// first released suite is declared from it, so the pair below is a real
@@ -184,7 +205,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// A record declared by a released suite MUST pass, so the failing cases
     /// below are discriminating rather than a check that cannot succeed.
     function testFrozenSnapshotDeclaredPasses() external view {
-        this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), releasedSuites());
+        this.externalCheckFrozenSnapshotsReleased(recordOfTheGeneratedSnapshot(), declaration().released);
     }
 
     /// A release in the record that the declaration does not name MUST fail,
@@ -202,7 +223,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// indistinguishable from a full declaration to anything that only counts.
     function testFrozenSnapshotDeclaredByAnotherSuiteReverts() external {
         DeploySuite[] memory wrongRelease = new DeploySuite[](1);
-        wrongRelease[0] = releasedSuites()[1];
+        wrongRelease[0] = declaration().released[1];
         assertEq(wrongRelease[0].suite, "second-address");
 
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfTheGeneratedSnapshot()[0]));
@@ -218,6 +239,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
 
     function declaredOlderTwin() internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: LibRainDeploy.supportedNetworks(),
             suite: "address-registry@0_1_10",
             creationCode: ADDRESS_REGISTRY_0_1_10_CREATION_CODE,
             storedDeployedAddress: ADDRESS_REGISTRY_0_1_10_DEPLOYED_ADDRESS,
@@ -225,13 +247,13 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedRuntimeCode: ADDRESS_REGISTRY_0_1_10_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
     }
 
     function declaredNewerTwin() internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: LibRainDeploy.supportedNetworks(),
             suite: "address-registry@0_1_11",
             creationCode: ADDRESS_REGISTRY_0_1_11_CREATION_CODE,
             storedDeployedAddress: ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
@@ -239,8 +261,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedRuntimeCode: ADDRESS_REGISTRY_0_1_11_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
     }
 
@@ -322,7 +343,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// and a `.sol` fixture left behind by a failed run is a file the next
     /// build has to compile.
     function testFrozenSnapshotMatchesTheDeclarationNotTheText() external view {
-        address released = LibRainDeploy.zoltuAddress(releasedSuites()[0].creationCode);
+        address released = LibRainDeploy.zoltuAddress(declaration().released[0].creationCode);
         assertEq(released, CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
         string memory record = recordDeclaring(address(0xdead), released);
@@ -364,7 +385,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// it, so a line naming `DEPLOYED_ADDRESS` other than the writer's
     /// declaration, a line comment among them, makes the record unreadable.
     function testFrozenSnapshotRefusesALineCommentedDeclaration() external {
-        address released = LibRainDeploy.zoltuAddress(releasedSuites()[0].creationCode);
+        address released = LibRainDeploy.zoltuAddress(declaration().released[0].creationCode);
         assertEq(released, CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
         string memory record = recordCommentingOutADeclaration(address(0xdead), released);
@@ -411,7 +432,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// while recording something else — the undeclared-record case this group
     /// exists to fail on, passing.
     function testFrozenSnapshotIgnoresABlockCommentedDeclaration() external view {
-        address released = LibRainDeploy.zoltuAddress(releasedSuites()[0].creationCode);
+        address released = LibRainDeploy.zoltuAddress(declaration().released[0].creationCode);
         assertEq(released, CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
         string memory record = recordBlockCommentingOutADeclaration(address(0xdead), released);
@@ -476,7 +497,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// never would. Refusing is also the only answer a hand edit cannot aim at
     /// by choosing which copy to put where.
     function testFrozenSnapshotWithTwoDeclarationsReverts() external {
-        address released = LibRainDeploy.zoltuAddress(releasedSuites()[0].creationCode);
+        address released = LibRainDeploy.zoltuAddress(declaration().released[0].creationCode);
         assertEq(released, CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
         string memory record = string.concat(
@@ -520,7 +541,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// Driven at the read: the wrapper this repo's generator emits is the
     /// wrapped form, so the bare form is a record no committed file is in.
     function testFrozenSnapshotReadsABareAddressLiteral() external view {
-        address released = LibRainDeploy.zoltuAddress(releasedSuites()[0].creationCode);
+        address released = LibRainDeploy.zoltuAddress(declaration().released[0].creationCode);
         assertEq(released, CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
         string memory bare = recordDeclaringABareLiteral(released);
@@ -544,14 +565,14 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
 
     /// A file in the record that declares no deploy address at all MUST fail as
     /// unreadable, naming itself. Reporting it as undeclared would send the
-    /// reader to `releasedSuites()` to add an entry for something that is not a
+    /// reader to `declaration().released` to add an entry for something that is not a
     /// snapshot.
     function testFrozenSnapshotWithoutADeployedAddressReverts() external {
         string[] memory paths = new string[](1);
         paths[0] = "src/concrete/ConfigRegistry.sol";
 
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, paths[0]));
-        this.externalCheckFrozenSnapshotsReleased(paths, releasedSuites());
+        this.externalCheckFrozenSnapshotsReleased(paths, declaration().released);
     }
 
     /// EVERY file in the record MUST be checked, not just the first. The
@@ -564,10 +585,10 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         // advance.
         string[] memory first = new string[](1);
         first[0] = recordOfBothGeneratedSnapshots()[0];
-        this.externalCheckFrozenSnapshotsReleased(first, releasedSuites());
+        this.externalCheckFrozenSnapshotsReleased(first, declaration().released);
 
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotNotReleased.selector, recordOfBothGeneratedSnapshots()[1]));
-        this.externalCheckFrozenSnapshotsReleased(recordOfBothGeneratedSnapshots(), releasedSuites());
+        this.externalCheckFrozenSnapshotsReleased(recordOfBothGeneratedSnapshots(), declaration().released);
     }
 
     /// An unreadable file MUST be named as the file the loop is ON. Its path is
@@ -583,7 +604,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         paths[1] = "src/concrete/ConfigRegistry.sol";
 
         vm.expectRevert(abi.encodeWithSelector(FrozenSnapshotUnreadable.selector, paths[1]));
-        this.externalCheckFrozenSnapshotsReleased(paths, releasedSuites());
+        this.externalCheckFrozenSnapshotsReleased(paths, declaration().released);
     }
 
     /// The inner search MUST reach every released suite, not just the first.
@@ -591,7 +612,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// only ever looked at `released[0]` would report a declared release as
     /// undeclared and make the check unusable the moment a repo releases twice.
     function testFrozenSnapshotCheckReachesEveryReleasedSuite() external view {
-        DeploySuite[] memory released = releasedSuites();
+        DeploySuite[] memory released = declaration().released;
         DeploySuite[] memory reordered = new DeploySuite[](2);
         reordered[0] = released[1];
         reordered[1] = released[0];
@@ -616,7 +637,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// there, an empty list is a repo whose snapshots nothing anchors; here, it
     /// is a repo that has frozen nothing yet.
     function testFrozenSnapshotEmptyRecordPasses() external view {
-        this.externalCheckFrozenSnapshotsReleased(new string[](0), releasedSuites());
+        this.externalCheckFrozenSnapshotsReleased(new string[](0), declaration().released);
         this.externalCheckFrozenSnapshotsReleased(new string[](0), new DeploySuite[](0));
     }
 
@@ -625,6 +646,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// @return The consistent `0_0_1` suite.
     function consistentSuite() internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: LibRainDeploy.supportedNetworks(),
             suite: "config-registry@0_0_1",
             creationCode: CONFIG_REGISTRY_CREATION_CODE,
             storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
@@ -632,8 +654,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
     }
 
@@ -757,7 +778,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// is the ordinary state of a repo between a release and the next source
     /// change.
     function testSuitesSharingCreationCodeAllDerive() external {
-        DeploySuite[] memory suites = allSuites();
+        DeploySuite[] memory suites = allSuites(declaration());
         assertEq(suites.length, 4);
         assertEq(suites[0].storedDeployedAddress, suites[2].storedDeployedAddress);
         assertEq(keccak256(suites[0].creationCode), keccak256(suites[2].creationCode));
@@ -805,7 +826,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// the stale field is `checkInternallyConsistent`'s to catch, with an error
     /// that names it. Matching on the recorded field instead reports a declared
     /// release as one nobody declared, and sends the reader to
-    /// `releasedSuites()` to add an entry that is already there.
+    /// `declaration().released` to add an entry that is already there.
     ///
     /// The suite here is the record's own release with that one field broken,
     /// so the derivation is the only thing left that can match it.
@@ -838,7 +859,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// `testZoltuDerivationMismatchReverts`'s, keyed on the creation code of the
     /// suite being reached rather than of the first one.
     function testSnapshotInternallyConsistentReachesEverySuite() external {
-        DeploySuite[] memory suites = allSuites();
+        DeploySuite[] memory suites = allSuites(declaration());
         assertEq(suites[1].suite, "second-address");
         assertNotEq(keccak256(suites[0].creationCode), keccak256(suites[1].creationCode));
 
@@ -880,7 +901,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// would be compared against itself by the chain-anchored group, and every
     /// network would pass whether or not anything is deployed there.
     function testDerivationLeavesNoCodeBehind() external {
-        DeploySuite[] memory suites = allSuites();
+        DeploySuite[] memory suites = allSuites(declaration());
         for (uint256 i = 0; i < suites.length; i++) {
             assertEq(suites[i].storedDeployedAddress.code.length, 0);
         }
@@ -1234,9 +1255,12 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// A per-network deploy record named as a code record is refused for its
     /// `DEPLOYED_ADDRESS_<chainId>` addresses.
     function testFrozenCodeRecordNamingAPerNetworkDeployRecordReverts() external {
-        string memory record = vm.readFile(
-            LibRainDeploySnapshot.pathForSnapshot(PER_NETWORK_CLONE_RECORD_ROOT, "0_0_1", "PerNetworkClone")
+        string memory record = vm.replace(
+            vm.readFile(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "ConfigRegistry")),
+            "address constant DEPLOYED_ADDRESS =",
+            "address constant DEPLOYED_ADDRESS_137 ="
         );
+        assertFalse(vm.contains(record, "address constant DEPLOYED_ADDRESS ="));
         vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
         this.externalCheckFrozenCodeRecord("record.sol", record);
     }
@@ -1279,6 +1303,20 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
         assertEq(codeRecords.length, 2);
         assertEq(codeRecords[0], paths[1]);
         assertEq(codeRecords[1], paths[3]);
+    }
+
+    /// The index is the first name whose `.sol` file is the path's whole file
+    /// name, and the names' length when none is.
+    function testCodeRecordIndexIsTheFirstMatchingName() external view {
+        string[] memory names = new string[](3);
+        names[0] = "AddressRegistry";
+        names[1] = "TimelockController";
+        names[2] = "TimelockController";
+        assertEq(this.externalCodeRecordIndex("src/generated/0_1_18/AddressRegistry.sol", names), 0);
+        assertEq(this.externalCodeRecordIndex("src/generated/0_1_18/TimelockController.sol", names), 1);
+        assertEq(this.externalCodeRecordIndex("TimelockController.sol", names), 1);
+        assertEq(this.externalCodeRecordIndex("src/generated/0_1_18/MigrationRegistry.sol", names), 3);
+        assertEq(this.externalCodeRecordIndex("src/generated/0_1_18/XTimelockController.sol", names), 3);
     }
 
     /// With no names, every path is a deploy record: the default leaves a repo

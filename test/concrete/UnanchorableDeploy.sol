@@ -6,7 +6,7 @@ import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -17,6 +17,8 @@ import {
     RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE
 } from "../../src/generated/candidate/ConfigRegistry.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 
 /// @dev Creation code no compiler here produces: `PUSH1 0 PUSH1 0 RETURN`,
@@ -48,17 +50,25 @@ bytes constant ASSEMBLED_CREATION_CODE = hex"600160005360016000f3";
 /// The ordinary candidate is first and real, so this is the mixed declaration a
 /// repo actually has rather than one where nothing is anchored.
 contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
+    }
+
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);
         return suites;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function declaredCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](3);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "compiled-candidate",
                 creationCode: CONFIG_REGISTRY_CREATION_CODE,
                 storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
@@ -66,13 +76,13 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "vendored-candidate",
                 creationCode: VENDORED_CREATION_CODE,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(VENDORED_CREATION_CODE),
@@ -82,13 +92,13 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 // resolves to no artifact.
                 artifactPath: "test/concrete/VendoredDeployable.sol:VendoredDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: "Vendored third party deployment: the pinned creation code is the source."
         });
         candidates[2] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "generated-candidate",
                 creationCode: ASSEMBLED_CREATION_CODE,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(ASSEMBLED_CREATION_CODE),
@@ -98,8 +108,7 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 // file the tables would be compiled from, and there is none.
                 artifactPath: "test/concrete/AssembledTables.sol:AssembledTables",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: "Assembled from generated tables: there is no source file to compile."
         });

@@ -15,19 +15,21 @@ relocated.
   `Manual big blocks` are `workflow_dispatch` only, and no merge, tag or
   schedule may be given a path to any of them.
 - **A `sol-v*` tag is the sole release trigger.** `[external.package].version`
-  in `foundry.toml` is the version of the LAST Soldeer publish, not a
-  next-version slot, so an ordinary PR does not bump it.
+  in `foundry.toml` is the newest release cut into `src/generated/<tag>/`. Only
+  the release PR that cuts that tag moves it, together with the cut, and
+  `testVersionIsTheNewestFrozenRelease` holds the two equal; an ordinary PR does
+  not bump it.
 - **`src/generated/<tag>/` is an append-only record.** `cutRelease()` writes a
   tag directory once. A cut tag can never be un-cut and consumers pin what it
-  holds, so a frozen record is never edited, renamed or deleted.
+  holds, so a frozen record is never edited, renamed or deleted. A release
+  freezes every contract the release before it froze unless
+  `Build.retiredContracts()` lists it; dropping one from `generatedContracts()`
+  alone fails `testNoReleaseDropsAContract`.
 - **`src/generated/extended/` is append-only too.** `run()` appends to it, and
   `ExtendedNetworksRewritten` means a declaration would drop, change or reorder
   a recorded network. Never delete or edit the file to get past it: fix the
   declaration. CI does not notice a record deleted or edited together with its
   declaration, nor one never committed.
-- **`CONFIG_REGISTRY_ROOT` is welded into the creation code.** Rotating it moves
-  the deploy address, the code hash and the snapshot together, as an ordinary
-  source change; the registry at the old address stays where it is.
 - **The deploy/verify abstracts live in `src/`, a SCOPED exception.** This
   repo's PRODUCT is the deploy process, so its machinery is published rather
   than scaffolding. Do not carry the exception into a consumer repo: there
@@ -51,5 +53,6 @@ relocated.
   the path — no `fs_permissions` grant and no spelling of the path gets past it,
   and `writeFile`, `writeLine` and `copyFile` are all refused. Reads are
   allowed. That is why `BuildScript.run()` stages the spliced config under
-  `.staged-config/` and `script/build.sh` installs it, and why regenerating by
-  hand is `forge script ./script/Build.sol` FOLLOWED BY `./script/build.sh`.
+  `.staged-config/` and rainix installs it, and why regenerating by hand is
+  `forge script ./script/Build.sol` FOLLOWED BY
+  `nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`.

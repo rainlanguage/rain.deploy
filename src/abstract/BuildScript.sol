@@ -3,67 +3,10 @@
 pragma solidity ^0.8.25;
 
 import {Script} from "forge-std-1.17.0/src/Script.sol";
-import {RAIN_COPYRIGHT_TEXT, RAIN_SPDX_LICENSE_IDENTIFIER} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
-import {DeployCandidate, DeploySuite, DuplicateDeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../lib/LibRainDeployConfig.sol";
-import {CloneNetwork} from "../lib/LibRainDeployClone.sol";
-import {LibRainDeployExtendedNetworks} from "../lib/LibRainDeployExtendedNetworks.sol";
-import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
-
-/// One contract a deploy repo generates pins for.
-struct GeneratedContract {
-    /// Names its rolling snapshot and every lib generated for it. For an
-    /// anchored candidate, the contract its `artifactPath` names.
-    string contractName;
-    /// Prefix for the constants its alias lib exports, e.g. `CONFIG_REGISTRY`.
-    /// Empty for no alias lib.
-    string constantPrefix;
-    /// The declared candidate it is generated from.
-    DeployCandidate candidate;
-}
-
-/// A contract a repo no longer builds, whose released-suites lib is still
-/// generated from its frozen record.
-struct RetiredContract {
-    /// Names its record files and its released-suites lib.
-    string contractName;
-    /// The suite key and artifact path its released entries are emitted with.
-    /// Every other field is read from the record.
-    DeploySuite template;
-}
-
-/// Thrown when a generated contract's key is no declared candidate's.
-/// @param contractName The generated contract.
-/// @param suite Its key.
-error GeneratedContractNotDeclared(string contractName, string suite);
-
-/// Thrown when a declared candidate is not generated, so no release would
-/// freeze it.
-/// @param suite The candidate's key.
-error DeclaredCandidateNotGenerated(string suite);
-
-/// Thrown when a generated contract carries something other than the candidate
-/// declared under its key.
-/// @param suite The key.
-error GeneratedCandidateNotDeclared(string suite);
-
-/// Thrown when an anchored candidate is generated under a name other than the
-/// contract its artifact path names, so its pins land in another contract's
-/// files.
-/// @param contractName The generated name.
-/// @param artifactPath The candidate's artifact path.
-error GeneratedContractNameNotArtifact(string contractName, string artifactPath);
-
-/// Thrown when two generated or retired contracts share a name, so one file is
-/// written for both.
-/// @param contractName The shared name.
-error DuplicateGeneratedContractName(string contractName);
-
-/// Thrown when two alias libs would export their constants under one prefix.
-/// @param constantPrefix The shared prefix.
-error DuplicateConstantPrefix(string constantPrefix);
 
 /// @title BuildScript
 /// @notice The two entry points of a deploy repo's `script/Build.sol`, concrete
@@ -91,213 +34,22 @@ error DuplicateConstantPrefix(string constantPrefix);
 /// generated from it could cover networks nothing verifies with nothing red.
 ///
 /// `run()` stages those two files rather than writing them, because foundry
-/// refuses a cheatcode write to the project root's own `foundry.toml`. A repo
-/// inheriting this needs `script/build.sh` to install what was staged — see
-/// `LibRainDeployConfig`.
+/// refuses a cheatcode write to the project root's own `foundry.toml`.
+/// `rainix-copy-artifacts` installs what was staged — see `LibRainDeployConfig`.
 abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// Rewrite the rolling `candidate/` snapshots from what this repo currently
     /// compiles. Run by `cutRelease()` inside `freeze`, after its guards and
     /// before it copies anything.
     function regenerateSnapshots() internal virtual;
 
-    /// Every contract this repo generates pins for, in the order its libs are
-    /// aggregated. Read through `checkedGeneratedContracts`.
-    /// @return The generated contracts.
-    function generatedContracts() internal view virtual returns (GeneratedContract[] memory);
+    /// Rewrite every file generated from the snapshots and from the frozen
+    /// record. Run last, after a `cutRelease()` freeze has written the record,
+    /// so a file emitted from that record holds the release just cut.
+    function regenerateLibs(DeployDeclaration memory d) internal virtual;
 
-    /// Contracts this repo no longer builds whose frozen releases stay
-    /// declared, in the order they were released. Defaults to none.
-    /// @return The retired contracts.
-    function retiredContracts() internal view virtual returns (RetiredContract[] memory) {
-        return new RetiredContract[](0);
-    }
-
-    /// `generatedContracts()`, refusing a list that is not exactly the declared
-    /// candidates, an anchored candidate named for another contract, a name
-    /// shared with another generated or retired contract, and a non-empty
-    /// constant prefix shared by two contracts.
-    /// @return The generated contracts.
-    function checkedGeneratedContracts() internal view returns (GeneratedContract[] memory) {
-        GeneratedContract[] memory generated = generatedContracts();
-        DeployCandidate[] memory candidates = checkedCandidateSuites();
-        for (uint256 i = 0; i < generated.length; i++) {
-            checkGeneratedContract(generated[i], candidates);
-            for (uint256 j = i + 1; j < generated.length; j++) {
-                if (
-                    keccak256(bytes(generated[j].candidate.snapshot.suite))
-                        == keccak256(bytes(generated[i].candidate.snapshot.suite))
-                ) {
-                    revert DuplicateDeploySuite(generated[i].candidate.snapshot.suite);
-                }
-                if (keccak256(bytes(generated[j].contractName)) == keccak256(bytes(generated[i].contractName))) {
-                    revert DuplicateGeneratedContractName(generated[i].contractName);
-                }
-                if (
-                    bytes(generated[i].constantPrefix).length > 0
-                        && keccak256(bytes(generated[j].constantPrefix))
-                            == keccak256(bytes(generated[i].constantPrefix))
-                ) {
-                    revert DuplicateConstantPrefix(generated[i].constantPrefix);
-                }
-            }
-        }
-        for (uint256 j = 0; j < candidates.length; j++) {
-            bytes32 suite = keccak256(bytes(candidates[j].snapshot.suite));
-            bool found = false;
-            for (uint256 i = 0; i < generated.length; i++) {
-                if (keccak256(bytes(generated[i].candidate.snapshot.suite)) == suite) {
-                    found = true;
-                    break;
-                }
-            }
-            if (!found) {
-                revert DeclaredCandidateNotGenerated(candidates[j].snapshot.suite);
-            }
-        }
-        RetiredContract[] memory retired = retiredContracts();
-        for (uint256 i = 0; i < retired.length; i++) {
-            for (uint256 j = i + 1; j < retired.length; j++) {
-                if (keccak256(bytes(retired[j].contractName)) == keccak256(bytes(retired[i].contractName))) {
-                    revert DuplicateGeneratedContractName(retired[i].contractName);
-                }
-            }
-            for (uint256 j = 0; j < generated.length; j++) {
-                if (keccak256(bytes(generated[j].contractName)) == keccak256(bytes(retired[i].contractName))) {
-                    revert DuplicateGeneratedContractName(retired[i].contractName);
-                }
-            }
-        }
-        return generated;
-    }
-
-    /// Refuses a generated contract whose candidate is not the one declared
-    /// under its key, or whose anchored artifact path names another contract.
-    /// @param generated The generated contract.
-    /// @param candidates The declared candidates.
-    function checkGeneratedContract(GeneratedContract memory generated, DeployCandidate[] memory candidates)
-        internal
-        pure
-    {
-        bytes32 suite = keccak256(bytes(generated.candidate.snapshot.suite));
-        bool found = false;
-        for (uint256 j = 0; j < candidates.length; j++) {
-            if (keccak256(bytes(candidates[j].snapshot.suite)) == suite) {
-                if (keccak256(abi.encode(candidates[j])) != keccak256(abi.encode(generated.candidate))) {
-                    revert GeneratedCandidateNotDeclared(generated.candidate.snapshot.suite);
-                }
-                found = true;
-                break;
-            }
-        }
-        if (!found) {
-            revert GeneratedContractNotDeclared(generated.contractName, generated.candidate.snapshot.suite);
-        }
-        if (bytes(generated.candidate.unanchorableReason).length == 0) {
-            checkGeneratedContractName(generated);
-        }
-    }
-
-    /// Refuses a generated contract whose name is not the contract its
-    /// artifact path names.
-    /// @param generated The generated contract.
-    function checkGeneratedContractName(GeneratedContract memory generated) internal pure {
-        string[] memory components = vm.split(generated.candidate.snapshot.artifactPath, ":");
-        if (keccak256(bytes(components[components.length - 1])) != keccak256(bytes(generated.contractName))) {
-            revert GeneratedContractNameNotArtifact(generated.contractName, generated.candidate.snapshot.artifactPath);
-        }
-    }
-
-    /// The names of `checkedGeneratedContracts()`, in order: the contracts
-    /// whose rolling snapshots a release freezes.
+    /// The contracts whose rolling snapshots a release freezes.
     /// @return The contract names.
-    function snapshotContractNames() internal view returns (string[] memory) {
-        GeneratedContract[] memory generated = checkedGeneratedContracts();
-        string[] memory names = new string[](generated.length);
-        for (uint256 i = 0; i < generated.length; i++) {
-            names[i] = generated[i].contractName;
-        }
-        return names;
-    }
-
-    /// Every contract with a released-suites lib, in the order the aggregate
-    /// lists them: `retiredContracts()`, then `snapshotContractNames()`.
-    /// @return The contract names.
-    function releasedContractNames() internal view returns (string[] memory) {
-        RetiredContract[] memory retired = retiredContracts();
-        string[] memory current = snapshotContractNames();
-        string[] memory names = new string[](retired.length + current.length);
-        for (uint256 i = 0; i < retired.length; i++) {
-            names[i] = retired[i].contractName;
-        }
-        for (uint256 i = 0; i < current.length; i++) {
-            names[retired.length + i] = current[i];
-        }
-        return names;
-    }
-
-    /// The SPDX licence identifier the generated libs declare. Defaults to
-    /// `RAIN_SPDX_LICENSE_IDENTIFIER`, for a repo this org owns.
-    /// @return The SPDX licence identifier.
-    function libSpdxLicenseIdentifier() internal view virtual returns (string memory) {
-        return RAIN_SPDX_LICENSE_IDENTIFIER;
-    }
-
-    /// The copyright text the generated libs declare. Defaults to
-    /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
-    /// @return The copyright text.
-    function libCopyrightText() internal view virtual returns (string memory) {
-        return RAIN_COPYRIGHT_TEXT;
-    }
-
-    /// Rewrite every generated lib under `libDir()`: each retired contract's
-    /// released-suites lib, each generated contract's alias lib (when it has a
-    /// prefix) and released-suites lib, then the aggregate over
-    /// `releasedContractNames()`. Run last, after a `cutRelease()` freeze has
-    /// written the record, so a lib emitted from that record holds the release
-    /// just cut.
-    function regenerateLibs() internal {
-        GeneratedContract[] memory generated = checkedGeneratedContracts();
-        RetiredContract[] memory retired = retiredContracts();
-        string memory dir = libDir();
-        string memory spdxLicenseIdentifier = libSpdxLicenseIdentifier();
-        string memory copyrightText = libCopyrightText();
-        for (uint256 i = 0; i < retired.length; i++) {
-            LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm,
-                dir,
-                recordRoot(),
-                retired[i].contractName,
-                spdxLicenseIdentifier,
-                copyrightText,
-                retired[i].template
-            );
-        }
-        for (uint256 i = 0; i < generated.length; i++) {
-            if (bytes(generated[i].constantPrefix).length > 0) {
-                LibRainDeploySnapshot.writeAliasLib(
-                    vm,
-                    dir,
-                    generated[i].contractName,
-                    generated[i].constantPrefix,
-                    LibRainDeploySnapshot.CANDIDATE,
-                    spdxLicenseIdentifier,
-                    copyrightText
-                );
-            }
-            LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm,
-                dir,
-                recordRoot(),
-                generated[i].contractName,
-                spdxLicenseIdentifier,
-                copyrightText,
-                generated[i].candidate.snapshot
-            );
-        }
-        LibRainDeploySnapshot.writeReleasedSuitesAggregate(
-            vm, dir, spdxLicenseIdentifier, copyrightText, releasedContractNames()
-        );
-    }
+    function snapshotContractNames() internal view virtual returns (string[] memory);
 
     /// Every rolling snapshot a release freezes into its record: the
     /// `snapshotContractNames()` deploy suites and any other snapshot the repo
@@ -314,8 +66,7 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     ///
     /// Overridable so a `cutRelease()` can be exercised against a record other
     /// than the repo's own, which is append-only and cannot hold a test's
-    /// release. Independent of `extendedNetworksRoot()`, which such a build
-    /// overrides too.
+    /// release.
     /// @return The record root.
     function recordRoot() internal view virtual returns (string memory) {
         return LibRainDeploySnapshot.LIB_FS_ROOT;
@@ -343,72 +94,11 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// so a tree whose config has drifted from the declaration it pins fails
     /// there.
     ///
-    /// This STAGES the files; `script/build.sh` installs them. See
+    /// This STAGES the files; `rainix-copy-artifacts` installs them. See
     /// `LibRainDeployConfig` for why a script cannot write `foundry.toml`
     /// itself.
-    function regenerateConfig() internal {
-        LibRainDeployConfig.writeStagedConfig(
-            vm,
-            configRoot(),
-            LibRainDeployConfig.BUILD_HOOK_PATH,
-            LibRainDeploy.declaredNetworkConfigs(supportedNetworks())
-        );
-    }
-
-    /// The SPDX licence identifier the generated extended networks records declare. Defaults to
-    /// `RAIN_SPDX_LICENSE_IDENTIFIER`, for a repo this org owns.
-    /// @return The SPDX licence identifier.
-    function extendedNetworksSpdxLicenseIdentifier() internal view virtual returns (string memory) {
-        return RAIN_SPDX_LICENSE_IDENTIFIER;
-    }
-
-    /// The copyright text the generated extended networks records declare. Defaults to `RAIN_COPYRIGHT_TEXT`, for a
-    /// repo this org owns.
-    /// @return The copyright text.
-    function extendedNetworksCopyrightText() internal view virtual returns (string memory) {
-        return RAIN_COPYRIGHT_TEXT;
-    }
-
-    /// Writes each release's extended networks record from `extendedNetworks`, under `extendedNetworksRoot()`.
-    /// Append-only against the record in the checkout: reverts with `ExtendedNetworksRewritten` on a declaration
-    /// that drops, changes or reorders a network that record holds. Before writing, refuses a declaration the
-    /// broadcast and the chain group would refuse, as `LibRainDeployMechanism.withExtendedNetworks` does.
-    /// Run by `run()`, which `Git is clean` calls, so an entry appended to a committed record fails there. A record
-    /// never committed is an untracked file, which `git diff` does not see.
-    function regenerateExtendedNetworks() internal {
-        DeploySuite[] memory released = releasedSuites();
-        string memory root = extendedNetworksRoot();
-        string memory spdxLicenseIdentifier = extendedNetworksSpdxLicenseIdentifier();
-        string memory copyrightText = extendedNetworksCopyrightText();
-        for (uint256 i = 0; i < released.length; i++) {
-            CloneNetwork[] memory declared = extendedNetworks(released[i].suite);
-            LibRainDeployMechanism.withExtendedNetworks(released[i], declared);
-            LibRainDeployExtendedNetworks.writeExtendedNetworks(
-                vm, root, released[i].suite, declared, spdxLicenseIdentifier, copyrightText
-            );
-        }
-    }
-
-    /// Every extended networks record `regenerateExtendedNetworks` writes.
-    /// @return The paths.
-    function extendedNetworksPaths() internal view returns (string[] memory) {
-        DeploySuite[] memory released = releasedSuites();
-        string memory root = extendedNetworksRoot();
-        string[] memory written = new string[](released.length);
-        uint256 count = 0;
-        for (uint256 i = 0; i < released.length; i++) {
-            (, string memory path) = LibRainDeployExtendedNetworks.writtenExtendedNetworksPath(
-                root, released[i].suite, extendedNetworks(released[i].suite)
-            );
-            if (bytes(path).length > 0) {
-                written[count++] = path;
-            }
-        }
-        string[] memory paths = new string[](count);
-        for (uint256 i = 0; i < count; i++) {
-            paths[i] = written[i];
-        }
-        return paths;
+    function regenerateConfig(DeployDeclaration memory d) internal {
+        LibRainDeployConfig.writeStagedConfig(vm, configRoot(), LibRainDeploy.declaredNetworkConfigs(d.networks));
     }
 
     /// The directory `regenerateLibs` writes every generated lib into, and the
@@ -426,58 +116,27 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     }
 
     /// Every path the repo's own hooks write that `generatedPaths()` does not
-    /// already name, e.g. non-deploy codegen. Defaults to none.
+    /// already name, e.g. alias libs or retired contracts' released-suites libs.
+    /// Defaults to none.
     /// @return The paths.
     function buildGeneratedPaths() internal view virtual returns (string[] memory) {
         return new string[](0);
     }
 
-    /// The alias lib `regenerateLibs` writes for each generated contract with
-    /// a constant prefix.
-    /// @return The paths.
-    function aliasLibPaths() internal view returns (string[] memory) {
-        GeneratedContract[] memory generated = checkedGeneratedContracts();
-        string memory dir = libDir();
-        string[] memory written = new string[](generated.length);
-        uint256 count = 0;
-        for (uint256 i = 0; i < generated.length; i++) {
-            if (bytes(generated[i].constantPrefix).length > 0) {
-                written[count++] = LibRainDeploySnapshot.pathForLib(
-                    dir, LibRainDeploySnapshot.aliasLibraryName(generated[i].contractName)
-                );
-            }
-        }
-        string[] memory paths = new string[](count);
-        for (uint256 i = 0; i < count; i++) {
-            paths[i] = written[i];
-        }
-        return paths;
-    }
-
-    /// Every path `run()` must rewrite, `script/build.sh`'s installs of the
-    /// staged config and the extended networks records included.
+    /// Every path `run()` must rewrite, the installed staged config included.
     /// @return The paths.
     function generatedPaths() internal view returns (string[] memory) {
         string[] memory base =
-            LibRainDeploySnapshot.generatedPaths(libDir(), recordRoot(), releaseRecordNames(), releasedContractNames());
-        string[] memory aliases = aliasLibPaths();
+            LibRainDeploySnapshot.generatedPaths(libDir(), recordRoot(), releaseRecordNames(), snapshotContractNames());
         string[] memory own = buildGeneratedPaths();
-        string[] memory extended = extendedNetworksPaths();
-        string[] memory paths = new string[](base.length + aliases.length + 2 + own.length + extended.length);
-        uint256 offset = 0;
+        string[] memory paths = new string[](base.length + 2 + own.length);
         for (uint256 i = 0; i < base.length; i++) {
-            paths[offset++] = base[i];
+            paths[i] = base[i];
         }
-        for (uint256 i = 0; i < aliases.length; i++) {
-            paths[offset++] = aliases[i];
-        }
-        paths[offset++] = LibRainDeployConfig.CONFIG_NAME;
-        paths[offset++] = LibRainDeployConfig.ENV_EXAMPLE_NAME;
+        paths[base.length] = LibRainDeployConfig.CONFIG_NAME;
+        paths[base.length + 1] = LibRainDeployConfig.ENV_EXAMPLE_NAME;
         for (uint256 i = 0; i < own.length; i++) {
-            paths[offset++] = own[i];
-        }
-        for (uint256 i = 0; i < extended.length; i++) {
-            paths[offset++] = extended[i];
+            paths[base.length + 2 + i] = own[i];
         }
         return paths;
     }
@@ -490,18 +149,18 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
 
     /// @notice Regenerate everything this repo generates. Freezes nothing.
     function run() external {
+        DeployDeclaration memory d = declaration();
         declareGeneratedPaths();
-        regenerateConfig();
+        regenerateConfig(d);
         regenerateSnapshots();
-        regenerateLibs();
-        regenerateExtendedNetworks();
+        regenerateLibs(d);
     }
 
     /// @notice Regenerate the rolling snapshots, freeze them as this release's
     /// record, then regenerate the libs from the record.
     function cutRelease() external {
-        checkedGeneratedContracts();
+        DeployDeclaration memory d = declaration();
         LibRainDeploySnapshot.freeze(vm, recordRoot(), regenerateSnapshots, releaseRecordNames());
-        regenerateLibs();
+        regenerateLibs(d);
     }
 }

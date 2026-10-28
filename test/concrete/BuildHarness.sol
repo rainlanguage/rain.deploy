@@ -2,9 +2,11 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {Build} from "../../script/Build.sol";
-import {BuildScript, GeneratedContract, RetiredContract} from "../../src/abstract/BuildScript.sol";
+import {Build, GeneratedContract, RetiredContract} from "../../script/Build.sol";
+import {DeployCandidate, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ParameterisedContract} from "../../src/abstract/RegistryDeploySuites.sol";
+import {BuildScript} from "../../src/abstract/BuildScript.sol";
+import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 
 /// Thrown when a harness left pointed at `Build`'s own lib directory is asked
 /// to run the lib half of a build. That write lands on the committed libs the
@@ -12,8 +14,14 @@ import {ParameterisedContract} from "../../src/abstract/RegistryDeploySuites.sol
 error BuildHarnessWouldWriteTheCommittedLibs();
 
 /// @title BuildHarness
-/// @notice An external seam onto `Build`'s declarations, and onto
-/// `regenerateLibs()` pointed somewhere nothing compiles, so a test can RUN it.
+/// @notice An external seam onto the two internal declarations `BuildTest`
+/// compares, so a test can hold both at once, and onto `regenerateLibs()`
+/// pointed somewhere nothing compiles, so a test can RUN it.
+///
+/// A harness rather than a change to `Build`: `generatedContracts()` is the
+/// script's own declaration and has no caller outside it, and widening it to
+/// `public` to be testable would put a second entry point on a script whose
+/// whole surface is `run()` and `cutRelease()`.
 contract BuildHarness is Build {
     /// The lib directory the hooks write into. Empty defers to `Build`'s own,
     /// which is what makes the default assertable and the write refusable.
@@ -41,23 +49,50 @@ contract BuildHarness is Build {
         if (bytes(sLibDir).length == 0) {
             revert BuildHarnessWouldWriteTheCommittedLibs();
         }
-        regenerateLibs();
+        regenerateLibs(declaration());
     }
 
-    function externalGeneratedContracts() external view returns (GeneratedContract[] memory) {
-        return checkedGeneratedContracts();
+    /// The generator's list.
+    /// @return The generated contracts.
+    function externalGeneratedContracts() external pure returns (GeneratedContract[] memory) {
+        return generatedContracts();
     }
 
-    function externalSnapshotContractNames() external view returns (string[] memory) {
-        return snapshotContractNames();
-    }
-
+    /// The retired contracts.
+    /// @return The retired contracts.
     function externalRetiredContracts() external pure returns (RetiredContract[] memory) {
         return retiredContracts();
     }
 
+    /// The template a retired contract's released entries are emitted from.
+    /// @param retired The retired contract.
+    /// @return The template.
+    function externalRetiredTemplate(RetiredContract memory retired) external pure returns (DeploySuite memory) {
+        return retiredTemplate(retired);
+    }
+
+    /// The names the released aggregate is emitted from.
+    /// @return The retired contract names, then the generated ones.
+    function externalReleasedContractNames() external pure returns (string[] memory) {
+        return releasedContractNames();
+    }
+
+    /// The names a release cut from this script freezes.
+    /// @return The snapshot contract names.
+    function externalSnapshotContractNames() external pure returns (string[] memory) {
+        return snapshotContractNames();
+    }
+
+    /// @return The paths `run()` declares.
     function externalGeneratedPaths() external view returns (string[] memory) {
         return generatedPaths();
+    }
+
+    /// The deploy declaration's list, through the same guarded reader every
+    /// other consumer of the declaration uses.
+    /// @return The declared candidates.
+    function externalCandidateSuites() external pure returns (DeployCandidate[] memory) {
+        return checkedCandidateSuites(declaration());
     }
 
     /// The rolling snapshot name of every parameterised contract, which the
@@ -71,5 +106,27 @@ contract BuildHarness is Build {
             names[i] = parameterisedContractName(parameterised[i]);
         }
         return names;
+    }
+
+    /// `LibRainDeploySnapshot.releasedLibraryBlock` under this build's declaration.
+    /// @param libraryName The library name.
+    /// @param contractName The contract the lib is for.
+    /// @param paths The record paths.
+    /// @param template The template the entries are emitted from.
+    /// @return The library block.
+    function externalReleasedLibraryBlock(
+        string memory libraryName,
+        string memory contractName,
+        string[] memory paths,
+        DeploySuite memory template
+    ) external view returns (string memory) {
+        return LibRainDeploySnapshot.releasedLibraryBlock(vm, libraryName, contractName, paths, template, declaration());
+    }
+
+    /// `LibRainDeploySnapshot.releasedImportBlock` under this build's declaration.
+    /// @param paths The record paths.
+    /// @return The import block.
+    function externalReleasedImportBlock(string[] memory paths) external view returns (string memory) {
+        return LibRainDeploySnapshot.releasedImportBlock(vm, paths, declaration());
     }
 }

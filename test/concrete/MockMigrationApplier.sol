@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
-import {Prerequisite} from "../../src/interface/IMigrationRegistryV3.sol";
+import {Prerequisite} from "../../src/interface/IMigrationRegistryV4.sol";
 
 /// @title MockMigrationApplier
 /// @notice A consumer in the shape `LibMigrationRegistry`'s writes are designed
@@ -28,13 +28,15 @@ contract MockMigrationApplier {
     /// @param migration The migration to apply.
     /// @param prerequisites `writer` in `namespace` at the head it is believed
     /// to be at, then the migrations that must already be applied.
-    function applyMigrationV3(
+    /// @param meta Rain metadata the registry emits with the record.
+    function applyMigrationV4(
         address writer,
         bytes32 namespace,
         bytes32 migration,
-        Prerequisite[] calldata prerequisites
+        Prerequisite[] calldata prerequisites,
+        bytes calldata meta
     ) external {
-        LibMigrationRegistry.applyMigrationV3(writer, namespace, migration, prerequisites);
+        LibMigrationRegistry.applyMigrationV4(writer, namespace, migration, prerequisites, meta);
     }
 
     /// Applies `migration` in `writer`'s line in `namespace`, at `appliedAt`,
@@ -45,28 +47,30 @@ contract MockMigrationApplier {
     /// @param appliedAt The moment the migration was applied.
     /// @param prerequisites `writer` in `namespace` at the head it is believed
     /// to be at, then the migrations that must already be applied.
-    function applyMigrationHistoryV3(
+    /// @param meta Rain metadata the registry emits with the record.
+    function applyMigrationHistoryV4(
         address writer,
         bytes32 namespace,
         bytes32 migration,
         uint256 appliedAt,
-        Prerequisite[] calldata prerequisites
+        Prerequisite[] calldata prerequisites,
+        bytes calldata meta
     ) external {
-        LibMigrationRegistry.applyMigrationHistoryV3(writer, namespace, migration, appliedAt, prerequisites);
+        LibMigrationRegistry.applyMigrationHistoryV4(writer, namespace, migration, appliedAt, prerequisites, meta);
     }
 
     /// Approves `delegate` for this contract's line in `namespace`.
     /// @param namespace The line under this contract.
     /// @param delegate The account to approve.
-    function approveV3(bytes32 namespace, address delegate) external {
-        LibMigrationRegistry.approveV3(namespace, delegate);
+    function approveV4(bytes32 namespace, address delegate) external {
+        LibMigrationRegistry.approveV4(namespace, delegate);
     }
 
     /// Revokes `delegate` for this contract's line in `namespace`.
     /// @param namespace The line under this contract.
     /// @param delegate The account to revoke.
-    function revokeV3(bytes32 namespace, address delegate) external {
-        LibMigrationRegistry.revokeV3(namespace, delegate);
+    function revokeV4(bytes32 namespace, address delegate) external {
+        LibMigrationRegistry.revokeV4(namespace, delegate);
     }
 
     /// When `writer` applied `migration` in `namespace`.
@@ -74,8 +78,8 @@ contract MockMigrationApplier {
     /// @param namespace The line under `writer` to read.
     /// @param migration The migration to ask about.
     /// @return The moment it was applied at, or zero.
-    function appliedV3(address writer, bytes32 namespace, bytes32 migration) external view returns (uint256) {
-        return LibMigrationRegistry.appliedV3(writer, namespace, migration);
+    function appliedV4(address writer, bytes32 namespace, bytes32 migration) external view returns (uint256) {
+        return LibMigrationRegistry.appliedV4(writer, namespace, migration);
     }
 
     /// What `writer` applied `migration` onto in `namespace`.
@@ -83,8 +87,8 @@ contract MockMigrationApplier {
     /// @param namespace The line under `writer` to read.
     /// @param migration The migration to ask about.
     /// @return The head it was applied onto, or zero.
-    function appliedOntoV3(address writer, bytes32 namespace, bytes32 migration) external view returns (bytes32) {
-        return LibMigrationRegistry.appliedOntoV3(writer, namespace, migration);
+    function appliedOntoV4(address writer, bytes32 namespace, bytes32 migration) external view returns (bytes32) {
+        return LibMigrationRegistry.appliedOntoV4(writer, namespace, migration);
     }
 
     /// What `writer` applied `migration` after in `namespace`.
@@ -92,19 +96,19 @@ contract MockMigrationApplier {
     /// @param namespace The line under `writer` to read.
     /// @param migration The migration to ask about.
     /// @return The list the write gave, or empty.
-    function appliedAfterV3(address writer, bytes32 namespace, bytes32 migration)
+    function appliedAfterV4(address writer, bytes32 namespace, bytes32 migration)
         external
         view
         returns (Prerequisite[] memory)
     {
-        return LibMigrationRegistry.appliedAfterV3(writer, namespace, migration);
+        return LibMigrationRegistry.appliedAfterV4(writer, namespace, migration);
     }
 
     /// The head of `writer`'s line in `namespace`.
     /// @param writer The writer to read.
     /// @param namespace The line under `writer` to read.
     /// @return The head.
-    function headV3(address writer, bytes32 namespace) external view returns (bytes32) {
-        return LibMigrationRegistry.headV3(writer, namespace);
+    function headV4(address writer, bytes32 namespace) external view returns (bytes32) {
+        return LibMigrationRegistry.headV4(writer, namespace);
     }
 }

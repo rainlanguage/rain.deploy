@@ -15,12 +15,13 @@ contract MockResolvedOwner {
     /// The address the registry answered with at construction, and forever.
     address public immutable iOwner;
 
+    /// @param authority The authority to resolve the name under.
     /// @param name The name to resolve, once.
-    constructor(bytes32 name) {
+    constructor(address authority, bytes32 name) {
         // The moment the name was bound is discarded: this mock exists to show
         // that the VALUE cannot move afterwards, and a consumer that wanted to
         // refuse a freshly bound answer would read it here instead.
-        (bytes memory value,) = LibConfigRegistry.resolve(name);
+        (bytes memory value,) = LibConfigRegistry.resolve(authority, name, keccak256("address"));
         iOwner = abi.decode(value, (address));
     }
 }

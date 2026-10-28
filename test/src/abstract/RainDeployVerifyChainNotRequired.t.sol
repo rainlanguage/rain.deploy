@@ -2,9 +2,11 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
@@ -24,11 +26,17 @@ contract RainDeployVerifyChainNotRequiredTest is ExampleDeploySuites, RainDeploy
         return LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
     }
 
-    /// @inheritdoc RainDeploySuitesBase
     /// @dev The second release on base alone; everything else everywhere.
-    function requiresSuiteOn(DeploySuite memory suite, string memory network) internal pure override returns (bool) {
-        return keccak256(bytes(suite.suite)) != keccak256("second-address")
-            || keccak256(bytes(network)) == keccak256(bytes(LibRainDeploy.BASE));
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        DeploySuite[] memory released = exampleReleased();
+        released[1].networks = new string[](1);
+        released[1].networks[0] = LibRainDeploy.BASE;
+        LibRainDeployDeclaration.addReleased(d, released);
+        LibRainDeployDeclaration.addCandidates(d, exampleCandidates());
+        return d;
     }
 
     /// Both releases live on every fork.
@@ -40,8 +48,8 @@ contract RainDeployVerifyChainNotRequiredTest is ExampleDeploySuites, RainDeploy
     }
 
     /// The fixture is only meaningful if base is not the first network walked.
-    function testBaseIsNotTheFirstSupportedNetwork() external view {
-        assertNotEq(supportedNetworks()[0], LibRainDeploy.BASE);
+    function testBaseIsNotTheFirstSupportedNetwork() external pure {
+        assertNotEq(declaration().networks[0], LibRainDeploy.BASE);
     }
 
     /// The absent release is reported on the one network it is required on.
