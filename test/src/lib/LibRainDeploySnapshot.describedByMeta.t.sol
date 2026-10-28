@@ -17,7 +17,8 @@ import {
 import {
     FrozenSnapshotDescribedByMetaAmbiguous,
     FrozenSnapshotUnreadable,
-    LibRainDeploySnapshot
+    LibRainDeploySnapshot,
+    RecordFacts
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
@@ -90,7 +91,17 @@ contract LibRainDeploySnapshotDescribedByMetaTest is Test {
     }
 
     function externalReleasedImport(string memory path) external view returns (string memory) {
-        return LibRainDeploySnapshot.releasedImport(vm, path);
+        (bool mechanismData, bool perNetwork) = LibRainDeploySnapshot.recordedMechanismShape(vm, path);
+        return LibRainDeploySnapshot.releasedImport(
+            vm,
+            path,
+            RecordFacts({
+                mechanismId: bytes32(0),
+                mechanismData: mechanismData,
+                perNetwork: perNetwork,
+                describedByMeta: LibRainDeploySnapshot.recordedDescribedByMeta(vm, path)
+            })
+        );
     }
 
     function externalReleasedSuiteEntry(string memory path) external view returns (string memory) {
