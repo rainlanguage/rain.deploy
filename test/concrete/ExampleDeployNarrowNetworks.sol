@@ -31,6 +31,7 @@ contract ExampleDeployNarrowNetworks is ExampleDeployScript {
         LibRainDeployDeclaration.extend(d);
         d.networks = new string[](1);
         d.networks[0] = LibRainDeploy.BASE;
+        d.deployNetworks = LibRainDeployDeclaration.everyNetwork(d);
         LibRainDeployZoltuMechanism.extend(d);
         addExample(d);
         return d;
