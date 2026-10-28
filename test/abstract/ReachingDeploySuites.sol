@@ -2,8 +2,14 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {DeployCandidate, DeployDependency, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
-import {ExternalDeployment, RainDeployDeclarationChecks} from "../../src/abstract/RainDeployDeclarationChecks.sol";
+import {
+    DeployCandidate,
+    DeployDeclaration,
+    DeployDependency,
+    DeploySuite,
+    ExternalDeployment
+} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {RainDeployDeclarationChecks} from "../../src/abstract/RainDeployDeclarationChecks.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployable} from "../concrete/MockDeployable.sol";
@@ -129,16 +135,14 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
         return candidates;
     }
 
-    /// @inheritdoc RainDeployDeclarationChecks
-    function sourceCreationCode(string memory suite) internal pure override returns (bytes memory) {
+    function reachingSourceCreationCode(string memory suite) internal pure returns (bytes memory) {
         bytes32 key = keccak256(bytes(suite));
         if (key == keccak256("mock-deployable")) return type(MockDeployable).creationCode;
         if (key == keccak256("mock-reaching-deployable")) return type(MockReachingDeployable).creationCode;
         revert(string.concat("no source for suite: ", suite));
     }
 
-    /// @inheritdoc RainDeployDeclarationChecks
-    function externalDeployments() internal pure override returns (ExternalDeployment[] memory) {
+    function reachingExternalDeployments() internal pure returns (ExternalDeployment[] memory) {
         ExternalDeployment[] memory externals = new ExternalDeployment[](1);
         externals[0] = ExternalDeployment({
             deployedAddress: MOCK_EXTERNAL_ADDRESS, codeHash: keccak256(MOCK_EXTERNAL_RUNTIME_CODE)
@@ -146,8 +150,11 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
         return externals;
     }
 
-    /// @inheritdoc RainDeployDeclarationChecks
-    function dispatchWorkflow() internal view virtual override returns (string memory) {
-        return sWorkflow;
+    /// Sets `d`'s source creation code, external deployments and dispatch workflow to this fixture's.
+    /// @param d The declaration, mutated.
+    function extendReaching(DeployDeclaration memory d) internal view {
+        d.sourceCreationCode = reachingSourceCreationCode;
+        d.externalDeployments = reachingExternalDeployments();
+        d.dispatchWorkflow = sWorkflow;
     }
 }
