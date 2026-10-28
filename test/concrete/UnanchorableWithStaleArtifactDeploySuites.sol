@@ -11,6 +11,7 @@ import {
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 
@@ -30,12 +31,13 @@ import {MockDeployableV2} from "./MockDeployableV2.sol";
 /// record happens to agree.
 contract UnanchorableWithStaleArtifactDeploySuites is ExternalDeploySuites {
     function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
-        declared.released = declaredReleased();
-        declared.candidates = declaredCandidates();
-        return declared;
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
     }
-
 
     function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);
@@ -55,7 +57,7 @@ contract UnanchorableWithStaleArtifactDeploySuites is ExternalDeploySuites {
                 // Deliberately NOT `MockDeployableV2`, which every recorded field above is.
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: "There is no source file to compile."
         });

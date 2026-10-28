@@ -12,6 +12,7 @@ import {
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployable} from "./MockDeployable.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 
@@ -29,12 +30,13 @@ import {MockDeployableV2} from "./MockDeployableV2.sol";
 /// position would still pass a test that only asked whether it reverted.
 contract EmptyArtifactPathDeploySuites is ExternalDeploySuites {
     function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
-        declared.released = declaredReleased();
-        declared.candidates = declaredCandidates();
-        return declared;
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
     }
-
 
     function declaredReleased() internal pure returns (DeploySuite[] memory) {
         return new DeploySuite[](0);
@@ -52,7 +54,7 @@ contract EmptyArtifactPathDeploySuites is ExternalDeploySuites {
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
@@ -66,7 +68,7 @@ contract EmptyArtifactPathDeploySuites is ExternalDeploySuites {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: "Derived bytes, with no source to anchor to."
         });

@@ -14,6 +14,7 @@ import {MockDeployable} from "./MockDeployable.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 
 /// @title UnqualifiedArtifactPathDeploySuites
 /// A declaration whose CANDIDATE names its contract by bare name rather than
@@ -32,12 +33,13 @@ import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.s
 /// and the position is what names the entry at fault.
 contract UnqualifiedArtifactPathDeploySuites is ExternalDeploySuites {
     function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
-        declared.released = declaredReleased();
-        declared.candidates = declaredCandidates();
-        return declared;
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
     }
-
 
     function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);
@@ -56,7 +58,7 @@ contract UnqualifiedArtifactPathDeploySuites is ExternalDeploySuites {
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
@@ -70,7 +72,7 @@ contract UnqualifiedArtifactPathDeploySuites is ExternalDeploySuites {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "MockDeployableV2",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
