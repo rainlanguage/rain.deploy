@@ -8,8 +8,8 @@ import {
     RAIN_COPYRIGHT_TEXT,
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
-import {CloneNetwork} from "../../../src/lib/LibRainDeployClone.sol";
 import {
+    ChainDeploy,
     ExtendedNetworksRewritten,
     ExtendedNetworksUnreadable,
     ExtendedNetworksUnrecorded,
@@ -40,15 +40,15 @@ contract LibRainDeployExtendedNetworksTest is Test {
     function network(uint256 chainId, bytes memory data, address deployedAddress)
         internal
         pure
-        returns (CloneNetwork memory)
+        returns (ChainDeploy memory)
     {
-        return CloneNetwork({chainId: chainId, data: data, deployedAddress: deployedAddress});
+        return ChainDeploy({chainId: chainId, data: data, deployedAddress: deployedAddress});
     }
 
     /// Polygon then Base, at distinct data and addresses.
     /// @return The networks.
-    function twoNetworks() internal pure returns (CloneNetwork[] memory) {
-        CloneNetwork[] memory networks = new CloneNetwork[](2);
+    function twoNetworks() internal pure returns (ChainDeploy[] memory) {
+        ChainDeploy[] memory networks = new ChainDeploy[](2);
         networks[0] = network(137, hex"00aa", address(0x1111111111111111111111111111111111111111));
         networks[1] = network(8453, hex"", address(0xC4c4c4C4C4c4C4c4c4C4c4c4c4c4c4C4c4c4c4C4));
         return networks;
@@ -58,8 +58,8 @@ contract LibRainDeployExtendedNetworksTest is Test {
     /// @param networks The networks.
     /// @param n How many.
     /// @return The prefix.
-    function prefix(CloneNetwork[] memory networks, uint256 n) internal pure returns (CloneNetwork[] memory) {
-        CloneNetwork[] memory out = new CloneNetwork[](n);
+    function prefix(ChainDeploy[] memory networks, uint256 n) internal pure returns (ChainDeploy[] memory) {
+        ChainDeploy[] memory out = new ChainDeploy[](n);
         for (uint256 i = 0; i < n; i++) {
             out[i] = networks[i];
         }
@@ -70,7 +70,7 @@ contract LibRainDeployExtendedNetworksTest is Test {
     /// @param root The record root.
     /// @param suite The release's suite key.
     /// @param declared The declared networks.
-    function externalWrite(string memory root, string memory suite, CloneNetwork[] memory declared) external {
+    function externalWrite(string memory root, string memory suite, ChainDeploy[] memory declared) external {
         LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, suite, declared);
     }
 
@@ -78,7 +78,7 @@ contract LibRainDeployExtendedNetworksTest is Test {
     /// @param root The record root.
     /// @param suite The release's suite key.
     /// @return The recorded networks.
-    function externalRecorded(string memory root, string memory suite) external view returns (CloneNetwork[] memory) {
+    function externalRecorded(string memory root, string memory suite) external view returns (ChainDeploy[] memory) {
         return LibRainDeployExtendedNetworks.recordedExtendedNetworks(vm, root, suite);
     }
 
@@ -86,7 +86,7 @@ contract LibRainDeployExtendedNetworksTest is Test {
     /// @param root The record root.
     /// @param suite The release's suite key.
     /// @param declared The declared networks.
-    function externalCheck(string memory root, string memory suite, CloneNetwork[] memory declared) external view {
+    function externalCheck(string memory root, string memory suite, ChainDeploy[] memory declared) external view {
         LibRainDeployExtendedNetworks.checkExtendedNetworksRecorded(vm, root, suite, declared);
     }
 
@@ -145,7 +145,7 @@ contract LibRainDeployExtendedNetworksTest is Test {
     /// What is written is the licence header then the body, and reads back as the networks written, in order.
     function testWriteThenReadRoundTrips() external {
         string memory root = freshRoot("round-trip");
-        CloneNetwork[] memory networks = twoNetworks();
+        ChainDeploy[] memory networks = twoNetworks();
         this.externalWrite(root, SUITE, networks);
 
         (,, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, SUITE);
@@ -162,7 +162,7 @@ contract LibRainDeployExtendedNetworksTest is Test {
 
     /// The body names each network's chain id in its constants, address first, then its init data.
     function testExtendedNetworksBodyShape() external pure {
-        CloneNetwork[] memory networks = new CloneNetwork[](1);
+        ChainDeploy[] memory networks = new ChainDeploy[](1);
         networks[0] = network(137, hex"00aa", address(0x1111111111111111111111111111111111111111));
         assertEq(
             LibRainDeployExtendedNetworks.extendedNetworksBody(vm, networks),
@@ -173,13 +173,13 @@ contract LibRainDeployExtendedNetworksTest is Test {
                 " broadcast with on chain id 137.\nbytes constant INIT_DATA_137 = hex\"00aa\";\n"
             )
         );
-        assertEq(LibRainDeployExtendedNetworks.extendedNetworksBody(vm, new CloneNetwork[](0)), "");
+        assertEq(LibRainDeployExtendedNetworks.extendedNetworksBody(vm, new ChainDeploy[](0)), "");
     }
 
     /// The licence-taking writer declares the licence it is given.
     function testWriteDeclaresTheGivenLicence() external {
         string memory root = freshRoot("licence");
-        CloneNetwork[] memory networks = twoNetworks();
+        ChainDeploy[] memory networks = twoNetworks();
         LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, SUITE, networks, "MIT", "Copyright (c) Someone");
         (,, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, SUITE);
         assertEq(
@@ -195,13 +195,13 @@ contract LibRainDeployExtendedNetworksTest is Test {
     function testNoRecordIsNoNetworks() external {
         string memory root = freshRoot("no-record");
         assertEq(this.externalRecorded(root, SUITE).length, 0);
-        this.externalCheck(root, SUITE, new CloneNetwork[](0));
+        this.externalCheck(root, SUITE, new ChainDeploy[](0));
     }
 
     /// Declaring nothing writes nothing.
     function testWritingNothingWritesNoFile() external {
         string memory root = freshRoot("write-nothing");
-        this.externalWrite(root, SUITE, new CloneNetwork[](0));
+        this.externalWrite(root, SUITE, new ChainDeploy[](0));
         (,, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(root, SUITE);
         assertFalse(vm.exists(path));
     }
@@ -209,7 +209,7 @@ contract LibRainDeployExtendedNetworksTest is Test {
     /// A network declared after those recorded is appended.
     function testWriteAppends() external {
         string memory root = freshRoot("append");
-        CloneNetwork[] memory networks = twoNetworks();
+        ChainDeploy[] memory networks = twoNetworks();
         this.externalWrite(root, SUITE, prefix(networks, 1));
         assertEq(abi.encode(this.externalRecorded(root, SUITE)), abi.encode(prefix(networks, 1)));
         this.externalWrite(root, SUITE, networks);
@@ -222,22 +222,22 @@ contract LibRainDeployExtendedNetworksTest is Test {
     /// left as it was.
     function testWriteRefusesARewrite() external {
         string memory root = freshRoot("rewrite");
-        CloneNetwork[] memory networks = twoNetworks();
+        ChainDeploy[] memory networks = twoNetworks();
         this.externalWrite(root, SUITE, networks);
 
         vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksRewritten.selector, SUITE, 0));
-        this.externalWrite(root, SUITE, new CloneNetwork[](0));
+        this.externalWrite(root, SUITE, new ChainDeploy[](0));
 
         vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksRewritten.selector, SUITE, 1));
         this.externalWrite(root, SUITE, prefix(networks, 1));
 
-        CloneNetwork[] memory reordered = new CloneNetwork[](2);
+        ChainDeploy[] memory reordered = new ChainDeploy[](2);
         reordered[0] = networks[1];
         reordered[1] = networks[0];
         vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksRewritten.selector, SUITE, 0));
         this.externalWrite(root, SUITE, reordered);
 
-        CloneNetwork[] memory changed = twoNetworks();
+        ChainDeploy[] memory changed = twoNetworks();
         changed[1].chainId = 8454;
         vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksRewritten.selector, SUITE, 1));
         this.externalWrite(root, SUITE, changed);
@@ -258,7 +258,7 @@ contract LibRainDeployExtendedNetworksTest is Test {
     /// A declaration that is not exactly the record, in order, is refused.
     function testCheckRefusesAnythingButTheRecord() external {
         string memory root = freshRoot("check");
-        CloneNetwork[] memory networks = twoNetworks();
+        ChainDeploy[] memory networks = twoNetworks();
 
         vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnrecorded.selector, SUITE));
         this.externalCheck(root, SUITE, networks);
@@ -269,15 +269,15 @@ contract LibRainDeployExtendedNetworksTest is Test {
         this.externalCheck(root, SUITE, prefix(networks, 1));
 
         vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnrecorded.selector, SUITE));
-        this.externalCheck(root, SUITE, new CloneNetwork[](0));
+        this.externalCheck(root, SUITE, new ChainDeploy[](0));
 
-        CloneNetwork[] memory reordered = new CloneNetwork[](2);
+        ChainDeploy[] memory reordered = new ChainDeploy[](2);
         reordered[0] = networks[1];
         reordered[1] = networks[0];
         vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnrecorded.selector, SUITE));
         this.externalCheck(root, SUITE, reordered);
 
-        CloneNetwork[] memory changed = twoNetworks();
+        ChainDeploy[] memory changed = twoNetworks();
         changed[0].chainId = 138;
         vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnrecorded.selector, SUITE));
         this.externalCheck(root, SUITE, changed);
@@ -297,10 +297,10 @@ contract LibRainDeployExtendedNetworksTest is Test {
     /// declaring none passes both.
     function testUntaggedKeyHasNoRecord() external {
         string memory root = freshRoot("untagged");
-        CloneNetwork[] memory networks = twoNetworks();
+        ChainDeploy[] memory networks = twoNetworks();
         assertEq(this.externalRecorded(root, "per-network-clone").length, 0);
-        this.externalCheck(root, "per-network-clone", new CloneNetwork[](0));
-        this.externalWrite(root, "per-network-clone", new CloneNetwork[](0));
+        this.externalCheck(root, "per-network-clone", new ChainDeploy[](0));
+        this.externalWrite(root, "per-network-clone", new ChainDeploy[](0));
 
         vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnrecorded.selector, "per-network-clone"));
         this.externalCheck(root, "per-network-clone", networks);
@@ -378,7 +378,7 @@ contract LibRainDeployExtendedNetworksTest is Test {
     function externalRecordedNetwork(string memory path, string memory entry)
         external
         pure
-        returns (CloneNetwork memory)
+        returns (ChainDeploy memory)
     {
         return LibRainDeployExtendedNetworks.recordedExtendedNetwork(vm, path, entry);
     }
@@ -492,7 +492,7 @@ contract LibRainDeployExtendedNetworksTest is Test {
                 LibRainDeployExtendedNetworks.extendedNetworksBody(vm, twoNetworks())
             )
         );
-        CloneNetwork[] memory recorded = this.externalRecorded(root, SUITE);
+        ChainDeploy[] memory recorded = this.externalRecorded(root, SUITE);
         assertEq(recorded.length, 2);
         this.externalCheck(root, SUITE, twoNetworks());
     }
