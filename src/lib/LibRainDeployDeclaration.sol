@@ -162,4 +162,36 @@ library LibRainDeployDeclaration {
         mechanisms[d.mechanisms.length] = copyHandler(handler);
         d.mechanisms = mechanisms;
     }
+
+    /// The name half of a suite key.
+    /// @param suite The suite key.
+    /// @return The name half.
+    function suiteKeyName(string memory suite) internal pure returns (string memory) {
+        bytes memory key = bytes(suite);
+        uint256 length = key.length;
+        for (uint256 i = 0; i < key.length; i++) {
+            if (key[i] == "@") {
+                length = i;
+                break;
+            }
+        }
+        bytes memory name = new bytes(length);
+        for (uint256 i = 0; i < length; i++) {
+            name[i] = key[i];
+        }
+        return string(name);
+    }
+
+    /// @param suites The suites to search.
+    /// @param requested The key to select.
+    /// @return The index in `suites` of the suite `requested` selects, `suites.length` if none.
+    function suiteIndex(DeploySuite[] memory suites, string memory requested) internal pure returns (uint256) {
+        bytes32 requestedHash = keccak256(bytes(requested));
+        for (uint256 i = 0; i < suites.length; i++) {
+            if (keccak256(bytes(suites[i].suite)) == requestedHash) {
+                return i;
+            }
+        }
+        return suites.length;
+    }
 }
