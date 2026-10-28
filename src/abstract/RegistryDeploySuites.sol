@@ -5,7 +5,6 @@ pragma solidity ^0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "./RainDeploySuitesBase.sol";
@@ -200,7 +199,6 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
             unanchorableReason: ""
@@ -230,7 +228,6 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: MIGRATION_REGISTRY_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
             unanchorableReason: ""

@@ -6,7 +6,6 @@ import {BuildScript} from "../src/abstract/BuildScript.sol";
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
     DeploySuite
 } from "../src/abstract/RainDeploySuitesBase.sol";
 import {ParameterisedContract, RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
@@ -99,7 +98,7 @@ contract Build is BuildScript, RegistryDeploySuites {
         RetiredContract[] memory retired = retiredContracts();
         for (uint256 i = 0; i < retired.length; i++) {
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, dir, recordRoot(), retired[i].contractName, retiredTemplate(retired[i])
+                vm, dir, recordRoot(), retired[i].contractName, retiredTemplate(retired[i]), releasedMechanismData
             );
         }
         for (uint256 i = 0; i < contracts.length; i++) {
@@ -107,7 +106,7 @@ contract Build is BuildScript, RegistryDeploySuites {
                 vm, dir, contracts[i].contractName, contracts[i].constantPrefix, LibRainDeploySnapshot.CANDIDATE
             );
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, dir, recordRoot(), contracts[i].contractName, contracts[i].candidate.snapshot
+                vm, dir, recordRoot(), contracts[i].contractName, contracts[i].candidate.snapshot, releasedMechanismData
             );
         }
         LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, dir, releasedContractNames());
@@ -163,7 +162,6 @@ contract Build is BuildScript, RegistryDeploySuites {
             storedRuntimeCode: "",
             artifactPath: retired.artifactPath,
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
     }
