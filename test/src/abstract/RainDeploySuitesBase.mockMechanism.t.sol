@@ -184,14 +184,14 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
 
     function testDeployLocallyOnChainDeploysOnlyThatNetworksAddress() external {
         vm.chainId(137);
-        sDeploy.externalDeployLocallyOnChain(vm, sDeploy.externalMockRelease());
+        sDeploy.externalDeployLocallyOnChain(vm, sDeploy.externalMockRelease(), 137);
         assertEq(networkAddress(137).code, type(MockDeployable).runtimeCode);
         assertEq(networkAddress(42161).code.length, 0);
     }
 
     function testDeployLocallyOnChainOfASingleAddressSuiteDeploysItsAddress() external {
         vm.chainId(137);
-        sDeploy.externalDeployLocallyOnChain(vm, singleSuite());
+        sDeploy.externalDeployLocallyOnChain(vm, singleSuite(), 137);
         assertEq(create2Address(MOCK_CREATE2_SALT).code, type(MockDeployable).runtimeCode);
     }
 

@@ -111,7 +111,10 @@ library LibMockSaltMechanism {
         return deployed;
     }
 
-    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
+    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite, uint256 chainId)
+        internal
+    {
+        vm.chainId(chainId);
         deployLocally(d, vm, suite);
     }
 

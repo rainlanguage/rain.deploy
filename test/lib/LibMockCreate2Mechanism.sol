@@ -244,9 +244,12 @@ library LibMockCreate2Mechanism {
         return deployed;
     }
 
-    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
+    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite, uint256 chainId)
+        internal
+    {
+        vm.chainId(chainId);
         etchFactory(vm, suite);
-        deployAt(vm, suite, salt(suite, block.chainid), deployedAddress(d, suite, block.chainid));
+        deployAt(vm, suite, salt(suite, chainId), deployedAddress(d, suite, chainId));
     }
 
     /// Per-network: adds to `suite` each of `chainIds` its candidate deploys to and it records nothing on, at the

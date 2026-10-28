@@ -300,7 +300,7 @@ struct DeployMechanismHandler {
         internal
         view returns (function(Vm, string memory, address, bytes memory) internal returns (address)) deployStep;
     function(DeployDeclaration memory, Vm, DeploySuite memory) internal returns (address[] memory) deployLocally;
-    function(DeployDeclaration memory, Vm, DeploySuite memory) internal deployLocallyOnChain;
+    function(DeployDeclaration memory, Vm, DeploySuite memory, uint256) internal deployLocallyOnChain;
     function(DeployDeclaration memory, DeploySuite memory, DeploySuite memory, uint256[] memory) internal view
         addUnrecordedNetworks;
     function(DeployDeclaration memory, DeploySuite memory) internal view addRecordedNetworks;
@@ -444,8 +444,10 @@ abstract contract RainDeploySuitesBase {
         return mechanismOf(d, suite).deployLocally(d, vm, suite);
     }
 
-    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
-        mechanismOf(d, suite).deployLocallyOnChain(d, vm, suite);
+    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite, uint256 chainId)
+        internal
+    {
+        mechanismOf(d, suite).deployLocallyOnChain(d, vm, suite, chainId);
     }
 
     function addUnrecordedNetworks(
