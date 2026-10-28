@@ -12,7 +12,7 @@ import {
     NoDeployCandidates,
     UnqualifiedCandidateArtifactPath
 } from "../abstract/RainDeploySuitesBase.sol";
-import {LibRainDeploy} from "./LibRainDeploy.sol";
+import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
 
 /// @title LibRainDeployDeclaration
 /// @notice The core layer of a declaration, and what every layer composes with.
@@ -241,12 +241,23 @@ library LibRainDeployDeclaration {
         while (i < candidates.length && keccak256(bytes(candidates[i].snapshot.suite)) != name) {
             i++;
         }
-        bool found = i < candidates.length;
-        DeploySuite memory candidate;
-        if (found) {
-            candidate = abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite));
+        if (i == candidates.length) {
+            return (
+                DeploySuite({
+                    suite: "",
+                    creationCode: "",
+                    storedDeployedAddress: address(0),
+                    storedBytecodeHash: bytes32(0),
+                    storedRuntimeCode: "",
+                    artifactPath: "",
+                    dependencies: new DeployDependency[](0),
+                    mechanismData: "",
+                    networks: new string[](0)
+                }),
+                false
+            );
         }
-        return (candidate, found);
+        return (abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite)), true);
     }
 
     /// The mechanism id a suite's `mechanismData` declares: its first word. Refuses `MechanismUnclaimed` for data
