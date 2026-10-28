@@ -87,7 +87,12 @@ contract RainDeploySuitesBaseMechanismsTest is Test {
         );
     }
 
-    function lookup(DeployMechanismHandler[] memory handlers, bytes32 id) external pure returns (bytes32) {
+    /// Looks `id` up in a hand-built list: Zoltu, salt, then salt again when `duplicate`, else create2.
+    function lookup(bool duplicate, bytes32 id) external pure returns (bytes32) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](3);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        handlers[1] = LibMockSaltMechanism.handler();
+        handlers[2] = duplicate ? LibMockSaltMechanism.handler() : LibMockCreate2Mechanism.handler();
         DeployDeclaration memory d;
         d.mechanisms = handlers;
         return LibRainDeployDeclaration.mechanismById(d, id, "subject").id;
@@ -205,18 +210,13 @@ contract RainDeploySuitesBaseMechanismsTest is Test {
 
     /// A hand-built list holding one id twice refuses every lookup, of that id or another.
     function testDuplicateMechanismIsRefusedByLookup() external {
-        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](3);
-        handlers[0] = LibRainDeployZoltuMechanism.handler();
-        handlers[1] = LibMockSaltMechanism.handler();
-        handlers[2] = LibMockSaltMechanism.handler();
         vm.expectRevert(abi.encodeWithSelector(DuplicateMechanism.selector, MOCK_SALT_MECHANISM_ID));
-        this.lookup(handlers, ZOLTU_MECHANISM_ID);
+        this.lookup(true, ZOLTU_MECHANISM_ID);
         vm.expectRevert(abi.encodeWithSelector(DuplicateMechanism.selector, MOCK_SALT_MECHANISM_ID));
-        this.lookup(handlers, MOCK_SALT_MECHANISM_ID);
-        handlers[2] = LibMockCreate2Mechanism.handler();
-        assertEq(this.lookup(handlers, MOCK_SALT_MECHANISM_ID), MOCK_SALT_MECHANISM_ID);
-        assertEq(this.lookup(handlers, MOCK_CREATE2_MECHANISM_ID), MOCK_CREATE2_MECHANISM_ID);
-        assertEq(this.lookup(handlers, ZOLTU_MECHANISM_ID), ZOLTU_MECHANISM_ID);
+        this.lookup(true, MOCK_SALT_MECHANISM_ID);
+        assertEq(this.lookup(false, MOCK_SALT_MECHANISM_ID), MOCK_SALT_MECHANISM_ID);
+        assertEq(this.lookup(false, MOCK_CREATE2_MECHANISM_ID), MOCK_CREATE2_MECHANISM_ID);
+        assertEq(this.lookup(false, ZOLTU_MECHANISM_ID), ZOLTU_MECHANISM_ID);
     }
 
     /// @param id An id no declared mechanism carries.
