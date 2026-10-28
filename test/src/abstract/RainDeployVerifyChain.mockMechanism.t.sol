@@ -7,7 +7,7 @@ import {DeployCandidate, DeployDeclaration, DeploySuite} from "../../../src/abst
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
-import {ChainDeploy, LibRainDeployExtendedNetworks} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {LibMockNetworkRecord, MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
 import {MockCreate2DeploySuites} from "../../abstract/MockCreate2DeploySuites.sol";
 import {
     LibMockCreate2Mechanism,
@@ -119,10 +119,10 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
     function writeBaseRecord(string memory root, string memory suite) internal {
         //forge-lint: disable-next-line(unsafe-cheatcode)
         try vm.removeDir(root, true) {} catch {}
-        ChainDeploy[] memory extended = new ChainDeploy[](1);
+        MockNetworkDeploy[] memory extended = new MockNetworkDeploy[](1);
         extended[0] =
-            ChainDeploy({chainId: 8453, data: abi.encode(uint256(8453)), deployedAddress: networkAddress(8453)});
-        LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, suite, extended);
+            MockNetworkDeploy({chainId: 8453, data: abi.encode(uint256(8453)), deployedAddress: networkAddress(8453)});
+        LibMockNetworkRecord.write(vm, root, suite, extended);
         this.setMockRecordRoot(root);
     }
 
@@ -137,7 +137,7 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
     }
 
     function arbitrumOnlySuite() internal view returns (DeploySuite memory) {
-        ChainDeploy[] memory networks = new ChainDeploy[](1);
+        MockNetworkDeploy[] memory networks = new MockNetworkDeploy[](1);
         networks[0] = mockNetwork(42161);
         return mockSuite("arbitrum-only@0_0_1", networks);
     }
