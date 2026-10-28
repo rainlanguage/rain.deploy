@@ -81,7 +81,7 @@ contract RainDeploySuitesBaseExtendChainTest is Test, TwoMechanismDeploySuites {
         assertEq(d.candidates[0].snapshot.networks, networks);
     }
 
-    function testEachSuiteDispatchesToItsOwnLayersMechanism() external pure {
+    function testEachSuiteDispatchesToItsOwnLayersMechanism() external view {
         DeployDeclaration memory d = declaration();
         assertEq(mechanismOf(d, d.released[0]).id, ZOLTU_MECHANISM_ID);
         assertEq(mechanismOf(d, d.candidates[0].snapshot).id, MOCK_CREATE2_MECHANISM_ID);
@@ -103,7 +103,7 @@ contract RainDeploySuitesBaseExtendChainTest is Test, TwoMechanismDeploySuites {
         );
     }
 
-    function testEachSuitesAddressesFollowTheConsumersNetworks() external pure {
+    function testEachSuitesAddressesFollowTheConsumersNetworks() external view {
         DeployDeclaration memory d = declaration();
         address[] memory addresses = deployedAddresses(d, d.candidates[1].snapshot);
         assertEq(addresses.length, 2);
