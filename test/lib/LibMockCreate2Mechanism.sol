@@ -138,12 +138,12 @@ library LibMockCreate2Mechanism {
         pure
         returns (bool, uint256)
     {
-        for (uint256 i = 0; i < mechanism.networks.length; i++) {
-            if (mechanism.networks[i].chainId == chainId) {
-                return (true, i);
-            }
+        uint256 i = 0;
+        while (i < mechanism.networks.length && mechanism.networks[i].chainId != chainId) {
+            i++;
         }
-        return (false, 0);
+        bool found = i < mechanism.networks.length;
+        return (found, found ? i : 0);
     }
 
     function salt(DeploySuite memory suite, uint256 chainId) internal pure returns (bytes32) {

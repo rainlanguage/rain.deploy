@@ -162,6 +162,23 @@ contract RainDeploySuitesBaseCallerHeldValuesTest is Test, MockCreate2DeploySuit
         assertEq(declarationHash(d), declarationBefore);
     }
 
+    function testCheckedCandidateSuitesReturnsCandidatesTheCallerCanChangeWithoutChangingTheDeclaration()
+        external
+        view
+    {
+        DeployDeclaration memory d = declaration();
+        bytes32 declarationBefore = declarationHash(d);
+        DeployCandidate[] memory candidates = checkedCandidateSuites(d);
+        assertEq(keccak256(abi.encode(candidates)), keccak256(abi.encode(d.candidates)));
+
+        candidates[0].snapshot.networks[0] = LibRainDeploy.BASE;
+        candidates[0].snapshot.suite = "changed";
+        candidates[0].unanchorableReason = "changed";
+        candidates[0] = candidates[candidates.length - 1];
+
+        assertEq(declarationHash(d), declarationBefore);
+    }
+
     function testAddReleasedFillsTheCallersSuiteWithNetworksNotSharedWithTheDeclaration() external pure {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);

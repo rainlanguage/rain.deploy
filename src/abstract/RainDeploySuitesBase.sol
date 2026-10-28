@@ -340,13 +340,16 @@ abstract contract RainDeploySuitesBase {
     {
         bytes32 name = keccak256(bytes(suiteKeyName(suite)));
         DeployCandidate[] memory candidates = checkedCandidateSuites(d);
-        for (uint256 i = 0; i < candidates.length; i++) {
-            if (keccak256(bytes(candidates[i].snapshot.suite)) == name) {
-                return (abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite)), true);
-            }
+        uint256 i = 0;
+        while (i < candidates.length && keccak256(bytes(candidates[i].snapshot.suite)) != name) {
+            i++;
         }
-        DeploySuite memory none;
-        return (none, false);
+        bool found = i < candidates.length;
+        DeploySuite memory candidate;
+        if (found) {
+            candidate = candidates[i].snapshot;
+        }
+        return (candidate, found);
     }
 
     /// Adds to `suite` the networks among `chainIds` its candidate takes it to, the candidate being a copy of `suite`
@@ -565,7 +568,7 @@ abstract contract RainDeploySuitesBase {
     /// stops asserting.
     /// @return The candidates.
     function checkedCandidateSuites(DeployDeclaration memory d) internal pure returns (DeployCandidate[] memory) {
-        DeployCandidate[] memory candidates = d.candidates;
+        DeployCandidate[] memory candidates = abi.decode(abi.encode(d.candidates), (DeployCandidate[]));
         if (candidates.length == 0) {
             revert NoDeployCandidates();
         }
