@@ -139,6 +139,8 @@ library LibRainDeployDeclaration {
             h.checkNetworkFrozen,
             h.checkOnChain,
             h.checkBroadcastSeat,
+            h.checkDeclaration,
+            h.checkNetwork,
             h.logVerification,
             h.writeSuiteSnapshot,
             h.releasedMechanismData,
