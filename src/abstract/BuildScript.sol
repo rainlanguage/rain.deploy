@@ -102,11 +102,6 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// before it copies anything.
     function regenerateSnapshots() internal virtual;
 
-    /// Rewrite every file generated from the snapshots and from the frozen
-    /// record. Run last, after a `cutRelease()` freeze has written the record,
-    /// so a file emitted from that record holds the release just cut.
-    function regenerateLibs(DeployDeclaration memory d) internal virtual;
-
     /// Every contract this repo generates pins for, in the order its libs are
     /// aggregated. Read through `checkedGeneratedContracts`.
     /// @return The generated contracts.
@@ -230,9 +225,91 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         }
     }
 
-    /// The contracts whose rolling snapshots a release freezes.
+    /// The names of `generated`, in order: the contracts whose rolling
+    /// snapshots a release freezes.
+    /// @param d The declaration.
+    /// @param generated `checkedGeneratedContracts(d)`.
     /// @return The contract names.
-    function snapshotContractNames() internal view virtual returns (string[] memory);
+    function snapshotContractNames(DeployDeclaration memory d, GeneratedContract[] memory generated)
+        internal
+        pure
+        returns (string[] memory)
+    {
+        (d);
+        string[] memory names = new string[](generated.length);
+        for (uint256 i = 0; i < generated.length; i++) {
+            names[i] = generated[i].contractName;
+        }
+        return names;
+    }
+
+    /// Every contract with a released-suites lib, in the order the aggregate
+    /// lists them: `retiredContracts()`, then `generated`.
+    /// @param generated `checkedGeneratedContracts(d)`.
+    /// @return The contract names.
+    function releasedContractNames(GeneratedContract[] memory generated) internal view returns (string[] memory) {
+        RetiredContract[] memory retired = retiredContracts();
+        string[] memory names = new string[](retired.length + generated.length);
+        for (uint256 i = 0; i < retired.length; i++) {
+            names[i] = retired[i].contractName;
+        }
+        for (uint256 i = 0; i < generated.length; i++) {
+            names[retired.length + i] = generated[i].contractName;
+        }
+        return names;
+    }
+
+    /// Rewrite every generated lib under `libDir()`: each retired contract's
+    /// released-suites lib, each generated contract's alias lib (when it has a
+    /// prefix) and released-suites lib, then the aggregate over
+    /// `releasedContractNames(generated)`. Run last, after a `cutRelease()`
+    /// freeze has written the record, so a lib emitted from that record holds
+    /// the release just cut.
+    /// @param d The declaration.
+    /// @param generated `checkedGeneratedContracts(d)`.
+    function regenerateLibs(DeployDeclaration memory d, GeneratedContract[] memory generated) internal {
+        (d);
+        RetiredContract[] memory retired = retiredContracts();
+        string memory dir = libDir();
+        string memory spdxLicenseIdentifier = libSpdxLicenseIdentifier();
+        string memory copyrightText = libCopyrightText();
+        for (uint256 i = 0; i < retired.length; i++) {
+            LibRainDeploySnapshot.writeReleasedSuitesLib(
+                vm,
+                dir,
+                recordRoot(),
+                retired[i].contractName,
+                spdxLicenseIdentifier,
+                copyrightText,
+                retired[i].template
+            );
+        }
+        for (uint256 i = 0; i < generated.length; i++) {
+            if (bytes(generated[i].constantPrefix).length > 0) {
+                LibRainDeploySnapshot.writeAliasLib(
+                    vm,
+                    dir,
+                    generated[i].contractName,
+                    generated[i].constantPrefix,
+                    LibRainDeploySnapshot.CANDIDATE,
+                    spdxLicenseIdentifier,
+                    copyrightText
+                );
+            }
+            LibRainDeploySnapshot.writeReleasedSuitesLib(
+                vm,
+                dir,
+                recordRoot(),
+                generated[i].contractName,
+                spdxLicenseIdentifier,
+                copyrightText,
+                generated[i].candidate.snapshot
+            );
+        }
+        LibRainDeploySnapshot.writeReleasedSuitesAggregate(
+            vm, dir, spdxLicenseIdentifier, copyrightText, releasedContractNames(generated)
+        );
+    }
 
     /// Every rolling snapshot a release freezes into its record: the
     /// `snapshotContractNames()` deploy suites and any other snapshot the repo
