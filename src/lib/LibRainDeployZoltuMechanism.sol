@@ -124,7 +124,10 @@ library LibRainDeployZoltuMechanism {
         checkMechanismData(frozen);
     }
 
-    function checkOnChain(DeploySuite memory suite, string memory, uint256, address) internal pure {
+    function checkOnChain(DeployDeclaration memory, DeploySuite memory suite, string memory, uint256, address)
+        internal
+        pure
+    {
         checkMechanismData(suite);
     }
 

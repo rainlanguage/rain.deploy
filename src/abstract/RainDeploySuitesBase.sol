@@ -298,7 +298,7 @@ struct DeployMechanismHandler {
     function(DeploySuite memory, DeploySuite memory, uint256[] memory) internal view addUnrecordedNetworks;
     function(DeploySuite memory) internal view addRecordedNetworks;
     function(DeploySuite memory, string memory, uint256, address) internal view checkNetworkFrozen;
-    function(DeploySuite memory, string memory, uint256, address) internal view checkOnChain;
+    function(DeployDeclaration memory, DeploySuite memory, string memory, uint256, address) internal view checkOnChain;
     function(Vm, string[] memory, DeploySuite memory, address[] memory) internal logVerification;
     function(Vm, SnapshotFile memory, DeploySuite memory) internal returns (string memory) writeSuiteSnapshot;
     function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData;
@@ -485,7 +485,7 @@ abstract contract RainDeploySuitesBase {
         uint256 chainId,
         address deployed
     ) internal view {
-        mechanismOf(d, suite).checkOnChain(suite, network, chainId, deployed);
+        mechanismOf(d, suite).checkOnChain(d, suite, network, chainId, deployed);
     }
 
     function logVerification(
