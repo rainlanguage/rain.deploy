@@ -19,7 +19,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// Checks every suite against every supported network.
     /// @param suites The suites to check.
     function checkDeployedOnSupportedNetworks(DeploySuite[] memory suites) internal {
-        checkDeployedOnNetworks(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
+        checkDeployedOnNetworks(LibRainDeploy.declaredNetworkConfigs(d.networks), suites);
     }
 
     /// Checks every suite on the given networks against each, forking with `vm`.
@@ -55,9 +55,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         DeploySuite[] memory onNetworks = new DeploySuite[](suites.length);
         for (uint256 j = 0; j < suites.length; j++) {
             frozen[j] = abi.decode(abi.encode(suites[j]), (DeploySuite));
-            addRecordedNetworks(frozen[j]);
+            addRecordedNetworks(d, frozen[j]);
             onNetworks[j] = abi.decode(abi.encode(frozen[j]), (DeploySuite));
-            addCandidateNetworks(onNetworks[j], chainIds);
+            addCandidateNetworks(d, onNetworks[j], chainIds);
         }
         suites = onNetworks;
 
@@ -79,8 +79,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             addresses[i] = new address[](suites.length);
             for (uint256 j = 0; j < suites.length; j++) {
                 if (requiresSuiteOn(suites[j], networks[i].name)) {
-                    addresses[i][j] = deployedAddress(suites[j], networks[i].chainId);
-                    checkNetworkFrozen(frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]);
+                    addresses[i][j] = deployedAddress(d, suites[j], networks[i].chainId);
+                    checkNetworkFrozen(d, frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]);
                 }
             }
         }
@@ -96,7 +96,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
                     continue;
                 }
                 checkSuiteOnNetwork(networks[i].name, suites[j], derived[j], addresses[i][j]);
-                checkOnChain(suites[j], networks[i].name, networks[i].chainId, addresses[i][j]);
+                checkOnChain(d, suites[j], networks[i].name, networks[i].chainId, addresses[i][j]);
             }
         }
     }
@@ -120,7 +120,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// Every RELEASED suite MUST be live, with the code its creation code produces and its declared
     /// dependencies under it, on every network it is required on, with `checkOnChain`'s refusals there.
     function testSuitesLiveOnEverySupportedNetwork() external {
-        checkDeployedOnSupportedNetworks(releasedSuites());
+        checkDeployedOnSupportedNetworks(d.released);
     }
 
     /// Checks every network's declared chain id against the endpoint bound to its `[rpc_endpoints]`
@@ -155,6 +155,6 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// endpoint: this is the contract that already forks every declared
     /// network, and the snapshot half is the one a credential-free job binds.
     function testSupportedNetworkChainIdsAreBound() external {
-        checkNetworkChainIds(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()));
+        checkNetworkChainIds(LibRainDeploy.declaredNetworkConfigs(d.networks));
     }
 }

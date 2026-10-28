@@ -42,7 +42,7 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
     /// network the declaration supports.
     /// @return The network names, as `[rpc_endpoints]` aliases.
     function selectedNetworks() internal view returns (string[] memory) {
-        return vm.envOr(envName("NETWORKS"), ",", supportedNetworks());
+        return vm.envOr(envName("NETWORKS"), ",", d.networks);
     }
 
     /// The target state: `<PREFIX>_APPROVED` if set, otherwise true.
@@ -65,7 +65,7 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
             delegation(),
             forkVm(),
             selectedNetworks(),
-            supportedNetworks(),
+            d.networks,
             msg.sender,
             LibRegistryAuthority.ROOT_AUTHORITY,
             vm.envString(envName("SCOPE")),
@@ -82,7 +82,7 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
             delegation(),
             forkVm(),
             selectedNetworks(),
-            supportedNetworks(),
+            d.networks,
             LibRegistryAuthority.ROOT_AUTHORITY,
             vm.envString(envName("SCOPE")),
             vm.envAddress(envName("ADDRESS")),

@@ -31,7 +31,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     function deriveDeployment(DeploySuite memory suite) internal returns (DerivedDeploy memory) {
         uint256 snapshotId = vm.snapshotState();
 
-        address[] memory deployedAddresses = deployLocally(vm, suite);
+        address[] memory deployedAddresses = deployLocally(d, vm, suite);
         DerivedDeploy memory derived = DerivedDeploy({
             suite: suite.suite, deployedAddresses: deployedAddresses, bytecodeHash: deployedAddresses[0].codehash
         });

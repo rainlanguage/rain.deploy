@@ -77,7 +77,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     function checkInternallyConsistent(DeploySuite memory suite) internal {
         DerivedDeploy memory derived = deriveDeployment(suite);
 
-        address[] memory recorded = recordedAddresses(suite);
+        address[] memory recorded = recordedAddresses(d, suite);
         for (uint256 i = 0; i < recorded.length; i++) {
             if (recorded[i] != derived.deployedAddresses[i]) {
                 revert StoredAddressMismatch(suite.suite, recorded[i], derived.deployedAddresses[i]);
@@ -108,7 +108,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         address[][] memory releasedAddresses = new address[][](released.length);
         for (uint256 j = 0; j < released.length; j++) {
             releasedChainIds[j] = suiteChainIds(released[j]);
-            releasedAddresses[j] = deployedAddresses(released[j]);
+            releasedAddresses[j] = deployedAddresses(d, released[j]);
         }
 
         bytes32[] memory recorded = new bytes32[](paths.length);
@@ -367,7 +367,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
 
     /// Every declared suite MUST be internally consistent.
     function testSnapshotInternallyConsistent() external {
-        DeploySuite[] memory suites = allSuites();
+        DeploySuite[] memory suites = allSuites(d);
         for (uint256 i = 0; i < suites.length; i++) {
             checkInternallyConsistent(suites[i]);
         }
@@ -383,6 +383,6 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// spelling the deploy does not run, which is exactly the state this test
     /// would otherwise be reporting green about.
     function testSnapshotMatchesSource() external view {
-        checkCandidatesAnchoredToSource();
+        checkCandidatesAnchoredToSource(d);
     }
 }

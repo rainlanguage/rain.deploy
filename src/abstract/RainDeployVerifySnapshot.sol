@@ -57,7 +57,7 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
     function testEveryFrozenSnapshotIsReleased() external view {
         (string[] memory deployRecords,) =
             partitionFrozenRecords(LibRainDeploySnapshot.frozenSnapshotPaths(vm), frozenCodeRecordNames());
-        checkFrozenSnapshotsReleased(deployRecords, releasedSuites());
+        checkFrozenSnapshotsReleased(deployRecords, d.released);
     }
 
     /// Every frozen code record MUST be one: a parameterised contract's

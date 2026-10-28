@@ -99,7 +99,7 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// itself.
     function regenerateConfig() internal {
         LibRainDeployConfig.writeStagedConfig(
-            vm, configRoot(), LibRainDeploy.declaredNetworkConfigs(supportedNetworks())
+            vm, configRoot(), LibRainDeploy.declaredNetworkConfigs(d.networks)
         );
     }
 

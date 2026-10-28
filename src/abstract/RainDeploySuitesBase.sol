@@ -300,23 +300,6 @@ abstract contract RainDeploySuitesBase {
     /// Everything this repo declares.
     /// @return The declaration.
     function declaration() internal view virtual returns (DeployDeclaration memory);
-
-    /// @return `declaration().released`.
-    function releasedSuites() internal view returns (DeploySuite[] memory) {
-        return declaration().released;
-    }
-
-    /// @return `declaration().candidates`.
-    function candidateSuites() internal view returns (DeployCandidate[] memory) {
-        return declaration().candidates;
-    }
-
-    /// `deployNetworks` narrowing this is one dispatch's targets, not the repo's set.
-    /// @return `declaration().networks`.
-    function supportedNetworks() internal view returns (string[] memory) {
-        return declaration().networks;
-    }
-
     /// Whether a suite declares a network among its `networks`.
     /// @param suite The suite.
     /// @param network The network, as an `[rpc_endpoints]` alias.
@@ -340,9 +323,9 @@ abstract contract RainDeploySuitesBase {
     /// @param suite The suite key.
     /// @return The snapshot of the candidate whose key is `suite`'s name half, freshly read from the declaration.
     /// @return Whether there is one.
-    function candidateOf(string memory suite) internal view returns (DeploySuite memory, bool) {
+    function candidateOf(DeployDeclaration memory d, string memory suite) internal view returns (DeploySuite memory, bool) {
         bytes32 name = keccak256(bytes(suiteKeyName(suite)));
-        DeployCandidate[] memory candidates = checkedCandidateSuites();
+        DeployCandidate[] memory candidates = checkedCandidateSuites(d);
         for (uint256 i = 0; i < candidates.length; i++) {
             if (keccak256(bytes(candidates[i].snapshot.suite)) == name) {
                 return (candidates[i].snapshot, true);
@@ -356,26 +339,20 @@ abstract contract RainDeploySuitesBase {
     /// when its key names none.
     /// @param suite The suite, mutated.
     /// @param chainIds The chain ids in play.
-    function addCandidateNetworks(DeploySuite memory suite, uint256[] memory chainIds) internal view {
-        (DeploySuite memory candidate, bool found) = candidateOf(suite.suite);
+    function addCandidateNetworks(DeployDeclaration memory d, DeploySuite memory suite, uint256[] memory chainIds) internal view {
+        (DeploySuite memory candidate, bool found) = candidateOf(d, suite.suite);
         if (!found) {
             candidate = abi.decode(abi.encode(suite), (DeploySuite));
         }
-        addUnrecordedNetworks(suite, candidate, chainIds);
+        addUnrecordedNetworks(d, suite, candidate, chainIds);
     }
-
-    /// @return `declaration().mechanisms`.
-    function mechanisms() internal view returns (DeployMechanismHandler[] memory) {
-        return declaration().mechanisms;
-    }
-
     /// The one of `mechanisms()` whose id is `id`, refusing `DuplicateMechanism` for a list repeating an id and
     /// `MechanismUnclaimed` for none.
     /// @param id The mechanism id.
     /// @param subject The suite key or record file `MechanismUnclaimed` names.
     /// @return Its handler.
-    function mechanismById(bytes32 id, string memory subject) internal view returns (DeployMechanismHandler memory) {
-        DeployMechanismHandler[] memory handlers = mechanisms();
+    function mechanismById(DeployDeclaration memory d, bytes32 id, string memory subject) internal view returns (DeployMechanismHandler memory) {
+        DeployMechanismHandler[] memory handlers = d.mechanisms;
         uint256 found = handlers.length;
         for (uint256 i = 0; i < handlers.length; i++) {
             for (uint256 j = 0; j < i; j++) {
@@ -411,70 +388,70 @@ abstract contract RainDeploySuitesBase {
 
     /// @param suite The suite.
     /// @return The handler of the mechanism its data declares.
-    function mechanismOf(DeploySuite memory suite) internal view returns (DeployMechanismHandler memory) {
-        return mechanismById(mechanismIdOf(suite), suite.suite);
+    function mechanismOf(DeployDeclaration memory d, DeploySuite memory suite) internal view returns (DeployMechanismHandler memory) {
+        return mechanismById(d, mechanismIdOf(suite), suite.suite);
     }
 
-    function deployedAddress(DeploySuite memory suite, uint256 chainId) internal view returns (address) {
-        return mechanismOf(suite).deployedAddress(suite, chainId);
+    function deployedAddress(DeployDeclaration memory d, DeploySuite memory suite, uint256 chainId) internal view returns (address) {
+        return mechanismOf(d, suite).deployedAddress(suite, chainId);
     }
 
-    function recordedAddress(DeploySuite memory suite, uint256 chainId) internal view returns (address) {
-        return mechanismOf(suite).recordedAddress(suite, chainId);
+    function recordedAddress(DeployDeclaration memory d, DeploySuite memory suite, uint256 chainId) internal view returns (address) {
+        return mechanismOf(d, suite).recordedAddress(suite, chainId);
     }
 
-    function deployStepData(DeploySuite memory suite, uint256 chainId) internal view returns (bytes memory) {
-        return mechanismOf(suite).deployStepData(suite, chainId);
+    function deployStepData(DeployDeclaration memory d, DeploySuite memory suite, uint256 chainId) internal view returns (bytes memory) {
+        return mechanismOf(d, suite).deployStepData(suite, chainId);
     }
 
-    function deployStep(DeploySuite memory suite)
+    function deployStep(DeployDeclaration memory d, DeploySuite memory suite)
         internal
         view
         returns (function(Vm, string memory, address, bytes memory) internal returns (address))
     {
-        return mechanismOf(suite).deployStep(suite);
+        return mechanismOf(d, suite).deployStep(suite);
     }
 
-    function deployLocally(Vm vm, DeploySuite memory suite) internal returns (address[] memory) {
-        return mechanismOf(suite).deployLocally(vm, suite);
+    function deployLocally(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal returns (address[] memory) {
+        return mechanismOf(d, suite).deployLocally(vm, suite);
     }
 
-    function deployLocallyOnChain(Vm vm, DeploySuite memory suite) internal {
-        mechanismOf(suite).deployLocallyOnChain(vm, suite);
+    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
+        mechanismOf(d, suite).deployLocallyOnChain(vm, suite);
     }
 
-    function addUnrecordedNetworks(DeploySuite memory suite, DeploySuite memory candidate, uint256[] memory chainIds)
+    function addUnrecordedNetworks(DeployDeclaration memory d, DeploySuite memory suite, DeploySuite memory candidate, uint256[] memory chainIds)
         internal
         view
     {
-        mechanismOf(suite).addUnrecordedNetworks(suite, candidate, chainIds);
+        mechanismOf(d, suite).addUnrecordedNetworks(suite, candidate, chainIds);
     }
 
-    function addRecordedNetworks(DeploySuite memory suite) internal view {
-        mechanismOf(suite).addRecordedNetworks(suite);
+    function addRecordedNetworks(DeployDeclaration memory d, DeploySuite memory suite) internal view {
+        mechanismOf(d, suite).addRecordedNetworks(suite);
     }
 
-    function checkNetworkFrozen(DeploySuite memory frozen, string memory network, uint256 chainId, address where)
+    function checkNetworkFrozen(DeployDeclaration memory d, DeploySuite memory frozen, string memory network, uint256 chainId, address where)
         internal
         view
     {
-        mechanismOf(frozen).checkNetworkFrozen(frozen, network, chainId, where);
+        mechanismOf(d, frozen).checkNetworkFrozen(frozen, network, chainId, where);
     }
 
-    function checkOnChain(DeploySuite memory suite, string memory network, uint256 chainId, address deployed)
+    function checkOnChain(DeployDeclaration memory d, DeploySuite memory suite, string memory network, uint256 chainId, address deployed)
         internal
         view
     {
-        mechanismOf(suite).checkOnChain(suite, network, chainId, deployed);
+        mechanismOf(d, suite).checkOnChain(suite, network, chainId, deployed);
     }
 
-    function logVerification(Vm vm, string[] memory networks, DeploySuite memory suite, address[] memory deployed)
+    function logVerification(DeployDeclaration memory d, Vm vm, string[] memory networks, DeploySuite memory suite, address[] memory deployed)
         internal
     {
-        mechanismOf(suite).logVerification(vm, networks, suite, deployed);
+        mechanismOf(d, suite).logVerification(vm, networks, suite, deployed);
     }
 
-    function writeSuiteSnapshot(
+    function writeSuiteSnapshot(DeployDeclaration memory d, 
         Vm vm,
         string memory root,
         string memory dir,
@@ -483,7 +460,7 @@ abstract contract RainDeploySuitesBase {
         string memory copyrightText,
         DeploySuite memory suite
     ) internal returns (string memory) {
-        return mechanismOf(suite)
+        return mechanismOf(d, suite)
             .writeSuiteSnapshot(vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite);
     }
 
@@ -493,33 +470,33 @@ abstract contract RainDeploySuitesBase {
     /// @param path The release's record file.
     /// @param prefix The prefix the record's constants are aliased under.
     /// @return The expression.
-    function releasedMechanismData(Vm vm, string memory path, string memory prefix)
+    function releasedMechanismData(DeployDeclaration memory d, Vm vm, string memory path, string memory prefix)
         internal
         view
         returns (string memory)
     {
-        return mechanismById(LibRainDeploySnapshot.recordedMechanismId(vm, path), path)
+        return mechanismById(d, LibRainDeploySnapshot.recordedMechanismId(vm, path), path)
             .releasedMechanismData(vm, path, prefix);
     }
 
     /// @param suite The suite.
     /// @return The address its mechanism derives for it on each of its `networks`, in order.
-    function deployedAddresses(DeploySuite memory suite) internal view returns (address[] memory) {
+    function deployedAddresses(DeployDeclaration memory d, DeploySuite memory suite) internal view returns (address[] memory) {
         uint256[] memory chainIds = suiteChainIds(suite);
         address[] memory addresses = new address[](chainIds.length);
         for (uint256 i = 0; i < chainIds.length; i++) {
-            addresses[i] = deployedAddress(suite, chainIds[i]);
+            addresses[i] = deployedAddress(d, suite, chainIds[i]);
         }
         return addresses;
     }
 
     /// @param suite The suite.
     /// @return The address it records for itself on each of its `networks`, in order.
-    function recordedAddresses(DeploySuite memory suite) internal view returns (address[] memory) {
+    function recordedAddresses(DeployDeclaration memory d, DeploySuite memory suite) internal view returns (address[] memory) {
         uint256[] memory chainIds = suiteChainIds(suite);
         address[] memory addresses = new address[](chainIds.length);
         for (uint256 i = 0; i < chainIds.length; i++) {
-            addresses[i] = recordedAddress(suite, chainIds[i]);
+            addresses[i] = recordedAddress(d, suite, chainIds[i]);
         }
         return addresses;
     }
@@ -528,15 +505,15 @@ abstract contract RainDeploySuitesBase {
     /// @param frozen The release with its recorded networks.
     /// @param onNetworks The release as it would be broadcast, with its candidate's unrecorded networks.
     /// @param networks The networks to broadcast to.
-    function checkNetworksFrozen(DeploySuite memory frozen, DeploySuite memory onNetworks, string[] memory networks)
+    function checkNetworksFrozen(DeployDeclaration memory d, DeploySuite memory frozen, DeploySuite memory onNetworks, string[] memory networks)
         internal
         view
     {
         SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
         for (uint256 i = 0; i < configs.length; i++) {
             if (requiresSuiteOn(onNetworks, networks[i])) {
-                checkNetworkFrozen(
-                    frozen, networks[i], configs[i].chainId, recordedAddress(onNetworks, configs[i].chainId)
+                checkNetworkFrozen(d, 
+                    frozen, networks[i], configs[i].chainId, recordedAddress(d, onNetworks, configs[i].chainId)
                 );
             }
         }
@@ -573,8 +550,8 @@ abstract contract RainDeploySuitesBase {
     /// the reader that got the second spelling wrong is the one that silently
     /// stops asserting.
     /// @return The candidates.
-    function checkedCandidateSuites() internal view returns (DeployCandidate[] memory) {
-        DeployCandidate[] memory candidates = candidateSuites();
+    function checkedCandidateSuites(DeployDeclaration memory d) internal view returns (DeployCandidate[] memory) {
+        DeployCandidate[] memory candidates = d.candidates;
         if (candidates.length == 0) {
             revert NoDeployCandidates();
         }
@@ -641,8 +618,8 @@ abstract contract RainDeploySuitesBase {
     /// `unanchorableReason` is not an exemption from the comparison but a
     /// declaration that there is no second operand to make one with, refused
     /// wherever `vm.getCode` can make one.
-    function checkCandidatesAnchoredToSource() internal view {
-        DeployCandidate[] memory candidates = checkedCandidateSuites();
+    function checkCandidatesAnchoredToSource(DeployDeclaration memory d) internal view {
+        DeployCandidate[] memory candidates = checkedCandidateSuites(d);
         for (uint256 i = 0; i < candidates.length; i++) {
             if (bytes(candidates[i].unanchorableReason).length != 0) {
                 // `vm.getCode` reverts rather than answering, so reading the
@@ -723,9 +700,9 @@ abstract contract RainDeploySuitesBase {
     /// unreadable key collides with nothing, and two keys can be spelled
     /// perfectly and still be the same key.
     /// @return Every declared suite.
-    function allSuites() internal view returns (DeploySuite[] memory) {
-        DeploySuite[] memory released = releasedSuites();
-        DeployCandidate[] memory candidates = checkedCandidateSuites();
+    function allSuites(DeployDeclaration memory d) internal view returns (DeploySuite[] memory) {
+        DeploySuite[] memory released = d.released;
+        DeployCandidate[] memory candidates = checkedCandidateSuites(d);
 
         DeploySuite[] memory suites = new DeploySuite[](released.length + candidates.length);
         for (uint256 i = 0; i < released.length; i++) {
@@ -753,8 +730,8 @@ abstract contract RainDeploySuitesBase {
     /// because the alphabet `allSuites` holds them to carries neither of those
     /// two characters anywhere but between two keys.
     /// @return The declared keys.
-    function suiteNames() internal view returns (string memory) {
-        DeploySuite[] memory suites = allSuites();
+    function suiteNames(DeployDeclaration memory d) internal view returns (string memory) {
+        DeploySuite[] memory suites = allSuites(d);
         string memory names;
         for (uint256 i = 0; i < suites.length; i++) {
             names = i == 0 ? suites[i].suite : string.concat(names, ", ", suites[i].suite);
@@ -770,11 +747,11 @@ abstract contract RainDeploySuitesBase {
     /// remembered to update.
     /// @param requested The key to select, from `DEPLOYMENT_SUITE`.
     /// @return The selected suite.
-    function suiteByName(string memory requested) internal view returns (DeploySuite memory) {
-        DeploySuite[] memory suites = allSuites();
+    function suiteByName(DeployDeclaration memory d, string memory requested) internal view returns (DeploySuite memory) {
+        DeploySuite[] memory suites = allSuites(d);
         uint256 index = suiteIndex(suites, requested);
         if (index == suites.length) {
-            revert UnknownDeploymentSuite(requested, suiteNames());
+            revert UnknownDeploymentSuite(requested, suiteNames(d));
         }
         return suites[index];
     }

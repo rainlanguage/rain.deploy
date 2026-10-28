@@ -36,7 +36,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// defaults to.
     /// @return The network names to deploy to, as `[rpc_endpoints]` aliases.
     function deployNetworks() internal view virtual returns (string[] memory) {
-        return supportedNetworks();
+        return d.networks;
     }
 
     /// Broadcasts the suite `DEPLOYMENT_SUITE` names.
@@ -64,9 +64,9 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// `dependencies` enforces per network, and which a caller satisfies by
     /// dispatching in order.
     function run() external {
-        checkCandidatesAnchoredToSource();
+        checkCandidatesAnchoredToSource(d);
 
-        DeploySuite memory suite = suiteByName(vm.envOr("DEPLOYMENT_SUITE", string("")));
+        DeploySuite memory suite = suiteByName(d, vm.envOr("DEPLOYMENT_SUITE", string("")));
 
         uint256 deployerPrivateKey = vm.envUint("DEPLOYMENT_KEY");
 
@@ -88,13 +88,13 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     {
         address deployer = vm.addr(deployerPrivateKey);
         DeploySuite memory frozen = abi.decode(abi.encode(suite), (DeploySuite));
-        addRecordedNetworks(frozen);
-        (DeploySuite memory candidate, bool found) = candidateOf(frozen.suite);
+        addRecordedNetworks(d, frozen);
+        (DeploySuite memory candidate, bool found) = candidateOf(d, frozen.suite);
         if (!found) {
             candidate = abi.decode(abi.encode(frozen), (DeploySuite));
         }
         DeploySuite memory seated = abi.decode(abi.encode(frozen), (DeploySuite));
-        addUnrecordedNetworks(seated, candidate, suiteChainIds(candidate));
+        addUnrecordedNetworks(d, seated, candidate, suiteChainIds(candidate));
         checkSeatsNoDeployKey(seated, seatTargets(seated, candidate, networks), deployer);
         return deployAndBroadcast(vm, networks, deployerPrivateKey, frozen, candidate);
     }
@@ -120,28 +120,28 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         }
         SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
         DeploySuite memory suite = abi.decode(abi.encode(frozen), (DeploySuite));
-        addUnrecordedNetworks(suite, candidate, LibRainDeploy.networkChainIds(configs));
-        checkNetworksFrozen(frozen, suite, networks);
+        addUnrecordedNetworks(d, suite, candidate, LibRainDeploy.networkChainIds(configs));
+        checkNetworksFrozen(d, frozen, suite, networks);
         NetworkDeploys memory deploys = NetworkDeploys({
             deployStepData: new bytes[](configs.length),
             expectedAddresses: new address[](configs.length),
             derivedAddresses: new address[](configs.length)
         });
         for (uint256 i = 0; i < configs.length; i++) {
-            deploys.deployStepData[i] = deployStepData(suite, configs[i].chainId);
-            deploys.expectedAddresses[i] = recordedAddress(suite, configs[i].chainId);
-            deploys.derivedAddresses[i] = deployedAddress(suite, configs[i].chainId);
+            deploys.deployStepData[i] = deployStepData(d, suite, configs[i].chainId);
+            deploys.expectedAddresses[i] = recordedAddress(d, suite, configs[i].chainId);
+            deploys.derivedAddresses[i] = deployedAddress(d, suite, configs[i].chainId);
         }
         uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
             vm,
             configs,
             LibRainDeploy.rememberDeployer(vm, deployerPrivateKey),
-            deployStep(suite),
+            deployStep(d, suite),
             deploys,
             suite.storedBytecodeHash,
             suite.dependencies
         );
-        logVerification(vm, networks, suite, deploys.expectedAddresses);
+        logVerification(d, vm, networks, suite, deploys.expectedAddresses);
         return (deploys.expectedAddresses, forkIds);
     }
 
@@ -198,9 +198,9 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             uint256 snapshotId = vm.snapshotState();
             vm.chainId(chainIds[i]);
             vm.startPrank(deployer, deployer);
-            deployLocallyOnChain(vm, suite);
+            deployLocallyOnChain(d, vm, suite);
             vm.stopPrank();
-            address deployed = deployedAddress(suite, chainIds[i]);
+            address deployed = deployedAddress(d, suite, chainIds[i]);
             // slither-disable-next-line low-level-calls
             (bool answered, bytes memory owner) = deployed.staticcall(abi.encodeCall(IERC5313.owner, ()));
             // Restores the chain id with the state.

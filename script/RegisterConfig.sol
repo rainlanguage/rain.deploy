@@ -61,7 +61,7 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     /// `CONFIG_REGISTRY_NETWORKS` to the networks it is deployed on.
     /// @return The network names, as `[rpc_endpoints]` aliases.
     function selectedNetworks() internal view returns (string[] memory) {
-        return vm.envOr(NETWORKS_VAR, ",", supportedNetworks());
+        return vm.envOr(NETWORKS_VAR, ",", d.networks);
     }
 
     /// The Vm `run()` and `verify()` fork, select and broadcast with.
@@ -88,7 +88,7 @@ contract RegisterConfig is RegistryDeploySuites, Script {
         (uint256[] memory forkIds,) = LibConfigRegistryRegister.registerOnNetworks(
             forkVm(),
             selectedNetworks(),
-            supportedNetworks(),
+            d.networks,
             msg.sender,
             LibRegistryAuthority.ROOT_AUTHORITY,
             binding()
@@ -100,7 +100,7 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     /// to the value as its type under the authority on each.
     function verify() external {
         LibConfigRegistryRegister.checkRegisteredOnNetworks(
-            forkVm(), selectedNetworks(), supportedNetworks(), LibRegistryAuthority.ROOT_AUTHORITY, binding()
+            forkVm(), selectedNetworks(), d.networks, LibRegistryAuthority.ROOT_AUTHORITY, binding()
         );
     }
 }
