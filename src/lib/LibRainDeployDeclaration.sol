@@ -18,21 +18,32 @@ library LibRainDeployDeclaration {
     /// The workflow `extend` declares the dispatch choices in.
     string constant DISPATCH_WORKFLOW = ".github/workflows/manual-sol-artifacts.yaml";
 
-    /// Sets `d.networks` to every one of Rain's networks, `d.dispatchWorkflow` to `DISPATCH_WORKFLOW` and
-    /// `d.deployNetworks` to a copy of `d.networks`.
+    /// Sets `d.networks` and `d.deployNetworks` to every one of Rain's networks and `d.dispatchWorkflow` to
+    /// `DISPATCH_WORKFLOW`.
     /// @param d The declaration, mutated.
     function extend(DeployDeclaration memory d) internal pure {
-        d.networks = LibRainDeploy.supportedNetworks();
+        setNetworks(d, LibRainDeploy.supportedNetworks());
         d.dispatchWorkflow = DISPATCH_WORKFLOW;
-        d.deployNetworks = everyNetwork(d);
+    }
+
+    /// Sets `d.networks` and `d.deployNetworks` each to its own copy of `networks`.
+    /// @param d The declaration, mutated.
+    /// @param networks The networks.
+    function setNetworks(DeployDeclaration memory d, string[] memory networks) internal pure {
+        d.networks = copy(networks);
+        d.deployNetworks = copy(networks);
     }
 
     /// @param d The declaration.
     /// @return A copy of `d.networks`.
     function everyNetwork(DeployDeclaration memory d) internal pure returns (string[] memory) {
-        string[] memory copied = new string[](d.networks.length);
+        return copy(d.networks);
+    }
+
+    function copy(string[] memory networks) private pure returns (string[] memory) {
+        string[] memory copied = new string[](networks.length);
         for (uint256 i = 0; i < copied.length; i++) {
-            copied[i] = d.networks[i];
+            copied[i] = networks[i];
         }
         return copied;
     }
