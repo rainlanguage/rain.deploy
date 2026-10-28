@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {BuildScript} from "../../src/abstract/BuildScript.sol";
+import {DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {BuildHarness} from "./BuildHarness.sol";
 
@@ -34,6 +35,9 @@ contract BuildRecordRootHarness is BuildHarness {
     /// The freeze `cutRelease()` runs, without the lib regeneration that would
     /// write into `LIB_DIR`.
     function externalFreeze() external {
-        LibRainDeploySnapshot.freeze(vm, recordRoot(), regenerateSnapshots, releaseRecordNames());
+        DeployDeclaration memory d = declaration();
+        LibRainDeploySnapshot.freeze(
+            vm, recordRoot(), regenerateSnapshots, releaseRecordNames(d, checkedGeneratedContracts(d))
+        );
     }
 }
