@@ -10,10 +10,8 @@ import {
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
-import {DeployMechanism, DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
+import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
-import {CloneNetworks} from "./LibRainDeployClone.sol";
-import {LibRainDeployMechanism, UnknownDeployMechanism} from "./LibRainDeployMechanism.sol";
 
 /// Thrown when `[external.package].version` is not strict `X.Y.Z`. A version
 /// like `0.1.7-rc1` maps to the directory `0_1_7-rc1`, which the append-only
@@ -61,12 +59,6 @@ error NonMonotonicRelease(string tag, string newestFrozenTag);
 /// @param root The rejected root.
 error InvalidRecordRoot(string root);
 
-/// Thrown when the state snapshot taken around a clone snapshot's local deploy could not be
-/// reverted.
-/// @param suite The suite whose snapshot was being written.
-/// @param snapshotId The state snapshot that could not be reverted.
-error SnapshotStateRevertFailed(string suite, uint256 snapshotId);
-
 /// Thrown when a file in the frozen record declares no deployed address, declares one as
 /// `DEPLOYED_ADDRESS_<x>` where `<x>` is not a chain id in decimal digits without a leading zero, names
 /// `DEPLOYED_ADDRESS` or `MECHANISM_DATA` outside a block comment on a line not starting with the writer's
@@ -90,14 +82,6 @@ error FrozenSnapshotMechanismDataAmbiguous(string path);
 /// `DEPLOYED_ADDRESS_<chainId>`, and declares no `MECHANISM_DATA`.
 /// @param path The record file.
 error FrozenSnapshotMechanismDataMissing(string path);
-
-/// Thrown when a file in the frozen record carries the `BEACON_PROXY` marker more than once.
-/// @param path The record file.
-error FrozenSnapshotBeaconProxyMarkerAmbiguous(string path);
-
-/// Thrown when a file in the frozen record carries the `BEACON_PROXY` marker and declares no `MECHANISM_DATA`.
-/// @param path The record file.
-error FrozenSnapshotBeaconProxyMechanismDataMissing(string path);
 
 /// @title LibRainDeploySnapshot
 /// @notice Which release is being built, where its record lives, and how it is
@@ -840,189 +824,6 @@ library LibRainDeploySnapshot {
         );
     }
 
-    /// The constants a CLONE or BEACON_PROXY snapshot declares below `BYTECODE_HASH`. A beacon proxy's
-    /// record also carries the `BEACON_PROXY` marker, which is how `recordedMechanism` reads it back.
-    /// @param vm The Vm instance for string operations.
-    /// @param deployed Where the local deploy put the suite, in the suite's address order.
-    /// @param suite The clone or beacon proxy suite.
-    /// @return The constants, as Solidity source.
-    function cloneSnapshotConstants(Vm vm, address[] memory deployed, DeploySuite memory suite)
-        internal
-        view
-        returns (string memory)
-    {
-        bool beaconProxy = LibRainDeployMechanism.isBeaconProxy(suite);
-        string memory addressConstants;
-        string memory mechanismDataComment;
-        bytes memory mechanismData;
-        if (LibRainDeployMechanism.isPerNetwork(suite)) {
-            (addressConstants, mechanismData) = perNetworkAddressConstants(vm, deployed, suite);
-            mechanismDataComment = beaconProxy
-                ? "/// @dev The beacon proxy factory call this release was cut with: the\n"
-                "/// `abi.encode`d `CloneNetworks` a released suite carries as its\n" "/// `mechanismData`."
-                : "/// @dev The clone factory call this release was cut with: the\n"
-                "/// `abi.encode`d `CloneNetworks` a released suite carries as its\n" "/// `mechanismData`.";
-        } else {
-            addressConstants = LibCodeGen.addressConstantString(
-                vm,
-                beaconProxy
-                    ? "/// @dev The deterministic deploy address of the beacon proxy, through its\n"
-                    "/// factory's beacon-proxy open salt."
-                    : "/// @dev The deterministic deploy address of the EIP-1167 clone, through its\n"
-                    "/// factory's open salt.",
-                "DEPLOYED_ADDRESS",
-                deployed[0]
-            );
-            mechanismData = suite.mechanismData;
-            mechanismDataComment = beaconProxy
-                ? "/// @dev The beacon proxy factory call this release was cut with: the\n"
-                "/// `abi.encode`d `CloneTarget` a released suite carries as its\n" "/// `mechanismData`."
-                : "/// @dev The clone factory call this release was cut with: the\n"
-                "/// `abi.encode`d `CloneTarget` a released suite carries as its\n" "/// `mechanismData`.";
-        }
-        return string.concat(
-            beaconProxy ? BEACON_PROXY_MARKER : "",
-            addressConstants,
-            LibCodeGen.bytesConstantString(
-                vm, "/// @dev The creation bytecode of the contract.", "CREATION_CODE", suite.creationCode
-            ),
-            LibCodeGen.bytesConstantString(
-                vm, "/// @dev The runtime bytecode of the contract.", "RUNTIME_CODE", deployed[0].code
-            ),
-            LibCodeGen.bytesConstantString(
-                vm,
-                "/// @dev What MUST already be on a network before this release can be\n"
-                "/// broadcast there: an address, and the runtime code that belongs at it.\n"
-                "/// `abi.encode`d as a `DeployDependency[]` because Solidity has no\n"
-                "/// file-scope constant of dynamic array type.",
-                "DEPENDENCIES",
-                abi.encode(suite.dependencies)
-            ),
-            LibCodeGen.bytesConstantString(vm, mechanismDataComment, "MECHANISM_DATA", mechanismData)
-        );
-    }
-
-    /// A per-network clone's `DEPLOYED_ADDRESS_<chainId>` constants, one per network in its address
-    /// order, and the `CloneNetworks` its record carries as `MECHANISM_DATA`.
-    /// @param vm The Vm instance for string operations.
-    /// @param deployed Where the local deploy put the clone on each network, in the suite's address
-    /// order.
-    /// @param suite The per-network clone suite.
-    /// @return The constants, as Solidity source.
-    /// @return The `abi.encode`d `CloneNetworks`, carrying the local deploy's addresses.
-    function perNetworkAddressConstants(Vm vm, address[] memory deployed, DeploySuite memory suite)
-        internal
-        pure
-        returns (string memory, bytes memory)
-    {
-        CloneNetworks memory clones = LibRainDeployMechanism.cloneNetworks(suite);
-        string memory addressConstants = "";
-        bool beaconProxy = LibRainDeployMechanism.isBeaconProxy(suite);
-        for (uint256 i = 0; i < clones.networks.length; i++) {
-            clones.networks[i].deployedAddress = deployed[i];
-            string memory chainId = vm.toString(clones.networks[i].chainId);
-            addressConstants = string.concat(
-                addressConstants,
-                LibCodeGen.addressConstantString(
-                    vm,
-                    string.concat(
-                        beaconProxy
-                            ? "/// @dev The deterministic deploy address of the beacon proxy on chain id\n/// "
-                            : "/// @dev The deterministic deploy address of the EIP-1167 clone on chain id\n/// ",
-                        chainId,
-                        beaconProxy
-                            ? ", through its factory's beacon-proxy open salt with that network's init data."
-                            : ", through its factory's open salt with that network's init data."
-                    ),
-                    string.concat("DEPLOYED_ADDRESS_", chainId),
-                    deployed[i]
-                )
-            );
-        }
-        return (addressConstants, abi.encode(clones));
-    }
-
-    /// Generate one snapshot for one SUITE, by the mechanism it declares.
-    /// @param vm The Vm instance for file operations.
-    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
-    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
-    /// @param contractName The contract the snapshot describes.
-    /// @param spdxLicenseIdentifier The SPDX licence identifier the written snapshot declares.
-    /// @param copyrightText The copyright text the written snapshot declares.
-    /// @param suite The suite to snapshot.
-    /// @return The path written.
-    function writeSnapshot(
-        Vm vm,
-        string memory root,
-        string memory dir,
-        string memory contractName,
-        string memory spdxLicenseIdentifier,
-        string memory copyrightText,
-        DeploySuite memory suite
-    ) internal returns (string memory) {
-        if (suite.mechanism == DeployMechanism.Zoltu) {
-            LibRainDeployMechanism.checkZoltuMechanismData(suite);
-            return writeSnapshot(
-                vm,
-                root,
-                dir,
-                contractName,
-                spdxLicenseIdentifier,
-                copyrightText,
-                suite.creationCode,
-                suite.dependencies
-            );
-        }
-
-        uint256 snapshotId = vm.snapshotState();
-        writeCloneSnapshotFile(vm, dirForSnapshot(root, dir), contractName, spdxLicenseIdentifier, copyrightText, suite);
-        if (!vm.revertToState(snapshotId)) {
-            revert SnapshotStateRevertFailed(suite.suite, snapshotId);
-        }
-
-        return pathForSnapshot(root, dir, contractName);
-    }
-
-    /// Deploy a clone suite locally and write its record into `snapshotDir`.
-    /// @param vm The Vm instance for file operations.
-    /// @param snapshotDir The checked directory to write into.
-    /// @param contractName The contract the snapshot describes.
-    /// @param spdxLicenseIdentifier The SPDX licence identifier the written snapshot declares.
-    /// @param copyrightText The copyright text the written snapshot declares.
-    /// @param suite The clone suite to snapshot.
-    function writeCloneSnapshotFile(
-        Vm vm,
-        string memory snapshotDir,
-        string memory contractName,
-        string memory spdxLicenseIdentifier,
-        string memory copyrightText,
-        DeploySuite memory suite
-    ) internal {
-        address[] memory deployed = LibRainDeployMechanism.deployLocally(vm, suite);
-        string memory constants = cloneSnapshotConstants(vm, deployed, suite);
-        LibFs.buildFileForContract(
-            vm, deployed[0], snapshotDir, contractName, spdxLicenseIdentifier, copyrightText, constants
-        );
-    }
-
-    /// `writeSnapshot` for a suite, applied to `RAIN_SPDX_LICENSE_IDENTIFIER` and
-    /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
-    /// @param vm The Vm instance for file operations.
-    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
-    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
-    /// @param contractName The contract the snapshot describes.
-    /// @param suite The suite to snapshot.
-    /// @return The path written.
-    function writeSnapshot(
-        Vm vm,
-        string memory root,
-        string memory dir,
-        string memory contractName,
-        DeploySuite memory suite
-    ) internal returns (string memory) {
-        return writeSnapshot(vm, root, dir, contractName, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, suite);
-    }
-
     /// The constants a parameterised snapshot declares below the
     /// `BYTECODE_HASH` that `LibFs` writes itself: the creation code without
     /// constructor arguments, then the runtime code, in that order.
@@ -1466,16 +1267,6 @@ library LibRainDeploySnapshot {
 
     string constant MECHANISM_DATA_DECLARATION = "bytes constant MECHANISM_DATA =";
 
-    /// The name of the beacon proxy marker. A line holding it anywhere but as the writer's declaration of it is not
-    /// the writer's.
-    string constant BEACON_PROXY_NAME = "BEACON_PROXY";
-
-    string constant BEACON_PROXY_DECLARATION = "bool constant BEACON_PROXY = true;";
-
-    /// The marker a beacon proxy record carries, as the writer emits it.
-    string constant BEACON_PROXY_MARKER = "\n/// @dev Marks a beacon proxy record: its factory call's `implementation` is the\n"
-        "/// beacon.\nbool constant BEACON_PROXY = true;\n";
-
     /// The addresses a frozen record declares as its deploy addresses, and the chain id each is
     /// for.
     /// @param vm The Vm instance for string operations.
@@ -1729,24 +1520,19 @@ library LibRainDeploySnapshot {
         return string(stripped);
     }
 
-    /// The mechanism a frozen record was cut with, read from the declarations the record carries: `MECHANISM_DATA`
-    /// for a clone or beacon proxy, `DEPLOYED_ADDRESS_<chainId>` for one per network, and the `BEACON_PROXY` marker for
-    /// a beacon proxy.
+    /// Whether a frozen record declares `MECHANISM_DATA`, and whether it declares its addresses per network as
+    /// `DEPLOYED_ADDRESS_<chainId>`. Refuses `FrozenSnapshotMechanismDataAmbiguous` for more than one declaration and
+    /// `FrozenSnapshotMechanismDataMissing` for a per-network record with none.
     /// @param vm The Vm instance for file and string operations.
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
-    /// @return The mechanism the record was cut with.
-    function recordedMechanism(Vm vm, string memory path) internal view returns (DeployMechanism) {
+    /// @return Whether it declares `MECHANISM_DATA`.
+    /// @return Whether it declares its addresses per network.
+    function recordedMechanismShape(Vm vm, string memory path) internal view returns (bool, bool) {
         string[] memory lines = recordLines(vm, path, vm.readFile(path));
         (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, lines);
         uint256 mechanismData = 0;
-        uint256 markers = 0;
-        bytes32 markerHash = keccak256(bytes(BEACON_PROXY_DECLARATION));
         for (uint256 i = 0; i < lines.length; i++) {
-            if (keccak256(bytes(lines[i])) == markerHash) {
-                markers++;
-            } else if (vm.contains(lines[i], BEACON_PROXY_NAME)) {
-                revert FrozenSnapshotUnreadable(path);
-            } else if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {
+            if (vm.indexOf(lines[i], MECHANISM_DATA_DECLARATION) == 0) {
                 mechanismData++;
             } else if (vm.contains(lines[i], MECHANISM_DATA_NAME)) {
                 revert FrozenSnapshotUnreadable(path);
@@ -1755,43 +1541,18 @@ library LibRainDeploySnapshot {
         if (mechanismData > 1) {
             revert FrozenSnapshotMechanismDataAmbiguous(path);
         }
-        if (markers > 1) {
-            revert FrozenSnapshotBeaconProxyMarkerAmbiguous(path);
+        if (mechanismData == 0 && chainIds.length != 0) {
+            revert FrozenSnapshotMechanismDataMissing(path);
         }
-        if (mechanismData == 0) {
-            if (markers != 0) {
-                revert FrozenSnapshotBeaconProxyMechanismDataMissing(path);
-            }
-            if (chainIds.length != 0) {
-                revert FrozenSnapshotMechanismDataMissing(path);
-            }
-            return DeployMechanism.Zoltu;
-        }
-        if (markers != 0) {
-            return chainIds.length == 0 ? DeployMechanism.BeaconProxy : DeployMechanism.BeaconProxyPerNetwork;
-        }
-        return chainIds.length == 0 ? DeployMechanism.Clone : DeployMechanism.ClonePerNetwork;
+        return (mechanismData != 0, chainIds.length != 0);
     }
 
-    /// @param kind A mechanism.
-    /// @return Its name as a generated released-suites lib spells it.
-    function mechanismName(DeployMechanism kind) internal pure returns (string memory) {
-        if (kind == DeployMechanism.Zoltu) {
-            return "DeployMechanism.Zoltu";
-        }
-        if (kind == DeployMechanism.Clone) {
-            return "DeployMechanism.Clone";
-        }
-        if (kind == DeployMechanism.ClonePerNetwork) {
-            return "DeployMechanism.ClonePerNetwork";
-        }
-        if (kind == DeployMechanism.BeaconProxy) {
-            return "DeployMechanism.BeaconProxy";
-        }
-        if (kind == DeployMechanism.BeaconProxyPerNetwork) {
-            return "DeployMechanism.BeaconProxyPerNetwork";
-        }
-        revert UnknownDeployMechanism(uint8(kind));
+    /// @param vm The Vm instance for file and string operations.
+    /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @return Whether it declares `MECHANISM_DATA`, with `recordedMechanismShape`'s refusals.
+    function recordDeclaresMechanismData(Vm vm, string memory path) internal view returns (bool) {
+        (bool mechanismData,) = recordedMechanismShape(vm, path);
+        return mechanismData;
     }
 
     /// The aliased import one record file contributes.
@@ -1800,9 +1561,9 @@ library LibRainDeploySnapshot {
     /// @return The import statement, and the blank line after it.
     function releasedImport(Vm vm, string memory path) internal view returns (string memory) {
         string memory prefix = releasedConstantPrefix(vm, path);
-        DeployMechanism mechanism = recordedMechanism(vm, path);
+        (bool mechanismData, bool perNetwork) = recordedMechanismShape(vm, path);
         return string.concat(
-            LibRainDeployMechanism.isPerNetworkMechanism(mechanism)
+            perNetwork
                 ? string("import {\n    ")
                 : string.concat("import {\n    DEPLOYED_ADDRESS as ", prefix, "_DEPLOYED_ADDRESS,\n    "),
             "BYTECODE_HASH as ",
@@ -1814,7 +1575,7 @@ library LibRainDeploySnapshot {
             "_RUNTIME_CODE,\n    DEPENDENCIES as ",
             prefix,
             "_DEPENDENCIES",
-            mechanism == DeployMechanism.Zoltu
+            !mechanismData
                 ? string("")
                 : string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA"),
             "\n} from \"../generated/",
@@ -1838,8 +1599,7 @@ library LibRainDeploySnapshot {
         returns (string memory)
     {
         string memory imports = string.concat(
-            "import {DeployDependency, DeployMechanism, DeploySuite} from \"", suitesImportPath, "\";\n\n"
-        );
+            "import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n\n");
         for (uint256 i = 0; i < paths.length; i++) {
             imports = string.concat(imports, releasedImport(vm, paths[i]));
         }
@@ -1859,23 +1619,22 @@ library LibRainDeploySnapshot {
     /// @param i The entry's index.
     /// @param path The record file the entry aliases.
     /// @param template The candidate declaration the key and the artifact path come from.
+    /// @param releasedMechanismData The expression the entry gives `mechanismData`, from the record and the prefix.
     /// @return The entry.
-    function releasedSuiteEntry(Vm vm, uint256 i, string memory path, DeploySuite memory template)
-        internal
-        view
-        returns (string memory)
-    {
+    function releasedSuiteEntry(
+        Vm vm,
+        uint256 i,
+        string memory path,
+        DeploySuite memory template,
+        function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData
+    ) internal view returns (string memory) {
         string memory prefix = releasedConstantPrefix(vm, path);
         string memory storedDeployedAddress;
-        string memory mechanism;
+        string memory mechanismData = releasedMechanismData(vm, path, prefix);
         {
-            DeployMechanism kind = recordedMechanism(vm, path);
-            storedDeployedAddress = LibRainDeployMechanism.isPerNetworkMechanism(kind)
-                ? string("address(0)")
-                : string.concat(prefix, "_DEPLOYED_ADDRESS");
-            mechanism = kind == DeployMechanism.Zoltu
-                ? string("DeployMechanism.Zoltu,\n            mechanismData: \"\"")
-                : string.concat(mechanismName(kind), ",\n            mechanismData: ", prefix, "_MECHANISM_DATA");
+            (, bool perNetwork) = recordedMechanismShape(vm, path);
+            storedDeployedAddress =
+                perNetwork ? string("address(0)") : string.concat(prefix, "_DEPLOYED_ADDRESS");
         }
         string memory head = string.concat(
             "        suites[",
@@ -1899,8 +1658,8 @@ library LibRainDeploySnapshot {
             template.artifactPath,
             "\",\n            dependencies: abi.decode(",
             prefix,
-            "_DEPENDENCIES, (DeployDependency[])),\n            mechanism: ",
-            mechanism,
+            "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: ",
+            mechanismData,
             "\n        });\n"
         );
     }
@@ -1911,17 +1670,19 @@ library LibRainDeploySnapshot {
     /// @param contractName The contract the released record describes.
     /// @param paths The record's files, in the order they are emitted.
     /// @param template The candidate declaration the metadata comes from.
+    /// @param releasedMechanismData The expression each entry gives `mechanismData`, from its record and prefix.
     /// @return The library block.
     function releasedLibraryBlock(
         Vm vm,
         string memory libraryName,
         string memory contractName,
         string[] memory paths,
-        DeploySuite memory template
+        DeploySuite memory template,
+        function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData
     ) internal view returns (string memory) {
         string memory entries = "";
         for (uint256 i = 0; i < paths.length; i++) {
-            entries = string.concat(entries, releasedSuiteEntry(vm, i, paths[i], template));
+            entries = string.concat(entries, releasedSuiteEntry(vm, i, paths[i], template, releasedMechanismData));
         }
 
         return string.concat(
@@ -1961,6 +1722,7 @@ library LibRainDeploySnapshot {
     /// @param spdxLicenseIdentifier The SPDX licence identifier the written lib declares.
     /// @param copyrightText The copyright text the written lib declares.
     /// @param template The candidate declaration the metadata comes from.
+    /// @param releasedMechanismData The expression each entry gives `mechanismData`, from its record and prefix.
     /// @param suitesImportPath The path the emitted lib reaches the suite types by.
     /// @return The path written.
     function writeReleasedSuitesLib(
@@ -1971,6 +1733,7 @@ library LibRainDeploySnapshot {
         string memory spdxLicenseIdentifier,
         string memory copyrightText,
         DeploySuite memory template,
+        function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData,
         string memory suitesImportPath
     ) internal returns (string memory) {
         string memory libraryName = releasedLibraryName(contractName);
@@ -1985,7 +1748,7 @@ library LibRainDeploySnapshot {
             string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
             body = string.concat(
                 releasedImportBlock(vm, paths, suitesImportPath),
-                releasedLibraryBlock(vm, libraryName, contractName, paths, template)
+                releasedLibraryBlock(vm, libraryName, contractName, paths, template, releasedMechanismData)
             );
         }
 
@@ -2003,6 +1766,7 @@ library LibRainDeploySnapshot {
     /// record.
     /// @param contractName The contract the released lib is written for.
     /// @param template The suite the released entries take their key and
+    /// @param releasedMechanismData The expression each entry gives `mechanismData`, from its record and prefix.
     /// artifact path from.
     /// @param suitesImportPath The path the emitted lib reaches the suite types by.
     /// @return The path written.
@@ -2012,6 +1776,7 @@ library LibRainDeploySnapshot {
         string memory recordRoot,
         string memory contractName,
         DeploySuite memory template,
+        function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData,
         string memory suitesImportPath
     ) internal returns (string memory) {
         return writeReleasedSuitesLib(
@@ -2022,6 +1787,7 @@ library LibRainDeploySnapshot {
             RAIN_SPDX_LICENSE_IDENTIFIER,
             RAIN_COPYRIGHT_TEXT,
             template,
+            releasedMechanismData,
             suitesImportPath
         );
     }
@@ -2036,6 +1802,7 @@ library LibRainDeploySnapshot {
     /// declares.
     /// @param copyrightText The copyright text the written lib declares.
     /// @param template The candidate declaration the metadata comes from.
+    /// @param releasedMechanismData The expression each entry gives `mechanismData`, from its record and prefix.
     /// @return The path written.
     function writeReleasedSuitesLib(
         Vm vm,
@@ -2044,7 +1811,8 @@ library LibRainDeploySnapshot {
         string memory contractName,
         string memory spdxLicenseIdentifier,
         string memory copyrightText,
-        DeploySuite memory template
+        DeploySuite memory template,
+        function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData
     ) internal returns (string memory) {
         // Derived into a local before the forward, not inlined as the eighth
         // argument: eight arguments and the derivation's own temporaries alive
@@ -2053,7 +1821,7 @@ library LibRainDeploySnapshot {
         // choice — the inlined form does not compile.
         string memory suitesImportPath = derivedSuitesImportPath(vm);
         return writeReleasedSuitesLib(
-            vm, libDir, recordRoot, contractName, spdxLicenseIdentifier, copyrightText, template, suitesImportPath
+            vm, libDir, recordRoot, contractName, spdxLicenseIdentifier, copyrightText, template, releasedMechanismData, suitesImportPath
         );
     }
 
@@ -2067,6 +1835,7 @@ library LibRainDeploySnapshot {
     /// record.
     /// @param contractName The contract the released lib is written for.
     /// @param template The suite the released entries take their key and
+    /// @param releasedMechanismData The expression each entry gives `mechanismData`, from its record and prefix.
     /// artifact path from.
     /// @return The path written.
     function writeReleasedSuitesLib(
@@ -2074,9 +1843,10 @@ library LibRainDeploySnapshot {
         string memory libDir,
         string memory recordRoot,
         string memory contractName,
-        DeploySuite memory template
+        DeploySuite memory template,
+        function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData
     ) internal returns (string memory) {
-        return writeReleasedSuitesLib(vm, libDir, recordRoot, contractName, template, derivedSuitesImportPath(vm));
+        return writeReleasedSuitesLib(vm, libDir, recordRoot, contractName, template, releasedMechanismData, derivedSuitesImportPath(vm));
     }
 
     /// The import block of the generated aggregate lib.

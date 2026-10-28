@@ -8,8 +8,17 @@ import {
     RAIN_COPYRIGHT_TEXT,
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
-import {CloneNetwork} from "./LibRainDeployClone.sol";
 import {LibRainDeploySnapshot} from "./LibRainDeploySnapshot.sol";
+
+/// One network a suite deploys to with its own data, and therefore its own address.
+struct ChainDeploy {
+    /// The chain id of the network.
+    uint256 chainId;
+    /// The mechanism data on that network.
+    bytes data;
+    /// The address recorded on that network.
+    address deployedAddress;
+}
 
 /// Thrown when a build would drop, change or reorder a network a release's extended networks record already holds.
 /// @param suite The release's suite key.
@@ -82,7 +91,7 @@ library LibRainDeployExtendedNetworks {
     /// @param vm The Vm instance for string operations.
     /// @param networks The networks.
     /// @return The body.
-    function extendedNetworksBody(Vm vm, CloneNetwork[] memory networks) internal pure returns (string memory) {
+    function extendedNetworksBody(Vm vm, ChainDeploy[] memory networks) internal pure returns (string memory) {
         string memory body = "";
         for (uint256 i = 0; i < networks.length; i++) {
             string memory chainId = vm.toString(networks[i].chainId);
@@ -118,11 +127,11 @@ library LibRainDeployExtendedNetworks {
     function recordedExtendedNetworks(Vm vm, string memory root, string memory suite)
         internal
         view
-        returns (CloneNetwork[] memory)
+        returns (ChainDeploy[] memory)
     {
         (bool tagged,, string memory path) = extendedNetworksPath(root, suite);
         if (!tagged || !vm.exists(path)) {
-            return new CloneNetwork[](0);
+            return new ChainDeploy[](0);
         }
         string memory record = vm.readFile(path);
         string[] memory halves = vm.split(record, HEADER_END);
@@ -131,7 +140,7 @@ library LibRainDeployExtendedNetworks {
         }
         checkExtendedNetworksHeader(vm, path, halves[0]);
         string[] memory entries = vm.split(halves[1], "DEPLOYED_ADDRESS_");
-        CloneNetwork[] memory networks = new CloneNetwork[](entries.length - 1);
+        ChainDeploy[] memory networks = new ChainDeploy[](entries.length - 1);
         for (uint256 i = 0; i < networks.length; i++) {
             networks[i] = recordedExtendedNetwork(vm, path, entries[i + 1]);
         }
@@ -181,7 +190,7 @@ library LibRainDeployExtendedNetworks {
     function recordedExtendedNetwork(Vm vm, string memory path, string memory entry)
         internal
         pure
-        returns (CloneNetwork memory)
+        returns (ChainDeploy memory)
     {
         string[] memory named = vm.split(entry, " =");
         string[] memory wrapped = vm.split(entry, "address(");
@@ -189,7 +198,7 @@ library LibRainDeployExtendedNetworks {
         if (wrapped.length < 2 || opened.length < 2) {
             revert ExtendedNetworksUnreadable(path);
         }
-        CloneNetwork memory network = CloneNetwork({chainId: 0, data: "", deployedAddress: address(0)});
+        ChainDeploy memory network = ChainDeploy({chainId: 0, data: "", deployedAddress: address(0)});
         try vm.parseUint(named[0]) returns (uint256 chainId) {
             network.chainId = chainId;
         } catch {
@@ -212,7 +221,7 @@ library LibRainDeployExtendedNetworks {
     /// @param a One network.
     /// @param b The other.
     /// @return Whether they are equal.
-    function sameNetwork(CloneNetwork memory a, CloneNetwork memory b) internal pure returns (bool) {
+    function sameNetwork(ChainDeploy memory a, ChainDeploy memory b) internal pure returns (bool) {
         return
             a.chainId == b.chainId && a.deployedAddress == b.deployedAddress && keccak256(a.data) == keccak256(b.data);
     }
@@ -226,9 +235,9 @@ library LibRainDeployExtendedNetworks {
         Vm vm,
         string memory root,
         string memory suite,
-        CloneNetwork[] memory declared
+        ChainDeploy[] memory declared
     ) internal view {
-        CloneNetwork[] memory recorded = recordedExtendedNetworks(vm, root, suite);
+        ChainDeploy[] memory recorded = recordedExtendedNetworks(vm, root, suite);
         if (recorded.length != declared.length) {
             revert ExtendedNetworksUnrecorded(suite);
         }
@@ -246,7 +255,7 @@ library LibRainDeployExtendedNetworks {
     /// @param declared The networks `extendedNetworks` declares for it.
     /// @return The record's directory, empty when nothing is declared.
     /// @return The record's path, empty when nothing is declared.
-    function writtenExtendedNetworksPath(string memory root, string memory suite, CloneNetwork[] memory declared)
+    function writtenExtendedNetworksPath(string memory root, string memory suite, ChainDeploy[] memory declared)
         internal
         pure
         returns (string memory, string memory)
@@ -274,11 +283,11 @@ library LibRainDeployExtendedNetworks {
         Vm vm,
         string memory root,
         string memory suite,
-        CloneNetwork[] memory declared,
+        ChainDeploy[] memory declared,
         string memory spdxLicenseIdentifier,
         string memory copyrightText
     ) internal {
-        CloneNetwork[] memory recorded = recordedExtendedNetworks(vm, root, suite);
+        ChainDeploy[] memory recorded = recordedExtendedNetworks(vm, root, suite);
         for (uint256 i = 0; i < recorded.length; i++) {
             if (i >= declared.length || !sameNetwork(recorded[i], declared[i])) {
                 revert ExtendedNetworksRewritten(suite, i);
@@ -305,7 +314,7 @@ library LibRainDeployExtendedNetworks {
     /// @param root The record root.
     /// @param suite The release's suite key.
     /// @param declared The networks `extendedNetworks` declares for it.
-    function writeExtendedNetworks(Vm vm, string memory root, string memory suite, CloneNetwork[] memory declared)
+    function writeExtendedNetworks(Vm vm, string memory root, string memory suite, ChainDeploy[] memory declared)
         internal
     {
         writeExtendedNetworks(vm, root, suite, declared, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT);
