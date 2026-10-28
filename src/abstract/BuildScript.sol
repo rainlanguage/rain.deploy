@@ -249,7 +249,6 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
 
     /// The names of `generated`, in order: the contracts whose rolling
     /// snapshots a release freezes.
-    /// @param d The declaration.
     /// @param generated `checkedGeneratedContracts(d)`.
     /// @return The contract names.
     function snapshotContractNames(GeneratedContract[] memory generated) internal pure returns (string[] memory) {
@@ -335,9 +334,8 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// candidate the release guard compares it against. Defaults to
     /// `snapshotContractNames()` for a repo whose candidate holds nothing else.
     /// @return The snapshot names.
-    /// @param d The declaration.
     /// @param generated `checkedGeneratedContracts(d)`.
-    function releaseRecordNames(DeployDeclaration memory d, GeneratedContract[] memory generated)
+    function releaseRecordNames(DeployDeclaration memory, GeneratedContract[] memory generated)
         internal
         view
         virtual
