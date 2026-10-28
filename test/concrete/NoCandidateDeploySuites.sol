@@ -2,9 +2,11 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {
     DeployCandidate,
     DeployDependency,
+    DeployMechanismHandler,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -25,6 +27,12 @@ import {
 /// trivial reason that there is nothing declared at all. Everything except the
 /// candidate is present and correct.
 contract NoCandidateDeploySuites is ExternalDeploySuites {
+    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        return handlers;
+    }
+
     /// @inheritdoc RainDeploySuitesBase
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);

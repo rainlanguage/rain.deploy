@@ -5,12 +5,14 @@ pragma solidity =0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
+    DeployMechanismHandler,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {
     BYTECODE_HASH as CONFIG_REGISTRY_BYTECODE_HASH,
     CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE,
@@ -27,6 +29,12 @@ import {
 /// declaration while every other fixture still answers, and that is the whole
 /// distance between "absent" and "short".
 contract ShortestKeyDeploySuites is ExternalDeploySuites {
+    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        return handlers;
+    }
+
     /// @inheritdoc RainDeploySuitesBase
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);

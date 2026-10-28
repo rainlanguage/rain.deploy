@@ -5,11 +5,13 @@ pragma solidity ^0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
+    DeployMechanismHandler,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ExternalDeployment, RainDeployDeclarationChecks} from "../../src/abstract/RainDeployDeclarationChecks.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployable} from "../concrete/MockDeployable.sol";
 import {
     MOCK_DEPLOYABLE_ADDRESS,
@@ -40,6 +42,12 @@ enum DeclarationDefect {
 /// with a leading zero byte, with one `DeclarationDefect` applied to its
 /// candidates.
 abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
+    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        return handlers;
+    }
+
     DeclarationDefect internal sDefect;
     string internal sWorkflow = "test/fixture-dispatch/dispatchable.yaml";
 

@@ -6,11 +6,13 @@ import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBas
 import {
     DeployCandidate,
     DeployDependency,
+    DeployMechanismHandler,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifySnapshotBase} from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 
 /// @title RainDeployVerifySnapshotBaseCandidateTest
@@ -34,6 +36,12 @@ import {MockDeployable} from "../../concrete/MockDeployable.sol";
 /// is green on exactly the file that is about to reach a chain — permanently
 /// green in a repo that has released nothing.
 contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBase {
+    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        return handlers;
+    }
+
     /// @inheritdoc RainDeploySuitesBase
     /// @dev Nothing released. This is the whole fixture.
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {

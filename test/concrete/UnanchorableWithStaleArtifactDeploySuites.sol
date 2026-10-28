@@ -5,10 +5,12 @@ pragma solidity =0.8.25;
 import {
     DeployDependency,
     DeployCandidate,
+    DeployMechanismHandler,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 
@@ -27,6 +29,12 @@ import {MockDeployableV2} from "./MockDeployableV2.sol";
 /// `CandidateSourceMismatch` here and is satisfied by the field everywhere a
 /// record happens to agree.
 contract UnanchorableWithStaleArtifactDeploySuites is ExternalDeploySuites {
+    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        return handlers;
+    }
+
     /// @inheritdoc RainDeploySuitesBase
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);

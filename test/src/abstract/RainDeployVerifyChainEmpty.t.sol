@@ -5,11 +5,13 @@ pragma solidity =0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
+    DeployMechanismHandler,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 
 /// @title RainDeployVerifyChainEmptyTest
@@ -35,6 +37,12 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 /// scope is a second contract. `RainDeployVerifyChainTest` cannot be it — it
 /// declares two released suites so that the matrix has something to fail on.
 contract RainDeployVerifyChainEmptyTest is RainDeployVerifyChain {
+    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        return handlers;
+    }
+
     /// @inheritdoc RainDeploySuitesBase
     /// @dev Nothing released. This is the whole fixture.
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {

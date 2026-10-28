@@ -6,10 +6,12 @@ import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {
     DeployCandidate,
     DeployDependency,
+    DeployMechanismHandler,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployable} from "./MockDeployable.sol";
 
 /// @dev The address the candidate declares must already hold code, and which
@@ -35,6 +37,12 @@ bytes constant ABSENT_DEPENDENCY_RUNTIME_CODE = hex"fe";
 /// rather than the first of the default roster. Keyed
 /// `second-address-candidate` for the reason `StalePinDeploy` gives.
 contract MissingDependencyDeploy is RainDeployBroadcast {
+    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        return handlers;
+    }
+
     /// @inheritdoc RainDeployBroadcast
     function deployNetworks() internal pure override returns (string[] memory) {
         string[] memory networks = new string[](1);

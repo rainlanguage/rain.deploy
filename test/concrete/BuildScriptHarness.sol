@@ -2,8 +2,9 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {BuildScript} from "../../src/abstract/BuildScript.sol";
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployMechanismHandler, DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeployConfig} from "../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 
@@ -16,6 +17,12 @@ import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 /// The markers are comment-only `.sol` files, because a failing test leaves its
 /// fixture behind and `forge test` compiles everything under `test/`.
 contract BuildScriptHarness is BuildScript {
+    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        return handlers;
+    }
+
     /// The fixture record root. Empty defers to `BuildScript`'s own.
     string internal sRoot;
 

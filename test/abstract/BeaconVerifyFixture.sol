@@ -6,12 +6,14 @@ import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/Upgr
 import {
     DeployCandidate,
     DeployDependency,
+    DeployMechanismHandler,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyBase} from "../../src/abstract/RainDeployVerifyBase.sol";
 import {BeaconState, BeaconTransition, ChainBeacon, DeployBeacon} from "../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {Prerequisite} from "../../src/interface/IMigrationRegistryV4.sol";
 import {MigrationRegistry} from "../../src/concrete/MigrationRegistry.sol";
 import {MockDeployable} from "../concrete/MockDeployable.sol";
@@ -22,6 +24,12 @@ import {LibBeaconTest} from "../lib/LibBeaconTest.sol";
 /// @notice Released implementation, upgrade and beacon suites live locally, a beacon at the implementation, and the
 /// declarations the beacon resolution and chain tests build from them.
 abstract contract BeaconVerifyFixture is RainDeployVerifyBase {
+    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        return handlers;
+    }
+
     /// The initial owner.
     address constant OWNER = address(0xB0B);
     /// The owner a handover moves to.

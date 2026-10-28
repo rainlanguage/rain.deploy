@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {
     DeployDependency,
     DeployCandidate,
+    DeployMechanismHandler,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -12,6 +13,7 @@ import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 import {MockDeployable} from "./MockDeployable.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 
 /// @title UnqualifiedArtifactPathDeploySuites
 /// A declaration whose CANDIDATE names its contract by bare name rather than
@@ -29,6 +31,12 @@ import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 /// looked at the first candidate answers this declaration as if it were fine,
 /// and the position is what names the entry at fault.
 contract UnqualifiedArtifactPathDeploySuites is ExternalDeploySuites {
+    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        return handlers;
+    }
+
     /// @inheritdoc RainDeploySuitesBase
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);

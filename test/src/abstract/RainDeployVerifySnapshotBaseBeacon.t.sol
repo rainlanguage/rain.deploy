@@ -13,6 +13,7 @@ import {
 import {
     DeployCandidate,
     DeployDependency,
+    DeployMechanismHandler,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
@@ -25,6 +26,7 @@ import {
     LibRainDeployBeacon
 } from "../../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {LibBeaconDeclarations} from "../../lib/LibBeaconDeclarations.sol";
 import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
 import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../../../src/interface/IMigrationRegistryV4.sol";
@@ -33,6 +35,12 @@ import {MockDeployable} from "../../concrete/MockDeployable.sol";
 /// @title RainDeployVerifySnapshotBaseBeaconTest
 /// @notice The snapshot group refuses a malformed beacon declaration without forking.
 contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase {
+    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        return handlers;
+    }
+
     using LibBeaconDeclarations for ChainBeacon[];
 
     address constant BEACON = address(0xBEAC0);
