@@ -8,7 +8,6 @@ import {
     DispatchChoiceNotDeclared,
     DispatchChoiceRepeated,
     DispatchChoicesUnreadable,
-    RainDeployDeclarationChecks,
     RepeatedDependency,
     RuntimeCodeExceedsEip170,
     SuiteNotDispatchable,
@@ -45,16 +44,8 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVeri
         LibRainDeployZoltuMechanism.extend(d);
         LibRainDeployDeclaration.addReleased(d, reachingReleased());
         LibRainDeployDeclaration.addCandidates(d, reachingCandidates());
+        extendReaching(d);
         return d;
-    }
-
-    function dispatchWorkflow()
-        internal
-        view
-        override(ReachingDeploySuites, RainDeployDeclarationChecks)
-        returns (string memory)
-    {
-        return ReachingDeploySuites.dispatchWorkflow();
     }
 
     function externalCheckDispatchChoicesAreTheSuiteKeys() external view {
@@ -90,15 +81,15 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVeri
     }
 
     function testDispatchDefaultsToTheManualArtifactsWorkflow() external {
-        sWorkflow = RainDeployDeclarationChecks.dispatchWorkflow();
-        string[] memory choices = dispatchChoices();
+        sWorkflow = LibRainDeployDeclaration.DISPATCH_WORKFLOW;
+        string[] memory choices = dispatchChoices(declaration());
         assertEq(choices.length, 2);
         assertEq(choices[0], "config-registry");
         assertEq(choices[1], "migration-registry");
     }
 
     function testDispatchChoicesAreReadPastCommentsAndBlankLines() external view {
-        string[] memory choices = dispatchChoices();
+        string[] memory choices = dispatchChoices(declaration());
         assertEq(choices.length, 3);
         assertEq(choices[0], "mock-deployable");
         assertEq(choices[1], "mock-reaching-deployable");
