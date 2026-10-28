@@ -16,18 +16,21 @@ import {
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
     DeploySuite,
     DuplicateDeploySuite
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {GeneratedContractsBuildScriptHarness} from "../../concrete/GeneratedContractsBuildScriptHarness.sol";
 
 contract BuildScriptGeneratedContractsTest is Test {
     string constant ROOT = "test/generated-buildscript-generated-contracts";
 
+    /// Networks named, so the declaration adds the candidate as the test built it.
     function suite(string memory key, string memory artifactPath) internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: LibRainDeploy.supportedNetworks(),
             suite: key,
             creationCode: "",
             storedDeployedAddress: address(0),
@@ -35,8 +38,7 @@ contract BuildScriptGeneratedContractsTest is Test {
             storedRuntimeCode: "",
             artifactPath: artifactPath,
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
     }
 
