@@ -165,7 +165,9 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         for (uint256 i = 0; i < targets.length; i++) {
             uint256 chainId = i < own.length
                 ? own[i]
-                : i < own.length + candidates.length ? candidates[i - own.length] : dispatched[i - own.length - candidates.length];
+                : i < own.length + candidates.length
+                    ? candidates[i - own.length]
+                    : dispatched[i - own.length - candidates.length];
             bool seen = false;
             for (uint256 j = 0; j < count; j++) {
                 if (targets[j] == chainId) {

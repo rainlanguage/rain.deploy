@@ -101,7 +101,6 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         }
     }
 
-
     /// The selected fork MUST hold `suite` at `deployedAddress` with its derived code and its declared dependencies.
     /// @param network The network's name, for the refusal.
     /// @param suite The suite.

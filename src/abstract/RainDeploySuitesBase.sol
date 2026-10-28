@@ -261,8 +261,9 @@ struct DeployMechanismHandler {
     function(DeploySuite memory, uint256) internal view returns (address) deployedAddress;
     function(DeploySuite memory, uint256) internal view returns (address) recordedAddress;
     function(DeploySuite memory, uint256) internal view returns (bytes memory) deployStepData;
-    function(DeploySuite memory) internal view returns (function(Vm, string memory, address, bytes memory) internal returns (address))
-        deployStep;
+    function(DeploySuite memory)
+        internal
+        view returns (function(Vm, string memory, address, bytes memory) internal returns (address)) deployStep;
     function(Vm, DeploySuite memory) internal returns (address[] memory) deployLocally;
     function(Vm, DeploySuite memory) internal deployLocallyOnChain;
     function(DeploySuite memory, DeploySuite memory, uint256[] memory) internal view addUnrecordedNetworks;
@@ -270,8 +271,8 @@ struct DeployMechanismHandler {
     function(DeploySuite memory, string memory, uint256, address) internal view checkNetworkFrozen;
     function(DeploySuite memory, string memory, uint256, address) internal view checkOnChain;
     function(Vm, string[] memory, DeploySuite memory, address[] memory) internal logVerification;
-    function(Vm, string memory, string memory, string memory, string memory, string memory, DeploySuite memory) internal returns (string memory)
-        writeSuiteSnapshot;
+    function(Vm, string memory, string memory, string memory, string memory, string memory, DeploySuite memory)
+        internal returns (string memory) writeSuiteSnapshot;
     function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData;
 }
 
@@ -482,9 +483,8 @@ abstract contract RainDeploySuitesBase {
         string memory copyrightText,
         DeploySuite memory suite
     ) internal returns (string memory) {
-        return mechanismOf(suite).writeSuiteSnapshot(
-            vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite
-        );
+        return mechanismOf(suite)
+            .writeSuiteSnapshot(vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite);
     }
 
     /// The expression a generated released-suites lib gives a release's `mechanismData`, from the mechanism whose id
@@ -498,9 +498,8 @@ abstract contract RainDeploySuitesBase {
         view
         returns (string memory)
     {
-        return mechanismById(LibRainDeploySnapshot.recordedMechanismId(vm, path), path).releasedMechanismData(
-            vm, path, prefix
-        );
+        return mechanismById(LibRainDeploySnapshot.recordedMechanismId(vm, path), path)
+            .releasedMechanismData(vm, path, prefix);
     }
 
     /// @param suite The suite.

@@ -21,7 +21,6 @@ struct DerivedDeploy {
     bytes32 bytecodeHash;
 }
 
-
 /// @title RainDeployVerifyBase
 /// @notice The derivation every deploy-verification group shares.
 abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
@@ -34,9 +33,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
 
         address[] memory deployedAddresses = deployLocally(vm, suite);
         DerivedDeploy memory derived = DerivedDeploy({
-            suite: suite.suite,
-            deployedAddresses: deployedAddresses,
-            bytecodeHash: deployedAddresses[0].codehash
+            suite: suite.suite, deployedAddresses: deployedAddresses, bytecodeHash: deployedAddresses[0].codehash
         });
 
         // A failed revert is unrecoverable, not a warning to silence. The etch
