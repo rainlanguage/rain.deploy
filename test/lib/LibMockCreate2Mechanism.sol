@@ -74,10 +74,15 @@ library LibMockCreate2Mechanism {
     }
 
     function isMockCreate2(DeploySuite memory suite) internal pure returns (bool) {
-        return suite.mechanismData.length > 0x20 && abi.decode(suite.mechanismData, (bytes32)) == MOCK_CREATE2_MECHANISM_ID;
+        return
+            suite.mechanismData.length > 0x20 && abi.decode(suite.mechanismData, (bytes32)) == MOCK_CREATE2_MECHANISM_ID;
     }
 
-    function create2Address(address factory, bytes32 create2Salt, bytes memory creationCode) internal pure returns (address) {
+    function create2Address(address factory, bytes32 create2Salt, bytes memory creationCode)
+        internal
+        pure
+        returns (address)
+    {
         return address(
             uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), factory, create2Salt, keccak256(creationCode)))))
         );

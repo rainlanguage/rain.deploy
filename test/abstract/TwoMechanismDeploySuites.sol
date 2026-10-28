@@ -46,7 +46,11 @@ abstract contract TwoMechanismDeploySuites is RainDeploySuitesBase {
             dependencies: new DeployDependency[](0),
             mechanismData: LibMockCreate2Mechanism.encode(
                 MockCreate2Mechanism({
-                    factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, perNetwork: true, networks: networks, root: ""
+                    factory: MOCK_CREATE2_FACTORY,
+                    salt: MOCK_CREATE2_SALT,
+                    perNetwork: true,
+                    networks: networks,
+                    root: ""
                 })
             )
         });

@@ -120,8 +120,6 @@ contract BuildHarness is Build {
         string[] memory paths,
         DeploySuite memory template
     ) external view returns (string memory) {
-        return LibRainDeploySnapshot.releasedLibraryBlock(
-            vm, libraryName, contractName, paths, template, declaration()
-        );
+        return LibRainDeploySnapshot.releasedLibraryBlock(vm, libraryName, contractName, paths, template, declaration());
     }
 }

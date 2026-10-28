@@ -84,7 +84,11 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     function testCandidatesRecordTheGeneratedConstants() external view {
         string memory json = vm.readFile(DECLARATION_ARTIFACT);
         string[] memory candidates = candidateLiteralPaths(json);
-        assertEq(candidates.length, checkedCandidateSuites(declaration()).length, "a declared candidate has no struct literal");
+        assertEq(
+            candidates.length,
+            checkedCandidateSuites(declaration()).length,
+            "a declared candidate has no struct literal"
+        );
 
         uint256[] memory creationIds = importedConstantIds(json, "CREATION_CODE");
         uint256[] memory runtimeIds = importedConstantIds(json, "RUNTIME_CODE");

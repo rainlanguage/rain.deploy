@@ -89,7 +89,11 @@ contract LibRainDeploySnapshotRecordedMechanismIdTest is Test {
 
     function testARecordWithoutMechanismDataReadsAsZoltu() external {
         checkId("zoltu", everyNetworkLine(), ZOLTU_MECHANISM_ID);
-        checkId("zoltu-commented", string.concat(everyNetworkLine(), "/*\n", mechanismDataLine(hexDigits(WORD)), "*/\n"), ZOLTU_MECHANISM_ID);
+        checkId(
+            "zoltu-commented",
+            string.concat(everyNetworkLine(), "/*\n", mechanismDataLine(hexDigits(WORD)), "*/\n"),
+            ZOLTU_MECHANISM_ID
+        );
     }
 
     function testTheIdIsTheLeadingWordOfMechanismData() external {
@@ -110,9 +114,7 @@ contract LibRainDeploySnapshotRecordedMechanismIdTest is Test {
         );
         checkId(
             "wrapped",
-            string.concat(
-                everyNetworkLine(), "bytes constant MECHANISM_DATA =\n    hex\"", hexDigits(WORD), "00\";\n"
-            ),
+            string.concat(everyNetworkLine(), "bytes constant MECHANISM_DATA =\n    hex\"", hexDigits(WORD), "00\";\n"),
             WORD
         );
         checkId(
@@ -135,21 +137,19 @@ contract LibRainDeploySnapshotRecordedMechanismIdTest is Test {
         checkUnreadable(
             "abi-encode",
             string.concat(
-                everyNetworkLine(),
-                "bytes constant MECHANISM_DATA = abi.encode(bytes32(", vm.toString(WORD), "));\n"
+                everyNetworkLine(), "bytes constant MECHANISM_DATA = abi.encode(bytes32(", vm.toString(WORD), "));\n"
             )
         );
         checkUnreadable(
             "bare-word",
             string.concat(everyNetworkLine(), "bytes constant MECHANISM_DATA = ", vm.toString(WORD), "00000000;\n")
         );
-        checkUnreadable(
-            "wrapped-without-value",
-            string.concat(everyNetworkLine(), "bytes constant MECHANISM_DATA =\n")
-        );
+        checkUnreadable("wrapped-without-value", string.concat(everyNetworkLine(), "bytes constant MECHANISM_DATA =\n"));
         checkUnreadable(
             "split-value",
-            string.concat(everyNetworkLine(), "bytes constant MECHANISM_DATA = hex\"", hexDigits(WORD), "\" hex\"00\";\n")
+            string.concat(
+                everyNetworkLine(), "bytes constant MECHANISM_DATA = hex\"", hexDigits(WORD), "\" hex\"00\";\n"
+            )
         );
     }
 

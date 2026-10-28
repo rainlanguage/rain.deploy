@@ -3652,12 +3652,7 @@ contract LibRainDeploySnapshotTest is Test {
 
         string memory defaulted = vm.readFile(
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm,
-                libDir,
-                LibRainDeploySnapshot.LIB_FS_ROOT,
-                FIXTURE_CONTRACT,
-                emitterTemplate(),
-                zoltuDeclaration()
+                vm, libDir, LibRainDeploySnapshot.LIB_FS_ROOT, FIXTURE_CONTRACT, emitterTemplate(), zoltuDeclaration()
             )
         );
         string memory explicitly = vm.readFile(

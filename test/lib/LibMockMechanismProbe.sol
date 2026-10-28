@@ -7,19 +7,26 @@ pragma solidity ^0.8.25;
 address constant MOCK_MECHANISM_PROBE = address(uint160(uint256(keccak256("rain.deploy.mock.mechanism.probe"))));
 
 interface IMockMechanismProbe {
-    function checkOnChain(bytes32 mechanismId, string memory suite, string memory network, uint256 chainId, address deployed)
-        external
-        view;
+    function checkOnChain(
+        bytes32 mechanismId,
+        string memory suite,
+        string memory network,
+        uint256 chainId,
+        address deployed
+    ) external view;
 
     function addRecordedNetworks(bytes32 mechanismId, string memory suite) external view;
 }
 
 /// @title LibMockMechanismProbe
 library LibMockMechanismProbe {
-    function checkOnChain(bytes32 mechanismId, string memory suite, string memory network, uint256 chainId, address deployed)
-        internal
-        view
-    {
+    function checkOnChain(
+        bytes32 mechanismId,
+        string memory suite,
+        string memory network,
+        uint256 chainId,
+        address deployed
+    ) internal view {
         probe(abi.encodeCall(IMockMechanismProbe.checkOnChain, (mechanismId, suite, network, chainId, deployed)));
     }
 
