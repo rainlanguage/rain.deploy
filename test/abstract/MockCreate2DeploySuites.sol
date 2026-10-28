@@ -9,7 +9,7 @@ import {
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
-import {ChainDeploy} from "../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {MockNetworkDeploy} from "../lib/LibMockNetworkRecord.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {
     LibMockCreate2Mechanism,
@@ -30,14 +30,14 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         sMockRecordRoot = root;
     }
 
-    function mockNetwork(uint256 chainId) internal pure returns (ChainDeploy memory) {
+    function mockNetwork(uint256 chainId) internal pure returns (MockNetworkDeploy memory) {
         return LibMockCreate2Mechanism.network(
             MOCK_CREATE2_FACTORY, MOCK_CREATE2_SALT, type(MockDeployable).creationCode, chainId, abi.encode(chainId)
         );
     }
 
     /// A per-network suite on exactly `networks`.
-    function mockSuite(string memory key, ChainDeploy[] memory networks) internal view returns (DeploySuite memory) {
+    function mockSuite(string memory key, MockNetworkDeploy[] memory networks) internal view returns (DeploySuite memory) {
         DeploySuite memory suite = mockSingleSuite(key);
         suite.storedDeployedAddress = address(0);
         suite.networks = LibMockCreate2Mechanism.networkNames(networks);
@@ -71,7 +71,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
                     factory: MOCK_CREATE2_FACTORY,
                     salt: MOCK_CREATE2_SALT,
                     perNetwork: false,
-                    networks: new ChainDeploy[](0),
+                    networks: new MockNetworkDeploy[](0),
                     root: sMockRecordRoot
                 })
             )
@@ -80,7 +80,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
 
     /// The per-network release, recording Arbitrum One and Polygon.
     function mockRelease() internal view returns (DeploySuite memory) {
-        ChainDeploy[] memory networks = new ChainDeploy[](2);
+        MockNetworkDeploy[] memory networks = new MockNetworkDeploy[](2);
         networks[0] = mockNetwork(42161);
         networks[1] = mockNetwork(137);
         return mockSuite("mock-create-two@0_0_1", networks);
@@ -88,7 +88,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
 
     /// The release's candidate, on Arbitrum One, Polygon and Base.
     function mockCandidate() internal view returns (DeploySuite memory) {
-        ChainDeploy[] memory networks = new ChainDeploy[](3);
+        MockNetworkDeploy[] memory networks = new MockNetworkDeploy[](3);
         networks[0] = mockNetwork(42161);
         networks[1] = mockNetwork(137);
         networks[2] = mockNetwork(8453);
