@@ -9,7 +9,13 @@ import {
 } from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {MockCreate2DeploySuites} from "../../abstract/MockCreate2DeploySuites.sol";
-import {LibMockCreate2Mechanism, MockCreate2Mechanism} from "../../lib/LibMockCreate2Mechanism.sol";
+import {
+    LibMockCreate2Mechanism,
+    MOCK_CREATE2_MECHANISM_ID,
+    MockCreate2Mechanism
+} from "../../lib/LibMockCreate2Mechanism.sol";
+import {IMockMechanismProbe, MOCK_MECHANISM_PROBE} from "../../lib/LibMockMechanismProbe.sol";
+import {LibMockSaltMechanism, MOCK_SALT_MECHANISM_ID} from "../../lib/LibMockSaltMechanism.sol";
 
 /// @title RainDeployVerifySnapshotBaseMockMechanismTest
 /// @notice The snapshot group checks each network's recorded address through a non-Zoltu mechanism handler.
@@ -18,6 +24,7 @@ contract RainDeployVerifySnapshotBaseMockMechanismTest is MockCreate2DeploySuite
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         LibMockCreate2Mechanism.extend(d);
+        LibMockSaltMechanism.extend(d);
         addMockCreate2(d);
         return d;
     }
@@ -69,5 +76,26 @@ contract RainDeployVerifySnapshotBaseMockMechanismTest is MockCreate2DeploySuite
             )
         );
         this.externalCheckInternallyConsistent(release);
+    }
+
+    /// `checkDeclaration` runs once per declared mechanism.
+    function testMechanismDeclarationsResolveChecksEachMechanismOnce() external {
+        vm.expectCall(
+            MOCK_MECHANISM_PROBE, abi.encodeCall(IMockMechanismProbe.checkDeclaration, (MOCK_CREATE2_MECHANISM_ID)), 1
+        );
+        vm.expectCall(
+            MOCK_MECHANISM_PROBE, abi.encodeCall(IMockMechanismProbe.checkDeclaration, (MOCK_SALT_MECHANISM_ID)), 1
+        );
+        this.testMechanismDeclarationsResolve();
+    }
+
+    function testMechanismDeclarationsResolveRefusalPropagates() external {
+        vm.mockCallRevert(
+            MOCK_MECHANISM_PROBE,
+            abi.encodeCall(IMockMechanismProbe.checkDeclaration, (MOCK_SALT_MECHANISM_ID)),
+            abi.encode("refused")
+        );
+        vm.expectRevert(abi.encode("refused"));
+        this.testMechanismDeclarationsResolve();
     }
 }
