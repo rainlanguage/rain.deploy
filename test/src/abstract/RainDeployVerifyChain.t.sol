@@ -500,8 +500,11 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
 
     /// The matrix over both released suites on local forks.
     function externalCheckOnLocalForks() external {
-        checkDeployedOnNetworks(declaration(), 
-            Vm(address(new LocalForkVm())), LibRainDeploy.declaredNetworkConfigs(declaration().networks), declaration().released
+        checkDeployedOnNetworks(
+            declaration(),
+            Vm(address(new LocalForkVm())),
+            LibRainDeploy.declaredNetworkConfigs(declaration().networks),
+            declaration().released
         );
     }
 

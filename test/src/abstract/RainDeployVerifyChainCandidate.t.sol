@@ -53,7 +53,6 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
         return d;
     }
 
-
     function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = DeploySuite({
