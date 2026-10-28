@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {ExternalDeploySuites} from "./ExternalDeploySuites.sol";
-import {DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {MockOriginOwned} from "../concrete/MockOriginOwned.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
@@ -13,7 +13,8 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 abstract contract ExternalDeployBroadcast is ExternalDeploySuites, RainDeployBroadcast {
     /// @return The networks a broadcast would go to.
     function externalDeployNetworks() external view returns (string[] memory) {
-        return deployNetworks(declaration());
+        DeployDeclaration memory d = declaration();
+        return d.deployNetworks(d);
     }
 
     /// @param suite The suite to broadcast.
