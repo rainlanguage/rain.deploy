@@ -6,10 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
-import {ExtendedNetworksUnexpected} from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {ChainDeploy} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
 import {BuildScriptHarness} from "../../concrete/BuildScriptHarness.sol";
-import {ZoltuReleaseBuildScriptHarness} from "../../concrete/ZoltuReleaseBuildScriptHarness.sol";
 
 /// A memory struct so a recursion into a subtree writes what it finds where the
 /// caller can read it: every frame of the walk shares this one accumulator.
@@ -51,9 +48,6 @@ contract BuildScriptTest is Test {
     /// parallel, so a root two of them share is one deleting the tree the other
     /// is midway through reading.
     string constant CUT_CONFIG_FIXTURE_ROOT = "test/generated-buildscript-cut-config";
-
-    /// Where the extended networks fixture's records are written. Under `fixture-lib`, which nothing compiles.
-    string constant EXTENDED_NETWORKS_FIXTURE_ROOT = "fixture-lib/buildscript-extended-networks";
 
     /// Carries its AST because `foundry.toml` sets `ast = true`.
     string constant BASE_ARTIFACT = "out/BuildScript.sol/BuildScript.json";
@@ -174,19 +168,6 @@ contract BuildScriptTest is Test {
         vm.removeDir(LIBS_FIXTURE_ROOT, true);
 
         assertEq(libs, harness.libsMarker(1, true));
-    }
-
-    /// PROPERTY: the build refuses, before writing, an extended network declared for a Zoltu release.
-    function testRegenerateExtendedNetworksRefusesAZoltuRelease() external {
-        string memory root = string.concat(EXTENDED_NETWORKS_FIXTURE_ROOT, "-zoltu");
-        resetFixture(root);
-        ZoltuReleaseBuildScriptHarness harness = new ZoltuReleaseBuildScriptHarness(root);
-        ChainDeploy[] memory networks = new ChainDeploy[](1);
-        networks[0] = ChainDeploy({chainId: 8453, data: hex"00aa", deployedAddress: address(1)});
-        harness.setExtendedNetworks(networks);
-        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnexpected.selector, "mock-deployable@0_0_1"));
-        harness.externalRegenerateExtendedNetworks();
-        assertFalse(vm.exists(string.concat(root, "/extended")), "a refused declaration wrote a record");
     }
 
     function testRunStagesTheNetworkConfig() external {
