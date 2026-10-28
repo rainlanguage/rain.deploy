@@ -47,7 +47,8 @@ library LibRainDeployZoltuMechanism {
             logVerification: logVerification,
             writeSuiteSnapshot: writeSuiteSnapshot,
             releasedMechanismData: releasedMechanismData,
-            releasedImport: releasedImport
+            releasedImport: releasedImport,
+            legacyRecordId: legacyRecordId
         });
     }
 
@@ -216,5 +217,10 @@ library LibRainDeployZoltuMechanism {
     function releasedImport(DeployDeclaration memory, string memory root) internal pure returns (string memory) {
         return
             string.concat("import {LibRainDeployZoltuMechanism} from \"", root, ZOLTU_MECHANISM_SOURCE_SUBPATH, "\";\n");
+    }
+
+    /// @return 0: a Zoltu record never declares `MECHANISM_DATA`, so no untagged legacy record is Zoltu's.
+    function legacyRecordId(DeployDeclaration memory, Vm, string memory) internal view returns (bytes32) {
+        return 0;
     }
 }
