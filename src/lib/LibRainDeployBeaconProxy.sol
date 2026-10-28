@@ -6,9 +6,9 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
-import {ICloneableFactoryV6} from "rain-factory-0.2.5/src/interface/ICloneableFactoryV6.sol";
-import {BEACON_PROXY_CREATION_CODE} from "rain-factory-0.2.5/src/generated/BeaconProxy.sol";
-import {LibICloneableFactoryV5} from "rain-factory-0.2.5/src/lib/LibICloneableFactoryV5.sol";
+import {ICloneableFactoryV7} from "rain-factory-0.2.6/src/interface/ICloneableFactoryV7.sol";
+import {BEACON_PROXY_CREATION_CODE} from "rain-factory-0.2.6/src/generated/BeaconProxy.sol";
+import {LibICloneableFactoryV5} from "rain-factory-0.2.6/src/lib/LibICloneableFactoryV5.sol";
 
 import {DeployDependency} from "./LibRainDeploy.sol";
 import {CloneTarget} from "./LibRainDeployClone.sol";
@@ -27,11 +27,11 @@ string constant BEACON_PROXY_UNANCHORABLE_REASON = "An OpenZeppelin BeaconProxy,
 /// The proxy's address does not commit to the implementation that runs `initialize(data)`: anyone may deploy it
 /// while the beacon serves any implementation, and a broadcast that finds code there skips it unchecked. Every
 /// implementation the beacon serves while the proxy is undeployed MUST give the same `initialize(data)` result, or
-/// revert, as `ICloneableFactoryV6` requires.
+/// revert, as `ICloneableFactoryV7` requires.
 struct BeaconProxyDeploy {
     /// The suite key, held to the key alphabet and to uniqueness like any other.
     string suite;
-    /// The `ICloneableFactoryV6` that deploys the proxy.
+    /// The `ICloneableFactoryV7` that deploys the proxy.
     address factory;
     /// The beacon the proxy reads its implementation from.
     address beacon;
@@ -155,7 +155,7 @@ library LibRainDeployBeaconProxy {
 
         console2.log(" - Beacon Proxy Factory:", target.factory);
         address expectedAddress = beaconProxyDeployedAddress(target);
-        address factoryPredictedAddress = ICloneableFactoryV6(target.factory)
+        address factoryPredictedAddress = ICloneableFactoryV7(target.factory)
             .predictBeaconProxyAddressOpenSalt(target.implementation, target.data, target.salt);
         if (factoryPredictedAddress != expectedAddress) {
             revert BeaconProxyFactoryPredictionMismatch(
@@ -165,7 +165,7 @@ library LibRainDeployBeaconProxy {
 
         console2.log(" - Beacon proxy of beacon:", target.implementation);
         vm.startBroadcast(deployer);
-        address proxy = ICloneableFactoryV6(target.factory)
+        address proxy = ICloneableFactoryV7(target.factory)
             .beaconProxyDeterministicOpenSalt(target.implementation, target.data, target.salt);
         vm.stopBroadcast();
 

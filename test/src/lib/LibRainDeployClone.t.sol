@@ -6,8 +6,8 @@ import {
     EIP1167_CREATION_CODE_PREFIX,
     EIP1167_CREATION_CODE_SUFFIX,
     LibICloneableFactoryV5
-} from "rain-factory-0.2.5/src/lib/LibICloneableFactoryV5.sol";
-import {ICloneableFactoryV4} from "rain-factory-0.2.5/src/interface/deprecated/ICloneableFactoryV4.sol";
+} from "rain-factory-0.2.6/src/lib/LibICloneableFactoryV5.sol";
+import {ICloneableFactoryV4} from "rain-factory-0.2.6/src/interface/deprecated/ICloneableFactoryV4.sol";
 import {Vm, VmSafe} from "forge-std-1.17.0/src/Vm.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {

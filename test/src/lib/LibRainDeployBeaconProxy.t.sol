@@ -6,10 +6,10 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {
     ICLONEABLE_FACTORY_V5_BEACON_PROXY_CREATION_CODE_HASH
-} from "rain-factory-0.2.5/src/interface/deprecated/ICloneableFactoryV5.sol";
-import {ICloneableFactoryV6} from "rain-factory-0.2.5/src/interface/ICloneableFactoryV6.sol";
-import {BEACON_PROXY_CREATION_CODE} from "rain-factory-0.2.5/src/generated/BeaconProxy.sol";
-import {DelegatedBeacon} from "rain-factory-0.2.5/src/lib/LibICloneableFactoryV5.sol";
+} from "rain-factory-0.2.6/src/interface/deprecated/ICloneableFactoryV5.sol";
+import {ICloneableFactoryV7} from "rain-factory-0.2.6/src/interface/ICloneableFactoryV7.sol";
+import {BEACON_PROXY_CREATION_CODE} from "rain-factory-0.2.6/src/generated/BeaconProxy.sol";
+import {DelegatedBeacon} from "rain-factory-0.2.6/src/lib/LibICloneableFactoryV5.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {CloneTarget} from "../../../src/lib/LibRainDeployClone.sol";
 import {BEACON_PROXY_ARTIFACT_PATH, LibRainDeployBeaconProxy} from "../../../src/lib/LibRainDeployBeaconProxy.sol";
@@ -171,7 +171,7 @@ contract LibRainDeployBeaconProxyTest is Test {
         address elsewhere = address(uint160(LibRainDeployBeaconProxy.beaconProxyDeployedAddress(target)) + 1);
         vm.mockCall(
             address(factory),
-            abi.encodeWithSelector(ICloneableFactoryV6(address(factory)).beaconProxyDeterministicOpenSalt.selector),
+            abi.encodeWithSelector(ICloneableFactoryV7(address(factory)).beaconProxyDeterministicOpenSalt.selector),
             abi.encode(elsewhere)
         );
         address deployed =
@@ -198,7 +198,7 @@ contract LibRainDeployBeaconProxyTest is Test {
         address predicted = address(uint160(expected) + 1);
         vm.mockCall(
             address(factory),
-            abi.encodeWithSelector(ICloneableFactoryV6(address(factory)).predictBeaconProxyAddressOpenSalt.selector),
+            abi.encodeWithSelector(ICloneableFactoryV7(address(factory)).predictBeaconProxyAddressOpenSalt.selector),
             abi.encode(predicted)
         );
         vm.expectRevert(

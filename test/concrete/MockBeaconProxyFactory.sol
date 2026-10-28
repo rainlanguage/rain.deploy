@@ -2,14 +2,14 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {ICloneableFactoryV5, ICloneableFactoryV6} from "rain-factory-0.2.5/src/interface/ICloneableFactoryV6.sol";
-import {LibICloneableFactoryV5} from "rain-factory-0.2.5/src/lib/LibICloneableFactoryV5.sol";
-import {LibICloneableFactoryV6} from "rain-factory-0.2.5/src/lib/LibICloneableFactoryV6.sol";
+import {ICloneableFactoryV5, ICloneableFactoryV7} from "rain-factory-0.2.6/src/interface/ICloneableFactoryV7.sol";
+import {LibICloneableFactoryV5} from "rain-factory-0.2.6/src/lib/LibICloneableFactoryV5.sol";
+import {LibICloneableFactoryV7} from "rain-factory-0.2.6/src/lib/LibICloneableFactoryV7.sol";
 import {MockCloneFactory} from "./MockCloneFactory.sol";
 
 /// @title MockBeaconProxyFactory
-/// @notice A real `ICloneableFactoryV6`, not a stub.
-contract MockBeaconProxyFactory is MockCloneFactory, ICloneableFactoryV6 {
+/// @notice A real `ICloneableFactoryV7`, not a stub.
+contract MockBeaconProxyFactory is MockCloneFactory, ICloneableFactoryV7 {
     /// @inheritdoc ICloneableFactoryV5
     function beaconProxyDeterministicOpenSalt(address beacon, bytes calldata data, bytes32 salt)
         external
@@ -36,7 +36,7 @@ contract MockBeaconProxyFactory is MockCloneFactory, ICloneableFactoryV6 {
         bytes calldata data,
         bytes32 salt
     ) external returns (address) {
-        return LibICloneableFactoryV6.registryBeaconProxy(registry, authority, beaconName, data, salt);
+        return LibICloneableFactoryV7.registryBeaconProxy(registry, authority, beaconName, data, salt);
     }
 
     function predictRegistryBeaconProxyAddress(
@@ -46,6 +46,6 @@ contract MockBeaconProxyFactory is MockCloneFactory, ICloneableFactoryV6 {
         bytes calldata data,
         bytes32 salt
     ) external view returns (address) {
-        return LibICloneableFactoryV6.predictRegistryBeaconProxyAddress(registry, authority, beaconName, data, salt);
+        return LibICloneableFactoryV7.predictRegistryBeaconProxyAddress(registry, authority, beaconName, data, salt);
     }
 }
