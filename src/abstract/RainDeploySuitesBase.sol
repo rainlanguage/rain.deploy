@@ -296,16 +296,21 @@ struct DeployMechanismHandler {
         view returns (function(Vm, string memory, address, bytes memory) internal returns (address)) deployStep;
     function(DeployDeclaration memory, Vm, DeploySuite memory) internal returns (address[] memory) deployLocally;
     function(DeployDeclaration memory, Vm, DeploySuite memory) internal deployLocallyOnChain;
-    function(DeployDeclaration memory, DeploySuite memory, DeploySuite memory, uint256[] memory) internal view addUnrecordedNetworks;
+    function(DeployDeclaration memory, DeploySuite memory, DeploySuite memory, uint256[] memory) internal view
+        addUnrecordedNetworks;
     function(DeployDeclaration memory, DeploySuite memory) internal view addRecordedNetworks;
-    function(DeployDeclaration memory, DeploySuite memory, string memory, uint256, address) internal view checkNetworkFrozen;
+    function(DeployDeclaration memory, DeploySuite memory, string memory, uint256, address) internal view
+        checkNetworkFrozen;
     function(DeployDeclaration memory, DeploySuite memory, string memory, uint256, address) internal checkOnChain;
     function(DeployDeclaration memory, DeploySuite memory, uint256, address) internal checkBroadcastSeat;
     function(DeployDeclaration memory) internal checkDeclaration;
     function(DeployDeclaration memory, string memory, uint256) internal checkNetwork;
-    function(DeployDeclaration memory, Vm, string[] memory, DeploySuite memory, address[] memory) internal logVerification;
-    function(DeployDeclaration memory, Vm, SnapshotFile memory, DeploySuite memory) internal returns (string memory) writeSuiteSnapshot;
-    function(DeployDeclaration memory, Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData;
+    function(DeployDeclaration memory, Vm, string[] memory, DeploySuite memory, address[] memory) internal
+        logVerification;
+    function(DeployDeclaration memory, Vm, SnapshotFile memory, DeploySuite memory) internal returns (string memory)
+        writeSuiteSnapshot;
+    function(DeployDeclaration memory, Vm, string memory, string memory) internal view returns (string memory)
+        releasedMechanismData;
     function(DeployDeclaration memory, string memory) internal pure returns (string memory) releasedImport;
 }
 
