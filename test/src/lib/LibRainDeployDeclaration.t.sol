@@ -53,19 +53,6 @@ contract LibRainDeployDeclarationTest is Test {
         }
     }
 
-    function externalMechanismById(DeployDeclaration memory d, bytes32 id) external pure returns (bytes32) {
-        return LibRainDeployDeclaration.mechanismById(d, id, "subject").id;
-    }
-
-    function externalAddMechanism(DeployDeclaration memory d, DeployMechanismHandler memory handler)
-        external
-        pure
-        returns (uint256)
-    {
-        LibRainDeployDeclaration.addMechanism(d, handler);
-        return d.mechanisms.length;
-    }
-
     function threeMechanisms() internal pure returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployZoltuMechanism.extend(d);
@@ -188,17 +175,39 @@ contract LibRainDeployDeclarationTest is Test {
         assertEq(d.networks.length, 0, "networks touched");
     }
 
-    function testAddMechanismRefusesARepeatedId() external {
+    function externalAddCreate2ToThreeMechanisms() external pure {
         DeployDeclaration memory d = threeMechanisms();
-        vm.expectRevert(abi.encodeWithSelector(DuplicateMechanism.selector, MOCK_CREATE2_MECHANISM_ID));
-        this.externalAddMechanism(d, LibMockCreate2Mechanism.handler());
+        LibRainDeployDeclaration.addMechanism(d, LibMockCreate2Mechanism.handler());
     }
 
-    function testMechanismByIdFindsEachIdInAnyOrder() external view {
+    function externalMechanismByIdInThreeMechanisms(bytes32 id) external pure returns (bytes32) {
+        return LibRainDeployDeclaration.mechanismById(threeMechanisms(), id, "subject").id;
+    }
+
+    function externalMechanismByIdInEmptyDeclaration(bytes32 id) external pure returns (bytes32) {
+        DeployDeclaration memory d;
+        return LibRainDeployDeclaration.mechanismById(d, id, "subject").id;
+    }
+
+    function externalMechanismByIdWithRepeatedSalt(bytes32 id) external pure returns (bytes32) {
+        DeployDeclaration memory d;
+        d.mechanisms = new DeployMechanismHandler[](3);
+        d.mechanisms[0] = LibRainDeployZoltuMechanism.handler();
+        d.mechanisms[1] = LibMockSaltMechanism.handler();
+        d.mechanisms[2] = LibMockSaltMechanism.handler();
+        return LibRainDeployDeclaration.mechanismById(d, id, "subject").id;
+    }
+
+    function testAddMechanismRefusesARepeatedId() external {
+        vm.expectRevert(abi.encodeWithSelector(DuplicateMechanism.selector, MOCK_CREATE2_MECHANISM_ID));
+        this.externalAddCreate2ToThreeMechanisms();
+    }
+
+    function testMechanismByIdFindsEachIdInAnyOrder() external pure {
         DeployDeclaration memory d = threeMechanisms();
         bytes32[3] memory ids = [ZOLTU_MECHANISM_ID, MOCK_CREATE2_MECHANISM_ID, MOCK_SALT_MECHANISM_ID];
         for (uint256 i = 0; i < ids.length; i++) {
-            assertEq(this.externalMechanismById(d, ids[i]), ids[i]);
+            assertEq(LibRainDeployDeclaration.mechanismById(d, ids[i], "subject").id, ids[i]);
         }
 
         DeployMechanismHandler[] memory reversed = new DeployMechanismHandler[](3);
@@ -207,29 +216,22 @@ contract LibRainDeployDeclarationTest is Test {
         reversed[2] = d.mechanisms[0];
         d.mechanisms = reversed;
         for (uint256 i = 0; i < ids.length; i++) {
-            assertEq(this.externalMechanismById(d, ids[i]), ids[i]);
+            assertEq(LibRainDeployDeclaration.mechanismById(d, ids[i], "subject").id, ids[i]);
         }
     }
 
     function testMechanismByIdRefusesAnUnclaimedId() external {
-        DeployDeclaration memory d = threeMechanisms();
         vm.expectRevert(abi.encodeWithSelector(MechanismUnclaimed.selector, "subject"));
-        this.externalMechanismById(d, keccak256("unclaimed"));
+        this.externalMechanismByIdInThreeMechanisms(keccak256("unclaimed"));
     }
 
     function testMechanismByIdRefusesAnEmptyDeclaration() external {
-        DeployDeclaration memory d;
         vm.expectRevert(abi.encodeWithSelector(MechanismUnclaimed.selector, "subject"));
-        this.externalMechanismById(d, ZOLTU_MECHANISM_ID);
+        this.externalMechanismByIdInEmptyDeclaration(ZOLTU_MECHANISM_ID);
     }
 
     function testMechanismByIdRefusesARepeatedIdEvenWhenTheRequestedIdIsUnique() external {
-        DeployDeclaration memory d;
-        d.mechanisms = new DeployMechanismHandler[](3);
-        d.mechanisms[0] = LibRainDeployZoltuMechanism.handler();
-        d.mechanisms[1] = LibMockSaltMechanism.handler();
-        d.mechanisms[2] = LibMockSaltMechanism.handler();
         vm.expectRevert(abi.encodeWithSelector(DuplicateMechanism.selector, MOCK_SALT_MECHANISM_ID));
-        this.externalMechanismById(d, ZOLTU_MECHANISM_ID);
+        this.externalMechanismByIdWithRepeatedSalt(ZOLTU_MECHANISM_ID);
     }
 }
