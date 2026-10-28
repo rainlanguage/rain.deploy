@@ -39,30 +39,32 @@ library LibRainDeployDeclaration {
 
     /// Appends `suites` to `d.released`, giving each naming no networks a copy of `d.networks`.
     /// @param d The declaration, mutated.
-    /// @param suites The released suites, each mutated by that fill.
+    /// @param suites The released suites, copied before that fill.
     function addReleased(DeployDeclaration memory d, DeploySuite[] memory suites) internal pure {
         DeploySuite[] memory released = new DeploySuite[](d.released.length + suites.length);
         for (uint256 i = 0; i < d.released.length; i++) {
             released[i] = d.released[i];
         }
         for (uint256 i = 0; i < suites.length; i++) {
-            fillNetworks(suites[i], d);
-            released[d.released.length + i] = suites[i];
+            DeploySuite memory suite = abi.decode(abi.encode(suites[i]), (DeploySuite));
+            fillNetworks(suite, d);
+            released[d.released.length + i] = suite;
         }
         d.released = released;
     }
 
     /// Appends `candidates` to `d.candidates`, giving each snapshot naming no networks a copy of `d.networks`.
     /// @param d The declaration, mutated.
-    /// @param candidates The candidates, each mutated by that fill.
+    /// @param candidates The candidates, copied before that fill.
     function addCandidates(DeployDeclaration memory d, DeployCandidate[] memory candidates) internal pure {
         DeployCandidate[] memory all = new DeployCandidate[](d.candidates.length + candidates.length);
         for (uint256 i = 0; i < d.candidates.length; i++) {
             all[i] = d.candidates[i];
         }
         for (uint256 i = 0; i < candidates.length; i++) {
-            fillNetworks(candidates[i].snapshot, d);
-            all[d.candidates.length + i] = candidates[i];
+            DeployCandidate memory candidate = abi.decode(abi.encode(candidates[i]), (DeployCandidate));
+            fillNetworks(candidate.snapshot, d);
+            all[d.candidates.length + i] = candidate;
         }
         d.candidates = all;
     }
@@ -78,7 +80,7 @@ library LibRainDeployDeclaration {
     /// @param d The declaration.
     /// @param id The mechanism id.
     /// @param subject The suite key or record file `MechanismUnclaimed` names.
-    /// @return Its handler.
+    /// @return A copy of its handler.
     function mechanismById(DeployDeclaration memory d, bytes32 id, string memory subject)
         internal
         pure
@@ -99,7 +101,23 @@ library LibRainDeployDeclaration {
         if (found == handlers.length) {
             revert MechanismUnclaimed(subject);
         }
-        return handlers[found];
+        DeployMechanismHandler memory h = handlers[found];
+        return DeployMechanismHandler(
+            h.id,
+            h.deployedAddress,
+            h.recordedAddress,
+            h.deployStepData,
+            h.deployStep,
+            h.deployLocally,
+            h.deployLocallyOnChain,
+            h.addUnrecordedNetworks,
+            h.addRecordedNetworks,
+            h.checkNetworkFrozen,
+            h.checkOnChain,
+            h.logVerification,
+            h.writeSuiteSnapshot,
+            h.releasedMechanismData
+        );
     }
 
     /// Appends `handler` to `d.mechanisms`, refusing `DuplicateMechanism` for an id already there.
