@@ -75,6 +75,13 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         script.runAsItself();
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
         script.verify();
+        // The list is split on commas: a second name is read, so a repeat of
+        // the first is refused.
+        vm.setEnv(e("SCOPES"), string.concat(name, ",", name));
+        vm.expectRevert(abi.encodeWithSelector(LibRegistryDelegatesApprove.DuplicateScope.selector, name));
+        script.runAsItself();
+        vm.expectRevert(abi.encodeWithSelector(LibRegistryDelegatesApprove.DuplicateScope.selector, name));
+        script.verify();
         vm.setEnv(e("SCOPES"), name);
 
         // The signer is the script's `msg.sender`: this test contract is not
@@ -142,6 +149,26 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         vm.setEnv(e("APPROVED"), "true");
         script.runAsItself();
         assertTrue(registry.approvedV4(authority, hashed, delegate));
+        script.verify();
+
+        // Two names: the second is approved too, and `verify()` reads both.
+        string memory second = string.concat(name, ".second");
+        bytes32 secondHashed = keccak256(bytes(second));
+        vm.setEnv(e("SCOPES"), string.concat(name, ",", second));
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRegistryDelegatesApprove.UnexpectedApproval.selector,
+                network,
+                authority,
+                secondHashed,
+                delegate,
+                true
+            )
+        );
+        script.verify();
+        script.runAsItself();
+        assertTrue(registry.approvedV4(authority, hashed, delegate));
+        assertTrue(registry.approvedV4(authority, secondHashed, delegate));
         script.verify();
     }
 
