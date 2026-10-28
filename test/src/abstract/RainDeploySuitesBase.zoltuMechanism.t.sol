@@ -4,7 +4,12 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
-import {DeploySuite, MechanismUnclaimed, UnexpectedMechanismData} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployDeclaration,
+    DeploySuite,
+    MechanismUnclaimed,
+    UnexpectedMechanismData
+} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployZoltuMechanism, ZOLTU_MECHANISM_ID} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
@@ -41,11 +46,13 @@ contract RainDeploySuitesBaseZoltuMechanismTest is Test {
     }
 
     function zoltuDeployedAddress(DeploySuite memory suite) external pure returns (address) {
-        return LibRainDeployZoltuMechanism.deployedAddress(suite, 0);
+        DeployDeclaration memory d;
+        return LibRainDeployZoltuMechanism.deployedAddress(d, suite, 0);
     }
 
     function zoltuDeployStepData(DeploySuite memory suite) external pure returns (bytes memory) {
-        return LibRainDeployZoltuMechanism.deployStepData(suite, 0);
+        DeployDeclaration memory d;
+        return LibRainDeployZoltuMechanism.deployStepData(d, suite, 0);
     }
 
     /// Mechanism data shorter than an id is claimed by no mechanism.
