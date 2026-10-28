@@ -2,10 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeployMechanismHandler, DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployCandidate, DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 
@@ -13,11 +13,14 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 /// @notice The chain matrix holds every released suite's declared dependencies to the code declared
 /// for them on each network, before the suite's own address.
 contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
-    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
-        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
-        handlers[0] = LibRainDeployZoltuMechanism.handler();
-        return handlers;
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
+        declared.released = declaredReleased();
+        declared.candidates = declaredCandidates();
+        declared.networks = declaredNetworks();
+        return declared;
     }
+
 
     /// Polygon's native token system contract.
     address constant POLYGON_SYSTEM_CONTRACT = 0x0000000000000000000000000000000000001010;
@@ -25,8 +28,7 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
     /// Where the release's one declared dependency is.
     address constant DEPENDENCY = address(uint160(0xDE9E4DE4C1));
 
-    /// @inheritdoc RainDeploySuitesBase
-    function supportedNetworks() internal pure override returns (string[] memory) {
+    function declaredNetworks() internal pure returns (string[] memory) {
         string[] memory networks = new string[](2);
         networks[0] = LibRainDeploy.POLYGON;
         networks[1] = LibRainDeploy.ARBITRUM_ONE;
@@ -53,15 +55,13 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
         });
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = dependentSuite("mock-deployable@0_0_1");
         return suites;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function declaredCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({snapshot: dependentSuite("mock-deployable"), unanchorableReason: ""});
         return candidates;

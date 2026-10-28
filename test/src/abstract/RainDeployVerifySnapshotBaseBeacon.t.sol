@@ -13,7 +13,7 @@ import {
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanismHandler,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
@@ -26,7 +26,7 @@ import {
     LibRainDeployBeacon
 } from "../../../src/lib/LibRainDeployBeacon.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {LibBeaconDeclarations} from "../../lib/LibBeaconDeclarations.sol";
 import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
 import {MIGRATION_HEAD_GENESIS, Prerequisite} from "../../../src/interface/IMigrationRegistryV4.sol";
@@ -35,11 +35,17 @@ import {MockDeployable} from "../../concrete/MockDeployable.sol";
 /// @title RainDeployVerifySnapshotBaseBeaconTest
 /// @notice The snapshot group refuses a malformed beacon declaration without forking.
 contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase {
-    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
-        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
-        handlers[0] = LibRainDeployZoltuMechanism.handler();
-        return handlers;
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
+        declared.released = declaredReleased();
+        declared.candidates = declaredCandidates();
+        declared.beacons = sBeacons;
+        if (sSupported.length > 0) {
+            declared.networks = sSupported;
+        }
+        return declared;
     }
+
 
     using LibBeaconDeclarations for ChainBeacon[];
 
@@ -49,9 +55,9 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
 
     address constant DEPLOY_KEY = address(0xDE9107);
 
-    /// The declarations `beacons()` returns.
+    /// The beacons `declaration()` declares.
     ChainBeacon[] internal sBeacons;
-    /// The networks `supportedNetworks()` returns, every catalogue network when empty.
+    /// The networks `declaration()` declares, every catalogue network when empty.
     string[] internal sSupported;
 
     function implementation(string memory key) internal pure returns (DeploySuite memory) {
@@ -63,8 +69,7 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
         );
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory released = new DeploySuite[](3);
         released[0] = implementation("implementation@0_0_1");
         address implementationAddress = released[0].storedDeployedAddress;
@@ -77,21 +82,10 @@ contract RainDeployVerifySnapshotBaseBeaconTest is RainDeployVerifySnapshotBase 
         return released;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function declaredCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({snapshot: implementation("implementation"), unanchorableReason: ""});
         return candidates;
-    }
-
-    /// @inheritdoc RainDeploySuitesBase
-    function beacons() internal view override returns (ChainBeacon[] memory) {
-        return sBeacons;
-    }
-
-    /// @inheritdoc RainDeploySuitesBase
-    function supportedNetworks() internal view override returns (string[] memory) {
-        return sSupported.length == 0 ? LibRainDeploy.supportedNetworks() : sSupported;
     }
 
     function setUp() external {
