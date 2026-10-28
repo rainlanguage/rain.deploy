@@ -6,12 +6,12 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {IBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/IBeacon.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
 
-import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {
+    DeploySuite,
     DerivationSnapshotRevertFailed,
-    LibRainDeployMechanism,
+    RainDeploySuitesBase,
     ZoltuDerivationMismatch
-} from "../lib/LibRainDeployMechanism.sol";
+} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 import {ChainBeacon, DeployBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
 
@@ -19,8 +19,7 @@ import {ChainBeacon, DeployBeacon, LibRainDeployBeacon} from "../lib/LibRainDepl
 struct DerivedDeploy {
     /// The suite the derivation came from.
     string suite;
-    /// The addresses the suite's mechanism deploys it to, in the suite's address order (see
-    /// `LibRainDeployMechanism`).
+    /// The addresses the suite's mechanism deploys it to, in the suite's address order (`deployedAddresses`).
     address[] deployedAddresses;
     /// The code hash the mechanism leaves behind at those addresses.
     bytes32 bytecodeHash;
@@ -92,7 +91,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     function deriveDeployment(DeploySuite memory suite) internal returns (DerivedDeploy memory) {
         uint256 snapshotId = vm.snapshotState();
 
-        address[] memory deployedAddresses = LibRainDeployMechanism.deployLocally(vm, suite);
+        address[] memory deployedAddresses = deployLocally(vm, suite);
         DerivedDeploy memory derived = DerivedDeploy({
             suite: suite.suite, deployedAddresses: deployedAddresses, bytecodeHash: deployedAddresses[0].codehash
         });
@@ -191,7 +190,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
 
     /// Refuses `BeaconNamedTwice` and `BeaconUnnamed`, `BeaconSuiteNotReleased` through `resolveReleased`,
     /// `LibRainDeployBeacon.checkTransitionMigrations`'s refusals, and those of
-    /// `LibRainDeployMechanism.deployedAddress` and `deriveDeployment` for each suite it names on `chainId`, and
+    /// `deployedAddress` and `deriveDeployment` for each suite it names on `chainId`, and
     /// `checkSeatedState`'s for a beacon named by `beaconSuite`.
     /// @param declaration The beacon, left unwritten so one declaration can be resolved on several networks.
     /// @param chainId The beacon's network.
@@ -221,7 +220,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
             uint256 releasedIndex = resolveReleased(beacon.beaconSuite, released, derived);
             resolved.suite = released[releasedIndex];
             resolved.derived = derived[releasedIndex];
-            beacon.beacon = LibRainDeployMechanism.deployedAddress(released[releasedIndex], chainId);
+            beacon.beacon = deployedAddress(released[releasedIndex], chainId);
             beacon.beaconCodeHash = derived[releasedIndex].bytecodeHash;
         } else if (beacon.beacon == address(0) || beacon.beaconCodeHash == bytes32(0)) {
             revert BeaconUnnamed(chainId, beaconIndex);
@@ -238,7 +237,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
                 resolveReleased(LibRainDeployBeacon.stateAt(beacon, state).implementation, released, derived);
             resolved.implementations[state] = released[releasedIndex];
             resolved.implementationAddresses[state] =
-                LibRainDeployMechanism.deployedAddress(released[releasedIndex], chainId);
+                deployedAddress(released[releasedIndex], chainId);
             resolved.implementationDerived[state] = derived[releasedIndex];
         }
         if (bytes(beacon.beaconSuite).length != 0) {
@@ -248,7 +247,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     }
 
     /// Deploys the beacon's suite locally, as `deriveDeployment` does but under the beacon's chain id and, for a
-    /// per-network clone suite, only that network's clone, and refuses
+    /// per-network suite, only that network's address, and refuses
     /// `BeaconSeatedOwner` or `BeaconSeatedImplementation` when the deployment at the beacon's address answers
     /// `owner()` or `implementation()` other than the initial state. A read that reverts or answers nothing is left
     /// to the chain group's `LibRainDeployBeacon.checkBeacon`.
@@ -257,7 +256,7 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     function checkSeatedState(ResolvedBeacon memory resolved, uint256 beaconIndex) internal {
         uint256 snapshotId = vm.snapshotState();
         vm.chainId(resolved.chainId);
-        LibRainDeployMechanism.deployLocallyOnChain(vm, resolved.suite);
+        deployLocallyOnChain(vm, resolved.suite);
         // slither-disable-next-line low-level-calls
         (bool ownerAnswered, bytes memory owner) = resolved.beacon.beacon.staticcall(abi.encodeCall(IERC5313.owner, ()));
         // slither-disable-next-line low-level-calls
