@@ -14,7 +14,7 @@ contract RegistryDeploySuitesOptimizerRunsTest is RegistryDeploySuites, Test {
     function testEveryCandidateRestrictedToItsRuns() external view {
         string memory toml = vm.readFile("foundry.toml");
         uint256 defaultRuns = vm.parseTomlUint(toml, ".profile.default.optimizer_runs");
-        DeployCandidate[] memory candidates = candidateSuites();
+        DeployCandidate[] memory candidates = declaration().candidates;
         assertGt(candidates.length, 0);
         for (uint256 c = 0; c < candidates.length; c++) {
             string memory source = vm.split(candidates[c].snapshot.artifactPath, ":")[0];
