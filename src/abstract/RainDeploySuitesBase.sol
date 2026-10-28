@@ -223,9 +223,30 @@ struct DeploySuite {
     /// broadcasts anything. So a wrong declaration is a red deploy run rather
     /// than a wrong hash frozen into a release.
     DeployDependency[] dependencies;
-    /// What the suite's mechanism needs beyond `creationCode`: empty for Zoltu, read by the overriding hooks of an
-    /// extension's suites abstract otherwise.
+    /// What the suite's mechanism needs beyond `creationCode`: empty for Zoltu, otherwise
+    /// `abi.encode(id, payload)` for the mechanism with that id.
     bytes mechanismData;
+    /// The networks, as `[rpc_endpoints]` aliases, the chain group requires the suite live on; empty for every
+    /// declared network. A release nothing can deploy any more names the networks it was deployed to. A suite
+    /// required on none of the networks checked is refused with `SuiteRequiredNowhere`.
+    string[] networks;
+}
+
+/// Everything a repo declares, as data. A declaration starts from `LibRainDeployDeclaration.zoltu()` and sets fields.
+struct DeployDeclaration {
+    /// Every FROZEN released suite, in any order, never regenerated nor anchored to current source.
+    DeploySuite[] released;
+    /// The rolling candidates, one per contract this repo compiles; MUST NOT be empty (`NoDeployCandidates`).
+    DeployCandidate[] candidates;
+    /// The mechanisms its suites deploy through, in any order, ids unique.
+    DeployMechanismHandler[] mechanisms;
+    /// Every network this repo deals with, as `[rpc_endpoints]` aliases: what a broadcast targets, what every
+    /// network-scoped assertion is made over, and what the network config is generated from.
+    string[] networks;
+    /// The beacons that MUST hold their declared state, each on one of `networks` with its chain id.
+    ChainBeacon[] beacons;
+    /// The record root extended networks records are read from and written under.
+    string extendedNetworksRoot;
 }
 
 /// The rolling candidate: a snapshot that tracks current source rather than a
@@ -287,78 +308,49 @@ struct DeployMechanismHandler {
 /// so a repo cannot be verified on a different set of networks than it deploys
 /// to, nor configured for a set it does neither on.
 ///
-/// A repo overrides `releasedSuites` and `candidateSuites` on one abstract
-/// contract and inherits that into its deploy script, its build script and its
-/// test contracts, and overrides `supportedNetworks` there too if it deploys to
-/// fewer than all of them. Nothing else is per suite and nothing else is per
-/// network.
-///
-/// `mechanisms` is overridden there too; every mechanism step resolves its
-/// suite's handler from it, so the declaration composes with every role
-/// abstract without restating anything.
+/// A repo implements `declaration` on one abstract contract and inherits that into its deploy script, its build
+/// script and its test contracts. It is the one override: the roles read every declared fact through it.
 abstract contract RainDeploySuitesBase {
-    /// Every FROZEN released suite, in any order. A released snapshot is
-    /// immutable: its recorded bytes describe a deployment that already
-    /// happened, so it is never regenerated and never anchored to current
-    /// source.
-    /// @return The released suites.
-    function releasedSuites() internal pure virtual returns (DeploySuite[] memory);
+    /// Everything this repo declares.
+    /// @return The declaration.
+    function declaration() internal view virtual returns (DeployDeclaration memory);
 
-    /// The rolling candidates — one snapshot per contract this repo compiles
-    /// right now, each naming the contract it MUST be the current compilation
-    /// of.
-    ///
-    /// A list because a repo deploys as many contracts as it deploys, and each
-    /// of them has its own rolling snapshot and its own source to be anchored
-    /// to. A single candidate leaves a repo's second deployed contract either
-    /// undeclared or declared as a release it is not, and in both cases the one
-    /// check that catches a snapshot of the wrong contract is never handed it.
-    ///
-    /// Two suites abstracts cannot be composed into that gap either: both would
-    /// override this, and a repo inherits exactly one declaration. So the list
-    /// is here rather than left to the consumer to assemble.
-    ///
-    /// MUST NOT be empty, which `checkedCandidateSuites` enforces. A deploy
-    /// repo always compiles a current source, so there is always something to
-    /// anchor to — see `NoDeployCandidates` for why an empty list is worse
-    /// than it looks.
-    /// @return The candidates.
-    function candidateSuites() internal view virtual returns (DeployCandidate[] memory);
-
-    /// The beacons that MUST hold their declared state, each on the one of `supportedNetworks()` with its chain id.
-    /// @return The beacons; one with transitions reads `MigrationRegistry`, which MUST be deployed on its network.
-    function beacons() internal view virtual returns (ChainBeacon[] memory) {
-        return new ChainBeacon[](0);
+    /// @return `declaration().released`.
+    function releasedSuites() internal view returns (DeploySuite[] memory) {
+        return declaration().released;
     }
 
-    /// Every network this repo deals with: what a broadcast targets, the set
-    /// every network-scoped assertion is made over, and the set the network
-    /// config is generated from. Defaults to all of Rain's.
-    ///
-    /// ONE hook, on the contract all three sides inherit, because the set of
-    /// networks a repo deals with is one fact. A `virtual` per verification
-    /// function would be three ways for verification to end up narrower than
-    /// what the repo broadcasts to, with nothing to catch it, and a second one
-    /// on the build script would be config for networks nothing verifies.
-    ///
-    /// `deployNetworks` narrowing this is a different thing and stays
-    /// available: that is one dispatch's targets, not the repo's set.
-    /// @return The network names, as `[rpc_endpoints]` aliases.
-    function supportedNetworks() internal view virtual returns (string[] memory) {
-        return LibRainDeploy.supportedNetworks();
+    /// @return `declaration().candidates`.
+    function candidateSuites() internal view returns (DeployCandidate[] memory) {
+        return declaration().candidates;
     }
 
-    /// Whether the chain group requires a suite to be live on a network. Every
-    /// suite on every supported network by default. A repo narrows it for a
-    /// release nothing can deploy any more, on networks it was never deployed
-    /// to. A suite it requires on none of the networks checked is refused with
-    /// `SuiteRequiredNowhere` rather than passed unchecked.
+    /// @return `declaration().beacons`.
+    function beacons() internal view returns (ChainBeacon[] memory) {
+        return declaration().beacons;
+    }
+
+    /// `deployNetworks` narrowing this is one dispatch's targets, not the repo's set.
+    /// @return `declaration().networks`.
+    function supportedNetworks() internal view returns (string[] memory) {
+        return declaration().networks;
+    }
+
+    /// Whether the chain group requires a suite to be live on a network: every declared network for a suite
+    /// declaring no `networks`, else the ones it declares.
     /// @param suite The suite.
     /// @param network The network, as an `[rpc_endpoints]` alias.
     /// @return True if the suite MUST be live on the network.
-    function requiresSuiteOn(DeploySuite memory suite, string memory network) internal view virtual returns (bool) {
-        (suite, network);
-        return true;
+    function requiresSuiteOn(DeploySuite memory suite, string memory network) internal pure returns (bool) {
+        if (suite.networks.length == 0) {
+            return true;
+        }
+        for (uint256 i = 0; i < suite.networks.length; i++) {
+            if (keccak256(bytes(suite.networks[i])) == keccak256(bytes(network))) {
+                return true;
+            }
+        }
+        return false;
     }
 
     /// A suite as the chain group checks it. The broadcast takes its candidate's networks in `deployAndBroadcast`
@@ -388,53 +380,40 @@ abstract contract RainDeploySuitesBase {
         return suite;
     }
 
-    /// A suite with the networks `extendedNetworks` declares for it. Reverts with `ExtendedNetworksUnrecorded` unless
-    /// they are exactly the ones its extended networks record under `extendedNetworksRoot()` holds, and with the
-    /// refusals of `LibRainDeployExtendedNetworks.checkExtendedNetworksRecorded` and `appendExtendedNetworks`.
+    /// A suite with the networks its extended networks record holds, with `appendExtendedNetworks`' refusals.
     /// @param suite The suite.
     /// @return The suite, with its extended networks.
     function withExtendedNetworks(DeploySuite memory suite) internal view returns (DeploySuite memory) {
-        ChainDeploy[] memory declared = extendedNetworks(suite.suite);
-        LibRainDeployExtendedNetworks.checkExtendedNetworksRecorded(
-            StdConstants.VM, extendedNetworksRoot(), suite.suite, declared
-        );
-        return appendExtendedNetworks(suite, declared);
+        return appendExtendedNetworks(suite, extendedNetworks(suite.suite));
     }
 
-    /// The record root the extended networks records are read from and written under.
-    /// Overridable so a test can declare extended networks against a record other than the repo's own, which is
-    /// append-only. Independent of `BuildScript.recordRoot()`: a build pointed at a fixture record overrides both, or
-    /// its extended networks records are still written to and read from the repo's own.
-    /// @return The record root.
-    function extendedNetworksRoot() internal view virtual returns (string memory) {
-        return LibRainDeploySnapshot.LIB_FS_ROOT;
+    /// @return `declaration().extendedNetworksRoot`.
+    function extendedNetworksRoot() internal view returns (string memory) {
+        return declaration().extendedNetworksRoot;
     }
 
-    /// The networks a per-network release takes beyond those it records, each declared before it is broadcast there:
-    /// its chain id, the init data it is broadcast with and the address that derives. The broadcast and the
-    /// chain group refuse an unrecorded network not named here, whether or not anything is live there, so an unrecorded
-    /// network's address is frozen before it exists on chain.
-    /// The init data and the address MUST be literals copied from the broadcast: the build writes them to the
-    /// release's append-only extended networks record (`LibRainDeployExtendedNetworks`), refuses to change an entry
-    /// already written, and `withExtendedNetworks` refuses a declaration that is not exactly what the record holds.
-    /// Empty by default.
+    /// The networks a per-network release takes beyond those it records: its append-only extended networks record
+    /// under `extendedNetworksRoot()` (`LibRainDeployExtendedNetworks`), each entry its chain id, the init data it is
+    /// broadcast with and the address that derives. The broadcast and the chain group refuse an unrecorded network
+    /// not named there, whether or not anything is live there, so an unrecorded network's address is frozen before
+    /// it exists on chain.
     /// @param suite The release's suite key.
     /// @return The networks.
-    function extendedNetworks(string memory suite) internal view virtual returns (ChainDeploy[] memory) {
-        (suite);
-        return new ChainDeploy[](0);
+    function extendedNetworks(string memory suite) internal view returns (ChainDeploy[] memory) {
+        return LibRainDeployExtendedNetworks.recordedExtendedNetworks(StdConstants.VM, extendedNetworksRoot(), suite);
     }
 
-    /// The mechanisms this repo's suites deploy through, in any order.
-    /// @return The handlers.
-    function mechanisms() internal pure virtual returns (DeployMechanismHandler[] memory);
+    /// @return `declaration().mechanisms`.
+    function mechanisms() internal view returns (DeployMechanismHandler[] memory) {
+        return declaration().mechanisms;
+    }
 
     /// The one of `mechanisms()` whose id is `id`, refusing `DuplicateMechanism` for a list repeating an id and
     /// `MechanismUnclaimed` for none.
     /// @param id The mechanism id.
     /// @param subject The suite key or record file `MechanismUnclaimed` names.
     /// @return Its handler.
-    function mechanismById(bytes32 id, string memory subject) internal pure returns (DeployMechanismHandler memory) {
+    function mechanismById(bytes32 id, string memory subject) internal view returns (DeployMechanismHandler memory) {
         DeployMechanismHandler[] memory handlers = mechanisms();
         uint256 found = handlers.length;
         for (uint256 i = 0; i < handlers.length; i++) {
@@ -474,7 +453,7 @@ abstract contract RainDeploySuitesBase {
 
     /// @param suite The suite.
     /// @return The handler of the mechanism its data declares.
-    function mechanismOf(DeploySuite memory suite) internal pure returns (DeployMechanismHandler memory) {
+    function mechanismOf(DeploySuite memory suite) internal view returns (DeployMechanismHandler memory) {
         return mechanismById(mechanismIdOf(suite), suite.suite);
     }
 
