@@ -299,7 +299,7 @@ contract BuildTest is Test {
                 string.concat(
                     LibCodeGen.filePrefix(),
                     "\n",
-                    LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+                    sBuild.externalReleasedImportBlock(paths),
                     sBuild.externalReleasedLibraryBlock(
                         libraryName, generated[i].contractName, paths, generated[i].candidate.snapshot
                     )
@@ -328,7 +328,7 @@ contract BuildTest is Test {
                 string.concat(
                     LibCodeGen.filePrefix(),
                     "\n",
-                    LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+                    sBuild.externalReleasedImportBlock(paths),
                     sBuild.externalReleasedLibraryBlock(
                         libraryName, retired[i].contractName, paths, sBuild.externalRetiredTemplate(retired[i])
                     )
