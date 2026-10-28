@@ -5,6 +5,8 @@ pragma solidity =0.8.25;
 import {DeployDeclaration} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
@@ -34,10 +36,13 @@ contract RainDeployVerifyChainNarrowNetworksTest is ExampleDeploySuites, RainDep
     /// @dev ONE network, and base rather than either end of the library's
     /// list, so a run that ignored the declaration ends on arbitrum or polygon.
     function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = exampleDeclaration();
-        declared.networks = new string[](1);
-        declared.networks[0] = LibRainDeploy.BASE;
-        return declared;
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        d.networks = new string[](1);
+        d.networks[0] = LibRainDeploy.BASE;
+        LibRainDeployZoltuMechanism.extend(d);
+        addExample(d);
+        return d;
     }
 
     /// The second suite's address, derived from `MockDeployableV2`'s creation
@@ -61,7 +66,7 @@ contract RainDeployVerifyChainNarrowNetworksTest is ExampleDeploySuites, RainDep
     /// every assertion below holds for a group that ignored it.
     function assertNarrowerThanTheLibrary() internal pure {
         assertLt(
-            supportedNetworks().length,
+            declaration().networks.length,
             LibRainDeploy.supportedNetworks().length,
             "this fixture declares every supported network, so a group that ignored it would read the same"
         );
