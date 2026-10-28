@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {IConfigRegistryV4} from "../interface/IConfigRegistryV4.sol";
+import {IConfigRegistryV5} from "../interface/IConfigRegistryV5.sol";
 import {LibConfigRegistryDeploy} from "./LibConfigRegistryDeploy.sol";
 
 /// @title LibConfigRegistry
@@ -129,7 +129,7 @@ library LibConfigRegistry {
     {
         checkCodeHash();
         (bytes memory value, uint256 registeredAt, bytes32 actualValueTypeHash) =
-            IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV4(authority, name);
+            IConfigRegistryV5(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS).getV5(authority, name);
         if (actualValueTypeHash != valueTypeHash) {
             revert ValueTypeMismatch(authority, name, valueTypeHash, actualValueTypeHash);
         }

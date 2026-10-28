@@ -2,10 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {IRegistryDelegatesV2} from "../../../src/interface/IRegistryDelegatesV2.sol";
+import {IRegistryDelegatesV3} from "../../../src/interface/IRegistryDelegatesV3.sol";
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
-import {IMigrationRegistryV4, Prerequisite} from "../../../src/interface/IMigrationRegistryV4.sol";
+import {IMigrationRegistryV5, Prerequisite} from "../../../src/interface/IMigrationRegistryV5.sol";
 import {MigrationRegistry} from "../../../src/concrete/MigrationRegistry.sol";
 import {LibMigrationFuzz} from "../../lib/LibMigrationFuzz.sol";
 import {rainMeta, isNotRainMeta} from "../../lib/RainMeta.sol";
@@ -33,7 +33,7 @@ contract MigrationRegistryMetaTest is Test {
         returns (Prerequisite[] memory)
     {
         Prerequisite[] memory list = new Prerequisite[](1);
-        list[0] = Prerequisite({writer: writer, namespace: namespace, migration: registry.headV4(writer, namespace)});
+        list[0] = Prerequisite({writer: writer, namespace: namespace, migration: registry.headV5(writer, namespace)});
         return list;
     }
 
@@ -49,9 +49,9 @@ contract MigrationRegistryMetaTest is Test {
         Prerequisite[] memory list = onto(registry, writer, namespace);
         vm.prank(sender);
         if (history) {
-            registry.applyMigrationHistoryV4(writer, namespace, migration, block.timestamp, list, meta);
+            registry.applyMigrationHistoryV5(writer, namespace, migration, block.timestamp, list, meta);
         } else {
-            registry.applyMigrationV4(writer, namespace, migration, list, meta);
+            registry.applyMigrationV5(writer, namespace, migration, list, meta);
         }
     }
 
@@ -77,7 +77,7 @@ contract MigrationRegistryMetaTest is Test {
         write(sRegistry, writer, writer, namespace, migration, history, meta);
         Vm.Log[] memory entries = vm.getRecordedLogs();
         assertEq(entries.length, 2);
-        assertEq(entries[0].topics[0], IMigrationRegistryV4.Migrated.selector);
+        assertEq(entries[0].topics[0], IMigrationRegistryV5.Migrated.selector);
         assertMetaLog(entries[1], writer, keccak256(abi.encode(writer, namespace, migration)), meta);
     }
 
@@ -95,7 +95,7 @@ contract MigrationRegistryMetaTest is Test {
         vm.assume(delegate != address(0) && delegate != writer);
         meta = rainMeta(meta);
         vm.prank(writer);
-        sRegistry.approveV4(namespace, delegate);
+        sRegistry.approveV5(namespace, delegate);
         vm.recordLogs();
         write(sRegistry, delegate, writer, namespace, migration, history, meta);
         Vm.Log[] memory entries = vm.getRecordedLogs();
@@ -112,7 +112,7 @@ contract MigrationRegistryMetaTest is Test {
         write(sRegistry, writer, writer, namespace, migration, history, "");
         Vm.Log[] memory entries = vm.getRecordedLogs();
         assertEq(entries.length, 1);
-        assertEq(entries[0].topics[0], IMigrationRegistryV4.Migrated.selector);
+        assertEq(entries[0].topics[0], IMigrationRegistryV5.Migrated.selector);
     }
 
     /// Each record in a line has its own subject.
@@ -151,11 +151,11 @@ contract MigrationRegistryMetaTest is Test {
         Prerequisite[] memory list = onto(sRegistry, writer, namespace);
         vm.recordLogs();
         vm.prank(sender);
-        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV2.NotApproved.selector, writer, namespace, sender));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV3.NotApproved.selector, writer, namespace, sender));
         if (history) {
-            sRegistry.applyMigrationHistoryV4(writer, namespace, migration, block.timestamp, list, meta);
+            sRegistry.applyMigrationHistoryV5(writer, namespace, migration, block.timestamp, list, meta);
         } else {
-            sRegistry.applyMigrationV4(writer, namespace, migration, list, meta);
+            sRegistry.applyMigrationV5(writer, namespace, migration, list, meta);
         }
         assertEq(vm.getRecordedLogs().length, 0);
     }
@@ -171,18 +171,18 @@ contract MigrationRegistryMetaTest is Test {
     ) external {
         assumeKey(writer, namespace, migration);
         vm.assume(isNotRainMeta(meta));
-        bytes32 head = sRegistry.headV4(writer, namespace);
+        bytes32 head = sRegistry.headV5(writer, namespace);
         Prerequisite[] memory list = onto(sRegistry, writer, namespace);
         vm.prank(writer);
         vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, meta));
         if (history) {
-            sRegistry.applyMigrationHistoryV4(writer, namespace, migration, block.timestamp, list, meta);
+            sRegistry.applyMigrationHistoryV5(writer, namespace, migration, block.timestamp, list, meta);
         } else {
-            sRegistry.applyMigrationV4(writer, namespace, migration, list, meta);
+            sRegistry.applyMigrationV5(writer, namespace, migration, list, meta);
         }
-        assertEq(sRegistry.appliedV4(writer, namespace, migration), 0);
-        assertEq(sRegistry.appliedByV4(writer, namespace, migration), address(0));
-        assertEq(sRegistry.headV4(writer, namespace), head);
+        assertEq(sRegistry.appliedV5(writer, namespace, migration), 0);
+        assertEq(sRegistry.appliedByV5(writer, namespace, migration), address(0));
+        assertEq(sRegistry.headV5(writer, namespace), head);
     }
 
     /// The magic number alone is rain meta, and anything short of it is not.
@@ -196,9 +196,9 @@ contract MigrationRegistryMetaTest is Test {
             vm.prank(writer);
             vm.expectRevert(abi.encodeWithSelector(NotRainMetaV1.selector, refused[i]));
             if (history) {
-                sRegistry.applyMigrationHistoryV4(writer, namespace, migration, block.timestamp, list, refused[i]);
+                sRegistry.applyMigrationHistoryV5(writer, namespace, migration, block.timestamp, list, refused[i]);
             } else {
-                sRegistry.applyMigrationV4(writer, namespace, migration, list, refused[i]);
+                sRegistry.applyMigrationV5(writer, namespace, migration, list, refused[i]);
             }
         }
         vm.recordLogs();

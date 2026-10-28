@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Test, Vm} from "forge-std-1.17.0/src/Test.sol";
 
-import {IRegistryDelegatesV2} from "../../src/interface/IRegistryDelegatesV2.sol";
+import {IRegistryDelegatesV3} from "../../src/interface/IRegistryDelegatesV3.sol";
 import {LibRegistryDelegatesApprove} from "../../src/lib/LibRegistryDelegatesApprove.sol";
 import {LibConfigRegistryRegister} from "../../src/lib/LibConfigRegistryRegister.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
@@ -58,7 +58,7 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         address delegate = address(0x5AFE);
         string memory name = string.concat("rain.deploy.approve-test.", vm.toString(vm.randomUint()));
         bytes32 hashed = keccak256(bytes(name));
-        IRegistryDelegatesV2 registry = IRegistryDelegatesV2(registryAddress);
+        IRegistryDelegatesV3 registry = IRegistryDelegatesV3(registryAddress);
 
         vm.setEnv(e("SCOPE"), name);
         vm.setEnv(e("ADDRESS"), vm.toString(delegate));
@@ -66,7 +66,7 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         vm.setEnv(e("ADDRESS"), "not-an-address");
         assertEnvAddressRefused(script, e("ADDRESS"));
         vm.setEnv(e("ADDRESS"), vm.toString(address(0)));
-        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV2.ZeroDelegate.selector));
+        vm.expectRevert(abi.encodeWithSelector(IRegistryDelegatesV3.ZeroDelegate.selector));
         script.runAsItself();
         vm.setEnv(e("ADDRESS"), vm.toString(delegate));
 
@@ -105,7 +105,7 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         for (uint256 i = 0; i < forkIds.length; i++) {
             assertEq(forkIds[i], LibRainDeploy.declaredNetworkConfigs(supported)[i].chainId);
         }
-        assertTrue(registry.approvedV4(authority, hashed, delegate));
+        assertTrue(registry.approvedV5(authority, hashed, delegate));
         script.verify();
 
         // A run already in the target state sends nothing.
@@ -135,13 +135,13 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         forkIds = script.runAsItself();
         assertEq(forkIds.length, 1);
         assertEq(forkIds[0], LibRainDeploy.declaredNetworkConfigs(supported)[0].chainId);
-        assertFalse(registry.approvedV4(authority, hashed, delegate));
+        assertFalse(registry.approvedV5(authority, hashed, delegate));
         script.verify();
 
         // `true` approves again.
         vm.setEnv(e("APPROVED"), "true");
         script.runAsItself();
-        assertTrue(registry.approvedV4(authority, hashed, delegate));
+        assertTrue(registry.approvedV5(authority, hashed, delegate));
         script.verify();
     }
 

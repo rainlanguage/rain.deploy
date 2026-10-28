@@ -8,7 +8,7 @@ import {ConfigBinding} from "../../src/lib/LibConfigRegistryRegister.sol";
 /// checks a value against it, so one type serves every test value.
 string constant VALUE_TYPE = "address";
 
-/// @dev `keccak256` of `VALUE_TYPE`, as `getV4` answers it.
+/// @dev `keccak256` of `VALUE_TYPE`, as `getV5` answers it.
 bytes32 constant VALUE_TYPE_HASH = keccak256(bytes(VALUE_TYPE));
 
 /// @dev A binding of `name` to `value` as `VALUE_TYPE`, with no metadata.
