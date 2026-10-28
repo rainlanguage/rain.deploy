@@ -410,6 +410,9 @@ library LibRainDeploySnapshot {
     /// source root.
     string constant CONCAT_SOURCE_SUBPATH = "lib/LibDeploySuiteConcat.sol";
 
+    /// Where `LibRainDeployZoltuMechanism` is declared inside this package, below the source root.
+    string constant ZOLTU_MECHANISM_SOURCE_SUBPATH = "lib/LibRainDeployZoltuMechanism.sol";
+
     /// The source root both this package and a consumer put Solidity under, and
     /// the directory `LIB_DIR` sits in.
     string constant SOURCE_ROOT = "src";
@@ -1628,7 +1631,25 @@ library LibRainDeploySnapshot {
         returns (string memory)
     {
         string memory imports =
-            string.concat("import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n\n");
+            string.concat("import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n");
+        for (uint256 i = 0; i < paths.length; i++) {
+            if (recordedMechanismId(vm, paths[i]) == ZOLTU_MECHANISM_ID) {
+                bytes memory suites = bytes(suitesImportPath);
+                bytes memory root = new bytes(suites.length - bytes(SUITES_SOURCE_SUBPATH).length);
+                for (uint256 j = 0; j < root.length; j++) {
+                    root[j] = suites[j];
+                }
+                imports = string.concat(
+                    imports,
+                    "import {LibRainDeployZoltuMechanism} from \"",
+                    string(root),
+                    ZOLTU_MECHANISM_SOURCE_SUBPATH,
+                    "\";\n"
+                );
+                break;
+            }
+        }
+        imports = string.concat(imports, "\n");
         for (uint256 i = 0; i < paths.length; i++) {
             imports = string.concat(imports, releasedImport(vm, paths[i]));
         }

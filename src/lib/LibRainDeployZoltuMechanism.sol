@@ -168,6 +168,6 @@ library LibRainDeployZoltuMechanism {
         if (LibRainDeploySnapshot.recordDeclaresMechanismData(vm, path)) {
             revert FrozenSnapshotMechanismDataUnexpected(path);
         }
-        return string.concat("abi.encode(bytes32(", vm.toString(ZOLTU_MECHANISM_ID), "))");
+        return "LibRainDeployZoltuMechanism.mechanismData()";
     }
 }
