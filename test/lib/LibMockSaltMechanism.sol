@@ -37,6 +37,7 @@ library LibMockSaltMechanism {
             addRecordedNetworks: addRecordedNetworks,
             checkNetworkFrozen: checkNetworkFrozen,
             checkOnChain: checkOnChain,
+            checkBroadcastSeat: checkBroadcastSeat,
             logVerification: logVerification,
             writeSuiteSnapshot: writeSuiteSnapshot,
             releasedMechanismData: releasedMechanismData
@@ -102,12 +103,17 @@ library LibMockSaltMechanism {
 
     function checkNetworkFrozen(DeploySuite memory, string memory, uint256, address) internal pure {}
 
-    function checkOnChain(DeploySuite memory suite, string memory network, uint256 chainId, address deployed)
-        internal
-        view
-    {
+    function checkOnChain(
+        DeployDeclaration memory,
+        DeploySuite memory suite,
+        string memory network,
+        uint256 chainId,
+        address deployed
+    ) internal view {
         LibMockMechanismProbe.checkOnChain(MOCK_SALT_MECHANISM_ID, suite.suite, network, chainId, deployed);
     }
+
+    function checkBroadcastSeat(DeployDeclaration memory, DeploySuite memory, uint256, address) internal pure {}
 
     function logVerification(Vm, string[] memory, DeploySuite memory suite, address[] memory deployed) internal {
         emit MockSaltVerification(suite.suite, deployed[0]);
