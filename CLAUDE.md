@@ -53,5 +53,6 @@ relocated.
   the path — no `fs_permissions` grant and no spelling of the path gets past it,
   and `writeFile`, `writeLine` and `copyFile` are all refused. Reads are
   allowed. That is why `BuildScript.run()` stages the spliced config under
-  `.staged-config/` and `script/build.sh` installs it, and why regenerating by
-  hand is `forge script ./script/Build.sol` FOLLOWED BY `./script/build.sh`.
+  `.staged-config/` and rainix installs it, and why regenerating by hand is
+  `forge script ./script/Build.sol` FOLLOWED BY
+  `nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`.

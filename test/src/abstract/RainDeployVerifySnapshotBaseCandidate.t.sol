@@ -6,12 +6,14 @@ import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBas
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifySnapshotBase} from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 
 /// @title RainDeployVerifySnapshotBaseCandidateTest
@@ -35,20 +37,28 @@ import {MockDeployable} from "../../concrete/MockDeployable.sol";
 /// is green on exactly the file that is about to reach a chain — permanently
 /// green in a repo that has released nothing.
 contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBase {
-    /// @inheritdoc RainDeploySuitesBase
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
+    }
+
     /// @dev Nothing released. This is the whole fixture.
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
         return new DeploySuite[](0);
     }
 
-    /// @inheritdoc RainDeploySuitesBase
     /// @dev One candidate, consistent and anchored to its own source, so the
     /// inherited tests are the passing case here exactly as they are in a
     /// consumer.
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function declaredCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "mock-deployable-candidate",
                 creationCode: type(MockDeployable).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
@@ -56,9 +66,7 @@ contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBa
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: "",
-                describedByMeta: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
@@ -82,7 +90,7 @@ contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBa
     /// gives this contract a release fails naming the declaration it changed,
     /// instead of passing because the release happened to fail first.
     function testSnapshotInternallyConsistentReachesACandidateNoReleaseCarries() external {
-        assertEq(releasedSuites().length, 0, "this fixture declares a release, so a candidate is not the subject");
+        assertEq(declaration().released.length, 0, "this fixture declares a release, so a candidate is not the subject");
 
         vm.mockCall(
             LibRainDeploy.ZOLTU_FACTORY,

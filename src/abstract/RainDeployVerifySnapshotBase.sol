@@ -3,9 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
-import {DeploySuite} from "./RainDeploySuitesBase.sol";
-import {DerivationSnapshotRevertFailed, LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
-import {LibRainDeployDescribedByMeta} from "../lib/LibRainDeployDescribedByMeta.sol";
+import {DeployDeclaration, DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// Thrown when the deploy address recorded for a version is not the address its own mechanism
@@ -76,10 +74,10 @@ error FrozenCodeRecordInconsistent(string path, bytes32 storedBytecodeHash, byte
 abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// Checks one suite against itself.
     /// @param suite The suite to check.
-    function checkInternallyConsistent(DeploySuite memory suite) internal {
-        DerivedDeploy memory derived = deriveDeployment(suite);
+    function checkInternallyConsistent(DeployDeclaration memory d, DeploySuite memory suite) internal {
+        DerivedDeploy memory derived = deriveDeployment(d, suite);
 
-        address[] memory recorded = LibRainDeployMechanism.recordedAddresses(suite);
+        address[] memory recorded = recordedAddresses(d, suite);
         for (uint256 i = 0; i < recorded.length; i++) {
             if (recorded[i] != derived.deployedAddresses[i]) {
                 revert StoredAddressMismatch(suite.suite, recorded[i], derived.deployedAddresses[i]);
@@ -94,42 +92,27 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         if (suite.storedBytecodeHash != runtimeCodeHash) {
             revert StoredRuntimeCodeHashMismatch(suite.suite, suite.storedBytecodeHash, runtimeCodeHash);
         }
-
-        checkDescribedByMeta(suite);
-    }
-
-    /// A suite carrying a described-by meta MUST name a `metaBoard()`, and its local deployment MUST answer
-    /// `describedByMetaV1()` with the meta's hash.
-    /// @param suite The suite to check.
-    function checkDescribedByMeta(DeploySuite memory suite) internal {
-        checkedMetaBoard(suite);
-        if (suite.describedByMeta.length == 0) {
-            return;
-        }
-        uint256 snapshotId = vm.snapshotState();
-        address[] memory deployed = LibRainDeployMechanism.deployLocally(vm, suite);
-        LibRainDeployDescribedByMeta.checkDescribes(suite.suite, deployed[0], suite.describedByMeta);
-        if (!vm.revertToState(snapshotId)) {
-            revert DerivationSnapshotRevertFailed(suite.suite, snapshotId);
-        }
     }
 
     string constant BYTECODE_HASH_DECLARATION = "bytes32 constant BYTECODE_HASH =";
     string constant CREATION_CODE_DECLARATION = "bytes constant CREATION_CODE =";
     string constant RUNTIME_CODE_DECLARATION = "bytes constant RUNTIME_CODE =";
 
-    /// Checks the frozen record against the released declaration.
+    /// Checks the frozen record against the released declaration. A record matches a release when each address it
+    /// records is the release's derived address on that chain: on every one of its `networks` for a record of one
+    /// address, on each recorded chain for a per-network record.
     /// @param paths The frozen record's files.
     /// @param released The declared released suites.
-    function checkFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released) internal view {
-        bytes32[] memory releasedIdentities = new bytes32[](released.length);
+    function checkFrozenSnapshotsReleased(
+        DeployDeclaration memory d,
+        string[] memory paths,
+        DeploySuite[] memory released
+    ) internal view {
+        uint256[][] memory releasedChainIds = new uint256[][](released.length);
+        address[][] memory releasedAddresses = new address[][](released.length);
         for (uint256 j = 0; j < released.length; j++) {
-            releasedIdentities[j] = keccak256(
-                abi.encode(
-                    LibRainDeployMechanism.addressChainIds(released[j]),
-                    LibRainDeployMechanism.deployedAddresses(released[j])
-                )
-            );
+            releasedChainIds[j] = suiteChainIds(released[j]);
+            releasedAddresses[j] = deployedAddresses(d, released[j]);
         }
 
         bytes32[] memory recorded = new bytes32[](paths.length);
@@ -140,7 +123,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
 
             uint256 declarations = 0;
             for (uint256 j = 0; j < released.length; j++) {
-                if (recorded[i] == releasedIdentities[j]) {
+                if (recordMatches(chainIds, addresses, releasedChainIds[j], releasedAddresses[j])) {
                     declarations++;
                 }
             }
@@ -162,25 +145,41 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         }
     }
 
-    /// The frozen code records' names: the contracts whose code a release
-    /// freezes without deploying them as suites — parameterised contracts,
-    /// recorded as `BYTECODE_HASH`, `CREATION_CODE` and `RUNTIME_CODE` and no
-    /// deploy address. A frozen file with one of these names is checked as a
-    /// code record by `checkFrozenCodeRecord`; every other frozen file is a
-    /// deploy record and goes through `checkFrozenSnapshotsReleased`.
-    ///
-    /// Matched by name, unlike a deploy record, because a code record has
-    /// nothing else to match on: no address to derive, and bytes that
-    /// legitimately differ between releases — a compiler-profile or dependency
-    /// change regenerates them, and the frozen copy is what keeps the
-    /// generation each release shipped. The name cannot silence anything: a
-    /// deploy record named here is refused for its address, and a code record
-    /// not named here reaches the deploy check and is refused as unreadable.
-    ///
-    /// Empty by default: a repo that freezes only deploy suites names none.
-    /// @return The names, e.g. `TimelockController`.
-    function frozenCodeRecordNames() internal view virtual returns (string[] memory) {
-        return new string[](0);
+    /// @param chainIds The record's chain ids, none for one address on every network.
+    /// @param addresses The record's addresses.
+    /// @param releaseChainIds The release's chain ids.
+    /// @param releaseAddresses The release's derived address on each of `releaseChainIds`.
+    /// @return Whether the record is the release's.
+    function recordMatches(
+        uint256[] memory chainIds,
+        address[] memory addresses,
+        uint256[] memory releaseChainIds,
+        address[] memory releaseAddresses
+    ) internal pure returns (bool) {
+        if (releaseChainIds.length == 0) {
+            return false;
+        }
+        if (chainIds.length == 0) {
+            for (uint256 m = 0; m < releaseAddresses.length; m++) {
+                if (releaseAddresses[m] != addresses[0]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        for (uint256 k = 0; k < chainIds.length; k++) {
+            bool found = false;
+            for (uint256 m = 0; m < releaseChainIds.length; m++) {
+                if (releaseChainIds[m] == chainIds[k]) {
+                    found = releaseAddresses[m] == addresses[k];
+                    break;
+                }
+            }
+            if (!found) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// The index of the first name in `codeRecordNames` that, plus `.sol`, is
@@ -349,18 +348,20 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         }
     }
 
-    /// Every declared beacon MUST resolve offline: released suite keys, named once, on a supported network, declared
-    /// once on its network, a beacon suite seating its initial state, and each transition naming a distinct, recordable
-    /// migration. Reads `supportedNetworks()` only when a beacon is declared.
-    function testBeaconDeclarationsResolve() external {
-        resolveSupportedBeacons();
-    }
-
     /// Every declared suite MUST be internally consistent.
     function testSnapshotInternallyConsistent() external {
-        DeploySuite[] memory suites = allSuites();
+        DeployDeclaration memory d = declaration();
+        DeploySuite[] memory suites = allSuites(d);
         for (uint256 i = 0; i < suites.length; i++) {
-            checkInternallyConsistent(suites[i]);
+            checkInternallyConsistent(d, suites[i]);
+        }
+    }
+
+    /// Every declared mechanism MUST accept the declaration.
+    function testMechanismDeclarationsResolve() external {
+        DeployDeclaration memory d = declaration();
+        for (uint256 i = 0; i < d.mechanisms.length; i++) {
+            d.mechanisms[i].checkDeclaration(d);
         }
     }
 
@@ -374,6 +375,6 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// spelling the deploy does not run, which is exactly the state this test
     /// would otherwise be reporting green about.
     function testSnapshotMatchesSource() external view {
-        checkCandidatesAnchoredToSource();
+        checkCandidatesAnchoredToSource(declaration());
     }
 }

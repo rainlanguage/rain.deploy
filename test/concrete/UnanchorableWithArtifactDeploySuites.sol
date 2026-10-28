@@ -5,11 +5,13 @@ pragma solidity =0.8.25;
 import {
     DeployDependency,
     DeployCandidate,
-    DeployMechanism,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 import {VENDORED_CREATION_CODE} from "./UnanchorableDeploy.sol";
@@ -30,17 +32,25 @@ import {VENDORED_CREATION_CODE} from "./UnanchorableDeploy.sol";
 /// refusal naming it is also what says the loop passes OVER an exemption rather
 /// than stopping at it.
 contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
+    }
+
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);
         return suites;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function declaredCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "vendored-candidate",
                 creationCode: VENDORED_CREATION_CODE,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(VENDORED_CREATION_CODE),
@@ -48,14 +58,13 @@ contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
                 storedRuntimeCode: hex"",
                 artifactPath: "test/concrete/VendoredDeployable.sol:VendoredDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: "",
-                describedByMeta: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: "Vendored third party deployment: the pinned creation code is the source."
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "current-source-candidate",
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
@@ -64,9 +73,7 @@ contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
                 // Resolves, and to the contract every recorded field above is.
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: "",
-                describedByMeta: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: "There is no source file to compile."
         });

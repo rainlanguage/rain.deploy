@@ -5,11 +5,13 @@ pragma solidity =0.8.25;
 import {
     DeployDependency,
     DeployCandidate,
-    DeployMechanism,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 
@@ -28,17 +30,25 @@ import {MockDeployableV2} from "./MockDeployableV2.sol";
 /// `CandidateSourceMismatch` here and is satisfied by the field everywhere a
 /// record happens to agree.
 contract UnanchorableWithStaleArtifactDeploySuites is ExternalDeploySuites {
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
+    }
+
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);
         return suites;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function declaredCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "stale-source-candidate",
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
@@ -47,9 +57,7 @@ contract UnanchorableWithStaleArtifactDeploySuites is ExternalDeploySuites {
                 // Deliberately NOT `MockDeployableV2`, which every recorded field above is.
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: "",
-                describedByMeta: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: "There is no source file to compile."
         });

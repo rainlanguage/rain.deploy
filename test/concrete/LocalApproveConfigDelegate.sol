@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
 import {ApproveConfigDelegate} from "../../script/ApproveConfigDelegate.sol";
+import {ApproveRegistryDelegate} from "../../script/ApproveRegistryDelegate.sol";
 import {LocalForkVm} from "./LocalForkVm.sol";
 
 /// @title LocalApproveConfigDelegate
@@ -15,7 +16,7 @@ contract LocalApproveConfigDelegate is ApproveConfigDelegate {
     /// The local fork seam.
     LocalForkVm public immutable iLocalForkVm = new LocalForkVm();
 
-    /// @inheritdoc ApproveConfigDelegate
+    /// @inheritdoc ApproveRegistryDelegate
     function forkVm() internal view override returns (Vm) {
         return Vm(address(iLocalForkVm));
     }

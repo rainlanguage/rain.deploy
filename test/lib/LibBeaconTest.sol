@@ -4,11 +4,12 @@ pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
-import {DeployDependency, DeployMechanism, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../src/lib/LibMigrationRegistryDeploy.sol";
-import {IMigrationRegistryV3, Prerequisite} from "../../src/interface/IMigrationRegistryV3.sol";
+import {IMigrationRegistryV4, Prerequisite} from "../../src/interface/IMigrationRegistryV4.sol";
 
 /// @title LibBeaconTest
 /// @notice The fixtures and assertions the beacon tests share.
@@ -35,6 +36,7 @@ library LibBeaconTest {
         string memory artifactPath
     ) internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: new string[](0),
             suite: key,
             creationCode: creationCode,
             storedDeployedAddress: LibRainDeploy.zoltuAddress(creationCode),
@@ -42,9 +44,7 @@ library LibBeaconTest {
             storedRuntimeCode: runtimeCode,
             artifactPath: artifactPath,
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: "",
-            describedByMeta: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
     }
 
@@ -80,8 +80,8 @@ library LibBeaconTest {
         Prerequisite[] memory prerequisites
     ) internal {
         vm.prank(writer);
-        IMigrationRegistryV3(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
-            .applyMigrationV3(writer, namespace, migration, prerequisites);
+        IMigrationRegistryV4(LibMigrationRegistryDeploy.MIGRATION_REGISTRY_DEPLOYED_ADDRESS)
+            .applyMigrationV4(writer, namespace, migration, prerequisites, "");
     }
 
     /// Applies `migration` as `writer` on the deployed `MigrationRegistry`, onto `head` in `namespace`.

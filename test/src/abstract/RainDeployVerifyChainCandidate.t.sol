@@ -5,12 +5,14 @@ pragma solidity =0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
     BYTECODE_HASH as CONFIG_REGISTRY_BYTECODE_HASH,
@@ -42,10 +44,19 @@ import {
 /// are the whole of what the matrix runs over: a contract has exactly one
 /// declaration, so a second scope is a second contract.
 contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
+    }
+
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = DeploySuite({
+            networks: new string[](0),
             suite: "config-registry@0_0_1",
             creationCode: CONFIG_REGISTRY_CREATION_CODE,
             storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
@@ -53,18 +64,16 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
             storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: "",
-            describedByMeta: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
         return suites;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function declaredCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "second-address-candidate",
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
@@ -72,9 +81,7 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: "",
-                describedByMeta: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });

@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
 import {ConfigRegistry} from "../../src/concrete/ConfigRegistry.sol";
-import {IConfigRegistryV2} from "../../src/interface/IConfigRegistryV2.sol";
+import {IConfigRegistryV4} from "../../src/interface/IConfigRegistryV4.sol";
 import {LibConfigRegistry} from "../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "../../src/lib/LibConfigRegistryDeploy.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
@@ -33,7 +33,7 @@ library LibConfigRegistryFork {
     /// @return The revert data.
     function unboundResolveRevert(address authority, bytes32 name) internal view returns (bytes memory) {
         if (isDeployed()) {
-            return abi.encodeWithSelector(IConfigRegistryV2.NameNotRegistered.selector, authority, name);
+            return abi.encodeWithSelector(IConfigRegistryV4.NameNotRegistered.selector, authority, name);
         }
         return abi.encodeWithSelector(
             LibConfigRegistry.UnexpectedConfigRegistryCodeHash.selector,

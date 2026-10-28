@@ -5,12 +5,14 @@ pragma solidity =0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 
 /// @title RainDeployVerifyChainEmptyTest
@@ -36,23 +38,31 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 /// scope is a second contract. `RainDeployVerifyChainTest` cannot be it — it
 /// declares two released suites so that the matrix has something to fail on.
 contract RainDeployVerifyChainEmptyTest is RainDeployVerifyChain {
-    /// @inheritdoc RainDeploySuitesBase
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
+    }
+
     /// @dev Nothing released. This is the whole fixture.
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
         return new DeploySuite[](0);
     }
 
-    /// @inheritdoc RainDeploySuitesBase
     /// @dev A candidate, because a repo always compiles a current source and an
     /// empty candidate list is a declaration `RainDeploySuitesBase` refuses. The
     /// chain group never reads it — that scoping is
     /// `RainDeployVerifyChainCandidateTest`'s subject — so what it is does not
     /// matter here, only that this contract is a declaration a repo could
     /// actually have.
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function declaredCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "second-address-candidate",
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
@@ -60,9 +70,7 @@ contract RainDeployVerifyChainEmptyTest is RainDeployVerifyChain {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: "",
-                describedByMeta: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
@@ -83,7 +91,7 @@ contract RainDeployVerifyChainEmptyTest is RainDeployVerifyChain {
     /// instead of reporting that a matrix with nothing to check forked — which
     /// would by then be describing a matrix that had something to check.
     function testChainWithNothingToCheckForksNothing() external {
-        assertEq(releasedSuites().length, 0, "this fixture declares a release, so the matrix has a subject");
+        assertEq(declaration().released.length, 0, "this fixture declares a release, so the matrix has a subject");
 
         (bool activeBefore,) = address(vm).call(abi.encodeWithSignature("activeFork()"));
         assertFalse(activeBefore, "a fork was selected before the call");

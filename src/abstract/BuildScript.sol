@@ -3,13 +3,9 @@
 pragma solidity ^0.8.25;
 
 import {Script} from "forge-std-1.17.0/src/Script.sol";
-import {RAIN_COPYRIGHT_TEXT, RAIN_SPDX_LICENSE_IDENTIFIER} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
-import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../lib/LibRainDeployConfig.sol";
-import {CloneNetwork} from "../lib/LibRainDeployClone.sol";
-import {LibRainDeployExtendedNetworks} from "../lib/LibRainDeployExtendedNetworks.sol";
-import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// @title BuildScript
@@ -38,9 +34,8 @@ import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 /// generated from it could cover networks nothing verifies with nothing red.
 ///
 /// `run()` stages those two files rather than writing them, because foundry
-/// refuses a cheatcode write to the project root's own `foundry.toml`. A repo
-/// inheriting this needs `script/build.sh` to install what was staged — see
-/// `LibRainDeployConfig`.
+/// refuses a cheatcode write to the project root's own `foundry.toml`.
+/// `rainix-copy-artifacts` installs what was staged — see `LibRainDeployConfig`.
 abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// Rewrite the rolling `candidate/` snapshots from what this repo currently
     /// compiles. Run by `cutRelease()` inside `freeze`, after its guards and
@@ -50,7 +45,7 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// Rewrite every file generated from the snapshots and from the frozen
     /// record. Run last, after a `cutRelease()` freeze has written the record,
     /// so a file emitted from that record holds the release just cut.
-    function regenerateLibs() internal virtual;
+    function regenerateLibs(DeployDeclaration memory d) internal virtual;
 
     /// The contracts whose rolling snapshots a release freezes.
     /// @return The contract names.
@@ -71,8 +66,7 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     ///
     /// Overridable so a `cutRelease()` can be exercised against a record other
     /// than the repo's own, which is append-only and cannot hold a test's
-    /// release. Independent of `extendedNetworksRoot()`, which such a build
-    /// overrides too.
+    /// release.
     /// @return The record root.
     function recordRoot() internal view virtual returns (string memory) {
         return LibRainDeploySnapshot.LIB_FS_ROOT;
@@ -100,72 +94,11 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// so a tree whose config has drifted from the declaration it pins fails
     /// there.
     ///
-    /// This STAGES the files; `script/build.sh` installs them. See
+    /// This STAGES the files; `rainix-copy-artifacts` installs them. See
     /// `LibRainDeployConfig` for why a script cannot write `foundry.toml`
     /// itself.
-    function regenerateConfig() internal {
-        LibRainDeployConfig.writeStagedConfig(
-            vm,
-            configRoot(),
-            LibRainDeployConfig.BUILD_HOOK_PATH,
-            LibRainDeploy.declaredNetworkConfigs(supportedNetworks())
-        );
-    }
-
-    /// The SPDX licence identifier the generated extended networks records declare. Defaults to
-    /// `RAIN_SPDX_LICENSE_IDENTIFIER`, for a repo this org owns.
-    /// @return The SPDX licence identifier.
-    function extendedNetworksSpdxLicenseIdentifier() internal view virtual returns (string memory) {
-        return RAIN_SPDX_LICENSE_IDENTIFIER;
-    }
-
-    /// The copyright text the generated extended networks records declare. Defaults to `RAIN_COPYRIGHT_TEXT`, for a
-    /// repo this org owns.
-    /// @return The copyright text.
-    function extendedNetworksCopyrightText() internal view virtual returns (string memory) {
-        return RAIN_COPYRIGHT_TEXT;
-    }
-
-    /// Writes each release's extended networks record from `extendedNetworks`, under `extendedNetworksRoot()`.
-    /// Append-only against the record in the checkout: reverts with `ExtendedNetworksRewritten` on a declaration
-    /// that drops, changes or reorders a network that record holds. Before writing, refuses a declaration the
-    /// broadcast and the chain group would refuse, as `LibRainDeployMechanism.withExtendedNetworks` does.
-    /// Run by `run()`, which `Git is clean` calls, so an entry appended to a committed record fails there. A record
-    /// never committed is an untracked file, which `git diff` does not see.
-    function regenerateExtendedNetworks() internal {
-        DeploySuite[] memory released = releasedSuites();
-        string memory root = extendedNetworksRoot();
-        string memory spdxLicenseIdentifier = extendedNetworksSpdxLicenseIdentifier();
-        string memory copyrightText = extendedNetworksCopyrightText();
-        for (uint256 i = 0; i < released.length; i++) {
-            CloneNetwork[] memory declared = extendedNetworks(released[i].suite);
-            LibRainDeployMechanism.withExtendedNetworks(released[i], declared);
-            LibRainDeployExtendedNetworks.writeExtendedNetworks(
-                vm, root, released[i].suite, declared, spdxLicenseIdentifier, copyrightText
-            );
-        }
-    }
-
-    /// Every extended networks record `regenerateExtendedNetworks` writes.
-    /// @return The paths.
-    function extendedNetworksPaths() internal view returns (string[] memory) {
-        DeploySuite[] memory released = releasedSuites();
-        string memory root = extendedNetworksRoot();
-        string[] memory written = new string[](released.length);
-        uint256 count = 0;
-        for (uint256 i = 0; i < released.length; i++) {
-            (, string memory path) = LibRainDeployExtendedNetworks.writtenExtendedNetworksPath(
-                root, released[i].suite, extendedNetworks(released[i].suite)
-            );
-            if (bytes(path).length > 0) {
-                written[count++] = path;
-            }
-        }
-        string[] memory paths = new string[](count);
-        for (uint256 i = 0; i < count; i++) {
-            paths[i] = written[i];
-        }
-        return paths;
+    function regenerateConfig(DeployDeclaration memory d) internal {
+        LibRainDeployConfig.writeStagedConfig(vm, configRoot(), LibRainDeploy.declaredNetworkConfigs(d.networks));
     }
 
     /// The directory `regenerateLibs` writes every generated lib into, and the
@@ -190,15 +123,13 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         return new string[](0);
     }
 
-    /// Every path `run()` must rewrite, `script/build.sh`'s installs of the
-    /// staged config and the extended networks records included.
+    /// Every path `run()` must rewrite, the installed staged config included.
     /// @return The paths.
     function generatedPaths() internal view returns (string[] memory) {
         string[] memory base =
             LibRainDeploySnapshot.generatedPaths(libDir(), recordRoot(), releaseRecordNames(), snapshotContractNames());
         string[] memory own = buildGeneratedPaths();
-        string[] memory extended = extendedNetworksPaths();
-        string[] memory paths = new string[](base.length + 2 + own.length + extended.length);
+        string[] memory paths = new string[](base.length + 2 + own.length);
         for (uint256 i = 0; i < base.length; i++) {
             paths[i] = base[i];
         }
@@ -206,9 +137,6 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         paths[base.length + 1] = LibRainDeployConfig.ENV_EXAMPLE_NAME;
         for (uint256 i = 0; i < own.length; i++) {
             paths[base.length + 2 + i] = own[i];
-        }
-        for (uint256 i = 0; i < extended.length; i++) {
-            paths[base.length + 2 + own.length + i] = extended[i];
         }
         return paths;
     }
@@ -221,17 +149,18 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
 
     /// @notice Regenerate everything this repo generates. Freezes nothing.
     function run() external {
+        DeployDeclaration memory d = declaration();
         declareGeneratedPaths();
-        regenerateConfig();
+        regenerateConfig(d);
         regenerateSnapshots();
-        regenerateLibs();
-        regenerateExtendedNetworks();
+        regenerateLibs(d);
     }
 
     /// @notice Regenerate the rolling snapshots, freeze them as this release's
     /// record, then regenerate the libs from the record.
     function cutRelease() external {
+        DeployDeclaration memory d = declaration();
         LibRainDeploySnapshot.freeze(vm, recordRoot(), regenerateSnapshots, releaseRecordNames());
-        regenerateLibs();
+        regenerateLibs(d);
     }
 }

@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
+import {DeployDeclaration} from "./RainDeploySuitesBase.sol";
 import {RainDeployVerifySnapshotBase} from "./RainDeployVerifySnapshotBase.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
@@ -55,13 +56,14 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
     /// to spell the exemption, while the release it names goes on being checked
     /// by everything anchored to a chain.
     function testEveryFrozenSnapshotIsReleased() external view {
+        DeployDeclaration memory d = declaration();
         (string[] memory deployRecords,) =
-            partitionFrozenRecords(LibRainDeploySnapshot.frozenSnapshotPaths(vm), frozenCodeRecordNames());
-        checkFrozenSnapshotsReleased(deployRecords, releasedSuites());
+            partitionFrozenRecords(LibRainDeploySnapshot.frozenSnapshotPaths(vm), d.frozenCodeRecordNames);
+        checkFrozenSnapshotsReleased(d, deployRecords, d.released);
     }
 
     /// Every frozen code record MUST be one: a parameterised contract's
-    /// snapshot, named by `frozenCodeRecordNames`, declaring its code and no
+    /// snapshot, named by `d.frozenCodeRecordNames`, declaring its code and no
     /// deploy, with its runtime code hashing to the hash recorded beside it.
     ///
     /// The same walk as `testEveryFrozenSnapshotIsReleased`, split the same
@@ -70,7 +72,7 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
     /// record the names claim is refused here for its address.
     function testEveryFrozenCodeRecordIsConsistent() external view {
         (, string[] memory codeRecords) =
-            partitionFrozenRecords(LibRainDeploySnapshot.frozenSnapshotPaths(vm), frozenCodeRecordNames());
+            partitionFrozenRecords(LibRainDeploySnapshot.frozenSnapshotPaths(vm), declaration().frozenCodeRecordNames);
         for (uint256 i = 0; i < codeRecords.length; i++) {
             checkFrozenCodeRecord(codeRecords[i], vm.readFile(codeRecords[i]));
         }

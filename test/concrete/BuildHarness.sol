@@ -6,6 +6,7 @@ import {Build, GeneratedContract, RetiredContract} from "../../script/Build.sol"
 import {DeployCandidate, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ParameterisedContract} from "../../src/abstract/RegistryDeploySuites.sol";
 import {BuildScript} from "../../src/abstract/BuildScript.sol";
+import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 
 /// Thrown when a harness left pointed at `Build`'s own lib directory is asked
 /// to run the lib half of a build. That write lands on the committed libs the
@@ -48,7 +49,7 @@ contract BuildHarness is Build {
         if (bytes(sLibDir).length == 0) {
             revert BuildHarnessWouldWriteTheCommittedLibs();
         }
-        regenerateLibs();
+        regenerateLibs(declaration());
     }
 
     /// The generator's list.
@@ -90,8 +91,8 @@ contract BuildHarness is Build {
     /// The deploy declaration's list, through the same guarded reader every
     /// other consumer of the declaration uses.
     /// @return The declared candidates.
-    function externalCandidateSuites() external view returns (DeployCandidate[] memory) {
-        return checkedCandidateSuites();
+    function externalCandidateSuites() external pure returns (DeployCandidate[] memory) {
+        return checkedCandidateSuites(declaration());
     }
 
     /// The rolling snapshot name of every parameterised contract, which the
@@ -105,5 +106,27 @@ contract BuildHarness is Build {
             names[i] = parameterisedContractName(parameterised[i]);
         }
         return names;
+    }
+
+    /// `LibRainDeploySnapshot.releasedLibraryBlock` under this build's declaration.
+    /// @param libraryName The library name.
+    /// @param contractName The contract the lib is for.
+    /// @param paths The record paths.
+    /// @param template The template the entries are emitted from.
+    /// @return The library block.
+    function externalReleasedLibraryBlock(
+        string memory libraryName,
+        string memory contractName,
+        string[] memory paths,
+        DeploySuite memory template
+    ) external view returns (string memory) {
+        return LibRainDeploySnapshot.releasedLibraryBlock(vm, libraryName, contractName, paths, template, declaration());
+    }
+
+    /// `LibRainDeploySnapshot.releasedImportBlock` under this build's declaration.
+    /// @param paths The record paths.
+    /// @return The import block.
+    function externalReleasedImportBlock(string[] memory paths) external view returns (string memory) {
+        return LibRainDeploySnapshot.releasedImportBlock(vm, paths, declaration());
     }
 }
