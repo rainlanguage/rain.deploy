@@ -357,6 +357,14 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         }
     }
 
+    /// Every declared mechanism MUST accept the declaration.
+    function testMechanismDeclarationsResolve() external {
+        DeployDeclaration memory d = declaration();
+        for (uint256 i = 0; i < d.mechanisms.length; i++) {
+            d.mechanisms[i].checkDeclaration(d);
+        }
+    }
+
     /// EVERY candidate MUST be a snapshot of the contract it NAMES, as this
     /// repo currently compiles it, not of some other contract that happens to
     /// be internally consistent.
