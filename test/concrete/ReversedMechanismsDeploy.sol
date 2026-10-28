@@ -22,15 +22,3 @@ contract ReversedMechanismsDeploy is TwoMechanismDeploySuites, ExternalDeploySui
         return d;
     }
 }
-
-/// `TwoMechanismDeploy`'s declaration without Zoltu.
-contract NoZoltuDeploy is TwoMechanismDeploySuites, ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory d;
-        LibRainDeployDeclaration.extend(d);
-        LibMockSaltMechanism.extend(d);
-        LibMockCreate2Mechanism.extend(d);
-        addTwoMechanismCandidates(d);
-        return d;
-    }
-}
