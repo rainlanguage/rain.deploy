@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
@@ -24,11 +24,12 @@ contract RainDeployVerifyChainNotRequiredTest is ExampleDeploySuites, RainDeploy
         return LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
     }
 
-    /// @inheritdoc RainDeploySuitesBase
     /// @dev The second release on base alone; everything else everywhere.
-    function requiresSuiteOn(DeploySuite memory suite, string memory network) internal pure override returns (bool) {
-        return keccak256(bytes(suite.suite)) != keccak256("second-address")
-            || keccak256(bytes(network)) == keccak256(bytes(LibRainDeploy.BASE));
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = exampleDeclaration();
+        declared.released[1].networks = new string[](1);
+        declared.released[1].networks[0] = LibRainDeploy.BASE;
+        return declared;
     }
 
     /// Both releases live on every fork.

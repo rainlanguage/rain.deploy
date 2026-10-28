@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
-import {RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../abstract/ExampleDeploySuites.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
@@ -26,11 +26,11 @@ import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 /// that read the library's first entry would be on arbitrum. Neither reads as
 /// base.
 contract ExampleDeployNarrowNetworks is ExampleDeploySuites, ExternalDeploySuites, RainDeployBroadcast {
-    /// @inheritdoc RainDeploySuitesBase
-    function supportedNetworks() internal pure override returns (string[] memory) {
-        string[] memory networks = new string[](1);
-        networks[0] = LibRainDeploy.BASE;
-        return networks;
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = exampleDeclaration();
+        declared.networks = new string[](1);
+        declared.networks[0] = LibRainDeploy.BASE;
+        return declared;
     }
 
     /// @return The networks a broadcast would go to.

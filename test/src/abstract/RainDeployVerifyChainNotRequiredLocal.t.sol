@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
-import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain, SuiteRequiredNowhere} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
@@ -31,12 +31,13 @@ contract RainDeployVerifyChainNotRequiredLocalTest is ExampleDeploySuites, RainD
         return LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode);
     }
 
-    /// @inheritdoc RainDeploySuitesBase
     /// @dev The second release on `sSecondRequiredOn` alone; everything else
     /// everywhere.
-    function requiresSuiteOn(DeploySuite memory suite, string memory network) internal view override returns (bool) {
-        return keccak256(bytes(suite.suite)) != keccak256("second-address")
-            || keccak256(bytes(network)) == keccak256(bytes(sSecondRequiredOn));
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = exampleDeclaration();
+        declared.released[1].networks = new string[](1);
+        declared.released[1].networks[0] = sSecondRequiredOn;
+        return declared;
     }
 
     /// Both releases live.

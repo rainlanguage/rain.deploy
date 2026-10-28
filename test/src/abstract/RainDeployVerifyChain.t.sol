@@ -4,7 +4,7 @@ pragma solidity =0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DerivedDeploy} from "../../../src/abstract/RainDeployVerifyBase.sol";
-import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
@@ -60,6 +60,10 @@ import {
 /// leaves the etch in place and changes only the code, and the check still
 /// fails, which it could not do if the expectation were read from the etch.
 contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        return exampleDeclaration();
+    }
+
     /// The second suite's address, derived from `MockDeployableV2`'s creation
     /// code by the same derivation `ExampleDeploySuites` declares, so the etch
     /// in `setUp` lands on the address the matrix reads.

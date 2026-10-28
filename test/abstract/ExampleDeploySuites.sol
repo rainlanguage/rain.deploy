@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanismHandler,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -17,7 +17,7 @@ import {
     RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE
 } from "../../src/generated/candidate/ConfigRegistry.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 
 /// @title ExampleDeploySuites
@@ -49,14 +49,16 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 /// candidate side is the source anchor's, which loops over the candidates
 /// alone and would otherwise be a loop with one thing in it.
 abstract contract ExampleDeploySuites is RainDeploySuitesBase {
-    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
-        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
-        handlers[0] = LibRainDeployZoltuMechanism.handler();
-        return handlers;
+    /// @return Zoltu over every Rain network, declaring `exampleReleased()` and `exampleCandidates()`.
+    function exampleDeclaration() internal pure returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
+        declared.released = exampleReleased();
+        declared.candidates = exampleCandidates();
+        return declared;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+
+    function exampleReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](2);
         suites[0] = DeploySuite({
             networks: new string[](0),
@@ -83,14 +85,13 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
         return suites;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
     /// @dev TWO candidates, at two different addresses and anchored to two
     /// different sources, because a repo that deploys more than one contract is
     /// what the list exists for. One candidate cannot tell a loop that runs
     /// over every candidate apart from one that stops at the first, and the
     /// source anchor is the only check that catches a snapshot of the wrong
     /// contract — so a loop that stops early is a contract nothing anchors.
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function exampleCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({

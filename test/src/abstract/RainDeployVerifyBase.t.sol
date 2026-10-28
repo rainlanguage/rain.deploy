@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "../../../src/abstract/RainDeployVerifyBase.sol";
-import {DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
@@ -17,6 +17,10 @@ import {
 /// @title RainDeployVerifyBaseTest
 /// @notice What the derivation RETURNS, read directly, which no other group asks it for.
 contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        return exampleDeclaration();
+    }
+
     /// The derivation MUST come from the creation code and the key, and from
     /// nothing else the suite records.
     ///

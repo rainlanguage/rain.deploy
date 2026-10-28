@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
+
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../abstract/ExampleDeploySuites.sol";
@@ -25,6 +27,10 @@ import {ExampleDeploySuites} from "../abstract/ExampleDeploySuites.sol";
 /// the default, which is the difference an assertion can see. A single-element
 /// override naming polygon would end on polygon either way and assert nothing.
 contract ExampleDeploySingleNetwork is ExampleDeploySuites, RainDeployBroadcast {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        return exampleDeclaration();
+    }
+
     /// @inheritdoc RainDeployBroadcast
     function deployNetworks() internal pure override returns (string[] memory) {
         string[] memory networks = new string[](1);

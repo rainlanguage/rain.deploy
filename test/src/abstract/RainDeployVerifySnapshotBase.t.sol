@@ -6,6 +6,7 @@ import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBas
 import {
     CandidateSourceMismatch,
     DeployCandidate,
+    DeployDeclaration,
     DeployDependency,
     DeploySuite
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
@@ -83,6 +84,10 @@ import {
 /// DECLARATION — `SourceMismatchDeploy` — which is also the shape a repo holding
 /// a stale generated file is actually in.
 contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVerifySnapshotBase {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        return exampleDeclaration();
+    }
+
     /// A declaration whose second candidate is a consistent snapshot of the
     /// wrong contract.
     ///

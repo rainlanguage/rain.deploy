@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
@@ -31,13 +31,13 @@ contract RainDeployVerifyChainNarrowNetworksTest is ExampleDeploySuites, RainDep
     /// other chain would agree with itself and assert nothing.
     uint256 constant BASE_CHAIN_ID = 8453;
 
-    /// @inheritdoc RainDeploySuitesBase
     /// @dev ONE network, and base rather than either end of the library's
     /// list, so a run that ignored the declaration ends on arbitrum or polygon.
-    function supportedNetworks() internal pure override returns (string[] memory) {
-        string[] memory networks = new string[](1);
-        networks[0] = LibRainDeploy.BASE;
-        return networks;
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = exampleDeclaration();
+        declared.networks = new string[](1);
+        declared.networks[0] = LibRainDeploy.BASE;
+        return declared;
     }
 
     /// The second suite's address, derived from `MockDeployableV2`'s creation
