@@ -45,7 +45,7 @@ contract RainDeploySuitesBaseExtendChainTest is Test, TwoMechanismDeploySuites {
         LibRainDeployZoltuMechanism.extend(d);
         LibMockCreate2Mechanism.extend(d);
         LibMockSaltMechanism.extend(d);
-        d.networks = consumerNetworks();
+        LibRainDeployDeclaration.setNetworks(d, consumerNetworks());
         DeploySuite[] memory released = new DeploySuite[](1);
         released[0] = zoltuSuite();
         LibRainDeployDeclaration.addReleased(d, released);
