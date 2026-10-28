@@ -213,6 +213,26 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
     }
 
     /// @param fileVm The Vm for file operations.
+    /// @param root The record root to write under.
+    /// @param dir The snapshot directory.
+    /// @param contractName The contract the snapshot is of.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the snapshot declares.
+    /// @param copyrightText The copyright text the snapshot declares.
+    /// @param suite The suite to snapshot.
+    /// @return `writeSuiteSnapshot(fileVm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite)`.
+    function externalWriteSuiteSnapshot(
+        Vm fileVm,
+        string memory root,
+        string memory dir,
+        string memory contractName,
+        string memory spdxLicenseIdentifier,
+        string memory copyrightText,
+        DeploySuite memory suite
+    ) external returns (string memory) {
+        return writeSuiteSnapshot(fileVm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite);
+    }
+
+    /// @param fileVm The Vm for file operations.
     /// @param path The release's record file.
     /// @param prefix The prefix its constants are aliased under.
     /// @return `releasedMechanismData(fileVm, path, prefix)`.
