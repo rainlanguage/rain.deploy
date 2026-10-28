@@ -9,14 +9,9 @@ import {
     DeployDeclaration,
     DeployDependency,
     DeploySuite,
+    ExternalDeployment,
     RainDeploySuitesBase
 } from "./RainDeploySuitesBase.sol";
-
-/// A deterministic deployment outside the repo that a suite may reach.
-struct ExternalDeployment {
-    address deployedAddress;
-    bytes32 codeHash;
-}
 
 /// The dispatch workflow has no `suite` input with an `options` list.
 /// @param workflow The workflow path.
@@ -73,13 +68,6 @@ error RuntimeCodeExceedsEip170(string suite, uint256 length);
 /// each suite's code embeds.
 abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     uint256 constant EIP170_MAX_RUNTIME_CODE_SIZE = 0x6000;
-
-    /// @param suite An anchored candidate's key.
-    /// @return The creation code of the contract the key names, from its type.
-    function sourceCreationCode(string memory suite) internal view virtual returns (bytes memory);
-
-    /// @return Every deterministic deployment outside this repo that a suite may embed.
-    function externalDeployments() internal view virtual returns (ExternalDeployment[] memory);
 
     /// @param line A line of YAML.
     /// @return Its count of leading spaces.
@@ -181,7 +169,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
                 continue;
             }
             DeploySuite memory suite = candidates[i].snapshot;
-            if (keccak256(vm.getCode(suite.artifactPath)) != keccak256(sourceCreationCode(suite.suite))) {
+            if (keccak256(vm.getCode(suite.artifactPath)) != keccak256(d.sourceCreationCode(suite.suite))) {
                 revert CandidateArtifactNotSource(suite.suite, suite.artifactPath);
             }
         }
@@ -209,7 +197,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     /// declared dependency, and every declared dependency MUST be embedded.
     function checkDependenciesAreTheEmbeddedDeployments(DeployDeclaration memory d) internal view {
         DeploySuite[] memory suites = allSuites(d);
-        ExternalDeployment[] memory externals = externalDeployments();
+        ExternalDeployment[] memory externals = d.externalDeployments;
         for (uint256 i = 0; i < suites.length; i++) {
             for (uint256 j = 0; j < suites.length; j++) {
                 checkDeclaredIfEmbedded(suites[i], suites[j].storedDeployedAddress);
@@ -238,7 +226,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     /// the runtime code that declaration records.
     function checkDependencyRuntimeCodeIsKnown(DeployDeclaration memory d) internal view {
         DeploySuite[] memory suites = allSuites(d);
-        ExternalDeployment[] memory externals = externalDeployments();
+        ExternalDeployment[] memory externals = d.externalDeployments;
         for (uint256 i = 0; i < suites.length; i++) {
             DeployDependency[] memory deps = suites[i].dependencies;
             for (uint256 j = 0; j < deps.length; j++) {

@@ -254,6 +254,16 @@ struct DeployDeclaration {
     /// The networks one broadcast goes to, as `[rpc_endpoints]` aliases. A repo bootstrapping one chain per dispatch
     /// narrows this; one deploying to fewer networks at all narrows `networks`.
     function(DeployDeclaration memory) internal view returns (string[] memory) deployNetworks;
+    /// Every deterministic deployment outside this repo that a suite may embed.
+    ExternalDeployment[] externalDeployments;
+    /// The creation code of the contract an anchored candidate's key names, from its type.
+    function(string memory) internal view returns (bytes memory) sourceCreationCode;
+}
+
+/// A deterministic deployment outside the repo that a suite may reach.
+struct ExternalDeployment {
+    address deployedAddress;
+    bytes32 codeHash;
 }
 
 /// The rolling candidate: a snapshot that tracks current source rather than a
