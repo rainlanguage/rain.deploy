@@ -123,8 +123,12 @@ library LibMockSaltMechanism {
         LibMockMechanismProbe.checkDeclaration(MOCK_SALT_MECHANISM_ID);
     }
 
-    function checkNetwork(DeployDeclaration memory, string memory onNetwork, uint256 chainId) internal view {
+    /// Reports its config as `d` declares it, so a test pins that the hook reads the caller's declaration.
+    function checkNetwork(DeployDeclaration memory d, string memory onNetwork, uint256 chainId) internal view {
         LibMockMechanismProbe.checkNetwork(MOCK_SALT_MECHANISM_ID, onNetwork, chainId);
+        LibMockMechanismProbe.declaredConfig(
+            MOCK_SALT_MECHANISM_ID, LibRainDeployDeclaration.mechanismById(d, MOCK_SALT_MECHANISM_ID, onNetwork).config
+        );
     }
 
     function logVerification(DeployDeclaration memory, Vm, string[] memory, DeploySuite memory suite, address[] memory deployed) internal {
