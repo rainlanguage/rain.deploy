@@ -27,6 +27,7 @@ library LibMockSaltMechanism {
     function handler() internal pure returns (DeployMechanismHandler memory) {
         return DeployMechanismHandler({
             id: MOCK_SALT_MECHANISM_ID,
+            config: "",
             deployedAddress: deployedAddress,
             recordedAddress: recordedAddress,
             deployStepData: deployStepData,
@@ -40,7 +41,8 @@ library LibMockSaltMechanism {
             checkBroadcastSeat: checkBroadcastSeat,
             logVerification: logVerification,
             writeSuiteSnapshot: writeSuiteSnapshot,
-            releasedMechanismData: releasedMechanismData
+            releasedMechanismData: releasedMechanismData,
+            releasedImport: releasedImport
         });
     }
 
@@ -144,5 +146,9 @@ library LibMockSaltMechanism {
 
     function releasedMechanismData(Vm, string memory, string memory prefix) internal pure returns (string memory) {
         return string.concat(prefix, "_MECHANISM_DATA");
+    }
+
+    function releasedImport(string memory) internal pure returns (string memory) {
+        return "";
     }
 }
