@@ -63,7 +63,7 @@ contract LibRainDeployDeclarationTest is Test {
 
     function testExtendSetsEveryRainNetwork() external pure {
         DeployDeclaration memory d;
-        d.networks = oneNetwork("stale");
+        LibRainDeployDeclaration.setNetworks(d, oneNetwork("stale"));
         LibRainDeployDeclaration.extend(d);
         assertNetworks(d.networks, LibRainDeploy.supportedNetworks(), "networks");
         assertNetworks(d.deployNetworks, LibRainDeploy.supportedNetworks(), "deployNetworks");
@@ -76,7 +76,7 @@ contract LibRainDeployDeclarationTest is Test {
 
     function testAddReleasedFillsUnsetNetworksWithAFreshCopy() external pure {
         DeployDeclaration memory d;
-        d.networks = twoNetworks();
+        LibRainDeployDeclaration.setNetworks(d, twoNetworks());
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = suiteNamed("a", new string[](0));
         LibRainDeployDeclaration.addReleased(d, suites);
@@ -90,7 +90,7 @@ contract LibRainDeployDeclarationTest is Test {
 
     function testAddReleasedKeepsExplicitNetworks() external pure {
         DeployDeclaration memory d;
-        d.networks = twoNetworks();
+        LibRainDeployDeclaration.setNetworks(d, twoNetworks());
         string[] memory own = oneNetwork("gamma");
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = suiteNamed("a", own);
@@ -104,7 +104,7 @@ contract LibRainDeployDeclarationTest is Test {
 
     function testAddReleasedAppendsInOrder() external pure {
         DeployDeclaration memory d;
-        d.networks = twoNetworks();
+        LibRainDeployDeclaration.setNetworks(d, twoNetworks());
         DeploySuite[] memory first = new DeploySuite[](1);
         first[0] = suiteNamed("a", new string[](0));
         LibRainDeployDeclaration.addReleased(d, first);
@@ -123,7 +123,7 @@ contract LibRainDeployDeclarationTest is Test {
     function testAddReleasedFillsFromTheCurrentNetworks() external pure {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
-        d.networks = oneNetwork("narrowed");
+        LibRainDeployDeclaration.setNetworks(d, oneNetwork("narrowed"));
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = suiteNamed("a", new string[](0));
         LibRainDeployDeclaration.addReleased(d, suites);
@@ -132,7 +132,7 @@ contract LibRainDeployDeclarationTest is Test {
 
     function testAddCandidatesFillsUnsetNetworksWithAFreshCopy() external pure {
         DeployDeclaration memory d;
-        d.networks = twoNetworks();
+        LibRainDeployDeclaration.setNetworks(d, twoNetworks());
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({snapshot: suiteNamed("a", new string[](0)), unanchorableReason: ""});
         string[] memory own = oneNetwork("gamma");
@@ -155,7 +155,7 @@ contract LibRainDeployDeclarationTest is Test {
 
     function testAddCandidatesAppendsInOrder() external pure {
         DeployDeclaration memory d;
-        d.networks = twoNetworks();
+        LibRainDeployDeclaration.setNetworks(d, twoNetworks());
         DeployCandidate[] memory first = new DeployCandidate[](1);
         first[0] = DeployCandidate({snapshot: suiteNamed("a", new string[](0)), unanchorableReason: ""});
         LibRainDeployDeclaration.addCandidates(d, first);
