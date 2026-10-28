@@ -17,4 +17,13 @@ library LibRegistryDelegates {
             ? abi.encodeCall(IRegistryDelegatesV3.approveV5, (scope, delegate))
             : abi.encodeCall(IRegistryDelegatesV3.revokeV5, (scope, delegate));
     }
+
+    /// @param delegate The delegate.
+    /// @param approve True for `approveUnscopedV5`, false for `revokeUnscopedV5`.
+    /// @return The calldata.
+    function approveUnscopedCalldata(address delegate, bool approve) internal pure returns (bytes memory) {
+        return approve
+            ? abi.encodeCall(IRegistryDelegatesV3.approveUnscopedV5, (delegate))
+            : abi.encodeCall(IRegistryDelegatesV3.revokeUnscopedV5, (delegate));
+    }
 }
