@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Script} from "forge-std-1.17.0/src/Script.sol";
-import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
@@ -45,7 +45,7 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// Rewrite every file generated from the snapshots and from the frozen
     /// record. Run last, after a `cutRelease()` freeze has written the record,
     /// so a file emitted from that record holds the release just cut.
-    function regenerateLibs() internal virtual;
+    function regenerateLibs(DeployDeclaration memory d) internal virtual;
 
     /// The contracts whose rolling snapshots a release freezes.
     /// @return The contract names.
@@ -97,7 +97,7 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// This STAGES the files; `rainix-copy-artifacts` installs them. See
     /// `LibRainDeployConfig` for why a script cannot write `foundry.toml`
     /// itself.
-    function regenerateConfig() internal {
+    function regenerateConfig(DeployDeclaration memory d) internal {
         LibRainDeployConfig.writeStagedConfig(
             vm, configRoot(), LibRainDeploy.declaredNetworkConfigs(d.networks)
         );
@@ -151,16 +151,18 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
 
     /// @notice Regenerate everything this repo generates. Freezes nothing.
     function run() external {
+        DeployDeclaration memory d = declaration();
         declareGeneratedPaths();
-        regenerateConfig();
+        regenerateConfig(d);
         regenerateSnapshots();
-        regenerateLibs();
+        regenerateLibs(d);
     }
 
     /// @notice Regenerate the rolling snapshots, freeze them as this release's
     /// record, then regenerate the libs from the record.
     function cutRelease() external {
+        DeployDeclaration memory d = declaration();
         LibRainDeploySnapshot.freeze(vm, recordRoot(), regenerateSnapshots, releaseRecordNames());
-        regenerateLibs();
+        regenerateLibs(d);
     }
 }
