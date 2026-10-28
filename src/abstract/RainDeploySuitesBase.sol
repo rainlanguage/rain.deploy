@@ -737,7 +737,7 @@ abstract contract RainDeploySuitesBase {
     /// perfectly and still be the same key.
     /// @return Every declared suite.
     function allSuites(DeployDeclaration memory d) internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory released = d.released;
+        DeploySuite[] memory released = abi.decode(abi.encode(d.released), (DeploySuite[]));
         DeployCandidate[] memory candidates = checkedCandidateSuites(d);
 
         DeploySuite[] memory suites = new DeploySuite[](released.length + candidates.length);
