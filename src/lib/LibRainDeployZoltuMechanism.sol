@@ -15,7 +15,7 @@ import {LibRainDeploy} from "./LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "./LibRainDeployDeclaration.sol";
 import {LibRainDeploySnapshot} from "./LibRainDeploySnapshot.sol";
 
-/// The Zoltu mechanism's id.
+/// @dev The Zoltu mechanism's id.
 bytes32 constant ZOLTU_MECHANISM_ID = keccak256("rain.deploy.mechanism.zoltu");
 
 /// @title LibRainDeployZoltuMechanism
