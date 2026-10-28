@@ -60,7 +60,7 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         bytes32 hashed = keccak256(bytes(name));
         IRegistryDelegatesV2 registry = IRegistryDelegatesV2(registryAddress);
 
-        vm.setEnv(e("SCOPE"), name);
+        vm.setEnv(e("SCOPES"), name);
         vm.setEnv(e("ADDRESS"), vm.toString(delegate));
 
         vm.setEnv(e("ADDRESS"), "not-an-address");
@@ -70,12 +70,12 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         script.runAsItself();
         vm.setEnv(e("ADDRESS"), vm.toString(delegate));
 
-        vm.setEnv(e("SCOPE"), "Not.Canonical");
+        vm.setEnv(e("SCOPES"), "Not.Canonical");
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
         script.runAsItself();
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "Not.Canonical"));
         script.verify();
-        vm.setEnv(e("SCOPE"), name);
+        vm.setEnv(e("SCOPES"), name);
 
         // The signer is the script's `msg.sender`: this test contract is not
         // the authority.

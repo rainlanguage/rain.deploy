@@ -4,6 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
+import {Multicall} from "@openzeppelin-contracts-5.7.0/utils/Multicall.sol";
 
 import {IRegistryDelegatesV2} from "../interface/IRegistryDelegatesV2.sol";
 import {LibRegistryDelegates} from "./LibRegistryDelegates.sol";
@@ -21,14 +22,15 @@ struct RegistryDelegation {
 
 /// @title LibRegistryDelegatesApprove
 /// @notice An account's delegation side of a registry with
-/// `IRegistryDelegatesV2` delegation: approves one delegate for one scope under
-/// the account on every network it is given, or revokes it, signed by the
-/// account itself, and reads the approval back. The registry is a
+/// `IRegistryDelegatesV2` delegation: approves one delegate for a list of
+/// scopes under the account on every network it is given, or revokes it, in
+/// one `multicall` per network signed by the account itself, and reads the
+/// approvals back. The registry is a
 /// `RegistryDelegation`: `LibConfigRegistryApprove` and
 /// `LibMigrationRegistryApprove` each build one, and their scripts say how they
 /// are run.
 ///
-/// The scope and the networks are taken and refused exactly as
+/// Each scope and the networks are taken and refused exactly as
 /// `LibConfigRegistryRegister` takes a name and networks, through its
 /// `nameHash` and `selectNetworks`, so an approval lands on the scope a
 /// consumer hashes the same way.
@@ -38,8 +40,9 @@ struct RegistryDelegation {
 /// Approving and revoking act under the caller, so the sender is the account:
 /// a delegate cannot approve another, and a sender that is not the account
 /// approves under itself, which no consumer reads. `checkInputs` refuses that,
-/// a zero delegate, a non-canonical scope and a bad network selection before
-/// any fork. Per network, once it is forked and before anything is recorded,
+/// a zero delegate, an empty scope list, a non-canonical scope and a bad
+/// network selection before any fork. Per network, once it is forked and
+/// before anything is recorded,
 /// the chain id is the catalogue's and the registry holds the pinned code
 /// hash. A script that reverts signs nothing.
 ///
@@ -57,6 +60,9 @@ library LibRegistryDelegatesApprove {
     /// @param sender The account that would sign.
     /// @param authority The account the run approves under.
     error SenderNotAuthority(address sender, address authority);
+
+    /// Thrown when a run is given no scope.
+    error NoScopes();
 
     /// Thrown when a network's registry does not hold the expected approval.
     /// @param network The network read.
@@ -89,11 +95,26 @@ library LibRegistryDelegatesApprove {
         }
     }
 
-    /// The record of a run's inputs, printed before any network: everything
-    /// the account's device is asked to sign, exactly as it will be signed.
+    /// The hash of each scope, refused unless there is at least one and each is
+    /// canonical.
+    /// @param scopes The scopes as a consumer writes them.
+    /// @return The hashed scopes, in order.
+    function hashScopes(string[] memory scopes) internal pure returns (bytes32[] memory) {
+        if (scopes.length == 0) {
+            revert NoScopes();
+        }
+        bytes32[] memory hashed = new bytes32[](scopes.length);
+        for (uint256 i = 0; i < scopes.length; i++) {
+            hashed[i] = LibConfigRegistryRegister.nameHash(scopes[i]);
+        }
+        return hashed;
+    }
+
+    /// The record of a run's inputs, printed before any network: every scope
+    /// and its hash, the signer, the delegate, the target and the registry.
     /// @param r The registry.
     /// @param vm The Vm instance to format with.
-    /// @param scope The scope as a consumer writes it.
+    /// @param scopes The scopes as a consumer writes them.
     /// @param authority The account that signs.
     /// @param delegate The delegate.
     /// @param approve True to approve, false to revoke.
@@ -101,95 +122,80 @@ library LibRegistryDelegatesApprove {
     function describeInputs(
         RegistryDelegation memory r,
         Vm vm,
-        string memory scope,
+        string[] memory scopes,
         address authority,
         address delegate,
         bool approve
     ) internal pure returns (string memory) {
-        bytes32 hashed = LibConfigRegistryRegister.nameHash(scope);
+        bytes32[] memory hashed = hashScopes(scopes);
+        string memory record = "";
+        for (uint256 i = 0; i < scopes.length; i++) {
+            record = string.concat(
+                record, "Scope: ", scopes[i], "\nScope hash (keccak256 of the scope): ", vm.toString(hashed[i]), "\n"
+            );
+        }
         return string.concat(
-            "Scope: ",
-            scope,
-            "\nScope hash (keccak256 of the scope): ",
-            vm.toString(hashed),
-            "\nAuthority (signer): ",
+            record,
+            "Authority (signer): ",
             vm.toString(authority),
             "\nDelegate: ",
             vm.toString(delegate),
             "\nTarget: ",
             approve ? "approved" : "revoked",
-            describeSigned(r, vm, hashed, delegate, approve)
-        );
-    }
-
-    /// The registry and calldata lines of `describeInputs`: where the
-    /// transaction goes and what it carries.
-    /// @param r The registry.
-    /// @param vm The Vm instance to format with.
-    /// @param scope The hashed scope.
-    /// @param delegate The delegate.
-    /// @param approve True to approve, false to revoke.
-    /// @return The two lines, each led by a newline.
-    function describeSigned(RegistryDelegation memory r, Vm vm, bytes32 scope, address delegate, bool approve)
-        internal
-        pure
-        returns (string memory)
-    {
-        return string.concat(
             "\nRegistry: ",
-            vm.toString(r.registry),
-            "\nCalldata: ",
-            vm.toString(LibRegistryDelegates.approveCalldata(scope, delegate, approve))
+            vm.toString(r.registry)
         );
     }
 
-    /// The record of one network: its chain id, the delegate's code size, the
-    /// current approval, and what the run does to it — `SKIP` when it is in the
-    /// target state already, `APPROVE` or `REVOKE` otherwise.
+    /// The head of one network's record: its chain id and the delegate's code
+    /// size.
     /// @param vm The Vm instance to format with.
     /// @param network The network's name.
     /// @param chainId The chain the network forked.
     /// @param delegateCodeSize The size of the code at the delegate.
-    /// @param approved Whether the delegate is approved now.
-    /// @param approve The target state.
     /// @return The record, one field per line.
-    function describeNetwork(
-        Vm vm,
-        string memory network,
-        uint256 chainId,
-        uint256 delegateCodeSize,
-        bool approved,
-        bool approve
-    ) internal pure returns (string memory) {
-        string memory action;
-        if (approved == approve) {
-            action = approve ? "SKIP: already approved" : "SKIP: already not approved";
-        } else {
-            action = approve ? "APPROVE" : "REVOKE";
-        }
+    function describeNetwork(Vm vm, string memory network, uint256 chainId, uint256 delegateCodeSize)
+        internal
+        pure
+        returns (string memory)
+    {
         return string.concat(
             "Network: ",
             network,
             "\n  chain id: ",
             vm.toString(chainId),
             "\n  delegate code: ",
-            delegateCodeSize == 0 ? "none" : string.concat(vm.toString(delegateCodeSize), " bytes"),
-            "\n  current: ",
-            approved ? "approved" : "not approved",
-            "\n  ",
-            action
+            delegateCodeSize == 0 ? "none" : string.concat(vm.toString(delegateCodeSize), " bytes")
         );
     }
 
-    /// Sets the approval of `delegate` for `scope` under `authority` on the
-    /// selected chain to `approve`, signed by `authority`, unless it is in that
-    /// state there already. Logs the current approval and what is about to
-    /// happen to it.
+    /// One scope's line of a network's record: its current approval and what
+    /// the run does to it — `SKIP` when it is in the target state already,
+    /// `APPROVE` or `REVOKE` otherwise.
+    /// @param scope The scope as a consumer writes it.
+    /// @param approved Whether the delegate is approved now.
+    /// @param approve The target state.
+    /// @return The line, led by a newline.
+    function describeScope(string memory scope, bool approved, bool approve) internal pure returns (string memory) {
+        string memory action;
+        if (approved == approve) {
+            action = approve ? "SKIP: already approved" : "SKIP: already not approved";
+        } else {
+            action = approve ? "APPROVE" : "REVOKE";
+        }
+        return string.concat("\n  ", scope, ": ", approved ? "approved" : "not approved", ", ", action);
+    }
+
+    /// Sets the approval of `delegate` for every scope under `authority` on the
+    /// selected chain to `approve`, in one `multicall` signed by `authority`
+    /// over the scopes not in that state there already. Logs each scope's
+    /// current approval, what is about to happen to it, and the calldata sent.
     /// @param r The registry.
     /// @param vm The Vm instance to broadcast with.
     /// @param network The catalogue entry of the selected chain.
     /// @param authority The account that signs.
-    /// @param scope The hashed scope.
+    /// @param scopes The scopes as a consumer writes them.
+    /// @param hashed The hashed scopes, positionally paired with `scopes`.
     /// @param delegate The delegate.
     /// @param approve True to approve, false to revoke.
     /// @return Whether a transaction was broadcast.
@@ -199,60 +205,74 @@ library LibRegistryDelegatesApprove {
         Vm vm,
         SupportedNetwork memory network,
         address authority,
-        bytes32 scope,
+        string[] memory scopes,
+        bytes32[] memory hashed,
         address delegate,
         bool approve
     ) internal returns (bool, string memory) {
         checkChain(r, vm, network);
-        bool approved = IRegistryDelegatesV2(r.registry).approvedV4(authority, scope, delegate);
-
-        string memory record =
-            describeNetwork(vm, network.name, network.chainId, delegate.code.length, approved, approve);
+        string memory record = describeNetwork(vm, network.name, network.chainId, delegate.code.length);
+        bytes[] memory calls = new bytes[](hashed.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < hashed.length; i++) {
+            bool approved = IRegistryDelegatesV2(r.registry).approvedV4(authority, hashed[i], delegate);
+            record = string.concat(record, describeScope(scopes[i], approved, approve));
+            if (approved != approve) {
+                calls[count] = LibRegistryDelegates.approveCalldata(hashed[i], delegate, approve);
+                count++;
+            }
+        }
+        bytes[] memory batch = new bytes[](count);
+        for (uint256 i = 0; i < count; i++) {
+            batch[i] = calls[i];
+        }
+        bool sends = count > 0;
+        if (sends) {
+            record = string.concat(record, "\n  Calldata: ", vm.toString(abi.encodeCall(Multicall.multicall, (batch))));
+        }
         console2.log(record);
-        bool sends = approved != approve;
         if (sends) {
             vm.startBroadcast(authority);
-            if (approve) {
-                IRegistryDelegatesV2(r.registry).approveV4(scope, delegate);
-            } else {
-                IRegistryDelegatesV2(r.registry).revokeV4(scope, delegate);
-            }
+            // The registry's own calls return nothing.
+            // slither-disable-next-line unused-return
+            Multicall(r.registry).multicall(batch);
             vm.stopBroadcast();
         }
         return (sends, record);
     }
 
     /// Every input refusal of `approveOnNetworks`, in order — the sender, the
-    /// delegate, the scope, then the networks.
+    /// delegate, the scopes, then the networks.
     /// @param selected The networks to act on.
     /// @param declared The networks the declaration supports.
     /// @param sender The account that signs.
     /// @param authority The account to approve under.
-    /// @param scope The scope as a consumer writes it.
+    /// @param scopes The scopes as a consumer writes them.
     /// @param delegate The delegate.
-    /// @return The hashed scope.
+    /// @return The hashed scopes.
     /// @return The selected networks' catalogue entries.
     function checkInputs(
         string[] memory selected,
         string[] memory declared,
         address sender,
         address authority,
-        string memory scope,
+        string[] memory scopes,
         address delegate
-    ) internal pure returns (bytes32, SupportedNetwork[] memory) {
+    ) internal pure returns (bytes32[] memory, SupportedNetwork[] memory) {
         if (sender != authority) {
             revert SenderNotAuthority(sender, authority);
         }
         if (delegate == address(0)) {
             revert IRegistryDelegatesV2.ZeroDelegate();
         }
-        bytes32 hashed = LibConfigRegistryRegister.nameHash(scope);
+        bytes32[] memory hashed = hashScopes(scopes);
         SupportedNetwork[] memory networks = LibConfigRegistryRegister.selectNetworks(selected, declared);
         return (hashed, networks);
     }
 
-    /// Sets the approval of `delegate` for `scope` under `authority` to
-    /// `approve` on every selected network, signed by `sender`.
+    /// Sets the approval of `delegate` for every scope under `authority` to
+    /// `approve` on every selected network, signed by `sender`, one
+    /// transaction per network.
     ///
     /// Every input refusal comes before the first fork, and every network is
     /// forked before any is selected, as `LibRainDeploy.createForks` requires.
@@ -262,7 +282,7 @@ library LibRegistryDelegatesApprove {
     /// @param declared The networks the declaration supports.
     /// @param sender The account that signs: the authority.
     /// @param authority The account to approve under.
-    /// @param scope The scope as a consumer writes it.
+    /// @param scopes The scopes as a consumer writes them.
     /// @param delegate The delegate.
     /// @param approve True to approve, false to revoke.
     /// @return The fork each selected network was simulated on, for
@@ -275,17 +295,17 @@ library LibRegistryDelegatesApprove {
         string[] memory declared,
         address sender,
         address authority,
-        string memory scope,
+        string[] memory scopes,
         address delegate,
         bool approve
     ) internal returns (uint256[] memory, string memory) {
         // slither-disable-next-line unused-return
-        checkInputs(selected, declared, sender, authority, scope, delegate);
-        string memory record = describeInputs(r, vm, scope, authority, delegate, approve);
+        checkInputs(selected, declared, sender, authority, scopes, delegate);
+        string memory record = describeInputs(r, vm, scopes, authority, delegate, approve);
         console2.log(record);
 
         uint256[] memory forkIds = LibRainDeploy.createForks(vm, selected);
-        approveOnForks(r, vm, selected, declared, forkIds, sender, authority, scope, delegate, approve);
+        approveOnForks(r, vm, selected, declared, forkIds, sender, authority, scopes, delegate, approve);
         return (forkIds, record);
     }
 
@@ -298,7 +318,7 @@ library LibRegistryDelegatesApprove {
     /// @param forkIds The fork of each selected network, positionally paired.
     /// @param sender The account that signs: the authority.
     /// @param authority The account to approve under.
-    /// @param scope The scope as a consumer writes it.
+    /// @param scopes The scopes as a consumer writes them.
     /// @param delegate The delegate.
     /// @param approve True to approve, false to revoke.
     function approveOnForks(
@@ -309,29 +329,30 @@ library LibRegistryDelegatesApprove {
         uint256[] memory forkIds,
         address sender,
         address authority,
-        string memory scope,
+        string[] memory scopes,
         address delegate,
         bool approve
     ) internal {
-        (bytes32 hashed, SupportedNetwork[] memory networks) =
-            checkInputs(selected, declared, sender, authority, scope, delegate);
+        (bytes32[] memory hashed, SupportedNetwork[] memory networks) =
+            checkInputs(selected, declared, sender, authority, scopes, delegate);
         if (forkIds.length != networks.length) {
             revert LibRainDeploy.ForkIdsLengthMismatch(networks.length, forkIds.length);
         }
         for (uint256 i = 0; i < networks.length; i++) {
             vm.selectFork(forkIds[i]);
-            approveOnSelectedChain(r, vm, networks[i], authority, hashed, delegate, approve);
+            // slither-disable-next-line unused-return
+            approveOnSelectedChain(r, vm, networks[i], authority, scopes, hashed, delegate, approve);
         }
     }
 
     /// Reverts unless the selected chain is the network's and its registry
-    /// holds the approval of `delegate` for `scope` under `authority` in the
-    /// state `approve`.
+    /// holds the approval of `delegate` for every scope under `authority` in
+    /// the state `approve`.
     /// @param r The registry.
     /// @param vm The Vm the chain id is read through.
     /// @param network The catalogue entry of the selected chain.
     /// @param authority The account to read under.
-    /// @param scope The hashed scope.
+    /// @param hashed The hashed scopes.
     /// @param delegate The delegate.
     /// @param approve Whether it must be approved.
     function checkApprovalOnSelectedChain(
@@ -339,17 +360,19 @@ library LibRegistryDelegatesApprove {
         Vm vm,
         SupportedNetwork memory network,
         address authority,
-        bytes32 scope,
+        bytes32[] memory hashed,
         address delegate,
         bool approve
     ) internal view {
         checkChain(r, vm, network);
-        if (IRegistryDelegatesV2(r.registry).approvedV4(authority, scope, delegate) != approve) {
-            revert UnexpectedApproval(network.name, authority, scope, delegate, approve);
+        for (uint256 i = 0; i < hashed.length; i++) {
+            if (IRegistryDelegatesV2(r.registry).approvedV4(authority, hashed[i], delegate) != approve) {
+                revert UnexpectedApproval(network.name, authority, hashed[i], delegate, approve);
+            }
         }
     }
 
-    /// Reverts unless every given fork's registry holds the approval in the
+    /// Reverts unless every given fork's registry holds every approval in the
     /// state `approve`, logging each network checked.
     /// @param r The registry.
     /// @param vm The Vm instance to select forks with.
@@ -357,7 +380,7 @@ library LibRegistryDelegatesApprove {
     /// @param declared The networks the declaration supports.
     /// @param forkIds The fork of each selected network, positionally paired.
     /// @param authority The account to read under.
-    /// @param scope The scope as a consumer writes it.
+    /// @param scopes The scopes as a consumer writes them.
     /// @param delegate The delegate.
     /// @param approve Whether it must be approved.
     function checkApprovalOnForks(
@@ -367,11 +390,11 @@ library LibRegistryDelegatesApprove {
         string[] memory declared,
         uint256[] memory forkIds,
         address authority,
-        string memory scope,
+        string[] memory scopes,
         address delegate,
         bool approve
     ) internal {
-        bytes32 hashed = LibConfigRegistryRegister.nameHash(scope);
+        bytes32[] memory hashed = hashScopes(scopes);
         SupportedNetwork[] memory networks = LibConfigRegistryRegister.selectNetworks(selected, declared);
         if (forkIds.length != networks.length) {
             revert LibRainDeploy.ForkIdsLengthMismatch(networks.length, forkIds.length);
@@ -390,7 +413,7 @@ library LibRegistryDelegatesApprove {
     /// @param selected The networks to check.
     /// @param declared The networks the declaration supports.
     /// @param authority The account to read under.
-    /// @param scope The scope as a consumer writes it.
+    /// @param scopes The scopes as a consumer writes them.
     /// @param delegate The delegate.
     /// @param approve Whether it must be approved.
     function checkApprovalOnNetworks(
@@ -399,17 +422,17 @@ library LibRegistryDelegatesApprove {
         string[] memory selected,
         string[] memory declared,
         address authority,
-        string memory scope,
+        string[] memory scopes,
         address delegate,
         bool approve
     ) internal {
         // Refused before anything is forked; the returns are not needed here.
         // slither-disable-next-line unused-return
-        LibConfigRegistryRegister.nameHash(scope);
+        hashScopes(scopes);
         // slither-disable-next-line unused-return
         LibConfigRegistryRegister.selectNetworks(selected, declared);
         checkApprovalOnForks(
-            r, vm, selected, declared, LibRainDeploy.createForks(vm, selected), authority, scope, delegate, approve
+            r, vm, selected, declared, LibRainDeploy.createForks(vm, selected), authority, scopes, delegate, approve
         );
     }
 }

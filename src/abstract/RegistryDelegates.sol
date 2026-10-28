@@ -3,12 +3,17 @@
 pragma solidity ^0.8.25;
 
 import {IRegistryDelegatesV2} from "../interface/IRegistryDelegatesV2.sol";
+import {Multicall} from "@openzeppelin-contracts-5.7.0/utils/Multicall.sol";
 
 /// @title RegistryDelegates
 /// @notice The delegation `ConfigRegistry` and `MigrationRegistry` share, as
 /// `IRegistryDelegatesV2` describes it. Each registry checks its own other keys
 /// before calling in.
-abstract contract RegistryDelegates is IRegistryDelegatesV2 {
+///
+/// Both registries are `Multicall`, so an account batches its approvals and
+/// writes into one transaction. Each call is a delegatecall into the registry
+/// itself, so `msg.sender` in every call is the account that sent the batch.
+abstract contract RegistryDelegates is IRegistryDelegatesV2, Multicall {
     mapping(address account => mapping(bytes32 scope => mapping(address delegate => bool))) internal sApproved;
 
     /// Refuses the zero delegate with `ZeroDelegate`.

@@ -13,9 +13,10 @@ import {LibRegistryAuthority} from "../src/lib/LibRegistryAuthority.sol";
 /// @title ApproveRegistryDelegate
 /// @notice Approves `<PREFIX>_ADDRESS` to write under
 /// `LibRegistryAuthority.ROOT_AUTHORITY`
-/// within `<PREFIX>_SCOPE` in a registry, on every network the declaration
-/// supports or on the comma-separated subset `<PREFIX>_NETWORKS` names,
-/// signed on a Trezor by that authority. `<PREFIX>_APPROVED=false` revokes
+/// within each of the comma-separated scopes `<PREFIX>_SCOPES` names in a
+/// registry, on every network the declaration supports or on the
+/// comma-separated subset `<PREFIX>_NETWORKS` names, signed on a Trezor by that
+/// authority as one `multicall` per network. `<PREFIX>_APPROVED=false` revokes
 /// instead. Each registry's script names its prefix and its registry.
 ///
 /// Local only: the signer is a hardware wallet. The README's sections on
@@ -70,7 +71,7 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
             d.networks,
             msg.sender,
             LibRegistryAuthority.ROOT_AUTHORITY,
-            vm.envString(envName("SCOPE")),
+            vm.envString(envName("SCOPES"), ","),
             vm.envAddress(envName("ADDRESS")),
             targetApproved()
         );
@@ -87,7 +88,7 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
             selectedNetworks(d),
             d.networks,
             LibRegistryAuthority.ROOT_AUTHORITY,
-            vm.envString(envName("SCOPE")),
+            vm.envString(envName("SCOPES"), ","),
             vm.envAddress(envName("ADDRESS")),
             targetApproved()
         );
