@@ -68,7 +68,8 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
             storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
-            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            describedByMeta: ""
         });
         suites[1] = DeploySuite({
             networks: new string[](0),
@@ -79,7 +80,8 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
             storedRuntimeCode: type(MockDeployableV2).runtimeCode,
             artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
             dependencies: new DeployDependency[](0),
-            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            describedByMeta: ""
         });
         return suites;
     }
@@ -102,7 +104,8 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
-                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });
@@ -116,7 +119,8 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
-                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+                describedByMeta: ""
             }),
             unanchorableReason: ""
         });

@@ -45,7 +45,8 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
             storedRuntimeCode: hex"00",
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
-            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            describedByMeta: ""
         });
 
         DerivedDeploy memory derived = deriveDeployment(declaration(), suite);
@@ -135,7 +136,8 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
             storedRuntimeCode: hex"00",
             artifactPath: "test/concrete/MockDependentDeployable.sol:MockDependentDeployable",
             dependencies: dependencies,
-            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            describedByMeta: ""
         });
     }
 

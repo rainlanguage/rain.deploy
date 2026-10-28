@@ -58,7 +58,8 @@ contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
                 storedRuntimeCode: hex"",
                 artifactPath: "test/concrete/VendoredDeployable.sol:VendoredDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+                describedByMeta: ""
             }),
             unanchorableReason: "Vendored third party deployment: the pinned creation code is the source."
         });
@@ -73,7 +74,8 @@ contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
                 // Resolves, and to the contract every recorded field above is.
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
-                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+                describedByMeta: ""
             }),
             unanchorableReason: "There is no source file to compile."
         });

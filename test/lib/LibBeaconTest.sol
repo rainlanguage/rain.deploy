@@ -44,7 +44,8 @@ library LibBeaconTest {
             storedRuntimeCode: runtimeCode,
             artifactPath: artifactPath,
             dependencies: new DeployDependency[](0),
-            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
+            describedByMeta: ""
         });
     }
 

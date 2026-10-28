@@ -52,7 +52,8 @@ abstract contract TwoMechanismDeploySuites is RainDeploySuitesBase {
                     networks: networks,
                     root: ""
                 })
-            )
+            ),
+            describedByMeta: ""
         });
     }
 
@@ -68,7 +69,8 @@ abstract contract TwoMechanismDeploySuites is RainDeploySuitesBase {
             storedRuntimeCode: type(MockDeployableV2).runtimeCode,
             artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
             dependencies: new DeployDependency[](0),
-            mechanismData: LibMockSaltMechanism.encode(TWO_MECHANISM_SALT)
+            mechanismData: LibMockSaltMechanism.encode(TWO_MECHANISM_SALT),
+            describedByMeta: ""
         });
     }
 
