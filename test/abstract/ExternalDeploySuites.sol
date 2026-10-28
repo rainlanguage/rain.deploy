@@ -6,7 +6,8 @@ import {
     DeployCandidate,
     DeployDeclaration,
     DeploySuite,
-    RainDeploySuitesBase
+    RainDeploySuitesBase,
+    SnapshotFile
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
@@ -192,7 +193,7 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
         DeploySuite memory suite
     ) external returns (string memory) {
         return writeSuiteSnapshot(
-            declaration(), fileVm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite
+            declaration(), fileVm, SnapshotFile(root, dir, contractName, spdxLicenseIdentifier, copyrightText), suite
         );
     }
 
