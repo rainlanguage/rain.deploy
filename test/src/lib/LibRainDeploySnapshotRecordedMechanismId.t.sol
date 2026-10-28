@@ -116,7 +116,6 @@ contract LibRainDeploySnapshotRecordedMechanismIdTest is Test {
 
     function checkId(string memory name, string memory record, bytes32 expected) internal {
         (string memory dir, string memory path) = writeRecord(name, record);
-        expectNoHandlerAsked();
         bytes32 id = this.externalRecordedMechanismId(path);
         removeRecord(dir);
         assertEq(id, expected);
@@ -130,6 +129,7 @@ contract LibRainDeploySnapshotRecordedMechanismIdTest is Test {
     }
 
     function testARecordWithoutMechanismDataReadsAsZoltu() external {
+        expectNoHandlerAsked();
         checkId("zoltu", everyNetworkLine(), ZOLTU_MECHANISM_ID);
         checkId(
             "zoltu-commented",
@@ -139,6 +139,7 @@ contract LibRainDeploySnapshotRecordedMechanismIdTest is Test {
     }
 
     function testTheIdIsTheLeadingWordOfMechanismData() external {
+        expectNoHandlerAsked();
         checkId(
             "exact-word",
             string.concat(everyNetworkLine(), mechanismDataLine(hexDigits(MOCK_CREATE2_MECHANISM_ID))),
