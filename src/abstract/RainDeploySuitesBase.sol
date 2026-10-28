@@ -304,6 +304,7 @@ struct DeployMechanismHandler {
     function(Vm, string[] memory, DeploySuite memory, address[] memory) internal logVerification;
     function(Vm, SnapshotFile memory, DeploySuite memory) internal returns (string memory) writeSuiteSnapshot;
     function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData;
+    function(string memory) internal pure returns (string memory) releasedImport;
 }
 
 /// @title RainDeploySuitesBase

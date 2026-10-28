@@ -136,7 +136,8 @@ library LibRainDeployDeclaration {
             h.checkBroadcastSeat,
             h.logVerification,
             h.writeSuiteSnapshot,
-            h.releasedMechanismData
+            h.releasedMechanismData,
+            h.releasedImport
         );
     }
 

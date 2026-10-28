@@ -410,9 +410,6 @@ library LibRainDeploySnapshot {
     /// source root.
     string constant CONCAT_SOURCE_SUBPATH = "lib/LibDeploySuiteConcat.sol";
 
-    /// Where `LibRainDeployZoltuMechanism` is declared inside this package, below the source root.
-    string constant ZOLTU_MECHANISM_SOURCE_SUBPATH = "lib/LibRainDeployZoltuMechanism.sol";
-
     /// The source root both this package and a consumer put Solidity under, and
     /// the directory `LIB_DIR` sits in.
     string constant SOURCE_ROOT = "src";
@@ -1624,29 +1621,36 @@ library LibRainDeploySnapshot {
     /// @param suitesImportPath The path the emitted lib reaches the suite types by —
     /// `suitesImportPathInThisRepo` for a lib written into this repo's own `LIB_DIR`, and the
     /// consumer's remapped path otherwise.
+    /// @param d The declaration whose mechanism for each record gives the import its `releasedMechanismData` needs,
+    /// emitted once per distinct import.
     /// @return The import block.
-    function releasedImportBlock(Vm vm, string[] memory paths, string memory suitesImportPath)
-        internal
-        view
-        returns (string memory)
-    {
+    function releasedImportBlock(
+        Vm vm,
+        string[] memory paths,
+        string memory suitesImportPath,
+        DeployDeclaration memory d
+    ) internal view returns (string memory) {
         string memory imports =
             string.concat("import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n");
+        string memory root = importRoot(suitesImportPath);
+        bytes32[] memory seen = new bytes32[](paths.length);
+        uint256 seenLength = 0;
         for (uint256 i = 0; i < paths.length; i++) {
-            if (recordedMechanismId(vm, paths[i]) == ZOLTU_MECHANISM_ID) {
-                bytes memory suites = bytes(suitesImportPath);
-                bytes memory root = new bytes(suites.length - bytes(SUITES_SOURCE_SUBPATH).length);
-                for (uint256 j = 0; j < root.length; j++) {
-                    root[j] = suites[j];
+            string memory mechanismImport = LibRainDeployDeclaration.mechanismById(
+                    d, recordedMechanismId(vm, paths[i]), paths[i]
+                ).releasedImport(root);
+            bytes32 hash = keccak256(bytes(mechanismImport));
+            bool duplicate = false;
+            for (uint256 j = 0; j < seenLength; j++) {
+                if (seen[j] == hash) {
+                    duplicate = true;
+                    break;
                 }
-                imports = string.concat(
-                    imports,
-                    "import {LibRainDeployZoltuMechanism} from \"",
-                    string(root),
-                    ZOLTU_MECHANISM_SOURCE_SUBPATH,
-                    "\";\n"
-                );
-                break;
+            }
+            if (!duplicate) {
+                seen[seenLength] = hash;
+                seenLength++;
+                imports = string.concat(imports, mechanismImport);
             }
         }
         imports = string.concat(imports, "\n");
@@ -1659,9 +1663,26 @@ library LibRainDeploySnapshot {
     /// `releasedImportBlock` applied to this repo's own `suitesImportPathInThisRepo`.
     /// @param vm The Vm instance for file and string operations.
     /// @param paths The record's files, in the order they are emitted.
+    /// @param d The declaration whose mechanisms give the imports.
     /// @return The import block.
-    function releasedImportBlock(Vm vm, string[] memory paths) internal view returns (string memory) {
-        return releasedImportBlock(vm, paths, suitesImportPathInThisRepo());
+    function releasedImportBlock(Vm vm, string[] memory paths, DeployDeclaration memory d)
+        internal
+        view
+        returns (string memory)
+    {
+        return releasedImportBlock(vm, paths, suitesImportPathInThisRepo(), d);
+    }
+
+    /// The import root of this package's source root: `suitesImportPath` less `SUITES_SOURCE_SUBPATH`.
+    /// @param suitesImportPath The path the emitted lib reaches the suite types by.
+    /// @return The root.
+    function importRoot(string memory suitesImportPath) internal pure returns (string memory) {
+        bytes memory suites = bytes(suitesImportPath);
+        bytes memory root = new bytes(suites.length - bytes(SUITES_SOURCE_SUBPATH).length);
+        for (uint256 i = 0; i < root.length; i++) {
+            root[i] = suites[i];
+        }
+        return string(root);
     }
 
     /// One `suites[i] = DeploySuite({...});` entry of a generated released-suites lib.
@@ -1797,7 +1818,7 @@ library LibRainDeploySnapshot {
         {
             string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
             body = string.concat(
-                releasedImportBlock(vm, paths, suitesImportPath),
+                releasedImportBlock(vm, paths, suitesImportPath, d),
                 releasedLibraryBlock(vm, libraryName, contractName, paths, template, d)
             );
         }

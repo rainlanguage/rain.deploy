@@ -19,6 +19,9 @@ import {LibRainDeploySnapshot} from "./LibRainDeploySnapshot.sol";
 /// @dev The Zoltu mechanism's id.
 bytes32 constant ZOLTU_MECHANISM_ID = keccak256("rain.deploy.mechanism.zoltu");
 
+/// @dev Where `LibRainDeployZoltuMechanism` is declared inside this package, below the source root.
+string constant ZOLTU_MECHANISM_SOURCE_SUBPATH = "lib/LibRainDeployZoltuMechanism.sol";
+
 /// @title LibRainDeployZoltuMechanism
 /// @notice The Zoltu mechanism: one address on every network, from the creation code alone. Its `mechanismData` is
 /// `abi.encode(ZOLTU_MECHANISM_ID)`, and every step refuses any other with `UnexpectedMechanismData`.
@@ -41,7 +44,8 @@ library LibRainDeployZoltuMechanism {
             checkBroadcastSeat: checkBroadcastSeat,
             logVerification: logVerification,
             writeSuiteSnapshot: writeSuiteSnapshot,
-            releasedMechanismData: releasedMechanismData
+            releasedMechanismData: releasedMechanismData,
+            releasedImport: releasedImport
         });
     }
 
@@ -169,5 +173,11 @@ library LibRainDeployZoltuMechanism {
             revert FrozenSnapshotMechanismDataUnexpected(path);
         }
         return "LibRainDeployZoltuMechanism.mechanismData()";
+    }
+
+    /// @param root The import root of this package's source root.
+    /// @return The import of this library that `releasedMechanismData`'s expression needs.
+    function releasedImport(string memory root) internal pure returns (string memory) {
+        return string.concat("import {LibRainDeployZoltuMechanism} from \"", root, ZOLTU_MECHANISM_SOURCE_SUBPATH, "\";\n");
     }
 }
