@@ -179,7 +179,7 @@ contract RainDeploySuitesBaseCallerHeldValuesTest is Test, MockCreate2DeploySuit
         assertEq(declarationHash(d), declarationBefore);
     }
 
-    function testAddReleasedFillsTheCallersSuiteWithNetworksNotSharedWithTheDeclaration() external pure {
+    function testAddReleasedLeavesTheCallersSuitesUnfilledAndUnshared() external pure {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         DeploySuite[] memory suites = new DeploySuite[](2);
@@ -187,19 +187,23 @@ contract RainDeploySuitesBaseCallerHeldValuesTest is Test, MockCreate2DeploySuit
         suites[0].networks = new string[](0);
         suites[1] = zoltuRelease();
         string[] memory explicitNetworks = suites[1].networks;
+        string memory explicitFirst = explicitNetworks[0];
         DeploySuite[] memory heldReleased = d.released;
 
         LibRainDeployDeclaration.addReleased(d, suites);
 
-        assertEq(suites[0].networks, d.networks);
+        assertEq(suites[0].networks.length, 0);
+        assertEq(d.released[0].networks, d.networks);
         d.networks[0] = "changed";
-        assertEq(suites[0].networks[0], LibRainDeploy.supportedNetworks()[0]);
+        assertEq(d.released[0].networks[0], LibRainDeploy.supportedNetworks()[0]);
         assertEq(suites[1].networks, explicitNetworks);
+        explicitNetworks[0] = "changed";
+        assertEq(d.released[1].networks[0], explicitFirst);
         assertEq(heldReleased.length, 0);
         assertEq(d.released.length, 2);
     }
 
-    function testAddCandidatesFillsTheCallersSnapshotWithNetworksNotSharedWithTheDeclaration() external pure {
+    function testAddCandidatesLeavesTheCallersSnapshotsUnfilledAndUnshared() external pure {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
@@ -207,14 +211,18 @@ contract RainDeploySuitesBaseCallerHeldValuesTest is Test, MockCreate2DeploySuit
         candidates[0].snapshot.networks = new string[](0);
         candidates[1] = DeployCandidate({snapshot: zoltuRelease(), unanchorableReason: ""});
         string[] memory explicitNetworks = candidates[1].snapshot.networks;
+        string memory explicitFirst = explicitNetworks[0];
         DeployCandidate[] memory heldCandidates = d.candidates;
 
         LibRainDeployDeclaration.addCandidates(d, candidates);
 
-        assertEq(candidates[0].snapshot.networks, d.networks);
+        assertEq(candidates[0].snapshot.networks.length, 0);
+        assertEq(d.candidates[0].snapshot.networks, d.networks);
         d.networks[0] = "changed";
-        assertEq(candidates[0].snapshot.networks[0], LibRainDeploy.supportedNetworks()[0]);
+        assertEq(d.candidates[0].snapshot.networks[0], LibRainDeploy.supportedNetworks()[0]);
         assertEq(candidates[1].snapshot.networks, explicitNetworks);
+        explicitNetworks[0] = "changed";
+        assertEq(d.candidates[1].snapshot.networks[0], explicitFirst);
         assertEq(heldCandidates.length, 0);
         assertEq(d.candidates.length, 2);
     }
