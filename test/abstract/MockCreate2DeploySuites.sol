@@ -11,7 +11,9 @@ import {
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ChainDeploy} from "../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockCreate2Factory} from "../concrete/MockCreate2Factory.sol";
 import {MockDeployable} from "../concrete/MockDeployable.sol";
 
@@ -35,8 +37,10 @@ error MockCreate2NetworkUnfrozen(string suite, string network, address where);
 error MockCreate2DerivationMismatch(string suite, address derived, address deployed);
 
 /// @title MockCreate2DeploySuites
-/// @notice A test-only mechanism overriding every hook: CREATE2 through `MockCreate2Factory`, its salt in
-/// `mechanismData`, falling through to the Zoltu defaults for empty `mechanismData`.
+/// @notice A test-only mechanism implementing every hook: CREATE2 through `MockCreate2Factory`, its salt in
+/// `mechanismData`, and Zoltu through `LibRainDeployZoltuMechanism` for empty `mechanismData`. A concrete taking the
+/// extended networks seam overrides `extendedNetworks` and `extendedNetworksRoot` with `mockExtendedNetworks` and
+/// `mockExtendedNetworksRoot`.
 abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
     event MockCreate2Verification(string[] networks, string suite, address[] deployed);
 
@@ -48,9 +52,9 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         sMockExtendedNetworksRoot = root;
     }
 
-    function extendedNetworksRoot() internal view virtual override returns (string memory) {
+    function mockExtendedNetworksRoot() internal view returns (string memory) {
         if (bytes(sMockExtendedNetworksRoot).length == 0) {
-            return super.extendedNetworksRoot();
+            return LibRainDeploySnapshot.LIB_FS_ROOT;
         }
         return sMockExtendedNetworksRoot;
     }
@@ -139,8 +143,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         return candidates;
     }
 
-    function extendedNetworks(string memory suite) internal view virtual override returns (ChainDeploy[] memory) {
-        (suite);
+    function mockExtendedNetworks() internal view returns (ChainDeploy[] memory) {
         return sMockExtendedNetworks;
     }
 
@@ -205,7 +208,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
     }
 
     function etchMockFactory(Vm vm, DeploySuite memory suite) internal {
-        etchDependencies(vm, suite);
+        LibRainDeploy.etchDependencies(vm, suite.dependencies);
         vm.etch(decodeMock(suite).factory, type(MockCreate2Factory).runtimeCode);
     }
 
@@ -217,7 +220,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         returns (address)
     {
         if (suite.mechanismData.length == 0) {
-            return super.deployedAddress(suite, chainId);
+            return LibRainDeployZoltuMechanism.deployedAddress(suite);
         }
         return mockCreate2Address(decodeMock(suite).factory, mockSalt(suite, chainId), suite.creationCode);
     }
@@ -230,7 +233,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         returns (address)
     {
         if (suite.mechanismData.length == 0) {
-            return super.recordedAddress(suite, chainId);
+            return LibRainDeployZoltuMechanism.recordedAddress(suite);
         }
         MockCreate2Mechanism memory mechanism = decodeMock(suite);
         if (mechanism.networks.length == 0) {
@@ -245,7 +248,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
 
     function addressChainIds(DeploySuite memory suite) internal view virtual override returns (uint256[] memory) {
         if (suite.mechanismData.length == 0) {
-            return super.addressChainIds(suite);
+            return LibRainDeployZoltuMechanism.addressChainIds(suite);
         }
         MockCreate2Mechanism memory mechanism = decodeMock(suite);
         uint256[] memory chainIds = new uint256[](mechanism.networks.length);
@@ -263,7 +266,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         returns (bytes memory)
     {
         if (suite.mechanismData.length == 0) {
-            return super.deployStepData(suite, chainId);
+            return LibRainDeployZoltuMechanism.deployStepData(suite);
         }
         return abi.encode(decodeMock(suite).factory, mockSalt(suite, chainId), suite.creationCode);
     }
@@ -276,14 +279,14 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         returns (function(Vm, string memory, address, bytes memory) internal returns (address))
     {
         if (suite.mechanismData.length == 0) {
-            return super.deployStep(suite);
+            return LibRainDeployZoltuMechanism.deployStep(suite);
         }
         return mockCreate2DeployStep;
     }
 
     function deployLocally(Vm vm, DeploySuite memory suite) internal virtual override returns (address[] memory) {
         if (suite.mechanismData.length == 0) {
-            return super.deployLocally(vm, suite);
+            return LibRainDeployZoltuMechanism.deployLocally(vm, suite);
         }
         etchMockFactory(vm, suite);
         address[] memory deployed = deployedAddresses(suite);
@@ -296,7 +299,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
 
     function deployLocallyOnChain(Vm vm, DeploySuite memory suite) internal virtual override {
         if (suite.mechanismData.length == 0 || decodeMock(suite).networks.length == 0) {
-            super.deployLocallyOnChain(vm, suite);
+            LibRainDeployZoltuMechanism.deployLocallyOnChain(vm, suite);
             return;
         }
         etchMockFactory(vm, suite);
@@ -311,7 +314,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         returns (DeploySuite memory)
     {
         if (suite.mechanismData.length == 0) {
-            return super.withUnrecordedNetworks(suite, candidate, chainIds);
+            return LibRainDeployZoltuMechanism.withUnrecordedNetworks(suite);
         }
         MockCreate2Mechanism memory mechanism = decodeMock(suite);
         if (mechanism.networks.length == 0 || candidate.mechanismData.length == 0) {
@@ -370,7 +373,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         returns (DeploySuite memory)
     {
         if (suite.mechanismData.length == 0) {
-            return super.appendExtendedNetworks(suite, extended);
+            return LibRainDeployZoltuMechanism.appendExtendedNetworks(suite, extended);
         }
         if (extended.length == 0) {
             return suite;
@@ -389,7 +392,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         override
     {
         if (frozen.mechanismData.length == 0) {
-            super.checkNetworkFrozen(frozen, network, chainId, where);
+            LibRainDeployZoltuMechanism.checkNetworkFrozen(frozen);
             return;
         }
         MockCreate2Mechanism memory mechanism = decodeMock(frozen);
@@ -404,7 +407,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
 
     function suiteBeacon(DeploySuite memory suite, uint256 chainId) internal view virtual override returns (address) {
         if (suite.mechanismData.length == 0) {
-            return super.suiteBeacon(suite, chainId);
+            return LibRainDeployZoltuMechanism.suiteBeacon(suite);
         }
         return decodeMock(suite).beacon;
     }
@@ -415,7 +418,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         override
     {
         if (suite.mechanismData.length == 0) {
-            super.logVerification(vm, networks, suite, deployed);
+            LibRainDeployZoltuMechanism.logVerification(vm, networks, suite, deployed);
             return;
         }
         emit MockCreate2Verification(networks, suite.suite, deployed);
@@ -431,7 +434,9 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         DeploySuite memory suite
     ) internal virtual override returns (string memory) {
         if (suite.mechanismData.length == 0) {
-            return super.writeSuiteSnapshot(vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite);
+            return LibRainDeployZoltuMechanism.writeSuiteSnapshot(
+                vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite
+            );
         }
         string memory path = LibRainDeploySnapshot.writeSnapshot(
             vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite.creationCode, suite.dependencies
@@ -455,6 +460,6 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         if (LibRainDeploySnapshot.recordDeclaresMechanismData(vm, path)) {
             return string.concat(prefix, "_MECHANISM_DATA");
         }
-        return super.releasedMechanismData(vm, path, prefix);
+        return LibRainDeployZoltuMechanism.releasedMechanismData(vm, path);
     }
 }
