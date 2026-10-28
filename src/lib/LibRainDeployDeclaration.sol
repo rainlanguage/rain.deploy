@@ -34,6 +34,13 @@ library LibRainDeployDeclaration {
         d.deployNetworks = copy(networks);
     }
 
+    /// Sets `d.deployNetworks` to a copy of `networks`, leaving `d.networks`.
+    /// @param d The declaration, mutated.
+    /// @param networks The networks a run deploys to.
+    function setDeployNetworks(DeployDeclaration memory d, string[] memory networks) internal pure {
+        d.deployNetworks = copy(networks);
+    }
+
     /// @param d The declaration.
     /// @return A copy of `d.networks`.
     function everyNetwork(DeployDeclaration memory d) internal pure returns (string[] memory) {
