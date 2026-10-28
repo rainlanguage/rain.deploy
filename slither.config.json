@@ -1,4 +1,4 @@
 {
-  "filter_paths": "dependencies/(forge-std|rain-lib-memkv|@openzeppelin-contracts|safe-global-safe-smart-account|rain-metadata)-|src/abstract/(RainDeploy(SuitesBase|Broadcast|VerifyBase|VerifyChain|VerifySnapshotBase|VerifySnapshot|VerifyDeclaration|DeclarationChecks|Verify)|RegistryDeploySuites|BuildScript|SafeBundleScript)\\.sol",
+  "filter_paths": "dependencies/(forge-std|rain-lib-memkv|@openzeppelin-contracts|safe-global-safe-smart-account|rain-metadata)-|src/abstract/(RainDeploy(SuitesBase|ZoltuSuitesBase|Broadcast|VerifyBase|VerifyChain|VerifySnapshotBase|VerifySnapshot|VerifyDeclaration|DeclarationChecks|Verify)|RegistryDeploySuites|BuildScript|SafeBundleScript)\\.sol",
   "detectors_to_exclude": "assembly,unindexed-event-address"
 }
