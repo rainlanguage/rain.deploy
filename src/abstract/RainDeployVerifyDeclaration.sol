@@ -8,26 +8,26 @@ import {RainDeployDeclarationChecks} from "./RainDeployDeclarationChecks.sol";
 /// @notice Runs every `RainDeployDeclarationChecks` check as a test.
 abstract contract RainDeployVerifyDeclaration is RainDeployDeclarationChecks {
     function testDispatchChoicesAreTheSuiteKeys() external view {
-        checkDispatchChoicesAreTheSuiteKeys();
+        checkDispatchChoicesAreTheSuiteKeys(declaration());
     }
 
     function testCandidateArtifactPathsAreSource() external view {
-        checkCandidateArtifactPathsAreSource();
+        checkCandidateArtifactPathsAreSource(declaration());
     }
 
     function testDependenciesAreNonZeroAndUnique() external view {
-        checkDependenciesAreNonZeroAndUnique();
+        checkDependenciesAreNonZeroAndUnique(declaration());
     }
 
     function testDependenciesAreTheEmbeddedDeployments() external view {
-        checkDependenciesAreTheEmbeddedDeployments();
+        checkDependenciesAreTheEmbeddedDeployments(declaration());
     }
 
     function testDependencyRuntimeCodeIsKnown() external view {
-        checkDependencyRuntimeCodeIsKnown();
+        checkDependencyRuntimeCodeIsKnown(declaration());
     }
 
     function testCandidateRuntimeCodeFitsEip170() external view {
-        checkCandidateRuntimeCodeFitsEip170();
+        checkCandidateRuntimeCodeFitsEip170(declaration());
     }
 }

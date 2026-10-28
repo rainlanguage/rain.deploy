@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {Script} from "forge-std-1.17.0/src/Script.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
+import {DeployDeclaration} from "../src/abstract/RainDeploySuitesBase.sol";
 import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibConfigRegistryRegister, ConfigBinding} from "../src/lib/LibConfigRegistryRegister.sol";
 import {LibRegistryAuthority} from "../src/lib/LibRegistryAuthority.sol";
@@ -60,8 +61,8 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     /// `UnexpectedConfigRegistryCodeHash`, so a partial rollout sets
     /// `CONFIG_REGISTRY_NETWORKS` to the networks it is deployed on.
     /// @return The network names, as `[rpc_endpoints]` aliases.
-    function selectedNetworks() internal view returns (string[] memory) {
-        return vm.envOr(NETWORKS_VAR, ",", supportedNetworks());
+    function selectedNetworks(DeployDeclaration memory d) internal view returns (string[] memory) {
+        return vm.envOr(NETWORKS_VAR, ",", d.networks);
     }
 
     /// The Vm `run()` and `verify()` fork, select and broadcast with.
@@ -85,13 +86,9 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     /// is not already bound to the value as its type.
     /// @return The fork each selected network was simulated on.
     function run() external returns (uint256[] memory) {
+        DeployDeclaration memory d = declaration();
         (uint256[] memory forkIds,) = LibConfigRegistryRegister.registerOnNetworks(
-            forkVm(),
-            selectedNetworks(),
-            supportedNetworks(),
-            msg.sender,
-            LibRegistryAuthority.ROOT_AUTHORITY,
-            binding()
+            forkVm(), selectedNetworks(d), d.networks, msg.sender, LibRegistryAuthority.ROOT_AUTHORITY, binding()
         );
         return forkIds;
     }
@@ -99,8 +96,9 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     /// Reads every selected network fresh and reverts unless the name resolves
     /// to the value as its type under the authority on each.
     function verify() external {
+        DeployDeclaration memory d = declaration();
         LibConfigRegistryRegister.checkRegisteredOnNetworks(
-            forkVm(), selectedNetworks(), supportedNetworks(), LibRegistryAuthority.ROOT_AUTHORITY, binding()
+            forkVm(), selectedNetworks(d), d.networks, LibRegistryAuthority.ROOT_AUTHORITY, binding()
         );
     }
 }

@@ -11,7 +11,6 @@ on:
           - mock-reaching-deployable
           # Frozen releases.
           - mock-deployable@0_0_1
-          - mock-clone
           - mock-deployable
       verify:
         type: boolean

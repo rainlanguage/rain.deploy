@@ -5,6 +5,7 @@ pragma solidity =0.8.25;
 import {Script} from "forge-std-1.17.0/src/Script.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 
+import {DeployDeclaration} from "../src/abstract/RainDeploySuitesBase.sol";
 import {RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibRegistryDelegatesApprove, RegistryDelegation} from "../src/lib/LibRegistryDelegatesApprove.sol";
 import {LibRegistryAuthority} from "../src/lib/LibRegistryAuthority.sol";
@@ -41,8 +42,8 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
     /// The networks to act on: `<PREFIX>_NETWORKS` if set, otherwise every
     /// network the declaration supports.
     /// @return The network names, as `[rpc_endpoints]` aliases.
-    function selectedNetworks() internal view returns (string[] memory) {
-        return vm.envOr(envName("NETWORKS"), ",", supportedNetworks());
+    function selectedNetworks(DeployDeclaration memory d) internal view returns (string[] memory) {
+        return vm.envOr(envName("NETWORKS"), ",", d.networks);
     }
 
     /// The target state: `<PREFIX>_APPROVED` if set, otherwise true.
@@ -61,11 +62,12 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
     /// the target state.
     /// @return The fork each selected network was simulated on.
     function run() external returns (uint256[] memory) {
+        DeployDeclaration memory d = declaration();
         (uint256[] memory forkIds,) = LibRegistryDelegatesApprove.approveOnNetworks(
             delegation(),
             forkVm(),
-            selectedNetworks(),
-            supportedNetworks(),
+            selectedNetworks(d),
+            d.networks,
             msg.sender,
             LibRegistryAuthority.ROOT_AUTHORITY,
             vm.envString(envName("SCOPE")),
@@ -78,11 +80,12 @@ abstract contract ApproveRegistryDelegate is RegistryDeploySuites, Script {
     /// Reads every selected network fresh and reverts unless the approval is
     /// in the target state on each.
     function verify() external {
+        DeployDeclaration memory d = declaration();
         LibRegistryDelegatesApprove.checkApprovalOnNetworks(
             delegation(),
             forkVm(),
-            selectedNetworks(),
-            supportedNetworks(),
+            selectedNetworks(d),
+            d.networks,
             LibRegistryAuthority.ROOT_AUTHORITY,
             vm.envString(envName("SCOPE")),
             vm.envAddress(envName("ADDRESS")),

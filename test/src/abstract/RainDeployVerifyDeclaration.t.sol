@@ -8,7 +8,6 @@ import {
     DispatchChoiceNotDeclared,
     DispatchChoiceRepeated,
     DispatchChoicesUnreadable,
-    RainDeployDeclarationChecks,
     RepeatedDependency,
     RuntimeCodeExceedsEip170,
     SuiteNotDispatchable,
@@ -18,13 +17,15 @@ import {
     ZeroDependency
 } from "../../../src/abstract/RainDeployDeclarationChecks.sol";
 import {RainDeployVerifyDeclaration} from "../../../src/abstract/RainDeployVerifyDeclaration.sol";
+import {DeployDeclaration} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {
     DeclarationDefect,
     MOCK_EXTERNAL_RUNTIME_CODE,
     ReachingDeploySuites
 } from "../../abstract/ReachingDeploySuites.sol";
-import {exampleCloneFactory} from "../../abstract/ExampleCloneDeploys.sol";
 import {DefectiveReleaseDeploySuites} from "../../abstract/DefectiveReleaseDeploySuites.sol";
 import {UndeclaredSiblingReleaseDeploySuites} from "../../concrete/UndeclaredSiblingReleaseDeploySuites.sol";
 import {UnknownDependencyReleaseDeploySuites} from "../../concrete/UnknownDependencyReleaseDeploySuites.sol";
@@ -37,37 +38,38 @@ import {
 } from "../../concrete/MockReachingDeployable.sol";
 
 contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVerifyDeclaration {
-    function dispatchWorkflow()
-        internal
-        view
-        override(ReachingDeploySuites, RainDeployDeclarationChecks)
-        returns (string memory)
-    {
-        return ReachingDeploySuites.dispatchWorkflow();
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, reachingReleased());
+        LibRainDeployDeclaration.addCandidates(d, reachingCandidates());
+        extendReaching(d);
+        return d;
     }
 
     function externalCheckDispatchChoicesAreTheSuiteKeys() external view {
-        checkDispatchChoicesAreTheSuiteKeys();
+        checkDispatchChoicesAreTheSuiteKeys(declaration());
     }
 
     function externalCheckCandidateArtifactPathsAreSource() external view {
-        checkCandidateArtifactPathsAreSource();
+        checkCandidateArtifactPathsAreSource(declaration());
     }
 
     function externalCheckDependenciesAreNonZeroAndUnique() external view {
-        checkDependenciesAreNonZeroAndUnique();
+        checkDependenciesAreNonZeroAndUnique(declaration());
     }
 
     function externalCheckDependenciesAreTheEmbeddedDeployments() external view {
-        checkDependenciesAreTheEmbeddedDeployments();
+        checkDependenciesAreTheEmbeddedDeployments(declaration());
     }
 
     function externalCheckDependencyRuntimeCodeIsKnown() external view {
-        checkDependencyRuntimeCodeIsKnown();
+        checkDependencyRuntimeCodeIsKnown(declaration());
     }
 
     function externalCheckCandidateRuntimeCodeFitsEip170() external view {
-        checkCandidateRuntimeCodeFitsEip170();
+        checkCandidateRuntimeCodeFitsEip170(declaration());
     }
 
     function reachingAddress() internal pure returns (address) {
@@ -79,20 +81,19 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVeri
     }
 
     function testDispatchDefaultsToTheManualArtifactsWorkflow() external {
-        sWorkflow = RainDeployDeclarationChecks.dispatchWorkflow();
-        string[] memory choices = dispatchChoices();
+        sWorkflow = LibRainDeployDeclaration.DISPATCH_WORKFLOW;
+        string[] memory choices = dispatchChoices(declaration());
         assertEq(choices.length, 2);
         assertEq(choices[0], "config-registry");
         assertEq(choices[1], "migration-registry");
     }
 
     function testDispatchChoicesAreReadPastCommentsAndBlankLines() external view {
-        string[] memory choices = dispatchChoices();
-        assertEq(choices.length, 4);
+        string[] memory choices = dispatchChoices(declaration());
+        assertEq(choices.length, 3);
         assertEq(choices[0], "mock-deployable");
         assertEq(choices[1], "mock-reaching-deployable");
         assertEq(choices[2], "mock-deployable@0_0_1");
-        assertEq(choices[3], "mock-clone");
     }
 
     function testDispatchChoiceNotDeclared() external {
@@ -185,12 +186,6 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVeri
         this.externalCheckDependenciesAreTheEmbeddedDeployments();
     }
 
-    function testUndeclaredDependencyInMechanismData() external {
-        sDefect = DeclarationDefect.UndeclaredMechanismDependency;
-        vm.expectRevert(abi.encodeWithSelector(UndeclaredDependency.selector, "mock-clone", exampleCloneFactory()));
-        this.externalCheckDependenciesAreTheEmbeddedDeployments();
-    }
-
     function testUnreachedDependency() external {
         sDefect = DeclarationDefect.UnreachedDependency;
         vm.expectRevert(abi.encodeWithSelector(UnreachedDependency.selector, "mock-deployable", reachingAddress()));
@@ -243,32 +238,32 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVeri
     }
 
     function testReleasedZeroDependency() external {
-        DefectiveReleaseDeploySuites declaration = new ZeroDependencyReleaseDeploySuites();
+        DefectiveReleaseDeploySuites defective = new ZeroDependencyReleaseDeploySuites();
         vm.expectRevert(abi.encodeWithSelector(ZeroDependency.selector, "mock-deployable@0_0_1"));
-        declaration.externalCheckDependenciesAreNonZeroAndUnique();
+        defective.externalCheckDependenciesAreNonZeroAndUnique();
     }
 
     function testReleasedUndeclaredSibling() external {
-        DefectiveReleaseDeploySuites declaration = new UndeclaredSiblingReleaseDeploySuites();
+        DefectiveReleaseDeploySuites defective = new UndeclaredSiblingReleaseDeploySuites();
         vm.expectRevert(
             abi.encodeWithSelector(
                 UndeclaredDependency.selector, "mock-reaching-deployable@0_0_1", MOCK_DEPLOYABLE_ADDRESS
             )
         );
-        declaration.externalCheckDependenciesAreTheEmbeddedDeployments();
+        defective.externalCheckDependenciesAreTheEmbeddedDeployments();
     }
 
     function testReleasedUnknownDependency() external {
-        DefectiveReleaseDeploySuites declaration = new UnknownDependencyReleaseDeploySuites();
+        DefectiveReleaseDeploySuites defective = new UnknownDependencyReleaseDeploySuites();
         vm.expectRevert(abi.encodeWithSelector(UnknownDependency.selector, "mock-deployable@0_0_1", address(0xdead)));
-        declaration.externalCheckDependencyRuntimeCodeIsKnown();
+        defective.externalCheckDependencyRuntimeCodeIsKnown();
     }
 
     function testBlankAndCommentLinesAreInert() external pure {
         assertTrue(isInert(""));
         assertTrue(isInert("      "));
         assertTrue(isInert("          # Frozen releases."));
-        assertFalse(isInert("          - mock-clone"));
+        assertFalse(isInert("          - mock-deployable"));
     }
 
     function testContainsAddressFindsTheStrippedPushImmediate() external pure {

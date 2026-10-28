@@ -10,7 +10,6 @@ on:
           - mock-deployable
           - mock-reaching-deployable
           # Frozen releases.
-          - mock-clone
       verify:
         type: boolean
         default: true

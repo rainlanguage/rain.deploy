@@ -4,13 +4,14 @@ pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
-import {DeployCandidate, DeployDependency, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
-
-/// A deterministic deployment outside the repo that a suite may reach.
-struct ExternalDeployment {
-    address deployedAddress;
-    bytes32 codeHash;
-}
+import {
+    DeployCandidate,
+    DeployDeclaration,
+    DeployDependency,
+    DeploySuite,
+    ExternalDeployment,
+    RainDeploySuitesBase
+} from "./RainDeploySuitesBase.sol";
 
 /// The dispatch workflow has no `suite` input with an `options` list.
 /// @param workflow The workflow path.
@@ -68,18 +69,6 @@ error RuntimeCodeExceedsEip170(string suite, uint256 length);
 abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     uint256 constant EIP170_MAX_RUNTIME_CODE_SIZE = 0x6000;
 
-    /// @param suite An anchored candidate's key.
-    /// @return The creation code of the contract the key names, from its type.
-    function sourceCreationCode(string memory suite) internal view virtual returns (bytes memory);
-
-    /// @return Every deterministic deployment outside this repo that a suite may embed.
-    function externalDeployments() internal view virtual returns (ExternalDeployment[] memory);
-
-    /// @return The workflow whose `suite` input lists the dispatch choices.
-    function dispatchWorkflow() internal view virtual returns (string memory) {
-        return ".github/workflows/manual-sol-artifacts.yaml";
-    }
-
     /// @param line A line of YAML.
     /// @return Its count of leading spaces.
     function indentation(string memory line) internal pure returns (uint256) {
@@ -99,8 +88,8 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// @return The `options` of the dispatch workflow's `suite` input.
-    function dispatchChoices() internal view returns (string[] memory) {
-        string memory workflow = dispatchWorkflow();
+    function dispatchChoices(DeployDeclaration memory d) internal view returns (string[] memory) {
+        string memory workflow = d.dispatchWorkflow;
         string[] memory lines = vm.split(vm.readFile(workflow), "\n");
         uint256 i = 0;
         while (i < lines.length && keccak256(bytes(vm.trim(lines[i]))) != keccak256("suite:")) {
@@ -148,9 +137,9 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// The dispatch choices MUST be exactly the declared suite keys, each once.
-    function checkDispatchChoicesAreTheSuiteKeys() internal view {
-        DeploySuite[] memory suites = allSuites();
-        string[] memory choices = dispatchChoices();
+    function checkDispatchChoicesAreTheSuiteKeys(DeployDeclaration memory d) internal view {
+        DeploySuite[] memory suites = allSuites(d);
+        string[] memory choices = dispatchChoices(d);
         for (uint256 i = 0; i < choices.length; i++) {
             if (suiteIndex(suites, choices[i]) == suites.length) {
                 revert DispatchChoiceNotDeclared(choices[i]);
@@ -173,22 +162,23 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// Every anchored candidate's artifact path MUST compile to the source its key names.
-    function checkCandidateArtifactPathsAreSource() internal view {
-        DeployCandidate[] memory candidates = checkedCandidateSuites();
+    function checkCandidateArtifactPathsAreSource(DeployDeclaration memory d) internal view {
+        checkCandidates(d);
+        DeployCandidate[] memory candidates = d.candidates;
         for (uint256 i = 0; i < candidates.length; i++) {
             if (bytes(candidates[i].unanchorableReason).length != 0) {
                 continue;
             }
             DeploySuite memory suite = candidates[i].snapshot;
-            if (keccak256(vm.getCode(suite.artifactPath)) != keccak256(sourceCreationCode(suite.suite))) {
+            if (keccak256(vm.getCode(suite.artifactPath)) != keccak256(d.sourceCreationCode(suite.suite))) {
                 revert CandidateArtifactNotSource(suite.suite, suite.artifactPath);
             }
         }
     }
 
     /// No suite MAY declare the zero address, or one address twice, as a dependency.
-    function checkDependenciesAreNonZeroAndUnique() internal view {
-        DeploySuite[] memory suites = allSuites();
+    function checkDependenciesAreNonZeroAndUnique(DeployDeclaration memory d) internal pure {
+        DeploySuite[] memory suites = allSuites(d);
         for (uint256 i = 0; i < suites.length; i++) {
             DeployDependency[] memory deps = suites[i].dependencies;
             for (uint256 j = 0; j < deps.length; j++) {
@@ -206,9 +196,9 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
 
     /// Every sibling or external deployment a suite's code embeds MUST be a
     /// declared dependency, and every declared dependency MUST be embedded.
-    function checkDependenciesAreTheEmbeddedDeployments() internal view {
-        DeploySuite[] memory suites = allSuites();
-        ExternalDeployment[] memory externals = externalDeployments();
+    function checkDependenciesAreTheEmbeddedDeployments(DeployDeclaration memory d) internal pure {
+        DeploySuite[] memory suites = allSuites(d);
+        ExternalDeployment[] memory externals = d.externalDeployments;
         for (uint256 i = 0; i < suites.length; i++) {
             for (uint256 j = 0; j < suites.length; j++) {
                 checkDeclaredIfEmbedded(suites[i], suites[j].storedDeployedAddress);
@@ -235,9 +225,9 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
 
     /// Every declared dependency MUST be a sibling or external deployment, with
     /// the runtime code that declaration records.
-    function checkDependencyRuntimeCodeIsKnown() internal view {
-        DeploySuite[] memory suites = allSuites();
-        ExternalDeployment[] memory externals = externalDeployments();
+    function checkDependencyRuntimeCodeIsKnown(DeployDeclaration memory d) internal pure {
+        DeploySuite[] memory suites = allSuites(d);
+        ExternalDeployment[] memory externals = d.externalDeployments;
         for (uint256 i = 0; i < suites.length; i++) {
             DeployDependency[] memory deps = suites[i].dependencies;
             for (uint256 j = 0; j < deps.length; j++) {
@@ -274,8 +264,9 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// Every candidate's runtime code MUST fit EIP-170.
-    function checkCandidateRuntimeCodeFitsEip170() internal view {
-        DeployCandidate[] memory candidates = checkedCandidateSuites();
+    function checkCandidateRuntimeCodeFitsEip170(DeployDeclaration memory d) internal pure {
+        checkCandidates(d);
+        DeployCandidate[] memory candidates = d.candidates;
         for (uint256 i = 0; i < candidates.length; i++) {
             uint256 length = candidates[i].snapshot.storedRuntimeCode.length;
             if (length > EIP170_MAX_RUNTIME_CODE_SIZE) {

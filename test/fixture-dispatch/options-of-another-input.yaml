@@ -12,7 +12,6 @@ on:
           - mock-deployable
           - mock-reaching-deployable
           - mock-deployable@0_0_1
-          - mock-clone
       verify:
         type: boolean
         default: true
