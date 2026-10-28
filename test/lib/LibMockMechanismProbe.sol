@@ -19,6 +19,8 @@ interface IMockMechanismProbe {
 
     function checkDeclaration(bytes32 mechanismId) external view;
 
+    function declaredConfig(bytes32 mechanismId, bytes memory config) external view;
+
     function checkNetwork(bytes32 mechanismId, string memory network, uint256 chainId, uint256 forkChainId)
         external
         view;
@@ -47,6 +49,10 @@ library LibMockMechanismProbe {
     /// Reports `block.chainid` beside `chainId` so a test pins which fork the hook ran on.
     function checkNetwork(bytes32 mechanismId, string memory network, uint256 chainId) internal view {
         probe(abi.encodeCall(IMockMechanismProbe.checkNetwork, (mechanismId, network, chainId, block.chainid)));
+    }
+
+    function declaredConfig(bytes32 mechanismId, bytes memory config) internal view {
+        probe(abi.encodeCall(IMockMechanismProbe.declaredConfig, (mechanismId, config)));
     }
 
     function probe(bytes memory data) private view {
