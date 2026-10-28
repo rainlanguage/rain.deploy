@@ -1530,7 +1530,20 @@ library LibRainDeploySnapshot {
     /// @return Whether it declares `MECHANISM_DATA`.
     /// @return Whether it declares its addresses per network.
     function recordedMechanismShape(Vm vm, string memory path) internal view returns (bool, bool) {
-        string[] memory lines = recordLines(vm, path, vm.readFile(path));
+        return recordedMechanismShape(vm, path, recordLines(vm, path, vm.readFile(path)));
+    }
+
+    /// `recordedMechanismShape` over a record's already-read `recordLines`.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file the lines were read from.
+    /// @param lines Its `recordLines`.
+    /// @return Whether it declares `MECHANISM_DATA`.
+    /// @return Whether it declares its addresses per network.
+    function recordedMechanismShape(Vm vm, string memory path, string[] memory lines)
+        internal
+        pure
+        returns (bool, bool)
+    {
         (uint256[] memory chainIds,) = recordedDeployedAddresses(vm, path, lines);
         uint256 mechanismData = 0;
         for (uint256 i = 0; i < lines.length; i++) {
@@ -1564,10 +1577,19 @@ library LibRainDeploySnapshot {
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
     /// @return The id.
     function recordedMechanismId(Vm vm, string memory path) internal view returns (bytes32) {
-        if (!recordDeclaresMechanismData(vm, path)) {
+        return recordedMechanismId(vm, path, recordLines(vm, path, vm.readFile(path)));
+    }
+
+    /// `recordedMechanismId` over a record's already-read `recordLines`.
+    /// @param vm The Vm instance for string operations.
+    /// @param path The record file the lines were read from.
+    /// @param lines Its `recordLines`.
+    /// @return The id.
+    function recordedMechanismId(Vm vm, string memory path, string[] memory lines) internal pure returns (bytes32) {
+        (bool mechanismData,) = recordedMechanismShape(vm, path, lines);
+        if (!mechanismData) {
             return ZOLTU_MECHANISM_ID;
         }
-        string[] memory lines = recordLines(vm, path, vm.readFile(path));
         uint256 line = 0;
         while (vm.indexOf(lines[line], MECHANISM_DATA_DECLARATION) != 0) {
             line++;
@@ -1630,15 +1652,42 @@ library LibRainDeploySnapshot {
         string memory suitesImportPath,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
+        return releasedImportBlock(vm, paths, recordedMechanismIds(vm, paths), suitesImportPath, d);
+    }
+
+    /// Each record file's `recordedMechanismId`.
+    /// @param vm The Vm instance for file and string operations.
+    /// @param paths The record's files.
+    /// @return The ids, index-aligned with `paths`.
+    function recordedMechanismIds(Vm vm, string[] memory paths) internal view returns (bytes32[] memory) {
+        bytes32[] memory ids = new bytes32[](paths.length);
+        for (uint256 i = 0; i < paths.length; i++) {
+            ids[i] = recordedMechanismId(vm, paths[i]);
+        }
+        return ids;
+    }
+
+    /// `releasedImportBlock` over the records' already-read `recordedMechanismIds`.
+    /// @param vm The Vm instance for file and string operations.
+    /// @param paths The record's files, in the order they are emitted.
+    /// @param ids `recordedMechanismIds` of `paths`.
+    /// @param suitesImportPath The path the emitted lib reaches the suite types by.
+    /// @param d The declaration whose mechanism for each record gives the import.
+    /// @return The import block.
+    function releasedImportBlock(
+        Vm vm,
+        string[] memory paths,
+        bytes32[] memory ids,
+        string memory suitesImportPath,
+        DeployDeclaration memory d
+    ) internal view returns (string memory) {
         string memory imports =
             string.concat("import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n");
         string memory root = importRoot(suitesImportPath);
         bytes32[] memory seen = new bytes32[](paths.length);
         uint256 seenLength = 0;
         for (uint256 i = 0; i < paths.length; i++) {
-            string memory mechanismImport = LibRainDeployDeclaration.mechanismById(
-                    d, recordedMechanismId(vm, paths[i]), paths[i]
-                ).releasedImport(root);
+            string memory mechanismImport = LibRainDeployDeclaration.mechanismById(d, ids[i], paths[i]).releasedImport(root);
             bytes32 hash = keccak256(bytes(mechanismImport));
             bool duplicate = false;
             for (uint256 j = 0; j < seenLength; j++) {
@@ -1699,10 +1748,29 @@ library LibRainDeploySnapshot {
         DeploySuite memory template,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
+        return releasedSuiteEntry(vm, i, path, recordedMechanismId(vm, path), template, d);
+    }
+
+    /// `releasedSuiteEntry` for a record whose `recordedMechanismId` is already read.
+    /// @param vm The Vm instance for file and string operations.
+    /// @param i The entry's index.
+    /// @param path The record file the entry aliases.
+    /// @param id `recordedMechanismId` of `path`.
+    /// @param template The candidate declaration the key and the artifact path come from.
+    /// @param d The declaration whose mechanism for the record gives the entry its `mechanismData`.
+    /// @return The entry.
+    function releasedSuiteEntry(
+        Vm vm,
+        uint256 i,
+        string memory path,
+        bytes32 id,
+        DeploySuite memory template,
+        DeployDeclaration memory d
+    ) internal view returns (string memory) {
         string memory prefix = releasedConstantPrefix(vm, path);
         string memory storedDeployedAddress;
-        string memory mechanismData = LibRainDeployDeclaration.mechanismById(d, recordedMechanismId(vm, path), path)
-            .releasedMechanismData(vm, path, prefix);
+        string memory mechanismData =
+            LibRainDeployDeclaration.mechanismById(d, id, path).releasedMechanismData(vm, path, prefix);
         {
             (, bool perNetwork) = recordedMechanismShape(vm, path);
             storedDeployedAddress = perNetwork ? string("address(0)") : string.concat(prefix, "_DEPLOYED_ADDRESS");
@@ -1751,9 +1819,30 @@ library LibRainDeploySnapshot {
         DeploySuite memory template,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
+        return releasedLibraryBlock(vm, libraryName, contractName, paths, recordedMechanismIds(vm, paths), template, d);
+    }
+
+    /// `releasedLibraryBlock` over the records' already-read `recordedMechanismIds`.
+    /// @param vm The Vm instance for file and string operations.
+    /// @param libraryName The generated library's name.
+    /// @param contractName The contract the released record describes.
+    /// @param paths The record's files, in the order they are emitted.
+    /// @param ids `recordedMechanismIds` of `paths`.
+    /// @param template The candidate declaration the metadata comes from.
+    /// @param d The declaration whose mechanism for each record gives its entry `mechanismData`.
+    /// @return The library block.
+    function releasedLibraryBlock(
+        Vm vm,
+        string memory libraryName,
+        string memory contractName,
+        string[] memory paths,
+        bytes32[] memory ids,
+        DeploySuite memory template,
+        DeployDeclaration memory d
+    ) internal view returns (string memory) {
         string memory entries = "";
         for (uint256 i = 0; i < paths.length; i++) {
-            entries = string.concat(entries, releasedSuiteEntry(vm, i, paths[i], template, d));
+            entries = string.concat(entries, releasedSuiteEntry(vm, i, paths[i], ids[i], template, d));
         }
 
         return string.concat(
@@ -1817,9 +1906,10 @@ library LibRainDeploySnapshot {
         string memory body;
         {
             string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
+            bytes32[] memory ids = recordedMechanismIds(vm, paths);
             body = string.concat(
-                releasedImportBlock(vm, paths, suitesImportPath, d),
-                releasedLibraryBlock(vm, libraryName, contractName, paths, template, d)
+                releasedImportBlock(vm, paths, ids, suitesImportPath, d),
+                releasedLibraryBlock(vm, libraryName, contractName, paths, ids, template, d)
             );
         }
 
