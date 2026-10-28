@@ -12,7 +12,14 @@ import {
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
-import {DeployDependency, DeploySuite, UnexpectedMechanismData} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployDeclaration,
+    DeployDependency,
+    DeploySuite,
+    SnapshotFile,
+    UnexpectedMechanismData
+} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {
     EmptyRelease,
     InvalidRecordRoot,
@@ -25,7 +32,6 @@ import {
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {LibReleasedSuitesAggregate} from "../../lib/LibReleasedSuitesAggregate.sol";
-import {ExampleDeploy} from "../../concrete/ExampleDeploy.sol";
 import {LibMemoryKV, MemoryKV, MemoryKVKey, MemoryKVVal} from "rain-lib-memkv-0.2.0/src/lib/LibMemoryKV.sol";
 import {BuildHarness} from "../../concrete/BuildHarness.sol";
 import {RetiredContract} from "../../../script/Build.sol";
@@ -109,23 +115,25 @@ contract LibRainDeploySnapshotTest is Test {
     function setUp() external {
         clearFixtureTree(FIXTURE_ROOT);
         clearFixtureTree(FIXTURE_LIB_ROOT);
-        sZoltu = new ExampleDeploy();
     }
 
-    /// The Zoltu suite hooks, for the writers that take one.
-    ExampleDeploy internal sZoltu;
+    /// A declaration claiming only the Zoltu mechanism, for the released-lib writers.
+    /// @return The declaration.
+    function zoltuDeclaration() internal pure returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployZoltuMechanism.extend(d);
+        return d;
+    }
 
-    /// The Zoltu `releasedMechanismData` hook, as the pointer the released-lib writers take.
-    /// @param fileVm The Vm for file operations.
-    /// @param path The release's record file.
-    /// @param prefix The prefix its constants are aliased under.
-    /// @return The `mechanismData` expression a Zoltu entry emits.
-    function zoltuReleasedMechanismData(Vm fileVm, string memory path, string memory prefix)
-        internal
-        view
+    /// External so `vm.expectRevert` sees the Zoltu suite writer's revert.
+    /// @param file Where the snapshot lands.
+    /// @param suite The suite written.
+    /// @return The written path.
+    function externalZoltuWriteSuiteSnapshot(SnapshotFile memory file, DeploySuite memory suite)
+        external
         returns (string memory)
     {
-        return sZoltu.externalReleasedMechanismData(fileVm, path, prefix);
+        return LibRainDeployZoltuMechanism.writeSuiteSnapshot(vm, file, suite);
     }
 
     function clearFixtureTree(string memory root) internal {
@@ -1184,7 +1192,7 @@ contract LibRainDeploySnapshotTest is Test {
                 generatedFilePrefix(),
                 LibRainDeploySnapshot.releasedImportBlock(vm, paths),
                 LibRainDeploySnapshot.releasedLibraryBlock(
-                    vm, EMITTED_LIBRARY, EMITTED_CONTRACT, paths, emitterTemplate(), zoltuReleasedMechanismData
+                    vm, EMITTED_LIBRARY, EMITTED_CONTRACT, paths, emitterTemplate(), zoltuDeclaration()
                 )
             )
         );
@@ -1667,7 +1675,7 @@ contract LibRainDeploySnapshotTest is Test {
     function testReleasedLibraryBlockDeclaresEveryRecord() external view {
         assertEq(
             LibRainDeploySnapshot.releasedLibraryBlock(
-                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(0), emitterTemplate(), zoltuReleasedMechanismData
+                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(0), emitterTemplate(), zoltuDeclaration()
             ),
             string.concat(
                 EXPECTED_LIBRARY_HEADER,
@@ -1678,7 +1686,7 @@ contract LibRainDeploySnapshotTest is Test {
 
         assertEq(
             LibRainDeploySnapshot.releasedLibraryBlock(
-                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(1), emitterTemplate(), zoltuReleasedMechanismData
+                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(1), emitterTemplate(), zoltuDeclaration()
             ),
             string.concat(
                 EXPECTED_LIBRARY_HEADER,
@@ -1690,7 +1698,7 @@ contract LibRainDeploySnapshotTest is Test {
 
         assertEq(
             LibRainDeploySnapshot.releasedLibraryBlock(
-                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), emitterTemplate(), zoltuReleasedMechanismData
+                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), emitterTemplate(), zoltuDeclaration()
             ),
             string.concat(
                 EXPECTED_LIBRARY_HEADER,
@@ -1709,7 +1717,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// revert.
     function testReleasedLibraryBlockKeysAreUniquePerRelease() external view {
         string memory emitted = LibRainDeploySnapshot.releasedLibraryBlock(
-            vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), emitterTemplate(), zoltuReleasedMechanismData
+            vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), emitterTemplate(), zoltuDeclaration()
         );
 
         assertTrue(vm.contains(emitted, "suite: \"address-registry@0_0_1\""));
@@ -1728,7 +1736,7 @@ contract LibRainDeploySnapshotTest is Test {
         declared.dependencies[1] = DeployDependency({deployedAddress: address(0xbeef), runtimeCode: hex"b0b0"});
 
         string memory emitted = LibRainDeploySnapshot.releasedLibraryBlock(
-            vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), declared, zoltuReleasedMechanismData
+            vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), declared, zoltuDeclaration()
         );
 
         assertTrue(
@@ -1767,10 +1775,10 @@ contract LibRainDeploySnapshotTest is Test {
 
         assertEq(
             LibRainDeploySnapshot.releasedLibraryBlock(
-                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), declared, zoltuReleasedMechanismData
+                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), declared, zoltuDeclaration()
             ),
             LibRainDeploySnapshot.releasedLibraryBlock(
-                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), emitterTemplate(), zoltuReleasedMechanismData
+                vm, EMITTED_LIBRARY, EMITTED_CONTRACT, recordOf(2), emitterTemplate(), zoltuDeclaration()
             ),
             "the template's dependency list reached a released entry"
         );
@@ -2247,7 +2255,7 @@ contract LibRainDeploySnapshotTest is Test {
             RAIN_SPDX_LICENSE_IDENTIFIER,
             RAIN_COPYRIGHT_TEXT,
             emitterTemplate(),
-            zoltuReleasedMechanismData
+            zoltuDeclaration()
         );
 
         string memory emitted = vm.readFile(path);
@@ -2256,7 +2264,7 @@ contract LibRainDeploySnapshotTest is Test {
             generatedFilePrefix(),
             LibRainDeploySnapshot.releasedImportBlock(vm, paths),
             LibRainDeploySnapshot.releasedLibraryBlock(
-                vm, libraryName, FIXTURE_CONTRACT, paths, emitterTemplate(), zoltuReleasedMechanismData
+                vm, libraryName, FIXTURE_CONTRACT, paths, emitterTemplate(), zoltuDeclaration()
             )
         );
 
@@ -3645,7 +3653,7 @@ contract LibRainDeploySnapshotTest is Test {
                 LibRainDeploySnapshot.LIB_FS_ROOT,
                 FIXTURE_CONTRACT,
                 emitterTemplate(),
-                zoltuReleasedMechanismData
+                zoltuDeclaration()
             )
         );
         string memory explicitly = vm.readFile(
@@ -3657,7 +3665,7 @@ contract LibRainDeploySnapshotTest is Test {
                 RAIN_SPDX_LICENSE_IDENTIFIER,
                 RAIN_COPYRIGHT_TEXT,
                 emitterTemplate(),
-                zoltuReleasedMechanismData
+                zoltuDeclaration()
             )
         );
 
@@ -3707,8 +3715,9 @@ contract LibRainDeploySnapshotTest is Test {
             mechanismData: hex"00"
         });
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
-        sZoltu.externalWriteSuiteSnapshot(
-            vm, ZOLTU_DATA_ROOT, "0_0_1", FIXTURE_CONTRACT, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT, suite
+        this.externalZoltuWriteSuiteSnapshot(
+            SnapshotFile(ZOLTU_DATA_ROOT, "0_0_1", FIXTURE_CONTRACT, RAIN_SPDX_LICENSE_IDENTIFIER, RAIN_COPYRIGHT_TEXT),
+            suite
         );
         assertFalse(vm.exists(LibRainDeploySnapshot.pathForSnapshot(ZOLTU_DATA_ROOT, "0_0_1", FIXTURE_CONTRACT)));
     }

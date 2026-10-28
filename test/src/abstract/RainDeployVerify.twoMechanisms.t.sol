@@ -3,8 +3,21 @@
 pragma solidity =0.8.25;
 
 import {RainDeployVerify} from "../../../src/abstract/RainDeployVerify.sol";
+import {DeployDeclaration} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {TwoMechanismDeploySuites} from "../../abstract/TwoMechanismDeploySuites.sol";
+import {LibMockCreate2Mechanism} from "../../lib/LibMockCreate2Mechanism.sol";
+import {LibMockSaltMechanism} from "../../lib/LibMockSaltMechanism.sol";
 
 /// @title RainDeployVerifyTwoMechanismsTest
 /// @notice The chain and snapshot groups run over a declaration of two non-Zoltu mechanisms with no override.
-contract RainDeployVerifyTwoMechanismsTest is TwoMechanismDeploySuites, RainDeployVerify {}
+contract RainDeployVerifyTwoMechanismsTest is TwoMechanismDeploySuites, RainDeployVerify {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibMockSaltMechanism.extend(d);
+        LibMockCreate2Mechanism.extend(d);
+        addTwoMechanismCandidates(d);
+        return d;
+    }
+}
