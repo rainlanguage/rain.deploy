@@ -104,8 +104,30 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
 
     /// Every contract this repo generates pins for, in the order its libs are
     /// aggregated. Read through `checkedGeneratedContracts`.
+    /// @param d The declaration whose candidates the entries take.
     /// @return The generated contracts.
-    function generatedContracts() internal view virtual returns (GeneratedContract[] memory);
+    function generatedContracts(DeployDeclaration memory d) internal view virtual returns (GeneratedContract[] memory);
+
+    /// The candidate `d` declares under `suite`, or an otherwise empty one
+    /// keyed `suite` that `checkedGeneratedContracts` refuses as undeclared.
+    /// @param d The declaration.
+    /// @param suite The candidate's key.
+    /// @return The candidate.
+    function declaredCandidate(DeployDeclaration memory d, string memory suite)
+        internal
+        pure
+        returns (DeployCandidate memory)
+    {
+        bytes32 key = keccak256(bytes(suite));
+        for (uint256 i = 0; i < d.candidates.length; i++) {
+            if (keccak256(bytes(d.candidates[i].snapshot.suite)) == key) {
+                return d.candidates[i];
+            }
+        }
+        DeployCandidate memory undeclared;
+        undeclared.snapshot.suite = suite;
+        return undeclared;
+    }
 
     /// Contracts this repo no longer builds whose frozen releases stay
     /// declared, in the order they were released. Defaults to none.
@@ -128,14 +150,14 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         return RAIN_COPYRIGHT_TEXT;
     }
 
-    /// `generatedContracts()`, refusing a list that is not exactly `d`'s
+    /// `generatedContracts(d)`, refusing a list that is not exactly `d`'s
     /// candidates, an anchored candidate named for another contract, a name
     /// shared with another generated or retired contract, and a non-empty
     /// constant prefix shared by two contracts.
     /// @param d The declaration.
     /// @return The generated contracts.
     function checkedGeneratedContracts(DeployDeclaration memory d) internal view returns (GeneratedContract[] memory) {
-        GeneratedContract[] memory generated = generatedContracts();
+        GeneratedContract[] memory generated = generatedContracts(d);
         checkCandidates(d);
         DeployCandidate[] memory candidates = d.candidates;
         for (uint256 i = 0; i < generated.length; i++) {

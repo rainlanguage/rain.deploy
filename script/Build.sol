@@ -21,15 +21,22 @@ import {LibRainDeploySnapshot} from "../src/lib/LibRainDeploySnapshot.sol";
 /// declaration.
 contract Build is BuildScript, RegistryDeploySuites {
     /// @inheritdoc BuildScript
-    function generatedContracts() internal pure override returns (GeneratedContract[] memory) {
+    function generatedContracts(DeployDeclaration memory d)
+        internal
+        pure
+        override
+        returns (GeneratedContract[] memory)
+    {
         GeneratedContract[] memory contracts = new GeneratedContract[](2);
         contracts[0] = GeneratedContract({
-            contractName: "ConfigRegistry", constantPrefix: "CONFIG_REGISTRY", candidate: configRegistryCandidate()
+            contractName: "ConfigRegistry",
+            constantPrefix: "CONFIG_REGISTRY",
+            candidate: declaredCandidate(d, configRegistryCandidate().snapshot.suite)
         });
         contracts[1] = GeneratedContract({
             contractName: "MigrationRegistry",
             constantPrefix: "MIGRATION_REGISTRY",
-            candidate: migrationRegistryCandidate()
+            candidate: declaredCandidate(d, migrationRegistryCandidate().snapshot.suite)
         });
         return contracts;
     }
