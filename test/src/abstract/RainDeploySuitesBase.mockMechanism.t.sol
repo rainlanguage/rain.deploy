@@ -2,20 +2,22 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {LibMockCreate2Mechanism} from "../../lib/LibMockCreate2Mechanism.sol";
-
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
-import {DeploySuite, ExtendedNetworksUnexpected} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ChainDeploy, LibRainDeployExtendedNetworks} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {LibRainDeployZoltuMechanism, ZOLTU_MECHANISM_ID} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {
+    LibMockCreate2Mechanism,
     MOCK_CREATE2_FACTORY,
+    MOCK_CREATE2_MECHANISM_ID,
     MOCK_CREATE2_SALT,
     MockCreate2Mechanism,
     MockCreate2NetworkUndeclared,
     MockCreate2NetworkUnfrozen
-} from "../../abstract/MockCreate2DeploySuites.sol";
+} from "../../lib/LibMockCreate2Mechanism.sol";
+import {IMockMechanismProbe, MOCK_MECHANISM_PROBE} from "../../lib/LibMockMechanismProbe.sol";
 import {MockCreate2Deploy} from "../../concrete/MockCreate2Deploy.sol";
 import {MockCreate2Factory} from "../../concrete/MockCreate2Factory.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
@@ -54,24 +56,27 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         return ChainDeploy({chainId: chainId, data: abi.encode(chainId), deployedAddress: recorded});
     }
 
-    function mechanismOf(DeploySuite memory suite) internal pure returns (MockCreate2Mechanism memory) {
-        return abi.decode(suite.mechanismData, (MockCreate2Mechanism));
-    }
-
+    /// `suite` on exactly `networks`, both in its payload and in `suite.networks`.
     function withNetworks(DeploySuite memory suite, ChainDeploy[] memory networks)
         internal
         pure
         returns (DeploySuite memory)
     {
-        MockCreate2Mechanism memory mechanism = mechanismOf(suite);
+        MockCreate2Mechanism memory mechanism = LibMockCreate2Mechanism.decode(suite);
         mechanism.networks = networks;
-        suite.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
-        return suite;
+        DeploySuite memory changed = abi.decode(abi.encode(suite), (DeploySuite));
+        changed.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
+        changed.networks = LibMockCreate2Mechanism.networkNames(networks);
+        return changed;
     }
 
-    /// The release with the empty network list: one address on every network.
+    /// The release at one address on each of its networks.
     function singleSuite() internal view returns (DeploySuite memory) {
-        DeploySuite memory suite = withNetworks(sDeploy.externalMockRelease(), new ChainDeploy[](0));
+        DeploySuite memory suite = sDeploy.externalMockRelease();
+        MockCreate2Mechanism memory mechanism = LibMockCreate2Mechanism.decode(suite);
+        mechanism.perNetwork = false;
+        mechanism.networks = new ChainDeploy[](0);
+        suite.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
         suite.storedDeployedAddress = create2Address(MOCK_CREATE2_SALT);
         return suite;
     }
@@ -97,49 +102,48 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         sDeploy.externalDeployedAddress(release, 8453);
     }
 
-    function testEmptyMechanismDataFallsThroughToZoltu() external view {
+    /// The same suite carrying the Zoltu id goes to Zoltu, declared beside the mock.
+    function testZoltuIdDispatchesToZoltuBesideTheMock() external view {
         DeploySuite memory suite = sDeploy.externalMockRelease();
-        suite.mechanismData = "";
+        suite.mechanismData = LibRainDeployZoltuMechanism.mechanismData();
         suite.storedDeployedAddress = address(0x1234);
+        assertEq(sDeploy.externalMechanismOf(sDeploy.externalMockRelease()), MOCK_CREATE2_MECHANISM_ID);
+        assertEq(sDeploy.externalMechanismOf(suite), ZOLTU_MECHANISM_ID);
         assertEq(sDeploy.externalDeployedAddress(suite, 42161), LibRainDeploy.zoltuAddress(suite.creationCode));
         assertEq(sDeploy.externalRecordedAddress(suite, 42161), address(0x1234));
-        assertEq(sDeploy.externalAddressChainIds(suite).length, 0);
         assertEq(sDeploy.externalDeployStepData(suite, 42161), suite.creationCode);
-        assertEq(sDeploy.externalSuiteBeacon(suite, 42161), address(0));
     }
 
-    /// `deployedAddresses` and `recordedAddresses` are one entry per `addressChainIds` entry, in its order, each read
+    /// `deployedAddresses` and `recordedAddresses` are one entry per `suite.networks` entry, in its order, each read
     /// through its own hook.
-    function testAddressListsFollowTheChainIdOrder() external view {
+    function testAddressListsFollowTheSuitesNetworkOrder() external view {
         ChainDeploy[] memory networks = new ChainDeploy[](3);
         networks[0] = network(137, address(0xa1));
         networks[1] = network(8453, address(0xa2));
         networks[2] = network(42161, address(0xa3));
         DeploySuite memory suite = withNetworks(sDeploy.externalMockRelease(), networks);
-
-        uint256[] memory chainIds = sDeploy.externalAddressChainIds(suite);
         address[] memory deployed = sDeploy.externalDeployedAddresses(suite);
         address[] memory recorded = sDeploy.externalRecordedAddresses(suite);
-        assertEq(chainIds.length, 3);
         assertEq(deployed.length, 3);
         assertEq(recorded.length, 3);
         for (uint256 i = 0; i < 3; i++) {
-            assertEq(chainIds[i], networks[i].chainId);
             assertEq(deployed[i], networkAddress(networks[i].chainId));
             assertEq(recorded[i], networks[i].deployedAddress);
         }
     }
 
-    /// A suite with no address chain ids has one address, read at chain id zero.
-    function testAddressListsOfASingleAddressSuiteHaveOneEntry() external view {
+    /// A one-address suite answers its one address for every network it lists.
+    function testAddressListsOfASingleAddressSuiteRepeatItsAddress() external view {
         DeploySuite memory suite = singleSuite();
         suite.storedDeployedAddress = address(0xb1);
         address[] memory deployed = sDeploy.externalDeployedAddresses(suite);
         address[] memory recorded = sDeploy.externalRecordedAddresses(suite);
-        assertEq(deployed.length, 1);
-        assertEq(deployed[0], create2Address(MOCK_CREATE2_SALT));
-        assertEq(recorded.length, 1);
-        assertEq(recorded[0], address(0xb1));
+        assertEq(deployed.length, 2);
+        assertEq(recorded.length, 2);
+        for (uint256 i = 0; i < 2; i++) {
+            assertEq(deployed[i], create2Address(MOCK_CREATE2_SALT));
+            assertEq(recorded[i], address(0xb1));
+        }
     }
 
     function testRecordedAddressIsTheMechanismsPerNetwork() external view {
@@ -193,71 +197,87 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
 
     /// The candidate's networks in play that the release lacks are added at the release's own derivation; those not
     /// in play, and those the release records, are not.
-    function testWithUnrecordedNetworksAddsTheCandidatesNetworksInPlay() external view {
+    function testAddUnrecordedNetworksAddsTheCandidatesNetworksInPlay() external view {
         DeploySuite memory release = sDeploy.externalMockRelease();
         DeploySuite memory candidate = sDeploy.externalMockCandidate();
         uint256[] memory chainIds = new uint256[](3);
         chainIds[0] = 8453;
         chainIds[1] = 137;
         chainIds[2] = 10;
-        DeploySuite memory suite = sDeploy.externalWithUnrecordedNetworks(release, candidate, chainIds);
-
-        uint256[] memory got = sDeploy.externalAddressChainIds(suite);
-        assertEq(got.length, 3);
-        assertEq(got[0], 42161);
-        assertEq(got[1], 137);
-        assertEq(got[2], 8453);
+        DeploySuite memory suite = sDeploy.externalAddUnrecordedNetworks(release, candidate, chainIds);
+        assertEq(suite.networks.length, 3);
+        assertEq(suite.networks[0], LibRainDeploy.ARBITRUM_ONE);
+        assertEq(suite.networks[1], LibRainDeploy.POLYGON);
+        assertEq(suite.networks[2], LibRainDeploy.BASE);
+        assertEq(LibMockCreate2Mechanism.decode(suite).networks.length, 3);
         assertEq(sDeploy.externalRecordedAddress(suite, 8453), networkAddress(8453));
         assertEq(sDeploy.externalDeployedAddress(suite, 8453), networkAddress(8453));
-        assertEq(keccak256(abi.encode(release)), keccak256(abi.encode(sDeploy.externalMockRelease())));
     }
 
-    function testOnSupportedNetworksTakesTheCandidateByKeyName() external view {
+    function testAddCandidateNetworksTakesTheCandidateByKeyName() external view {
         uint256[] memory chainIds = new uint256[](1);
         chainIds[0] = 8453;
-        DeploySuite memory suite = sDeploy.externalOnSupportedNetworks(sDeploy.externalMockRelease(), chainIds);
-        assertEq(sDeploy.externalAddressChainIds(suite).length, 3);
+        DeploySuite memory suite = sDeploy.externalAddCandidateNetworks(sDeploy.externalMockRelease(), chainIds);
+        assertEq(suite.networks.length, 3);
         assertEq(sDeploy.externalRecordedAddress(suite, 8453), networkAddress(8453));
     }
 
-    function testAppendExtendedNetworksAppendsInOrder() external view {
-        ChainDeploy[] memory extended = new ChainDeploy[](2);
-        extended[0] = network(8453, address(0xd1));
-        extended[1] = network(10, address(0xd2));
-        DeploySuite memory suite = sDeploy.externalAppendExtendedNetworks(sDeploy.externalMockRelease(), extended);
-        uint256[] memory chainIds = sDeploy.externalAddressChainIds(suite);
-        assertEq(chainIds.length, 4);
-        assertEq(chainIds[2], 8453);
-        assertEq(chainIds[3], 10);
-        assertEq(sDeploy.externalRecordedAddress(suite, 8453), address(0xd1));
-        assertEq(sDeploy.externalRecordedAddress(suite, 10), address(0xd2));
-    }
-
-    function testAppendExtendedNetworksRefusesASingleAddressSuite() external {
-        ChainDeploy[] memory extended = new ChainDeploy[](1);
-        extended[0] = network(8453, address(0xd1));
-        DeploySuite memory suite = singleSuite();
-        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksUnexpected.selector, suite.suite));
-        sDeploy.externalAppendExtendedNetworks(suite, extended);
-    }
-
-    function testWithExtendedNetworksAppendsTheDeclaredNetworksThroughTheHook() external {
-        string memory root = "test/generated-snapshot/mock-create2-extended";
+    /// The mock reads its own records under the root in its payload, appending them in order.
+    function testAddRecordedNetworksAppendsTheMechanismsOwnRecords() external {
+        string memory root = "test/generated-snapshot/mock-create2-recorded";
         //forge-lint: disable-next-line(unsafe-cheatcode)
         try vm.removeDir(root, true) {} catch {}
-        ChainDeploy[] memory extended = new ChainDeploy[](1);
-        extended[0] = network(8453, networkAddress(8453));
+        ChainDeploy[] memory recorded = new ChainDeploy[](2);
+        recorded[0] = network(8453, networkAddress(8453));
+        recorded[1] = network(10, networkAddress(10));
+        sDeploy.setMockRecordRoot(root);
         DeploySuite memory release = sDeploy.externalMockRelease();
-        LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, release.suite, extended);
-        sDeploy.setMockExtendedNetworksRoot(root);
-        sDeploy.setMockExtendedNetworks(extended);
-        DeploySuite memory frozen = sDeploy.externalWithExtendedNetworks(release);
+        LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, release.suite, recorded);
+        vm.expectCall(
+            MOCK_MECHANISM_PROBE,
+            abi.encodeCall(IMockMechanismProbe.addRecordedNetworks, (MOCK_CREATE2_MECHANISM_ID, release.suite)),
+            1
+        );
+        DeploySuite memory frozen = sDeploy.externalAddRecordedNetworks(release);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(root, true);
-        uint256[] memory chainIds = sDeploy.externalAddressChainIds(frozen);
-        assertEq(chainIds.length, 3);
-        assertEq(chainIds[2], 8453);
+        assertEq(frozen.networks.length, 4);
+        assertEq(frozen.networks[2], LibRainDeploy.BASE);
+        assertEq(frozen.networks[3], LibRainDeploy.OPTIMISM);
         assertEq(sDeploy.externalRecordedAddress(frozen, 8453), networkAddress(8453));
+        assertEq(sDeploy.externalRecordedAddress(frozen, 10), networkAddress(10));
+    }
+
+    /// Without a record root the mock adds nothing, but the hook still runs.
+    function testAddRecordedNetworksWithoutRecordsAddsNothing() external {
+        DeploySuite memory release = sDeploy.externalMockRelease();
+        vm.expectCall(
+            MOCK_MECHANISM_PROBE,
+            abi.encodeCall(IMockMechanismProbe.addRecordedNetworks, (MOCK_CREATE2_MECHANISM_ID, release.suite)),
+            1
+        );
+        DeploySuite memory frozen = sDeploy.externalAddRecordedNetworks(release);
+        assertEq(keccak256(abi.encode(frozen)), keccak256(abi.encode(release)));
+    }
+
+    function testCheckOnChainIsTheMechanisms() external {
+        DeploySuite memory release = sDeploy.externalMockRelease();
+        vm.expectCall(
+            MOCK_MECHANISM_PROBE,
+            abi.encodeCall(
+                IMockMechanismProbe.checkOnChain,
+                (MOCK_CREATE2_MECHANISM_ID, release.suite, LibRainDeploy.POLYGON, uint256(137), address(0xbeac))
+            ),
+            1
+        );
+        sDeploy.externalCheckOnChain(release, LibRainDeploy.POLYGON, 137, address(0xbeac));
+    }
+
+    function testCheckOnChainRefusalPropagates() external {
+        DeploySuite memory release = sDeploy.externalMockRelease();
+        vm.mockCallRevert(MOCK_MECHANISM_PROBE, abi.encodeWithSelector(IMockMechanismProbe.checkOnChain.selector), "no");
+        vm.expectRevert(bytes("no"));
+        sDeploy.externalCheckOnChain(release, LibRainDeploy.POLYGON, 137, address(0xbeac));
     }
 
     function testCheckNetworkFrozenRefusesANetworkTheReleaseLacks() external {
@@ -271,7 +291,7 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         sDeploy.externalCheckNetworkFrozen(release, LibRainDeploy.BASE, 8453, address(0xe1));
     }
 
-    /// `checkNetworksFrozen` checks each broadcast network the suite has an address for, at its recorded address.
+    /// `checkNetworksFrozen` checks each broadcast network the suite lists, at its recorded address.
     function testCheckNetworksFrozenNamesTheUnfrozenNetworksRecordedAddress() external {
         DeploySuite memory release = sDeploy.externalMockRelease();
         ChainDeploy[] memory networks = new ChainDeploy[](3);
@@ -291,8 +311,8 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         sDeploy.externalCheckNetworksFrozen(release, onNetworks, names);
     }
 
-    /// A broadcast network the suite has no address for is not checked, and the recorded ones pass.
-    function testCheckNetworksFrozenSkipsNetworksWithoutAnAddress() external view {
+    /// A broadcast network the suite does not list is not checked, and the listed ones pass.
+    function testCheckNetworksFrozenSkipsNetworksTheSuiteDoesNotList() external view {
         DeploySuite memory release = sDeploy.externalMockRelease();
         string[] memory names = new string[](3);
         names[0] = LibRainDeploy.BASE;
@@ -305,14 +325,6 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         string[] memory names = new string[](1);
         names[0] = LibRainDeploy.BASE;
         sDeploy.externalCheckNetworksFrozen(sDeploy.externalMockRelease(), singleSuite(), names);
-    }
-
-    function testSuiteBeaconIsTheMechanisms() external view {
-        DeploySuite memory suite = sDeploy.externalMockRelease();
-        MockCreate2Mechanism memory mechanism = mechanismOf(suite);
-        mechanism.beacon = address(0xbeac);
-        suite.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
-        assertEq(sDeploy.externalSuiteBeacon(suite, 42161), address(0xbeac));
     }
 
     /// The mechanism's verification log replaces the Zoltu verify commands.
@@ -340,7 +352,7 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         string memory record = vm.readFile(path);
         string memory expression = sDeploy.externalReleasedMechanismData(vm, path, "V0_0_1");
         DeploySuite memory zoltu = sDeploy.externalMockRelease();
-        zoltu.mechanismData = "";
+        zoltu.mechanismData = LibRainDeployZoltuMechanism.mechanismData();
         vm.etch(LibRainDeploy.zoltuAddress(zoltu.creationCode), hex"");
         vm.resetNonce(LibRainDeploy.zoltuAddress(zoltu.creationCode));
         string memory zoltuPath = sDeploy.externalWriteSuiteSnapshot(
@@ -349,7 +361,6 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         string memory zoltuExpression = sDeploy.externalReleasedMechanismData(vm, zoltuPath, "V0_0_2");
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(root, true);
-
         assertTrue(
             vm.contains(
                 record,
@@ -361,6 +372,6 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
             )
         );
         assertEq(expression, "V0_0_1_MECHANISM_DATA");
-        assertEq(zoltuExpression, "\"\"");
+        assertEq(zoltuExpression, string.concat("abi.encode(bytes32(", vm.toString(ZOLTU_MECHANISM_ID), "))"));
     }
 }
