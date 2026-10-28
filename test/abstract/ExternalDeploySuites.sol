@@ -22,8 +22,22 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 /// wrapper a fixture forgot to carry is a reader nothing checks that fixture
 /// through.
 abstract contract ExternalDeploySuites is RainDeploySuitesBase {
-    function externalDeclaration() external view returns (DeployDeclaration memory) {
-        return declaration();
+    function externalReleased() external view returns (DeploySuite[] memory) {
+        return declaration().released;
+    }
+
+    function externalCandidates() external view returns (DeployCandidate[] memory) {
+        return declaration().candidates;
+    }
+
+    /// @return The id of each of the declaration's mechanisms, in order.
+    function externalMechanismIds() external view returns (bytes32[] memory) {
+        DeployDeclaration memory d = declaration();
+        bytes32[] memory ids = new bytes32[](d.mechanisms.length);
+        for (uint256 i = 0; i < ids.length; i++) {
+            ids[i] = d.mechanisms[i].id;
+        }
+        return ids;
     }
 
     function externalAllSuites() external view returns (DeploySuite[] memory) {

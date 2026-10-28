@@ -2,7 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-/// The codeless address the mock mechanisms report their side-effect-free hooks to, so tests count them with
+/// @dev The codeless address the mock mechanisms report their side-effect-free hooks to, so tests count them with
 /// `vm.expectCall(MOCK_MECHANISM_PROBE, abi.encodeCall(IMockMechanismProbe.<hook>, (...)), count)`.
 address constant MOCK_MECHANISM_PROBE = address(uint160(uint256(keccak256("rain.deploy.mock.mechanism.probe"))));
 
