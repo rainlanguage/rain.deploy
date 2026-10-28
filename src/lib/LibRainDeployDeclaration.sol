@@ -7,7 +7,8 @@ import {
     DeployDeclaration,
     DeployMechanismHandler,
     DeploySuite,
-    DuplicateMechanism
+    DuplicateMechanism,
+    MechanismUnclaimed
 } from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 
@@ -58,6 +59,35 @@ library LibRainDeployDeclaration {
             }
             suite.networks = copied;
         }
+    }
+
+    /// The one of `d.mechanisms` whose id is `id`, refusing `DuplicateMechanism` for a list repeating an id and
+    /// `MechanismUnclaimed` for none.
+    /// @param d The declaration.
+    /// @param id The mechanism id.
+    /// @param subject The suite key or record file `MechanismUnclaimed` names.
+    /// @return Its handler.
+    function mechanismById(DeployDeclaration memory d, bytes32 id, string memory subject)
+        internal
+        pure
+        returns (DeployMechanismHandler memory)
+    {
+        DeployMechanismHandler[] memory handlers = d.mechanisms;
+        uint256 found = handlers.length;
+        for (uint256 i = 0; i < handlers.length; i++) {
+            for (uint256 j = 0; j < i; j++) {
+                if (handlers[j].id == handlers[i].id) {
+                    revert DuplicateMechanism(handlers[i].id);
+                }
+            }
+            if (handlers[i].id == id) {
+                found = i;
+            }
+        }
+        if (found == handlers.length) {
+            revert MechanismUnclaimed(subject);
+        }
+        return handlers[found];
     }
 
     /// Appends `handler` to `d.mechanisms`, refusing `DuplicateMechanism` for an id already there.

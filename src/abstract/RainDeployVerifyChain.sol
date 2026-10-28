@@ -25,7 +25,11 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// Checks every suite on the given networks against each, forking with `vm`.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
-    function checkDeployedOnNetworks(DeployDeclaration memory d, SupportedNetwork[] memory networks, DeploySuite[] memory suites) internal {
+    function checkDeployedOnNetworks(
+        DeployDeclaration memory d,
+        SupportedNetwork[] memory networks,
+        DeploySuite[] memory suites
+    ) internal {
         checkDeployedOnNetworks(d, vm, networks, suites);
     }
 
@@ -37,9 +41,12 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
-    function checkDeployedOnNetworks(DeployDeclaration memory d, Vm forkVm, SupportedNetwork[] memory networks, DeploySuite[] memory suites)
-        internal
-    {
+    function checkDeployedOnNetworks(
+        DeployDeclaration memory d,
+        Vm forkVm,
+        SupportedNetwork[] memory networks,
+        DeploySuite[] memory suites
+    ) internal {
         // Nothing to check is not a reason to touch every RPC endpoint.
         if (suites.length == 0) {
             return;

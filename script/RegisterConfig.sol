@@ -88,12 +88,7 @@ contract RegisterConfig is RegistryDeploySuites, Script {
     function run() external returns (uint256[] memory) {
         DeployDeclaration memory d = declaration();
         (uint256[] memory forkIds,) = LibConfigRegistryRegister.registerOnNetworks(
-            forkVm(),
-            selectedNetworks(d),
-            d.networks,
-            msg.sender,
-            LibRegistryAuthority.ROOT_AUTHORITY,
-            binding()
+            forkVm(), selectedNetworks(d), d.networks, msg.sender, LibRegistryAuthority.ROOT_AUTHORITY, binding()
         );
         return forkIds;
     }

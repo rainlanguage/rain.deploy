@@ -98,9 +98,7 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// `LibRainDeployConfig` for why a script cannot write `foundry.toml`
     /// itself.
     function regenerateConfig(DeployDeclaration memory d) internal {
-        LibRainDeployConfig.writeStagedConfig(
-            vm, configRoot(), LibRainDeploy.declaredNetworkConfigs(d.networks)
-        );
+        LibRainDeployConfig.writeStagedConfig(vm, configRoot(), LibRainDeploy.declaredNetworkConfigs(d.networks));
     }
 
     /// The directory `regenerateLibs` writes every generated lib into, and the

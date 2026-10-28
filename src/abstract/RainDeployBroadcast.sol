@@ -6,7 +6,12 @@ import {Script} from "forge-std-1.17.0/src/Script.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
 
-import {DeployDeclaration, DeploySuite, DerivationSnapshotRevertFailed, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
+import {
+    DeployDeclaration,
+    DeploySuite,
+    DerivationSnapshotRevertFailed,
+    RainDeploySuitesBase
+} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 
 /// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with a first word whose low
@@ -83,10 +88,12 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
     /// @return Where the suite is on each network, positionally paired with `networks`.
     /// @return The fork each network was deployed on.
-    function broadcastSuite(DeployDeclaration memory d, DeploySuite memory suite, string[] memory networks, uint256 deployerPrivateKey)
-        internal
-        returns (address[] memory, uint256[] memory)
-    {
+    function broadcastSuite(
+        DeployDeclaration memory d,
+        DeploySuite memory suite,
+        string[] memory networks,
+        uint256 deployerPrivateKey
+    ) internal returns (address[] memory, uint256[] memory) {
         address deployer = vm.addr(deployerPrivateKey);
         DeploySuite memory frozen = abi.decode(abi.encode(suite), (DeploySuite));
         addRecordedNetworks(d, frozen);
@@ -195,7 +202,12 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// @param suite The suite to broadcast, with its recorded networks and every network its candidate adds.
     /// @param chainIds The chain ids to deploy under.
     /// @param deployer The deploy key's address.
-    function checkSeatsNoDeployKey(DeployDeclaration memory d, DeploySuite memory suite, uint256[] memory chainIds, address deployer) internal {
+    function checkSeatsNoDeployKey(
+        DeployDeclaration memory d,
+        DeploySuite memory suite,
+        uint256[] memory chainIds,
+        address deployer
+    ) internal {
         for (uint256 i = 0; i < chainIds.length; i++) {
             uint256 snapshotId = vm.snapshotState();
             vm.chainId(chainIds[i]);

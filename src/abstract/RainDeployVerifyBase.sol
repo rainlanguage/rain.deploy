@@ -29,7 +29,10 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     /// alone.
     /// @param suite The suite to derive from.
     /// @return The addresses and code hash the suite's mechanism produces.
-    function deriveDeployment(DeployDeclaration memory d, DeploySuite memory suite) internal returns (DerivedDeploy memory) {
+    function deriveDeployment(DeployDeclaration memory d, DeploySuite memory suite)
+        internal
+        returns (DerivedDeploy memory)
+    {
         uint256 snapshotId = vm.snapshotState();
 
         address[] memory deployedAddresses = deployLocally(d, vm, suite);
@@ -54,7 +57,10 @@ abstract contract RainDeployVerifyBase is RainDeploySuitesBase, Test {
     /// deployment under test occupies.
     /// @param suites The suites to derive.
     /// @return The derivation of each, positionally paired.
-    function deriveDeployments(DeployDeclaration memory d, DeploySuite[] memory suites) internal returns (DerivedDeploy[] memory) {
+    function deriveDeployments(DeployDeclaration memory d, DeploySuite[] memory suites)
+        internal
+        returns (DerivedDeploy[] memory)
+    {
         DerivedDeploy[] memory derived = new DerivedDeploy[](suites.length);
         for (uint256 i = 0; i < suites.length; i++) {
             derived[i] = deriveDeployment(d, suites[i]);

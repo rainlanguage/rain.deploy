@@ -4,7 +4,13 @@ pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
-import {DeployCandidate, DeployDeclaration, DeployDependency, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDeclaration,
+    DeployDependency,
+    DeploySuite,
+    RainDeploySuitesBase
+} from "./RainDeploySuitesBase.sol";
 
 /// A deterministic deployment outside the repo that a suite may reach.
 struct ExternalDeployment {

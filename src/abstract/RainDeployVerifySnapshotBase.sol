@@ -103,7 +103,11 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// address, on each recorded chain for a per-network record.
     /// @param paths The frozen record's files.
     /// @param released The declared released suites.
-    function checkFrozenSnapshotsReleased(DeployDeclaration memory d, string[] memory paths, DeploySuite[] memory released) internal view {
+    function checkFrozenSnapshotsReleased(
+        DeployDeclaration memory d,
+        string[] memory paths,
+        DeploySuite[] memory released
+    ) internal view {
         uint256[][] memory releasedChainIds = new uint256[][](released.length);
         address[][] memory releasedAddresses = new address[][](released.length);
         for (uint256 j = 0; j < released.length; j++) {

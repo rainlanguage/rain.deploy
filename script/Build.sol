@@ -3,7 +3,12 @@
 pragma solidity =0.8.25;
 
 import {BuildScript} from "../src/abstract/BuildScript.sol";
-import {DeployCandidate, DeployDeclaration, DeployDependency, DeploySuite} from "../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDeclaration,
+    DeployDependency,
+    DeploySuite
+} from "../src/abstract/RainDeploySuitesBase.sol";
 import {ParameterisedContract, RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../src/lib/LibRainDeploySnapshot.sol";
 
@@ -94,7 +99,7 @@ contract Build is BuildScript, RegistryDeploySuites {
         RetiredContract[] memory retired = retiredContracts();
         for (uint256 i = 0; i < retired.length; i++) {
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, dir, recordRoot(), retired[i].contractName, retiredTemplate(retired[i]), d, releasedMechanismData
+                vm, dir, recordRoot(), retired[i].contractName, retiredTemplate(retired[i]), d
             );
         }
         for (uint256 i = 0; i < contracts.length; i++) {
@@ -102,7 +107,7 @@ contract Build is BuildScript, RegistryDeploySuites {
                 vm, dir, contracts[i].contractName, contracts[i].constantPrefix, LibRainDeploySnapshot.CANDIDATE
             );
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, dir, recordRoot(), contracts[i].contractName, contracts[i].candidate.snapshot, d, releasedMechanismData
+                vm, dir, recordRoot(), contracts[i].contractName, contracts[i].candidate.snapshot, d
             );
         }
         LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, dir, releasedContractNames());
