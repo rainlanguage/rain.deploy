@@ -303,7 +303,7 @@ contract BuildScriptTest is Test {
     /// or by nobody at all, and a test that lists today's three says nothing
     /// either way.
     ///
-    /// `run()` holding nothing but those calls is the other half. Every
+    /// `run()` holding nothing but those calls and one read of its declaration is the other half. Every
     /// assertion here is about the set of declarations `run()` calls, and a set
     /// says nothing about a statement that is not a call — a guard, an early
     /// return, an inlined generator — which is exactly where a regeneration
@@ -529,19 +529,21 @@ contract BuildScriptTest is Test {
     function statementCallIds(string memory json, string memory path) internal view returns (int256[] memory) {
         int256[] memory found = new int256[](64);
         uint256 count = 0;
+        bool read = false;
         for (
             uint256 i = 0;
             vm.keyExistsJson(json, string.concat(path, ".body.statements[", vm.toString(i), "].nodeType"));
             i++
         ) {
             string memory statement = string.concat(path, ".body.statements[", vm.toString(i), "]");
-            assertEq(
-                vm.parseJsonString(json, string.concat(statement, ".nodeType")),
-                "ExpressionStatement",
-                "the entry point holds a statement that is not a call"
-            );
-
-            string memory call = string.concat(statement, ".expression");
+            string memory nodeType = vm.parseJsonString(json, string.concat(statement, ".nodeType"));
+            string memory call;
+            if (keccak256(bytes(nodeType)) == keccak256("VariableDeclarationStatement")) {
+                call = string.concat(statement, ".initialValue");
+            } else {
+                assertEq(nodeType, "ExpressionStatement", "the entry point holds a statement that is not a call");
+                call = string.concat(statement, ".expression");
+            }
             assertEq(
                 vm.parseJsonString(json, string.concat(call, ".nodeType")),
                 "FunctionCall",
@@ -552,6 +554,16 @@ contract BuildScriptTest is Test {
                 "Identifier",
                 "the entry point calls something other than a function of its own"
             );
+            if (keccak256(bytes(nodeType)) == keccak256("VariableDeclarationStatement")) {
+                assertEq(
+                    vm.parseJsonString(json, string.concat(call, ".expression.name")),
+                    "declaration",
+                    "the entry point binds something other than its declaration"
+                );
+                assertFalse(read, "the entry point reads its declaration twice");
+                read = true;
+                continue;
+            }
 
             found[count] = vm.parseJsonInt(json, string.concat(call, ".expression.referencedDeclaration"));
             count++;
