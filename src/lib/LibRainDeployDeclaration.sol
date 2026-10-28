@@ -119,10 +119,15 @@ library LibRainDeployDeclaration {
         if (found == handlers.length) {
             revert MechanismUnclaimed(subject);
         }
-        DeployMechanismHandler memory h = handlers[found];
+        return copyHandler(handlers[found]);
+    }
+
+    /// @param h The handler.
+    /// @return A copy of `h`, `config` included.
+    function copyHandler(DeployMechanismHandler memory h) internal pure returns (DeployMechanismHandler memory) {
         return DeployMechanismHandler(
             h.id,
-            h.config,
+            bytes.concat(h.config),
             h.deployedAddress,
             h.recordedAddress,
             h.deployStepData,
@@ -141,7 +146,7 @@ library LibRainDeployDeclaration {
         );
     }
 
-    /// Appends `handler` to `d.mechanisms`, refusing `DuplicateMechanism` for an id already there.
+    /// Appends a copy of `handler` to `d.mechanisms`, refusing `DuplicateMechanism` for an id already there.
     /// @param d The declaration, mutated.
     /// @param handler The mechanism.
     function addMechanism(DeployDeclaration memory d, DeployMechanismHandler memory handler) internal pure {
@@ -152,7 +157,7 @@ library LibRainDeployDeclaration {
             }
             mechanisms[i] = d.mechanisms[i];
         }
-        mechanisms[d.mechanisms.length] = handler;
+        mechanisms[d.mechanisms.length] = copyHandler(handler);
         d.mechanisms = mechanisms;
     }
 }
