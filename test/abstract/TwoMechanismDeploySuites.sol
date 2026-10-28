@@ -9,7 +9,7 @@ import {
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
-import {ChainDeploy} from "../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {MockNetworkDeploy} from "../lib/LibMockNetworkRecord.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {
     LibMockCreate2Mechanism,
@@ -28,7 +28,7 @@ bytes32 constant TWO_MECHANISM_SALT = keccak256("rain.deploy.mock.salt");
 /// One and Polygon, and a `LibMockSaltMechanism` candidate.
 abstract contract TwoMechanismDeploySuites is RainDeploySuitesBase {
     function create2Candidate() internal pure returns (DeploySuite memory) {
-        ChainDeploy[] memory networks = new ChainDeploy[](2);
+        MockNetworkDeploy[] memory networks = new MockNetworkDeploy[](2);
         networks[0] = LibMockCreate2Mechanism.network(
             MOCK_CREATE2_FACTORY, MOCK_CREATE2_SALT, type(MockDeployable).creationCode, 42161, abi.encode(42161)
         );
