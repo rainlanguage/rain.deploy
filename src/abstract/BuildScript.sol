@@ -317,8 +317,15 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// candidate the release guard compares it against. Defaults to
     /// `snapshotContractNames()` for a repo whose candidate holds nothing else.
     /// @return The snapshot names.
-    function releaseRecordNames() internal view virtual returns (string[] memory) {
-        return snapshotContractNames();
+    /// @param d The declaration.
+    /// @param generated `checkedGeneratedContracts(d)`.
+    function releaseRecordNames(DeployDeclaration memory d, GeneratedContract[] memory generated)
+        internal
+        view
+        virtual
+        returns (string[] memory)
+    {
+        return snapshotContractNames(d, generated);
     }
 
     /// The record root a release is frozen into, and the one the rolling
@@ -385,42 +392,75 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
 
     /// Every path `run()` must rewrite, the installed staged config included.
     /// @return The paths.
-    function generatedPaths() internal view returns (string[] memory) {
-        string[] memory base =
-            LibRainDeploySnapshot.generatedPaths(libDir(), recordRoot(), releaseRecordNames(), snapshotContractNames());
+    function generatedPaths(DeployDeclaration memory d, GeneratedContract[] memory generated)
+        internal
+        view
+        returns (string[] memory)
+    {
+        string[] memory base = LibRainDeploySnapshot.generatedPaths(
+            libDir(), recordRoot(), releaseRecordNames(d, generated), releasedContractNames(generated)
+        );
+        string[] memory aliases = aliasLibPaths(generated);
         string[] memory own = buildGeneratedPaths();
-        string[] memory paths = new string[](base.length + 2 + own.length);
+        string[] memory paths = new string[](base.length + aliases.length + 2 + own.length);
+        uint256 offset = 0;
         for (uint256 i = 0; i < base.length; i++) {
-            paths[i] = base[i];
+            paths[offset++] = base[i];
         }
-        paths[base.length] = LibRainDeployConfig.CONFIG_NAME;
-        paths[base.length + 1] = LibRainDeployConfig.ENV_EXAMPLE_NAME;
+        for (uint256 i = 0; i < aliases.length; i++) {
+            paths[offset++] = aliases[i];
+        }
+        paths[offset++] = LibRainDeployConfig.CONFIG_NAME;
+        paths[offset++] = LibRainDeployConfig.ENV_EXAMPLE_NAME;
         for (uint256 i = 0; i < own.length; i++) {
-            paths[base.length + 2 + i] = own[i];
+            paths[offset++] = own[i];
+        }
+        return paths;
+    }
+
+    /// The alias lib `regenerateLibs` writes for each generated contract with
+    /// a constant prefix.
+    /// @param generated `checkedGeneratedContracts(d)`.
+    /// @return The paths.
+    function aliasLibPaths(GeneratedContract[] memory generated) internal view returns (string[] memory) {
+        string memory dir = libDir();
+        string[] memory written = new string[](generated.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < generated.length; i++) {
+            if (bytes(generated[i].constantPrefix).length > 0) {
+                written[count++] =
+                    LibRainDeploySnapshot.pathForLib(dir, LibRainDeploySnapshot.aliasLibraryName(generated[i].contractName));
+            }
+        }
+        string[] memory paths = new string[](count);
+        for (uint256 i = 0; i < count; i++) {
+            paths[i] = written[i];
         }
         return paths;
     }
 
     /// Prints `generatedPaths()` for `rainix-copy-artifacts` to fail a run that
     /// leaves one unwritten.
-    function declareGeneratedPaths() internal view {
-        LibRainDeploySnapshot.declareGenerated(generatedPaths());
+    function declareGeneratedPaths(DeployDeclaration memory d, GeneratedContract[] memory generated) internal view {
+        LibRainDeploySnapshot.declareGenerated(generatedPaths(d, generated));
     }
 
     /// @notice Regenerate everything this repo generates. Freezes nothing.
     function run() external {
         DeployDeclaration memory d = declaration();
-        declareGeneratedPaths();
+        GeneratedContract[] memory generated = checkedGeneratedContracts(d);
+        declareGeneratedPaths(d, generated);
         regenerateConfig(d);
         regenerateSnapshots();
-        regenerateLibs(d);
+        regenerateLibs(d, generated);
     }
 
     /// @notice Regenerate the rolling snapshots, freeze them as this release's
     /// record, then regenerate the libs from the record.
     function cutRelease() external {
         DeployDeclaration memory d = declaration();
-        LibRainDeploySnapshot.freeze(vm, recordRoot(), regenerateSnapshots, releaseRecordNames());
-        regenerateLibs(d);
+        GeneratedContract[] memory generated = checkedGeneratedContracts(d);
+        LibRainDeploySnapshot.freeze(vm, recordRoot(), regenerateSnapshots, releaseRecordNames(d, generated));
+        regenerateLibs(d, generated);
     }
 }
