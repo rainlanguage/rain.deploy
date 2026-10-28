@@ -21,7 +21,8 @@ import {
     LibMockCreate2Mechanism
 } from "../../lib/LibMockCreate2Mechanism.sol";
 import {LibMockSaltMechanism, MOCK_SALT_MECHANISM_ID} from "../../lib/LibMockSaltMechanism.sol";
-import {NoZoltuDeploy, ReversedMechanismsDeploy} from "../../concrete/MechanismOrderDeploys.sol";
+import {NoZoltuDeploy} from "../../concrete/NoZoltuDeploy.sol";
+import {ReversedMechanismsDeploy} from "../../concrete/ReversedMechanismsDeploy.sol";
 import {TwoMechanismDeploy} from "../../concrete/TwoMechanismDeploy.sol";
 import {ExternalDeploySuites} from "../../abstract/ExternalDeploySuites.sol";
 import {TWO_MECHANISM_SALT, TwoMechanismDeploySuites} from "../../abstract/TwoMechanismDeploySuites.sol";
