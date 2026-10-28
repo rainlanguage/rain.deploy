@@ -7,7 +7,7 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {SuiteSeatsDeployKey} from "../../../src/abstract/RainDeployBroadcast.sol";
 import {DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {ChainDeploy, LibRainDeployExtendedNetworks} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {LibMockNetworkRecord, MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
 import {
     LibMockCreate2Mechanism,
     MOCK_CREATE2_FACTORY,
@@ -117,12 +117,12 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         string memory root = "test/generated-snapshot/broadcast-mock-recorded";
         //forge-lint: disable-next-line(unsafe-cheatcode)
         try vm.removeDir(root, true) {} catch {}
-        ChainDeploy[] memory recorded = new ChainDeploy[](1);
+        MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](1);
         recorded[0] =
-            ChainDeploy({chainId: 8453, data: abi.encode(uint256(8453)), deployedAddress: networkAddress(8453)});
+            MockNetworkDeploy({chainId: 8453, data: abi.encode(uint256(8453)), deployedAddress: networkAddress(8453)});
         sDeploy.setMockRecordRoot(root);
         DeploySuite memory release = sDeploy.externalMockRelease();
-        LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, release.suite, recorded);
+        LibMockNetworkRecord.write(vm, root, release.suite, recorded);
         DeploySuite memory frozen = sDeploy.externalAddRecordedNetworks(release);
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(root, true);
@@ -175,9 +175,9 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         try vm.removeDir(root, true) {} catch {}
         CallerHeldMockBroadcast deploy = new CallerHeldMockBroadcast();
         deploy.setMockRecordRoot(root);
-        ChainDeploy[] memory recorded = new ChainDeploy[](1);
-        recorded[0] = ChainDeploy({chainId: 56, data: abi.encode(uint256(56)), deployedAddress: networkAddress(56)});
-        LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, deploy.externalMockRelease().suite, recorded);
+        MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](1);
+        recorded[0] = MockNetworkDeploy({chainId: 56, data: abi.encode(uint256(56)), deployedAddress: networkAddress(56)});
+        LibMockNetworkRecord.write(vm, root, deploy.externalMockRelease().suite, recorded);
         assertEq(deploy.externalAddRecordedNetworks(deploy.externalMockRelease()).networks.length, 3);
         vm.makePersistent(MOCK_CREATE2_FACTORY);
         string[] memory networks = new string[](1);
@@ -193,11 +193,11 @@ contract RainDeployBroadcastMockMechanismTest is Test {
 
     function originOwnedOnSuite(uint256 ownedOn) internal view returns (DeploySuite memory) {
         bytes memory creationCode = abi.encodePacked(type(MockChainOriginOwned).creationCode, abi.encode(ownedOn));
-        ChainDeploy[] memory networks = new ChainDeploy[](2);
-        networks[0] = ChainDeploy({
+        MockNetworkDeploy[] memory networks = new MockNetworkDeploy[](2);
+        networks[0] = MockNetworkDeploy({
             chainId: 42161, data: abi.encode(uint256(42161)), deployedAddress: networkAddress(42161, creationCode)
         });
-        networks[1] = ChainDeploy({
+        networks[1] = MockNetworkDeploy({
             chainId: 137, data: abi.encode(uint256(137)), deployedAddress: networkAddress(137, creationCode)
         });
         DeploySuite memory suite = sDeploy.externalMockRelease();
