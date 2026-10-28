@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Script} from "forge-std-1.17.0/src/Script.sol";
 import {LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
 import {LibCodeGen} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
-import {SafeProxyFactory} from "safe-global-safe-smart-account-1.5.0/contracts/proxies/SafeProxyFactory.sol";
+import {SafeProxyFactory} from "safe-global-safe-smart-account-1.4.1-3/contracts/proxies/SafeProxyFactory.sol";
 
 import {LibRainDeploy} from "../src/lib/LibRainDeploy.sol";
 import {LibSafe} from "../src/lib/LibSafe.sol";

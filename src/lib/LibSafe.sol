@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {Safe} from "safe-global-safe-smart-account-1.5.0/contracts/Safe.sol";
-import {IProxy} from "safe-global-safe-smart-account-1.5.0/contracts/proxies/SafeProxy.sol";
+import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
+import {IProxy} from "safe-global-safe-smart-account-1.4.1-3/contracts/proxies/SafeProxy.sol";
 import {
     BYTECODE_HASH as SAFE_V1_4_1_SAFE_BYTECODE_HASH,
     RUNTIME_CODE as SAFE_V1_4_1_SAFE_RUNTIME_CODE
