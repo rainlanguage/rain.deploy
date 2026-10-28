@@ -69,24 +69,24 @@ library LibRainDeployZoltuMechanism {
     }
 
     /// @return The Zoltu address of its creation code, on every network.
-    function deployedAddress(DeploySuite memory suite, uint256) internal pure returns (address) {
+    function deployedAddress(DeployDeclaration memory, DeploySuite memory suite, uint256) internal pure returns (address) {
         checkMechanismData(suite);
         return LibRainDeploy.zoltuAddress(suite.creationCode);
     }
 
     /// @return Its recorded address, on every network.
-    function recordedAddress(DeploySuite memory suite, uint256) internal pure returns (address) {
+    function recordedAddress(DeployDeclaration memory, DeploySuite memory suite, uint256) internal pure returns (address) {
         checkMechanismData(suite);
         return suite.storedDeployedAddress;
     }
 
     /// @return Its creation code, on every network.
-    function deployStepData(DeploySuite memory suite, uint256) internal pure returns (bytes memory) {
+    function deployStepData(DeployDeclaration memory, DeploySuite memory suite, uint256) internal pure returns (bytes memory) {
         checkMechanismData(suite);
         return suite.creationCode;
     }
 
-    function deployStep(DeploySuite memory suite)
+    function deployStep(DeployDeclaration memory, DeploySuite memory suite)
         internal
         pure
         returns (function(Vm, string memory, address, bytes memory) internal returns (address))
@@ -98,8 +98,8 @@ library LibRainDeployZoltuMechanism {
     /// Deploys through the etched Zoltu factory with the declared dependencies etched, refusing
     /// `ZoltuDerivationMismatch` where the factory and `LibRainDeploy.zoltuAddress` disagree.
     /// @return Its one address, once per each of its `networks`.
-    function deployLocally(Vm vm, DeploySuite memory suite) internal returns (address[] memory) {
-        address expected = deployedAddress(suite, 0);
+    function deployLocally(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal returns (address[] memory) {
+        address expected = deployedAddress(d, suite, 0);
         LibRainDeploy.etchDependencies(vm, suite.dependencies);
         vm.etch(expected, hex"");
         vm.resetNonce(expected);
@@ -114,21 +114,21 @@ library LibRainDeployZoltuMechanism {
         return deployed;
     }
 
-    function deployLocallyOnChain(Vm vm, DeploySuite memory suite) internal {
-        deployLocally(vm, suite);
+    function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
+        deployLocally(d, vm, suite);
     }
 
     /// Its one address covers every network, so there is nothing to add.
-    function addUnrecordedNetworks(DeploySuite memory suite, DeploySuite memory, uint256[] memory) internal pure {
+    function addUnrecordedNetworks(DeployDeclaration memory, DeploySuite memory suite, DeploySuite memory, uint256[] memory) internal pure {
         checkMechanismData(suite);
     }
 
     /// A Zoltu release records no networks beyond its declared ones.
-    function addRecordedNetworks(DeploySuite memory suite) internal pure {
+    function addRecordedNetworks(DeployDeclaration memory, DeploySuite memory suite) internal pure {
         checkMechanismData(suite);
     }
 
-    function checkNetworkFrozen(DeploySuite memory frozen, string memory, uint256, address) internal pure {
+    function checkNetworkFrozen(DeployDeclaration memory, DeploySuite memory frozen, string memory, uint256, address) internal pure {
         checkMechanismData(frozen);
     }
 
@@ -147,7 +147,7 @@ library LibRainDeployZoltuMechanism {
 
     function checkNetwork(DeployDeclaration memory, string memory, uint256) internal pure {}
 
-    function logVerification(Vm vm, string[] memory networks, DeploySuite memory suite, address[] memory deployed)
+    function logVerification(DeployDeclaration memory, Vm vm, string[] memory networks, DeploySuite memory suite, address[] memory deployed)
         internal
         pure
     {
@@ -155,7 +155,7 @@ library LibRainDeployZoltuMechanism {
         LibRainDeploy.logVerifyCommands(vm, networks, deployed[0], suite.artifactPath);
     }
 
-    function writeSuiteSnapshot(Vm vm, SnapshotFile memory file, DeploySuite memory suite)
+    function writeSuiteSnapshot(DeployDeclaration memory, Vm vm, SnapshotFile memory file, DeploySuite memory suite)
         internal
         returns (string memory)
     {
@@ -174,7 +174,7 @@ library LibRainDeployZoltuMechanism {
 
     /// Refuses `FrozenSnapshotMechanismDataUnexpected` for a record declaring `MECHANISM_DATA`.
     /// @return The expression of `mechanismData()`.
-    function releasedMechanismData(Vm vm, string memory path, string memory) internal view returns (string memory) {
+    function releasedMechanismData(DeployDeclaration memory, Vm vm, string memory path, string memory) internal view returns (string memory) {
         if (LibRainDeploySnapshot.recordDeclaresMechanismData(vm, path)) {
             revert FrozenSnapshotMechanismDataUnexpected(path);
         }
@@ -183,7 +183,7 @@ library LibRainDeployZoltuMechanism {
 
     /// @param root The import root of this package's source root.
     /// @return The import of this library that `releasedMechanismData`'s expression needs.
-    function releasedImport(string memory root) internal pure returns (string memory) {
+    function releasedImport(DeployDeclaration memory, string memory root) internal pure returns (string memory) {
         return
             string.concat("import {LibRainDeployZoltuMechanism} from \"", root, ZOLTU_MECHANISM_SOURCE_SUBPATH, "\";\n");
     }
