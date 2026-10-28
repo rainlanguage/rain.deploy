@@ -16,7 +16,7 @@ import {
 } from "../../abstract/MockCreate2DeploySuites.sol";
 import {MockCreate2Deploy} from "../../concrete/MockCreate2Deploy.sol";
 import {MockCreate2Factory} from "../../concrete/MockCreate2Factory.sol";
-import {MockChainDependentOwner} from "../../concrete/MockChainDependentOwner.sol";
+import {MockChainOriginOwned} from "../../concrete/MockChainOriginOwned.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 
@@ -133,9 +133,9 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         assertFalse(anyForkExists());
     }
 
-    function chainDependentOwnerSuite(address deployer) internal view returns (DeploySuite memory) {
+    function originOwnedOnSuite(uint256 ownedOn) internal view returns (DeploySuite memory) {
         bytes memory creationCode = abi.encodePacked(
-            type(MockChainDependentOwner).creationCode, abi.encode(deployer, address(0xbeef), uint256(137))
+            type(MockChainOriginOwned).creationCode, abi.encode(ownedOn)
         );
         ChainDeploy[] memory networks = new ChainDeploy[](2);
         networks[0] = ChainDeploy({
@@ -158,7 +158,7 @@ contract RainDeployBroadcastMockMechanismTest is Test {
     /// refuses the broadcast, by its own address.
     function testSeatCheckDeploysEachNetworkUnderItsOwnChainId() external {
         address deployer = vm.addr(1);
-        DeploySuite memory suite = chainDependentOwnerSuite(deployer);
+        DeploySuite memory suite = originOwnedOnSuite(137);
         vm.expectRevert(
             abi.encodeWithSelector(SuiteSeatsDeployKey.selector, suite.suite, networkAddress(137, suite.creationCode))
         );
@@ -166,7 +166,7 @@ contract RainDeployBroadcastMockMechanismTest is Test {
     }
 
     function testSeatCheckLeavesNothingDeployed() external {
-        DeploySuite memory suite = chainDependentOwnerSuite(address(0xbeef));
+        DeploySuite memory suite = originOwnedOnSuite(1);
         sDeploy.externalCheckSeatsNoDeployKey(
             suite, names(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), vm.addr(1)
         );

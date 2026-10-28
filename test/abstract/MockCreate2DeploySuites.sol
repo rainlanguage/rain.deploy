@@ -314,22 +314,39 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
             (bool recorded,) = mockNetworkIndex(mechanism, chainIds[i]);
             (bool candidateHas, uint256 index) = mockNetworkIndex(candidateMechanism, chainIds[i]);
             if (!recorded && candidateHas) {
-                bytes memory data = candidateMechanism.networks[index].data;
-                added[count++] = ChainDeploy({
-                    chainId: chainIds[i],
-                    data: data,
-                    deployedAddress: mockCreate2Address(
-                        mechanism.factory, mockNetworkSalt(mechanism.salt, data), suite.creationCode
-                    )
-                });
+                added[count++] = mockDerivedNetwork(suite, candidateMechanism.networks[index]);
             }
         }
+        return withMockNetworks(suite, mechanism, added, count);
+    }
+
+    function mockDerivedNetwork(DeploySuite memory suite, ChainDeploy memory candidateNetwork)
+        internal
+        pure
+        returns (ChainDeploy memory)
+    {
+        MockCreate2Mechanism memory mechanism = decodeMock(suite);
+        return ChainDeploy({
+            chainId: candidateNetwork.chainId,
+            data: candidateNetwork.data,
+            deployedAddress: mockCreate2Address(
+                mechanism.factory, mockNetworkSalt(mechanism.salt, candidateNetwork.data), suite.creationCode
+            )
+        });
+    }
+
+    function withMockNetworks(
+        DeploySuite memory suite,
+        MockCreate2Mechanism memory mechanism,
+        ChainDeploy[] memory more,
+        uint256 count
+    ) internal pure returns (DeploySuite memory) {
         ChainDeploy[] memory networks = new ChainDeploy[](mechanism.networks.length + count);
         for (uint256 i = 0; i < mechanism.networks.length; i++) {
             networks[i] = mechanism.networks[i];
         }
         for (uint256 i = 0; i < count; i++) {
-            networks[mechanism.networks.length + i] = added[i];
+            networks[mechanism.networks.length + i] = more[i];
         }
         mechanism.networks = networks;
         return withMock(suite, mechanism);
@@ -352,15 +369,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         if (mechanism.networks.length == 0) {
             revert ExtendedNetworksUnexpected(suite.suite);
         }
-        ChainDeploy[] memory networks = new ChainDeploy[](mechanism.networks.length + extended.length);
-        for (uint256 i = 0; i < mechanism.networks.length; i++) {
-            networks[i] = mechanism.networks[i];
-        }
-        for (uint256 i = 0; i < extended.length; i++) {
-            networks[mechanism.networks.length + i] = extended[i];
-        }
-        mechanism.networks = networks;
-        return withMock(suite, mechanism);
+        return withMockNetworks(suite, mechanism, extended, extended.length);
     }
 
     function checkNetworkFrozen(DeploySuite memory frozen, string memory network, uint256 chainId, address where)
