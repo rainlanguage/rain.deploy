@@ -18,7 +18,10 @@ import {
     ZeroDependency
 } from "../../../src/abstract/RainDeployDeclarationChecks.sol";
 import {RainDeployVerifyDeclaration} from "../../../src/abstract/RainDeployVerifyDeclaration.sol";
+import {DeployDeclaration} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {
     DeclarationDefect,
     MOCK_EXTERNAL_RUNTIME_CODE,
@@ -36,6 +39,15 @@ import {
 } from "../../concrete/MockReachingDeployable.sol";
 
 contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVerifyDeclaration {
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, reachingReleased());
+        LibRainDeployDeclaration.addCandidates(d, reachingCandidates());
+        return d;
+    }
+
     function dispatchWorkflow()
         internal
         view
@@ -46,27 +58,27 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVeri
     }
 
     function externalCheckDispatchChoicesAreTheSuiteKeys() external view {
-        checkDispatchChoicesAreTheSuiteKeys();
+        checkDispatchChoicesAreTheSuiteKeys(declaration());
     }
 
     function externalCheckCandidateArtifactPathsAreSource() external view {
-        checkCandidateArtifactPathsAreSource();
+        checkCandidateArtifactPathsAreSource(declaration());
     }
 
     function externalCheckDependenciesAreNonZeroAndUnique() external view {
-        checkDependenciesAreNonZeroAndUnique();
+        checkDependenciesAreNonZeroAndUnique(declaration());
     }
 
     function externalCheckDependenciesAreTheEmbeddedDeployments() external view {
-        checkDependenciesAreTheEmbeddedDeployments();
+        checkDependenciesAreTheEmbeddedDeployments(declaration());
     }
 
     function externalCheckDependencyRuntimeCodeIsKnown() external view {
-        checkDependencyRuntimeCodeIsKnown();
+        checkDependencyRuntimeCodeIsKnown(declaration());
     }
 
     function externalCheckCandidateRuntimeCodeFitsEip170() external view {
-        checkCandidateRuntimeCodeFitsEip170();
+        checkCandidateRuntimeCodeFitsEip170(declaration());
     }
 
     function reachingAddress() internal pure returns (address) {
@@ -235,25 +247,25 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVeri
     }
 
     function testReleasedZeroDependency() external {
-        DefectiveReleaseDeploySuites declaration = new ZeroDependencyReleaseDeploySuites();
+        DefectiveReleaseDeploySuites defective = new ZeroDependencyReleaseDeploySuites();
         vm.expectRevert(abi.encodeWithSelector(ZeroDependency.selector, "mock-deployable@0_0_1"));
-        declaration.externalCheckDependenciesAreNonZeroAndUnique();
+        defective.externalCheckDependenciesAreNonZeroAndUnique();
     }
 
     function testReleasedUndeclaredSibling() external {
-        DefectiveReleaseDeploySuites declaration = new UndeclaredSiblingReleaseDeploySuites();
+        DefectiveReleaseDeploySuites defective = new UndeclaredSiblingReleaseDeploySuites();
         vm.expectRevert(
             abi.encodeWithSelector(
                 UndeclaredDependency.selector, "mock-reaching-deployable@0_0_1", MOCK_DEPLOYABLE_ADDRESS
             )
         );
-        declaration.externalCheckDependenciesAreTheEmbeddedDeployments();
+        defective.externalCheckDependenciesAreTheEmbeddedDeployments();
     }
 
     function testReleasedUnknownDependency() external {
-        DefectiveReleaseDeploySuites declaration = new UnknownDependencyReleaseDeploySuites();
+        DefectiveReleaseDeploySuites defective = new UnknownDependencyReleaseDeploySuites();
         vm.expectRevert(abi.encodeWithSelector(UnknownDependency.selector, "mock-deployable@0_0_1", address(0xdead)));
-        declaration.externalCheckDependencyRuntimeCodeIsKnown();
+        defective.externalCheckDependencyRuntimeCodeIsKnown();
     }
 
     function testBlankAndCommentLinesAreInert() external pure {
