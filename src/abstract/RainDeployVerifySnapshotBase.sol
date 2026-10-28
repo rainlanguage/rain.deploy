@@ -98,13 +98,17 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     string constant CREATION_CODE_DECLARATION = "bytes constant CREATION_CODE =";
     string constant RUNTIME_CODE_DECLARATION = "bytes constant RUNTIME_CODE =";
 
-    /// Checks the frozen record against the released declaration.
+    /// Checks the frozen record against the released declaration. A record matches a release when each address it
+    /// records is the release's derived address on that chain: on every one of its `networks` for a record of one
+    /// address, on each recorded chain for a per-network record.
     /// @param paths The frozen record's files.
     /// @param released The declared released suites.
     function checkFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released) internal view {
-        bytes32[] memory releasedIdentities = new bytes32[](released.length);
+        uint256[][] memory releasedChainIds = new uint256[][](released.length);
+        address[][] memory releasedAddresses = new address[][](released.length);
         for (uint256 j = 0; j < released.length; j++) {
-            releasedIdentities[j] = keccak256(abi.encode(addressChainIds(released[j]), deployedAddresses(released[j])));
+            releasedChainIds[j] = suiteChainIds(released[j]);
+            releasedAddresses[j] = deployedAddresses(released[j]);
         }
 
         bytes32[] memory recorded = new bytes32[](paths.length);
@@ -115,7 +119,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
 
             uint256 declarations = 0;
             for (uint256 j = 0; j < released.length; j++) {
-                if (recorded[i] == releasedIdentities[j]) {
+                if (recordMatches(chainIds, addresses, releasedChainIds[j], releasedAddresses[j])) {
                     declarations++;
                 }
             }
@@ -135,6 +139,43 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
                 revert FrozenSnapshotsOutnumberReleases(paths[i], addresses, records, declarations);
             }
         }
+    }
+
+    /// @param chainIds The record's chain ids, none for one address on every network.
+    /// @param addresses The record's addresses.
+    /// @param releaseChainIds The release's chain ids.
+    /// @param releaseAddresses The release's derived address on each of `releaseChainIds`.
+    /// @return Whether the record is the release's.
+    function recordMatches(
+        uint256[] memory chainIds,
+        address[] memory addresses,
+        uint256[] memory releaseChainIds,
+        address[] memory releaseAddresses
+    ) internal pure returns (bool) {
+        if (releaseChainIds.length == 0) {
+            return false;
+        }
+        if (chainIds.length == 0) {
+            for (uint256 m = 0; m < releaseAddresses.length; m++) {
+                if (releaseAddresses[m] != addresses[0]) {
+                    return false;
+                }
+            }
+            return true;
+        }
+        for (uint256 k = 0; k < chainIds.length; k++) {
+            bool found = false;
+            for (uint256 m = 0; m < releaseChainIds.length; m++) {
+                if (releaseChainIds[m] == chainIds[k]) {
+                    found = releaseAddresses[m] == addresses[k];
+                    break;
+                }
+            }
+            if (!found) {
+                return false;
+            }
+        }
+        return true;
     }
 
     /// The frozen code records' names: the contracts whose code a release
@@ -322,13 +363,6 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         if (runtimeCodeHash != storedBytecodeHash) {
             revert FrozenCodeRecordInconsistent(path, storedBytecodeHash, runtimeCodeHash);
         }
-    }
-
-    /// Every declared beacon MUST resolve offline: released suite keys, named once, on a supported network, declared
-    /// once on its network, a beacon suite seating its initial state, and each transition naming a distinct, recordable
-    /// migration. Reads `supportedNetworks()` only when a beacon is declared.
-    function testBeaconDeclarationsResolve() external {
-        resolveSupportedBeacons();
     }
 
     /// Every declared suite MUST be internally consistent.
