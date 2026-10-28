@@ -3,7 +3,12 @@
 pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
-import {DeployDeclaration, DeployMechanismHandler, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployDeclaration,
+    DeployMechanismHandler,
+    DeploySuite,
+    SnapshotFile
+} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
@@ -108,17 +113,19 @@ library LibMockSaltMechanism {
         emit MockSaltVerification(suite.suite, deployed[0]);
     }
 
-    function writeSuiteSnapshot(
-        Vm vm,
-        string memory root,
-        string memory dir,
-        string memory contractName,
-        string memory spdxLicenseIdentifier,
-        string memory copyrightText,
-        DeploySuite memory suite
-    ) internal returns (string memory) {
+    function writeSuiteSnapshot(Vm vm, SnapshotFile memory file, DeploySuite memory suite)
+        internal
+        returns (string memory)
+    {
         string memory path = LibRainDeploySnapshot.writeSnapshot(
-            vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite.creationCode, suite.dependencies
+            vm,
+            file.root,
+            file.dir,
+            file.contractName,
+            file.spdxLicenseIdentifier,
+            file.copyrightText,
+            suite.creationCode,
+            suite.dependencies
         );
         vm.writeLine(
             path,
