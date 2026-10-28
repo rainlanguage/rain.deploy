@@ -2,7 +2,6 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
-import {ExternalDeployment} from "../../../src/abstract/RainDeployDeclarationChecks.sol";
 import {DeployDeclaration} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyDeclaration} from "../../../src/abstract/RainDeployVerifyDeclaration.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
@@ -21,19 +20,13 @@ contract RainDeployVerifyDeclarationTwoMechanismsTest is TwoMechanismDeploySuite
         LibMockSaltMechanism.extend(d);
         LibMockCreate2Mechanism.extend(d);
         addTwoMechanismCandidates(d);
+        d.sourceCreationCode = twoMechanismSourceCreationCode;
+        d.dispatchWorkflow = "test/fixture-dispatch/two-mechanisms.yaml";
         return d;
     }
 
-    function sourceCreationCode(string memory suite) internal pure override returns (bytes memory) {
+    function twoMechanismSourceCreationCode(string memory suite) internal pure returns (bytes memory) {
         if (keccak256(bytes(suite)) == keccak256("mock-create-two")) return type(MockDeployable).creationCode;
         return type(MockDeployableV2).creationCode;
-    }
-
-    function externalDeployments() internal pure override returns (ExternalDeployment[] memory) {
-        return new ExternalDeployment[](0);
-    }
-
-    function dispatchWorkflow() internal pure override returns (string memory) {
-        return "test/fixture-dispatch/two-mechanisms.yaml";
     }
 }
