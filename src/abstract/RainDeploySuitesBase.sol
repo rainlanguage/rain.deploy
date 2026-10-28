@@ -260,6 +260,10 @@ struct DeployCandidate {
 /// test contracts, and overrides `supportedNetworks` there too if it deploys to
 /// fewer than all of them. Nothing else is per suite and nothing else is per
 /// network.
+///
+/// The mechanism hooks are unimplemented, so that one abstract inherits exactly
+/// one mechanism base implementing them, `RainDeployZoltuSuitesBase` or an
+/// extension's, and composes with every role abstract without restating them.
 abstract contract RainDeploySuitesBase {
     /// Every FROZEN released suite, in any order. A released snapshot is
     /// immutable: its recorded bytes describe a deployment that already
@@ -389,51 +393,28 @@ abstract contract RainDeploySuitesBase {
         return new ChainDeploy[](0);
     }
 
-    /// Refuses `UnexpectedMechanismData` for a Zoltu suite carrying mechanism data.
-    /// @param suite The Zoltu suite.
-    function checkZoltuMechanismData(DeploySuite memory suite) internal pure {
-        if (suite.mechanismData.length != 0) {
-            revert UnexpectedMechanismData(suite.suite);
-        }
-    }
-
     /// The address a suite's mechanism puts it at on one network.
     /// @param suite The suite.
     /// @param chainId The network's chain id.
     /// @return The derived address on that network.
-    function deployedAddress(DeploySuite memory suite, uint256 chainId) internal view virtual returns (address) {
-        (chainId);
-        checkZoltuMechanismData(suite);
-        return LibRainDeploy.zoltuAddress(suite.creationCode);
-    }
+    function deployedAddress(DeploySuite memory suite, uint256 chainId) internal view virtual returns (address);
 
     /// The address a suite records for itself on one network.
     /// @param suite The suite.
     /// @param chainId The network's chain id.
     /// @return The recorded address on that network.
-    function recordedAddress(DeploySuite memory suite, uint256 chainId) internal view virtual returns (address) {
-        (chainId);
-        checkZoltuMechanismData(suite);
-        return suite.storedDeployedAddress;
-    }
+    function recordedAddress(DeploySuite memory suite, uint256 chainId) internal view virtual returns (address);
 
     /// The chain id each of a suite's addresses is for, in its address order; empty for one address on every network.
     /// @param suite The suite.
     /// @return The chain ids.
-    function addressChainIds(DeploySuite memory suite) internal view virtual returns (uint256[] memory) {
-        checkZoltuMechanismData(suite);
-        return new uint256[](0);
-    }
+    function addressChainIds(DeploySuite memory suite) internal view virtual returns (uint256[] memory);
 
     /// What a suite's mechanism step is handed on one network.
     /// @param suite The suite.
     /// @param chainId The network's chain id.
     /// @return The step data on that network.
-    function deployStepData(DeploySuite memory suite, uint256 chainId) internal view virtual returns (bytes memory) {
-        (chainId);
-        checkZoltuMechanismData(suite);
-        return suite.creationCode;
-    }
+    function deployStepData(DeploySuite memory suite, uint256 chainId) internal view virtual returns (bytes memory);
 
     /// A suite's mechanism as a `LibRainDeploy.deployStepToNetworks` step.
     /// @param suite The suite.
@@ -442,43 +423,18 @@ abstract contract RainDeploySuitesBase {
         internal
         view
         virtual
-        returns (function(Vm, string memory, address, bytes memory) internal returns (address))
-    {
-        checkZoltuMechanismData(suite);
-        return LibRainDeploy.zoltuDeployStep;
-    }
-
-    /// Etches each of a suite's declared dependencies at its address.
-    /// @param vm The Vm instance to etch with.
-    /// @param suite The suite.
-    function etchDependencies(Vm vm, DeploySuite memory suite) internal {
-        for (uint256 i = 0; i < suite.dependencies.length; i++) {
-            vm.etch(suite.dependencies[i].deployedAddress, suite.dependencies[i].runtimeCode);
-        }
-    }
+        returns (function(Vm, string memory, address, bytes memory) internal returns (address));
 
     /// Runs a suite's mechanism on the local EVM with its declared dependencies etched.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy.
     /// @return Where it landed, in its address order: the addresses `deployedAddresses` derives.
-    function deployLocally(Vm vm, DeploySuite memory suite) internal virtual returns (address[] memory) {
-        address[] memory deployed = deployedAddresses(suite);
-        etchDependencies(vm, suite);
-        vm.etch(deployed[0], hex"");
-        vm.resetNonce(deployed[0]);
-        address zoltuAddress = LibRainDeploy.etchAndDeployZoltu(vm, suite.creationCode);
-        if (zoltuAddress != deployed[0]) {
-            revert ZoltuDerivationMismatch(suite.suite, deployed[0], zoltuAddress);
-        }
-        return deployed;
-    }
+    function deployLocally(Vm vm, DeploySuite memory suite) internal virtual returns (address[] memory);
 
     /// `deployLocally` as the deploy to the network of `block.chainid` runs it.
     /// @param vm The Vm instance to etch with.
     /// @param suite The suite to deploy.
-    function deployLocallyOnChain(Vm vm, DeploySuite memory suite) internal virtual {
-        deployLocally(vm, suite);
-    }
+    function deployLocallyOnChain(Vm vm, DeploySuite memory suite) internal virtual;
 
     /// A suite with an entry for every network in play that its candidate has and it lacks.
     /// @param suite The suite.
@@ -489,15 +445,9 @@ abstract contract RainDeploySuitesBase {
         internal
         view
         virtual
-        returns (DeploySuite memory)
-    {
-        (candidate, chainIds);
-        checkZoltuMechanismData(suite);
-        return suite;
-    }
+        returns (DeploySuite memory);
 
-    /// A release with the networks declared for it beyond those it records appended. Refuses
-    /// `ExtendedNetworksUnexpected` for any.
+    /// A release with the networks declared for it beyond those it records appended.
     /// @param suite The release.
     /// @param extended The networks declared for it.
     /// @return The release with them.
@@ -505,16 +455,9 @@ abstract contract RainDeploySuitesBase {
         internal
         view
         virtual
-        returns (DeploySuite memory)
-    {
-        checkZoltuMechanismData(suite);
-        if (extended.length != 0) {
-            revert ExtendedNetworksUnexpected(suite.suite);
-        }
-        return suite;
-    }
+        returns (DeploySuite memory);
 
-    /// Refuses a release on a network that `frozen` neither records nor declares as extended. Refuses nothing.
+    /// Refuses a release on a network that `frozen` neither records nor declares as extended.
     /// @param frozen The release with its extended networks.
     /// @param network The network's name.
     /// @param chainId The network's chain id.
@@ -522,21 +465,13 @@ abstract contract RainDeploySuitesBase {
     function checkNetworkFrozen(DeploySuite memory frozen, string memory network, uint256 chainId, address where)
         internal
         view
-        virtual
-    {
-        (network, chainId, where);
-        checkZoltuMechanismData(frozen);
-    }
+        virtual;
 
     /// The beacon a suite's code reads its implementation from on one network, zero for none.
     /// @param suite The suite.
     /// @param chainId The network's chain id.
     /// @return The beacon.
-    function suiteBeacon(DeploySuite memory suite, uint256 chainId) internal view virtual returns (address) {
-        (chainId);
-        checkZoltuMechanismData(suite);
-        return address(0);
-    }
+    function suiteBeacon(DeploySuite memory suite, uint256 chainId) internal view virtual returns (address);
 
     /// Logs how to verify a broadcast suite's source.
     /// @param vm The Vm instance to format with.
@@ -545,11 +480,7 @@ abstract contract RainDeploySuitesBase {
     /// @param deployed Where it is on each network, positionally paired with `networks`.
     function logVerification(Vm vm, string[] memory networks, DeploySuite memory suite, address[] memory deployed)
         internal
-        virtual
-    {
-        checkZoltuMechanismData(suite);
-        LibRainDeploy.logVerifyCommands(vm, networks, deployed[0], suite.artifactPath);
-    }
+        virtual;
 
     /// Writes one snapshot of a suite, by its mechanism.
     /// @param vm The Vm instance for file operations.
@@ -568,15 +499,9 @@ abstract contract RainDeploySuitesBase {
         string memory spdxLicenseIdentifier,
         string memory copyrightText,
         DeploySuite memory suite
-    ) internal virtual returns (string memory) {
-        checkZoltuMechanismData(suite);
-        return LibRainDeploySnapshot.writeSnapshot(
-            vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite.creationCode, suite.dependencies
-        );
-    }
+    ) internal virtual returns (string memory);
 
-    /// The Solidity expression a generated released-suites lib gives a release's `mechanismData`. Refuses
-    /// `FrozenSnapshotMechanismDataUnexpected` for a record declaring `MECHANISM_DATA`.
+    /// The Solidity expression a generated released-suites lib gives a release's `mechanismData`.
     /// @param vm The Vm instance for file and string operations.
     /// @param path The release's record file.
     /// @param prefix The prefix the record's constants are aliased under.
@@ -585,14 +510,7 @@ abstract contract RainDeploySuitesBase {
         internal
         view
         virtual
-        returns (string memory)
-    {
-        (prefix);
-        if (LibRainDeploySnapshot.recordDeclaresMechanismData(vm, path)) {
-            revert FrozenSnapshotMechanismDataUnexpected(path);
-        }
-        return "\"\"";
-    }
+        returns (string memory);
 
     /// Every address a suite's mechanism derives for it, in its address order.
     /// @param suite The suite.
