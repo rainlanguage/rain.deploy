@@ -27,7 +27,7 @@ contract BuildScriptMockMechanismTest is Test {
         }
         MockCreate2BuildScriptHarness harness = new MockCreate2BuildScriptHarness();
         harness.setMockExtendedNetworksRoot(ROOT);
-        (,, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(ROOT, "mock-create2@0_0_1");
+        (,, string memory path) = LibRainDeployExtendedNetworks.extendedNetworksPath(ROOT, "mock-create-two@0_0_1");
 
         harness.externalRegenerateExtendedNetworks();
         bool writtenForNothing = vm.exists(path);
@@ -41,7 +41,7 @@ contract BuildScriptMockMechanismTest is Test {
         string[] memory paths = harness.externalExtendedNetworksPaths();
 
         harness.setMockExtendedNetworks(new ChainDeploy[](0));
-        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksRewritten.selector, "mock-create2@0_0_1", 0));
+        vm.expectRevert(abi.encodeWithSelector(ExtendedNetworksRewritten.selector, "mock-create-two@0_0_1", 0));
         harness.externalRegenerateExtendedNetworks();
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(ROOT, true);

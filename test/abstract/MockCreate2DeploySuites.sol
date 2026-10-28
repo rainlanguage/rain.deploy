@@ -117,7 +117,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         ChainDeploy[] memory networks = new ChainDeploy[](2);
         networks[0] = mockNetwork(42161);
         networks[1] = mockNetwork(137);
-        return mockSuite("mock-create2@0_0_1", address(0), networks);
+        return mockSuite("mock-create-two@0_0_1", address(0), networks);
     }
 
     /// The release's candidate, on Arbitrum One, Polygon and Base.
@@ -126,7 +126,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         networks[0] = mockNetwork(42161);
         networks[1] = mockNetwork(137);
         networks[2] = mockNetwork(8453);
-        return mockSuite("mock-create2", address(0), networks);
+        return mockSuite("mock-create-two", address(0), networks);
     }
 
     function releasedSuites() internal pure virtual override returns (DeploySuite[] memory) {

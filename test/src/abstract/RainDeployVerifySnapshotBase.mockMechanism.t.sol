@@ -14,15 +14,6 @@ import {MockCreate2DeploySuites, MockCreate2Mechanism} from "../../abstract/Mock
 /// @title RainDeployVerifySnapshotBaseMockMechanismTest
 /// @notice The snapshot group checks each network's recorded address through an overriding mechanism's hooks.
 contract RainDeployVerifySnapshotBaseMockMechanismTest is MockCreate2DeploySuites, RainDeployVerifySnapshotBase {
-    function releasedSuites()
-        internal
-        pure
-        override(RainDeploySuitesBase, MockCreate2DeploySuites)
-        returns (DeploySuite[] memory)
-    {
-        return new DeploySuite[](0);
-    }
-
     function externalCheckInternallyConsistent(DeploySuite memory suite) external {
         checkInternallyConsistent(suite);
     }
