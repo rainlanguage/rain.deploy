@@ -1689,7 +1689,7 @@ library LibRainDeploySnapshot {
         uint256 seenLength = 0;
         for (uint256 i = 0; i < paths.length; i++) {
             string memory mechanismImport =
-                LibRainDeployDeclaration.mechanismById(d, ids[i], paths[i]).releasedImport(root);
+                LibRainDeployDeclaration.mechanismById(d, ids[i], paths[i]).releasedImport(d, root);
             bytes32 hash = keccak256(bytes(mechanismImport));
             bool duplicate = false;
             for (uint256 j = 0; j < seenLength; j++) {
@@ -1772,7 +1772,7 @@ library LibRainDeploySnapshot {
         string memory prefix = releasedConstantPrefix(vm, path);
         string memory storedDeployedAddress;
         string memory mechanismData =
-            LibRainDeployDeclaration.mechanismById(d, id, path).releasedMechanismData(vm, path, prefix);
+            LibRainDeployDeclaration.mechanismById(d, id, path).releasedMechanismData(d, vm, path, prefix);
         {
             (, bool perNetwork) = recordedMechanismShape(vm, path);
             storedDeployedAddress = perNetwork ? string("address(0)") : string.concat(prefix, "_DEPLOYED_ADDRESS");
