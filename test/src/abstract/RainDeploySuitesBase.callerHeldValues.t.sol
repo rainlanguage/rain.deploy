@@ -6,7 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {DeployCandidate, DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
-import {ChainDeploy, LibRainDeployExtendedNetworks} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {LibMockNetworkRecord, MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
 import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {LibMockCreate2Mechanism} from "../../lib/LibMockCreate2Mechanism.sol";
 import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
@@ -95,9 +95,9 @@ contract RainDeploySuitesBaseCallerHeldValuesTest is Test, MockCreate2DeploySuit
         sMockRecordRoot = root;
         DeployDeclaration memory d = declaration();
         DeploySuite memory suite = mockRelease();
-        ChainDeploy[] memory recorded = new ChainDeploy[](1);
+        MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](1);
         recorded[0] = mockNetwork(56);
-        LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, suite.suite, recorded);
+        LibMockNetworkRecord.write(vm, root, suite.suite, recorded);
         bytes32 declarationBefore = declarationHash(d);
 
         addRecordedNetworks(d, suite);
