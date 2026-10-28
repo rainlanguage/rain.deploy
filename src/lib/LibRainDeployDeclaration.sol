@@ -19,12 +19,12 @@ library LibRainDeployDeclaration {
     string constant DISPATCH_WORKFLOW = ".github/workflows/manual-sol-artifacts.yaml";
 
     /// Sets `d.networks` to every one of Rain's networks, `d.dispatchWorkflow` to `DISPATCH_WORKFLOW` and
-    /// `d.deployNetworks` to `everyNetwork`.
+    /// `d.deployNetworks` to a copy of `d.networks`.
     /// @param d The declaration, mutated.
     function extend(DeployDeclaration memory d) internal pure {
         d.networks = LibRainDeploy.supportedNetworks();
         d.dispatchWorkflow = DISPATCH_WORKFLOW;
-        d.deployNetworks = everyNetwork;
+        d.deployNetworks = everyNetwork(d);
     }
 
     /// @param d The declaration.
