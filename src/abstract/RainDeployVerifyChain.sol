@@ -7,7 +7,6 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DerivedDeploy, RainDeployVerifyBase, ResolvedBeacon} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
-import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {DeployBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
 
 /// Thrown when `requiresSuiteOn` requires a suite on none of the networks
@@ -15,7 +14,7 @@ import {DeployBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol"
 /// @param suite The suite.
 error SuiteRequiredNowhere(string suite);
 
-/// Thrown when a beacon proxy suite is required on a network where `beacons()` declares no beacon at the
+/// Thrown when a suite `suiteBeacon` names a beacon for is required on a network where `beacons()` declares no beacon at the
 /// proxy's beacon, so nothing would check what the proxy delegates into there.
 /// @param suite The beacon proxy suite.
 /// @param network The network.
@@ -41,11 +40,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// Checks every suite and every beacon on the given networks against each, forking each network once with
     /// `forkVm`, with `resolveBeacons`'s refusals raised before forking. With no suites, only the networks a beacon is
     /// on are forked.
-    /// A per-network suite is checked on the networks it records and those `extendedNetworks` declares for it. On any
-    /// other network it is required on it is refused before any network is forked: with `ExtendedNetworkUnfrozen`,
-    /// naming the address its candidate's init data derives there, whether or not anything is live at it, or with
-    /// `CloneNetworkUndeclared` where its candidate has no entry there.
-    /// A beacon proxy suite is refused `BeaconProxyBeaconUndeclared` before forking on a network it is required on
+    /// A suite is refused `checkNetworkFrozen`'s refusals before any network is forked on each network it is required on.
+    /// A suite `suiteBeacon` names a beacon for is refused `BeaconProxyBeaconUndeclared` before forking on a network it is required on
     /// where `beacons()` declares no beacon at its beacon; the beacon's own checks then cover what the proxy
     /// delegates into. Those checks read the beacon's current state only: how the proxy was initialized, under
     /// whichever implementation the beacon served when it was deployed, is not read.
@@ -96,9 +92,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         for (uint256 i = 0; i < networks.length; i++) {
             addresses[i] = new address[](suites.length);
             for (uint256 j = 0; j < suites.length; j++) {
-                addresses[i][j] = LibRainDeployMechanism.deployedAddress(suites[j], networks[i].chainId);
+                addresses[i][j] = deployedAddress(suites[j], networks[i].chainId);
                 if (requiresSuiteOn(suites[j], networks[i].name)) {
-                    LibRainDeployMechanism.checkNetworkFrozen(
+                    checkNetworkFrozen(
                         frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]
                     );
                     checkBeaconProxyBeaconDeclared(suites[j], networks[i], resolved);
@@ -125,7 +121,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         }
     }
 
-    /// Refuses `BeaconProxyBeaconUndeclared` when `suite` is a beacon proxy and no beacon in `resolved` is its beacon
+    /// Refuses `BeaconProxyBeaconUndeclared` when `suiteBeacon` names a beacon for `suite` and no beacon in `resolved` is it
     /// on `network`.
     /// @param suite The suite.
     /// @param network The network it is required on.
@@ -134,11 +130,11 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         DeploySuite memory suite,
         SupportedNetwork memory network,
         ResolvedBeacon[] memory resolved
-    ) internal pure {
-        if (!LibRainDeployMechanism.isBeaconProxy(suite)) {
+    ) internal view {
+        address beacon = suiteBeacon(suite, network.chainId);
+        if (beacon == address(0)) {
             return;
         }
-        address beacon = LibRainDeployMechanism.cloneTargetOn(suite, network.chainId).implementation;
         for (uint256 i = 0; i < resolved.length; i++) {
             if (resolved[i].chainId == network.chainId && resolved[i].beacon.beacon == beacon) {
                 return;
