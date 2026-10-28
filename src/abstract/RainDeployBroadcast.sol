@@ -132,7 +132,27 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         addUnrecordedNetworks(d, suite, candidate, LibRainDeploy.networkChainIds(configs));
         checkNetworksFrozen(d, frozen, suite, networks);
         NetworkDeploys memory deploys = networkDeploys(d, suite, configs);
-        uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
+        uint256[] memory forkIds = deployToConfigs(d, vm, configs, deployerPrivateKey, suite, deploys);
+        logVerification(d, vm, networks, suite, deploys.expectedAddresses);
+        return (deploys.expectedAddresses, forkIds);
+    }
+
+    /// @param d The declaration.
+    /// @param vm The Vm instance to broadcast with.
+    /// @param configs The networks.
+    /// @param deployerPrivateKey The deploy key.
+    /// @param suite The suite, on every network in `configs`.
+    /// @param deploys Its deploy step data and addresses on each network.
+    /// @return The fork each network was deployed on.
+    function deployToConfigs(
+        DeployDeclaration memory d,
+        Vm vm,
+        SupportedNetwork[] memory configs,
+        uint256 deployerPrivateKey,
+        DeploySuite memory suite,
+        NetworkDeploys memory deploys
+    ) internal returns (uint256[] memory) {
+        return LibRainDeploy.deployStepToNetworks(
             vm,
             configs,
             LibRainDeploy.rememberDeployer(vm, deployerPrivateKey),
@@ -141,8 +161,6 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             suite.storedBytecodeHash,
             suite.dependencies
         );
-        logVerification(d, vm, networks, suite, deploys.expectedAddresses);
-        return (deploys.expectedAddresses, forkIds);
     }
 
     /// @param d The declaration.
