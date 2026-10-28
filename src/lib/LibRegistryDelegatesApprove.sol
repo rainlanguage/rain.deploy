@@ -261,26 +261,39 @@ library LibRegistryDelegatesApprove {
                 count++;
             }
         }
-        bytes[] memory batch = new bytes[](count);
-        for (uint256 i = 0; i < count; i++) {
-            batch[i] = calls[i];
-        }
-        bool sends = count > 0;
-        // A lone call goes as itself, which the device decodes; only two or
-        // more need `multicall`.
-        bytes memory data = count == 1 ? batch[0] : abi.encodeCall(Multicall.multicall, (batch));
-        if (sends) {
+        bytes memory data = transactionCalldata(calls, count);
+        if (count > 0) {
             record = string.concat(record, "\n  Calldata: ", vm.toString(data));
         }
         console2.log(record);
-        if (sends) {
+        if (count > 0) {
             vm.startBroadcast(authority);
             // The registry's calls return nothing that is read.
             // slither-disable-next-line unused-return
             Address.functionCall(r.registry, data);
             vm.stopBroadcast();
         }
-        return (sends, record);
+        return (count > 0, record);
+    }
+
+    /// The calldata of one network's transaction over the first `count` of
+    /// `calls`: a lone call as itself, which the device decodes; two or more as
+    /// one `multicall`.
+    /// @param calls The calls, the first `count` of them in use.
+    /// @param count How many are in use.
+    /// @return The calldata, empty when `count` is zero.
+    function transactionCalldata(bytes[] memory calls, uint256 count) internal pure returns (bytes memory) {
+        if (count == 0) {
+            return "";
+        }
+        if (count == 1) {
+            return calls[0];
+        }
+        bytes[] memory batch = new bytes[](count);
+        for (uint256 i = 0; i < count; i++) {
+            batch[i] = calls[i];
+        }
+        return abi.encodeCall(Multicall.multicall, (batch));
     }
 
     /// Every input refusal of `approveOnNetworks`, in order — the sender, the
