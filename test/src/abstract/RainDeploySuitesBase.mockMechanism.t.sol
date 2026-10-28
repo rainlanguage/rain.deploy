@@ -333,6 +333,7 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         string memory expression = sDeploy.externalReleasedMechanismData(vm, path, "V0_0_1");
         DeploySuite memory zoltu = sDeploy.externalMockRelease();
         zoltu.mechanismData = "";
+        vm.etch(LibRainDeploy.zoltuAddress(zoltu.creationCode), hex"");
         string memory zoltuPath =
             sDeploy.externalWriteSuiteSnapshot(vm, root, "0_0_2", "MockDeployable", "LicenseRef-DCL-1.0", "Copyright", zoltu);
         string memory zoltuExpression = sDeploy.externalReleasedMechanismData(vm, zoltuPath, "V0_0_2");

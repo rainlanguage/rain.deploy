@@ -88,13 +88,14 @@ contract RainDeployBroadcastMockMechanismTest is Test {
     /// address the release's derivation gives it there.
     function testBroadcastRefusesAnUnfrozenCandidateNetworkBeforeAnyFork() external {
         DeploySuite memory release = sDeploy.externalMockRelease();
+        DeploySuite memory candidate = sDeploy.externalMockCandidate();
         vm.expectRevert(
             abi.encodeWithSelector(
                 MockCreate2NetworkUnfrozen.selector, release.suite, LibRainDeploy.BASE, networkAddress(8453)
             )
         );
         sDeploy.externalDeployAndBroadcast(
-            vm, names(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE), 1, release, sDeploy.externalMockCandidate()
+            vm, names(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE), 1, release, candidate
         );
         assertFalse(anyForkExists());
     }
