@@ -6,6 +6,7 @@ import {DeployCandidate, DeployDeclaration, DeploySuite} from "../../../src/abst
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {DeployDependency, LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 
@@ -14,11 +15,13 @@ import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 /// for them on each network, before the suite's own address.
 contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
     function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
-        declared.released = declaredReleased();
-        declared.candidates = declaredCandidates();
-        declared.networks = declaredNetworks();
-        return declared;
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        d.networks = declaredNetworks();
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
     }
 
 
@@ -51,7 +54,7 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
             storedRuntimeCode: type(MockDeployable).runtimeCode,
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: dependencies,
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
     }
 
@@ -69,7 +72,7 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
 
     /// Puts the release's dependencies, and the release at its address, on every fork.
     function setUp() external {
-        DeploySuite memory release = releasedSuites()[0];
+        DeploySuite memory release = declaration().released[0];
         for (uint256 i = 0; i < release.dependencies.length; i++) {
             vm.etch(release.dependencies[i].deployedAddress, release.dependencies[i].runtimeCode);
             vm.makePersistent(release.dependencies[i].deployedAddress);
@@ -81,7 +84,7 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
     /// External wrapper for `checkDeployedOnSupportedNetworks`.
     /// @param suites The suites to check.
     function externalCheckDeployedOnSupportedNetworks(DeploySuite[] memory suites) external {
-        checkDeployedOnSupportedNetworks(suites);
+        checkDeployedOnSupportedNetworks(declaration(), suites);
     }
 
     /// The release with one more declared dependency.
@@ -89,7 +92,7 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
     /// @return The release, as the one suite to check.
     function releaseDeclaring(DeployDependency memory dependency) internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);
-        suites[0] = releasedSuites()[0];
+        suites[0] = declaration().released[0];
         DeployDependency[] memory dependencies = new DeployDependency[](suites[0].dependencies.length + 1);
         for (uint256 i = 0; i < suites[0].dependencies.length; i++) {
             dependencies[i] = suites[0].dependencies[i];
@@ -173,7 +176,7 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
     /// on Arbitrum One naming it.
     function testSecondSuitesDependencyAbsentFromOneNetworkIsRefusedNamingThatNetworkAndDependency() external {
         DeploySuite[] memory suites = new DeploySuite[](2);
-        suites[0] = releasedSuites()[0];
+        suites[0] = declaration().released[0];
         suites[1] = releaseDeclaring(
             DeployDependency({deployedAddress: POLYGON_SYSTEM_CONTRACT, runtimeCode: polygonSystemContractCode()})
         )[0];
@@ -188,22 +191,22 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
     /// With the release gone from Polygon, the first network checked, the suite is refused as not
     /// deployed there.
     function testReleaseGoneIsRefusedAsNotDeployedOnTheFirstNetwork() external {
-        address deployed = releasedSuites()[0].storedDeployedAddress;
+        address deployed = declaration().released[0].storedDeployedAddress;
         vm.etch(deployed, hex"");
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeploy.NotDeployedOnNetwork.selector, LibRainDeploy.POLYGON, deployed)
         );
-        this.externalCheckDeployedOnSupportedNetworks(releasedSuites());
+        this.externalCheckDeployedOnSupportedNetworks(declaration().released);
     }
 
     /// On a network where the suite's dependency AND its address both fail, the dependency is the
     /// refusal.
     function testDependencyRefusalPrecedesTheAddressRefusalOnOneNetwork() external {
-        vm.etch(releasedSuites()[0].storedDeployedAddress, hex"");
+        vm.etch(declaration().released[0].storedDeployedAddress, hex"");
         vm.etch(DEPENDENCY, hex"");
         vm.expectRevert(
             abi.encodeWithSelector(LibRainDeploy.MissingDependency.selector, LibRainDeploy.POLYGON, DEPENDENCY)
         );
-        this.externalCheckDeployedOnSupportedNetworks(releasedSuites());
+        this.externalCheckDeployedOnSupportedNetworks(declaration().released);
     }
 }
