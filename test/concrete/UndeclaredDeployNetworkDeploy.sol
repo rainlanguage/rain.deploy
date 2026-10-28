@@ -8,7 +8,6 @@ import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.s
 import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExampleDeployScript} from "../abstract/ExampleDeployScript.sol";
 
-/// A deploy network that is no network alias at all.
 string constant UNALIASED_DEPLOY_NETWORK = "unaliased";
 
 /// @title UndeclaredDeployNetworkDeploy
