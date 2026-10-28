@@ -70,10 +70,10 @@ contract LibConfigRegistryApproveTest is Test {
         return hashed;
     }
 
-    /// The `multicall` calldata over `calls`, built from the selector rather
+    /// The `multicall` calldata over `batch`, built from the selector rather
     /// than the library's encoding.
-    function multicallData(bytes[] memory calls) internal pure returns (bytes memory) {
-        return abi.encodeWithSelector(MULTICALL_SELECTOR, calls);
+    function multicallData(bytes[] memory batch) internal pure returns (bytes memory) {
+        return abi.encodeWithSelector(MULTICALL_SELECTOR, batch);
     }
 
     function calls(bytes memory only) internal pure returns (bytes[] memory) {
