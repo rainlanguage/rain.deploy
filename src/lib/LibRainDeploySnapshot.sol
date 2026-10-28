@@ -1681,13 +1681,15 @@ library LibRainDeploySnapshot {
         string memory suitesImportPath,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
-        string memory imports =
-            string.concat("import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n");
+        string memory imports = string.concat(
+            "import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n"
+        );
         string memory root = importRoot(suitesImportPath);
         bytes32[] memory seen = new bytes32[](paths.length);
         uint256 seenLength = 0;
         for (uint256 i = 0; i < paths.length; i++) {
-            string memory mechanismImport = LibRainDeployDeclaration.mechanismById(d, ids[i], paths[i]).releasedImport(root);
+            string memory mechanismImport =
+                LibRainDeployDeclaration.mechanismById(d, ids[i], paths[i]).releasedImport(root);
             bytes32 hash = keccak256(bytes(mechanismImport));
             bool duplicate = false;
             for (uint256 j = 0; j < seenLength; j++) {
@@ -1873,6 +1875,32 @@ library LibRainDeploySnapshot {
         );
     }
 
+    /// The body of a generated released-suites lib: its import block then its library block, over one
+    /// `recordedMechanismIds` read of `paths`.
+    /// @param vm The Vm instance for file and string operations.
+    /// @param paths The record's files, in the order they are emitted.
+    /// @param libraryName The generated library's name.
+    /// @param contractName The contract the released record describes.
+    /// @param template The candidate declaration the metadata comes from.
+    /// @param d The declaration whose mechanism for each record gives its import and entry.
+    /// @param suitesImportPath The path the emitted lib reaches the suite types by.
+    /// @return The body.
+    function releasedLibBody(
+        Vm vm,
+        string[] memory paths,
+        string memory libraryName,
+        string memory contractName,
+        DeploySuite memory template,
+        DeployDeclaration memory d,
+        string memory suitesImportPath
+    ) internal view returns (string memory) {
+        bytes32[] memory ids = recordedMechanismIds(vm, paths);
+        return string.concat(
+            releasedImportBlock(vm, paths, ids, suitesImportPath, d),
+            releasedLibraryBlock(vm, libraryName, contractName, paths, ids, template, d)
+        );
+    }
+
     /// Generate the released-suites lib for a repo's frozen record.
     /// @param vm The Vm instance for file operations.
     /// @param libDir The directory to write the lib into — `LIB_DIR` for a repo's real tree.
@@ -1898,20 +1926,15 @@ library LibRainDeploySnapshot {
     ) internal returns (string memory) {
         string memory libraryName = releasedLibraryName(contractName);
         string memory path = pathForLib(libDir, libraryName);
-        // `paths` is scoped away before the write, and the body built first,
-        // because `libDir` is one local past what this function's stack frame
-        // holds: inlined into the `writeFile` call the way the other writers
-        // spell it, solc 0.8.25 without `--via-ir` refuses it as stack too
-        // deep. Not a style choice — the flat form does not compile.
-        string memory body;
-        {
-            string[] memory paths = recordPathsForContract(vm, recordRoot, contractName);
-            bytes32[] memory ids = recordedMechanismIds(vm, paths);
-            body = string.concat(
-                releasedImportBlock(vm, paths, ids, suitesImportPath, d),
-                releasedLibraryBlock(vm, libraryName, contractName, paths, ids, template, d)
-            );
-        }
+        string memory body = releasedLibBody(
+            vm,
+            recordPathsForContract(vm, recordRoot, contractName),
+            libraryName,
+            contractName,
+            template,
+            d,
+            suitesImportPath
+        );
 
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.writeFile(path, string.concat(LibCodeGen.filePrefix(spdxLicenseIdentifier, copyrightText), "\n", body));
