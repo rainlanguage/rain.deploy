@@ -5,6 +5,7 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {Multicall} from "@openzeppelin-contracts-5.7.0/utils/Multicall.sol";
+import {Address} from "@openzeppelin-contracts-5.7.0/utils/Address.sol";
 
 import {IRegistryDelegatesV3} from "../interface/IRegistryDelegatesV3.sol";
 import {LibRegistryDelegates} from "./LibRegistryDelegates.sol";
@@ -24,8 +25,9 @@ struct RegistryDelegation {
 /// @notice An account's delegation side of a registry with
 /// `IRegistryDelegatesV3` delegation: approves one delegate for a list of
 /// scopes under the account on every network it is given, or revokes it, in
-/// one `multicall` per network signed by the account itself, and reads the
-/// approvals back. The registry is a
+/// one transaction per network signed by the account itself, and reads the
+/// approvals back. A transaction carrying one call is that call; two or more
+/// go as one `multicall`. The registry is a
 /// `RegistryDelegation`: `LibConfigRegistryApprove` and
 /// `LibMigrationRegistryApprove` each build one, and their scripts say how they
 /// are run.
@@ -213,8 +215,9 @@ library LibRegistryDelegatesApprove {
 
     /// Sets the approval of `delegate` for every scope, and unscoped when
     /// asked, under `authority` on the selected chain to `approve`, in one
-    /// `multicall` signed by `authority` over the approvals not in that state
-    /// there already. Logs each approval's current state, what is about to
+    /// transaction signed by `authority` over the approvals not in that state
+    /// there already: the call itself when there is one, a `multicall` when
+    /// there are more. Logs each approval's current state, what is about to
     /// happen to it, and the calldata sent.
     /// @param r The registry.
     /// @param vm The Vm instance to broadcast with.
@@ -263,15 +266,18 @@ library LibRegistryDelegatesApprove {
             batch[i] = calls[i];
         }
         bool sends = count > 0;
+        // A lone call goes as itself, which the device decodes; only two or
+        // more need `multicall`.
+        bytes memory data = count == 1 ? batch[0] : abi.encodeCall(Multicall.multicall, (batch));
         if (sends) {
-            record = string.concat(record, "\n  Calldata: ", vm.toString(abi.encodeCall(Multicall.multicall, (batch))));
+            record = string.concat(record, "\n  Calldata: ", vm.toString(data));
         }
         console2.log(record);
         if (sends) {
             vm.startBroadcast(authority);
-            // The registry's own calls return nothing.
+            // The registry's calls return nothing that is read.
             // slither-disable-next-line unused-return
-            Multicall(r.registry).multicall(batch);
+            Address.functionCall(r.registry, data);
             vm.stopBroadcast();
         }
         return (sends, record);

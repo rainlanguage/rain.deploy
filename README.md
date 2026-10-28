@@ -695,11 +695,12 @@ target and the registry address, then for each network its chain id, the size of
 the code at the delegate (`none` where the delegate has no code there: a Safe
 not yet deployed on that network), each name's current approval with `APPROVE`,
 `REVOKE` or `SKIP`, and, where any name is not `SKIP`, the exact `Calldata:` of
-that network's transaction. The transaction is `multicall` (selector
-`0xac9650d8`) over one `approveV5` (`0x50c453c7`) or `revokeV5` (`0x42213144`)
-per name not `SKIP`, each with the name hash and the delegate, then, with
-`UNSCOPED=true` and the unscoped line not `SKIP`, one `approveUnscopedV5`
-(`0xf2f0514c`) or `revokeUnscopedV5` (`0x9547ac1b`) with the delegate. The
+that network's transaction. With one call to make, the transaction is that call,
+which the device decodes. With more, it is `multicall` (selector `0xac9650d8`)
+over one `approveV5` (`0x50c453c7`) or `revokeV5` (`0x42213144`) per name not
+`SKIP`, each with the name hash and the delegate, then, with `UNSCOPED=true` and
+the unscoped line not `SKIP`, one `approveUnscopedV5` (`0xf2f0514c`) or
+`revokeUnscopedV5` (`0x9547ac1b`) with the delegate. For a `multicall` the
 device shows the registry as recipient, amount 0, the network, and that calldata
 as opaque data, so it may need blind signing enabled: compare the data on the
 device with the network's `Calldata:` line before confirming.

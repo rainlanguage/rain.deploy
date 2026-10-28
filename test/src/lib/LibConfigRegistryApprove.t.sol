@@ -200,9 +200,9 @@ contract LibConfigRegistryApproveTest is Test {
         assertEq(LibRegistryDelegates.approveCalldata(name, delegate, false), revokeData);
 
         deployRegistry();
-        vm.expectCall(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS, multicallData(calls(approveData)), 1);
+        vm.expectCall(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS, approveData, 1);
         this.externalApproveOnSelectedChain(AUTHORITY, one("x"), hashes(name), delegate, true);
-        vm.expectCall(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS, multicallData(calls(revokeData)), 1);
+        vm.expectCall(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS, revokeData, 1);
         this.externalApproveOnSelectedChain(AUTHORITY, one("x"), hashes(name), delegate, false);
     }
 
@@ -341,7 +341,7 @@ contract LibConfigRegistryApproveTest is Test {
         registry.approveV5(NAME, DELEGATE);
         bytes memory otherData = abi.encodePacked(bytes4(0x50c453c7), OTHER_NAME, uint256(uint160(DELEGATE)));
         uint64 nonce = vm.getNonce(AUTHORITY);
-        vm.expectCall(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS, multicallData(calls(otherData)), 1);
+        vm.expectCall(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS, otherData, 1);
         (bool sent, string memory record) =
             this.externalApproveOnSelectedChain(AUTHORITY, list("a.b", "c.d"), hashes(NAME, OTHER_NAME), DELEGATE, true);
         assertTrue(sent);
@@ -352,7 +352,7 @@ contract LibConfigRegistryApproveTest is Test {
             string.concat(
                 LibRegistryDelegatesApprove.describeNetwork(vm, "base", base().chainId, 0),
                 "\n  a.b: approved, SKIP: already approved\n  c.d: not approved, APPROVE\n  Calldata: ",
-                vm.toString(multicallData(calls(otherData)))
+                vm.toString(otherData)
             )
         );
     }
@@ -376,9 +376,7 @@ contract LibConfigRegistryApproveTest is Test {
             string.concat(
                 LibRegistryDelegatesApprove.describeNetwork(vm, "base", base().chainId, 0),
                 "\n  a.b: approved, REVOKE\n  Calldata: ",
-                vm.toString(
-                    multicallData(calls(abi.encodePacked(bytes4(0x42213144), NAME, uint256(uint160(DELEGATE)))))
-                )
+                vm.toString(abi.encodePacked(bytes4(0x42213144), NAME, uint256(uint160(DELEGATE))))
             )
         );
         this.externalCheckApprovalOnSelectedChain(hashes(NAME), DELEGATE, false);
@@ -624,7 +622,7 @@ contract LibConfigRegistryApproveTest is Test {
         assertTrue(registry.approvedUnscopedV5(AUTHORITY, DELEGATE));
         bytes[] memory batch = new bytes[](1);
         batch[0] = abi.encodePacked(bytes4(0x9547ac1b), uint256(uint160(DELEGATE)));
-        vm.expectCall(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS, multicallData(batch), 1);
+        vm.expectCall(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS, batch[0], 1);
         (bool sent,) = this.externalApproveOnSelectedChain(AUTHORITY, none, new bytes32[](0), DELEGATE, false);
         assertTrue(sent);
         assertFalse(registry.approvedUnscopedV5(AUTHORITY, DELEGATE));
