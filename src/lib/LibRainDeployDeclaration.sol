@@ -253,7 +253,8 @@ library LibRainDeployDeclaration {
                     artifactPath: "",
                     dependencies: new DeployDependency[](0),
                     mechanismData: "",
-                    networks: new string[](0)
+                    networks: new string[](0),
+                    describedByMeta: ""
                 }),
                 found
             );
