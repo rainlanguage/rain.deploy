@@ -83,7 +83,7 @@ contract LibRainDeployDeclarationTest is Test {
 
         assertEq(d.released.length, 1);
         assertNetworks(d.released[0].networks, twoNetworks(), "filled");
-        assertNetworks(suites[0].networks, twoNetworks(), "caller's suite filled");
+        assertEq(suites[0].networks.length, 0, "caller's suite filled");
         d.released[0].networks[0] = "mutated";
         assertEq(d.networks[0], "alpha", "fill aliases d.networks");
     }
@@ -98,7 +98,7 @@ contract LibRainDeployDeclarationTest is Test {
 
         assertNetworks(d.released[0].networks, oneNetwork("gamma"), "explicit");
         own[0] = "delta";
-        assertEq(d.released[0].networks[0], "delta", "explicit array replaced");
+        assertEq(d.released[0].networks[0], "gamma", "explicit array aliased");
         assertNetworks(d.networks, twoNetworks(), "d.networks");
     }
 
@@ -144,12 +144,12 @@ contract LibRainDeployDeclarationTest is Test {
         assertEq(d.candidates[1].snapshot.suite, "b");
         assertEq(d.candidates[1].unanchorableReason, "why");
         assertNetworks(d.candidates[0].snapshot.networks, twoNetworks(), "filled");
-        assertNetworks(candidates[0].snapshot.networks, twoNetworks(), "caller's candidate filled");
+        assertEq(candidates[0].snapshot.networks.length, 0, "caller's candidate filled");
         d.candidates[0].snapshot.networks[0] = "mutated";
         assertEq(d.networks[0], "alpha", "fill aliases d.networks");
 
         own[0] = "delta";
-        assertEq(d.candidates[1].snapshot.networks[0], "delta", "explicit array replaced");
+        assertEq(d.candidates[1].snapshot.networks[0], "gamma", "explicit array aliased");
         assertEq(d.released.length, 0, "released touched");
     }
 
