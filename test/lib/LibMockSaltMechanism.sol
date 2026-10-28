@@ -192,8 +192,8 @@ library LibMockSaltMechanism {
         return string.concat(prefix, "_MECHANISM_DATA");
     }
 
-    function releasedImport(DeployDeclaration memory, string memory) internal pure returns (string memory) {
-        return "";
+    function releasedImport(DeployDeclaration memory, string memory root) internal pure returns (string memory) {
+        return string.concat("import {LibMockSaltMechanism} from \"", root, "../test/lib/LibMockSaltMechanism.sol\";\n");
     }
 
     function legacyRecordId(DeployDeclaration memory, Vm, string memory path) internal view returns (bytes32) {
