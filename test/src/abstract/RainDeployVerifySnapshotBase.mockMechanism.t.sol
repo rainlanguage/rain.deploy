@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {LibMockCreate2Mechanism} from "../../lib/LibMockCreate2Mechanism.sol";
+
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
@@ -22,7 +24,7 @@ contract RainDeployVerifySnapshotBaseMockMechanismTest is MockCreate2DeploySuite
         DeploySuite memory release = mockRelease();
         MockCreate2Mechanism memory mechanism = abi.decode(release.mechanismData, (MockCreate2Mechanism));
         mechanism.networks[index].deployedAddress = recorded;
-        release.mechanismData = abi.encode(mechanism);
+        release.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
         return release;
     }
 

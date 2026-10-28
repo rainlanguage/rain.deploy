@@ -76,7 +76,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
             storedRuntimeCode: type(MockDeployable).runtimeCode,
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new DeployDependency[](0),
-            mechanismData: abi.encode(
+            mechanismData: LibMockCreate2Mechanism.encode(
                 MockCreate2Mechanism({
                     factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, beacon: beacon, networks: networks
                 })

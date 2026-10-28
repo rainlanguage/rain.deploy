@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {LibMockCreate2Mechanism} from "../../lib/LibMockCreate2Mechanism.sol";
+
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {SuiteSeatsDeployKey} from "../../../src/abstract/RainDeployBroadcast.sol";
@@ -126,7 +128,7 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         DeploySuite memory release = sDeploy.externalMockRelease();
         MockCreate2Mechanism memory mechanism = abi.decode(release.mechanismData, (MockCreate2Mechanism));
         mechanism.networks[1].deployedAddress = address(0x5a1e);
-        release.mechanismData = abi.encode(mechanism);
+        release.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.UnexpectedDeployedAddress.selector, address(0x5a1e), networkAddress(137)
@@ -150,7 +152,7 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         DeploySuite memory suite = sDeploy.externalMockRelease();
         suite.creationCode = creationCode;
         suite.dependencies = new DeployDependency[](0);
-        suite.mechanismData = abi.encode(
+        suite.mechanismData = LibMockCreate2Mechanism.encode(
             MockCreate2Mechanism({
                 factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, beacon: address(0), networks: networks
             })

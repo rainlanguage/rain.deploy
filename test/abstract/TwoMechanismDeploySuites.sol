@@ -57,7 +57,7 @@ abstract contract TwoMechanismDeploySuites is RainDeploySuitesBase {
             storedRuntimeCode: type(MockDeployable).runtimeCode,
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new DeployDependency[](0),
-            mechanismData: abi.encode(
+            mechanismData: LibMockCreate2Mechanism.encode(
                 MockCreate2Mechanism({
                     factory: MOCK_CREATE2_FACTORY, salt: MOCK_CREATE2_SALT, beacon: address(0), networks: networks
                 })
@@ -76,7 +76,7 @@ abstract contract TwoMechanismDeploySuites is RainDeploySuitesBase {
             storedRuntimeCode: type(MockDeployableV2).runtimeCode,
             artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
             dependencies: new DeployDependency[](0),
-            mechanismData: abi.encode(TWO_MECHANISM_SALT)
+            mechanismData: LibMockSaltMechanism.encode(TWO_MECHANISM_SALT)
         });
     }
 

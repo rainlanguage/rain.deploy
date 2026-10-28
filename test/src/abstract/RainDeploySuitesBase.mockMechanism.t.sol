@@ -2,6 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {LibMockCreate2Mechanism} from "../../lib/LibMockCreate2Mechanism.sol";
+
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite, ExtendedNetworksUnexpected} from "../../../src/abstract/RainDeploySuitesBase.sol";
@@ -63,7 +65,7 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
     {
         MockCreate2Mechanism memory mechanism = mechanismOf(suite);
         mechanism.networks = networks;
-        suite.mechanismData = abi.encode(mechanism);
+        suite.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
         return suite;
     }
 
@@ -309,7 +311,7 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         DeploySuite memory suite = sDeploy.externalMockRelease();
         MockCreate2Mechanism memory mechanism = mechanismOf(suite);
         mechanism.beacon = address(0xbeac);
-        suite.mechanismData = abi.encode(mechanism);
+        suite.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
         assertEq(sDeploy.externalSuiteBeacon(suite, 42161), address(0xbeac));
     }
 
