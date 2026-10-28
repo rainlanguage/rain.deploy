@@ -193,7 +193,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// No suite MAY declare the zero address, or one address twice, as a dependency.
-    function checkDependenciesAreNonZeroAndUnique(DeployDeclaration memory d) internal view {
+    function checkDependenciesAreNonZeroAndUnique(DeployDeclaration memory d) internal pure {
         DeploySuite[] memory suites = allSuites(d);
         for (uint256 i = 0; i < suites.length; i++) {
             DeployDependency[] memory deps = suites[i].dependencies;
