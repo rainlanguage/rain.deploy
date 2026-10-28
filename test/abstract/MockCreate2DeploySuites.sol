@@ -24,9 +24,8 @@ import {
 import {MockDeployable} from "../concrete/MockDeployable.sol";
 
 /// @title MockCreate2DeploySuites
-/// @notice A test-only declaration of `LibMockCreate2Mechanism` suites, resolved before Zoltu. A concrete taking the
-/// extended networks seam overrides `extendedNetworks` and `extendedNetworksRoot` with `mockExtendedNetworks` and
-/// `mockExtendedNetworksRoot`.
+/// @notice A test-only declaration of `LibMockCreate2Mechanism` suites, resolved before Zoltu. Its extended networks
+/// and their root are set from outside.
 abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
     ChainDeploy[] internal sMockExtendedNetworks;
 
@@ -36,7 +35,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         sMockExtendedNetworksRoot = root;
     }
 
-    function mockExtendedNetworksRoot() internal view returns (string memory) {
+    function extendedNetworksRoot() internal view virtual override returns (string memory) {
         if (bytes(sMockExtendedNetworksRoot).length == 0) {
             return LibRainDeploySnapshot.LIB_FS_ROOT;
         }
@@ -114,7 +113,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         return candidates;
     }
 
-    function mockExtendedNetworks() internal view returns (ChainDeploy[] memory) {
+    function extendedNetworks(string memory) internal view virtual override returns (ChainDeploy[] memory) {
         return sMockExtendedNetworks;
     }
 

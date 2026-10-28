@@ -28,4 +28,22 @@ contract MockCreate2BuildScriptHarness is MockCreate2DeploySuites, BuildScript {
     function externalExtendedNetworksPaths() external view returns (string[] memory) {
         return extendedNetworksPaths();
     }
+
+    function extendedNetworksRoot()
+        internal
+        view
+        override(RainDeploySuitesBase, MockCreate2DeploySuites)
+        returns (string memory)
+    {
+        return super.extendedNetworksRoot();
+    }
+
+    function extendedNetworks(string memory suite)
+        internal
+        view
+        override(RainDeploySuitesBase, MockCreate2DeploySuites)
+        returns (ChainDeploy[] memory)
+    {
+        return super.extendedNetworks(suite);
+    }
 }

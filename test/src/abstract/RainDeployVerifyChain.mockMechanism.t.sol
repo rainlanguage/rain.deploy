@@ -133,4 +133,22 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(root, true);
     }
+
+    function extendedNetworksRoot()
+        internal
+        view
+        override(RainDeploySuitesBase, MockCreate2DeploySuites)
+        returns (string memory)
+    {
+        return super.extendedNetworksRoot();
+    }
+
+    function extendedNetworks(string memory suite)
+        internal
+        view
+        override(RainDeploySuitesBase, MockCreate2DeploySuites)
+        returns (ChainDeploy[] memory)
+    {
+        return super.extendedNetworks(suite);
+    }
 }
