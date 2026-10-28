@@ -65,6 +65,7 @@ contract MissingDependencyDeploy is RainDeployBroadcast {
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "second-address-candidate",
                 creationCode: type(MockDeployable).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),

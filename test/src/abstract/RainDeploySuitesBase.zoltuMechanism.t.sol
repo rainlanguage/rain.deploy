@@ -31,6 +31,7 @@ contract RainDeploySuitesBaseZoltuMechanismTest is Test {
     /// @return The suite.
     function zoltuMockDeployableSuite(string memory suite) internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: new string[](0),
             suite: suite,
             creationCode: type(MockDeployable).creationCode,
             storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),

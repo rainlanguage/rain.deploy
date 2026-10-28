@@ -33,6 +33,7 @@ contract DuplicateDeploySuites is ExternalDeploySuites {
     /// @return The colliding suite.
     function collidingSuite() internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: new string[](0),
             suite: "collides",
             creationCode: CONFIG_REGISTRY_CREATION_CODE,
             storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,

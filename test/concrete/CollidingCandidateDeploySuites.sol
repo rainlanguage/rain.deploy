@@ -51,6 +51,7 @@ contract CollidingCandidateDeploySuites is ExternalDeploySuites {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "collides",
                 creationCode: CONFIG_REGISTRY_CREATION_CODE,
                 storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
@@ -64,6 +65,7 @@ contract CollidingCandidateDeploySuites is ExternalDeploySuites {
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "collides",
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),

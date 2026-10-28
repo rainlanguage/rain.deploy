@@ -53,6 +53,7 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
 
     function leafSuite(string memory key) internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: new string[](0),
             suite: key,
             creationCode: type(MockDeployable).creationCode,
             storedDeployedAddress: MOCK_DEPLOYABLE_ADDRESS,
@@ -70,6 +71,7 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
             DeployDependency({deployedAddress: MOCK_DEPLOYABLE_ADDRESS, runtimeCode: type(MockDeployable).runtimeCode});
         deps[1] = DeployDependency({deployedAddress: MOCK_EXTERNAL_ADDRESS, runtimeCode: MOCK_EXTERNAL_RUNTIME_CODE});
         return DeploySuite({
+            networks: new string[](0),
             suite: key,
             creationCode: type(MockReachingDeployable).creationCode,
             storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockReachingDeployable).creationCode),

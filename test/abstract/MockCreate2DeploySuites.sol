@@ -67,6 +67,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         returns (DeploySuite memory)
     {
         return DeploySuite({
+            networks: new string[](0),
             suite: key,
             creationCode: type(MockDeployable).creationCode,
             storedDeployedAddress: networks.length == 0

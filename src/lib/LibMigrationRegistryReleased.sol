@@ -155,7 +155,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_7_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_7_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[1] = DeploySuite({
             suite: "migration-registry@0_1_8",
@@ -165,7 +166,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_8_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_8_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[2] = DeploySuite({
             suite: "migration-registry@0_1_10",
@@ -175,7 +177,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_10_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_10_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[3] = DeploySuite({
             suite: "migration-registry@0_1_11",
@@ -185,7 +188,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_11_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_11_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[4] = DeploySuite({
             suite: "migration-registry@0_1_12",
@@ -195,7 +199,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_12_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_12_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[5] = DeploySuite({
             suite: "migration-registry@0_1_14",
@@ -205,7 +210,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_14_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_14_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[6] = DeploySuite({
             suite: "migration-registry@0_1_15",
@@ -215,7 +221,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_15_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_15_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[7] = DeploySuite({
             suite: "migration-registry@0_1_17",
@@ -225,7 +232,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_17_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_17_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[8] = DeploySuite({
             suite: "migration-registry@0_1_18",
@@ -235,7 +243,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_18_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_18_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[9] = DeploySuite({
             suite: "migration-registry@0_1_19",
@@ -245,7 +254,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_19_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_19_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[10] = DeploySuite({
             suite: "migration-registry@0_1_20",
@@ -255,7 +265,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_20_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_20_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[11] = DeploySuite({
             suite: "migration-registry@0_1_21",
@@ -265,7 +276,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_21_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_21_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[12] = DeploySuite({
             suite: "migration-registry@0_1_22",
@@ -275,7 +287,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_22_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_22_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[13] = DeploySuite({
             suite: "migration-registry@0_1_25",
@@ -285,7 +298,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_25_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_25_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[14] = DeploySuite({
             suite: "migration-registry@0_1_26",
@@ -295,7 +309,8 @@ library LibMigrationRegistryReleased {
             storedRuntimeCode: MigrationRegistry_0_1_26_RUNTIME_CODE,
             artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
             dependencies: abi.decode(MigrationRegistry_0_1_26_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         return suites;
     }

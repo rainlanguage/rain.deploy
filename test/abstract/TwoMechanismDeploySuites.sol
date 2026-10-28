@@ -50,6 +50,7 @@ abstract contract TwoMechanismDeploySuites is RainDeploySuitesBase {
             });
         }
         return DeploySuite({
+            networks: new string[](0),
             suite: "mock-create-two",
             creationCode: type(MockDeployable).creationCode,
             storedDeployedAddress: address(0),
@@ -67,6 +68,7 @@ abstract contract TwoMechanismDeploySuites is RainDeploySuitesBase {
 
     function saltCandidate() internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: new string[](0),
             suite: "mock-salt",
             creationCode: type(MockDeployableV2).creationCode,
             storedDeployedAddress: LibMockCreate2Mechanism.create2Address(

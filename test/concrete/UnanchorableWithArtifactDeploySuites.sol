@@ -48,6 +48,7 @@ contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "vendored-candidate",
                 creationCode: VENDORED_CREATION_CODE,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(VENDORED_CREATION_CODE),
@@ -61,6 +62,7 @@ contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "current-source-candidate",
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),

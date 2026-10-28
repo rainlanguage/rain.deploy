@@ -228,6 +228,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
 
     function declaredOlderTwin() internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: new string[](0),
             suite: "address-registry@0_1_10",
             creationCode: ADDRESS_REGISTRY_0_1_10_CREATION_CODE,
             storedDeployedAddress: ADDRESS_REGISTRY_0_1_10_DEPLOYED_ADDRESS,
@@ -241,6 +242,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
 
     function declaredNewerTwin() internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: new string[](0),
             suite: "address-registry@0_1_11",
             creationCode: ADDRESS_REGISTRY_0_1_11_CREATION_CODE,
             storedDeployedAddress: ADDRESS_REGISTRY_0_1_11_DEPLOYED_ADDRESS,
@@ -633,6 +635,7 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// @return The consistent `0_0_1` suite.
     function consistentSuite() internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: new string[](0),
             suite: "config-registry@0_0_1",
             creationCode: CONFIG_REGISTRY_CREATION_CODE,
             storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,

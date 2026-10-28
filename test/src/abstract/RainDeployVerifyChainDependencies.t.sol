@@ -41,6 +41,7 @@ contract RainDeployVerifyChainDependenciesTest is RainDeployVerifyChain {
         dependencies[0] =
             DeployDependency({deployedAddress: DEPENDENCY, runtimeCode: type(MockDeployableV2).runtimeCode});
         return DeploySuite({
+            networks: new string[](0),
             suite: key,
             creationCode: type(MockDeployable).creationCode,
             storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),

@@ -107,7 +107,8 @@ library LibAddressRegistryReleased {
             storedRuntimeCode: AddressRegistry_0_1_7_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_7_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[1] = DeploySuite({
             suite: "address-registry@0_1_8",
@@ -117,7 +118,8 @@ library LibAddressRegistryReleased {
             storedRuntimeCode: AddressRegistry_0_1_8_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_8_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[2] = DeploySuite({
             suite: "address-registry@0_1_10",
@@ -127,7 +129,8 @@ library LibAddressRegistryReleased {
             storedRuntimeCode: AddressRegistry_0_1_10_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_10_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[3] = DeploySuite({
             suite: "address-registry@0_1_11",
@@ -137,7 +140,8 @@ library LibAddressRegistryReleased {
             storedRuntimeCode: AddressRegistry_0_1_11_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_11_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[4] = DeploySuite({
             suite: "address-registry@0_1_12",
@@ -147,7 +151,8 @@ library LibAddressRegistryReleased {
             storedRuntimeCode: AddressRegistry_0_1_12_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_12_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[5] = DeploySuite({
             suite: "address-registry@0_1_14",
@@ -157,7 +162,8 @@ library LibAddressRegistryReleased {
             storedRuntimeCode: AddressRegistry_0_1_14_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_14_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[6] = DeploySuite({
             suite: "address-registry@0_1_15",
@@ -167,7 +173,8 @@ library LibAddressRegistryReleased {
             storedRuntimeCode: AddressRegistry_0_1_15_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_15_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[7] = DeploySuite({
             suite: "address-registry@0_1_17",
@@ -177,7 +184,8 @@ library LibAddressRegistryReleased {
             storedRuntimeCode: AddressRegistry_0_1_17_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_17_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         suites[8] = DeploySuite({
             suite: "address-registry@0_1_18",
@@ -187,7 +195,8 @@ library LibAddressRegistryReleased {
             storedRuntimeCode: AddressRegistry_0_1_18_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_18_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: ""
+            mechanismData: "",
+            networks: new string[](0)
         });
         return suites;
     }

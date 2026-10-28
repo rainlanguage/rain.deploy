@@ -66,6 +66,7 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
         DeployCandidate[] memory candidates = new DeployCandidate[](3);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "compiled-candidate",
                 creationCode: CONFIG_REGISTRY_CREATION_CODE,
                 storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
@@ -79,6 +80,7 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "vendored-candidate",
                 creationCode: VENDORED_CREATION_CODE,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(VENDORED_CREATION_CODE),
@@ -94,6 +96,7 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
         });
         candidates[2] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "generated-candidate",
                 creationCode: ASSEMBLED_CREATION_CODE,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(ASSEMBLED_CREATION_CODE),

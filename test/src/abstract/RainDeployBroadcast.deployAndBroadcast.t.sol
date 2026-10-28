@@ -21,6 +21,7 @@ contract RainDeployBroadcastDeployAndBroadcastTest is Test {
 
     function zoltuSuite(address recordedAddress) internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: new string[](0),
             suite: "zoltu",
             creationCode: type(MockDeployable).creationCode,
             storedDeployedAddress: recordedAddress,

@@ -45,6 +45,7 @@ contract VersionQualifiedArtifactPathDeploySuites is ExternalDeploySuites {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "qualified-candidate",
                 creationCode: type(MockDeployable).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),
@@ -58,6 +59,7 @@ contract VersionQualifiedArtifactPathDeploySuites is ExternalDeploySuites {
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "version-qualified-candidate",
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),

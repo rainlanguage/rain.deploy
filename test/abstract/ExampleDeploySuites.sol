@@ -59,6 +59,7 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](2);
         suites[0] = DeploySuite({
+            networks: new string[](0),
             suite: "config-registry@0_0_1",
             creationCode: CONFIG_REGISTRY_CREATION_CODE,
             storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
@@ -69,6 +70,7 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
             mechanismData: ""
         });
         suites[1] = DeploySuite({
+            networks: new string[](0),
             suite: "second-address",
             creationCode: type(MockDeployableV2).creationCode,
             storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
@@ -92,6 +94,7 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "config-registry-candidate",
                 creationCode: CONFIG_REGISTRY_CREATION_CODE,
                 storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
@@ -105,6 +108,7 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "second-address-candidate",
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),

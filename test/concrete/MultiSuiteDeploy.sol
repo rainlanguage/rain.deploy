@@ -56,6 +56,7 @@ contract MultiSuiteDeploy is RainDeployBroadcast {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "second-address-candidate",
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
@@ -69,6 +70,7 @@ contract MultiSuiteDeploy is RainDeployBroadcast {
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "unselected-candidate",
                 creationCode: type(MockDeployable).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),

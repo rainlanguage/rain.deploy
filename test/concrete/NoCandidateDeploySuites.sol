@@ -37,6 +37,7 @@ contract NoCandidateDeploySuites is ExternalDeploySuites {
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = DeploySuite({
+            networks: new string[](0),
             suite: "config-registry@0_0_1",
             creationCode: CONFIG_REGISTRY_CREATION_CODE,
             storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,

@@ -35,6 +35,7 @@ library LibBeaconTest {
         string memory artifactPath
     ) internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: new string[](0),
             suite: key,
             creationCode: creationCode,
             storedDeployedAddress: LibRainDeploy.zoltuAddress(creationCode),

@@ -30,6 +30,7 @@ contract ZoltuReleaseBuildScriptHarness is BuildScript {
     function releasedSuites() internal pure override returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = DeploySuite({
+            networks: new string[](0),
             suite: "mock-deployable@0_0_1",
             creationCode: type(MockDeployable).creationCode,
             storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),

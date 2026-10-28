@@ -56,6 +56,7 @@ contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBa
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "mock-deployable-candidate",
                 creationCode: type(MockDeployable).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),

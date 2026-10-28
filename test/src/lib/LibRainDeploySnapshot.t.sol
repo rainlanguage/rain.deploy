@@ -1383,6 +1383,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// @return The template.
     function emitterTemplate() internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: new string[](0),
             suite: "address-registry",
             creationCode: "",
             storedDeployedAddress: address(0),
@@ -1471,7 +1472,7 @@ contract LibRainDeploySnapshotTest is Test {
             "_RUNTIME_CODE,\n            artifactPath: \"src/concrete/AddressRegistry.sol:AddressRegistry\",\n",
             "            dependencies: abi.decode(AddressRegistry_",
             tag,
-            "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: \"\"\n        });\n"
+            "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: \"\",\n            networks: new string[](0)\n        });\n"
         );
     }
 
@@ -3695,6 +3696,7 @@ contract LibRainDeploySnapshotTest is Test {
     /// written.
     function testSuiteWriterRefusesAZoltuSuiteCarryingMechanismData() external {
         DeploySuite memory suite = DeploySuite({
+            networks: new string[](0),
             suite: "zoltu-with-data",
             creationCode: type(MockDeployable).creationCode,
             storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployable).creationCode),

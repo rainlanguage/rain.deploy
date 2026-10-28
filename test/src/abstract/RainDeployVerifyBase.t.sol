@@ -27,6 +27,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
     /// construction, and that group would be comparing a value against itself.
     function testDerivationReadsTheCreationCodeAndNotTheRecordedFields() external {
         DeploySuite memory suite = DeploySuite({
+            networks: new string[](0),
             suite: "a-declared-key",
             creationCode: CONFIG_REGISTRY_CREATION_CODE,
             storedDeployedAddress: address(0xdead),
@@ -114,6 +115,7 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
         returns (DeploySuite memory)
     {
         return DeploySuite({
+            networks: new string[](0),
             suite: "a-dependent-key",
             creationCode: creationCode,
             storedDeployedAddress: address(0xdead),

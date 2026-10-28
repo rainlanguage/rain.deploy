@@ -1686,7 +1686,7 @@ library LibRainDeploySnapshot {
             prefix,
             "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: ",
             mechanismData,
-            "\n        });\n"
+            ",\n            networks: new string[](0)\n        });\n"
         );
     }
 
