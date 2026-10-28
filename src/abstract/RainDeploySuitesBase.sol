@@ -153,6 +153,11 @@ error FrozenSnapshotMechanismDataUnexpected(string path);
 /// @param suite The suite's key, or the record file.
 error MechanismUnclaimed(string suite);
 
+/// Thrown when more than one mechanism's `legacyRecordId` claims a released record whose `MECHANISM_DATA` leads
+/// with no declared mechanism's id.
+/// @param path The record file.
+error LegacyRecordAmbiguous(string path);
+
 /// Thrown when two of the declaration's mechanisms share an id.
 /// @param id The shared id.
 error DuplicateMechanism(bytes32 id);
@@ -312,6 +317,7 @@ struct DeployMechanismHandler {
     function(DeployDeclaration memory, Vm, string memory, string memory) internal view returns (string memory)
         releasedMechanismData;
     function(DeployDeclaration memory, string memory) internal pure returns (string memory) releasedImport;
+    function(DeployDeclaration memory, Vm, string memory) internal view returns (bytes32) legacyRecordId;
 }
 
 /// @title RainDeploySuitesBase
