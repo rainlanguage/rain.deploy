@@ -3,7 +3,9 @@
 pragma solidity =0.8.25;
 
 import {BuildScript, GeneratedContract, RetiredContract} from "../../src/abstract/BuildScript.sol";
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployCandidate, DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 
 /// @title GeneratedContractsBuildScriptHarness
 /// @notice A `BuildScript` whose candidates, generated contracts and retired
@@ -30,7 +32,7 @@ contract GeneratedContractsBuildScriptHarness is BuildScript {
         sRetired = abi.encode(new RetiredContract[](0));
     }
 
-    /// @param candidates `abi.encode` of what `candidateSuites` declares.
+    /// @param candidates `abi.encode` of the candidates `declaration` adds.
     /// @param generated `abi.encode` of what `generatedContracts` returns.
     /// @param retired `abi.encode` of what `retiredContracts` returns.
     function declare(bytes memory candidates, bytes memory generated, bytes memory retired) external {
@@ -39,14 +41,12 @@ contract GeneratedContractsBuildScriptHarness is BuildScript {
         sRetired = retired;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
-        return new DeploySuite[](0);
-    }
-
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal view override returns (DeployCandidate[] memory) {
-        return abi.decode(sCandidates, (DeployCandidate[]));
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addCandidates(d, abi.decode(sCandidates, (DeployCandidate[])));
+        return d;
     }
 
     /// @inheritdoc BuildScript
@@ -78,10 +78,11 @@ contract GeneratedContractsBuildScriptHarness is BuildScript {
     }
 
     function externalSnapshotContractNames() external view returns (string[] memory) {
-        return snapshotContractNames();
+        return snapshotContractNames(checkedGeneratedContracts(declaration()));
     }
 
     function externalRegenerateLibs() external {
-        regenerateLibs();
+        DeployDeclaration memory d = declaration();
+        regenerateLibs(d, checkedGeneratedContracts(d));
     }
 }
