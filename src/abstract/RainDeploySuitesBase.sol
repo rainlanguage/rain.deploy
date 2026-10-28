@@ -703,7 +703,7 @@ abstract contract RainDeploySuitesBase {
     /// Unique AND in the alphabet, because neither implies the other: a lone
     /// unreadable key collides with nothing, and two keys can be spelled
     /// perfectly and still be the same key.
-    /// @return A fresh array of the declared suites themselves, not copies.
+    /// @return A fresh array: the released suites themselves, each candidate snapshot copied.
     function allSuites(DeployDeclaration memory d) internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory released = d.released;
         checkCandidates(d);
