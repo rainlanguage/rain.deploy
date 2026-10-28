@@ -251,7 +251,7 @@ contract RainDeploySuitesBaseMechanismsTest is Test {
         vm.removeDir(ROOT, true);
 
         assertEq(create2Expression, "V0_0_1_MECHANISM_DATA");
-        assertEq(zoltuExpression, string.concat("abi.encode(bytes32(", vm.toString(ZOLTU_MECHANISM_ID), "))"));
+        assertEq(zoltuExpression, "LibRainDeployZoltuMechanism.mechanismData()");
         assertEq(noZoltuExpression, "V0_0_1_MECHANISM_DATA");
     }
 }
