@@ -120,12 +120,8 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         return RAIN_COPYRIGHT_TEXT;
     }
 
-    /// Writes each release's extended networks record from `extendedNetworks`, under `extendedNetworksRoot()`.
-    /// Append-only against the record in the checkout: reverts with `ExtendedNetworksRewritten` on a declaration
-    /// that drops, changes or reorders a network that record holds. Before writing, refuses a declaration the
-    /// broadcast and the chain group would refuse, as `appendExtendedNetworks` does.
-    /// Run by `run()`, which `Git is clean` calls, so an entry appended to a committed record fails there. A record
-    /// never committed is an untracked file, which `git diff` does not see.
+    /// Rewrites each release's extended networks record under `extendedNetworksRoot()` from `extendedNetworks`, which
+    /// reads it, after refusing one the broadcast and the chain group would refuse, as `appendExtendedNetworks` does.
     function regenerateExtendedNetworks() internal {
         DeploySuite[] memory released = releasedSuites();
         string memory root = extendedNetworksRoot();
