@@ -28,7 +28,6 @@ import {
 } from "../../../src/lib/LibRainDeploySnapshot.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
-import {PER_NETWORK_CLONE_RECORD_ROOT} from "../../abstract/PerNetworkCloneDeploys.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {SourceMismatchDeploy} from "../../concrete/SourceMismatchDeploy.sol";
@@ -1242,9 +1241,12 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
     /// A per-network deploy record named as a code record is refused for its
     /// `DEPLOYED_ADDRESS_<chainId>` addresses.
     function testFrozenCodeRecordNamingAPerNetworkDeployRecordReverts() external {
-        string memory record = vm.readFile(
-            LibRainDeploySnapshot.pathForSnapshot(PER_NETWORK_CLONE_RECORD_ROOT, "0_0_1", "PerNetworkClone")
+        string memory record = vm.replace(
+            vm.readFile(LibRainDeploySnapshot.pathForSnapshot(LibRainDeploySnapshot.CANDIDATE, "ConfigRegistry")),
+            "address constant DEPLOYED_ADDRESS =",
+            "address constant DEPLOYED_ADDRESS_137 ="
         );
+        assertFalse(vm.contains(record, "address constant DEPLOYED_ADDRESS ="));
         vm.expectRevert(abi.encodeWithSelector(FrozenCodeRecordDeclaresDeployedAddress.selector, "record.sol"));
         this.externalCheckFrozenCodeRecord("record.sol", record);
     }
