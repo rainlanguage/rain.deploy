@@ -225,6 +225,15 @@ struct DeploySuite {
     string[] networks;
 }
 
+/// Where a suite's snapshot is written and the header it carries. Read-only input to `writeSuiteSnapshot`.
+struct SnapshotFile {
+    string root;
+    string dir;
+    string contractName;
+    string spdxLicenseIdentifier;
+    string copyrightText;
+}
+
 /// Everything a repo declares, as data. A declaration starts empty and every contribution is a layer's `extend(d)`.
 struct DeployDeclaration {
     /// Every FROZEN released suite, in any order, never regenerated nor anchored to current source.
@@ -272,8 +281,7 @@ struct DeployMechanismHandler {
     function(DeploySuite memory, string memory, uint256, address) internal view checkNetworkFrozen;
     function(DeploySuite memory, string memory, uint256, address) internal view checkOnChain;
     function(Vm, string[] memory, DeploySuite memory, address[] memory) internal logVerification;
-    function(Vm, string memory, string memory, string memory, string memory, string memory, DeploySuite memory)
-        internal returns (string memory) writeSuiteSnapshot;
+    function(Vm, SnapshotFile memory, DeploySuite memory) internal returns (string memory) writeSuiteSnapshot;
     function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData;
 }
 
@@ -468,18 +476,11 @@ abstract contract RainDeploySuitesBase {
         mechanismOf(d, suite).logVerification(vm, networks, suite, deployed);
     }
 
-    function writeSuiteSnapshot(
-        DeployDeclaration memory d,
-        Vm vm,
-        string memory root,
-        string memory dir,
-        string memory contractName,
-        string memory spdxLicenseIdentifier,
-        string memory copyrightText,
-        DeploySuite memory suite
-    ) internal returns (string memory) {
-        return mechanismOf(d, suite)
-            .writeSuiteSnapshot(vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite);
+    function writeSuiteSnapshot(DeployDeclaration memory d, Vm vm, SnapshotFile memory file, DeploySuite memory suite)
+        internal
+        returns (string memory)
+    {
+        return mechanismOf(d, suite).writeSuiteSnapshot(vm, file, suite);
     }
 
     /// @param suite The suite.
