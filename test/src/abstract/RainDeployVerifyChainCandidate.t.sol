@@ -5,13 +5,13 @@ pragma solidity =0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanismHandler,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {
     BYTECODE_HASH as CONFIG_REGISTRY_BYTECODE_HASH,
@@ -43,14 +43,15 @@ import {
 /// are the whole of what the matrix runs over: a contract has exactly one
 /// declaration, so a second scope is a second contract.
 contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
-    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
-        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
-        handlers[0] = LibRainDeployZoltuMechanism.handler();
-        return handlers;
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
+        declared.released = declaredReleased();
+        declared.candidates = declaredCandidates();
+        return declared;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = DeploySuite({
             networks: new string[](0),
@@ -66,8 +67,7 @@ contract RainDeployVerifyChainCandidateTest is RainDeployVerifyChain {
         return suites;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function declaredCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({

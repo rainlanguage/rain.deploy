@@ -5,12 +5,12 @@ pragma solidity =0.8.25;
 import {
     DeployDependency,
     DeployCandidate,
-    DeployMechanismHandler,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 import {VENDORED_CREATION_CODE} from "./UnanchorableDeploy.sol";
@@ -31,20 +31,20 @@ import {VENDORED_CREATION_CODE} from "./UnanchorableDeploy.sol";
 /// refusal naming it is also what says the loop passes OVER an exemption rather
 /// than stopping at it.
 contract UnanchorableWithArtifactDeploySuites is ExternalDeploySuites {
-    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
-        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
-        handlers[0] = LibRainDeployZoltuMechanism.handler();
-        return handlers;
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
+        declared.released = declaredReleased();
+        declared.candidates = declaredCandidates();
+        return declared;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);
         return suites;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function declaredCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({

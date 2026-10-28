@@ -6,12 +6,12 @@ import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanismHandler,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {MockDeployable} from "./MockDeployable.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 
@@ -32,11 +32,13 @@ import {MockDeployableV2} from "./MockDeployableV2.sol";
 /// One network, and the selected suite is keyed `second-address-candidate` for
 /// the reason `StalePinDeploy` gives.
 contract MultiSuiteDeploy is RainDeployBroadcast {
-    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
-        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
-        handlers[0] = LibRainDeployZoltuMechanism.handler();
-        return handlers;
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
+        declared.released = declaredReleased();
+        declared.candidates = declaredCandidates();
+        return declared;
     }
+
 
     /// @inheritdoc RainDeployBroadcast
     function deployNetworks() internal pure override returns (string[] memory) {
@@ -45,14 +47,12 @@ contract MultiSuiteDeploy is RainDeployBroadcast {
         return networks;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);
         return suites;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function declaredCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({

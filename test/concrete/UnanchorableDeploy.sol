@@ -6,7 +6,7 @@ import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanismHandler,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -17,7 +17,7 @@ import {
     RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE
 } from "../../src/generated/candidate/ConfigRegistry.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
-import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 
 /// @dev Creation code no compiler here produces: `PUSH1 0 PUSH1 0 RETURN`,
@@ -49,20 +49,20 @@ bytes constant ASSEMBLED_CREATION_CODE = hex"600160005360016000f3";
 /// The ordinary candidate is first and real, so this is the mixed declaration a
 /// repo actually has rather than one where nothing is anchored.
 contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
-    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
-        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
-        handlers[0] = LibRainDeployZoltuMechanism.handler();
-        return handlers;
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
+        declared.released = declaredReleased();
+        declared.candidates = declaredCandidates();
+        return declared;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+
+    function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);
         return suites;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function declaredCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](3);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
