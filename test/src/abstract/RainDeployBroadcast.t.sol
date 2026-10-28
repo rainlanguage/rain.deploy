@@ -515,7 +515,7 @@ contract RainDeployBroadcastTest is ZoltuDeployOrAdopt {
     function testDeployNetworksFollowsTheDeclaredNetworks() external {
         ExampleDeployNarrowNetworks narrow = new ExampleDeployNarrowNetworks();
 
-        string[] memory declared = narrow.externalSupportedNetworks();
+        string[] memory declared = narrow.externalNetworks();
         assertEq(declared.length, 1);
         assertEq(declared[0], LibRainDeploy.BASE);
         assertGt(
