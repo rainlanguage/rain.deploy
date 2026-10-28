@@ -195,7 +195,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
 
     /// Every sibling or external deployment a suite's code embeds MUST be a
     /// declared dependency, and every declared dependency MUST be embedded.
-    function checkDependenciesAreTheEmbeddedDeployments(DeployDeclaration memory d) internal view {
+    function checkDependenciesAreTheEmbeddedDeployments(DeployDeclaration memory d) internal pure {
         DeploySuite[] memory suites = allSuites(d);
         ExternalDeployment[] memory externals = d.externalDeployments;
         for (uint256 i = 0; i < suites.length; i++) {
@@ -224,7 +224,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
 
     /// Every declared dependency MUST be a sibling or external deployment, with
     /// the runtime code that declaration records.
-    function checkDependencyRuntimeCodeIsKnown(DeployDeclaration memory d) internal view {
+    function checkDependencyRuntimeCodeIsKnown(DeployDeclaration memory d) internal pure {
         DeploySuite[] memory suites = allSuites(d);
         ExternalDeployment[] memory externals = d.externalDeployments;
         for (uint256 i = 0; i < suites.length; i++) {
