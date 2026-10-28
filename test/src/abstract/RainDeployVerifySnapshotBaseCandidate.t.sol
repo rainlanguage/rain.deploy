@@ -13,6 +13,7 @@ import {
 import {RainDeployVerifySnapshotBase} from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 
 /// @title RainDeployVerifySnapshotBaseCandidateTest
@@ -37,10 +38,12 @@ import {MockDeployable} from "../../concrete/MockDeployable.sol";
 /// green in a repo that has released nothing.
 contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBase {
     function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
-        declared.released = declaredReleased();
-        declared.candidates = declaredCandidates();
-        return declared;
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
     }
 
 
@@ -64,7 +67,7 @@ contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBa
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
@@ -88,7 +91,7 @@ contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBa
     /// gives this contract a release fails naming the declaration it changed,
     /// instead of passing because the release happened to fail first.
     function testSnapshotInternallyConsistentReachesACandidateNoReleaseCarries() external {
-        assertEq(releasedSuites().length, 0, "this fixture declares a release, so a candidate is not the subject");
+        assertEq(declaration().released.length, 0, "this fixture declares a release, so a candidate is not the subject");
 
         vm.mockCall(
             LibRainDeploy.ZOLTU_FACTORY,
