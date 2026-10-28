@@ -6,7 +6,7 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite, RainDeploySuitesBase} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {BeaconProxyBeaconUndeclared, RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {ChainDeploy} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {ChainDeploy, LibRainDeployExtendedNetworks} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
 import {
     MOCK_CREATE2_FACTORY,
     MOCK_CREATE2_SALT,
@@ -111,13 +111,22 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
         this.checkOn(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON, release);
     }
 
-    function testChecksAnExtendedNetworkAtItsDeclaredAddress() external {
+    function testChecksARecordedExtendedNetworkAtItsDeclaredAddress() external {
+        string memory root = "test/generated-snapshot/mock-create2-verify-chain-extended";
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        try vm.removeDir(root, true) {} catch {}
         etchLive(42161);
         etchLive(8453);
         ChainDeploy[] memory extended = new ChainDeploy[](1);
         extended[0] =
             ChainDeploy({chainId: 8453, data: abi.encode(uint256(8453)), deployedAddress: networkAddress(8453)});
-        this.checkOn(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE, appendExtendedNetworks(mockRelease(), extended));
+        DeploySuite memory release = mockRelease();
+        LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, release.suite, extended);
+        this.setMockExtendedNetworksRoot(root);
+        this.setMockExtendedNetworks(extended);
+        this.checkOn(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.BASE, release);
+        //forge-lint: disable-next-line(unsafe-cheatcode)
+        vm.removeDir(root, true);
     }
 
     function extendedNetworksRoot()
