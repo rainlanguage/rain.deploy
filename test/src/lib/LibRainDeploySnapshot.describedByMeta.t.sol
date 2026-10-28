@@ -119,11 +119,9 @@ contract LibRainDeploySnapshotDescribedByMetaTest is Test {
     }
 
     function testTheWriterDeclaresALongMetaLastWrapped() external {
-        bytes memory meta = new bytes(64);
-        for (uint256 i = 0; i < meta.length; i++) {
-            meta[i] = bytes1(uint8(i + 1));
-        }
-        checkWriterDeclaresTheMetaLast("long", meta, NEWLINE_DUE_TO_MAX_LENGTH);
+        checkWriterDeclaresTheMetaLast(
+            "long", abi.encodePacked(keccak256("a"), keccak256("b")), NEWLINE_DUE_TO_MAX_LENGTH
+        );
     }
 
     function testTheWriterDeclaresNoMetaForAnEmptyOne() external {
