@@ -8,6 +8,7 @@ import {
     DeployMechanismHandler,
     DeploySuite,
     FrozenSnapshotMechanismDataUnexpected,
+    SnapshotFile,
     UnexpectedMechanismData,
     ZoltuDerivationMismatch
 } from "../abstract/RainDeploySuitesBase.sol";
@@ -135,18 +136,20 @@ library LibRainDeployZoltuMechanism {
         LibRainDeploy.logVerifyCommands(vm, networks, deployed[0], suite.artifactPath);
     }
 
-    function writeSuiteSnapshot(
-        Vm vm,
-        string memory root,
-        string memory dir,
-        string memory contractName,
-        string memory spdxLicenseIdentifier,
-        string memory copyrightText,
-        DeploySuite memory suite
-    ) internal returns (string memory) {
+    function writeSuiteSnapshot(Vm vm, SnapshotFile memory file, DeploySuite memory suite)
+        internal
+        returns (string memory)
+    {
         checkMechanismData(suite);
         return LibRainDeploySnapshot.writeSnapshot(
-            vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite.creationCode, suite.dependencies
+            vm,
+            file.root,
+            file.dir,
+            file.contractName,
+            file.spdxLicenseIdentifier,
+            file.copyrightText,
+            suite.creationCode,
+            suite.dependencies
         );
     }
 
