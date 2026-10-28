@@ -22,6 +22,10 @@ import {LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../lib/LibRainDep
 /// whose low 160 bits are the deploy key.
 error SuiteSeatsDeployKey(string suite, address deployed);
 
+/// @notice Every network a run deploys to MUST be one of the declaration's networks.
+/// @param network The entry of `d.deployNetworks` missing from `d.networks`.
+error DeployNetworkUndeclared(string network);
+
 /// @title RainDeployBroadcast
 /// @notice The broadcast, inherited rather than rewritten per repo.
 abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
@@ -57,7 +61,26 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
 
         uint256 deployerPrivateKey = vm.envUint("DEPLOYMENT_KEY");
 
+        checkDeployNetworksDeclared(d);
         broadcastSuite(d, suite, d.deployNetworks, deployerPrivateKey);
+    }
+
+    /// Refuses `DeployNetworkUndeclared` for the first entry of `d.deployNetworks` not in `d.networks`.
+    /// @param d The declaration.
+    function checkDeployNetworksDeclared(DeployDeclaration memory d) internal pure {
+        for (uint256 i = 0; i < d.deployNetworks.length; i++) {
+            bytes32 deployNetwork = keccak256(bytes(d.deployNetworks[i]));
+            bool declared = false;
+            for (uint256 j = 0; j < d.networks.length; j++) {
+                if (keccak256(bytes(d.networks[j])) == deployNetwork) {
+                    declared = true;
+                    break;
+                }
+            }
+            if (!declared) {
+                revert DeployNetworkUndeclared(d.deployNetworks[i]);
+            }
+        }
     }
 
     /// Refuses `checkSeatsNoDeployKey`'s refusals before reading any network (so the suite's constructor MUST succeed
