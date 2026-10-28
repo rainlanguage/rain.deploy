@@ -131,16 +131,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         DeploySuite memory suite = abi.decode(abi.encode(frozen), (DeploySuite));
         addUnrecordedNetworks(d, suite, candidate, LibRainDeploy.networkChainIds(configs));
         checkNetworksFrozen(d, frozen, suite, networks);
-        NetworkDeploys memory deploys = NetworkDeploys({
-            deployStepData: new bytes[](configs.length),
-            expectedAddresses: new address[](configs.length),
-            derivedAddresses: new address[](configs.length)
-        });
-        for (uint256 i = 0; i < configs.length; i++) {
-            deploys.deployStepData[i] = deployStepData(d, suite, configs[i].chainId);
-            deploys.expectedAddresses[i] = recordedAddress(d, suite, configs[i].chainId);
-            deploys.derivedAddresses[i] = deployedAddress(d, suite, configs[i].chainId);
-        }
+        NetworkDeploys memory deploys = networkDeploys(d, suite, configs);
         uint256[] memory forkIds = LibRainDeploy.deployStepToNetworks(
             vm,
             configs,
@@ -152,6 +143,28 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         );
         logVerification(d, vm, networks, suite, deploys.expectedAddresses);
         return (deploys.expectedAddresses, forkIds);
+    }
+
+    /// @param d The declaration.
+    /// @param suite The suite, on every network in `configs`.
+    /// @param configs The networks.
+    /// @return The deploy step data, recorded address and derived address on each network.
+    function networkDeploys(DeployDeclaration memory d, DeploySuite memory suite, SupportedNetwork[] memory configs)
+        internal
+        view
+        returns (NetworkDeploys memory)
+    {
+        NetworkDeploys memory deploys = NetworkDeploys({
+            deployStepData: new bytes[](configs.length),
+            expectedAddresses: new address[](configs.length),
+            derivedAddresses: new address[](configs.length)
+        });
+        for (uint256 i = 0; i < configs.length; i++) {
+            deploys.deployStepData[i] = deployStepData(d, suite, configs[i].chainId);
+            deploys.expectedAddresses[i] = recordedAddress(d, suite, configs[i].chainId);
+            deploys.derivedAddresses[i] = deployedAddress(d, suite, configs[i].chainId);
+        }
+        return deploys;
     }
 
     /// The chain ids `checkSeatsNoDeployKey` deploys under: those of `suite`'s networks, then of `candidate`'s not
