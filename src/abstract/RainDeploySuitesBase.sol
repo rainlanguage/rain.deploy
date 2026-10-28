@@ -762,7 +762,7 @@ abstract contract RainDeploySuitesBase {
     /// @return The selected suite.
     function suiteByName(DeployDeclaration memory d, string memory requested)
         internal
-        view
+        pure
         returns (DeploySuite memory)
     {
         DeploySuite[] memory suites = allSuites(d);
