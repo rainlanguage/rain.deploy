@@ -48,7 +48,7 @@ contract RainDeployVerifyChainNotRequiredTest is ExampleDeploySuites, RainDeploy
     }
 
     /// The fixture is only meaningful if base is not the first network walked.
-    function testBaseIsNotTheFirstSupportedNetwork() external view {
+    function testBaseIsNotTheFirstSupportedNetwork() external pure {
         assertNotEq(declaration().networks[0], LibRainDeploy.BASE);
     }
 
