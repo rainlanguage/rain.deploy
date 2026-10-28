@@ -195,7 +195,8 @@ library LibRainDeployZoltuMechanism {
             file.spdxLicenseIdentifier,
             file.copyrightText,
             suite.creationCode,
-            suite.dependencies
+            suite.dependencies,
+            suite.describedByMeta
         );
     }
 

@@ -86,6 +86,10 @@ error FrozenSnapshotAmbiguous(string path);
 /// @param path The record file declaring `MECHANISM_DATA` more than once.
 error FrozenSnapshotMechanismDataAmbiguous(string path);
 
+/// Thrown when a file in the frozen record declares `DESCRIBED_BY_META` more than once.
+/// @param path The record file declaring `DESCRIBED_BY_META` more than once.
+error FrozenSnapshotDescribedByMetaAmbiguous(string path);
+
 /// Thrown when a file in the frozen record declares its deployed addresses per network, as
 /// `DEPLOYED_ADDRESS_<chainId>`, and declares no `MECHANISM_DATA`.
 /// @param path The record file.
@@ -733,6 +737,23 @@ library LibRainDeploySnapshot {
         );
     }
 
+    /// The `DESCRIBED_BY_META` constant a record declares, or nothing for an empty meta.
+    /// @param vm The Vm instance for string operations.
+    /// @param describedByMeta The described-by meta.
+    /// @return The constant, as Solidity source.
+    function describedByMetaConstant(Vm vm, bytes memory describedByMeta) internal pure returns (string memory) {
+        if (describedByMeta.length == 0) {
+            return "";
+        }
+        return LibCodeGen.bytesConstantString(
+            vm,
+            "/// @dev The described-by meta this release emits on the metaboard: what the\n"
+            "/// deployment's `describedByMetaV1()` hashes to.",
+            DESCRIBED_BY_META_NAME,
+            describedByMeta
+        );
+    }
+
     /// Generate one snapshot for one contract.
     ///
     /// The output root is the one `freeze` is handed, and it is required for
@@ -795,8 +816,38 @@ library LibRainDeploySnapshot {
         bytes memory creationCode,
         DeployDependency[] memory dependencies
     ) internal returns (string memory) {
+        return writeSnapshot(
+            vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, creationCode, dependencies, ""
+        );
+    }
+
+    /// `writeSnapshot` that also declares `DESCRIBED_BY_META`, when `describedByMeta` is non-empty.
+    /// @param vm The Vm instance for file operations.
+    /// @param root The record root — `LIB_FS_ROOT` for a repo's real record.
+    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
+    /// @param contractName The contract the snapshot describes.
+    /// @param spdxLicenseIdentifier The SPDX licence identifier the written snapshot declares.
+    /// @param copyrightText The copyright text the written snapshot declares.
+    /// @param creationCode That contract's creation code.
+    /// @param dependencies Each address that must already have code on a network before this contract can be
+    /// broadcast there, with that code.
+    /// @param describedByMeta The described-by meta, declared only when non-empty.
+    /// @return The path written.
+    function writeSnapshot(
+        Vm vm,
+        string memory root,
+        string memory dir,
+        string memory contractName,
+        string memory spdxLicenseIdentifier,
+        string memory copyrightText,
+        bytes memory creationCode,
+        DeployDependency[] memory dependencies,
+        bytes memory describedByMeta
+    ) internal returns (string memory) {
         address deployed = LibRainDeploy.etchAndDeployZoltu(vm, creationCode);
-        string memory constants = snapshotConstants(vm, deployed, creationCode, dependencies);
+        string memory constants = string.concat(
+            snapshotConstants(vm, deployed, creationCode, dependencies), describedByMetaConstant(vm, describedByMeta)
+        );
 
         // The directory is created by the writer, from the same root and tag
         // this path is derived from, so there is no `createDir` here to
@@ -1275,6 +1326,12 @@ library LibRainDeploySnapshot {
 
     string constant MECHANISM_DATA_DECLARATION = "bytes constant MECHANISM_DATA =";
 
+    /// The name of the described-by meta constant. A line holding it anywhere but at the start of the writer's
+    /// declaration is not the writer's.
+    string constant DESCRIBED_BY_META_NAME = "DESCRIBED_BY_META";
+
+    string constant DESCRIBED_BY_META_DECLARATION = "bytes constant DESCRIBED_BY_META =";
+
     /// The addresses a frozen record declares as its deploy addresses, and the chain id each is
     /// for.
     /// @param vm The Vm instance for string operations.
@@ -1568,6 +1625,27 @@ library LibRainDeploySnapshot {
         return (mechanismData != 0, chainIds.length != 0);
     }
 
+    /// Whether a frozen record declares `DESCRIBED_BY_META`. A record cut before a suite could carry a described-by
+    /// meta declares none, as does one cut from a suite that describes nothing.
+    /// @param vm The Vm instance for file and string operations.
+    /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @return True if the record declares it.
+    function recordedDescribedByMeta(Vm vm, string memory path) internal view returns (bool) {
+        string[] memory lines = recordLines(vm, path, vm.readFile(path));
+        uint256 declarations = 0;
+        for (uint256 i = 0; i < lines.length; i++) {
+            if (vm.indexOf(lines[i], DESCRIBED_BY_META_DECLARATION) == 0) {
+                declarations++;
+            } else if (vm.contains(lines[i], DESCRIBED_BY_META_NAME)) {
+                revert FrozenSnapshotUnreadable(path);
+            }
+        }
+        if (declarations > 1) {
+            revert FrozenSnapshotDescribedByMetaAmbiguous(path);
+        }
+        return declarations == 1;
+    }
+
     /// @param vm The Vm instance for file and string operations.
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
     /// @return Whether it declares `MECHANISM_DATA`, with `recordedMechanismShape`'s refusals.
@@ -1681,6 +1759,9 @@ library LibRainDeploySnapshot {
             prefix,
             "_DEPENDENCIES",
             !mechanismData ? string("") : string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA"),
+            recordedDescribedByMeta(vm, path)
+                ? string.concat(",\n    DESCRIBED_BY_META as ", prefix, "_DESCRIBED_BY_META")
+                : string(""),
             "\n} from \"../generated/",
             tagForRecordPath(vm, path),
             "/",
@@ -1883,7 +1964,9 @@ library LibRainDeploySnapshot {
             prefix,
             "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: ",
             mechanismData,
-            ",\n            networks: new string[](0)\n        });\n"
+            ",\n            networks: new string[](0),\n            describedByMeta: ",
+            recordedDescribedByMeta(vm, path) ? string.concat(prefix, "_DESCRIBED_BY_META") : string("\"\""),
+            "\n        });\n"
         );
     }
 
