@@ -182,27 +182,6 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         return true;
     }
 
-    /// The frozen code records' names: the contracts whose code a release
-    /// freezes without deploying them as suites — parameterised contracts,
-    /// recorded as `BYTECODE_HASH`, `CREATION_CODE` and `RUNTIME_CODE` and no
-    /// deploy address. A frozen file with one of these names is checked as a
-    /// code record by `checkFrozenCodeRecord`; every other frozen file is a
-    /// deploy record and goes through `checkFrozenSnapshotsReleased`.
-    ///
-    /// Matched by name, unlike a deploy record, because a code record has
-    /// nothing else to match on: no address to derive, and bytes that
-    /// legitimately differ between releases — a compiler-profile or dependency
-    /// change regenerates them, and the frozen copy is what keeps the
-    /// generation each release shipped. The name cannot silence anything: a
-    /// deploy record named here is refused for its address, and a code record
-    /// not named here reaches the deploy check and is refused as unreadable.
-    ///
-    /// Empty by default: a repo that freezes only deploy suites names none.
-    /// @return The names, e.g. `TimelockController`.
-    function frozenCodeRecordNames() internal view virtual returns (string[] memory) {
-        return new string[](0);
-    }
-
     /// The index of the first name in `codeRecordNames` that, plus `.sol`, is
     /// `path`'s file name.
     /// @param path A frozen record file.

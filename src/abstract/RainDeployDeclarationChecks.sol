@@ -81,11 +81,6 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     /// @return Every deterministic deployment outside this repo that a suite may embed.
     function externalDeployments() internal view virtual returns (ExternalDeployment[] memory);
 
-    /// @return The workflow whose `suite` input lists the dispatch choices.
-    function dispatchWorkflow() internal view virtual returns (string memory) {
-        return ".github/workflows/manual-sol-artifacts.yaml";
-    }
-
     /// @param line A line of YAML.
     /// @return Its count of leading spaces.
     function indentation(string memory line) internal pure returns (uint256) {
@@ -105,8 +100,8 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// @return The `options` of the dispatch workflow's `suite` input.
-    function dispatchChoices() internal view returns (string[] memory) {
-        string memory workflow = dispatchWorkflow();
+    function dispatchChoices(DeployDeclaration memory d) internal view returns (string[] memory) {
+        string memory workflow = d.dispatchWorkflow;
         string[] memory lines = vm.split(vm.readFile(workflow), "\n");
         uint256 i = 0;
         while (i < lines.length && keccak256(bytes(vm.trim(lines[i]))) != keccak256("suite:")) {
@@ -156,7 +151,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     /// The dispatch choices MUST be exactly the declared suite keys, each once.
     function checkDispatchChoicesAreTheSuiteKeys(DeployDeclaration memory d) internal view {
         DeploySuite[] memory suites = allSuites(d);
-        string[] memory choices = dispatchChoices();
+        string[] memory choices = dispatchChoices(d);
         for (uint256 i = 0; i < choices.length; i++) {
             if (suiteIndex(suites, choices[i]) == suites.length) {
                 revert DispatchChoiceNotDeclared(choices[i]);

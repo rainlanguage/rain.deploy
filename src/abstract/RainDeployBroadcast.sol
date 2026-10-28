@@ -25,25 +25,6 @@ error SuiteSeatsDeployKey(string suite, address deployed);
 /// @title RainDeployBroadcast
 /// @notice The broadcast, inherited rather than rewritten per repo.
 abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
-    /// The networks to broadcast to. Every network the declaration supports by
-    /// default, which is what a deterministic deployment usually wants: one
-    /// address, every chain, in one dispatch.
-    ///
-    /// Overridable because that is not universal. A repo bootstrapping onto one
-    /// chain at a time — `st0x.deploy` selects between Ethereum and HyperEVM
-    /// per dispatch — returns a single-element list from its own env var
-    /// instead. The reusable workflow already carries a `network:` input for
-    /// exactly this.
-    ///
-    /// An override here narrows ONE dispatch: the networks it skips are still
-    /// ones this repo deploys to and is verified on. A repo that deploys to
-    /// fewer networks at all overrides `supportedNetworks` instead, which this
-    /// defaults to.
-    /// @return The network names to deploy to, as `[rpc_endpoints]` aliases.
-    function deployNetworks(DeployDeclaration memory d) internal view virtual returns (string[] memory) {
-        return d.networks;
-    }
-
     /// Broadcasts the suite `DEPLOYMENT_SUITE` names.
     ///
     /// The source anchor runs FIRST, before a suite is selected and before the
@@ -76,7 +57,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
 
         uint256 deployerPrivateKey = vm.envUint("DEPLOYMENT_KEY");
 
-        broadcastSuite(d, suite, deployNetworks(d), deployerPrivateKey);
+        broadcastSuite(d, suite, d.deployNetworks(d), deployerPrivateKey);
     }
 
     /// Refuses `checkSeatsNoDeployKey`'s refusals before reading any network (so the suite's constructor MUST succeed
@@ -84,7 +65,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// selected suite by ITS mechanism, through the mechanism hooks — the same dispatch every verification group
     /// derives through, so what is broadcast is what was verified. `suite` is not changed.
     /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
-    /// @param networks The networks to broadcast to, as `deployNetworks()` gave them.
+    /// @param networks The networks to broadcast to, as `d.deployNetworks` gave them.
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
     /// @return Where the suite is on each network, positionally paired with `networks`.
     /// @return The fork each network was deployed on.

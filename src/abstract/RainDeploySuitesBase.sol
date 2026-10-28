@@ -245,6 +245,15 @@ struct DeployDeclaration {
     /// Every network this repo deals with, as `[rpc_endpoints]` aliases: what a broadcast targets, what every
     /// network-scoped assertion is made over, and what the network config is generated from.
     string[] networks;
+    /// The workflow whose `suite` input lists the dispatch choices.
+    string dispatchWorkflow;
+    /// The names of the frozen code records, each a parameterised contract's snapshot matched by file name, e.g.
+    /// `TimelockController`. A deploy record named here is refused for its address and a code record not named here
+    /// is refused as unreadable.
+    string[] frozenCodeRecordNames;
+    /// The networks one broadcast goes to, as `[rpc_endpoints]` aliases. A repo bootstrapping one chain per dispatch
+    /// narrows this; one deploying to fewer networks at all narrows `networks`.
+    function(DeployDeclaration memory) internal view returns (string[] memory) deployNetworks;
 }
 
 /// The rolling candidate: a snapshot that tracks current source rather than a

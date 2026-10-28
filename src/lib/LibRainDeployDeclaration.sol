@@ -15,10 +15,26 @@ import {LibRainDeploy} from "./LibRainDeploy.sol";
 /// @title LibRainDeployDeclaration
 /// @notice The core layer of a declaration, and what every layer composes with.
 library LibRainDeployDeclaration {
-    /// Sets `d.networks` to every one of Rain's networks.
+    /// The workflow `extend` declares the dispatch choices in.
+    string constant DISPATCH_WORKFLOW = ".github/workflows/manual-sol-artifacts.yaml";
+
+    /// Sets `d.networks` to every one of Rain's networks, `d.dispatchWorkflow` to `DISPATCH_WORKFLOW` and
+    /// `d.deployNetworks` to `everyNetwork`.
     /// @param d The declaration, mutated.
     function extend(DeployDeclaration memory d) internal pure {
         d.networks = LibRainDeploy.supportedNetworks();
+        d.dispatchWorkflow = DISPATCH_WORKFLOW;
+        d.deployNetworks = everyNetwork;
+    }
+
+    /// @param d The declaration.
+    /// @return A copy of `d.networks`.
+    function everyNetwork(DeployDeclaration memory d) internal pure returns (string[] memory) {
+        string[] memory copied = new string[](d.networks.length);
+        for (uint256 i = 0; i < copied.length; i++) {
+            copied[i] = d.networks[i];
+        }
+        return copied;
     }
 
     /// Appends `suites` to `d.released`, giving each naming no networks a copy of `d.networks`.
@@ -30,7 +46,7 @@ library LibRainDeployDeclaration {
             released[i] = d.released[i];
         }
         for (uint256 i = 0; i < suites.length; i++) {
-            fillNetworks(suites[i], d.networks);
+            fillNetworks(suites[i], d);
             released[d.released.length + i] = suites[i];
         }
         d.released = released;
@@ -45,19 +61,15 @@ library LibRainDeployDeclaration {
             all[i] = d.candidates[i];
         }
         for (uint256 i = 0; i < candidates.length; i++) {
-            fillNetworks(candidates[i].snapshot, d.networks);
+            fillNetworks(candidates[i].snapshot, d);
             all[d.candidates.length + i] = candidates[i];
         }
         d.candidates = all;
     }
 
-    function fillNetworks(DeploySuite memory suite, string[] memory networks) private pure {
+    function fillNetworks(DeploySuite memory suite, DeployDeclaration memory d) private pure {
         if (suite.networks.length == 0) {
-            string[] memory copied = new string[](networks.length);
-            for (uint256 i = 0; i < networks.length; i++) {
-                copied[i] = networks[i];
-            }
-            suite.networks = copied;
+            suite.networks = everyNetwork(d);
         }
     }
 
