@@ -6,6 +6,7 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {DeployDependency, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../src/lib/LibMigrationRegistryDeploy.sol";
 import {IMigrationRegistryV4, Prerequisite} from "../../src/interface/IMigrationRegistryV4.sol";
@@ -43,7 +44,7 @@ library LibBeaconTest {
             storedRuntimeCode: runtimeCode,
             artifactPath: artifactPath,
             dependencies: new DeployDependency[](0),
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
     }
 
