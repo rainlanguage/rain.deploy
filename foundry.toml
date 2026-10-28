@@ -32,6 +32,9 @@ optimizer = true
 # below; change all three.
 optimizer_runs = 100000
 evm_version = "cancun"
+# The build script and its regenerate-libs test run past the default
+# 1,073,741,824 gas: every frozen release is regenerated in one run.
+gas_limit = 4000000000
 cbor_metadata = false
 bytecode_hash = "none"
 
