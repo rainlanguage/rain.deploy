@@ -242,22 +242,24 @@ library LibRainDeployDeclaration {
             i++;
         }
         if (i == candidates.length) {
-            return (
-                DeploySuite({
-                    suite: "",
-                    creationCode: "",
-                    storedDeployedAddress: address(0),
-                    storedBytecodeHash: bytes32(0),
-                    storedRuntimeCode: "",
-                    artifactPath: "",
-                    dependencies: new DeployDependency[](0),
-                    mechanismData: "",
-                    networks: new string[](0)
-                }),
-                false
-            );
+            return (noSuite(), false);
         }
         return (abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite)), true);
+    }
+
+    /// @return A suite with every field empty: what `candidateOf` returns beside `false`.
+    function noSuite() private pure returns (DeploySuite memory) {
+        return DeploySuite({
+            suite: "",
+            creationCode: "",
+            storedDeployedAddress: address(0),
+            storedBytecodeHash: bytes32(0),
+            storedRuntimeCode: "",
+            artifactPath: "",
+            dependencies: new DeployDependency[](0),
+            mechanismData: "",
+            networks: new string[](0)
+        });
     }
 
     /// The mechanism id a suite's `mechanismData` declares: its first word. Refuses `MechanismUnclaimed` for data
