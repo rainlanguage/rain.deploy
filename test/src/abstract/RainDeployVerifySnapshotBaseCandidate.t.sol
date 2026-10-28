@@ -6,7 +6,6 @@ import {ZoltuDerivationMismatch} from "../../../src/abstract/RainDeployVerifyBas
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
@@ -56,7 +55,6 @@ contract RainDeployVerifySnapshotBaseCandidateTest is RainDeployVerifySnapshotBa
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
             unanchorableReason: ""

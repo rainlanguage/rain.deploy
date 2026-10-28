@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {DeployDependency, DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     FrozenSnapshotAmbiguous,
     FrozenSnapshotMechanismDataAmbiguous,

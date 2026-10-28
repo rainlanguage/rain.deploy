@@ -6,7 +6,6 @@ import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -66,7 +65,6 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
             unanchorableReason: ""
@@ -82,7 +80,6 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 // resolves to no artifact.
                 artifactPath: "test/concrete/VendoredDeployable.sol:VendoredDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
             unanchorableReason: "Vendored third party deployment: the pinned creation code is the source."
@@ -98,7 +95,6 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 // file the tables would be compiled from, and there is none.
                 artifactPath: "test/concrete/AssembledTables.sol:AssembledTables",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
             unanchorableReason: "Assembled from generated tables: there is no source file to compile."

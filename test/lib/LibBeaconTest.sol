@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
-import {DeployDependency, DeployMechanism, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibMigrationRegistry} from "../../src/lib/LibMigrationRegistry.sol";
 import {LibMigrationRegistryDeploy} from "../../src/lib/LibMigrationRegistryDeploy.sol";
@@ -42,7 +42,6 @@ library LibBeaconTest {
             storedRuntimeCode: runtimeCode,
             artifactPath: artifactPath,
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
     }

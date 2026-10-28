@@ -7,7 +7,6 @@ import {
     CandidateSourceMismatch,
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
     DeploySuite
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
@@ -237,7 +236,6 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedRuntimeCode: ADDRESS_REGISTRY_0_1_10_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
     }
@@ -251,7 +249,6 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedRuntimeCode: ADDRESS_REGISTRY_0_1_11_RUNTIME_CODE,
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
     }
@@ -644,7 +641,6 @@ contract RainDeployVerifySnapshotBaseTest is ExampleDeploySuites, RainDeployVeri
             storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
     }

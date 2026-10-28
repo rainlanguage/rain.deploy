@@ -5,7 +5,6 @@ pragma solidity ^0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -58,7 +57,6 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
             storedRuntimeCode: type(MockDeployable).runtimeCode,
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
     }
@@ -76,7 +74,6 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
             storedRuntimeCode: type(MockReachingDeployable).runtimeCode,
             artifactPath: "test/concrete/MockReachingDeployable.sol:MockReachingDeployable",
             dependencies: deps,
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
     }

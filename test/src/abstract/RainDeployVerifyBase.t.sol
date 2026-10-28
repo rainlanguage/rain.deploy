@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "../../../src/abstract/RainDeployVerifyBase.sol";
-import {DeployDependency, DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
@@ -34,7 +34,6 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
             storedRuntimeCode: hex"00",
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
 
@@ -122,7 +121,6 @@ contract RainDeployVerifyBaseTest is ExampleDeploySuites, RainDeployVerifyBase {
             storedRuntimeCode: hex"00",
             artifactPath: "test/concrete/MockDependentDeployable.sol:MockDependentDeployable",
             dependencies: dependencies,
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
     }

@@ -6,7 +6,6 @@ import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -65,7 +64,6 @@ contract MissingDependencyDeploy is RainDeployBroadcast {
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: dependencies,
-                mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
             unanchorableReason: ""

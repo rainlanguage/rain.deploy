@@ -6,7 +6,6 @@ import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -56,7 +55,6 @@ contract MultiSuiteDeploy is RainDeployBroadcast {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
             unanchorableReason: ""
@@ -70,7 +68,6 @@ contract MultiSuiteDeploy is RainDeployBroadcast {
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
             unanchorableReason: ""

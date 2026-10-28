@@ -11,7 +11,7 @@ import {
     RAIN_SPDX_LICENSE_IDENTIFIER
 } from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
-import {DeployDependency, DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {
     EmptyRelease,
     InvalidRecordRoot,
@@ -1389,7 +1389,6 @@ contract LibRainDeploySnapshotTest is Test {
             storedRuntimeCode: "",
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
     }
@@ -1485,13 +1484,13 @@ contract LibRainDeploySnapshotTest is Test {
     function testReleasedImportBlockAliasesEveryRecord() external view {
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(0)),
-            "import {DeployDependency, DeployMechanism, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n"
+            "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n"
         );
 
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1)),
             string.concat(
-                "import {DeployDependency, DeployMechanism, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
                 expectedImport("0_0_1")
             )
         );
@@ -1499,7 +1498,7 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2)),
             string.concat(
-                "import {DeployDependency, DeployMechanism, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
                 expectedImport("0_0_1"),
                 expectedImport("0_0_2")
             )
@@ -1523,7 +1522,7 @@ contract LibRainDeploySnapshotTest is Test {
         assertEq(
             LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1), consumerPath),
             string.concat(
-                "import {DeployDependency, DeployMechanism, DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n",
+                "import {DeployDependency, DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n",
                 expectedImport("0_0_1")
             )
         );
@@ -3738,7 +3737,6 @@ contract LibRainDeploySnapshotTest is Test {
             storedRuntimeCode: type(MockDeployable).runtimeCode,
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: hex"00"
         });
         vm.expectRevert(abi.encodeWithSelector(UnexpectedMechanismData.selector, suite.suite));
@@ -3924,7 +3922,7 @@ contract LibRainDeploySnapshotTest is Test {
             emitted,
             string.concat(
                 generatedFilePrefix(),
-                "import {DeployDependency, DeployMechanism, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
                 EXPECTED_PER_NETWORK_IMPORT,
                 LibRainDeploySnapshot.releasedLibraryBlock(
                     vm,

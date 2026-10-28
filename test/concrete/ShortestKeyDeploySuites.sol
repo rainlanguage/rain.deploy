@@ -5,7 +5,6 @@ pragma solidity =0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -39,7 +38,6 @@ contract ShortestKeyDeploySuites is ExternalDeploySuites {
             storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
         return suites;
@@ -57,7 +55,6 @@ contract ShortestKeyDeploySuites is ExternalDeploySuites {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
                 mechanismData: ""
             }),
             unanchorableReason: ""

@@ -15,7 +15,7 @@ import {
     LibRainDeployMechanism,
     UnverifiableSource
 } from "../../../src/lib/LibRainDeployMechanism.sol";
-import {DeployMechanism, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {BEACON_PROXY_ARTIFACT_PATH, LibRainDeployBeaconProxy} from "../../../src/lib/LibRainDeployBeaconProxy.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {MockBeaconProxyFactory} from "../../concrete/MockBeaconProxyFactory.sol";
@@ -101,7 +101,6 @@ contract LibRainDeployMechanismBroadcastTest is ZoltuDeployOrAdopt {
             storedRuntimeCode: "",
             artifactPath: "test/concrete/MockCloneable.sol:MockCloneable",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
     }

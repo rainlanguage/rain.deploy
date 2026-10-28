@@ -5,7 +5,6 @@ pragma solidity =0.8.25;
 import {
     CandidateSourceMismatch,
     DeployDependency,
-    DeployMechanism,
     DeploySuite,
     UnknownDeploymentSuite
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
