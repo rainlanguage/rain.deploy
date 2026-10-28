@@ -23,17 +23,10 @@ the value the function returns.
 | N14: `registerOnSelectedChain` network log removed  | `src/lib/LibConfigRegistryRegister.sol` `console2.log(record);` in `registerOnSelectedChain`                                             | Console output. The record is returned and pinned by `LibConfigRegistryRegisterTest.testRegisterUnbound`, `testRegisterRebinds`, `testRegisterSkipsSameBinding`.                |
 | M32: chain suite log removed                        | `src/abstract/RainDeployVerifyChain.sol` `console2.log("Checking suite on network:", ...)` in `checkSuiteOnNetwork`                      | Console output. The check it announces is pinned by `RainDeployVerifyChainNotRequiredLocalTest.testRequiredSuiteIsStillCheckedEverywhere`.                                      |
 | M64: seated-state revert-failure names no suite     | `src/abstract/RainDeployVerifyBase.sol` `revert DerivationSnapshotRevertFailed(resolved.suite.suite, snapshotId);` in `checkSeatedState` | Unreachable: `vm.revertToState` of a snapshot taken in the same call, with no revert or other snapshot between, returns true, so the guard never fires.                         |
-| G03: `deployStep` final revert removed              | `src/lib/LibRainDeployMechanism.sol` `revert UnknownDeployMechanism(uint8(suite.mechanism));` in `deployStep`                            | Unreachable: every `DeployMechanism` member returns before it, and an out-of-range value panics 0x21 on read before reaching it. It guards a member added later without an arm. |
-| G05: `mechanismName` revert becomes an empty return | `src/lib/LibRainDeploySnapshot.sol` `revert UnknownDeployMechanism(uint8(kind));` in `mechanismName`                                     | Unreachable for the same reason as G03.                                                                                                                                         |
 | B44: seat-check revert-failure arguments changed    | `src/abstract/RainDeployBroadcast.sol` `revert DerivationSnapshotRevertFailed(suite.suite, snapshotId);` in `checkSeatsNoDeployKey`      | Unreachable: `vm.revertToState` of a snapshot taken in the same loop iteration, with no revert or other snapshot between, returns true, so the guard never fires.               |
 
 ## Equivalent mutants
 
-- `LibRainDeployMechanism.deployAndBroadcast`: `UnverifiableSource`'s entry
-  address read from `deploys.derivedAddresses[0]` instead of
-  `deploys.expectedAddresses[0]` (Z7). `deployStepToNetworks` refuses any
-  network whose derived address differs from its expected one before the event,
-  so the two are equal there.
 - `LibRainDeploySnapshot.declarationValue`: the value read as
   `tokens[tokens.length - 1]` instead of `tokens[4]` (D7), or the final
   `tokens.length == 5` relaxed to `tokens.length <= 5` (T5G, D4). The count is
