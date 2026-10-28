@@ -4,65 +4,49 @@ pragma solidity ^0.8.25;
 
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
-import {DerivedDeploy, RainDeployVerifyBase, ResolvedBeacon} from "./RainDeployVerifyBase.sol";
+import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
-import {DeployBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
 
 /// Thrown when `requiresSuiteOn` requires a suite on none of the networks
 /// checked, which would pass the suite having checked it nowhere.
 /// @param suite The suite.
 error SuiteRequiredNowhere(string suite);
 
-/// Thrown when a suite `suiteBeacon` names a beacon for is required on a network where `beacons()` declares no beacon at the
-/// proxy's beacon, so nothing would check what the proxy delegates into there.
-/// @param suite The beacon proxy suite.
-/// @param network The network.
-/// @param beacon The proxy's beacon.
-error BeaconProxyBeaconUndeclared(string suite, string network, address beacon);
-
 /// @title RainDeployVerifyChain
 /// @notice The only deploy-pin assertions anchored to something outside the repo.
 abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
-    /// Checks every suite and every beacon against every supported network.
+    /// Checks every suite against every supported network.
     /// @param suites The suites to check.
     function checkDeployedOnSupportedNetworks(DeploySuite[] memory suites) internal {
         checkDeployedOnNetworks(LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), suites);
     }
 
-    /// Checks every suite and every beacon on the given networks against each, forking with `vm`.
+    /// Checks every suite on the given networks against each, forking with `vm`.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
     function checkDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) internal {
         checkDeployedOnNetworks(vm, networks, suites);
     }
 
-    /// Checks every suite and every beacon on the given networks against each, forking each network once with
-    /// `forkVm`, with `resolveBeacons`'s refusals raised before forking. With no suites, only the networks a beacon is
-    /// on are forked.
-    /// A suite is refused `checkNetworkFrozen`'s refusals before any network is forked on each network it is required on.
-    /// A suite `suiteBeacon` names a beacon for is refused `BeaconProxyBeaconUndeclared` before forking on a network it is required on
-    /// where `beacons()` declares no beacon at its beacon; the beacon's own checks then cover what the proxy
-    /// delegates into. Those checks read the beacon's current state only: how the proxy was initialized, under
-    /// whichever implementation the beacon served when it was deployed, is not read.
+    /// Checks every suite on the given networks against each, forking each network once with `forkVm`. Each suite is
+    /// checked with its recorded networks (`addRecordedNetworks`) and the networks in play its candidate adds
+    /// (`addCandidateNetworks`); the caller's suites are not changed. A suite is refused `checkNetworkFrozen`'s
+    /// refusals before any network is forked on each network it is required on, and `checkOnChain`'s on each
+    /// selected fork it is required on.
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
     function checkDeployedOnNetworks(Vm forkVm, SupportedNetwork[] memory networks, DeploySuite[] memory suites)
         internal
     {
-        ResolvedBeacon[] memory resolved = resolveBeacons(networks);
-
-        // Nothing to check is not a reason to touch every RPC endpoint. Forking
-        // to check nothing turns an outage into the failure of an assertion
-        // that has no subject, which is the one failure this contract is
-        // supposed to be legible against. With no suites only the networks a
-        // beacon is on are forked, none when no beacon is on them.
+        // Nothing to check is not a reason to touch every RPC endpoint.
         if (suites.length == 0) {
-            networks = beaconNetworks(networks, resolved);
-        } else if (networks.length == 0) {
-            // With no networks every suite is required nowhere, which would
-            // name a suite for what is a fault of the roster.
+            return;
+        }
+        // With no networks every suite is required nowhere, which would name a suite for what is a fault of the
+        // roster.
+        if (networks.length == 0) {
             revert LibRainDeploy.NoNetworks();
         }
 
@@ -70,8 +54,10 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         DeploySuite[] memory frozen = new DeploySuite[](suites.length);
         DeploySuite[] memory onNetworks = new DeploySuite[](suites.length);
         for (uint256 j = 0; j < suites.length; j++) {
-            frozen[j] = withExtendedNetworks(suites[j]);
-            onNetworks[j] = onSupportedNetworks(frozen[j], chainIds);
+            frozen[j] = abi.decode(abi.encode(suites[j]), (DeploySuite));
+            addRecordedNetworks(frozen[j]);
+            onNetworks[j] = abi.decode(abi.encode(frozen[j]), (DeploySuite));
+            addCandidateNetworks(onNetworks[j], chainIds);
         }
         suites = onNetworks;
 
@@ -92,18 +78,14 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         for (uint256 i = 0; i < networks.length; i++) {
             addresses[i] = new address[](suites.length);
             for (uint256 j = 0; j < suites.length; j++) {
-                addresses[i][j] = deployedAddress(suites[j], networks[i].chainId);
                 if (requiresSuiteOn(suites[j], networks[i].name)) {
+                    addresses[i][j] = deployedAddress(suites[j], networks[i].chainId);
                     checkNetworkFrozen(frozen[j], networks[i].name, networks[i].chainId, addresses[i][j]);
-                    checkBeaconProxyBeaconDeclared(suites[j], networks[i], resolved);
                 }
             }
         }
 
-        DerivedDeploy[] memory derived = new DerivedDeploy[](suites.length);
-        for (uint256 j = 0; j < suites.length; j++) {
-            derived[j] = deriveUnlessResolved(suites[j], resolved);
-        }
+        DerivedDeploy[] memory derived = deriveDeployments(suites);
         uint256[] memory forkIds = LibRainDeploy.createForks(forkVm, LibRainDeploy.networkNames(networks));
         for (uint256 i = 0; i < networks.length; i++) {
             forkVm.selectFork(forkIds[i]);
@@ -114,98 +96,11 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
                     continue;
                 }
                 checkSuiteOnNetwork(networks[i].name, suites[j], derived[j], addresses[i][j]);
-            }
-            checkBeaconsOnNetwork(networks[i], resolved);
-        }
-    }
-
-    /// Refuses `BeaconProxyBeaconUndeclared` when `suiteBeacon` names a beacon for `suite` and no beacon in `resolved` is it
-    /// on `network`.
-    /// @param suite The suite.
-    /// @param network The network it is required on.
-    /// @param resolved The resolved beacons.
-    function checkBeaconProxyBeaconDeclared(
-        DeploySuite memory suite,
-        SupportedNetwork memory network,
-        ResolvedBeacon[] memory resolved
-    ) internal view {
-        address beacon = suiteBeacon(suite, network.chainId);
-        if (beacon == address(0)) {
-            return;
-        }
-        for (uint256 i = 0; i < resolved.length; i++) {
-            if (resolved[i].chainId == network.chainId && resolved[i].beacon.beacon == beacon) {
-                return;
-            }
-        }
-        revert BeaconProxyBeaconUndeclared(suite.suite, network.name, beacon);
-    }
-
-    /// Each beacon in `resolved` on `network` goes through `checkResolvedBeacon`, in order; the others are not read.
-    /// @param network The selected fork's network.
-    /// @param resolved The resolved beacons.
-    function checkBeaconsOnNetwork(SupportedNetwork memory network, ResolvedBeacon[] memory resolved) internal view {
-        for (uint256 beaconIndex = 0; beaconIndex < resolved.length; beaconIndex++) {
-            if (resolved[beaconIndex].chainId == network.chainId) {
-                checkResolvedBeacon(network.name, resolved[beaconIndex]);
+                checkOnChain(suites[j], networks[i].name, networks[i].chainId, addresses[i][j]);
             }
         }
     }
 
-    /// @param networks The networks to check.
-    /// @param resolved The resolved beacons.
-    /// @return The networks in `networks`, in order, whose chain id a beacon in `resolved` is on.
-    function beaconNetworks(SupportedNetwork[] memory networks, ResolvedBeacon[] memory resolved)
-        internal
-        pure
-        returns (SupportedNetwork[] memory)
-    {
-        bool[] memory kept = new bool[](networks.length);
-        uint256 count = 0;
-        for (uint256 i = 0; i < networks.length; i++) {
-            for (uint256 j = 0; j < resolved.length; j++) {
-                if (resolved[j].chainId == networks[i].chainId) {
-                    kept[i] = true;
-                    count++;
-                    break;
-                }
-            }
-        }
-        SupportedNetwork[] memory onBeacons = new SupportedNetwork[](count);
-        count = 0;
-        for (uint256 i = 0; i < networks.length; i++) {
-            if (kept[i]) {
-                onBeacons[count] = networks[i];
-                count++;
-            }
-        }
-        return onBeacons;
-    }
-
-    /// `suite`'s derivation, reused from a beacon in `resolved` that resolved `suite` itself, else derived.
-    /// @param suite The suite.
-    /// @param resolved The resolved beacons.
-    /// @return The derivation.
-    function deriveUnlessResolved(DeploySuite memory suite, ResolvedBeacon[] memory resolved)
-        internal
-        returns (DerivedDeploy memory)
-    {
-        bytes32 encoded = keccak256(abi.encode(suite));
-        for (uint256 i = 0; i < resolved.length; i++) {
-            // `resolved[i].suite` is unset when the beacon names no `beaconSuite`.
-            if (
-                bytes(resolved[i].beacon.beaconSuite).length != 0 && keccak256(abi.encode(resolved[i].suite)) == encoded
-            ) {
-                return resolved[i].derived;
-            }
-            for (uint256 state = 0; state < resolved[i].implementations.length; state++) {
-                if (keccak256(abi.encode(resolved[i].implementations[state])) == encoded) {
-                    return resolved[i].implementationDerived[state];
-                }
-            }
-        }
-        return deriveDeployment(suite);
-    }
 
     /// The selected fork MUST hold `suite` at `deployedAddress` with its derived code and its declared dependencies.
     /// @param network The network's name, for the refusal.
@@ -223,32 +118,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         LibRainDeploy.checkDeployedCode(network, deployedAddress, derived.bytecodeHash);
     }
 
-    /// The selected fork MUST hold the beacon at its applied state, with its own suite, when it names one, and that
-    /// state's implementation suite live. Reverts as `checkSuiteOnNetwork`, `LibRainDeployBeacon.appliedState` and
-    /// `LibRainDeployBeacon.checkBeacon` do.
-    /// @param network The network's name, for the refusal.
-    /// @param resolved The beacon.
-    function checkResolvedBeacon(string memory network, ResolvedBeacon memory resolved) internal view {
-        DeployBeacon memory beacon = resolved.beacon;
-        // Deliberately rechecked by `checkBeacon`, which holds a beacon to its code hash on its own.
-        if (bytes(beacon.beaconSuite).length != 0) {
-            checkSuiteOnNetwork(network, resolved.suite, resolved.derived, beacon.beacon);
-        }
-        uint256 state = LibRainDeployBeacon.appliedState(network, beacon);
-        LibRainDeployBeacon.checkBeacon(
-            network, beacon, resolved.implementationAddresses[state], LibRainDeployBeacon.stateAt(beacon, state).owner
-        );
-        checkSuiteOnNetwork(
-            network,
-            resolved.implementations[state],
-            resolved.implementationDerived[state],
-            resolved.implementationAddresses[state]
-        );
-    }
-
     /// Every RELEASED suite MUST be live, with the code its creation code produces and its declared
-    /// dependencies under it, on every supported network `requiresSuiteOn` requires it on, and every declared beacon
-    /// MUST hold its applied state there.
+    /// dependencies under it, on every network it is required on, with `checkOnChain`'s refusals there.
     function testSuitesLiveOnEverySupportedNetwork() external {
         checkDeployedOnSupportedNetworks(releasedSuites());
     }
