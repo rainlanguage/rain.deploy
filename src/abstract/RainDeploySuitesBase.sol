@@ -10,9 +10,7 @@ import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 // released lib names, and the struct lives beside `deployToNetworks`, which is
 // what holds a declared pair to a chain.
 import {DeployDependency, LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
-import {ChainDeploy, LibRainDeployExtendedNetworks} from "../lib/LibRainDeployExtendedNetworks.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
-import {ChainBeacon} from "../lib/LibRainDeployBeacon.sol";
 
 /// Thrown when two suites share a key. The key selects what gets broadcast, so
 /// a duplicate makes the selection ambiguous and one of the two unreachable.
@@ -142,23 +140,19 @@ error DerivationSnapshotRevertFailed(string suite, uint256 snapshotId);
 /// @param factoryAddress The address the factory bytecode actually deployed to.
 error ZoltuDerivationMismatch(string suite, address formulaAddress, address factoryAddress);
 
-/// Thrown when a Zoltu suite carries mechanism data.
+/// Thrown when a Zoltu suite carries mechanism data other than Zoltu's own.
 /// @param suite The suite carrying the data.
 error UnexpectedMechanismData(string suite);
-
-/// Thrown when a suite whose mechanism takes no extended networks is given some.
-/// @param suite The suite's key.
-error ExtendedNetworksUnexpected(string suite);
 
 /// Thrown when a Zoltu release's frozen record declares `MECHANISM_DATA`.
 /// @param path The record file.
 error FrozenSnapshotMechanismDataUnexpected(string path);
 
-/// Thrown when no mechanism in `mechanisms()` has the id a suite or a released record declares.
+/// Thrown when no mechanism in the declaration has the id a suite or a released record declares.
 /// @param suite The suite's key, or the record file.
 error MechanismUnclaimed(string suite);
 
-/// Thrown when two of `mechanisms()` share an id.
+/// Thrown when two of the declaration's mechanisms share an id.
 /// @param id The shared id.
 error DuplicateMechanism(bytes32 id);
 
@@ -223,16 +217,14 @@ struct DeploySuite {
     /// broadcasts anything. So a wrong declaration is a red deploy run rather
     /// than a wrong hash frozen into a release.
     DeployDependency[] dependencies;
-    /// What the suite's mechanism needs beyond `creationCode`: empty for Zoltu, otherwise
-    /// `abi.encode(id, payload)` for the mechanism with that id.
+    /// What the suite's mechanism needs: `abi.encode(id, payload)` for the mechanism with that id, Zoltu's included.
     bytes mechanismData;
-    /// The networks, as `[rpc_endpoints]` aliases, the chain group requires the suite live on; empty for every
-    /// declared network. A release nothing can deploy any more names the networks it was deployed to. A suite
-    /// required on none of the networks checked is refused with `SuiteRequiredNowhere`.
+    /// The networks, as `[rpc_endpoints]` aliases, the suite has an address on and the chain group requires it live
+    /// on. A suite required on none of the networks checked is refused with `SuiteRequiredNowhere`.
     string[] networks;
 }
 
-/// Everything a repo declares, as data. A declaration starts from `LibRainDeployDeclaration.zoltu()` and sets fields.
+/// Everything a repo declares, as data. A declaration starts empty and every contribution is a layer's `extend(d)`.
 struct DeployDeclaration {
     /// Every FROZEN released suite, in any order, never regenerated nor anchored to current source.
     DeploySuite[] released;
@@ -243,10 +235,6 @@ struct DeployDeclaration {
     /// Every network this repo deals with, as `[rpc_endpoints]` aliases: what a broadcast targets, what every
     /// network-scoped assertion is made over, and what the network config is generated from.
     string[] networks;
-    /// The beacons that MUST hold their declared state, each on one of `networks` with its chain id.
-    ChainBeacon[] beacons;
-    /// The record root extended networks records are read from and written under.
-    string extendedNetworksRoot;
 }
 
 /// The rolling candidate: a snapshot that tracks current source rather than a
@@ -266,24 +254,21 @@ struct DeployCandidate {
     string unanchorableReason;
 }
 
-/// A deploy mechanism, one function per mechanism step. It handles exactly the suites and records declaring its `id`:
-/// empty `mechanismData` declares `bytes32(0)`, Zoltu's; any other is `abi.encode(id, payload)`.
+/// A deploy mechanism, one function per mechanism step. It handles exactly the suites and records declaring its `id`
+/// as the first word of their `mechanismData`. The `add*` steps mutate the suite they are given.
 struct DeployMechanismHandler {
     bytes32 id;
     function(DeploySuite memory, uint256) internal view returns (address) deployedAddress;
     function(DeploySuite memory, uint256) internal view returns (address) recordedAddress;
-    function(DeploySuite memory) internal view returns (uint256[] memory) addressChainIds;
     function(DeploySuite memory, uint256) internal view returns (bytes memory) deployStepData;
     function(DeploySuite memory) internal view returns (function(Vm, string memory, address, bytes memory) internal returns (address))
         deployStep;
     function(Vm, DeploySuite memory) internal returns (address[] memory) deployLocally;
     function(Vm, DeploySuite memory) internal deployLocallyOnChain;
-    function(DeploySuite memory, DeploySuite memory, uint256[] memory) internal view returns (DeploySuite memory)
-        withUnrecordedNetworks;
-    function(DeploySuite memory, ChainDeploy[] memory) internal view returns (DeploySuite memory)
-        appendExtendedNetworks;
+    function(DeploySuite memory, DeploySuite memory, uint256[] memory) internal view addUnrecordedNetworks;
+    function(DeploySuite memory) internal view addRecordedNetworks;
     function(DeploySuite memory, string memory, uint256, address) internal view checkNetworkFrozen;
-    function(DeploySuite memory, uint256) internal view returns (address) suiteBeacon;
+    function(DeploySuite memory, string memory, uint256, address) internal view checkOnChain;
     function(Vm, string[] memory, DeploySuite memory, address[] memory) internal logVerification;
     function(Vm, string memory, string memory, string memory, string memory, string memory, DeploySuite memory) internal returns (string memory)
         writeSuiteSnapshot;
@@ -325,26 +310,17 @@ abstract contract RainDeploySuitesBase {
         return declaration().candidates;
     }
 
-    /// @return `declaration().beacons`.
-    function beacons() internal view returns (ChainBeacon[] memory) {
-        return declaration().beacons;
-    }
-
     /// `deployNetworks` narrowing this is one dispatch's targets, not the repo's set.
     /// @return `declaration().networks`.
     function supportedNetworks() internal view returns (string[] memory) {
         return declaration().networks;
     }
 
-    /// Whether the chain group requires a suite to be live on a network: every declared network for a suite
-    /// declaring no `networks`, else the ones it declares.
+    /// Whether a suite declares a network among its `networks`.
     /// @param suite The suite.
     /// @param network The network, as an `[rpc_endpoints]` alias.
     /// @return True if the suite MUST be live on the network.
     function requiresSuiteOn(DeploySuite memory suite, string memory network) internal pure returns (bool) {
-        if (suite.networks.length == 0) {
-            return true;
-        }
         for (uint256 i = 0; i < suite.networks.length; i++) {
             if (keccak256(bytes(suite.networks[i])) == keccak256(bytes(network))) {
                 return true;
@@ -353,54 +329,38 @@ abstract contract RainDeploySuitesBase {
         return false;
     }
 
-    /// A suite as the chain group checks it. The broadcast takes its candidate's networks in `deployAndBroadcast`
-    /// instead, among the networks it broadcasts to.
-    /// @param frozen The suite, with its extended networks, as `withExtendedNetworks` gives it.
-    /// @param chainIds The chain ids in play.
-    /// @return The suite, with its extended networks and the networks in play its candidate adds.
-    function onSupportedNetworks(DeploySuite memory frozen, uint256[] memory chainIds)
-        internal
-        view
-        returns (DeploySuite memory)
-    {
-        return withUnrecordedNetworks(frozen, candidateOf(frozen), chainIds);
+    /// @param suite The suite.
+    /// @return The chain id of each of its `networks`, in order.
+    function suiteChainIds(DeploySuite memory suite) internal pure returns (uint256[] memory) {
+        return LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(suite.networks));
     }
 
-    /// A suite's candidate snapshot.
-    /// @param suite The suite.
-    /// @return The snapshot of the candidate whose key's name half is `suite`'s, or `suite` when none is.
-    function candidateOf(DeploySuite memory suite) internal view returns (DeploySuite memory) {
-        bytes32 name = keccak256(bytes(suiteKeyName(suite.suite)));
+    /// The candidate a suite key names.
+    /// @param suite The suite key.
+    /// @return The snapshot of the candidate whose key is `suite`'s name half, freshly read from the declaration.
+    /// @return Whether there is one.
+    function candidateOf(string memory suite) internal view returns (DeploySuite memory, bool) {
+        bytes32 name = keccak256(bytes(suiteKeyName(suite)));
         DeployCandidate[] memory candidates = checkedCandidateSuites();
         for (uint256 i = 0; i < candidates.length; i++) {
             if (keccak256(bytes(candidates[i].snapshot.suite)) == name) {
-                return candidates[i].snapshot;
+                return (candidates[i].snapshot, true);
             }
         }
-        return suite;
+        DeploySuite memory none;
+        return (none, false);
     }
 
-    /// A suite with the networks its extended networks record holds, with `appendExtendedNetworks`' refusals.
-    /// @param suite The suite.
-    /// @return The suite, with its extended networks.
-    function withExtendedNetworks(DeploySuite memory suite) internal view returns (DeploySuite memory) {
-        return appendExtendedNetworks(suite, extendedNetworks(suite.suite));
-    }
-
-    /// @return `declaration().extendedNetworksRoot`.
-    function extendedNetworksRoot() internal view returns (string memory) {
-        return declaration().extendedNetworksRoot;
-    }
-
-    /// The networks a per-network release takes beyond those it records: its append-only extended networks record
-    /// under `extendedNetworksRoot()` (`LibRainDeployExtendedNetworks`), each entry its chain id, the init data it is
-    /// broadcast with and the address that derives. The broadcast and the chain group refuse an unrecorded network
-    /// not named there, whether or not anything is live there, so an unrecorded network's address is frozen before
-    /// it exists on chain.
-    /// @param suite The release's suite key.
-    /// @return The networks.
-    function extendedNetworks(string memory suite) internal view returns (ChainDeploy[] memory) {
-        return LibRainDeployExtendedNetworks.recordedExtendedNetworks(StdConstants.VM, extendedNetworksRoot(), suite);
+    /// Adds to `suite` the networks among `chainIds` its candidate takes it to, the candidate being a copy of `suite`
+    /// when its key names none.
+    /// @param suite The suite, mutated.
+    /// @param chainIds The chain ids in play.
+    function addCandidateNetworks(DeploySuite memory suite, uint256[] memory chainIds) internal view {
+        (DeploySuite memory candidate, bool found) = candidateOf(suite.suite);
+        if (!found) {
+            candidate = abi.decode(abi.encode(suite), (DeploySuite));
+        }
+        addUnrecordedNetworks(suite, candidate, chainIds);
     }
 
     /// @return `declaration().mechanisms`.
@@ -432,15 +392,12 @@ abstract contract RainDeploySuitesBase {
         return handlers[found];
     }
 
-    /// The mechanism id a suite's `mechanismData` declares: `bytes32(0)` for none, else its first word. Refuses
-    /// `MechanismUnclaimed` for data shorter than a word.
+    /// The mechanism id a suite's `mechanismData` declares: its first word. Refuses `MechanismUnclaimed` for data
+    /// shorter than a word.
     /// @param suite The suite.
     /// @return The id.
     function mechanismIdOf(DeploySuite memory suite) internal pure returns (bytes32) {
         bytes memory data = suite.mechanismData;
-        if (data.length == 0) {
-            return bytes32(0);
-        }
         if (data.length < 0x20) {
             revert MechanismUnclaimed(suite.suite);
         }
@@ -465,11 +422,6 @@ abstract contract RainDeploySuitesBase {
         return mechanismOf(suite).recordedAddress(suite, chainId);
     }
 
-    /// Empty for one address on every network.
-    function addressChainIds(DeploySuite memory suite) internal view returns (uint256[] memory) {
-        return mechanismOf(suite).addressChainIds(suite);
-    }
-
     function deployStepData(DeploySuite memory suite, uint256 chainId) internal view returns (bytes memory) {
         return mechanismOf(suite).deployStepData(suite, chainId);
     }
@@ -490,20 +442,15 @@ abstract contract RainDeploySuitesBase {
         mechanismOf(suite).deployLocallyOnChain(vm, suite);
     }
 
-    function withUnrecordedNetworks(DeploySuite memory suite, DeploySuite memory candidate, uint256[] memory chainIds)
+    function addUnrecordedNetworks(DeploySuite memory suite, DeploySuite memory candidate, uint256[] memory chainIds)
         internal
         view
-        returns (DeploySuite memory)
     {
-        return mechanismOf(suite).withUnrecordedNetworks(suite, candidate, chainIds);
+        mechanismOf(suite).addUnrecordedNetworks(suite, candidate, chainIds);
     }
 
-    function appendExtendedNetworks(DeploySuite memory suite, ChainDeploy[] memory extended)
-        internal
-        view
-        returns (DeploySuite memory)
-    {
-        return mechanismOf(suite).appendExtendedNetworks(suite, extended);
+    function addRecordedNetworks(DeploySuite memory suite) internal view {
+        mechanismOf(suite).addRecordedNetworks(suite);
     }
 
     function checkNetworkFrozen(DeploySuite memory frozen, string memory network, uint256 chainId, address where)
@@ -513,8 +460,11 @@ abstract contract RainDeploySuitesBase {
         mechanismOf(frozen).checkNetworkFrozen(frozen, network, chainId, where);
     }
 
-    function suiteBeacon(DeploySuite memory suite, uint256 chainId) internal view returns (address) {
-        return mechanismOf(suite).suiteBeacon(suite, chainId);
+    function checkOnChain(DeploySuite memory suite, string memory network, uint256 chainId, address deployed)
+        internal
+        view
+    {
+        mechanismOf(suite).checkOnChain(suite, network, chainId, deployed);
     }
 
     function logVerification(Vm vm, string[] memory networks, DeploySuite memory suite, address[] memory deployed)
@@ -553,16 +503,10 @@ abstract contract RainDeploySuitesBase {
         );
     }
 
-    /// Every address a suite's mechanism derives for it, in its address order.
     /// @param suite The suite.
-    /// @return The derived addresses.
+    /// @return The address its mechanism derives for it on each of its `networks`, in order.
     function deployedAddresses(DeploySuite memory suite) internal view returns (address[] memory) {
-        uint256[] memory chainIds = addressChainIds(suite);
-        if (chainIds.length == 0) {
-            address[] memory single = new address[](1);
-            single[0] = deployedAddress(suite, 0);
-            return single;
-        }
+        uint256[] memory chainIds = suiteChainIds(suite);
         address[] memory addresses = new address[](chainIds.length);
         for (uint256 i = 0; i < chainIds.length; i++) {
             addresses[i] = deployedAddress(suite, chainIds[i]);
@@ -570,16 +514,10 @@ abstract contract RainDeploySuitesBase {
         return addresses;
     }
 
-    /// Every address a suite records for itself, in its address order.
     /// @param suite The suite.
-    /// @return The recorded addresses.
+    /// @return The address it records for itself on each of its `networks`, in order.
     function recordedAddresses(DeploySuite memory suite) internal view returns (address[] memory) {
-        uint256[] memory chainIds = addressChainIds(suite);
-        if (chainIds.length == 0) {
-            address[] memory single = new address[](1);
-            single[0] = recordedAddress(suite, 0);
-            return single;
-        }
+        uint256[] memory chainIds = suiteChainIds(suite);
         address[] memory addresses = new address[](chainIds.length);
         for (uint256 i = 0; i < chainIds.length; i++) {
             addresses[i] = recordedAddress(suite, chainIds[i]);
@@ -587,26 +525,20 @@ abstract contract RainDeploySuitesBase {
         return addresses;
     }
 
-    /// `checkNetworkFrozen` on each of `networks` that `onNetworks` has an address for, with that address.
-    /// @param frozen The release with its extended networks.
+    /// `checkNetworkFrozen` on each of `networks` among `onNetworks`' networks, with its recorded address there.
+    /// @param frozen The release with its recorded networks.
     /// @param onNetworks The release as it would be broadcast, with its candidate's unrecorded networks.
     /// @param networks The networks to broadcast to.
     function checkNetworksFrozen(DeploySuite memory frozen, DeploySuite memory onNetworks, string[] memory networks)
         internal
         view
     {
-        uint256[] memory chainIds = addressChainIds(onNetworks);
-        if (chainIds.length == 0) {
-            return;
-        }
         SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
         for (uint256 i = 0; i < configs.length; i++) {
-            for (uint256 j = 0; j < chainIds.length; j++) {
-                if (chainIds[j] == configs[i].chainId) {
-                    checkNetworkFrozen(
-                        frozen, networks[i], configs[i].chainId, recordedAddress(onNetworks, configs[i].chainId)
-                    );
-                }
+            if (requiresSuiteOn(onNetworks, networks[i])) {
+                checkNetworkFrozen(
+                    frozen, networks[i], configs[i].chainId, recordedAddress(onNetworks, configs[i].chainId)
+                );
             }
         }
     }
