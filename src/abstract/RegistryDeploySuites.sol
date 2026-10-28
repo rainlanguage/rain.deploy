@@ -2,8 +2,14 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {DeployCandidate, DeployDependency, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
-import {RainDeployZoltuSuitesBase} from "./RainDeployZoltuSuitesBase.sol";
+import {
+    DeployCandidate,
+    DeployDependency,
+    DeployMechanismHandler,
+    DeploySuite,
+    RainDeploySuitesBase
+} from "./RainDeploySuitesBase.sol";
+import {LibRainDeployZoltuMechanism} from "../lib/LibRainDeployZoltuMechanism.sol";
 import {
     CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE_CANDIDATE
@@ -72,7 +78,13 @@ struct ParameterisedContract {
 /// are the declaration, and the whole released side — the per-contract libs and
 /// the aggregate that concatenates them — comes from `script/Build.sol`, which
 /// emits it from the frozen record. Nothing about a release is written here.
-abstract contract RegistryDeploySuites is RainDeployZoltuSuitesBase {
+abstract contract RegistryDeploySuites is RainDeploySuitesBase {
+    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
+        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
+        handlers[0] = LibRainDeployZoltuMechanism.handler();
+        return handlers;
+    }
+
     /// The suite key of the retired `AddressRegistry` releases.
     string constant ADDRESS_REGISTRY_SUITE = "address-registry";
 

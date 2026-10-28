@@ -154,6 +154,10 @@ error ExtendedNetworksUnexpected(string suite);
 /// @param path The record file.
 error FrozenSnapshotMechanismDataUnexpected(string path);
 
+/// Thrown when no mechanism in `mechanisms()` claims a suite or a released record.
+/// @param suite The suite's key, or the record file.
+error MechanismUnclaimed(string suite);
+
 /// One deployable unit.
 struct DeploySuite {
     /// The key. Unique across every suite a repo declares, and held to the key
@@ -237,6 +241,30 @@ struct DeployCandidate {
     string unanchorableReason;
 }
 
+/// A deploy mechanism, one function per mechanism step. `claims` selects the suites it handles; a
+/// `releasedMechanismData` returning the empty string declines that record.
+struct DeployMechanismHandler {
+    function(DeploySuite memory) internal view returns (bool) claims;
+    function(DeploySuite memory, uint256) internal view returns (address) deployedAddress;
+    function(DeploySuite memory, uint256) internal view returns (address) recordedAddress;
+    function(DeploySuite memory) internal view returns (uint256[] memory) addressChainIds;
+    function(DeploySuite memory, uint256) internal view returns (bytes memory) deployStepData;
+    function(DeploySuite memory) internal view returns (function(Vm, string memory, address, bytes memory) internal returns (address))
+        deployStep;
+    function(Vm, DeploySuite memory) internal returns (address[] memory) deployLocally;
+    function(Vm, DeploySuite memory) internal deployLocallyOnChain;
+    function(DeploySuite memory, DeploySuite memory, uint256[] memory) internal view returns (DeploySuite memory)
+        withUnrecordedNetworks;
+    function(DeploySuite memory, ChainDeploy[] memory) internal view returns (DeploySuite memory)
+        appendExtendedNetworks;
+    function(DeploySuite memory, string memory, uint256, address) internal view checkNetworkFrozen;
+    function(DeploySuite memory, uint256) internal view returns (address) suiteBeacon;
+    function(Vm, string[] memory, DeploySuite memory, address[] memory) internal logVerification;
+    function(Vm, string memory, string memory, string memory, string memory, string memory, DeploySuite memory) internal returns (string memory)
+        writeSuiteSnapshot;
+    function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData;
+}
+
 /// @title RainDeploySuitesBase
 /// @notice The ONE declaration of what a repo deploys, consumed by both the
 /// broadcasting abstract and the verification abstracts.
@@ -261,9 +289,9 @@ struct DeployCandidate {
 /// fewer than all of them. Nothing else is per suite and nothing else is per
 /// network.
 ///
-/// The mechanism hooks are unimplemented, so that one abstract inherits exactly
-/// one mechanism base implementing them, `RainDeployZoltuSuitesBase` or an
-/// extension's, and composes with every role abstract without restating them.
+/// `mechanisms` is overridden there too; every mechanism step resolves its
+/// suite's handler from it, so the declaration composes with every role
+/// abstract without restating anything.
 abstract contract RainDeploySuitesBase {
     /// Every FROZEN released suite, in any order. A released snapshot is
     /// immutable: its recorded bytes describe a deployment that already
@@ -393,104 +421,89 @@ abstract contract RainDeploySuitesBase {
         return new ChainDeploy[](0);
     }
 
-    /// The address a suite's mechanism puts it at on one network.
-    /// @param suite The suite.
-    /// @param chainId The network's chain id.
-    /// @return The derived address on that network.
-    function deployedAddress(DeploySuite memory suite, uint256 chainId) internal view virtual returns (address);
+    /// The mechanisms this repo's suites deploy through, in resolution order.
+    /// @return The handlers.
+    function mechanisms() internal pure virtual returns (DeployMechanismHandler[] memory);
 
-    /// The address a suite records for itself on one network.
+    /// The first of `mechanisms()` claiming `suite`, refusing `MechanismUnclaimed` for none.
     /// @param suite The suite.
-    /// @param chainId The network's chain id.
-    /// @return The recorded address on that network.
-    function recordedAddress(DeploySuite memory suite, uint256 chainId) internal view virtual returns (address);
+    /// @return Its handler.
+    function mechanismOf(DeploySuite memory suite) internal view returns (DeployMechanismHandler memory) {
+        DeployMechanismHandler[] memory handlers = mechanisms();
+        for (uint256 i = 0; i < handlers.length; i++) {
+            if (handlers[i].claims(suite)) {
+                return handlers[i];
+            }
+        }
+        revert MechanismUnclaimed(suite.suite);
+    }
 
-    /// The chain id each of a suite's addresses is for, in its address order; empty for one address on every network.
-    /// @param suite The suite.
-    /// @return The chain ids.
-    function addressChainIds(DeploySuite memory suite) internal view virtual returns (uint256[] memory);
+    function deployedAddress(DeploySuite memory suite, uint256 chainId) internal view returns (address) {
+        return mechanismOf(suite).deployedAddress(suite, chainId);
+    }
 
-    /// What a suite's mechanism step is handed on one network.
-    /// @param suite The suite.
-    /// @param chainId The network's chain id.
-    /// @return The step data on that network.
-    function deployStepData(DeploySuite memory suite, uint256 chainId) internal view virtual returns (bytes memory);
+    function recordedAddress(DeploySuite memory suite, uint256 chainId) internal view returns (address) {
+        return mechanismOf(suite).recordedAddress(suite, chainId);
+    }
 
-    /// A suite's mechanism as a `LibRainDeploy.deployStepToNetworks` step.
-    /// @param suite The suite.
-    /// @return The step.
+    /// Empty for one address on every network.
+    function addressChainIds(DeploySuite memory suite) internal view returns (uint256[] memory) {
+        return mechanismOf(suite).addressChainIds(suite);
+    }
+
+    function deployStepData(DeploySuite memory suite, uint256 chainId) internal view returns (bytes memory) {
+        return mechanismOf(suite).deployStepData(suite, chainId);
+    }
+
     function deployStep(DeploySuite memory suite)
         internal
         view
-        virtual
-        returns (function(Vm, string memory, address, bytes memory) internal returns (address));
+        returns (function(Vm, string memory, address, bytes memory) internal returns (address))
+    {
+        return mechanismOf(suite).deployStep(suite);
+    }
 
-    /// Runs a suite's mechanism on the local EVM with its declared dependencies etched.
-    /// @param vm The Vm instance to etch with.
-    /// @param suite The suite to deploy.
-    /// @return Where it landed, in its address order: the addresses `deployedAddresses` derives.
-    function deployLocally(Vm vm, DeploySuite memory suite) internal virtual returns (address[] memory);
+    function deployLocally(Vm vm, DeploySuite memory suite) internal returns (address[] memory) {
+        return mechanismOf(suite).deployLocally(vm, suite);
+    }
 
-    /// `deployLocally` as the deploy to the network of `block.chainid` runs it.
-    /// @param vm The Vm instance to etch with.
-    /// @param suite The suite to deploy.
-    function deployLocallyOnChain(Vm vm, DeploySuite memory suite) internal virtual;
+    function deployLocallyOnChain(Vm vm, DeploySuite memory suite) internal {
+        mechanismOf(suite).deployLocallyOnChain(vm, suite);
+    }
 
-    /// A suite with an entry for every network in play that its candidate has and it lacks.
-    /// @param suite The suite.
-    /// @param candidate Its candidate, or `suite` when it has none.
-    /// @param chainIds The chain ids in play.
-    /// @return The suite with those networks.
     function withUnrecordedNetworks(DeploySuite memory suite, DeploySuite memory candidate, uint256[] memory chainIds)
         internal
         view
-        virtual
-        returns (DeploySuite memory);
+        returns (DeploySuite memory)
+    {
+        return mechanismOf(suite).withUnrecordedNetworks(suite, candidate, chainIds);
+    }
 
-    /// A release with the networks declared for it beyond those it records appended.
-    /// @param suite The release.
-    /// @param extended The networks declared for it.
-    /// @return The release with them.
     function appendExtendedNetworks(DeploySuite memory suite, ChainDeploy[] memory extended)
         internal
         view
-        virtual
-        returns (DeploySuite memory);
+        returns (DeploySuite memory)
+    {
+        return mechanismOf(suite).appendExtendedNetworks(suite, extended);
+    }
 
-    /// Refuses a release on a network that `frozen` neither records nor declares as extended.
-    /// @param frozen The release with its extended networks.
-    /// @param network The network's name.
-    /// @param chainId The network's chain id.
-    /// @param where The address checked on it.
     function checkNetworkFrozen(DeploySuite memory frozen, string memory network, uint256 chainId, address where)
         internal
         view
-        virtual;
+    {
+        mechanismOf(frozen).checkNetworkFrozen(frozen, network, chainId, where);
+    }
 
-    /// The beacon a suite's code reads its implementation from on one network, zero for none.
-    /// @param suite The suite.
-    /// @param chainId The network's chain id.
-    /// @return The beacon.
-    function suiteBeacon(DeploySuite memory suite, uint256 chainId) internal view virtual returns (address);
+    function suiteBeacon(DeploySuite memory suite, uint256 chainId) internal view returns (address) {
+        return mechanismOf(suite).suiteBeacon(suite, chainId);
+    }
 
-    /// Logs how to verify a broadcast suite's source.
-    /// @param vm The Vm instance to format with.
-    /// @param networks The networks it was broadcast to.
-    /// @param suite The suite.
-    /// @param deployed Where it is on each network, positionally paired with `networks`.
     function logVerification(Vm vm, string[] memory networks, DeploySuite memory suite, address[] memory deployed)
         internal
-        virtual;
+    {
+        mechanismOf(suite).logVerification(vm, networks, suite, deployed);
+    }
 
-    /// Writes one snapshot of a suite, by its mechanism.
-    /// @param vm The Vm instance for file operations.
-    /// @param root The record root.
-    /// @param dir The snapshot directory name — a release tag, or `CANDIDATE`.
-    /// @param contractName The contract the snapshot describes.
-    /// @param spdxLicenseIdentifier The SPDX licence identifier the snapshot declares.
-    /// @param copyrightText The copyright text the snapshot declares.
-    /// @param suite The suite to snapshot.
-    /// @return The path written.
     function writeSuiteSnapshot(
         Vm vm,
         string memory root,
@@ -499,9 +512,14 @@ abstract contract RainDeploySuitesBase {
         string memory spdxLicenseIdentifier,
         string memory copyrightText,
         DeploySuite memory suite
-    ) internal virtual returns (string memory);
+    ) internal returns (string memory) {
+        return mechanismOf(suite).writeSuiteSnapshot(
+            vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite
+        );
+    }
 
-    /// The Solidity expression a generated released-suites lib gives a release's `mechanismData`.
+    /// The expression a generated released-suites lib gives a release's `mechanismData`, from the first of
+    /// `mechanisms()` not declining the record, refusing `MechanismUnclaimed` for none.
     /// @param vm The Vm instance for file and string operations.
     /// @param path The release's record file.
     /// @param prefix The prefix the record's constants are aliased under.
@@ -509,8 +527,17 @@ abstract contract RainDeploySuitesBase {
     function releasedMechanismData(Vm vm, string memory path, string memory prefix)
         internal
         view
-        virtual
-        returns (string memory);
+        returns (string memory)
+    {
+        DeployMechanismHandler[] memory handlers = mechanisms();
+        for (uint256 i = 0; i < handlers.length; i++) {
+            string memory expression = handlers[i].releasedMechanismData(vm, path, prefix);
+            if (bytes(expression).length != 0) {
+                return expression;
+            }
+        }
+        revert MechanismUnclaimed(path);
+    }
 
     /// Every address a suite's mechanism derives for it, in its address order.
     /// @param suite The suite.
