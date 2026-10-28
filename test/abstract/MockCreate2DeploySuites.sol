@@ -42,6 +42,19 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
 
     ChainDeploy[] internal sMockExtendedNetworks;
 
+    string internal sMockExtendedNetworksRoot;
+
+    function setMockExtendedNetworksRoot(string memory root) external {
+        sMockExtendedNetworksRoot = root;
+    }
+
+    function extendedNetworksRoot() internal view virtual override returns (string memory) {
+        if (bytes(sMockExtendedNetworksRoot).length == 0) {
+            return super.extendedNetworksRoot();
+        }
+        return sMockExtendedNetworksRoot;
+    }
+
     function setMockExtendedNetworks(ChainDeploy[] memory networks) external {
         delete sMockExtendedNetworks;
         for (uint256 i = 0; i < networks.length; i++) {
