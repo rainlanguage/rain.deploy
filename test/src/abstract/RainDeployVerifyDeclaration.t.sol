@@ -87,7 +87,7 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVeri
 
     function testDispatchChoicesAreReadPastCommentsAndBlankLines() external view {
         string[] memory choices = dispatchChoices();
-        assertEq(choices.length, 4);
+        assertEq(choices.length, 3);
         assertEq(choices[0], "mock-deployable");
         assertEq(choices[1], "mock-reaching-deployable");
         assertEq(choices[2], "mock-deployable@0_0_1");
@@ -260,7 +260,7 @@ contract RainDeployVerifyDeclarationTest is ReachingDeploySuites, RainDeployVeri
         assertTrue(isInert(""));
         assertTrue(isInert("      "));
         assertTrue(isInert("          # Frozen releases."));
-        assertFalse(isInert("          - mock-clone"));
+        assertFalse(isInert("          - mock-deployable"));
     }
 
     function testContainsAddressFindsTheStrippedPushImmediate() external pure {
