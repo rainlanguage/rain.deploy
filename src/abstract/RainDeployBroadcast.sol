@@ -8,22 +8,14 @@ import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
 
 import {DeploySuite, DerivationSnapshotRevertFailed, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../lib/LibRainDeploy.sol";
-import {ChainBeacon, LibRainDeployBeacon} from "../lib/LibRainDeployBeacon.sol";
 
 /// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with a first word whose low
 /// 160 bits are the deploy key. Roles, pending owners, admin slots and contracts the suite's constructors create are
 /// not read.
-/// A beacon proxy suite is checked per network on its fork instead, as `BeaconProxySeatsDeployKey`.
 /// @param suite The suite being broadcast.
 /// @param deployed The address, deployed locally as the deploy key would, that answers `owner()` with a first word
 /// whose low 160 bits are the deploy key.
 error SuiteSeatsDeployKey(string suite, address deployed);
-
-/// @notice The deploy key MUST NOT be a declared owner of any state of any beacon.
-/// @param chainId The beacon's network.
-/// @param beaconIndex The beacon's index in `beacons()`.
-/// @param state The state index, as `LibRainDeployBeacon.stateAt` takes it.
-error BeaconOwnedByDeployKey(uint256 chainId, uint256 beaconIndex, uint256 state);
 
 /// @title RainDeployBroadcast
 /// @notice The broadcast, inherited rather than rewritten per repo.
@@ -81,10 +73,10 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         broadcastSuite(suite, deployNetworks(), deployerPrivateKey);
     }
 
-    /// Refuses `BeaconOwnedByDeployKey` and `checkSeatsNoDeployKey`'s refusals before reading any network (so the
-    /// suite's constructor MUST succeed locally, with only its declared dependencies etched, under each chain id that
-    /// check reads), then broadcasts the selected suite by ITS mechanism, through the mechanism hooks — the same
-    /// dispatch every verification group derives through, so what is broadcast is what was verified.
+    /// Refuses `checkSeatsNoDeployKey`'s refusals before reading any network (so the suite's constructor MUST succeed
+    /// locally, with only its declared dependencies etched, under each chain id that check reads), then broadcasts the
+    /// selected suite by ITS mechanism, through the mechanism hooks — the same dispatch every verification group
+    /// derives through, so what is broadcast is what was verified. `suite` is not changed.
     /// @param suite The selected suite, as `DEPLOYMENT_SUITE` named it.
     /// @param networks The networks to broadcast to, as `deployNetworks()` gave them.
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
@@ -95,27 +87,25 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         returns (address[] memory, uint256[] memory)
     {
         address deployer = vm.addr(deployerPrivateKey);
-        ChainBeacon[] memory chainBeacons = beacons();
-        for (uint256 beaconIndex = 0; beaconIndex < chainBeacons.length; beaconIndex++) {
-            for (uint256 state = 0; state <= chainBeacons[beaconIndex].beacon.transitions.length; state++) {
-                if (LibRainDeployBeacon.stateAt(chainBeacons[beaconIndex].beacon, state).owner == deployer) {
-                    revert BeaconOwnedByDeployKey(chainBeacons[beaconIndex].chainId, beaconIndex, state);
-                }
-            }
+        DeploySuite memory frozen = abi.decode(abi.encode(suite), (DeploySuite));
+        addRecordedNetworks(frozen);
+        (DeploySuite memory candidate, bool found) = candidateOf(frozen.suite);
+        if (!found) {
+            candidate = abi.decode(abi.encode(frozen), (DeploySuite));
         }
-        DeploySuite memory frozen = withExtendedNetworks(suite);
-        DeploySuite memory candidate = candidateOf(frozen);
-        checkSeatsNoDeployKey(withUnrecordedNetworks(frozen, candidate, addressChainIds(candidate)), networks, deployer);
+        DeploySuite memory seated = abi.decode(abi.encode(frozen), (DeploySuite));
+        addUnrecordedNetworks(seated, candidate, suiteChainIds(candidate));
+        checkSeatsNoDeployKey(seated, seatTargets(seated, candidate, networks), deployer);
         return deployAndBroadcast(vm, networks, deployerPrivateKey, frozen, candidate);
     }
 
     /// Broadcasts `frozen`, with every network in play its candidate adds, to each of `networks` by its mechanism,
-    /// then logs how to verify it.
+    /// then logs how to verify it. `frozen` is not changed.
     /// @param vm The Vm instance to broadcast with.
     /// @param networks The networks to broadcast to.
     /// @param deployerPrivateKey The deploy key.
-    /// @param frozen The release with its extended networks.
-    /// @param candidate Its candidate, or `frozen` when it has none.
+    /// @param frozen The release with its recorded networks.
+    /// @param candidate Its candidate, or a copy of `frozen` when it has none.
     /// @return Where the suite is on each network, positionally paired with `networks`.
     /// @return The fork each network was deployed on.
     function deployAndBroadcast(
@@ -129,7 +119,8 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
             revert LibRainDeploy.NoNetworks();
         }
         SupportedNetwork[] memory configs = LibRainDeploy.declaredNetworkConfigs(networks);
-        DeploySuite memory suite = withUnrecordedNetworks(frozen, candidate, LibRainDeploy.networkChainIds(configs));
+        DeploySuite memory suite = abi.decode(abi.encode(frozen), (DeploySuite));
+        addUnrecordedNetworks(suite, candidate, LibRainDeploy.networkChainIds(configs));
         checkNetworksFrozen(frozen, suite, networks);
         NetworkDeploys memory deploys = NetworkDeploys({
             deployStepData: new bytes[](configs.length),
@@ -154,41 +145,53 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         return (deploys.expectedAddresses, forkIds);
     }
 
-    /// Deploys `suite` locally with `deployer` as sender and origin, once under each target's chain id (a per-network
-    /// suite only that network's address), and refuses
-    /// `SuiteSeatsDeployKey` when the target deployed for that chain id answers `owner()` with a first word whose
-    /// low 160 bits are `deployer`. The targets are `addressChainIds(suite)` when non-empty, otherwise every one of
-    /// `supportedNetworks()`, those this broadcast does not reach included, then each of `networks` not among them,
-    /// so one network seating the deploy key refuses the broadcast to every network. The suite's constructor runs
-    /// on the local EVM with only its declared dependencies etched, so it MUST succeed there under each target's
-    /// chain id: one that reverts locally (say, by calling an undeclared contract under one chain id) refuses the
-    /// broadcast to every network with its revert.
-    /// @param suite The suite to broadcast, with its extended networks and every network its candidate adds.
+    /// The chain ids `checkSeatsNoDeployKey` deploys under: those of `suite`'s networks, then of `candidate`'s not
+    /// among them, then of `networks` not among those, so one network seating the deploy key refuses the broadcast
+    /// to every network.
+    /// @param suite The suite to broadcast, with its recorded networks and every network its candidate adds.
+    /// @param candidate Its candidate.
     /// @param networks The networks this broadcast reaches.
-    /// @param deployer The deploy key's address.
-    function checkSeatsNoDeployKey(DeploySuite memory suite, string[] memory networks, address deployer) internal {
-        uint256[] memory chainIds = addressChainIds(suite);
-        if (chainIds.length == 0) {
-            SupportedNetwork[] memory supported = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
-            SupportedNetwork[] memory dispatched = LibRainDeploy.declaredNetworkConfigs(networks);
-            uint256 count = supported.length;
-            for (uint256 i = 0; i < dispatched.length; i++) {
-                if (!LibRainDeploy.hasChainId(supported, dispatched[i].chainId)) {
-                    count++;
+    /// @return The chain ids.
+    function seatTargets(DeploySuite memory suite, DeploySuite memory candidate, string[] memory networks)
+        internal
+        pure
+        returns (uint256[] memory)
+    {
+        uint256[] memory own = suiteChainIds(suite);
+        uint256[] memory candidates = suiteChainIds(candidate);
+        uint256[] memory dispatched = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(networks));
+        uint256[] memory targets = new uint256[](own.length + candidates.length + dispatched.length);
+        uint256 count = 0;
+        for (uint256 i = 0; i < targets.length; i++) {
+            uint256 chainId = i < own.length
+                ? own[i]
+                : i < own.length + candidates.length ? candidates[i - own.length] : dispatched[i - own.length - candidates.length];
+            bool seen = false;
+            for (uint256 j = 0; j < count; j++) {
+                if (targets[j] == chainId) {
+                    seen = true;
+                    break;
                 }
             }
-            chainIds = new uint256[](count);
-            for (uint256 i = 0; i < supported.length; i++) {
-                chainIds[i] = supported[i].chainId;
-            }
-            count = supported.length;
-            for (uint256 i = 0; i < dispatched.length; i++) {
-                if (!LibRainDeploy.hasChainId(supported, dispatched[i].chainId)) {
-                    chainIds[count] = dispatched[i].chainId;
-                    count++;
-                }
+            if (!seen) {
+                targets[count++] = chainId;
             }
         }
+        assembly ("memory-safe") {
+            mstore(targets, count)
+        }
+        return targets;
+    }
+
+    /// Deploys `suite` locally with `deployer` as sender and origin, once under each of `chainIds`, and refuses
+    /// `SuiteSeatsDeployKey` when the address deployed for that chain id answers `owner()` with a first word whose
+    /// low 160 bits are `deployer`. The suite's constructor runs on the local EVM with only its declared dependencies
+    /// etched, so it MUST succeed there under each chain id: one that reverts locally (say, by calling an undeclared
+    /// contract under one chain id) refuses the broadcast to every network with its revert.
+    /// @param suite The suite to broadcast, with its recorded networks and every network its candidate adds.
+    /// @param chainIds The chain ids to deploy under.
+    /// @param deployer The deploy key's address.
+    function checkSeatsNoDeployKey(DeploySuite memory suite, uint256[] memory chainIds, address deployer) internal {
         for (uint256 i = 0; i < chainIds.length; i++) {
             uint256 snapshotId = vm.snapshotState();
             vm.chainId(chainIds[i]);
