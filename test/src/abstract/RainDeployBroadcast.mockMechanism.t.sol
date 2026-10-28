@@ -5,7 +5,7 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {SuiteSeatsDeployKey} from "../../../src/abstract/RainDeployBroadcast.sol";
-import {DeployDeclaration, DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDependency, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {ChainDeploy, LibRainDeployExtendedNetworks} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
 import {
@@ -22,27 +22,7 @@ import {MockCreate2Factory} from "../../concrete/MockCreate2Factory.sol";
 import {MockChainOriginOwned} from "../../concrete/MockChainOriginOwned.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
-
-/// `broadcastSuite` over a suite the caller still holds.
-contract CallerHeldMockBroadcast is MockCreate2Deploy {
-    /// @return The hashes of the caller's suite and declaration before, then after, the broadcast.
-    function broadcastRelease(string[] memory networks, uint256 key)
-        external
-        returns (bytes32, bytes32, bytes32, bytes32)
-    {
-        DeployDeclaration memory d = declaration();
-        DeploySuite memory suite = mockRelease();
-        bytes32 suiteBefore = keccak256(abi.encode(suite));
-        bytes32 declarationBefore = keccak256(abi.encode(d.released, d.candidates, d.networks));
-        broadcastSuite(d, suite, networks, key);
-        return (
-            suiteBefore,
-            keccak256(abi.encode(suite)),
-            declarationBefore,
-            keccak256(abi.encode(d.released, d.candidates, d.networks))
-        );
-    }
-}
+import {CallerHeldMockBroadcast} from "../../concrete/CallerHeldMockBroadcast.sol";
 
 /// @title RainDeployBroadcastMockMechanismTest
 /// @notice `deployAndBroadcast`, `broadcastSuite` and the seat check over a per-network mechanism.
