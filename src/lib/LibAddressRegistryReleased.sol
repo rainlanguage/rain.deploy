@@ -109,7 +109,8 @@ library LibAddressRegistryReleased {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_7_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[1] = DeploySuite({
             suite: "address-registry@0_1_8",
@@ -120,7 +121,8 @@ library LibAddressRegistryReleased {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_8_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[2] = DeploySuite({
             suite: "address-registry@0_1_10",
@@ -131,7 +133,8 @@ library LibAddressRegistryReleased {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_10_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[3] = DeploySuite({
             suite: "address-registry@0_1_11",
@@ -142,7 +145,8 @@ library LibAddressRegistryReleased {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_11_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[4] = DeploySuite({
             suite: "address-registry@0_1_12",
@@ -153,7 +157,8 @@ library LibAddressRegistryReleased {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_12_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[5] = DeploySuite({
             suite: "address-registry@0_1_14",
@@ -164,7 +169,8 @@ library LibAddressRegistryReleased {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_14_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[6] = DeploySuite({
             suite: "address-registry@0_1_15",
@@ -175,7 +181,8 @@ library LibAddressRegistryReleased {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_15_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[7] = DeploySuite({
             suite: "address-registry@0_1_17",
@@ -186,7 +193,8 @@ library LibAddressRegistryReleased {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_17_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         suites[8] = DeploySuite({
             suite: "address-registry@0_1_18",
@@ -197,7 +205,8 @@ library LibAddressRegistryReleased {
             artifactPath: "src/concrete/AddressRegistry.sol:AddressRegistry",
             dependencies: abi.decode(AddressRegistry_0_1_18_DEPENDENCIES, (DeployDependency[])),
             mechanismData: LibRainDeployZoltuMechanism.mechanismData(),
-            networks: new string[](0)
+            networks: new string[](0),
+            describedByMeta: ""
         });
         return suites;
     }

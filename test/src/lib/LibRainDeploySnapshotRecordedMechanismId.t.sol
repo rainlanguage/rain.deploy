@@ -295,8 +295,8 @@ contract LibRainDeploySnapshotRecordedMechanismIdTest is Test {
             "            storedBytecodeHash: Record_0_1_0_BYTECODE_HASH,\n"
             "            storedRuntimeCode: Record_0_1_0_RUNTIME_CODE,\n" "            artifactPath: \"\",\n"
             "            dependencies: abi.decode(Record_0_1_0_DEPENDENCIES, (DeployDependency[])),\n"
-            "            mechanismData: Record_0_1_0_MECHANISM_DATA,\n" "            networks: new string[](0),\n" "            describedByMeta: \"\"\n"
-            "        });\n"
+            "            mechanismData: Record_0_1_0_MECHANISM_DATA,\n" "            networks: new string[](0),\n"
+            "            describedByMeta: \"\"\n" "        });\n"
         );
     }
 
