@@ -8,7 +8,7 @@ import {Safe} from "safe-global-safe-smart-account-1.5.0/contracts/Safe.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {SafeTx} from "../../../src/lib/LibSafeTx.sol";
 import {LibSafe} from "../../../src/lib/LibSafe.sol";
-import {Enum} from "safe-global-safe-smart-account-1.5.0/contracts/common/Enum.sol";
+import {Enum} from "safe-global-safe-smart-account-1.5.0/contracts/libraries/Enum.sol";
 import {LibSafeFork} from "../../../src/lib/LibSafeFork.sol";
 import {LibSafeTxBuilderJson} from "../../../src/lib/LibSafeTxBuilderJson.sol";
 import {ExampleSafeBundleScript} from "../../concrete/ExampleSafeBundleScript.sol";

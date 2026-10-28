@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Safe} from "safe-global-safe-smart-account-1.5.0/contracts/Safe.sol";
-import {Enum} from "safe-global-safe-smart-account-1.5.0/contracts/common/Enum.sol";
+import {Enum} from "safe-global-safe-smart-account-1.5.0/contracts/libraries/Enum.sol";
 import {MultiSendCallOnly} from "safe-global-safe-smart-account-1.5.0/contracts/libraries/MultiSendCallOnly.sol";
 import {LibSafe} from "./LibSafe.sol";
 

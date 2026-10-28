@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {Safe} from "safe-global-safe-smart-account-1.5.0/contracts/Safe.sol";
 import {OwnerManager} from "safe-global-safe-smart-account-1.5.0/contracts/base/OwnerManager.sol";
-import {Enum} from "safe-global-safe-smart-account-1.5.0/contracts/common/Enum.sol";
+import {Enum} from "safe-global-safe-smart-account-1.5.0/contracts/libraries/Enum.sol";
 import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {LibSafeTx, SafeTx} from "./LibSafeTx.sol";
 

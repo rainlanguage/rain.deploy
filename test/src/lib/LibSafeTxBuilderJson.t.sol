@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {Enum} from "safe-global-safe-smart-account-1.5.0/contracts/common/Enum.sol";
+import {Enum} from "safe-global-safe-smart-account-1.5.0/contracts/libraries/Enum.sol";
 import {LibSafeTx, SafeTx} from "../../../src/lib/LibSafeTx.sol";
 import {LibSafeTxBuilderJson} from "../../../src/lib/LibSafeTxBuilderJson.sol";
 
