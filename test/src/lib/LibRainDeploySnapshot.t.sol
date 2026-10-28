@@ -19,7 +19,7 @@ import {
     SnapshotFile,
     UnexpectedMechanismData
 } from "../../../src/abstract/RainDeploySuitesBase.sol";
-import {LibRainDeployZoltuMechanism, ZOLTU_MECHANISM_ID} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {
     EmptyRelease,
     InvalidRecordRoot,
@@ -1192,7 +1192,7 @@ contract LibRainDeploySnapshotTest is Test {
             vm.readFile(RELEASED_LIB_PATH),
             string.concat(
                 generatedFilePrefix(),
-                LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+                LibRainDeploySnapshot.releasedImportBlock(vm, paths, zoltuDeclaration()),
                 LibRainDeploySnapshot.releasedLibraryBlock(
                     vm, EMITTED_LIBRARY, EMITTED_CONTRACT, paths, emitterTemplate(), zoltuDeclaration()
                 )
@@ -1482,11 +1482,8 @@ contract LibRainDeploySnapshotTest is Test {
             "_RUNTIME_CODE,\n            artifactPath: \"src/concrete/AddressRegistry.sol:AddressRegistry\",\n",
             "            dependencies: abi.decode(AddressRegistry_",
             tag,
-            string.concat(
-                "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: abi.encode(bytes32(",
-                vm.toString(ZOLTU_MECHANISM_ID),
-                ")),\n            networks: new string[](0)\n        });\n"
-            )
+            "_DEPENDENCIES, (DeployDependency[])),\n            mechanismData: LibRainDeployZoltuMechanism.mechanismData(),\n",
+            "            networks: new string[](0)\n        });\n"
         );
     }
 
@@ -1499,22 +1496,24 @@ contract LibRainDeploySnapshotTest is Test {
     /// falls back to whatever else is in scope.
     function testReleasedImportBlockAliasesEveryRecord() external view {
         assertEq(
-            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(0)),
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(0), zoltuDeclaration()),
             "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n"
         );
 
         assertEq(
-            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1)),
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1), zoltuDeclaration()),
             string.concat(
-                "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n",
+                "import {LibRainDeployZoltuMechanism} from \"../lib/LibRainDeployZoltuMechanism.sol\";\n\n",
                 expectedImport("0_0_1")
             )
         );
 
         assertEq(
-            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2)),
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2), zoltuDeclaration()),
             string.concat(
-                "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n\n",
+                "import {DeployDependency, DeploySuite} from \"../abstract/RainDeploySuitesBase.sol\";\n",
+                "import {LibRainDeployZoltuMechanism} from \"../lib/LibRainDeployZoltuMechanism.sol\";\n\n",
                 expectedImport("0_0_1"),
                 expectedImport("0_0_2")
             )
@@ -1536,9 +1535,10 @@ contract LibRainDeploySnapshotTest is Test {
         string memory consumerPath = "rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol";
 
         assertEq(
-            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1), consumerPath),
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(1), consumerPath, zoltuDeclaration()),
             string.concat(
-                "import {DeployDependency, DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n\n",
+                "import {DeployDependency, DeploySuite} from \"rain-deploy-0.1.11/src/abstract/RainDeploySuitesBase.sol\";\n",
+                "import {LibRainDeployZoltuMechanism} from \"rain-deploy-0.1.11/src/lib/LibRainDeployZoltuMechanism.sol\";\n\n",
                 expectedImport("0_0_1")
             )
         );
@@ -1548,9 +1548,9 @@ contract LibRainDeploySnapshotTest is Test {
     /// existing caller spells keeps emitting what it emitted.
     function testReleasedImportBlockDefaultsToThisRepoSuitesImportPath() external view {
         assertEq(
-            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2)),
+            LibRainDeploySnapshot.releasedImportBlock(vm, recordOf(2), zoltuDeclaration()),
             LibRainDeploySnapshot.releasedImportBlock(
-                vm, recordOf(2), LibRainDeploySnapshot.suitesImportPathInThisRepo()
+                vm, recordOf(2), LibRainDeploySnapshot.suitesImportPathInThisRepo(), zoltuDeclaration()
             )
         );
     }
@@ -2268,7 +2268,7 @@ contract LibRainDeploySnapshotTest is Test {
         // Built while the fixture record is still there: both emitters read it.
         string memory expected = string.concat(
             generatedFilePrefix(),
-            LibRainDeploySnapshot.releasedImportBlock(vm, paths),
+            LibRainDeploySnapshot.releasedImportBlock(vm, paths, zoltuDeclaration()),
             LibRainDeploySnapshot.releasedLibraryBlock(
                 vm, libraryName, FIXTURE_CONTRACT, paths, emitterTemplate(), zoltuDeclaration()
             )
