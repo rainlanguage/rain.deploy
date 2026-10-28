@@ -49,7 +49,7 @@ contract BuildHarness is Build {
         if (bytes(sLibDir).length == 0) {
             revert BuildHarnessWouldWriteTheCommittedLibs();
         }
-        regenerateLibs();
+        regenerateLibs(declaration());
     }
 
     /// The generator's list.
@@ -91,8 +91,8 @@ contract BuildHarness is Build {
     /// The deploy declaration's list, through the same guarded reader every
     /// other consumer of the declaration uses.
     /// @return The declared candidates.
-    function externalCandidateSuites() external view returns (DeployCandidate[] memory) {
-        return checkedCandidateSuites();
+    function externalCandidateSuites() external pure returns (DeployCandidate[] memory) {
+        return checkedCandidateSuites(declaration());
     }
 
     /// The rolling snapshot name of every parameterised contract, which the
@@ -108,7 +108,7 @@ contract BuildHarness is Build {
         return names;
     }
 
-    /// `LibRainDeploySnapshot.releasedLibraryBlock` under this build's `releasedMechanismData`.
+    /// `LibRainDeploySnapshot.releasedLibraryBlock` under this build's declaration.
     /// @param libraryName The library name.
     /// @param contractName The contract the lib is for.
     /// @param paths The record paths.
@@ -121,7 +121,7 @@ contract BuildHarness is Build {
         DeploySuite memory template
     ) external view returns (string memory) {
         return LibRainDeploySnapshot.releasedLibraryBlock(
-            vm, libraryName, contractName, paths, template, releasedMechanismData
+            vm, libraryName, contractName, paths, template, declaration()
         );
     }
 }
