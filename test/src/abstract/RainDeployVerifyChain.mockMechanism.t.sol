@@ -283,4 +283,17 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
             networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), new DeploySuite[](0)
         );
     }
+
+    /// A hook reads its mechanism's config through the declaration the caller passes it.
+    function testCheckNetworkReadsItsConfigThroughTheDeclaration() external {
+        this.setMockConfig(hex"c0ffee");
+        vm.expectCall(
+            MOCK_MECHANISM_PROBE,
+            abi.encodeCall(IMockMechanismProbe.declaredConfig, (MOCK_SALT_MECHANISM_ID, hex"c0ffee")),
+            2
+        );
+        this.externalCheckAllOn(
+            networkConfigs(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), new DeploySuite[](0)
+        );
+    }
 }
