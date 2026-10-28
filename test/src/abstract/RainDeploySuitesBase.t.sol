@@ -33,7 +33,6 @@ import {VersionQualifiedArtifactPathDeploySuites} from "../../concrete/VersionQu
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 
 /// @title RainDeploySuitesBaseTest
 /// @notice The registry itself: one declaration, keyed lookup, and the two ways
@@ -64,12 +63,6 @@ contract RainDeploySuitesBaseTest is Test {
         assertEq(suites[1].suite, "second-address");
         assertEq(suites[2].suite, "config-registry-candidate");
         assertEq(suites[3].suite, "second-address-candidate");
-    }
-
-    /// A repo that does not override `extendedNetworksRoot` reads and writes its extended networks records under its
-    /// own record, the one its frozen snapshots are under.
-    function testExtendedNetworksRootDefaultsToTheRepoRecord() external view {
-        assertEq(sSuites.externalExtendedNetworksRoot(), LibRainDeploySnapshot.LIB_FS_ROOT);
     }
 
     /// Every declared key MUST select its own suite. A deploy is dispatched per
@@ -575,12 +568,24 @@ contract RainDeploySuitesBaseTest is Test {
     /// Position as well as membership, because the deploy and the matrix both
     /// walk it in order and the last entry is what each leaves selected.
     function testSupportedNetworksDefaultsToEveryRainNetwork() external view {
-        string[] memory declared = sSuites.externalSupportedNetworks();
+        string[] memory declared = sSuites.externalNetworks();
         string[] memory supported = LibRainDeploy.supportedNetworks();
 
         assertEq(declared.length, supported.length);
         for (uint256 i = 0; i < supported.length; i++) {
             assertEq(declared[i], supported[i]);
+        }
+    }
+
+    /// A suite declared without networks is required on every declared network.
+    function testUnlistedSuitesTakeEveryDeclaredNetwork() external view {
+        string[] memory declared = sSuites.externalNetworks();
+        DeploySuite[] memory suites = sSuites.externalAllSuites();
+        for (uint256 i = 0; i < suites.length; i++) {
+            assertEq(suites[i].networks.length, declared.length);
+            for (uint256 j = 0; j < declared.length; j++) {
+                assertEq(suites[i].networks[j], declared[j]);
+            }
         }
     }
 }
