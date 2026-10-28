@@ -107,7 +107,11 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         }
         DeploySuite memory seated = abi.decode(abi.encode(frozen), (DeploySuite));
         addUnrecordedNetworks(d, seated, candidate, suiteChainIds(candidate));
-        checkSeatsNoDeployKey(d, seated, seatTargets(seated, candidate, networks), deployer);
+        uint256[] memory targets = seatTargets(seated, candidate, networks);
+        for (uint256 i = 0; i < targets.length; i++) {
+            checkBroadcastSeat(d, seated, targets[i], deployer);
+        }
+        checkSeatsNoDeployKey(d, seated, targets, deployer);
         return deployAndBroadcast(d, vm, networks, deployerPrivateKey, frozen, candidate);
     }
 
