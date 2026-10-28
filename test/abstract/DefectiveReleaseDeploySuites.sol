@@ -8,14 +8,14 @@ import {ReachingDeploySuites} from "./ReachingDeploySuites.sol";
 /// the checks for a test to call.
 abstract contract DefectiveReleaseDeploySuites is ReachingDeploySuites {
     function externalCheckDependenciesAreNonZeroAndUnique() external view {
-        checkDependenciesAreNonZeroAndUnique();
+        checkDependenciesAreNonZeroAndUnique(declaration());
     }
 
     function externalCheckDependenciesAreTheEmbeddedDeployments() external view {
-        checkDependenciesAreTheEmbeddedDeployments();
+        checkDependenciesAreTheEmbeddedDeployments(declaration());
     }
 
     function externalCheckDependencyRuntimeCodeIsKnown() external view {
-        checkDependencyRuntimeCodeIsKnown();
+        checkDependencyRuntimeCodeIsKnown(declaration());
     }
 }

@@ -2,13 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {
-    DeployCandidate,
-    DeployDependency,
-    DeployMechanismHandler,
-    DeploySuite,
-    RainDeploySuitesBase
-} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployCandidate, DeployDependency, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ExternalDeployment, RainDeployDeclarationChecks} from "../../src/abstract/RainDeployDeclarationChecks.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
@@ -42,12 +36,6 @@ enum DeclarationDefect {
 /// with a leading zero byte, with one `DeclarationDefect` applied to its
 /// candidates.
 abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
-    function mechanisms() internal pure virtual override returns (DeployMechanismHandler[] memory) {
-        DeployMechanismHandler[] memory handlers = new DeployMechanismHandler[](1);
-        handlers[0] = LibRainDeployZoltuMechanism.handler();
-        return handlers;
-    }
-
     DeclarationDefect internal sDefect;
     string internal sWorkflow = "test/fixture-dispatch/dispatchable.yaml";
 
@@ -61,7 +49,7 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
             storedRuntimeCode: type(MockDeployable).runtimeCode,
             artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
             dependencies: new DeployDependency[](0),
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
     }
 
@@ -79,19 +67,17 @@ abstract contract ReachingDeploySuites is RainDeployDeclarationChecks {
             storedRuntimeCode: type(MockReachingDeployable).runtimeCode,
             artifactPath: "test/concrete/MockReachingDeployable.sol:MockReachingDeployable",
             dependencies: deps,
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure virtual override returns (DeploySuite[] memory) {
+    function reachingReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);
         suites[0] = leafSuite("mock-deployable@0_0_1");
         return suites;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal view override returns (DeployCandidate[] memory) {
+    function reachingCandidates() internal view returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({snapshot: leafSuite("mock-deployable"), unanchorableReason: ""});
         candidates[1] = DeployCandidate({snapshot: reachingSuite("mock-reaching-deployable"), unanchorableReason: ""});
