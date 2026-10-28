@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {Script} from "forge-std-1.17.0/src/Script.sol";
+import {RAIN_COPYRIGHT_TEXT, RAIN_SPDX_LICENSE_IDENTIFIER} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {
     DeployCandidate,
     DeployDeclaration,
@@ -105,6 +106,129 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// record. Run last, after a `cutRelease()` freeze has written the record,
     /// so a file emitted from that record holds the release just cut.
     function regenerateLibs(DeployDeclaration memory d) internal virtual;
+
+    /// Every contract this repo generates pins for, in the order its libs are
+    /// aggregated. Read through `checkedGeneratedContracts`.
+    /// @return The generated contracts.
+    function generatedContracts() internal view virtual returns (GeneratedContract[] memory);
+
+    /// Contracts this repo no longer builds whose frozen releases stay
+    /// declared, in the order they were released. Defaults to none.
+    /// @return The retired contracts.
+    function retiredContracts() internal view virtual returns (RetiredContract[] memory) {
+        return new RetiredContract[](0);
+    }
+
+    /// The SPDX licence identifier the generated libs declare. Defaults to
+    /// `RAIN_SPDX_LICENSE_IDENTIFIER`, for a repo this org owns.
+    /// @return The SPDX licence identifier.
+    function libSpdxLicenseIdentifier() internal view virtual returns (string memory) {
+        return RAIN_SPDX_LICENSE_IDENTIFIER;
+    }
+
+    /// The copyright text the generated libs declare. Defaults to
+    /// `RAIN_COPYRIGHT_TEXT`, for a repo this org owns.
+    /// @return The copyright text.
+    function libCopyrightText() internal view virtual returns (string memory) {
+        return RAIN_COPYRIGHT_TEXT;
+    }
+
+    /// `generatedContracts()`, refusing a list that is not exactly `d`'s
+    /// candidates, an anchored candidate named for another contract, a name
+    /// shared with another generated or retired contract, and a non-empty
+    /// constant prefix shared by two contracts.
+    /// @param d The declaration.
+    /// @return The generated contracts.
+    function checkedGeneratedContracts(DeployDeclaration memory d) internal view returns (GeneratedContract[] memory) {
+        GeneratedContract[] memory generated = generatedContracts();
+        checkCandidates(d);
+        DeployCandidate[] memory candidates = d.candidates;
+        for (uint256 i = 0; i < generated.length; i++) {
+            checkGeneratedContract(generated[i], candidates);
+            for (uint256 j = i + 1; j < generated.length; j++) {
+                if (
+                    keccak256(bytes(generated[j].candidate.snapshot.suite))
+                        == keccak256(bytes(generated[i].candidate.snapshot.suite))
+                ) {
+                    revert DuplicateDeploySuite(generated[i].candidate.snapshot.suite);
+                }
+                if (keccak256(bytes(generated[j].contractName)) == keccak256(bytes(generated[i].contractName))) {
+                    revert DuplicateGeneratedContractName(generated[i].contractName);
+                }
+                if (
+                    bytes(generated[i].constantPrefix).length > 0
+                        && keccak256(bytes(generated[j].constantPrefix))
+                            == keccak256(bytes(generated[i].constantPrefix))
+                ) {
+                    revert DuplicateConstantPrefix(generated[i].constantPrefix);
+                }
+            }
+        }
+        for (uint256 j = 0; j < candidates.length; j++) {
+            bytes32 suite = keccak256(bytes(candidates[j].snapshot.suite));
+            bool found = false;
+            for (uint256 i = 0; i < generated.length; i++) {
+                if (keccak256(bytes(generated[i].candidate.snapshot.suite)) == suite) {
+                    found = true;
+                    break;
+                }
+            }
+            if (!found) {
+                revert DeclaredCandidateNotGenerated(candidates[j].snapshot.suite);
+            }
+        }
+        RetiredContract[] memory retired = retiredContracts();
+        for (uint256 i = 0; i < retired.length; i++) {
+            for (uint256 j = i + 1; j < retired.length; j++) {
+                if (keccak256(bytes(retired[j].contractName)) == keccak256(bytes(retired[i].contractName))) {
+                    revert DuplicateGeneratedContractName(retired[i].contractName);
+                }
+            }
+            for (uint256 j = 0; j < generated.length; j++) {
+                if (keccak256(bytes(generated[j].contractName)) == keccak256(bytes(retired[i].contractName))) {
+                    revert DuplicateGeneratedContractName(retired[i].contractName);
+                }
+            }
+        }
+        return generated;
+    }
+
+    /// Refuses a generated contract whose candidate is not the one declared
+    /// under its key, or whose anchored artifact path names another contract.
+    /// @param generated The generated contract.
+    /// @param candidates The declared candidates.
+    function checkGeneratedContract(GeneratedContract memory generated, DeployCandidate[] memory candidates)
+        internal
+        pure
+    {
+        bytes32 suite = keccak256(bytes(generated.candidate.snapshot.suite));
+        bool found = false;
+        for (uint256 j = 0; j < candidates.length; j++) {
+            if (keccak256(bytes(candidates[j].snapshot.suite)) == suite) {
+                if (keccak256(abi.encode(candidates[j])) != keccak256(abi.encode(generated.candidate))) {
+                    revert GeneratedCandidateNotDeclared(generated.candidate.snapshot.suite);
+                }
+                found = true;
+                break;
+            }
+        }
+        if (!found) {
+            revert GeneratedContractNotDeclared(generated.contractName, generated.candidate.snapshot.suite);
+        }
+        if (bytes(generated.candidate.unanchorableReason).length == 0) {
+            checkGeneratedContractName(generated);
+        }
+    }
+
+    /// Refuses a generated contract whose name is not the contract its
+    /// artifact path names.
+    /// @param generated The generated contract.
+    function checkGeneratedContractName(GeneratedContract memory generated) internal pure {
+        string[] memory components = vm.split(generated.candidate.snapshot.artifactPath, ":");
+        if (keccak256(bytes(components[components.length - 1])) != keccak256(bytes(generated.contractName))) {
+            revert GeneratedContractNameNotArtifact(generated.contractName, generated.candidate.snapshot.artifactPath);
+        }
+    }
 
     /// The contracts whose rolling snapshots a release freezes.
     /// @return The contract names.
