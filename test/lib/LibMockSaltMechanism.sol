@@ -10,15 +10,17 @@ import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 import {LibMockCreate2Mechanism, MOCK_CREATE2_FACTORY} from "./LibMockCreate2Mechanism.sol";
 import {MockCreate2Factory} from "../concrete/MockCreate2Factory.sol";
 
+bytes32 constant MOCK_SALT_MECHANISM_ID = keccak256("rain.deploy.mock.salt.mechanism");
+
 /// @title LibMockSaltMechanism
 /// @notice A second test-only mechanism: CREATE2 through `MockCreate2Factory` at `MOCK_CREATE2_FACTORY`, one address
-/// on every network, its `mechanismData` one word, the abi-encoded salt. It declines every released record.
+/// on every network, its `mechanismData` its id and the salt, abi-encoded.
 library LibMockSaltMechanism {
     event MockSaltVerification(string suite, address deployed);
 
     function handler() internal pure returns (DeployMechanismHandler memory) {
         return DeployMechanismHandler({
-            claims: claims,
+            id: MOCK_SALT_MECHANISM_ID,
             deployedAddress: deployedAddress,
             recordedAddress: recordedAddress,
             addressChainIds: addressChainIds,
@@ -36,12 +38,13 @@ library LibMockSaltMechanism {
         });
     }
 
-    function claims(DeploySuite memory suite) internal pure returns (bool) {
-        return suite.mechanismData.length == 32;
+    function encode(bytes32 create2Salt) internal pure returns (bytes memory) {
+        return abi.encode(MOCK_SALT_MECHANISM_ID, create2Salt);
     }
 
     function salt(DeploySuite memory suite) internal pure returns (bytes32) {
-        return abi.decode(suite.mechanismData, (bytes32));
+        (, bytes32 create2Salt) = abi.decode(suite.mechanismData, (bytes32, bytes32));
+        return create2Salt;
     }
 
     function deployedAddress(DeploySuite memory suite, uint256) internal pure returns (address) {
@@ -118,12 +121,19 @@ library LibMockSaltMechanism {
         string memory copyrightText,
         DeploySuite memory suite
     ) internal returns (string memory) {
-        return LibRainDeploySnapshot.writeSnapshot(
+        string memory path = LibRainDeploySnapshot.writeSnapshot(
             vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite.creationCode, suite.dependencies
         );
+        vm.writeLine(
+            path,
+            string.concat(
+                "bytes constant MECHANISM_DATA = hex\"", vm.replace(vm.toString(suite.mechanismData), "0x", ""), "\";"
+            )
+        );
+        return path;
     }
 
-    function releasedMechanismData(Vm, string memory, string memory) internal pure returns (string memory) {
-        return "";
+    function releasedMechanismData(Vm, string memory, string memory prefix) internal pure returns (string memory) {
+        return string.concat(prefix, "_MECHANISM_DATA");
     }
 }

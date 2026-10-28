@@ -16,14 +16,13 @@ import {ChainDeploy} from "./LibRainDeployExtendedNetworks.sol";
 import {LibRainDeploySnapshot} from "./LibRainDeploySnapshot.sol";
 
 /// @title LibRainDeployZoltuMechanism
-/// @notice The Zoltu mechanism: one address on every network, from the creation code alone. It claims empty
-/// `mechanismData`, and every step refuses non-empty data with `UnexpectedMechanismData`. Listed last in
-/// `mechanisms()` by convention.
+/// @notice The Zoltu mechanism: one address on every network, from the creation code alone. Its id is `bytes32(0)`,
+/// which empty `mechanismData` declares, and every step refuses non-empty data with `UnexpectedMechanismData`.
 library LibRainDeployZoltuMechanism {
     /// @return The Zoltu handler.
     function handler() internal pure returns (DeployMechanismHandler memory) {
         return DeployMechanismHandler({
-            claims: claims,
+            id: bytes32(0),
             deployedAddress: deployedAddress,
             recordedAddress: recordedAddress,
             addressChainIds: addressChainIds,
@@ -41,9 +40,6 @@ library LibRainDeployZoltuMechanism {
         });
     }
 
-    function claims(DeploySuite memory suite) internal pure returns (bool) {
-        return suite.mechanismData.length == 0;
-    }
 
     function checkMechanismData(DeploySuite memory suite) internal pure {
         if (suite.mechanismData.length != 0) {

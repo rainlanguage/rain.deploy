@@ -1555,6 +1555,35 @@ library LibRainDeploySnapshot {
         return mechanismData;
     }
 
+    /// The mechanism id a record declares: `bytes32(0)` without `MECHANISM_DATA`, else its leading word. Refuses
+    /// `FrozenSnapshotUnreadable` for a `MECHANISM_DATA` not a `hex"..."` literal of at least a word, with
+    /// `recordedMechanismShape`'s refusals.
+    /// @param vm The Vm instance for file and string operations.
+    /// @param path A record file, as `frozenSnapshotPaths` returns it.
+    /// @return The id.
+    function recordedMechanismId(Vm vm, string memory path) internal view returns (bytes32) {
+        if (!recordDeclaresMechanismData(vm, path)) {
+            return bytes32(0);
+        }
+        string[] memory lines = recordLines(vm, path, vm.readFile(path));
+        uint256 line = 0;
+        while (vm.indexOf(lines[line], MECHANISM_DATA_DECLARATION) != 0) {
+            line++;
+        }
+        (, string memory value) = declarationValue(vm, lines, line, string.concat(WRAPPED_INDENT, "hex\""));
+        bytes memory literal = bytes(value);
+        if (literal.length < 70 || vm.indexOf(value, "hex\"") != 0) {
+            revert FrozenSnapshotUnreadable(path);
+        }
+        bytes memory word = new bytes(66);
+        word[0] = "0";
+        word[1] = "x";
+        for (uint256 i = 0; i < 64; i++) {
+            word[i + 2] = literal[i + 4];
+        }
+        return vm.parseBytes32(string(word));
+    }
+
     /// The aliased import one record file contributes.
     /// @param vm The Vm instance for file and string operations.
     /// @param path A record file, as `frozenSnapshotPaths` returns it.

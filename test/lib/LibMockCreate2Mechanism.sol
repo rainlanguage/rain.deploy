@@ -22,6 +22,8 @@ address constant MOCK_CREATE2_FACTORY = address(uint160(uint256(keccak256("rain.
 
 bytes32 constant MOCK_CREATE2_SALT = keccak256("rain.deploy.mock.create2.salt");
 
+bytes32 constant MOCK_CREATE2_MECHANISM_ID = keccak256("rain.deploy.mock.create2.mechanism");
+
 error MockCreate2NetworkUndeclared(string suite, uint256 chainId);
 
 error MockCreate2NetworkUnfrozen(string suite, string network, address where);
@@ -29,14 +31,14 @@ error MockCreate2NetworkUnfrozen(string suite, string network, address where);
 error MockCreate2DerivationMismatch(string suite, address derived, address deployed);
 
 /// @title LibMockCreate2Mechanism
-/// @notice A test-only mechanism: CREATE2 through `MockCreate2Factory`, an abi-encoded `MockCreate2Mechanism` longer
-/// than one word in `mechanismData`.
+/// @notice A test-only mechanism: CREATE2 through `MockCreate2Factory`, `mechanismData` its id and a
+/// `MockCreate2Mechanism`, abi-encoded.
 library LibMockCreate2Mechanism {
     event MockCreate2Verification(string[] networks, string suite, address[] deployed);
 
     function handler() internal pure returns (DeployMechanismHandler memory) {
         return DeployMechanismHandler({
-            claims: claims,
+            id: MOCK_CREATE2_MECHANISM_ID,
             deployedAddress: deployedAddress,
             recordedAddress: recordedAddress,
             addressChainIds: addressChainIds,
@@ -54,8 +56,8 @@ library LibMockCreate2Mechanism {
         });
     }
 
-    function claims(DeploySuite memory suite) internal pure returns (bool) {
-        return suite.mechanismData.length > 32;
+    function isMockCreate2(DeploySuite memory suite) internal pure returns (bool) {
+        return suite.mechanismData.length > 0x20 && abi.decode(suite.mechanismData, (bytes32)) == MOCK_CREATE2_MECHANISM_ID;
     }
 
     function create2Address(address factory, bytes32 create2Salt, bytes memory creationCode) internal pure returns (address) {
@@ -68,8 +70,13 @@ library LibMockCreate2Mechanism {
         return keccak256(abi.encode(baseSalt, data));
     }
 
+    function encode(MockCreate2Mechanism memory mechanism) internal pure returns (bytes memory) {
+        return abi.encode(MOCK_CREATE2_MECHANISM_ID, mechanism);
+    }
+
     function decode(DeploySuite memory suite) internal pure returns (MockCreate2Mechanism memory) {
-        return abi.decode(suite.mechanismData, (MockCreate2Mechanism));
+        (, MockCreate2Mechanism memory mechanism) = abi.decode(suite.mechanismData, (bytes32, MockCreate2Mechanism));
+        return mechanism;
     }
 
     function withMechanism(DeploySuite memory suite, MockCreate2Mechanism memory mechanism)
@@ -78,7 +85,7 @@ library LibMockCreate2Mechanism {
         returns (DeploySuite memory)
     {
         DeploySuite memory copy = abi.decode(abi.encode(suite), (DeploySuite));
-        copy.mechanismData = abi.encode(mechanism);
+        copy.mechanismData = encode(mechanism);
         return copy;
     }
 
@@ -190,7 +197,7 @@ library LibMockCreate2Mechanism {
         returns (DeploySuite memory)
     {
         MockCreate2Mechanism memory mechanism = decode(suite);
-        if (mechanism.networks.length == 0 || !claims(candidate)) {
+        if (mechanism.networks.length == 0 || !isMockCreate2(candidate)) {
             return suite;
         }
         MockCreate2Mechanism memory candidateMechanism = decode(candidate);
@@ -298,15 +305,7 @@ library LibMockCreate2Mechanism {
         return path;
     }
 
-    /// Claims a record declaring `MECHANISM_DATA`, declining the rest.
-    function releasedMechanismData(Vm vm, string memory path, string memory prefix)
-        internal
-        view
-        returns (string memory)
-    {
-        if (LibRainDeploySnapshot.recordDeclaresMechanismData(vm, path)) {
-            return string.concat(prefix, "_MECHANISM_DATA");
-        }
-        return "";
+    function releasedMechanismData(Vm, string memory, string memory prefix) internal pure returns (string memory) {
+        return string.concat(prefix, "_MECHANISM_DATA");
     }
 }

@@ -154,9 +154,13 @@ error ExtendedNetworksUnexpected(string suite);
 /// @param path The record file.
 error FrozenSnapshotMechanismDataUnexpected(string path);
 
-/// Thrown when no mechanism in `mechanisms()` claims a suite or a released record.
+/// Thrown when no mechanism in `mechanisms()` has the id a suite or a released record declares.
 /// @param suite The suite's key, or the record file.
 error MechanismUnclaimed(string suite);
+
+/// Thrown when two of `mechanisms()` share an id.
+/// @param id The shared id.
+error DuplicateMechanism(bytes32 id);
 
 /// One deployable unit.
 struct DeploySuite {
@@ -241,10 +245,10 @@ struct DeployCandidate {
     string unanchorableReason;
 }
 
-/// A deploy mechanism, one function per mechanism step. `claims` selects the suites it handles; a
-/// `releasedMechanismData` returning the empty string declines that record.
+/// A deploy mechanism, one function per mechanism step. It handles exactly the suites and records declaring its `id`:
+/// empty `mechanismData` declares `bytes32(0)`, Zoltu's; any other is `abi.encode(id, payload)`.
 struct DeployMechanismHandler {
-    function(DeploySuite memory) internal view returns (bool) claims;
+    bytes32 id;
     function(DeploySuite memory, uint256) internal view returns (address) deployedAddress;
     function(DeploySuite memory, uint256) internal view returns (address) recordedAddress;
     function(DeploySuite memory) internal view returns (uint256[] memory) addressChainIds;
@@ -421,21 +425,57 @@ abstract contract RainDeploySuitesBase {
         return new ChainDeploy[](0);
     }
 
-    /// The mechanisms this repo's suites deploy through, in resolution order.
+    /// The mechanisms this repo's suites deploy through, in any order.
     /// @return The handlers.
     function mechanisms() internal pure virtual returns (DeployMechanismHandler[] memory);
 
-    /// The first of `mechanisms()` claiming `suite`, refusing `MechanismUnclaimed` for none.
-    /// @param suite The suite.
+    /// The one of `mechanisms()` whose id is `id`, refusing `DuplicateMechanism` for a list repeating an id and
+    /// `MechanismUnclaimed` for none.
+    /// @param id The mechanism id.
+    /// @param subject The suite key or record file `MechanismUnclaimed` names.
     /// @return Its handler.
-    function mechanismOf(DeploySuite memory suite) internal view returns (DeployMechanismHandler memory) {
+    function mechanismById(bytes32 id, string memory subject) internal pure returns (DeployMechanismHandler memory) {
         DeployMechanismHandler[] memory handlers = mechanisms();
+        uint256 found = handlers.length;
         for (uint256 i = 0; i < handlers.length; i++) {
-            if (handlers[i].claims(suite)) {
-                return handlers[i];
+            for (uint256 j = 0; j < i; j++) {
+                if (handlers[j].id == handlers[i].id) {
+                    revert DuplicateMechanism(handlers[i].id);
+                }
+            }
+            if (handlers[i].id == id) {
+                found = i;
             }
         }
-        revert MechanismUnclaimed(suite.suite);
+        if (found == handlers.length) {
+            revert MechanismUnclaimed(subject);
+        }
+        return handlers[found];
+    }
+
+    /// The mechanism id a suite's `mechanismData` declares: `bytes32(0)` for none, else its first word. Refuses
+    /// `MechanismUnclaimed` for data shorter than a word.
+    /// @param suite The suite.
+    /// @return The id.
+    function mechanismIdOf(DeploySuite memory suite) internal pure returns (bytes32) {
+        bytes memory data = suite.mechanismData;
+        if (data.length == 0) {
+            return bytes32(0);
+        }
+        if (data.length < 0x20) {
+            revert MechanismUnclaimed(suite.suite);
+        }
+        bytes32 id;
+        assembly ("memory-safe") {
+            id := mload(add(data, 0x20))
+        }
+        return id;
+    }
+
+    /// @param suite The suite.
+    /// @return The handler of the mechanism its data declares.
+    function mechanismOf(DeploySuite memory suite) internal pure returns (DeployMechanismHandler memory) {
+        return mechanismById(mechanismIdOf(suite), suite.suite);
     }
 
     function deployedAddress(DeploySuite memory suite, uint256 chainId) internal view returns (address) {
@@ -518,8 +558,8 @@ abstract contract RainDeploySuitesBase {
         );
     }
 
-    /// The expression a generated released-suites lib gives a release's `mechanismData`, from the first of
-    /// `mechanisms()` not declining the record, refusing `MechanismUnclaimed` for none.
+    /// The expression a generated released-suites lib gives a release's `mechanismData`, from the mechanism whose id
+    /// the record declares (`LibRainDeploySnapshot.recordedMechanismId`).
     /// @param vm The Vm instance for file and string operations.
     /// @param path The release's record file.
     /// @param prefix The prefix the record's constants are aliased under.
@@ -529,14 +569,9 @@ abstract contract RainDeploySuitesBase {
         view
         returns (string memory)
     {
-        DeployMechanismHandler[] memory handlers = mechanisms();
-        for (uint256 i = 0; i < handlers.length; i++) {
-            string memory expression = handlers[i].releasedMechanismData(vm, path, prefix);
-            if (bytes(expression).length != 0) {
-                return expression;
-            }
-        }
-        revert MechanismUnclaimed(path);
+        return mechanismById(LibRainDeploySnapshot.recordedMechanismId(vm, path), path).releasedMechanismData(
+            vm, path, prefix
+        );
     }
 
     /// Every address a suite's mechanism derives for it, in its address order.
