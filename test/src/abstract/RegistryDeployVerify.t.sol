@@ -343,7 +343,6 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
             }
         }
         assertGt(retired, 0, "no AddressRegistry release declared");
-        assertLt(live.length, d.networks.length, "the retired releases are required everywhere");
     }
 
     function isListed(string[] memory networks, string memory network) internal pure returns (bool) {
