@@ -30,7 +30,18 @@ contract LibRainDeploySnapshotReleasedImportBlockTest is Test {
         return string.concat("0_0_", vm.toString(i + 1));
     }
 
-    /// One record per id, tagged `0_0_<i + 1>` in order; a Zoltu record declares no `MECHANISM_DATA`.
+    /// A Zoltu record declares no `MECHANISM_DATA`; any other leads its `MECHANISM_DATA` with its id.
+    function record(bytes32 id) internal pure returns (string memory) {
+        string memory addressLine =
+            string.concat("address constant DEPLOYED_ADDRESS = address(", vm.toString(address(1)), ");\n");
+        if (id == ZOLTU_MECHANISM_ID) {
+            return addressLine;
+        }
+        string memory digits = vm.replace(vm.toString(id), "0x", "");
+        return string.concat(addressLine, "bytes constant MECHANISM_DATA = hex\"", digits, "\";\n");
+    }
+
+    /// One record per id, tagged `0_0_<i + 1>` in order.
     function writeRecords(string memory name, bytes32[] memory ids) internal returns (string memory, string[] memory) {
         string memory dir = string.concat(ROOT, "/", name);
         string[] memory paths = new string[](ids.length);
@@ -40,19 +51,7 @@ contract LibRainDeploySnapshotReleasedImportBlockTest is Test {
             //forge-lint: disable-next-line(unsafe-cheatcode)
             vm.createDir(tagDir, true);
             //forge-lint: disable-next-line(unsafe-cheatcode)
-            vm.writeFile(
-                paths[i],
-                string.concat(
-                    "address constant DEPLOYED_ADDRESS = address(",
-                    vm.toString(address(1)),
-                    ");\n",
-                    ids[i] == ZOLTU_MECHANISM_ID
-                        ? string("")
-                        : string.concat(
-                            "bytes constant MECHANISM_DATA = hex\"", vm.replace(vm.toString(ids[i]), "0x", ""), "\";\n"
-                        )
-                )
-            );
+            vm.writeFile(paths[i], record(ids[i]));
         }
         return (dir, paths);
     }
@@ -67,23 +66,23 @@ contract LibRainDeploySnapshotReleasedImportBlockTest is Test {
 
     function recordImport(uint256 i, bool mechanismData) internal pure returns (string memory) {
         string memory prefix = string.concat("Record_", tag(i));
-        return string.concat(
-            "import {\n    DEPLOYED_ADDRESS as ",
-            prefix,
-            "_DEPLOYED_ADDRESS,\n    BYTECODE_HASH as ",
-            prefix,
-            "_BYTECODE_HASH,\n    CREATION_CODE as ",
-            prefix,
-            "_CREATION_CODE,\n    RUNTIME_CODE as ",
-            prefix,
-            "_RUNTIME_CODE,\n    DEPENDENCIES as ",
-            prefix,
-            "_DEPENDENCIES",
-            mechanismData ? string.concat(",\n    MECHANISM_DATA as ", prefix, "_MECHANISM_DATA") : string(""),
-            "\n} from \"../generated/",
-            tag(i),
-            "/Record.sol\";\n\n"
+        string memory aliases = string.concat(
+            aliased(prefix, "DEPLOYED_ADDRESS"),
+            ",\n",
+            aliased(prefix, "BYTECODE_HASH"),
+            ",\n",
+            aliased(prefix, "CREATION_CODE"),
+            ",\n"
         );
+        aliases = string.concat(aliases, aliased(prefix, "RUNTIME_CODE"), ",\n", aliased(prefix, "DEPENDENCIES"));
+        if (mechanismData) {
+            aliases = string.concat(aliases, ",\n", aliased(prefix, "MECHANISM_DATA"));
+        }
+        return string.concat("import {\n", aliases, "\n} from \"../generated/", tag(i), "/Record.sol\";\n\n");
+    }
+
+    function aliased(string memory prefix, string memory name) internal pure returns (string memory) {
+        return string.concat("    ", name, " as ", prefix, "_", name);
     }
 
     function testEachMechanismImportOnceAtItsFirstRecordAndNoneForAnEmptyOne() external {
@@ -92,18 +91,11 @@ contract LibRainDeploySnapshotReleasedImportBlockTest is Test {
         ids[1] = MOCK_SALT_MECHANISM_ID;
         ids[2] = MOCK_SALT_MECHANISM_ID;
         ids[3] = MOCK_CREATE2_MECHANISM_ID;
+        string memory records =
+            string.concat(recordImport(0, false), recordImport(1, true), recordImport(2, true), recordImport(3, true));
         assertEq(
             importBlock("zoltu-salt-salt-create2", ids),
-            string.concat(
-                SUITES_IMPORT,
-                ZOLTU_IMPORT,
-                SALT_IMPORT,
-                "\n",
-                recordImport(0, false),
-                recordImport(1, true),
-                recordImport(2, true),
-                recordImport(3, true)
-            )
+            string.concat(SUITES_IMPORT, ZOLTU_IMPORT, SALT_IMPORT, "\n", records)
         );
     }
 
