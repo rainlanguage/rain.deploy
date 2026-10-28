@@ -2,6 +2,7 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
+import {DeployDeclaration} from "./RainDeploySuitesBase.sol";
 import {RainDeployVerifySnapshotBase} from "./RainDeployVerifySnapshotBase.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
@@ -57,7 +58,8 @@ abstract contract RainDeployVerifySnapshot is RainDeployVerifySnapshotBase {
     function testEveryFrozenSnapshotIsReleased() external view {
         (string[] memory deployRecords,) =
             partitionFrozenRecords(LibRainDeploySnapshot.frozenSnapshotPaths(vm), frozenCodeRecordNames());
-        checkFrozenSnapshotsReleased(deployRecords, d.released);
+        DeployDeclaration memory d = declaration();
+        checkFrozenSnapshotsReleased(d, deployRecords, d.released);
     }
 
     /// Every frozen code record MUST be one: a parameterised contract's

@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {console2} from "forge-std-1.17.0/src/console2.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
-import {DeploySuite} from "./RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 
 /// Thrown when `requiresSuiteOn` requires a suite on none of the networks
@@ -18,15 +18,15 @@ error SuiteRequiredNowhere(string suite);
 abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// Checks every suite against every supported network.
     /// @param suites The suites to check.
-    function checkDeployedOnSupportedNetworks(DeploySuite[] memory suites) internal {
-        checkDeployedOnNetworks(LibRainDeploy.declaredNetworkConfigs(d.networks), suites);
+    function checkDeployedOnSupportedNetworks(DeployDeclaration memory d, DeploySuite[] memory suites) internal {
+        checkDeployedOnNetworks(d, LibRainDeploy.declaredNetworkConfigs(d.networks), suites);
     }
 
     /// Checks every suite on the given networks against each, forking with `vm`.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
-    function checkDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) internal {
-        checkDeployedOnNetworks(vm, networks, suites);
+    function checkDeployedOnNetworks(DeployDeclaration memory d, SupportedNetwork[] memory networks, DeploySuite[] memory suites) internal {
+        checkDeployedOnNetworks(d, vm, networks, suites);
     }
 
     /// Checks every suite on the given networks against each, forking each network once with `forkVm`. Each suite is
@@ -37,7 +37,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// @param forkVm The Vm instance to fork with.
     /// @param networks The catalogue entry of each network to check on.
     /// @param suites The suites to check.
-    function checkDeployedOnNetworks(Vm forkVm, SupportedNetwork[] memory networks, DeploySuite[] memory suites)
+    function checkDeployedOnNetworks(DeployDeclaration memory d, Vm forkVm, SupportedNetwork[] memory networks, DeploySuite[] memory suites)
         internal
     {
         // Nothing to check is not a reason to touch every RPC endpoint.
@@ -85,7 +85,7 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
             }
         }
 
-        DerivedDeploy[] memory derived = deriveDeployments(suites);
+        DerivedDeploy[] memory derived = deriveDeployments(d, suites);
         uint256[] memory forkIds = LibRainDeploy.createForks(forkVm, LibRainDeploy.networkNames(networks));
         for (uint256 i = 0; i < networks.length; i++) {
             forkVm.selectFork(forkIds[i]);
@@ -120,7 +120,8 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// Every RELEASED suite MUST be live, with the code its creation code produces and its declared
     /// dependencies under it, on every network it is required on, with `checkOnChain`'s refusals there.
     function testSuitesLiveOnEverySupportedNetwork() external {
-        checkDeployedOnSupportedNetworks(d.released);
+        DeployDeclaration memory d = declaration();
+        checkDeployedOnSupportedNetworks(d, d.released);
     }
 
     /// Checks every network's declared chain id against the endpoint bound to its `[rpc_endpoints]`
@@ -155,6 +156,6 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     /// endpoint: this is the contract that already forks every declared
     /// network, and the snapshot half is the one a credential-free job binds.
     function testSupportedNetworkChainIdsAreBound() external {
-        checkNetworkChainIds(LibRainDeploy.declaredNetworkConfigs(d.networks));
+        checkNetworkChainIds(LibRainDeploy.declaredNetworkConfigs(declaration().networks));
     }
 }

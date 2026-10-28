@@ -3,7 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
-import {DeploySuite} from "./RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// Thrown when the deploy address recorded for a version is not the address its own mechanism
@@ -74,8 +74,8 @@ error FrozenCodeRecordInconsistent(string path, bytes32 storedBytecodeHash, byte
 abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// Checks one suite against itself.
     /// @param suite The suite to check.
-    function checkInternallyConsistent(DeploySuite memory suite) internal {
-        DerivedDeploy memory derived = deriveDeployment(suite);
+    function checkInternallyConsistent(DeployDeclaration memory d, DeploySuite memory suite) internal {
+        DerivedDeploy memory derived = deriveDeployment(d, suite);
 
         address[] memory recorded = recordedAddresses(d, suite);
         for (uint256 i = 0; i < recorded.length; i++) {
@@ -103,7 +103,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// address, on each recorded chain for a per-network record.
     /// @param paths The frozen record's files.
     /// @param released The declared released suites.
-    function checkFrozenSnapshotsReleased(string[] memory paths, DeploySuite[] memory released) internal view {
+    function checkFrozenSnapshotsReleased(DeployDeclaration memory d, string[] memory paths, DeploySuite[] memory released) internal view {
         uint256[][] memory releasedChainIds = new uint256[][](released.length);
         address[][] memory releasedAddresses = new address[][](released.length);
         for (uint256 j = 0; j < released.length; j++) {
@@ -367,9 +367,10 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
 
     /// Every declared suite MUST be internally consistent.
     function testSnapshotInternallyConsistent() external {
+        DeployDeclaration memory d = declaration();
         DeploySuite[] memory suites = allSuites(d);
         for (uint256 i = 0; i < suites.length; i++) {
-            checkInternallyConsistent(suites[i]);
+            checkInternallyConsistent(d, suites[i]);
         }
     }
 
@@ -383,6 +384,6 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     /// spelling the deploy does not run, which is exactly the state this test
     /// would otherwise be reporting green about.
     function testSnapshotMatchesSource() external view {
-        checkCandidatesAnchoredToSource(d);
+        checkCandidatesAnchoredToSource(declaration());
     }
 }

@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 
-import {DeployCandidate, DeployDependency, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
+import {DeployCandidate, DeployDeclaration, DeployDependency, DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 
 /// A deterministic deployment outside the repo that a suite may reach.
 struct ExternalDeployment {
@@ -148,7 +148,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// The dispatch choices MUST be exactly the declared suite keys, each once.
-    function checkDispatchChoicesAreTheSuiteKeys() internal view {
+    function checkDispatchChoicesAreTheSuiteKeys(DeployDeclaration memory d) internal view {
         DeploySuite[] memory suites = allSuites(d);
         string[] memory choices = dispatchChoices();
         for (uint256 i = 0; i < choices.length; i++) {
@@ -173,7 +173,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// Every anchored candidate's artifact path MUST compile to the source its key names.
-    function checkCandidateArtifactPathsAreSource() internal view {
+    function checkCandidateArtifactPathsAreSource(DeployDeclaration memory d) internal view {
         DeployCandidate[] memory candidates = checkedCandidateSuites(d);
         for (uint256 i = 0; i < candidates.length; i++) {
             if (bytes(candidates[i].unanchorableReason).length != 0) {
@@ -187,7 +187,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// No suite MAY declare the zero address, or one address twice, as a dependency.
-    function checkDependenciesAreNonZeroAndUnique() internal view {
+    function checkDependenciesAreNonZeroAndUnique(DeployDeclaration memory d) internal view {
         DeploySuite[] memory suites = allSuites(d);
         for (uint256 i = 0; i < suites.length; i++) {
             DeployDependency[] memory deps = suites[i].dependencies;
@@ -206,7 +206,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
 
     /// Every sibling or external deployment a suite's code embeds MUST be a
     /// declared dependency, and every declared dependency MUST be embedded.
-    function checkDependenciesAreTheEmbeddedDeployments() internal view {
+    function checkDependenciesAreTheEmbeddedDeployments(DeployDeclaration memory d) internal view {
         DeploySuite[] memory suites = allSuites(d);
         ExternalDeployment[] memory externals = externalDeployments();
         for (uint256 i = 0; i < suites.length; i++) {
@@ -235,7 +235,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
 
     /// Every declared dependency MUST be a sibling or external deployment, with
     /// the runtime code that declaration records.
-    function checkDependencyRuntimeCodeIsKnown() internal view {
+    function checkDependencyRuntimeCodeIsKnown(DeployDeclaration memory d) internal view {
         DeploySuite[] memory suites = allSuites(d);
         ExternalDeployment[] memory externals = externalDeployments();
         for (uint256 i = 0; i < suites.length; i++) {
@@ -274,7 +274,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// Every candidate's runtime code MUST fit EIP-170.
-    function checkCandidateRuntimeCodeFitsEip170() internal view {
+    function checkCandidateRuntimeCodeFitsEip170(DeployDeclaration memory d) internal view {
         DeployCandidate[] memory candidates = checkedCandidateSuites(d);
         for (uint256 i = 0; i < candidates.length; i++) {
             uint256 length = candidates[i].snapshot.storedRuntimeCode.length;
