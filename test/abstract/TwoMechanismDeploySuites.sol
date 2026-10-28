@@ -10,7 +10,6 @@ import {
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ChainDeploy} from "../../src/lib/LibRainDeployExtendedNetworks.sol";
-import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {
     LibMockCreate2Mechanism,
@@ -34,13 +33,6 @@ abstract contract TwoMechanismDeploySuites is RainDeploySuitesBase {
         handlers[1] = LibMockCreate2Mechanism.handler();
         handlers[2] = LibRainDeployZoltuMechanism.handler();
         return handlers;
-    }
-
-    function supportedNetworks() internal pure virtual override returns (string[] memory) {
-        string[] memory networks = new string[](2);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        networks[1] = LibRainDeploy.POLYGON;
-        return networks;
     }
 
     function create2Candidate() internal pure returns (DeploySuite memory) {
