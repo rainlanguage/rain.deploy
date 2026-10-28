@@ -367,19 +367,7 @@ abstract contract RainDeploySuitesBase {
         pure
         returns (DeploySuite memory, bool)
     {
-        bytes32 name = keccak256(bytes(suiteKeyName(suite)));
-        checkCandidates(d);
-        DeployCandidate[] memory candidates = d.candidates;
-        uint256 i = 0;
-        while (i < candidates.length && keccak256(bytes(candidates[i].snapshot.suite)) != name) {
-            i++;
-        }
-        bool found = i < candidates.length;
-        DeploySuite memory candidate;
-        if (found) {
-            candidate = abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite));
-        }
-        return (candidate, found);
+        return LibRainDeployDeclaration.candidateOf(d, suite);
     }
 
     /// Adds to `suite` the networks among `chainIds` its candidate takes it to, the candidate being a copy of `suite`
@@ -591,31 +579,7 @@ abstract contract RainDeploySuitesBase {
     /// the reader that got the second spelling wrong is the one that silently
     /// stops asserting.
     function checkCandidates(DeployDeclaration memory d) internal pure {
-        DeployCandidate[] memory candidates = d.candidates;
-        if (candidates.length == 0) {
-            revert NoDeployCandidates();
-        }
-        for (uint256 i = 0; i < candidates.length; i++) {
-            bytes memory path = bytes(candidates[i].snapshot.artifactPath);
-            // `.sol:` and not merely a colon, because forge reads `Name:0.8.25`
-            // as a contract name plus a compiler version — a colon that
-            // qualifies nothing, and a path that still resolves to whichever
-            // same-named artifact comes first. Measured: `Dup2:0.8.25` resolves
-            // to the same bytes as `File.sol:Dup2` with two `Dup2` compiled.
-            bool qualified = false;
-            for (uint256 j = 0; j + 5 <= path.length; j++) {
-                if (
-                    path[j] == "." && path[j + 1] == "s" && path[j + 2] == "o" && path[j + 3] == "l"
-                        && path[j + 4] == ":"
-                ) {
-                    qualified = true;
-                    break;
-                }
-            }
-            if (!qualified) {
-                revert UnqualifiedCandidateArtifactPath(i, candidates[i].snapshot.artifactPath);
-            }
-        }
+        LibRainDeployDeclaration.checkCandidates(d);
     }
 
     /// @return A copy of the checked `d.candidates`.

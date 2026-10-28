@@ -8,7 +8,9 @@ import {
     DeployMechanismHandler,
     DeploySuite,
     DuplicateMechanism,
-    MechanismUnclaimed
+    MechanismUnclaimed,
+    NoDeployCandidates,
+    UnqualifiedCandidateArtifactPath
 } from "../abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "./LibRainDeploy.sol";
 
@@ -180,6 +182,70 @@ library LibRainDeployDeclaration {
             name[i] = key[i];
         }
         return string(name);
+    }
+
+    /// The declared candidates, refusing an empty list and an `artifactPath`
+    /// that is not `<path>:<Name>`.
+    ///
+    /// The ONE place `NoDeployCandidates` and
+    /// `UnqualifiedCandidateArtifactPath` are raised, and the only way anything
+    /// reads the candidates. `allSuites` goes through it, and so does
+    /// `checkCandidatesAnchoredToSource` — which matters, because the source
+    /// anchor loops over the candidates and a loop over an empty list passes.
+    /// Guarding each reader separately would be two spellings of one rule, and
+    /// the reader that got the second spelling wrong is the one that silently
+    /// stops asserting.
+    function checkCandidates(DeployDeclaration memory d) internal pure {
+        DeployCandidate[] memory candidates = d.candidates;
+        if (candidates.length == 0) {
+            revert NoDeployCandidates();
+        }
+        for (uint256 i = 0; i < candidates.length; i++) {
+            bytes memory path = bytes(candidates[i].snapshot.artifactPath);
+            // `.sol:` and not merely a colon, because forge reads `Name:0.8.25`
+            // as a contract name plus a compiler version — a colon that
+            // qualifies nothing, and a path that still resolves to whichever
+            // same-named artifact comes first. Measured: `Dup2:0.8.25` resolves
+            // to the same bytes as `File.sol:Dup2` with two `Dup2` compiled.
+            bool qualified = false;
+            for (uint256 j = 0; j + 5 <= path.length; j++) {
+                if (
+                    path[j] == "." && path[j + 1] == "s" && path[j + 2] == "o" && path[j + 3] == "l"
+                        && path[j + 4] == ":"
+                ) {
+                    qualified = true;
+                    break;
+                }
+            }
+            if (!qualified) {
+                revert UnqualifiedCandidateArtifactPath(i, candidates[i].snapshot.artifactPath);
+            }
+        }
+    }
+
+    /// The candidate a suite key names.
+    /// @param d The declaration.
+    /// @param suite The suite key.
+    /// @return The snapshot of the candidate whose key is `suite`'s name half, freshly read from the declaration.
+    /// @return Whether there is one.
+    function candidateOf(DeployDeclaration memory d, string memory suite)
+        internal
+        pure
+        returns (DeploySuite memory, bool)
+    {
+        bytes32 name = keccak256(bytes(suiteKeyName(suite)));
+        checkCandidates(d);
+        DeployCandidate[] memory candidates = d.candidates;
+        uint256 i = 0;
+        while (i < candidates.length && keccak256(bytes(candidates[i].snapshot.suite)) != name) {
+            i++;
+        }
+        bool found = i < candidates.length;
+        DeploySuite memory candidate;
+        if (found) {
+            candidate = abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite));
+        }
+        return (candidate, found);
     }
 
     /// @param suites The suites to search.
