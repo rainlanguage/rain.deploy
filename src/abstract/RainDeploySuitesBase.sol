@@ -288,25 +288,25 @@ struct DeployCandidate {
 struct DeployMechanismHandler {
     bytes32 id;
     bytes config;
-    function(DeploySuite memory, uint256) internal view returns (address) deployedAddress;
-    function(DeploySuite memory, uint256) internal view returns (address) recordedAddress;
-    function(DeploySuite memory, uint256) internal view returns (bytes memory) deployStepData;
-    function(DeploySuite memory)
+    function(DeployDeclaration memory, DeploySuite memory, uint256) internal view returns (address) deployedAddress;
+    function(DeployDeclaration memory, DeploySuite memory, uint256) internal view returns (address) recordedAddress;
+    function(DeployDeclaration memory, DeploySuite memory, uint256) internal view returns (bytes memory) deployStepData;
+    function(DeployDeclaration memory, DeploySuite memory)
         internal
         view returns (function(Vm, string memory, address, bytes memory) internal returns (address)) deployStep;
-    function(Vm, DeploySuite memory) internal returns (address[] memory) deployLocally;
-    function(Vm, DeploySuite memory) internal deployLocallyOnChain;
-    function(DeploySuite memory, DeploySuite memory, uint256[] memory) internal view addUnrecordedNetworks;
-    function(DeploySuite memory) internal view addRecordedNetworks;
-    function(DeploySuite memory, string memory, uint256, address) internal view checkNetworkFrozen;
+    function(DeployDeclaration memory, Vm, DeploySuite memory) internal returns (address[] memory) deployLocally;
+    function(DeployDeclaration memory, Vm, DeploySuite memory) internal deployLocallyOnChain;
+    function(DeployDeclaration memory, DeploySuite memory, DeploySuite memory, uint256[] memory) internal view addUnrecordedNetworks;
+    function(DeployDeclaration memory, DeploySuite memory) internal view addRecordedNetworks;
+    function(DeployDeclaration memory, DeploySuite memory, string memory, uint256, address) internal view checkNetworkFrozen;
     function(DeployDeclaration memory, DeploySuite memory, string memory, uint256, address) internal checkOnChain;
     function(DeployDeclaration memory, DeploySuite memory, uint256, address) internal checkBroadcastSeat;
     function(DeployDeclaration memory) internal checkDeclaration;
     function(DeployDeclaration memory, string memory, uint256) internal checkNetwork;
-    function(Vm, string[] memory, DeploySuite memory, address[] memory) internal logVerification;
-    function(Vm, SnapshotFile memory, DeploySuite memory) internal returns (string memory) writeSuiteSnapshot;
-    function(Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData;
-    function(string memory) internal pure returns (string memory) releasedImport;
+    function(DeployDeclaration memory, Vm, string[] memory, DeploySuite memory, address[] memory) internal logVerification;
+    function(DeployDeclaration memory, Vm, SnapshotFile memory, DeploySuite memory) internal returns (string memory) writeSuiteSnapshot;
+    function(DeployDeclaration memory, Vm, string memory, string memory) internal view returns (string memory) releasedMechanismData;
+    function(DeployDeclaration memory, string memory) internal pure returns (string memory) releasedImport;
 }
 
 /// @title RainDeploySuitesBase
@@ -423,7 +423,7 @@ abstract contract RainDeploySuitesBase {
         view
         returns (address)
     {
-        return mechanismOf(d, suite).deployedAddress(suite, chainId);
+        return mechanismOf(d, suite).deployedAddress(d, suite, chainId);
     }
 
     function recordedAddress(DeployDeclaration memory d, DeploySuite memory suite, uint256 chainId)
@@ -431,7 +431,7 @@ abstract contract RainDeploySuitesBase {
         view
         returns (address)
     {
-        return mechanismOf(d, suite).recordedAddress(suite, chainId);
+        return mechanismOf(d, suite).recordedAddress(d, suite, chainId);
     }
 
     function deployStepData(DeployDeclaration memory d, DeploySuite memory suite, uint256 chainId)
@@ -439,7 +439,7 @@ abstract contract RainDeploySuitesBase {
         view
         returns (bytes memory)
     {
-        return mechanismOf(d, suite).deployStepData(suite, chainId);
+        return mechanismOf(d, suite).deployStepData(d, suite, chainId);
     }
 
     function deployStep(DeployDeclaration memory d, DeploySuite memory suite)
@@ -447,18 +447,18 @@ abstract contract RainDeploySuitesBase {
         view
         returns (function(Vm, string memory, address, bytes memory) internal returns (address))
     {
-        return mechanismOf(d, suite).deployStep(suite);
+        return mechanismOf(d, suite).deployStep(d, suite);
     }
 
     function deployLocally(DeployDeclaration memory d, Vm vm, DeploySuite memory suite)
         internal
         returns (address[] memory)
     {
-        return mechanismOf(d, suite).deployLocally(vm, suite);
+        return mechanismOf(d, suite).deployLocally(d, vm, suite);
     }
 
     function deployLocallyOnChain(DeployDeclaration memory d, Vm vm, DeploySuite memory suite) internal {
-        mechanismOf(d, suite).deployLocallyOnChain(vm, suite);
+        mechanismOf(d, suite).deployLocallyOnChain(d, vm, suite);
     }
 
     function addUnrecordedNetworks(
@@ -467,11 +467,11 @@ abstract contract RainDeploySuitesBase {
         DeploySuite memory candidate,
         uint256[] memory chainIds
     ) internal view {
-        mechanismOf(d, suite).addUnrecordedNetworks(suite, candidate, chainIds);
+        mechanismOf(d, suite).addUnrecordedNetworks(d, suite, candidate, chainIds);
     }
 
     function addRecordedNetworks(DeployDeclaration memory d, DeploySuite memory suite) internal view {
-        mechanismOf(d, suite).addRecordedNetworks(suite);
+        mechanismOf(d, suite).addRecordedNetworks(d, suite);
     }
 
     function checkNetworkFrozen(
@@ -481,7 +481,7 @@ abstract contract RainDeploySuitesBase {
         uint256 chainId,
         address where
     ) internal view {
-        mechanismOf(d, frozen).checkNetworkFrozen(frozen, network, chainId, where);
+        mechanismOf(d, frozen).checkNetworkFrozen(d, frozen, network, chainId, where);
     }
 
     function checkOnChain(
@@ -507,14 +507,14 @@ abstract contract RainDeploySuitesBase {
         DeploySuite memory suite,
         address[] memory deployed
     ) internal {
-        mechanismOf(d, suite).logVerification(vm, networks, suite, deployed);
+        mechanismOf(d, suite).logVerification(d, vm, networks, suite, deployed);
     }
 
     function writeSuiteSnapshot(DeployDeclaration memory d, Vm vm, SnapshotFile memory file, DeploySuite memory suite)
         internal
         returns (string memory)
     {
-        return mechanismOf(d, suite).writeSuiteSnapshot(vm, file, suite);
+        return mechanismOf(d, suite).writeSuiteSnapshot(d, vm, file, suite);
     }
 
     /// @param suite The suite.
