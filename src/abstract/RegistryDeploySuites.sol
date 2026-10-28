@@ -81,7 +81,8 @@ struct ParameterisedContract {
 /// emits it from the frozen record. Nothing about a release is written here.
 abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// This repo's declaration: every Rain network, Zoltu, the generated releases with each `AddressRegistry`
-    /// release required only on `addressRegistryNetworks()`, and `registryCandidates()`.
+    /// release required only on `addressRegistryNetworks()`, `registryCandidates()` and `parameterisedContractNames()` as
+    /// the frozen code records.
     /// @return The declaration.
     function declaration() internal pure override returns (DeployDeclaration memory) {
         DeployDeclaration memory declared;
@@ -89,6 +90,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
         LibRainDeployZoltuMechanism.extend(declared);
         LibRainDeployDeclaration.addReleased(declared, registryReleasedSuites());
         LibRainDeployDeclaration.addCandidates(declared, registryCandidates());
+        declared.frozenCodeRecordNames = parameterisedContractNames();
         return declared;
     }
 
