@@ -1684,9 +1684,8 @@ library LibRainDeploySnapshot {
         string memory imports = string.concat(
             "import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n"
         );
-        imports = string.concat(
-            imports, distinctConcat(mechanismImports(paths, ids, importRoot(suitesImportPath), d)), "\n"
-        );
+        imports =
+            string.concat(imports, distinctConcat(mechanismImports(paths, ids, importRoot(suitesImportPath), d)), "\n");
         for (uint256 i = 0; i < paths.length; i++) {
             imports = string.concat(imports, releasedImport(vm, paths[i]));
         }
