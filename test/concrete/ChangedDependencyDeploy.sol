@@ -50,6 +50,7 @@ contract ChangedDependencyDeploy is RainDeployBroadcast {
         LibRainDeployDeclaration.extend(d);
         d.networks = new string[](1);
         d.networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        d.deployNetworks = LibRainDeployDeclaration.everyNetwork(d);
         LibRainDeployZoltuMechanism.extend(d);
         LibRainDeployDeclaration.addReleased(d, declaredReleased());
         LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
