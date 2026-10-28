@@ -125,11 +125,11 @@ abstract extending `RainDeploySuitesBase` that overrides its `virtual` mechanism
 hooks (`deployedAddress`, `recordedAddress`, `addressChainIds`,
 `deployStepData`, `deployStep`, `deployLocally`, `deployLocallyOnChain`,
 `withUnrecordedNetworks`, `appendExtendedNetworks`, `checkNetworkFrozen`,
-`suiteBeacon`, `logVerification`, `writeSuiteSnapshot`,
-`releasedMechanismData`) for the `mechanismData` it owns and falls through to
-`super` for the rest. Broadcast, every verification group and `BuildScript`
-reach a suite only through those hooks. Factory clones and beacon proxies are
-`RainDeployCloneSuitesBase` in `rain-factory`.
+`suiteBeacon`, `logVerification`, `writeSuiteSnapshot`, `releasedMechanismData`)
+for the `mechanismData` it owns and falls through to `super` for the rest.
+Broadcast, every verification group and `BuildScript` reach a suite only through
+those hooks. Factory clones and beacon proxies are `RainDeployCloneSuitesBase`
+in `rain-factory`.
 
 ### Upgradeable beacons
 
@@ -200,14 +200,13 @@ with a first word whose low 160 bits are the deploy key (`SuiteSeatsDeployKey`),
 so a suite seats its governance, not the deploy key, from its first state. For a
 suite whose `addressChainIds` is non-empty the targets are those chain ids only
 (its candidate's added networks included), each deploying only that network's
-address; for any
-other suite they are every supported network, the networks the broadcast does
-not reach included, then each network it reaches that is not supported. The
-suite's constructor runs on the local EVM with only its declared dependencies
-etched, so it MUST succeed there under each target's chain id: one that reverts
-locally refuses the broadcast to every network. That check reads `owner()` only:
-roles, pending owners, admin slots and contracts a constructor creates are not
-read, so assert those yourself.
+address; for any other suite they are every supported network, the networks the
+broadcast does not reach included, then each network it reaches that is not
+supported. The suite's constructor runs on the local EVM with only its declared
+dependencies etched, so it MUST succeed there under each target's chain id: one
+that reverts locally refuses the broadcast to every network. That check reads
+`owner()` only: roles, pending owners, admin slots and contracts a constructor
+creates are not read, so assert those yourself.
 
 Declare transitions in the order their migrations are applied: each applied
 transition's record MUST reach the latest earlier-declared applied one through
@@ -1150,15 +1149,15 @@ forge soldeer install rain-deploy~<version>
 ```
 
 **You also need `forge-std` 1.17.0 and `rain-sol-codegen` 0.1.39**, remapped as
-`forge-std-1.17.0/` and `rain-sol-codegen-0.1.39/`. The published package ships `src/`, `script/` and the
-licence and README files — no `test/`, no `foundry.toml`, no `remappings.txt`,
-no `soldeer.lock`, no `dependencies/` — so a consumer resolves both itself.
-The requirement is transitive rather than incidental: the deployed contract
-imports nothing outside this package, but every abstract a consumer inherits
-pulls them in — `Script` via `RainDeployBroadcast`, `Test` via
-`RainDeployVerifyBase`, `Vm` via `LibRainDeploy` beneath both, and
-`LibCodeGen`/`LibFs` via `LibRainDeploySnapshot`, which
-`RainDeployVerifySnapshot` imports:
+`forge-std-1.17.0/` and `rain-sol-codegen-0.1.39/`. The published package ships
+`src/`, `script/` and the licence and README files — no `test/`, no
+`foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no `dependencies/` — so
+a consumer resolves both itself. The requirement is transitive rather than
+incidental: the deployed contract imports nothing outside this package, but
+every abstract a consumer inherits pulls them in — `Script` via
+`RainDeployBroadcast`, `Test` via `RainDeployVerifyBase`, `Vm` via
+`LibRainDeploy` beneath both, and `LibCodeGen`/`LibFs` via
+`LibRainDeploySnapshot`, which `RainDeployVerifySnapshot` imports:
 
 ```toml
 [dependencies]
