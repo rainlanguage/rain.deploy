@@ -342,7 +342,7 @@ abstract contract RainDeploySuitesBase {
         DeployCandidate[] memory candidates = checkedCandidateSuites(d);
         for (uint256 i = 0; i < candidates.length; i++) {
             if (keccak256(bytes(candidates[i].snapshot.suite)) == name) {
-                return (candidates[i].snapshot, true);
+                return (abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite)), true);
             }
         }
         DeploySuite memory none;
