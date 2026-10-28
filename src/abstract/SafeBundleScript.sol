@@ -4,7 +4,7 @@ pragma solidity ^0.8.25;
 
 import {Script} from "forge-std-1.17.0/src/Script.sol";
 import {console2} from "forge-std-1.17.0/src/console2.sol";
-import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
+import {Safe} from "safe-global-safe-smart-account-1.5.0/contracts/Safe.sol";
 
 import {LibSafeTx, SafeTx} from "../lib/LibSafeTx.sol";
 import {LibSafeFork} from "../lib/LibSafeFork.sol";

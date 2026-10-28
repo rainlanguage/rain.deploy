@@ -5,8 +5,8 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibSafeTx, SafeTx} from "../../../src/lib/LibSafeTx.sol";
 import {LibSafe} from "../../../src/lib/LibSafe.sol";
-import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
-import {Enum} from "safe-global-safe-smart-account-1.4.1-3/contracts/common/Enum.sol";
+import {Safe} from "safe-global-safe-smart-account-1.5.0/contracts/Safe.sol";
+import {Enum} from "safe-global-safe-smart-account-1.5.0/contracts/common/Enum.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibForkSafe} from "../../lib/LibForkSafe.sol";
 

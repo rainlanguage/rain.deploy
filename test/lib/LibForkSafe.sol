@@ -2,8 +2,8 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity ^0.8.25;
 
-import {Safe} from "safe-global-safe-smart-account-1.4.1-3/contracts/Safe.sol";
-import {SafeProxyFactory} from "safe-global-safe-smart-account-1.4.1-3/contracts/proxies/SafeProxyFactory.sol";
+import {Safe} from "safe-global-safe-smart-account-1.5.0/contracts/Safe.sol";
+import {SafeProxyFactory} from "safe-global-safe-smart-account-1.5.0/contracts/proxies/SafeProxyFactory.sol";
 import {LibSafe} from "../../src/lib/LibSafe.sol";
 
 /// @title LibForkSafe
