@@ -22,12 +22,23 @@ contract TwoMechanismBuildScriptHarness is TwoMechanismDeploySuites, ExternalDep
         return d;
     }
 
-    function generatedContracts() internal pure override returns (GeneratedContract[] memory) {
-        DeployDeclaration memory d = declaration();
+    function generatedContracts(DeployDeclaration memory d)
+        internal
+        pure
+        override
+        returns (GeneratedContract[] memory)
+    {
         GeneratedContract[] memory generated = new GeneratedContract[](2);
-        generated[0] = GeneratedContract({contractName: "MockDeployable", constantPrefix: "", candidate: d.candidates[0]});
-        generated[1] =
-            GeneratedContract({contractName: "MockDeployableV2", constantPrefix: "", candidate: d.candidates[1]});
+        generated[0] = GeneratedContract({
+            contractName: "MockDeployable",
+            constantPrefix: "",
+            candidate: declaredCandidate(d, create2Candidate().suite)
+        });
+        generated[1] = GeneratedContract({
+            contractName: "MockDeployableV2",
+            constantPrefix: "",
+            candidate: declaredCandidate(d, saltCandidate().suite)
+        });
         return generated;
     }
 

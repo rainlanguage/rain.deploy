@@ -50,7 +50,7 @@ contract GeneratedContractsBuildScriptHarness is BuildScript {
     }
 
     /// @inheritdoc BuildScript
-    function generatedContracts() internal view override returns (GeneratedContract[] memory) {
+    function generatedContracts(DeployDeclaration memory) internal view override returns (GeneratedContract[] memory) {
         return abi.decode(sGenerated, (GeneratedContract[]));
     }
 

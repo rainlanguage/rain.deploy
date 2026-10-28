@@ -82,10 +82,17 @@ contract BuildScriptHarness is BuildScript {
     }
 
     /// @inheritdoc BuildScript
-    function generatedContracts() internal view override returns (GeneratedContract[] memory) {
+    function generatedContracts(DeployDeclaration memory d)
+        internal
+        pure
+        override
+        returns (GeneratedContract[] memory)
+    {
         GeneratedContract[] memory generated = new GeneratedContract[](1);
         generated[0] = GeneratedContract({
-            contractName: BUILD_SCRIPT_HARNESS_CONTRACT, constantPrefix: "", candidate: declaration().candidates[0]
+            contractName: BUILD_SCRIPT_HARNESS_CONTRACT,
+            constantPrefix: "",
+            candidate: declaredCandidate(d, BUILD_SCRIPT_HARNESS_SUITE)
         });
         return generated;
     }
