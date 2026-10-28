@@ -5,8 +5,8 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeployDependency, LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
-import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
-import {ConfigRegistry, CONFIG_REGISTRY_ROOT} from "../../../src/concrete/ConfigRegistry.sol";
+import {IConfigRegistryV4} from "../../../src/interface/IConfigRegistryV4.sol";
+import {ConfigRegistry} from "../../../src/concrete/ConfigRegistry.sol";
 import {MockAddressRevertingFactory} from "../../concrete/MockAddressRevertingFactory.sol";
 import {MockResolvedOwner} from "../../concrete/MockResolvedOwner.sol";
 import {MockDirtyWordOwner} from "../../concrete/MockDirtyWordOwner.sol";
@@ -15,18 +15,20 @@ import {MockRevertingAnswerOwner} from "../../concrete/MockRevertingAnswerOwner.
 import {MockChainDependentOwner} from "../../concrete/MockChainDependentOwner.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
-import {CloneTarget, LibRainDeployClone} from "../../../src/lib/LibRainDeployClone.sol";
-import {MockCloneable} from "../../concrete/MockCloneable.sol";
-import {MockUncloneableMispredictingCloneFactory} from "../../concrete/MockUncloneableMispredictingCloneFactory.sol";
 import {MOCK_DEPLOYABLE_OWNER} from "../../concrete/MockDeployableOwner.sol";
 import {MockReverter} from "../../concrete/MockReverter.sol";
 import {LibResolvedReadFixture} from "../../lib/LibResolvedReadFixture.sol";
+import {VALUE_TYPE} from "../../lib/ConfigTestBinding.sol";
 
 /// @title LibRainDeployTest
 /// Tests for `LibRainDeploy`. External wrappers are used for library functions
 /// that need `vm.expectRevert` at the correct call depth, and for functions
 /// that require a storage mapping reference.
 contract LibRainDeployTest is Test {
+    /// The authority the config registry tests bind under and resolve under.
+    /// Any account is one.
+    address internal constant CONFIG_AUTHORITY = address(0xA11CE);
+
     /// The address the Zoltu factory derives for empty creation code, i.e.
     /// CREATE2 over the factory address, a zero salt and the hash of empty
     /// creation code. An account is created there but it has no code.
@@ -466,9 +468,8 @@ contract LibRainDeployTest is Test {
         }
     }
 
-    /// External wrapper for `deployStepToNetworks` through a real mechanism's step.
+    /// External wrapper for `deployStepToNetworks` through the Zoltu step.
     /// @param networks The networks.
-    /// @param clone Whether the step is `cloneDeployStep` rather than `zoltuDeployStep`.
     /// @param stepData The step data on every network.
     /// @param expectedAddress The expected and derived address on every network.
     /// @param expectedCodeHash The expected code hash.
@@ -476,7 +477,6 @@ contract LibRainDeployTest is Test {
     /// @return The fork of each network.
     function externalDeployStepToNetworksThroughStep(
         SupportedNetwork[] memory networks,
-        bool clone,
         bytes memory stepData,
         address expectedAddress,
         bytes32 expectedCodeHash,
@@ -486,7 +486,7 @@ contract LibRainDeployTest is Test {
             vm,
             networks,
             address(this),
-            clone ? LibRainDeployClone.cloneDeployStep : LibRainDeploy.zoltuDeployStep,
+            LibRainDeploy.zoltuDeployStep,
             LibRainDeploy.everyNetwork(networks.length, stepData, expectedAddress, expectedAddress),
             expectedCodeHash,
             dependencies
@@ -515,7 +515,6 @@ contract LibRainDeployTest is Test {
         );
         this.externalDeployStepToNetworksThroughStep(
             misboundArbitrum(),
-            false,
             type(MockDeployable).creationCode,
             mockDeployableAddress(),
             mockDeployableCodeHash(),
@@ -537,35 +536,9 @@ contract LibRainDeployTest is Test {
         );
         this.externalDeployStepToNetworksThroughStep(
             misboundArbitrum(),
-            false,
             type(MockDeployable).creationCode,
             mockDeployableAddress(),
             keccak256(type(MockDeployable).runtimeCode),
-            new DeployDependency[](0)
-        );
-    }
-
-    /// The chain id is checked before a clone step.
-    function testDeployStepToNetworksRefusesAMisboundEndpointBeforeTheCloneStep() external {
-        vm.makePersistent(address(this));
-        vm.createSelectFork(LibRainDeploy.ARBITRUM_ONE);
-        MockUncloneableMispredictingCloneFactory factory = new MockUncloneableMispredictingCloneFactory();
-        vm.makePersistent(address(factory));
-        CloneTarget memory target = CloneTarget({
-            factory: address(factory), implementation: address(new MockCloneable()), data: hex"01", salt: bytes32(0)
-        });
-
-        vm.expectRevert(
-            abi.encodeWithSelector(
-                LibRainDeploy.NetworkChainIdMismatch.selector, LibRainDeploy.ARBITRUM_ONE, 137, 42161
-            )
-        );
-        this.externalDeployStepToNetworksThroughStep(
-            misboundArbitrum(),
-            true,
-            abi.encode(target),
-            LibRainDeployClone.cloneDeployedAddress(target),
-            bytes32(0),
             new DeployDependency[](0)
         );
     }
@@ -1412,21 +1385,21 @@ contract LibRainDeployTest is Test {
     }
 
     /// Deploys `ConfigRegistry` through the Zoltu factory (which lands it at
-    /// its pinned address), binds `name` to `account` as root, then deploys a
-    /// consumer that resolves `name` once in its constructor.
+    /// its pinned address), binds `name` to `account` under `CONFIG_AUTHORITY`,
+    /// then deploys a consumer that resolves `name` once in its constructor.
     /// @param name The name to bind and resolve.
     /// @param account The address to bind it to.
     /// @return The deployed registry.
     /// @return The deployed consumer holding the resolved address.
     function deployRegistryAndConsumer(bytes32 name, address account)
         internal
-        returns (IConfigRegistryV1, MockResolvedOwner)
+        returns (IConfigRegistryV4, MockResolvedOwner)
     {
-        IConfigRegistryV1 registry =
-            IConfigRegistryV1(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
-        MockResolvedOwner consumer = new MockResolvedOwner(name);
+        IConfigRegistryV4 registry =
+            IConfigRegistryV4(LibRainDeploy.etchAndDeployZoltu(vm, type(ConfigRegistry).creationCode));
+        vm.prank(CONFIG_AUTHORITY);
+        registry.registerV4(CONFIG_AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
+        MockResolvedOwner consumer = new MockResolvedOwner(CONFIG_AUTHORITY, name);
         return (registry, consumer);
     }
 
@@ -1489,13 +1462,13 @@ contract LibRainDeployTest is Test {
         vm.assume(account != address(0));
         vm.assume(rebound != address(0));
         vm.assume(rebound != account);
-        (IConfigRegistryV1 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
+        (IConfigRegistryV4 registry, MockResolvedOwner consumer) = deployRegistryAndConsumer(name, account);
 
         // A re-bind needs a later block: a name's moment strictly increases.
         vm.warp(block.timestamp + 1);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(rebound));
-        (bytes memory nowBound,) = registry.getV1(name);
+        vm.prank(CONFIG_AUTHORITY);
+        registry.registerV4(CONFIG_AUTHORITY, name, VALUE_TYPE, abi.encode(rebound), "");
+        (bytes memory nowBound,,) = registry.getV4(CONFIG_AUTHORITY, name);
         assertEq(nowBound, abi.encode(rebound));
 
         assertEq(consumer.iOwner(), account);

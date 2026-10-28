@@ -117,306 +117,19 @@ it was told nothing.
 Every suite is individually selectable, including a frozen release — which is
 how a snapshot from before a network existed reaches that network.
 
-### Factory clones
+### Other mechanisms
 
-A repo whose deployment is an EIP-1167 clone of an audited implementation,
-rather than a contract it compiles itself, declares the clones and its releases,
-and binds the same broadcast as any other repo:
-
-```solidity
-// src/abstract/MyCloneDeploys.sol
-abstract contract MyCloneDeploys is RainDeployCloneSuitesBase {
-    // `cloneDeploys()` has a default body, so it is implemented here, not redeclared.
-    // A repo of beacon proxies overrides `beaconProxyDeploys()` the same way.
-    function cloneDeploys() internal pure override returns (CloneDeploy[] memory) { ... }
-    function releasedSuites() internal pure override returns (DeploySuite[] memory);
-}
-
-// script/Deploy.sol
-contract Deploy is MyCloneDeploys, RainDeployBroadcast {}
-```
-
-A `CloneDeploy` is the suite key, the factory, the implementation, the init data
-— one `data` for every network, or an `initData` function per network (see
-[Init data per network](#init-data-per-network)) — the salt and the
-dependencies. A clone with one `data` sets `initDataPerNetwork: false` and gives
-`LibRainDeployClone.noInitDataPerNetwork` as its `initData`, which nothing
-reads. The dependencies MUST name both the factory and the implementation, each
-paired with its runtime code; a clone missing either is refused with
-`CloneDependencyUndeclared`. The factory's entry pins the code that performs the
-clone, and the implementation's pins the code the clone delegates to — the
-clone's own code hash only says WHICH address it delegates to.
-
-`RainDeployCloneSuitesBase` derives `candidateSuites()` from the clone list with
-`LibRainDeployMechanism.cloneCandidate`, so it is still ONE list. Each candidate
-is an ordinary `DeploySuite` whose `mechanism` is `DeployMechanism.Clone` and
-whose `mechanismData` is the `abi.encode`d `CloneTarget` (factory,
-implementation, init data, salt). Every consumer — `RainDeployBroadcast`, the
-verification abstracts and `LibRainDeploySnapshot.writeSnapshot` — reads the
-suite through `LibRainDeployMechanism`, which answers the deployed address and
-performs the local and broadcast deploy for whichever mechanism the suite
-declares. A Zoltu suite carries `DeployMechanism.Zoltu` and empty
-`mechanismData`; anything else is refused with `UnexpectedMechanismData`.
-
-Releases follow the normal lifecycle. `BuildScript` regenerates the clone's
-snapshot through `writeSnapshot(DeploySuite)`, which records `MECHANISM_DATA`
-beside the usual constants; `cutRelease()` freezes it under
-`src/generated/<tag>/`; and the generated `Lib<Contract>Released` entry carries
-the mechanism and that `MECHANISM_DATA`. Both the mechanism kind and its data
-come from each frozen record: no `MECHANISM_DATA` is Zoltu; with it,
-`DEPLOYED_ADDRESS` is Clone and `DEPLOYED_ADDRESS_<chainId>` is ClonePerNetwork.
-So a suite can change mechanism between releases. From there the frozen clone is
-checked like any frozen suite: the record group holds it to its released entry
-at the CLONE address, the chain group requires its code at that address, and its
-declared factory and implementation with their declared code, on every supported
-network, and it is selectable by key for broadcast.
-
-A clone is **unanchorable** — no compiler produces a proxy assembled from an
-address — so the candidate carries `unanchorableReason` and a constant
-`artifactPath` that resolves to no artifact in any repo. The empty string is NOT
-that path: the qualifier rule is the shape `<path>.sol:<Name>` and it applies to
-unanchorable candidates too, so `""` is refused with
-`UnqualifiedCandidateArtifactPath`.
-
-The local derivation deploys the clone the way the chain does: the declared
-dependencies are etched first, then the etched factory's
-`cloneDeterministicOpenSalt` runs. A suite whose `creationCode` is not the
-EIP-1167 initcode for its implementation is refused with
-`CloneCreationCodeMismatch`, and a factory that lands the clone anywhere but the
-derived address with `CloneDerivationMismatch`.
-
-The broadcast is `RainDeployBroadcast.run()` and
-`LibRainDeploy.deployStepToNetworks`, shared with the Zoltu path: the suite
-selection, the key handling, the network list, the forks, the dependency checks,
-the idempotent skip and the address and code hash assertions are one loop, and
-the deploy STEP is the parameter — `cloneDeterministicOpenSalt` in place of
-`CREATE2` over creation code.
-
-The clone factory's address is a **parameter** rather than a constant in this
-package, because the deployed factory's address and code hash are pinned in
-`rain-factory-deploy`, which depends on this package; the declared factory
-dependency pins its runtime code on every network before the step runs. Per
-network, before the broadcast window opens, the factory is also asked where it
-would put this exact clone and refused with `CloneFactoryPredictionMismatch` if
-it disagrees with `rain-factory`'s formula — not an `ICloneableFactoryV4`, a
-different open-salt domain tag, a different proxy layout. That check says
-nothing about what `cloneDeterministicOpenSalt` itself does; the factory
-dependency pin covers that.
-
-The **open** salt, not the namespaced one, because the open-salt digest covers
-the implementation and the init data and not the caller — so every account
-reaches the same address on every network. The namespaced derivation bakes the
-deploying account into the address, which a retired key makes unreachable
-forever.
-
-#### Init data per network
-
-A clone's address covers its init data, so a clone initialized differently on
-each network — an admin that is a different Safe on one chain than on the others
-— is at a different address on each. Such a clone sets `initDataPerNetwork`,
-leaves `data` empty, and gives ONE function from a chain id to that network's
-init data:
-
-```solidity
-function authoriserInitData(uint256 chainId) pure returns (bytes memory) {
-    return abi.encode(LibSafeInvariants.safeForChainId(chainId));
-}
-
-function cloneDeploys() internal pure override returns (CloneDeploy[] memory clones) {
-    clones = new CloneDeploy[](1);
-    clones[0] = CloneDeploy({
-        suite: "authoriser",
-        factory: FACTORY,
-        implementation: IMPLEMENTATION,
-        data: "",
-        initDataPerNetwork: true,
-        initData: authoriserInitData,
-        salt: SALT,
-        dependencies: dependencies()
-    });
-}
-```
-
-`RainDeployCloneSuitesBase` reads that function once for each network in
-`supportedNetworks()`, in that order, with the chain id the network catalogue
-gives it, so the clone's networks are exactly the repo's and no chain id is
-written twice. A chain id the function reverts on reverts every reader of the
-candidates with that revert; it is never skipped or defaulted. Setting
-`initDataPerNetwork` beside a non-empty `data` is refused with
-`CloneDataAmbiguous`. A clone whose init data is the same everywhere is the
-`Clone` suite described above.
-
-`cloneCandidate` turns a per-network declaration into a suite whose `mechanism`
-is `DeployMechanism.ClonePerNetwork` and whose `mechanismData` is the
-`abi.encode`d `CloneNetworks`: the shared factory, implementation and salt, and
-per network its chain id, init data and the address derived from them. Its
-`storedDeployedAddress` is zero — the addresses live in `CloneNetworks` — and a
-nonzero one is refused with `UnexpectedStoredDeployedAddress`. A `CloneNetworks`
-with no networks is refused with `NoCloneNetworks`, and one naming a chain id
-twice with `DuplicateCloneNetwork`. Its code hash is one value on every network:
-an EIP-1167 clone's runtime code embeds only the implementation.
-
-A suite's addresses are a list, in the order its `CloneNetworks` names the
-networks: one address for Zoltu and `Clone`, one per declared network for
-`ClonePerNetwork`. Every reader resolves by network:
-
-- **Broadcast.** `RainDeployBroadcast.broadcastSuite` and
-  `LibRainDeployMechanism.deployAndBroadcast` return the suite's address on each
-  network and the fork each was deployed on, both positionally paired with the
-  networks broadcast to. Every network's chain id is read from the network
-  catalogue and every recorded address held to the derived one before any fork
-  is created; each fork whose `block.chainid` is not its catalogue entry's is
-  refused with `NetworkChainIdMismatch`, for every mechanism.
-- **Unrecorded networks.** A release records the networks it was cut for. At
-  broadcast and in the chain group, a per-network release first takes its
-  extended networks (below), then an entry for each network in play (broadcast
-  to or checked on) its candidate — the candidate whose key is the release key
-  before its `@` — has and it lacks, through
-  `LibRainDeployMechanism.withUnrecordedNetworks`: that network's init data from
-  the current declaration, and the address it derives under the RELEASE's
-  factory, implementation and salt. That entry is never broadcast or checked: it
-  is the address `ExtendedNetworkUnfrozen` names when a network added to
-  `supportedNetworks()` after the cut is broadcast to or checked on before it is
-  declared as an extended network (below), and a network the candidate has no
-  entry for is refused with `CloneNetworkUndeclared`. Once declared, the network
-  is broadcast and checked at its declared entry. Recorded entries are kept
-  exactly as recorded, so a recorded network keeps its recorded address and the
-  refusal of a stale one. The record group does not do this: it matches the
-  record against what the release was cut for.
-- **Extended networks.** The candidate's init data can change after a release is
-  broadcast to an unrecorded network, which would move that network's address.
-  So an unrecorded network is declared, then broadcast: override
-  `RainDeploySuitesBase.extendedNetworks` to return it, for the release's key,
-  as a `CloneNetwork`: its chain id, the init data it is broadcast with and its
-  address. The broadcast refuses an unrecorded network not yet declared with
-  `ExtendedNetworkUnfrozen`, before any fork, naming the address the candidate's
-  current init data derives. That is the address to declare only for a network
-  the release is not yet live on: a release already broadcast there is declared
-  with the init data it was broadcast with, from its `NewClone` event, or a
-  second clone is deployed and the live one orphaned. A declared entry is used
-  in place of the candidate's, held to the address its init data derives under
-  the release (`ExtendedNetworkAddressMismatch`), and is refused on a network
-  the release records (`DuplicateCloneNetwork`) or on a suite that is not per
-  network (`ExtendedNetworksUnexpected`). The chain group refuses a per-network
-  suite on a network it neither records nor declares with
-  `ExtendedNetworkUnfrozen` before checking any code there, naming the address
-  the candidate's current init data derives, whether or not anything is live at
-  it. Both the init data and the address are literals copied from the broadcast:
-  the build (`BuildScript.run()`, through `regenerateExtendedNetworks`) writes
-  them to the release's append-only record,
-  `src/generated/extended/<tag>/<name>.sol`, as `DEPLOYED_ADDRESS_<chain id>`
-  and `INIT_DATA_<chain id>`. It first refuses a declaration the broadcast would
-  refuse, with the errors above, and it refuses to drop, change or reorder an
-  entry the record in the checkout holds (`ExtendedNetworksRewritten`). The
-  broadcast and the chain group refuse a declaration that is not exactly what
-  the record holds (`ExtendedNetworksUnrecorded`) or a record that is not
-  exactly what the writer writes (`ExtendedNetworksUnreadable`). Append-only
-  holds against the checked out record, not against history: a commit that edits
-  or deletes the record and its declaration together passes all three.
-  `Git is clean` fails on an entry appended to a committed record, but not on a
-  record never committed, which is an untracked file. The record is published
-  with the rest of `src/generated/`; the generated `Lib<Contract>Released` does
-  not carry it.
-- **Undeclared networks.** A network the suite still has no entry for — no
-  candidate is named by its key, or the candidate has no entry either — is
-  refused with `CloneNetworkUndeclared`, before any fork, at broadcast and in
-  the chain group. It is never given another network's init data.
-- **Record.** The snapshot writer deploys the clone locally once per network —
-  networks sharing init data share an address and are deployed once — and
-  records `DEPLOYED_ADDRESS_<chainId>` per network in place of the one
-  `DEPLOYED_ADDRESS`, and the `CloneNetworks` as `MECHANISM_DATA`, both from the
-  local deploy rather than from the addresses the suite claims. The generated
-  `Lib<Contract>Released` entry imports no `DEPLOYED_ADDRESS`, stores
-  `address(0)`, and carries `DeployMechanism.ClonePerNetwork` and that
-  `MECHANISM_DATA`. A storage read during the local deploy of any account but
-  the clone and the accounts created under it is refused with
-  `CloneInitializeReadsStorage`: locally that storage is empty, while the clone
-  and what it creates are empty on chain too. An account created by one that
-  predates the deploy, such as a factory, may already exist on chain, so it is
-  not exempt.
-- **Verification.** The record group holds each network's recorded address to
-  its derivation and matches a frozen record to its release by chain id AND
-  address, so a record whose per-network labels were swapped matches no release.
-  The chain group requires the clone's code at each network's own address, and
-  on each network first checks the suite's declared dependencies with
-  `LibRainDeploy.checkDeclaredDependencies` — the check a broadcast makes before
-  deploying there — refusing a missing one with `MissingDependency` and changed
-  code with `DependencyChanged`. A clone's runtime code says only which
-  implementation it delegates to, so the right code hash at its address over a
-  missing or changed implementation does not work.
-
-#### Beacon proxies
-
-A repo whose deployment is an OpenZeppelin `BeaconProxy` over an upgradeable
-beacon, deployed by an `ICloneableFactoryV5` factory, declares it in
-`beaconProxyDeploys()` beside, or instead of, `cloneDeploys()`. Both default to
-empty, `candidateSuites()` is the clones' candidates then the beacon proxies',
-and only both empty is refused with `NoFactoryDeploys`. A `BeaconProxyDeploy`
-has the fields of a `CloneDeploy`, with `beacon` in place of `implementation`,
-and its dependencies MUST name the factory and the beacon, refused otherwise
-with `CloneDependencyUndeclared`. Because `cloneDeploys()` now has a default
-body, a contract that inherits it from an abstract of its own as well as from
-`RainDeployCloneSuitesBase` names both in its override:
-`override(MyCloneDeploys, RainDeployCloneSuitesBase)`.
-
-The candidate is built by `LibRainDeployMechanism.beaconProxyCandidate`. Its
-mechanism is `DeployMechanism.BeaconProxy`, or `BeaconProxyPerNetwork` with init
-data per network, and its `mechanismData` is the same `CloneTarget` or
-`CloneNetworks` a clone's is, with the beacon in the `implementation` field. The
-address is the factory's open-salt beacon proxy derivation
-(`LibICloneableFactoryV5`), and the runtime code is `BeaconProxy`'s with the
-beacon written into its one immutable, so the recorded code hash says which
-beacon the proxy reads. The proxy is unanchorable like a clone: it carries
-`BEACON_PROXY_UNANCHORABLE_REASON` and `BEACON_PROXY_ARTIFACT_PATH`.
-
-A beacon proxy's snapshot declares a clone's constants, with comments naming the
-beacon proxy and its factory, and one more, `bool constant BEACON_PROXY = true;`
-under its own `@dev` comment, which is how a frozen record is read back as a
-beacon proxy rather than a clone. A record with the marker and no
-`MECHANISM_DATA` is refused with
-`FrozenSnapshotBeaconProxyMechanismDataMissing`, and one with the marker twice
-with `FrozenSnapshotBeaconProxyMarkerAmbiguous`.
-
-A beacon proxy suite carries its runtime code as a generated constant. In the
-repo's `script/Build.sol`, `LibRainDeployBeaconProxy.beaconProxyRuntimeCode`
-deploys a real `UpgradeableBeacon` serving the real implementation at the
-beacon's address, then rain-factory's `BeaconProxy` creation code with empty
-constructor data, so no `initialize` runs, and returns the deployed code to
-write into `src/generated/`. The `Git is clean` job checks it, as it does a
-Zoltu suite's runtime code. The local derivation places that code at the derived
-address rather than deploying through the factory. A suite whose creation code
-is not the beacon proxy's over its beacon is refused with
-`CloneCreationCodeMismatch`.
-
-The broadcast step asks the factory where it would put the proxy and refuses
-`BeaconProxyFactoryPredictionMismatch` if it disagrees with the derivation. It
-then calls `beaconProxyDeterministicOpenSalt` and refuses
-`BeaconProxySeatsDeployKey` if the proxy answers `owner()` with the deploy key.
-That is the beacon proxy's only real seat check: the pre-fork
-`SuiteSeatsDeployKey` one cannot read a placed proxy's `owner()`. It reads
-`owner()` only. Roles, `AccessControl` admins, pending owners and admin slots
-the implementation's `initialize` grants to `tx.origin` are not read, and the
-deploy key keeps any of them on every network it broadcasts to. Keeping that
-authority off the deploy key is the declaring repo's job: its implementation's
-`initialize` MUST NOT grant the origin anything, or its own tests MUST assert
-the grant away.
-
-The chain group checks the proxy's code at its address and its dependencies as
-for a clone. The code says nothing about what the beacon serves, so on every
-network the proxy is required on, `beacons()` MUST declare its beacon, refused
-before any fork with `BeaconProxyBeaconUndeclared`. The beacon's own checks then
-hold its implementation and owner. The broadcast does not yet check the beacon
-before deploying a proxy over it.
-
-A proxy's address commits to its factory, beacon, salt and init data, not to the
-implementation that runs `initialize(data)`. Anyone can deploy it, at any time,
-and its initial state is whatever the beacon served then. `ICloneableFactoryV5`
-puts this on the beacon owner: every implementation the beacon serves while the
-proxy is undeployed MUST give the same `initialize(data)` result, or revert.
-Nothing here checks that. A broadcast that finds code at the proxy's address
-skips it, so neither the per-network seat check nor anything else reads how that
-proxy was initialized, and the chain group checks only its code, its
-dependencies and the beacon's current state.
+A suite with empty `mechanismData` deploys through Zoltu; every Zoltu hook
+refuses non-empty data with `UnexpectedMechanismData`. Another mechanism is an
+abstract extending `RainDeploySuitesBase` that overrides its `virtual` mechanism
+hooks (`deployedAddress`, `recordedAddress`, `addressChainIds`,
+`deployStepData`, `deployStep`, `deployLocally`, `deployLocallyOnChain`,
+`withUnrecordedNetworks`, `appendExtendedNetworks`, `checkNetworkFrozen`,
+`suiteBeacon`, `logVerification`, `writeSuiteSnapshot`, `releasedMechanismData`)
+for the `mechanismData` it owns and falls through to `super` for the rest.
+Broadcast, every verification group and `BuildScript` reach a suite only through
+those hooks. Factory clones and beacon proxies are `RainDeployCloneSuitesBase`
+in `rain-factory`.
 
 ### Upgradeable beacons
 
@@ -440,7 +153,7 @@ function beacons() internal view override returns (ChainBeacon[] memory) {
 ```
 
 On each network's fork the chain group expects the state of the latest
-transition the network's registry reports `appliedV3`, else `initial`: the
+transition the network's registry reports `appliedV4`, else `initial`: the
 beacon at its code hash, `implementation()` at that suite's address on the
 network, `owner()` at that owner, and the beacon's own suite, when it names one,
 and that state's implementation suite live there as any suite is. A suite a
@@ -485,22 +198,19 @@ refused before any network is read when its suite, deployed locally with the
 deploy key as sender and origin under each target's chain id, answers `owner()`
 with a first word whose low 160 bits are the deploy key (`SuiteSeatsDeployKey`),
 so a suite seats its governance, not the deploy key, from its first state. For a
-per-network clone suite the targets are its own networks only (its candidate's
-added networks included), each deploying only that network's clone; for any
-other suite they are every supported network, the networks the broadcast does
-not reach included, then each network it reaches that is not supported. The
-suite's constructor runs on the local EVM with only its declared dependencies
-etched, so it MUST succeed there under each target's chain id: one that reverts
-locally refuses the broadcast to every network. That check reads `owner()` only:
-roles, pending owners, admin slots and contracts a constructor creates are not
-read, so assert those yourself. A beacon proxy suite is the exception: locally
-it is placed, not deployed, so its seat check is the per-network one in the
-broadcast step (`BeaconProxySeatsDeployKey`), on each network's fork, not this
-pre-fork one.
+suite whose `addressChainIds` is non-empty the targets are those chain ids only
+(its candidate's added networks included), each deploying only that network's
+address; for any other suite they are every supported network, the networks the
+broadcast does not reach included, then each network it reaches that is not
+supported. The suite's constructor runs on the local EVM with only its declared
+dependencies etched, so it MUST succeed there under each target's chain id: one
+that reverts locally refuses the broadcast to every network. That check reads
+`owner()` only: roles, pending owners, admin slots and contracts a constructor
+creates are not read, so assert those yourself.
 
 Declare transitions in the order their migrations are applied: each applied
 transition's record MUST reach the latest earlier-declared applied one through
-`appliedAfterV3` (its line's head, then its prerequisites), refused otherwise
+`appliedAfterV4` (its line's head, then its prerequisites), refused otherwise
 with `BeaconTransitionsOutOfOrder`; moments are never compared. Each transition
 names a distinct migration, refused otherwise with
 `BeaconTransitionMigrationRepeated`, and one the registry can record (nonzero
@@ -515,7 +225,7 @@ transition, across lines, in fewer steps than the earlier one, and every
 reachable record back to each line's genesis when the earlier one is not
 reached. Apply a transition's migration in the same transaction as the beacon
 change it describes (one Safe batch: `upgradeTo` or `transferOwnership`, then
-`applyMigrationV3`; for an `Ownable2Step` beacon the handover's migration goes
+`applyMigrationV4`; for an `Ownable2Step` beacon the handover's migration goes
 in the batch that calls `acceptOwnership`, as `owner()` moves only then).
 Between two separate transactions the chain group refuses the network, as the
 chain and the registry disagree.
@@ -596,14 +306,6 @@ deploy. On a candidate that declares itself unanchorable it is the other way
 round: resolving to nothing is the state being declared, and resolving to an
 artifact is what refuses the declaration.
 
-A Zoltu suite whose `artifactPath` is `CLONE_ARTIFACT_PATH` (a historical entry
-generated under a clone template) names no compiled source, so its broadcast
-prints no verify command. It emits
-`UnverifiableSource(sender, entryAddress, networks)`, a file-level event
-imported from `LibRainDeployMechanism.sol`, and logs a notice naming the address
-and each network, whose source must be verified by hand. Both appear only in the
-script run's local trace: neither is part of a broadcast transaction.
-
 Uniqueness is not something `vm.getCode` reports. It resolves a BARE contract
 name to whichever same-named artifact comes first, and answers rather than
 reverting when several match, so a bare name anchors a candidate to a contract
@@ -666,11 +368,11 @@ fails the job every push runs.
 
 It reaches `foundry.toml` in two steps, because foundry refuses a filesystem
 cheatcode write to the project root's own config whatever `fs_permissions` says.
-`run()` stages the spliced files under `.staged-config/` and `script/build.sh`
-installs them — see [Install](#install). Reads are allowed, which is what makes
-the splice possible at all, and staging removes the hazard the direct write
-would have carried: nothing under `forge test` can race a rewrite of the config
-every other test reads, because nothing rewrites it.
+`run()` stages the spliced files under `.staged-config/` and rainix's
+`rainix-copy-artifacts` installs them — see [Install](#install). Reads are
+allowed, which is what makes the splice possible at all, and staging removes the
+hazard the direct write would have carried: nothing under `forge test` can race
+a rewrite of the config every other test reads, because nothing rewrites it.
 
 That is what a config group used to be for, and comparing is the weaker half of
 it. A comparison keeps both statements, so every assertion in it is one somebody
@@ -701,22 +403,49 @@ wrong explorer.
 
 `ConfigRegistry` binds an opaque `bytes32` name to ABI-encoded `bytes`: an
 address, a role id, a threshold, a list of accounts, anything a deployment would
-otherwise compile in. An immutable root authority binds a name, anyone reads a
-bound name, and reading an unbound name reverts rather than answering empty. The
-interface is `IConfigRegistryV1`. There is no removal, no upgrade and no
-authority besides root.
+otherwise compile in. Bindings are keyed by authority: any account binds a name
+under its own address, or under an authority that approved it as a delegate for
+that name (`approveV4`, `revokeV4`, read by `approvedV4`); anyone reads a name
+under an authority it names, and reading a name that authority has not bound
+reverts rather than answering empty. The interface is `IConfigRegistryV4`. There
+is no removal, no upgrade, and no way to write under an account that has not
+approved the writer.
+
+A bind is `registerV4(authority, name, valueType, value, meta)`. `valueType` is
+the value's normalized ABI type as a string — `address`, `uint256`,
+`(address,uint256)` — and an empty one is refused (`EmptyValueType`). The
+registry stores only its hash, `keccak256(bytes(valueType))`, beside the value
+and the moment it was bound, replacing all three on a rebind, and `getV4`
+returns `(value, registeredAt, valueTypeHash)`. The string itself appears only
+in the `Register(sender, authority, name, valueType, value)` event. The registry
+never checks a type against its value and never canonicalises it: the hash is of
+the exact string bound.
+
+`meta` is optional rain metadata. When it is non-empty the same write emits
+`MetaV1_2(sender, subject, meta)` (`IMetaV1_2` from `rain.metadata`), with
+`sender` the caller and `subject` `keccak256(abi.encode(authority, name))`, the
+same for every bind of that name under that authority. An empty `meta` emits
+nothing. A non-empty `meta` without the rain meta magic number reverts
+`NotRainMetaV1`, as `LibIMetaBoardV1_2.emitMeta` checks it. It is never stored,
+and nothing past that prefix is validated: it lives in the logs only.
+
+A consumer names the authority it trusts beside the name it resolves, both in
+its own creation code, and gets only what that authority bound. What the
+consumer then trusts, and what a contract authority must do on every network, is
+in `IConfigRegistryV4`'s NatSpec under "The authority and its delegates are the
+whole access control" and "Delegation is per authority and name". A delegate can
+rebind the name it was approved for, so a consumer's prod tests assert
+`approvedV4` is false for every retired delegate beside the true answers for the
+live ones.
 
 Bindings do not carry over from the deprecated `AddressRegistry`. Once the
-registry is deployed on a network, root binds each name a consumer resolves with
-`script/RegisterConfig.sol` (value `cast abi-encode "f(address)" <account>`, and
+registry is deployed on a network, an authority binds each name its consumers
+resolve with `script/RegisterConfig.sol` (value
+`cast abi-encode "f(address)" <account>`, value type `address`, and
 `CONFIG_REGISTRY_NETWORKS` naming the networks it is deployed on until that is
-every declared one) before that consumer deploys against it. Which names those
-are is each consumer's to declare; until a name is bound, its
-`LibConfigRegistry.resolve` reverts.
-
-`CONFIG_REGISTRY_ROOT` in `src/concrete/ConfigRegistry.sol` is the one place
-root lives. It is welded into the creation code, so rotating it moves the deploy
-address, the code hash and the snapshot with it.
+every declared one) before those consumers deploy against it. Which names and
+which authority are each consumer's to declare; until a name is bound under that
+authority, its `LibConfigRegistry.resolve` reverts.
 
 Bindings are **mutable**, because the configuration they name is. Rotating an
 owning multisig is ordinary business and has to be expressible without moving
@@ -731,11 +460,15 @@ re-binding a name changes what the _next_ deployment resolves and nothing else,
 which makes a rotation a deliberate migration rather than a silent change to
 live contracts.
 
-`LibConfigRegistry.resolve` is the read, verifying the registry's code hash
-first, the same way `LibRainDeploy` verifies the Zoltu factory's. It resolves a
-name to the bound bytes and never decodes them: only the consumer knows the type
-it expects, so the consumer decodes, as `abi.decode(value, (address))` for an
-address. What it does with the value, and when, is the consumer's business.
+`LibConfigRegistry.resolve(authority, name, valueTypeHash)` is the read,
+verifying the registry's code hash first, the same way `LibRainDeploy` verifies
+the Zoltu factory's. It resolves a name under an authority to the bound bytes
+and the moment they were bound, and reverts `ValueTypeMismatch` unless the name
+is bound as the type whose hash the consumer passes, `keccak256("address")` for
+an address; `resolveSafe(authority, name, valueTypeHash, minAge)` takes the same
+hash. Neither decodes the value: the consumer decodes, as
+`abi.decode(value, (address))` for an address. What it does with the value, and
+when, is the consumer's business.
 
 `LibRainDeploy` carries the **post-deploy** verification: on every target
 network, the deployed contract must hold the value the deployment expected. It
@@ -770,10 +503,29 @@ for an `address[]`.
 
 ## Managing the config registry
 
-Root binds a name with `script/RegisterConfig.sol`, signed on the Trezor that
-holds `CONFIG_REGISTRY_ROOT`. It is run by hand on the machine the Trezor is
-plugged into, never in CI: forge's own `--trezor` signer asks the device for
-each signature, and the key never leaves it.
+Both registries have one root authority, the same on every network:
+`LibRegistryAuthority.ROOT_AUTHORITY`,
+`0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c`. Consumers import it rather than
+redefining it. The scripts below act under it only; nothing selects another.
+
+The authority, or a delegate it approved, binds a name with
+`script/RegisterConfig.sol`, signed on the Trezor that holds it: the script
+binds under the root authority and, on each network, refuses a signer that is
+neither the authority nor a delegate the authority approved there for the name
+(`SenderNotApproved`), since the registry refuses that bind. It is run by hand
+on the machine the Trezor is plugged into, never in CI: forge's own `--trezor`
+signer asks the device for each signature, and the key never leaves it.
+
+The script signs as an EOA. A Safe or timelock authority either approves that
+EOA as a delegate, once per network through its own execution path
+(`approveV4(name, delegate)`), after which the EOA runs the script with
+`--sender` set to itself, or submits
+`registerV4(authority, keccak256("<org>.<name>"), valueType, value, meta)` to
+the registry itself and then runs step 3 below (`verify`), which reads under any
+authority. An approval lets the delegate rebind that one name under the
+authority until it is revoked (`revokeV4(name, delegate)`) on that network. An
+EOA authority approves or revokes a delegate, such as a Safe, with
+`script/ApproveConfigDelegate.sol` ("Approving a delegate" below).
 
 **The name is the string consumers hash.** Consumers derive a name as
 `keccak256("<org>.<name>")` — st0x resolves its token-owner Safe as
@@ -789,34 +541,42 @@ is a near miss of a real name that no consumer resolves.
 refuses one that is not a whole number of 32-byte words, though the registry
 itself binds any non-empty bytes.
 
+**The value type is named.** `CONFIG_REGISTRY_VALUE_TYPE` is the value's
+normalized ABI type, `address` for an address, bound as given; the run refuses
+it empty. `CONFIG_REGISTRY_META`, optional, is `0x` hex rain metadata emitted
+with each bind; unset, the binds carry none.
+
 It binds on every declared network by default — one binding everywhere, as the
 deployment is the same everywhere — and a network already bound to the same
-value is skipped, so a run that stopped partway is fixed by running it again.
-The default needs the registry deployed on every declared network: it checks the
-registry's code hash on each and reverts `UnexpectedConfigRegistryCodeHash` on
-the first one without it, binding nothing. While the registry is on only some
-networks, set `CONFIG_REGISTRY_NETWORKS` to those.
+value as the same type is skipped, so a run that stopped partway is fixed by
+running it again. The default needs the registry deployed on every declared
+network: it checks the registry's code hash on each and reverts
+`UnexpectedConfigRegistryCodeHash` on the first one without it, binding nothing.
+While the registry is on only some networks, set `CONFIG_REGISTRY_NETWORKS` to
+those.
 
 ### Before the first run
 
-- The Trezor: unlocked, with the passphrase of root's wallet if it has one, and
-  Trezor Suite closed (it holds the USB connection).
-- Read root from the source:
+- The Trezor: unlocked, with the passphrase of the authority's wallet if it has
+  one, and Trezor Suite closed (it holds the USB connection).
+- Name the signer: the root authority itself, or a delegate it approved on every
+  network the run binds on:
 
   ```sh
-  export CONFIG_REGISTRY_ROOT=$(grep -oE "CONFIG_REGISTRY_ROOT = 0x[0-9a-fA-F]{40}" src/concrete/ConfigRegistry.sol | grep -oE "0x[0-9a-fA-F]{40}")
+  export CONFIG_REGISTRY_SENDER=0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c # or the delegate
   ```
 
-- Check the device answers as root (add `--mnemonic-derivation-path "<path>"`
-  after `--trezor` inside the `$(…)` if root is not the first Ethereum account
-  in Trezor Suite, and the same path as `--mnemonic-derivation-paths "<path>"`
-  on the `forge script` commands below):
+- Check the device answers as the signer (add
+  `--mnemonic-derivation-path "<path>"` after `--trezor` inside the `$(…)` if
+  the signer is not the first Ethereum account in Trezor Suite, and the same
+  path as `--mnemonic-derivation-paths "<path>"` on the `forge script` commands
+  below):
 
   ```sh
-  [ "$(nix develop -c cast wallet address --trezor)" = "${CONFIG_REGISTRY_ROOT:?}" ] && echo "root OK" || echo "NOT root"
+  [ "$(nix develop -c cast wallet address --trezor)" = "${CONFIG_REGISTRY_SENDER:?}" ] && echo "signer OK" || echo "NOT the signer"
   ```
 
-- Root needs native gas on every network it binds on.
+- The signer needs native gas on every network it binds on.
 - `cp .env.example .env` for the network endpoints. They are public and
   rate-limit; replace any that fail with your own.
 
@@ -826,21 +586,26 @@ networks, set `CONFIG_REGISTRY_NETWORKS` to those.
 export CONFIG_REGISTRY_NAME=st0x.token-owner-safe
 # The value, as 0x hex of its ABI encoding. For an address:
 export CONFIG_REGISTRY_VALUE=$(nix develop -c cast abi-encode "f(address)" 0x...)
+# Its normalized ABI type:
+export CONFIG_REGISTRY_VALUE_TYPE=address
+# Optional rain metadata, as 0x hex, emitted with each bind:
+# export CONFIG_REGISTRY_META=0x...
 # Optional, to bind on fewer networks than all of them:
 # export CONFIG_REGISTRY_NETWORKS=base,arbitrum
 
 # 1. Dry run. Executes every check and the bind itself on a fork of each
 #    network, and sends nothing.
 nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
-  --sender "$CONFIG_REGISTRY_ROOT" --trezor --legacy
+  --sender "$CONFIG_REGISTRY_SENDER" --trezor --legacy
 
 # 2. The same command with --broadcast. The device asks once per network the
 #    dry run marked BIND or REBIND.
 nix develop -c forge script script/RegisterConfig.sol:RegisterConfig \
-  --sender "$CONFIG_REGISTRY_ROOT" --trezor --legacy --broadcast
+  --sender "$CONFIG_REGISTRY_SENDER" --trezor --legacy --broadcast
 
 # 3. Once every transaction is mined: reads every network fresh and fails
-#    unless the name resolves to the value on each.
+#    unless the name resolves to the value, as the type, under the authority
+#    on each.
 nix develop -c forge script script/RegisterConfig.sol:RegisterConfig --sig "verify()"
 ```
 
@@ -850,31 +615,90 @@ itself.
 
 Before anything is signed the run refuses, with an error naming what is wrong: a
 non-canonical name, an empty value, a value that is not a whole number of
-32-byte words (a bare 20-byte address, say, rather than its ABI encoding), a
-network the repo does not support or one named twice, a sender other than root,
-a network whose endpoint reports another chain id than the catalogue states for
-it, and a registry address that does not hold the pinned registry code. A
-refused run signs nothing.
+32-byte words (a bare 20-byte address, say, rather than its ABI encoding), an
+empty value type, a network the repo does not support or one named twice, a
+network whose endpoint reports another chain id than the catalogue states for
+it, a registry address that does not hold the pinned registry code, and a signer
+that is neither the authority nor a delegate the authority approved on that
+network. With `--broadcast`, forge itself is a second layer: it refuses a device
+that is not the signer before sending on any network, with
+`No associated wallet for addresses: [<signer>]`. A refused run signs nothing.
 
-The dry run prints the name, its hash, the value, the registry address and the
-exact calldata, then for each network its chain id, the current binding
-(`unbound`, or the value and the moment it was bound) and what will happen:
-`BIND`, `REBIND` (old → new) or `SKIP`. That is the record to approve against.
-For each transaction the device shows:
+The dry run prints the name, its hash, the value type, its hash, the value, the
+meta, the authority, the signer, the registry address and the exact calldata,
+then for each network its chain id, the authority's current binding (`unbound`,
+or the value, its type hash and the moment it was bound) and what will happen:
+`BIND` or `REBIND` to the value as the type, or `SKIP` where the name is bound
+to both already. That is the record to approve against. For each transaction the
+device shows:
 
 - **Recipient**: the registry address the dry run printed
   (`LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS`);
 - **Amount**: 0;
 - **Network**: the network's name or chain id, which must be one the dry run
   marked `BIND` or `REBIND`;
-- **Data**: exactly the `Calldata:` line the dry run printed: `registerV1`'s
-  selector, the name hash, the offset `0x40`, the value's length and the value
-  padded to a multiple of 32 bytes. The device cannot decode `registerV1`, so it
-  shows the raw bytes; open the full data on the device to compare them.
+- **Data**: exactly the `Calldata:` line the dry run printed: `registerV4`'s
+  selector `0x41f0fc94`, the authority, the name hash, the offsets of the value
+  type, the value and the meta (the first is `0xa0`), then the value type's
+  length and bytes, the value's length and bytes, and the meta's length and
+  bytes, each padded to a multiple of 32 bytes. The device cannot decode
+  `registerV4`, so it shows the raw bytes; open the full data on the device to
+  compare them.
 
 Labels vary by firmware; whatever they are called, the recipient, amount, chain
 and raw calldata must each match the dry run. Reject on the device if any of
 them differs.
+
+### Approving a delegate
+
+`script/ApproveConfigDelegate.sol` approves a delegate for one name under the
+root authority, or revokes it, on every declared network by default. `approveV4`
+and `revokeV4` act under their caller, so the signer is the root authority, and
+the run refuses any other `--sender` (`SenderNotAuthority`) before forking. It
+takes its own variables, so nothing exported for `RegisterConfig` carries over.
+The Trezor setup is "Before the first run" above, with the authority as the
+signer.
+
+```sh
+export CONFIG_DELEGATE_SCOPE=st0x.token-owner-safe
+export CONFIG_DELEGATE_ADDRESS=0x... # the delegate, such as the Safe
+# Optional: false revokes. Unset approves.
+# export CONFIG_DELEGATE_APPROVED=false
+# Optional, to act on fewer networks than all of them:
+# export CONFIG_DELEGATE_NETWORKS=base,arbitrum
+
+# 1. Dry run.
+nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelegate \
+  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy
+
+# 2. The same command with --broadcast. The device asks once per network the
+#    dry run marked APPROVE or REVOKE.
+nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelegate \
+  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy --broadcast
+
+# 3. Once every transaction is mined: reads every network fresh and fails
+#    unless the delegate is approved (or, with false, not approved) on each.
+nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelegate --sig "verify()"
+```
+
+Before anything is signed the run refuses a signer that is not the authority, a
+zero delegate, and every name, network, chain id and registry refusal of
+`RegisterConfig`. A network already in the target state is `SKIP`, so a run that
+stopped partway is fixed by running it again. An approval covers that one name;
+each name the delegate binds is a run of its own.
+
+The dry run prints the name, its hash, the authority, the delegate, the target,
+the registry address and the exact calldata, then for each network its chain id,
+the size of the code at the delegate (`none` where the delegate has no code
+there: a Safe not yet deployed on that network), whether it is approved now, and
+`APPROVE`, `REVOKE` or `SKIP`. The device shows the registry as recipient,
+amount 0, the network, and the `Calldata:` line as data: `approveV4`'s selector
+`0xeb34d125` or `revokeV4`'s `0x8f02e4a5`, then the name hash and the delegate.
+
+A Safe delegate then binds by executing
+`registerV4(authority, keccak256("<org>.<name>"), valueType, value, meta)` on
+the registry from the Safe, on each network, and `RegisterConfig`'s `verify()`
+checks the binding under the authority.
 
 ## Migration registry
 
@@ -882,22 +706,28 @@ them differs.
 what: a write names its writer and a namespace, and that writer or a delegate it
 approved for the namespace applies one migration in that line after one list —
 the migration it believes ran last in that line, then the migrations in any
-other line it waits on (`applyMigrationV3`, or `applyMigrationHistoryV3` for one
+other line it waits on (`applyMigrationV4`, or `applyMigrationHistoryV4` for one
 that already ran). Anyone reads when a given writer's line in a given namespace
-applied a given one (`appliedV3`), what it applied it onto (`appliedOntoV3`),
-what it applied it after (`appliedAfterV3`), which account wrote the record
-(`appliedByV3`), and where that line has got to (`headV3`). A writer approves
-and revokes delegates per namespace (`approveV3`, `revokeV3`, read by
-`approvedV3`). There is no removal and no upgrade. The interface is
-`IMigrationRegistryV3`.
+applied a given one (`appliedV4`), what it applied it onto (`appliedOntoV4`),
+what it applied it after (`appliedAfterV4`), which account wrote the record
+(`appliedByV4`), and where that line has got to (`headV4`). A writer approves
+and revokes delegates per namespace (`approveV4`, `revokeV4`, read by
+`approvedV4`). There is no removal and no upgrade. The interface is
+`IMigrationRegistryV4`.
 
 The two writes differ in exactly one thing: where the recorded moment comes
-from. `applyMigrationV3` stamps the block the record lands in, for a script
+from. `applyMigrationV4` stamps the block the record lands in, for a script
 applying its own migration in the same atomic unit as the migration itself.
-`applyMigrationHistoryV3` takes the moment as an argument, so a migration that
+`applyMigrationHistoryV4` takes the moment as an argument, so a migration that
 ran before the registry reached the chain is recordable with the time it
 actually ran. They write the same record, into the same line, and make the same
 refusals.
+
+Both take a trailing `bytes meta`, as `registerV4` does: non-empty, the same
+write emits `MetaV1_2(sender, subject, meta)` with `sender` the caller and
+`subject` `keccak256(abi.encode(writer, namespace, migration))`; empty, nothing.
+Non-empty `meta` without the rain meta magic number reverts `NotRainMetaV1`; it
+is never stored, and nothing past that prefix is validated.
 
 It exists because prod-state tests otherwise decide what to assert by reading
 the **clock**. The pattern that emerges without it is a dual-state invariant —
@@ -909,18 +739,18 @@ rather than on a fact. What you actually want is "**exactly** the value implied
 by the migrations that have run", which needs the chain to hold which ones have:
 
 ```solidity
-if (LibMigrationRegistry.appliedV3(SAFE, NAMESPACE, MIGRATION_V2) != 0) {
+if (LibMigrationRegistry.appliedV4(SAFE, NAMESPACE, MIGRATION_V2) != 0) {
     assertEq(vault.owner(), NEW_OWNER);
 } else {
     assertEq(vault.owner(), OLD_OWNER);
 }
 ```
 
-Both branches assert exactly. Neither skips, and `appliedV3` answering zero is
+Both branches assert exactly. Neither skips, and `appliedV4` answering zero is
 an ordinary expected answer rather than a revert — it is the state of every
 migration before it runs, and of every migration on a chain that never got it.
 
-**`appliedV3` is a timestamp, not a flag.** "Which invariant applies" is
+**`appliedV4` is a timestamp, not a flag.** "Which invariant applies" is
 frequently "which invariant applies _yet_": a cliff that starts at the
 migration, a rate that changes a week after it. A flag sends a consumer that
 needs the moment back to a hardcoded date, which is the thing this registry
@@ -946,7 +776,7 @@ that `appliedAt` is the block the record landed in. Everything else is kept, by
 three refusals:
 
 - **Never zero** (`ZeroTimestamp`), or the record would read back through
-  `appliedV3` as no record while the head had moved and the migration could
+  `appliedV4` as no record while the head had moved and the migration could
   never be applied again.
 - **Never after the block it is written in** (`FutureTimestamp`). A migration
   that has run has run, so a moment still to come is not a late record of
@@ -964,11 +794,11 @@ block it is written in, and two records may carry the same moment: two
 migrations applied in one transaction share a block, and two backfilled to the
 same day share a moment, so forcing them apart would demand a precision the
 moments do not have. Which of them ran first is the chain, not the moments —
-total order comes from `appliedOntoV3`, and the bound above only stops a record
+total order comes from `appliedOntoV4`, and the bound above only stops a record
 claiming to predate the one it is chained onto.
 
 Both writes get all three, `block.timestamp` included: a block whose timestamp
-is zero is `ZeroTimestamp` on `applyMigrationV3`, which a test that warps to
+is zero is `ZeroTimestamp` on `applyMigrationV4`, which a test that warps to
 zero and a chain configured from a zero genesis both reach.
 
 **A set of applied migrations, not a high-water mark.** A mark needs a total
@@ -976,7 +806,7 @@ order consumers do not have: two migrations authored on one day collide, and one
 migration split across two scripts because it landed on two networks a week
 apart cannot be one comparable value at all. A set represents both exactly, and
 the ordering between migrations moves into the assertion —
-`appliedV3(V5) != 0 ? … : appliedV3(V4) != 0 ? … : …` — which is where the
+`appliedV4(V5) != 0 ? … : appliedV4(V4) != 0 ? … : …` — which is where the
 semantic dependency actually lives.
 
 **A head, so a step cannot be skipped or repeated.** A line — one writer's
@@ -995,17 +825,17 @@ everything about that line, so every later entry names a record in another line.
 Prerequisite[] memory prerequisites = new Prerequisite[](1);
 // The first migration in a line, applied in this transaction.
 prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_HEAD_GENESIS});
-LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V1, prerequisites);
+LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V1, prerequisites, "");
 // Every later one names its predecessor.
 prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V1});
-LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V2, prerequisites);
+LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V2, prerequisites, "");
 // One that ran before the registry reached this chain names the moment it ran.
 prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
-LibMigrationRegistry.applyMigrationHistoryV3(address(this), NAMESPACE, MIGRATION_V3, 1750000000, prerequisites);
+LibMigrationRegistry.applyMigrationHistoryV4(address(this), NAMESPACE, MIGRATION_V3, 1750000000, prerequisites, "");
 ```
 
-Each record keeps that first entry, which `appliedOntoV3` reads back, so a line
-is a chain in storage rather than a set of moments to sort: from `headV3`, each
+Each record keeps that first entry, which `appliedOntoV4` reads back, so a line
+is a chain in storage rather than a set of moments to sort: from `headV4`, each
 answer names the record before it, down to `MIGRATION_HEAD_GENESIS`. That chain
 is the order the migrations ran in whatever moments the records carry.
 
@@ -1058,15 +888,15 @@ and the head still orders its own line exactly as before.
 Prerequisite[] memory prerequisites = new Prerequisite[](2);
 prerequisites[0] = Prerequisite({writer: address(this), namespace: NAMESPACE, migration: MIGRATION_V2});
 prerequisites[1] = Prerequisite({writer: FLEET_SAFE, namespace: FLEET_NAMESPACE, migration: FLEET_UPGRADE});
-LibMigrationRegistry.applyMigrationV3(address(this), NAMESPACE, MIGRATION_V3, prerequisites);
+LibMigrationRegistry.applyMigrationV4(address(this), NAMESPACE, MIGRATION_V3, prerequisites, "");
 ```
 
-The list is the record, and `appliedAfterV3` reads it back exactly as the write
+The list is the record, and `appliedAfterV4` reads it back exactly as the write
 gave it: the head under the writer's own line first, then the prerequisites as
 listed, duplicates included. A line's first migration's answer starts with
 `MIGRATION_HEAD_GENESIS`, the one entry that is a head and not a record. Empty
-only for a migration never applied. Within a line `appliedOntoV3` walks the
-chain back to genesis; `appliedAfterV3` walks from a record to every record it
+only for a migration never applied. Within a line `appliedOntoV4` walks the
+chain back to genesis; `appliedAfterV4` walks from a record to every record it
 waited on, its predecessor included, so the cross-line order is on chain and not
 only in the log. `Migrated` says nothing about the list: it is in the record,
 not beside it. A prerequisite is an index check, not proof: it says the other
@@ -1077,13 +907,13 @@ the record existed when this write landed, which is chain order, and the moments
 in another line are that writer's data.
 
 The refusals and their order are specified once, on
-`IMigrationRegistryV3.applyMigrationHistoryV3`. Duplicates are ordinary index
+`IMigrationRegistryV4.applyMigrationHistoryV4`. Duplicates are ordinary index
 checks.
 
 **The writer decides who writes its lines, and that is the whole access
 control.** A write names its writer, and the registry refuses it with
 `NotApproved` unless the caller is that writer or an account the writer approved
-for that namespace (`approveV3`, `revokeV3`, `approvedV3`). An approval names
+for that namespace (`approveV4`, `revokeV4`, `approvedV4`). An approval names
 one namespace under the approving writer and nothing else, so a Safe and a
 timelock can both write one line without either owning it, and moving a role
 between them never moves where its records go. Anyone may write, but only into
@@ -1092,35 +922,66 @@ lines of an authority it already trusts is reading something only that authority
 or a delegate it approved could have written; every other writer's lines hold
 unforgeable claims nobody asks about. A line is therefore only as trustworthy as
 every delegate it has ever had, revoked ones included, so each record keeps the
-account that wrote it (`appliedByV3`). An approved delegate can also move the
+account that wrote it (`appliedByV4`). An approved delegate can also move the
 line's head onto any id, which no write can undo, so a compromised delegate can
 stop every script queued against the line, leaving a new namespace as the only
 way out. Approve only accounts held to the writer's own custody, and revoke
 before rotating one out. Approvals cannot be enumerated on chain, only asked
-about one delegate at a time, so a consumer's prod tests assert `approvedV3` is
+about one delegate at a time, so a consumer's prod tests assert `approvedV4` is
 false for every retired delegate beside the true answers for the live ones. A
 namespace is not an authority: it is the writer's to name, and a record in it is
-that writer's claim. A root would have to be welded into the creation code, the
-way `CONFIG_REGISTRY_ROOT` is — and the account that applies a migration is a
-different Safe, deployer or timelock for every consumer and every chain, so one
-root would have to be all of them, and baking each consumer's authority in would
-give each a different address for what is meant to be one shared registry. With
-nothing to configure there is also no rollout state in which it is inert.
+that writer's claim. The repo's scripts write under the one root authority,
+`LibRegistryAuthority.ROOT_AUTHORITY`.
 
 **An index, not proof.** The registry says which invariant applies. It does not
 say the invariant holds — a multisig can act out of band and nothing here moves.
 Keep both layers: this selects, codehash and bytecode pins verify. Replacing the
 pins with it trades a clock-guess for a bookkeeping-guess.
 
-`LibMigrationRegistry` is the surface — `appliedV3`, `appliedOntoV3`,
-`appliedAfterV3`, `appliedByV3`, `headV3`, `approvedV3`, `approveV3`,
-`revokeV3`, `applyMigrationV3` and `applyMigrationHistoryV3`, plus the `*Call`
+`LibMigrationRegistry` is the surface — `appliedV4`, `appliedOntoV4`,
+`appliedAfterV4`, `appliedByV4`, `headV4`, `approvedV4`, `approveV4`,
+`revokeV4`, `applyMigrationV4` and `applyMigrationHistoryV4`, plus the `*Call`
 builders for a bundle, each verifying the registry's code hash before it reads
 or writes, and the pure `onto`, which builds the head-only list. There is
 deliberately **no broadcast runner**: the dominant real shape is a Safe
 executing a bundle that never broadcasts, and such a script appends the
-`applyMigrationV3Call` output to the bundle it is already emitting, which makes
+`applyMigrationV4Call` output to the bundle it is already emitting, which makes
 the record atomic with the migration it describes.
+
+## Managing the migration registry
+
+`script/ApproveMigrationDelegate.sol` approves a delegate to write one
+namespace's line under the root authority, or revokes it, on every declared
+network by default. `approveV4` and `revokeV4` act under their caller, so the
+signer is the root authority, and the run refuses any other `--sender`
+(`SenderNotAuthority`) before forking. The namespace is the string the consumer
+hashes, refused unless canonical as a config name is. Everything else — the
+Trezor setup, the refusals, the dry run's record and `SKIP` — is "Approving a
+delegate" above, with the migration registry as the recipient.
+
+```sh
+export MIGRATION_DELEGATE_SCOPE=st0x.deploy
+export MIGRATION_DELEGATE_ADDRESS=0x... # the delegate, such as a Safe or timelock
+# Optional: false revokes. Unset approves.
+# export MIGRATION_DELEGATE_APPROVED=false
+# Optional, to act on fewer networks than all of them:
+# export MIGRATION_DELEGATE_NETWORKS=base,arbitrum
+
+# 1. Dry run.
+nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate \
+  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy
+
+# 2. The same command with --broadcast.
+nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate \
+  --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy --broadcast
+
+# 3. Once every transaction is mined.
+nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate --sig "verify()"
+```
+
+The device shows `approveV4`'s selector `0xeb34d125` or `revokeV4`'s
+`0x8f02e4a5`, then the namespace hash and the delegate. An approval covers that
+one namespace; each delegate is a run of its own.
 
 ## Deploying, and then releasing
 
@@ -1138,13 +999,13 @@ Four separate steps, in this order. Nothing automatic ever broadcasts.
    version first, because `cutRelease()` freezes under that version's tag. Then
    run `nix develop -c forge script ./script/Build.sol --sig 'cutRelease()'`,
    then `nix develop -c forge script ./script/Build.sol` FOLLOWED BY
-   `nix develop -c ./script/build.sh`, and open the release PR. Its CI checks
-   the newly released suites on chain, so merge it only once step 1 has landed
-   on every supported network. A release freezes every contract the release
-   before it froze, unless `Build.retiredContracts()` lists it:
-   `testNoReleaseDropsAContract` refuses any other drop. Retiring a contract is
-   moving it from `generatedContracts()` to `retiredContracts()`, as
-   `AddressRegistry` was.
+   `nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`,
+   and open the release PR. Its CI checks the newly released suites on chain, so
+   merge it only once step 1 has landed on every supported network. A release
+   freezes every contract the release before it froze, unless
+   `Build.retiredContracts()` lists it: `testNoReleaseDropsAContract` refuses
+   any other drop. Retiring a contract is moving it from `generatedContracts()`
+   to `retiredContracts()`, as `AddressRegistry` was.
 3. **Verify.** `RegistryDeployVerifyTest` passes only once every **released**
    suite is live on every supported network, with the code that release froze.
 4. **Tag.** Push a `sol-v*` tag on the release PR's merge commit, the sole
@@ -1287,27 +1148,21 @@ Via [soldeer](https://soldeer.xyz):
 forge soldeer install rain-deploy~<version>
 ```
 
-**You also need `forge-std` 1.17.0, `rain-sol-codegen` 0.1.39 and `rain-factory`
-at git rev `976cd62` (rain.factory#271, which adds `ICloneableFactoryV5`)**,
-remapped as `forge-std-1.17.0/`, `rain-sol-codegen-0.1.39/` and
-`rain-factory-0.2.0/`. The published package ships `src/`, `script/` and the
-licence and README files — no `test/`, no `foundry.toml`, no `remappings.txt`,
-no `soldeer.lock`, no `dependencies/` — so a consumer resolves all three itself.
-The requirement is transitive rather than incidental: the deployed contract
-imports nothing outside this package, but every abstract a consumer inherits
-pulls them in — `Script` via `RainDeployBroadcast`, `Test` via
-`RainDeployVerifyBase`, `Vm` via `LibRainDeploy` beneath both,
-`ICloneableFactoryV4` and `ICloneableFactoryV5` via `LibRainDeployMechanism`
-beneath both, `LibICloneableFactoryV5` and the generated
-`BEACON_PROXY_CREATION_CODE` via `LibRainDeployBeaconProxy` beneath both, and
-`LibCodeGen`/`LibFs` via `LibRainDeploySnapshot`, which
-`RainDeployVerifySnapshot` imports:
+**You also need `forge-std` 1.17.0 and `rain-sol-codegen` 0.1.39**, remapped as
+`forge-std-1.17.0/` and `rain-sol-codegen-0.1.39/`. The published package ships
+`src/`, `script/` and the licence and README files — no `test/`, no
+`foundry.toml`, no `remappings.txt`, no `soldeer.lock`, no `dependencies/` — so
+a consumer resolves both itself. The requirement is transitive rather than
+incidental: the deployed contract imports nothing outside this package, but
+every abstract a consumer inherits pulls them in — `Script` via
+`RainDeployBroadcast`, `Test` via `RainDeployVerifyBase`, `Vm` via
+`LibRainDeploy` beneath both, and `LibCodeGen`/`LibFs` via
+`LibRainDeploySnapshot`, which `RainDeployVerifySnapshot` imports:
 
 ```toml
 [dependencies]
 forge-std = "1.17.0"
 rain-sol-codegen = "0.1.39"
-rain-factory = { version = "pr271-976cd62", git = "https://github.com/rainlanguage/rain.factory.git", rev = "976cd6216ad1ba15c270a266d64a654259a5b3f1" }
 rain-deploy = "<version>"
 ```
 
@@ -1323,7 +1178,6 @@ fs_permissions = [
   { access = "read", path = "./foundry.toml" },
   { access = "read", path = "./.env.example" },
   { access = "read-write", path = "./.staged-config" },
-  { access = "read", path = "./script/build.sh" },
 ]
 ```
 
@@ -1333,22 +1187,15 @@ is on the path, so no `fs_permissions` grant and no spelling of the path gets
 past it. `run()` therefore reads each file, splices its blocks, and writes the
 result to `.staged-config/` under the same name.
 
-What installs it is `script/build.sh`, the hook rainix's `rainix-copy-artifacts`
-runs after `forge script ./script/Build.sol` and before the `git diff` that
-fails a stale tree. Copy this repo's — it needs no forge, no nix and no `--ffi`,
-which is the other way a script could reach a shell and is not taken: the
-invocation that matters passes no `--ffi`, and granting it there would hand FFI
-to every consumer's build rather than to one step.
+What installs it is rainix's `rainix-copy-artifacts`, after
+`forge script ./script/Build.sol` and before the `git diff` that fails a stale
+tree. Locally:
+`nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`.
 
 ```sh
 # .gitignore
 .staged-config
 ```
-
-A repo with no `script/build.sh` is REFUSED rather than staged for, because
-nothing else moves a staged file into place: generating for it would write the
-roster where nothing reads it while the config went on saying whatever it said,
-and the build would report success.
 
 Both files then need the markers the generated blocks are spliced between, once
 each and the begin before the end. A file carrying neither is refused, naming
@@ -1391,29 +1238,26 @@ verified through Sourcify.
 
 ### Upgrading from 0.1.18
 
-`DeploySuite` gains `mechanism` and `mechanismData`, so a consumer's generated
+`DeploySuite` gains `mechanismData`, so a consumer's generated
 `Lib<Contract>Released` stops compiling before its `BuildScript` can regenerate
 it. In order:
 
-1. Add `mechanism: DeployMechanism.Zoltu, mechanismData: ""` to every entry of
-   the generated released libs, and import `DeployMechanism` beside
-   `DeploySuite`.
-2. Add `rain-factory` at rev `976cd62` and its remapping, as above.
-3. Make `view` every function of yours that calls `checkedCandidateSuites`,
+1. Add `mechanismData: ""` to every entry of the generated released libs.
+2. Make `view` every function of yours that calls `checkedCandidateSuites`,
    `allSuites`, `suiteNames`, `suiteByName` or `candidateSuites`, which are
    `view` now. A `pure` override of `candidateSuites` still compiles.
-4. Update the moved errors. `NetworkChainIdMismatch`, `NotDeployedOnNetwork` and
+3. Update the moved errors. `NetworkChainIdMismatch`, `NotDeployedOnNetwork` and
    `CodeHashMismatchOnNetwork` are members of `LibRainDeploy`: refer to them as
    `LibRainDeploy.NotDeployedOnNetwork.selector` and so on, and drop their
    imports. `NotDeployedOnNetwork` and `CodeHashMismatchOnNetwork` no longer
    carry the suite. Import `ZoltuDerivationMismatch` from
-   `LibRainDeployMechanism`, and `FrozenSnapshotUnreadable` and
+   `RainDeploySuitesBase`, and `FrozenSnapshotUnreadable` and
    `FrozenSnapshotAmbiguous` from `LibRainDeploySnapshot`.
    `FrozenSnapshotsOutnumberReleases` carries an `address[]`. A code hash
    mismatch in `deployToNetworks` reverts `CodeHashMismatchOnNetwork`, or
    `NotDeployedOnNetwork` when the address holds no code, where it reverted
    `UnexpectedDeployedCodeHash`.
-5. Replace the removed or re-signed internal functions and members:
+4. Replace the removed or re-signed internal functions and members:
    - `DerivedDeploy.deployedAddress` is `address[] deployedAddresses`, one per
      address the suite's mechanism deploys to, in the suite's address order.
    - `RainDeployVerifySnapshotBase.DEPLOYED_ADDRESS_DECLARATION` is
@@ -1440,7 +1284,7 @@ it. In order:
      takes both after `deployer`.
    - `LibRainDeploySnapshot.releasedImport`, `releasedImportBlock` and
      `releasedLibraryBlock` are `view`.
-6. For each per-network release broadcast, or to be broadcast, to a network it
+5. For each per-network release broadcast, or to be broadcast, to a network it
    does not record, override `extendedNetworks` to return that network as
    broadcast: declare, then broadcast. Without it the broadcast and the chain
    group refuse the release there with `ExtendedNetworkUnfrozen`. The address
@@ -1452,29 +1296,25 @@ it. In order:
    and `extendedNetworksCopyrightText` for a licence other than this org's): the
    broadcast and the chain group refuse a declaration it does not hold with
    `ExtendedNetworksUnrecorded`.
-7. A clone whose `initialize` reads storage of any account but the clone and the
-   accounts created under it is refused by the local deploy with
-   `CloneInitializeReadsStorage`. An account created through a dependency that
-   predates the call, such as a factory, is not exempt: it may already exist on
-   chain. Only storage reads are checked: a balance or code read of another
-   account is not refused. A write to part of a slot reads the slot first, so it
-   is refused like a read. The local deploy records each clone's state diff,
-   which ends any state-diff recording the caller started.
-8. Move to the V3 migration registry. `LibMigrationRegistry.applied`,
-   `appliedOnto`, `appliedAfter` and `head` are `appliedV3`, `appliedOntoV3`,
-   `appliedAfterV3` and `headV3`. `applyMigration` and `applyMigrationHistory`
-   are `applyMigrationV3` and `applyMigrationHistoryV3`, and take the
-   `address writer` first; `applyMigrationCall` and `applyMigrationHistoryCall`
-   are `applyMigrationV3Call` and `applyMigrationHistoryV3Call`, likewise.
-   Import `Prerequisite` from `src/interface/IMigrationRegistryV3.sol`;
-   `IMigrationRegistryV1` and `IMigrationRegistryV2` moved to
-   `src/interface/deprecated/`. The registry has a new address, so migrations
-   recorded in the 0.1.18 registry stay there and read as unapplied in V3: apply
-   them again, with `applyMigrationHistoryV3` for one that already ran.
-9. Regenerate: `forge script ./script/Build.sol` followed by
-   `./script/build.sh`.
+6. Move to the V4 migration registry. `LibMigrationRegistry.applied`,
+   `appliedOnto`, `appliedAfter` and `head` are `appliedV4`, `appliedOntoV4`,
+   `appliedAfterV4` and `headV4`. `applyMigration` and `applyMigrationHistory`
+   are `applyMigrationV4` and `applyMigrationHistoryV4`, and take the
+   `address writer` first and a trailing `bytes meta` (`""` for none);
+   `applyMigrationCall` and `applyMigrationHistoryCall` are
+   `applyMigrationV4Call` and `applyMigrationHistoryV4Call`, likewise.
+   Delegation is `IRegistryDelegatesV2`: `approveV4`, `revokeV4` and
+   `approvedV4`. Import `Prerequisite` from
+   `src/interface/IMigrationRegistryV4.sol`; `IMigrationRegistryV1`,
+   `IMigrationRegistryV2`, `IMigrationRegistryV3` and `IRegistryDelegatesV1`
+   moved to `src/interface/deprecated/`. The registry has a new address, so
+   migrations recorded in the 0.1.18 registry stay there and read as unapplied
+   in V4: apply them again, with `applyMigrationHistoryV4` for one that already
+   ran.
+7. Regenerate: `forge script ./script/Build.sol` followed by
+   `nix run github:rainlanguage/rainix#rainix-static -- install-staged-config`.
 
-`LibRainDeploy.deployToNetworks`, `LibRainDeployMechanism.deployAndBroadcast`,
+`LibRainDeploy.deployToNetworks`, `RainDeployBroadcast.deployAndBroadcast`,
 `RainDeployBroadcast.broadcastSuite` and
 `RainDeployVerifyChain.checkDeployedOnSupportedNetworks` take catalogue aliases
 only (`NetworkNotInCatalogue`), refuse a fork reporting another chain id
@@ -1503,7 +1343,7 @@ optional — the first only stages the network config:
 
 ```sh
 nix develop -c forge script ./script/Build.sol
-./script/build.sh
+nix run github:rainlanguage/rainix#rainix-static -- install-staged-config
 ```
 
 Three of the CI jobs are rainix reusable workflows, not commands in the shell,

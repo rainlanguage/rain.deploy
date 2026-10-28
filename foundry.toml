@@ -11,7 +11,7 @@ name = "rain-deploy"
 # that tag moves it, in lockstep with the record the cut writes. A version
 # published before this lifecycle has no such record, so src/generated/ holds no
 # directory for it.
-version = "0.1.19"
+version = "0.1.26"
 
 # SPDX-License-Identifier: LicenseRef-DCL-1.0
 # SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
@@ -54,8 +54,8 @@ compilation_restrictions = [
 ast = true
 
 # Build reads the version and the network sections from foundry.toml, stages the
-# regenerated sections under .staged-config/ for script/build.sh to install, and
-# writes the generated per-tag snapshots + the current-pin lib under src/.
+# regenerated sections under .staged-config/ for rainix to install, and writes
+# the generated per-tag snapshots + the current-pin lib under src/.
 # Nothing else in this repo touches the filesystem.
 fs_permissions = [
   # READ, not read-write. `BuildScript.regenerateConfig` reads these two and
@@ -64,12 +64,9 @@ fs_permissions = [
   # not a permission this list can hand out.
   { access = "read", path = "./foundry.toml" },
   { access = "read", path = "./.env.example" },
-  # Where the spliced files are staged, for script/build.sh to install over the
-  # two above. Gitignored; the hook removes it once it has installed them.
+  # Where the spliced files are staged, for rainix to install over the two
+  # above. Gitignored; removed once installed.
   { access = "read-write", path = "./.staged-config" },
-  # `writeStagedConfig` refuses a repo with no build hook, which is a repo where
-  # nothing would install what it staged.
-  { access = "read", path = "./script/build.sh" },
   { access = "read-write", path = "./src" },
   # LibRainDeploySnapshotTest builds a record tree of its own under
   # test/generated-snapshot to drive the frozen-record walk. NOT src/generated:
@@ -98,13 +95,7 @@ rain-sol-codegen = "0.1.39"
 rain-lib-memkv = "0.2.0"
 "@openzeppelin-contracts" = "5.7.0"
 safe-global-safe-smart-account = "1.4.1-3"
-# The clone factory's interface and its address/salt derivations, for the clone
-# deploy step. Its `src` imports nothing outside itself and it does not depend on
-# `rain-deploy`, so this edge introduces no cycle. `rain-factory-deploy` — which
-# is where the deployed factory's address and code hash are pinned — DOES depend
-# on `rain-deploy`, which is why a clone's factory address is a parameter here
-# rather than a constant.
-rain-factory = "0.2.0"
+rain-metadata = "0.1.43"
 
 [soldeer]
 recursive_deps = false

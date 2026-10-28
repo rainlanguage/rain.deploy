@@ -5,7 +5,7 @@ pragma solidity ^0.8.25;
 import {
     DeployCandidate,
     DeployDependency,
-    DeployMechanism,
+    DeployDeclaration,
     DeploySuite,
     RainDeploySuitesBase
 } from "../../src/abstract/RainDeploySuitesBase.sol";
@@ -17,6 +17,8 @@ import {
     RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE
 } from "../../src/generated/candidate/ConfigRegistry.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 
 /// @title ExampleDeploySuites
@@ -48,10 +50,17 @@ import {MockDeployableV2} from "../concrete/MockDeployableV2.sol";
 /// candidate side is the source anchor's, which loops over the candidates
 /// alone and would otherwise be a loop with one thing in it.
 abstract contract ExampleDeploySuites is RainDeploySuitesBase {
-    /// @inheritdoc RainDeploySuitesBase
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
+    /// Adds `exampleReleased()` and `exampleCandidates()` to `d`.
+    /// @param d The declaration, mutated.
+    function addExample(DeployDeclaration memory d) internal pure {
+        LibRainDeployDeclaration.addReleased(d, exampleReleased());
+        LibRainDeployDeclaration.addCandidates(d, exampleCandidates());
+    }
+
+    function exampleReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](2);
         suites[0] = DeploySuite({
+            networks: new string[](0),
             suite: "config-registry@0_0_1",
             creationCode: CONFIG_REGISTRY_CREATION_CODE,
             storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
@@ -59,10 +68,10 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
             storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
         suites[1] = DeploySuite({
+            networks: new string[](0),
             suite: "second-address",
             creationCode: type(MockDeployableV2).creationCode,
             storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
@@ -70,23 +79,22 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
             storedRuntimeCode: type(MockDeployableV2).runtimeCode,
             artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
         return suites;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
     /// @dev TWO candidates, at two different addresses and anchored to two
     /// different sources, because a repo that deploys more than one contract is
     /// what the list exists for. One candidate cannot tell a loop that runs
     /// over every candidate apart from one that stops at the first, and the
     /// source anchor is the only check that catches a snapshot of the wrong
     /// contract — so a loop that stops early is a contract nothing anchors.
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
+    function exampleCandidates() internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = new DeployCandidate[](2);
         candidates[0] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "config-registry-candidate",
                 creationCode: CONFIG_REGISTRY_CREATION_CODE,
                 storedDeployedAddress: CONFIG_REGISTRY_DEPLOYED_ADDRESS,
@@ -94,13 +102,13 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
         candidates[1] = DeployCandidate({
             snapshot: DeploySuite({
+                networks: new string[](0),
                 suite: "second-address-candidate",
                 creationCode: type(MockDeployableV2).creationCode,
                 storedDeployedAddress: LibRainDeploy.zoltuAddress(type(MockDeployableV2).creationCode),
@@ -108,8 +116,7 @@ abstract contract ExampleDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
-                mechanism: DeployMechanism.Zoltu,
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });

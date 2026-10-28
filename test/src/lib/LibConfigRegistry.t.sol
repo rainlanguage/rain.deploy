@@ -5,30 +5,34 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibConfigRegistry} from "../../../src/lib/LibConfigRegistry.sol";
 import {LibConfigRegistryDeploy} from "../../../src/lib/LibConfigRegistryDeploy.sol";
-import {IConfigRegistryV1} from "../../../src/interface/IConfigRegistryV1.sol";
-import {CONFIG_REGISTRY_ROOT} from "../../../src/concrete/ConfigRegistry.sol";
+import {IConfigRegistryV4} from "../../../src/interface/IConfigRegistryV4.sol";
 import {DELEGATION_DESIGNATOR_LENGTH, LibAccountCode} from "../../lib/LibAccountCode.sol";
 import {MockSafeResolvedOwner} from "../../concrete/MockSafeResolvedOwner.sol";
 import {LibConfigRegistryFork} from "../../lib/LibConfigRegistryFork.sol";
+import {VALUE_TYPE, VALUE_TYPE_HASH} from "../../lib/ConfigTestBinding.sol";
 
 /// @title LibConfigRegistryTest
 /// Tests for `LibConfigRegistry`. The registry is not mocked: the real
 /// `ConfigRegistry` is deployed through the Zoltu factory, which lands it at
 /// the pinned address with the pinned code hash.
 contract LibConfigRegistryTest is Test {
+    /// The authority every test here binds and resolves under. Any account is
+    /// one.
+    address internal constant AUTHORITY = address(0xA11CE);
+
     /// Deploys `ConfigRegistry` through the Zoltu factory, as a release deploy
     /// does.
     /// @return The deployed registry.
-    function deployRegistry() internal returns (IConfigRegistryV1) {
+    function deployRegistry() internal returns (IConfigRegistryV4) {
         LibConfigRegistryFork.ensureDeployed(vm);
-        return IConfigRegistryV1(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
+        return IConfigRegistryV4(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS);
     }
 
     /// External wrapper for `resolve`, for `vm.expectRevert`'s call depth.
     /// @param name The name to resolve.
     /// @return The value bound to `name`.
     function externalResolve(bytes32 name) external view returns (bytes memory) {
-        (bytes memory value,) = LibConfigRegistry.resolve(name);
+        (bytes memory value,) = LibConfigRegistry.resolve(AUTHORITY, name, VALUE_TYPE_HASH);
         return value;
     }
 
@@ -37,7 +41,7 @@ contract LibConfigRegistryTest is Test {
     /// @param name The name to resolve.
     /// @return The address bound to `name`.
     function resolveAddress(bytes32 name) internal view returns (address) {
-        (bytes memory value,) = LibConfigRegistry.resolve(name);
+        (bytes memory value,) = LibConfigRegistry.resolve(AUTHORITY, name, VALUE_TYPE_HASH);
         return abi.decode(value, (address));
     }
 
@@ -46,45 +50,45 @@ contract LibConfigRegistryTest is Test {
     /// and the library neither checks nor reshapes the value.
     function testResolveReturnsValueVerbatim(bytes32 name, bytes memory value, uint96 time) external {
         vm.assume(value.length > 0);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
         time = uint96(bound(time, 1, type(uint96).max));
         vm.warp(time);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, value);
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, value, "");
 
-        (bytes memory resolved, uint256 registeredAt) = LibConfigRegistry.resolve(name);
+        (bytes memory resolved, uint256 registeredAt) = LibConfigRegistry.resolve(AUTHORITY, name, VALUE_TYPE_HASH);
         assertEq(resolved, value);
         assertEq(registeredAt, time);
         vm.warp(uint256(time) + 2);
-        assertEq(LibConfigRegistry.resolveSafe(name, 1), value);
+        assertEq(LibConfigRegistry.resolveSafe(AUTHORITY, name, VALUE_TYPE_HASH, 1), value);
     }
 
     /// A consumer that decodes a binding of the wrong shape reverts in its
     /// constructor rather than coming into existence holding a misread value:
     /// a packed 20-byte address is too short for `abi.decode(value, (address))`.
     function testConsumerRefusesWrongShape(bytes32 name, address account) external {
-        IConfigRegistryV1 registry = deployRegistry();
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encodePacked(account));
+        IConfigRegistryV4 registry = deployRegistry();
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encodePacked(account), "");
         vm.warp(block.timestamp + 2);
 
         // Solidity reverts a failed `abi.decode` with no data.
         vm.expectRevert(bytes(""));
-        new MockSafeResolvedOwner(name, 1);
+        new MockSafeResolvedOwner(AUTHORITY, name, 1);
     }
 
     /// A bound name resolves to the address it is bound to, and to the moment
     /// that address was bound.
     function testResolveRegistered(bytes32 name, address account, uint96 time) external {
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
         time = uint96(bound(time, 1, type(uint96).max));
         vm.warp(time);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
 
-        (bytes memory resolved, uint256 registeredAt) = LibConfigRegistry.resolve(name);
+        (bytes memory resolved, uint256 registeredAt) = LibConfigRegistry.resolve(AUTHORITY, name, VALUE_TYPE_HASH);
         assertEq(resolved, abi.encode(account));
         assertEq(registeredAt, time);
     }
@@ -99,17 +103,17 @@ contract LibConfigRegistryTest is Test {
         // shadows forge-std's helper of that name.
         vm.assume(first > 0);
         vm.assume(second > first);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
         vm.warp(first);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(bound));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(bound), "");
         assertEq(resolveAddress(name), bound);
 
         vm.warp(second);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
-        (bytes memory resolved, uint256 registeredAt) = LibConfigRegistry.resolve(name);
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
+        (bytes memory resolved, uint256 registeredAt) = LibConfigRegistry.resolve(AUTHORITY, name, VALUE_TYPE_HASH);
         assertEq(resolved, abi.encode(account));
         assertEq(registeredAt, second);
     }
@@ -118,8 +122,84 @@ contract LibConfigRegistryTest is Test {
     function testResolveUnregistered(bytes32 name) external {
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name));
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.NameNotRegistered.selector, AUTHORITY, name));
         this.externalResolve(name);
+    }
+
+    /// External wrapper for `resolve` under any authority, for
+    /// `vm.expectRevert`'s call depth.
+    /// @param authority The authority to resolve under.
+    /// @param name The name to resolve.
+    /// @return The value `authority` bound `name` to.
+    function externalResolveUnder(address authority, bytes32 name) external view returns (bytes memory) {
+        (bytes memory value,) = LibConfigRegistry.resolve(authority, name, VALUE_TYPE_HASH);
+        return value;
+    }
+
+    /// `resolve` reads the authority it is given and no other: two authorities
+    /// binding one name each resolve to their own value and moment, and a third
+    /// that bound nothing reverts naming itself.
+    function testResolveReadsOnlyTheNamedAuthority(
+        address other,
+        address third,
+        bytes32 name,
+        address accountA,
+        address accountB
+    ) external {
+        vm.assume(other != AUTHORITY);
+        vm.assume(third != AUTHORITY && third != other);
+        IConfigRegistryV4 registry = deployRegistry();
+
+        vm.warp(10);
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(accountA), "");
+        vm.warp(20);
+        vm.prank(other);
+        registry.registerV4(other, name, VALUE_TYPE, abi.encode(accountB), "");
+
+        (bytes memory valueA, uint256 momentA) = LibConfigRegistry.resolve(AUTHORITY, name, VALUE_TYPE_HASH);
+        (bytes memory valueB, uint256 momentB) = LibConfigRegistry.resolve(other, name, VALUE_TYPE_HASH);
+        assertEq(valueA, abi.encode(accountA));
+        assertEq(momentA, 10);
+        assertEq(valueB, abi.encode(accountB));
+        assertEq(momentB, 20);
+
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.NameNotRegistered.selector, third, name));
+        this.externalResolveUnder(third, name);
+    }
+
+    /// `resolveSafe` ages the named authority's binding alone: another
+    /// authority binding the same name a moment ago neither makes it too
+    /// fresh nor lends it age.
+    function testResolveSafeAgesOnlyTheNamedAuthority(address other, bytes32 name, address account) external {
+        vm.assume(other != AUTHORITY);
+        IConfigRegistryV4 registry = deployRegistry();
+
+        vm.warp(100);
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
+        vm.warp(200);
+        vm.prank(other);
+        registry.registerV4(other, name, VALUE_TYPE, abi.encode(address(0xdead)), "");
+        vm.warp(201);
+
+        assertEq(LibConfigRegistry.resolveSafe(AUTHORITY, name, VALUE_TYPE_HASH, 100), abi.encode(account));
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, other, name, 1, 100));
+        this.externalResolveSafeUnder(other, name, 100);
+    }
+
+    /// External wrapper for `resolveSafe` under any authority, for
+    /// `vm.expectRevert`'s call depth.
+    /// @param authority The authority to resolve under.
+    /// @param name The name to resolve.
+    /// @param minAge The binding must have stood for longer than this.
+    /// @return The value `authority` bound `name` to.
+    function externalResolveSafeUnder(address authority, bytes32 name, uint256 minAge)
+        external
+        view
+        returns (bytes memory)
+    {
+        return LibConfigRegistry.resolveSafe(authority, name, VALUE_TYPE_HASH, minAge);
     }
 
     /// A chain with no registry deployed reverts on the code hash, with an
@@ -203,35 +283,37 @@ contract LibConfigRegistryTest is Test {
     /// @param minAge The binding must have stood for longer than this.
     /// @return The ABI-encoded value bound to `name`.
     function externalResolveSafe(bytes32 name, uint256 minAge) external view returns (bytes memory) {
-        return LibConfigRegistry.resolveSafe(name, minAge);
+        return LibConfigRegistry.resolveSafe(AUTHORITY, name, VALUE_TYPE_HASH, minAge);
     }
 
     /// A binding that has stood longer than the caller's minimum resolves to its
     /// address.
     function testResolveSafeOldEnough(bytes32 name, address account, uint64 minAge, uint64 extra) external {
         vm.assume(minAge > 0);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
 
         extra = uint64(bound(extra, 1, type(uint64).max));
         vm.warp(vm.getBlockTimestamp() + uint256(minAge) + uint256(extra));
-        assertEq(LibConfigRegistry.resolveSafe(name, minAge), abi.encode(account));
+        assertEq(LibConfigRegistry.resolveSafe(AUTHORITY, name, VALUE_TYPE_HASH, minAge), abi.encode(account));
     }
 
     /// A binding exactly `minAge` old is REFUSED: the binding must have stood
     /// for strictly longer.
     function testResolveSafeRefusesExactlyMinAge(bytes32 name, address account, uint64 minAge) external {
         vm.assume(minAge > 0);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
 
         vm.warp(block.timestamp + uint256(minAge));
         vm.expectRevert(
-            abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, name, uint256(minAge), uint256(minAge))
+            abi.encodeWithSelector(
+                LibConfigRegistry.BindingTooFresh.selector, AUTHORITY, name, uint256(minAge), uint256(minAge)
+            )
         );
         this.externalResolveSafe(name, minAge);
     }
@@ -239,51 +321,53 @@ contract LibConfigRegistryTest is Test {
     /// One second past `minAge` is accepted.
     function testResolveSafeAcceptsOneSecondPastMinAge(bytes32 name, address account, uint64 minAge) external {
         vm.assume(minAge > 0);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
 
         vm.warp(vm.getBlockTimestamp() + uint256(minAge) + 1);
-        assertEq(LibConfigRegistry.resolveSafe(name, minAge), abi.encode(account));
+        assertEq(LibConfigRegistry.resolveSafe(AUTHORITY, name, VALUE_TYPE_HASH, minAge), abi.encode(account));
     }
 
     /// A binding younger than the minimum is refused, and the revert carries the
     /// age it had and the age it needed.
     function testResolveSafeTooFresh(bytes32 name, address account, uint64 age, uint64 minAge) external {
         vm.assume(age < minAge);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
 
         vm.warp(block.timestamp + uint256(age));
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, name, age, minAge));
+        vm.expectRevert(
+            abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, AUTHORITY, name, age, minAge)
+        );
         this.externalResolveSafe(name, minAge);
     }
 
     /// A binding made in the block being read is refused by any nonzero minimum.
     function testResolveSafeSameBlockRefused(bytes32 name, address account, uint64 minAge) external {
         vm.assume(minAge > 0);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
 
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, name, 0, minAge));
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, AUTHORITY, name, 0, minAge));
         this.externalResolveSafe(name, minAge);
     }
 
     /// A minimum of zero is refused rather than honoured, even for a binding
     /// that would pass any real threshold.
     function testResolveSafeZeroMinAgeRefused(bytes32 name, address account, uint64 aged) external {
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
         vm.warp(block.timestamp + uint256(aged));
 
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.ZeroMinAge.selector, name));
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.ZeroMinAge.selector, AUTHORITY, name));
         this.externalResolveSafe(name, 0);
     }
 
@@ -292,7 +376,7 @@ contract LibConfigRegistryTest is Test {
     function testResolveSafeZeroMinAgeBeatsUnregistered(bytes32 name) external {
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.ZeroMinAge.selector, name));
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.ZeroMinAge.selector, AUTHORITY, name));
         this.externalResolveSafe(name, 0);
     }
 
@@ -301,7 +385,7 @@ contract LibConfigRegistryTest is Test {
     function testResolveSafeZeroMinAgeBeatsMissingRegistry(bytes32 name) external {
         assertEq(LibConfigRegistryDeploy.CONFIG_REGISTRY_DEPLOYED_ADDRESS.code.length, 0);
 
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.ZeroMinAge.selector, name));
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.ZeroMinAge.selector, AUTHORITY, name));
         this.externalResolveSafe(name, 0);
     }
 
@@ -313,18 +397,18 @@ contract LibConfigRegistryTest is Test {
         vm.assume(minAge > 0);
         vm.assume(minAge < type(uint64).max);
         aged = uint64(bound(aged, uint256(minAge) + 1, type(uint64).max));
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(boundTo));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(boundTo), "");
 
         vm.warp(vm.getBlockTimestamp() + uint256(aged));
-        assertEq(LibConfigRegistry.resolveSafe(name, minAge), abi.encode(boundTo));
+        assertEq(LibConfigRegistry.resolveSafe(AUTHORITY, name, VALUE_TYPE_HASH, minAge), abi.encode(boundTo));
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
 
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, name, 0, minAge));
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, AUTHORITY, name, 0, minAge));
         this.externalResolveSafe(name, minAge);
     }
 
@@ -334,17 +418,17 @@ contract LibConfigRegistryTest is Test {
     function testResolveSafeStampedInFuture(bytes32 name, address account, uint64 ahead, uint64 minAge) external {
         vm.assume(ahead > 0);
         vm.assume(minAge > 0);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
         vm.warp(uint256(ahead) + 1);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
 
         // The clock goes backwards, leaving the binding stamped ahead of it.
         vm.warp(1);
         vm.expectRevert(
             abi.encodeWithSelector(
-                LibConfigRegistry.BindingStampedInFuture.selector, name, uint256(ahead) + 1, uint256(1)
+                LibConfigRegistry.BindingStampedInFuture.selector, AUTHORITY, name, uint256(ahead) + 1, uint256(1)
             )
         );
         this.externalResolveSafe(name, minAge);
@@ -353,18 +437,18 @@ contract LibConfigRegistryTest is Test {
     /// A future stamp is refused however large the caller's minimum.
     function testResolveSafeStampedInFutureRefusedAtAnyMinAge(bytes32 name, address account, uint64 ahead) external {
         vm.assume(ahead > 0);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
         vm.warp(uint256(ahead) + 1);
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
         vm.warp(1);
 
         uint256[3] memory minAges = [uint256(1), uint256(type(uint64).max), type(uint256).max];
         for (uint256 i = 0; i < minAges.length; i++) {
             vm.expectRevert(
                 abi.encodeWithSelector(
-                    LibConfigRegistry.BindingStampedInFuture.selector, name, uint256(ahead) + 1, uint256(1)
+                    LibConfigRegistry.BindingStampedInFuture.selector, AUTHORITY, name, uint256(ahead) + 1, uint256(1)
                 )
             );
             this.externalResolveSafe(name, minAges[i]);
@@ -375,12 +459,12 @@ contract LibConfigRegistryTest is Test {
     /// too-fresh case, which is the boundary between the two errors.
     function testResolveSafeSameTimestampIsFreshNotFuture(bytes32 name, address account, uint64 minAge) external {
         vm.assume(minAge > 0);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
 
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, name, 0, minAge));
+        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, AUTHORITY, name, 0, minAge));
         this.externalResolveSafe(name, minAge);
     }
 
@@ -390,7 +474,7 @@ contract LibConfigRegistryTest is Test {
         vm.assume(minAge > 0);
         deployRegistry();
 
-        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV1.NameNotRegistered.selector, name));
+        vm.expectRevert(abi.encodeWithSelector(IConfigRegistryV4.NameNotRegistered.selector, AUTHORITY, name));
         this.externalResolveSafe(name, minAge);
     }
 
@@ -413,14 +497,14 @@ contract LibConfigRegistryTest is Test {
     /// comes into existence holding the vetted address.
     function testResolveSafeFromConstructor(bytes32 name, address account, uint64 minAge, uint64 extra) external {
         vm.assume(minAge > 0);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
         extra = uint64(bound(extra, 1, type(uint64).max));
         vm.warp(block.timestamp + uint256(minAge) + uint256(extra));
 
-        MockSafeResolvedOwner consumer = new MockSafeResolvedOwner(name, minAge);
+        MockSafeResolvedOwner consumer = new MockSafeResolvedOwner(AUTHORITY, name, minAge);
         assertEq(consumer.iOwner(), account);
     }
 
@@ -430,14 +514,16 @@ contract LibConfigRegistryTest is Test {
         external
     {
         vm.assume(age < minAge);
-        IConfigRegistryV1 registry = deployRegistry();
+        IConfigRegistryV4 registry = deployRegistry();
 
-        vm.prank(CONFIG_REGISTRY_ROOT);
-        registry.registerV1(name, abi.encode(account));
+        vm.prank(AUTHORITY);
+        registry.registerV4(AUTHORITY, name, VALUE_TYPE, abi.encode(account), "");
         vm.warp(block.timestamp + uint256(age));
 
-        vm.expectRevert(abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, name, age, minAge));
-        new MockSafeResolvedOwner(name, minAge);
+        vm.expectRevert(
+            abi.encodeWithSelector(LibConfigRegistry.BindingTooFresh.selector, AUTHORITY, name, age, minAge)
+        );
+        new MockSafeResolvedOwner(AUTHORITY, name, minAge);
     }
 
     /// The Zoltu deploy really does land the registry on its pinned address

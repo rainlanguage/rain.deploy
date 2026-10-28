@@ -5,7 +5,6 @@ pragma solidity =0.8.25;
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
 import {
-    BuildHookMissing,
     EmptyRoster,
     GeneratedBlockMalformed,
     LibRainDeployConfig,
@@ -39,9 +38,6 @@ contract LibRainDeployConfigTest is Test {
 
     /// Where the `writeStagedConfig` fixture is built.
     string constant STAGED_FIXTURE_ROOT = "test/generated-config-staged";
-
-    /// Where the fixture for a repo with no build hook is built.
-    string constant NO_HOOK_FIXTURE_ROOT = "test/generated-config-no-hook";
 
     /// A roster of three, one of which carries an explorer url, so both
     /// `[etherscan]` entry shapes are emitted by one call.
@@ -133,15 +129,6 @@ contract LibRainDeployConfigTest is Test {
         external
     {
         LibRainDeployConfig.writeNetworkConfig(vm, path, staged, networks);
-    }
-
-    /// @param root The project root to stage under.
-    /// @param hookPath The build hook that would install what is staged.
-    /// @param networks The roster.
-    function externalWriteStagedConfig(string memory root, string memory hookPath, SupportedNetwork[] memory networks)
-        external
-    {
-        LibRainDeployConfig.writeStagedConfig(vm, root, hookPath, networks);
     }
 
     /// PROPERTY: the `[rpc_endpoints]` section is the roster, in roster order,
@@ -359,7 +346,7 @@ contract LibRainDeployConfigTest is Test {
     ///
     /// The source staying untouched is the property: foundry refuses a
     /// cheatcode write to the project root's own `foundry.toml`, so the only
-    /// thing that can put this result there is `script/build.sh`.
+    /// thing that can put this result there is `rainix-copy-artifacts`.
     function testWriteNetworkConfigWritesBothSections() external {
         resetFixtures(CONFIG_FIXTURE_ROOT);
         string memory path = string.concat(CONFIG_FIXTURE_ROOT, "/foundry.toml");
@@ -432,7 +419,7 @@ contract LibRainDeployConfigTest is Test {
     /// installed over, and sits under the staging directory of the root it was
     /// generated for.
     ///
-    /// `script/build.sh` copies each staged file onto the file of the same name
+    /// `rainix-copy-artifacts` copies each staged file onto the file of the same name
     /// at the root, so the name is the whole of the mapping between the two.
     function testStagedPathsAreNamedAsTheFilesTheyInstallOver() external pure {
         assertEq(LibRainDeployConfig.configPath("."), "./foundry.toml");
@@ -455,9 +442,7 @@ contract LibRainDeployConfigTest is Test {
         writeFixture(STAGED_FIXTURE_ROOT, LibRainDeployConfig.configPath(STAGED_FIXTURE_ROOT), configSource);
         writeFixture(STAGED_FIXTURE_ROOT, LibRainDeployConfig.envExamplePath(STAGED_FIXTURE_ROOT), envSource);
 
-        LibRainDeployConfig.writeStagedConfig(
-            vm, STAGED_FIXTURE_ROOT, LibRainDeployConfig.BUILD_HOOK_PATH, singleRoster("alpha", 11)
-        );
+        LibRainDeployConfig.writeStagedConfig(vm, STAGED_FIXTURE_ROOT, singleRoster("alpha", 11));
 
         string memory stagedConfig =
             vm.readFile(LibRainDeployConfig.stagedPath(STAGED_FIXTURE_ROOT, LibRainDeployConfig.CONFIG_NAME));
@@ -481,28 +466,5 @@ contract LibRainDeployConfigTest is Test {
             stagedEnv,
             "# rain-deploy:generated:env:begin\n" "ALPHA_RPC_URL=https://one\n" "# rain-deploy:generated:env:end\n"
         );
-    }
-
-    /// PROPERTY: a repo with no build hook is refused, naming the hook, and
-    /// nothing is staged.
-    ///
-    /// The hook is the only thing that installs a staged file. Staging for a
-    /// repo that has none writes the roster where nothing reads it while the
-    /// config goes on saying whatever it said, and the build reports success —
-    /// the silent green this whole mechanism exists to remove. Presence is what
-    /// `rainix-copy-artifacts` conditions its own run of the hook on, so this
-    /// is exactly the state in which the install would be skipped.
-    function testWriteStagedConfigWithoutBuildHookReverts() external {
-        resetFixtures(NO_HOOK_FIXTURE_ROOT);
-        string memory missing = string.concat(NO_HOOK_FIXTURE_ROOT, "/build.sh");
-
-        vm.expectRevert(abi.encodeWithSelector(BuildHookMissing.selector, missing));
-        this.externalWriteStagedConfig(NO_HOOK_FIXTURE_ROOT, missing, singleRoster("alpha", 11));
-
-        bool stagedAnything = vm.exists(LibRainDeployConfig.stagedDir(NO_HOOK_FIXTURE_ROOT));
-        //forge-lint: disable-next-line(unsafe-cheatcode)
-        vm.removeDir(NO_HOOK_FIXTURE_ROOT, true);
-
-        assertFalse(stagedAnything);
     }
 }

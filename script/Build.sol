@@ -5,8 +5,8 @@ pragma solidity =0.8.25;
 import {BuildScript} from "../src/abstract/BuildScript.sol";
 import {
     DeployCandidate,
+    DeployDeclaration,
     DeployDependency,
-    DeployMechanism,
     DeploySuite
 } from "../src/abstract/RainDeploySuitesBase.sol";
 import {ParameterisedContract, RegistryDeploySuites} from "../src/abstract/RegistryDeploySuites.sol";
@@ -93,13 +93,13 @@ contract Build is BuildScript, RegistryDeploySuites {
     /// @inheritdoc BuildScript
     /// @dev Every alias lib, every released-suites lib, retired ones included,
     /// and the aggregate over them.
-    function regenerateLibs() internal override {
+    function regenerateLibs(DeployDeclaration memory d) internal override {
         GeneratedContract[] memory contracts = generatedContracts();
         string memory dir = libDir();
         RetiredContract[] memory retired = retiredContracts();
         for (uint256 i = 0; i < retired.length; i++) {
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, dir, recordRoot(), retired[i].contractName, retiredTemplate(retired[i])
+                vm, dir, recordRoot(), retired[i].contractName, retiredTemplate(retired[i]), d
             );
         }
         for (uint256 i = 0; i < contracts.length; i++) {
@@ -107,7 +107,7 @@ contract Build is BuildScript, RegistryDeploySuites {
                 vm, dir, contracts[i].contractName, contracts[i].constantPrefix, LibRainDeploySnapshot.CANDIDATE
             );
             LibRainDeploySnapshot.writeReleasedSuitesLib(
-                vm, dir, recordRoot(), contracts[i].contractName, contracts[i].candidate.snapshot
+                vm, dir, recordRoot(), contracts[i].contractName, contracts[i].candidate.snapshot, d
             );
         }
         LibRainDeploySnapshot.writeReleasedSuitesAggregate(vm, dir, releasedContractNames());
@@ -156,6 +156,7 @@ contract Build is BuildScript, RegistryDeploySuites {
     /// @return The template.
     function retiredTemplate(RetiredContract memory retired) internal pure returns (DeploySuite memory) {
         return DeploySuite({
+            networks: new string[](0),
             suite: retired.suite,
             creationCode: "",
             storedDeployedAddress: address(0),
@@ -163,7 +164,6 @@ contract Build is BuildScript, RegistryDeploySuites {
             storedRuntimeCode: "",
             artifactPath: retired.artifactPath,
             dependencies: new DeployDependency[](0),
-            mechanism: DeployMechanism.Zoltu,
             mechanismData: ""
         });
     }

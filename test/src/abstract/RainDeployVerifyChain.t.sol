@@ -4,9 +4,11 @@ pragma solidity =0.8.25;
 
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DerivedDeploy} from "../../../src/abstract/RainDeployVerifyBase.sol";
-import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerifyChain} from "../../../src/abstract/RainDeployVerifyChain.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../../src/lib/LibRainDeploy.sol";
+import {LibRainDeployDeclaration} from "../../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExampleDeploySuites} from "../../abstract/ExampleDeploySuites.sol";
 import {LocalForkVm} from "../../concrete/LocalForkVm.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
@@ -20,7 +22,7 @@ import {
 /// @notice `RainDeployVerifyChain` inherited by a exemplar repo whose versions
 /// are made live on every network by `setUp`, so the inherited
 /// `testSuitesLiveOnEverySupportedNetwork` is the passing case: it forks
-/// every network `supportedNetworks()` returns and finds both released suites.
+/// every network `declaration().networks` returns and finds both released suites.
 /// The candidate is etched too, so nothing here depends on whether the matrix
 /// happens to reach it — `RainDeployVerifyChainCandidateTest`, in
 /// `RainDeployVerifyChainCandidate.t.sol`, is what says it does not.
@@ -60,6 +62,14 @@ import {
 /// leaves the etch in place and changes only the code, and the check still
 /// fails, which it could not do if the expectation were read from the etch.
 contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain {
+    function declaration() internal pure override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        addExample(d);
+        return d;
+    }
+
     /// The second suite's address, derived from `MockDeployableV2`'s creation
     /// code by the same derivation `ExampleDeploySuites` declares, so the etch
     /// in `setUp` lands on the address the matrix reads.
@@ -122,7 +132,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         this.testSuitesLiveOnEverySupportedNetwork();
 
         // This test forks nothing of its own, so the matrix's forks are ids 0
-        // upwards in `supportedNetworks()` order. Selecting the last of them at
+        // upwards in `declaration().networks` order. Selecting the last of them at
         // all is the assertion; the chain ids say it is a different network
         // from the one the failure named, rather than another fork of it.
         uint256 lastNetwork = LibRainDeploy.supportedNetworks().length - 1;
@@ -216,10 +226,10 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         // with its recorded hash on whichever forks the matrix creates and the
         // check itself passes on all of them.
         DeploySuite[] memory suites = new DeploySuite[](1);
-        suites[0] = releasedSuites()[0];
+        suites[0] = declaration().released[0];
         assertEq(suites[0].storedDeployedAddress, CONFIG_REGISTRY_DEPLOYED_ADDRESS);
 
-        checkDeployedOnSupportedNetworks(suites);
+        checkDeployedOnSupportedNetworks(declaration(), suites);
 
         (bool activeAfter,) = address(vm).call(abi.encodeWithSignature("activeFork()"));
         assertTrue(activeAfter, "the matrix checked a subject without forking");
@@ -262,7 +272,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     /// `codelessDeployStep`.
     /// @return The fork of each network.
     function externalBroadcastConfigRegistry() external returns (uint256[] memory) {
-        SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(supportedNetworks());
+        SupportedNetwork[] memory networks = LibRainDeploy.declaredNetworkConfigs(declaration().networks);
         return LibRainDeploy.deployStepToNetworks(
             vm,
             networks,
@@ -275,7 +285,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
                 CONFIG_REGISTRY_DEPLOYED_ADDRESS
             ),
             CONFIG_REGISTRY_BYTECODE_HASH,
-            releasedSuites()[0].dependencies
+            declaration().released[0].dependencies
         );
     }
 
@@ -326,7 +336,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         assertEq(vm.getNonce(CONFIG_REGISTRY_DEPLOYED_ADDRESS), 0);
         assertEq(vm.getNonce(secondDeployedAddress()), 0);
 
-        DerivedDeploy[] memory derived = deriveDeployments(allSuites());
+        DerivedDeploy[] memory derived = deriveDeployments(declaration(), allSuites(declaration()));
         assertEq(derived.length, 4);
 
         assertEq(CONFIG_REGISTRY_DEPLOYED_ADDRESS.code, CONFIG_REGISTRY_RUNTIME_CODE);
@@ -345,7 +355,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     /// exactly one fork per supported network and not one more, so a fork
     /// opened to derive on is an extra one. Fork ids are handed out in creation
     /// order from zero and this test creates none of its own, so the run's ids
-    /// are exactly `0 .. supportedNetworks().length - 1`: selecting the last of
+    /// are exactly `0 .. declaration().networks.length - 1`: selecting the last of
     /// them says the matrix really did open one per network, and the id past
     /// the end not existing is what says nothing else opened one. `selectFork`
     /// reverts on an id that was never created, so the low-level call failing
@@ -384,7 +394,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     /// @param networks The networks to check on.
     /// @param suites The suites to check.
     function externalCheckDeployedOnNetworks(SupportedNetwork[] memory networks, DeploySuite[] memory suites) external {
-        checkDeployedOnNetworks(networks, suites);
+        checkDeployedOnNetworks(declaration(), networks, suites);
     }
 
     /// The chain group checks the chain id before any suite.
@@ -400,7 +410,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
                 LibRainDeploy.NetworkChainIdMismatch.selector, LibRainDeploy.ARBITRUM_ONE, 137, 42161
             )
         );
-        this.externalCheckDeployedOnNetworks(networks, releasedSuites());
+        this.externalCheckDeployedOnNetworks(networks, declaration().released);
     }
 
     /// The chain group forks through `vm`: a network whose name is neither an alias nor a URL is refused by the
@@ -408,11 +418,15 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     function testChainGroupForksThroughTheVm() external {
         SupportedNetwork[] memory networks = new SupportedNetwork[](1);
         networks[0] = SupportedNetwork({name: "no-such-alias", chainId: 1, explorerUrl: "", defaultRpcUrl: ""});
+        DeploySuite[] memory suites = new DeploySuite[](1);
+        suites[0] = declaration().released[0];
+        suites[0].networks = new string[](1);
+        suites[0].networks[0] = "no-such-alias";
 
         vm.expectRevert(
             abi.encodeWithSignature("CheatcodeError(string)", "vm.createFork: invalid rpc url: no-such-alias")
         );
-        this.externalCheckDeployedOnNetworks(networks, releasedSuites());
+        this.externalCheckDeployedOnNetworks(networks, suites);
     }
 
     /// PROPERTY: a declared chain id that is not the reported one fails hard,
@@ -491,7 +505,10 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     /// The matrix over both released suites on local forks.
     function externalCheckOnLocalForks() external {
         checkDeployedOnNetworks(
-            Vm(address(new LocalForkVm())), LibRainDeploy.declaredNetworkConfigs(supportedNetworks()), releasedSuites()
+            declaration(),
+            Vm(address(new LocalForkVm())),
+            LibRainDeploy.declaredNetworkConfigs(declaration().networks),
+            declaration().released
         );
     }
 
@@ -507,7 +524,7 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
         vm.expectRevert(
             abi.encodeWithSelector(
                 LibRainDeploy.CodeHashMismatchOnNetwork.selector,
-                supportedNetworks()[0],
+                declaration().networks[0],
                 secondDeployedAddress(),
                 keccak256(secondRuntimeCode()),
                 keccak256(hex"6001")

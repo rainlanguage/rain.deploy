@@ -2,8 +2,10 @@
 // SPDX-FileCopyrightText: Copyright (c) 2020 Rain Open Source Software Ltd
 pragma solidity =0.8.25;
 
+import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {BuildScript} from "../../src/abstract/BuildScript.sol";
-import {DeployCandidate, DeploySuite, RainDeploySuitesBase} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeployConfig} from "../../src/lib/LibRainDeployConfig.sol";
 import {LibRainDeploySnapshot} from "../../src/lib/LibRainDeploySnapshot.sol";
 
@@ -22,7 +24,7 @@ contract BuildScriptHarness is BuildScript {
     /// The single contract this fixture release freezes.
     string internal sContractName;
 
-    /// The declared network set, or empty for `RainDeploySuitesBase`'s own
+    /// The declared network set, or empty for `LibRainDeployDeclaration.extend`'s
     /// default. Set by `declareNetworks` and only by it, so the default case is
     /// the one every other test here drives.
     string[] internal sNetworks;
@@ -41,25 +43,15 @@ contract BuildScriptHarness is BuildScript {
         sNetworks = networks;
     }
 
-    /// @inheritdoc RainDeploySuitesBase
-    function supportedNetworks() internal view override returns (string[] memory) {
-        return sNetworks.length > 0 ? sNetworks : super.supportedNetworks();
-    }
-
-    /// @inheritdoc RainDeploySuitesBase
-    /// @dev A fixture with no suites at all. Nothing `run()` or `cutRelease()`
-    /// reaches asks for one — the subject here is the wiring and the config —
-    /// and a declaration this harness does not drive is one a reader would take
-    /// for an assertion.
-    function releasedSuites() internal pure override returns (DeploySuite[] memory) {
-        DeploySuite[] memory suites = new DeploySuite[](0);
-        return suites;
-    }
-
-    /// @inheritdoc RainDeploySuitesBase
-    function candidateSuites() internal pure override returns (DeployCandidate[] memory) {
-        DeployCandidate[] memory candidates = new DeployCandidate[](0);
-        return candidates;
+    /// @dev No suites: the subject here is the wiring and the config.
+    function declaration() internal view override returns (DeployDeclaration memory) {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        if (sNetworks.length > 0) {
+            LibRainDeployDeclaration.setNetworks(d, sNetworks);
+        }
+        LibRainDeployZoltuMechanism.extend(d);
+        return d;
     }
 
     /// @inheritdoc BuildScript
@@ -81,7 +73,7 @@ contract BuildScriptHarness is BuildScript {
     /// @inheritdoc BuildScript
     /// @dev The fixture root, never the repo's own. A `run()` here would
     /// otherwise read the committed config and stage a spliced copy of it,
-    /// which the next `script/build.sh` would install.
+    /// which the next install would put in place.
     function configRoot() internal view override returns (string memory) {
         return sRoot;
     }
@@ -205,7 +197,7 @@ contract BuildScriptHarness is BuildScript {
     }
 
     /// @inheritdoc BuildScript
-    function regenerateLibs() internal override {
+    function regenerateLibs(DeployDeclaration memory) internal override {
         writeFixture(
             libsPath(),
             libsMarker(LibRainDeploySnapshot.frozenSnapshotPaths(vm, recordRoot()).length, vm.exists(rollingPath()))

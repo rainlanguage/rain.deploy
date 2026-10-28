@@ -299,9 +299,9 @@ contract BuildTest is Test {
                 string.concat(
                     LibCodeGen.filePrefix(),
                     "\n",
-                    LibRainDeploySnapshot.releasedImportBlock(vm, paths),
-                    LibRainDeploySnapshot.releasedLibraryBlock(
-                        vm, libraryName, generated[i].contractName, paths, generated[i].candidate.snapshot
+                    sBuild.externalReleasedImportBlock(paths),
+                    sBuild.externalReleasedLibraryBlock(
+                        libraryName, generated[i].contractName, paths, generated[i].candidate.snapshot
                     )
                 ),
                 string.concat("committed released lib is not what the generator emits: ", generated[i].contractName)
@@ -328,9 +328,9 @@ contract BuildTest is Test {
                 string.concat(
                     LibCodeGen.filePrefix(),
                     "\n",
-                    LibRainDeploySnapshot.releasedImportBlock(vm, paths),
-                    LibRainDeploySnapshot.releasedLibraryBlock(
-                        vm, libraryName, retired[i].contractName, paths, sBuild.externalRetiredTemplate(retired[i])
+                    sBuild.externalReleasedImportBlock(paths),
+                    sBuild.externalReleasedLibraryBlock(
+                        libraryName, retired[i].contractName, paths, sBuild.externalRetiredTemplate(retired[i])
                     )
                 ),
                 string.concat("committed retired lib is not what the generator emits: ", retired[i].contractName)
