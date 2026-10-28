@@ -6,7 +6,7 @@ import {Script} from "forge-std-1.17.0/src/Script.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {IERC5313} from "@openzeppelin-contracts-5.7.0/interfaces/IERC5313.sol";
 
-import {DeploySuite, DerivationSnapshotRevertFailed, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
+import {DeployDeclaration, DeploySuite, DerivationSnapshotRevertFailed, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy, NetworkDeploys, SupportedNetwork} from "../lib/LibRainDeploy.sol";
 
 /// @notice A suite deployed as the deploy key would deploy it MUST NOT answer `owner()` with a first word whose low
@@ -35,7 +35,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// fewer networks at all overrides `supportedNetworks` instead, which this
     /// defaults to.
     /// @return The network names to deploy to, as `[rpc_endpoints]` aliases.
-    function deployNetworks() internal view virtual returns (string[] memory) {
+    function deployNetworks(DeployDeclaration memory d) internal view virtual returns (string[] memory) {
         return d.networks;
     }
 
@@ -64,13 +64,14 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// `dependencies` enforces per network, and which a caller satisfies by
     /// dispatching in order.
     function run() external {
+        DeployDeclaration memory d = declaration();
         checkCandidatesAnchoredToSource(d);
 
         DeploySuite memory suite = suiteByName(d, vm.envOr("DEPLOYMENT_SUITE", string("")));
 
         uint256 deployerPrivateKey = vm.envUint("DEPLOYMENT_KEY");
 
-        broadcastSuite(suite, deployNetworks(), deployerPrivateKey);
+        broadcastSuite(d, suite, deployNetworks(d), deployerPrivateKey);
     }
 
     /// Refuses `checkSeatsNoDeployKey`'s refusals before reading any network (so the suite's constructor MUST succeed
@@ -82,7 +83,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// @param deployerPrivateKey The key from `DEPLOYMENT_KEY`.
     /// @return Where the suite is on each network, positionally paired with `networks`.
     /// @return The fork each network was deployed on.
-    function broadcastSuite(DeploySuite memory suite, string[] memory networks, uint256 deployerPrivateKey)
+    function broadcastSuite(DeployDeclaration memory d, DeploySuite memory suite, string[] memory networks, uint256 deployerPrivateKey)
         internal
         returns (address[] memory, uint256[] memory)
     {
@@ -95,8 +96,8 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
         }
         DeploySuite memory seated = abi.decode(abi.encode(frozen), (DeploySuite));
         addUnrecordedNetworks(d, seated, candidate, suiteChainIds(candidate));
-        checkSeatsNoDeployKey(seated, seatTargets(seated, candidate, networks), deployer);
-        return deployAndBroadcast(vm, networks, deployerPrivateKey, frozen, candidate);
+        checkSeatsNoDeployKey(d, seated, seatTargets(seated, candidate, networks), deployer);
+        return deployAndBroadcast(d, vm, networks, deployerPrivateKey, frozen, candidate);
     }
 
     /// Broadcasts `frozen`, with every network in play its candidate adds, to each of `networks` by its mechanism,
@@ -109,6 +110,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// @return Where the suite is on each network, positionally paired with `networks`.
     /// @return The fork each network was deployed on.
     function deployAndBroadcast(
+        DeployDeclaration memory d,
         Vm vm,
         string[] memory networks,
         uint256 deployerPrivateKey,
@@ -193,7 +195,7 @@ abstract contract RainDeployBroadcast is RainDeploySuitesBase, Script {
     /// @param suite The suite to broadcast, with its recorded networks and every network its candidate adds.
     /// @param chainIds The chain ids to deploy under.
     /// @param deployer The deploy key's address.
-    function checkSeatsNoDeployKey(DeploySuite memory suite, uint256[] memory chainIds, address deployer) internal {
+    function checkSeatsNoDeployKey(DeployDeclaration memory d, DeploySuite memory suite, uint256[] memory chainIds, address deployer) internal {
         for (uint256 i = 0; i < chainIds.length; i++) {
             uint256 snapshotId = vm.snapshotState();
             vm.chainId(chainIds[i]);
