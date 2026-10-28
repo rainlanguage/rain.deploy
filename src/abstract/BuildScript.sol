@@ -230,12 +230,7 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// @param d The declaration.
     /// @param generated `checkedGeneratedContracts(d)`.
     /// @return The contract names.
-    function snapshotContractNames(DeployDeclaration memory d, GeneratedContract[] memory generated)
-        internal
-        pure
-        returns (string[] memory)
-    {
-        (d);
+    function snapshotContractNames(GeneratedContract[] memory generated) internal pure returns (string[] memory) {
         string[] memory names = new string[](generated.length);
         for (uint256 i = 0; i < generated.length; i++) {
             names[i] = generated[i].contractName;
@@ -268,7 +263,6 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     /// @param d The declaration.
     /// @param generated `checkedGeneratedContracts(d)`.
     function regenerateLibs(DeployDeclaration memory d, GeneratedContract[] memory generated) internal {
-        (d);
         RetiredContract[] memory retired = retiredContracts();
         string memory dir = libDir();
         string memory spdxLicenseIdentifier = libSpdxLicenseIdentifier();
@@ -281,7 +275,8 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
                 retired[i].contractName,
                 spdxLicenseIdentifier,
                 copyrightText,
-                retired[i].template
+                retired[i].template,
+                d
             );
         }
         for (uint256 i = 0; i < generated.length; i++) {
@@ -303,7 +298,8 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
                 generated[i].contractName,
                 spdxLicenseIdentifier,
                 copyrightText,
-                generated[i].candidate.snapshot
+                generated[i].candidate.snapshot,
+                d
             );
         }
         LibRainDeploySnapshot.writeReleasedSuitesAggregate(
@@ -325,7 +321,7 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         virtual
         returns (string[] memory)
     {
-        return snapshotContractNames(d, generated);
+        return snapshotContractNames(generated);
     }
 
     /// The record root a release is frozen into, and the one the rolling
