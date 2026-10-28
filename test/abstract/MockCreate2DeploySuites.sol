@@ -37,7 +37,11 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
     }
 
     /// A per-network suite on exactly `networks`.
-    function mockSuite(string memory key, MockNetworkDeploy[] memory networks) internal view returns (DeploySuite memory) {
+    function mockSuite(string memory key, MockNetworkDeploy[] memory networks)
+        internal
+        view
+        returns (DeploySuite memory)
+    {
         DeploySuite memory suite = mockSingleSuite(key);
         suite.storedDeployedAddress = address(0);
         suite.networks = LibMockCreate2Mechanism.networkNames(networks);

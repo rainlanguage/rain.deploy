@@ -267,8 +267,7 @@ library LibMockCreate2Mechanism {
         if (!mechanism.perNetwork || bytes(mechanism.root).length == 0) {
             return;
         }
-        MockNetworkDeploy[] memory recorded =
-            LibMockNetworkRecord.read(StdConstants.VM, mechanism.root, suite.suite);
+        MockNetworkDeploy[] memory recorded = LibMockNetworkRecord.read(StdConstants.VM, mechanism.root, suite.suite);
         addNetworks(suite, mechanism, recorded, recorded.length);
     }
 

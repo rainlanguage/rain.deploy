@@ -178,6 +178,7 @@ library LibRainDeployZoltuMechanism {
     /// @param root The import root of this package's source root.
     /// @return The import of this library that `releasedMechanismData`'s expression needs.
     function releasedImport(string memory root) internal pure returns (string memory) {
-        return string.concat("import {LibRainDeployZoltuMechanism} from \"", root, ZOLTU_MECHANISM_SOURCE_SUBPATH, "\";\n");
+        return
+            string.concat("import {LibRainDeployZoltuMechanism} from \"", root, ZOLTU_MECHANISM_SOURCE_SUBPATH, "\";\n");
     }
 }

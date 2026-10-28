@@ -176,7 +176,8 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         CallerHeldMockBroadcast deploy = new CallerHeldMockBroadcast();
         deploy.setMockRecordRoot(root);
         MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](1);
-        recorded[0] = MockNetworkDeploy({chainId: 56, data: abi.encode(uint256(56)), deployedAddress: networkAddress(56)});
+        recorded[0] =
+            MockNetworkDeploy({chainId: 56, data: abi.encode(uint256(56)), deployedAddress: networkAddress(56)});
         LibMockNetworkRecord.write(vm, root, deploy.externalMockRelease().suite, recorded);
         assertEq(deploy.externalAddRecordedNetworks(deploy.externalMockRelease()).networks.length, 3);
         vm.makePersistent(MOCK_CREATE2_FACTORY);
