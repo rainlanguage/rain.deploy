@@ -29,9 +29,9 @@ contract ExampleDeployNarrowNetworks is ExampleDeployScript {
     function declaration() internal pure override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
-        d.networks = new string[](1);
-        d.networks[0] = LibRainDeploy.BASE;
-        d.deployNetworks = LibRainDeployDeclaration.everyNetwork(d);
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.BASE;
+        LibRainDeployDeclaration.setNetworks(d, networks);
         LibRainDeployZoltuMechanism.extend(d);
         addExample(d);
         return d;
