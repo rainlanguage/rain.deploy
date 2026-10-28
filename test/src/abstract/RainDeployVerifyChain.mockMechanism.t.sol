@@ -26,7 +26,12 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
         sForkVm = new LocalForkVm();
     }
 
-    function releasedSuites() internal pure override(RainDeploySuitesBase, MockCreate2DeploySuites) returns (DeploySuite[] memory) {
+    function releasedSuites()
+        internal
+        pure
+        override(RainDeploySuitesBase, MockCreate2DeploySuites)
+        returns (DeploySuite[] memory)
+    {
         return new DeploySuite[](0);
     }
 

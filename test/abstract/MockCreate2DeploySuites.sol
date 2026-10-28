@@ -82,9 +82,7 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
             chainId: chainId,
             data: data,
             deployedAddress: mockCreate2Address(
-                MOCK_CREATE2_FACTORY,
-                mockNetworkSalt(MOCK_CREATE2_SALT, data),
-                type(MockDeployable).creationCode
+                MOCK_CREATE2_FACTORY, mockNetworkSalt(MOCK_CREATE2_SALT, data), type(MockDeployable).creationCode
             )
         });
     }
@@ -211,14 +209,26 @@ abstract contract MockCreate2DeploySuites is RainDeploySuitesBase {
         vm.etch(decodeMock(suite).factory, type(MockCreate2Factory).runtimeCode);
     }
 
-    function deployedAddress(DeploySuite memory suite, uint256 chainId) internal view virtual override returns (address) {
+    function deployedAddress(DeploySuite memory suite, uint256 chainId)
+        internal
+        view
+        virtual
+        override
+        returns (address)
+    {
         if (suite.mechanismData.length == 0) {
             return super.deployedAddress(suite, chainId);
         }
         return mockCreate2Address(decodeMock(suite).factory, mockSalt(suite, chainId), suite.creationCode);
     }
 
-    function recordedAddress(DeploySuite memory suite, uint256 chainId) internal view virtual override returns (address) {
+    function recordedAddress(DeploySuite memory suite, uint256 chainId)
+        internal
+        view
+        virtual
+        override
+        returns (address)
+    {
         if (suite.mechanismData.length == 0) {
             return super.recordedAddress(suite, chainId);
         }

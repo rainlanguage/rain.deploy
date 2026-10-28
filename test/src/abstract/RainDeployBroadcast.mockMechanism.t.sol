@@ -38,7 +38,9 @@ contract RainDeployBroadcastMockMechanismTest is Test {
     function networkAddress(uint256 chainId, bytes memory creationCode) internal pure returns (address) {
         bytes32 salt = keccak256(abi.encode(MOCK_CREATE2_SALT, abi.encode(chainId)));
         return address(
-            uint160(uint256(keccak256(abi.encodePacked(bytes1(0xff), MOCK_CREATE2_FACTORY, salt, keccak256(creationCode)))))
+            uint160(
+                uint256(keccak256(abi.encodePacked(bytes1(0xff), MOCK_CREATE2_FACTORY, salt, keccak256(creationCode))))
+            )
         );
     }
 
@@ -126,7 +128,9 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         mechanism.networks[1].deployedAddress = address(0x5a1e);
         release.mechanismData = abi.encode(mechanism);
         vm.expectRevert(
-            abi.encodeWithSelector(LibRainDeploy.UnexpectedDeployedAddress.selector, address(0x5a1e), networkAddress(137))
+            abi.encodeWithSelector(
+                LibRainDeploy.UnexpectedDeployedAddress.selector, address(0x5a1e), networkAddress(137)
+            )
         );
         sDeploy.externalDeployAndBroadcast(
             vm, names(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), 1, release, release
@@ -135,15 +139,14 @@ contract RainDeployBroadcastMockMechanismTest is Test {
     }
 
     function originOwnedOnSuite(uint256 ownedOn) internal view returns (DeploySuite memory) {
-        bytes memory creationCode = abi.encodePacked(
-            type(MockChainOriginOwned).creationCode, abi.encode(ownedOn)
-        );
+        bytes memory creationCode = abi.encodePacked(type(MockChainOriginOwned).creationCode, abi.encode(ownedOn));
         ChainDeploy[] memory networks = new ChainDeploy[](2);
         networks[0] = ChainDeploy({
             chainId: 42161, data: abi.encode(uint256(42161)), deployedAddress: networkAddress(42161, creationCode)
         });
-        networks[1] =
-            ChainDeploy({chainId: 137, data: abi.encode(uint256(137)), deployedAddress: networkAddress(137, creationCode)});
+        networks[1] = ChainDeploy({
+            chainId: 137, data: abi.encode(uint256(137)), deployedAddress: networkAddress(137, creationCode)
+        });
         DeploySuite memory suite = sDeploy.externalMockRelease();
         suite.creationCode = creationCode;
         suite.dependencies = new DeployDependency[](0);

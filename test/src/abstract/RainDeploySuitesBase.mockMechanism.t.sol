@@ -154,7 +154,9 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         assertEq(
             data,
             abi.encode(
-                MOCK_CREATE2_FACTORY, keccak256(abi.encode(MOCK_CREATE2_SALT, abi.encode(uint256(137)))), release.creationCode
+                MOCK_CREATE2_FACTORY,
+                keccak256(abi.encode(MOCK_CREATE2_SALT, abi.encode(uint256(137)))),
+                release.creationCode
             )
         );
         LocalForkVm forkVm = new LocalForkVm();
@@ -260,7 +262,9 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         DeploySuite memory release = sDeploy.externalMockRelease();
         sDeploy.externalCheckNetworkFrozen(release, LibRainDeploy.POLYGON, 137, address(0xe1));
         vm.expectRevert(
-            abi.encodeWithSelector(MockCreate2NetworkUnfrozen.selector, release.suite, LibRainDeploy.BASE, address(0xe1))
+            abi.encodeWithSelector(
+                MockCreate2NetworkUnfrozen.selector, release.suite, LibRainDeploy.BASE, address(0xe1)
+            )
         );
         sDeploy.externalCheckNetworkFrozen(release, LibRainDeploy.BASE, 8453, address(0xe1));
     }
@@ -278,7 +282,9 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         names[1] = LibRainDeploy.POLYGON;
         names[2] = LibRainDeploy.BASE;
         vm.expectRevert(
-            abi.encodeWithSelector(MockCreate2NetworkUnfrozen.selector, release.suite, LibRainDeploy.BASE, address(0xf1))
+            abi.encodeWithSelector(
+                MockCreate2NetworkUnfrozen.selector, release.suite, LibRainDeploy.BASE, address(0xf1)
+            )
         );
         sDeploy.externalCheckNetworksFrozen(release, onNetworks, names);
     }
@@ -335,8 +341,9 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         zoltu.mechanismData = "";
         vm.etch(LibRainDeploy.zoltuAddress(zoltu.creationCode), hex"");
         vm.resetNonce(LibRainDeploy.zoltuAddress(zoltu.creationCode));
-        string memory zoltuPath =
-            sDeploy.externalWriteSuiteSnapshot(vm, root, "0_0_2", "MockDeployable", "LicenseRef-DCL-1.0", "Copyright", zoltu);
+        string memory zoltuPath = sDeploy.externalWriteSuiteSnapshot(
+            vm, root, "0_0_2", "MockDeployable", "LicenseRef-DCL-1.0", "Copyright", zoltu
+        );
         string memory zoltuExpression = sDeploy.externalReleasedMechanismData(vm, zoltuPath, "V0_0_2");
         //forge-lint: disable-next-line(unsafe-cheatcode)
         vm.removeDir(root, true);
@@ -345,7 +352,9 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
             vm.contains(
                 record,
                 string.concat(
-                    "bytes constant MECHANISM_DATA = hex\"", vm.replace(vm.toString(release.mechanismData), "0x", ""), "\";"
+                    "bytes constant MECHANISM_DATA = hex\"",
+                    vm.replace(vm.toString(release.mechanismData), "0x", ""),
+                    "\";"
                 )
             )
         );
