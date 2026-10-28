@@ -83,7 +83,7 @@ library LibConfigRegistryReleased {
             storedRuntimeCode: ConfigRegistry_0_1_19_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_19_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: "",
+            mechanismData: abi.encode(bytes32(0xb24595658094558cfc3f1e6ecb97b1404b48f70bd87e3905c2507d4c244dc5ee)),
             networks: new string[](0)
         });
         suites[1] = DeploySuite({
@@ -94,7 +94,7 @@ library LibConfigRegistryReleased {
             storedRuntimeCode: ConfigRegistry_0_1_20_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_20_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: "",
+            mechanismData: abi.encode(bytes32(0xb24595658094558cfc3f1e6ecb97b1404b48f70bd87e3905c2507d4c244dc5ee)),
             networks: new string[](0)
         });
         suites[2] = DeploySuite({
@@ -105,7 +105,7 @@ library LibConfigRegistryReleased {
             storedRuntimeCode: ConfigRegistry_0_1_21_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_21_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: "",
+            mechanismData: abi.encode(bytes32(0xb24595658094558cfc3f1e6ecb97b1404b48f70bd87e3905c2507d4c244dc5ee)),
             networks: new string[](0)
         });
         suites[3] = DeploySuite({
@@ -116,7 +116,7 @@ library LibConfigRegistryReleased {
             storedRuntimeCode: ConfigRegistry_0_1_22_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_22_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: "",
+            mechanismData: abi.encode(bytes32(0xb24595658094558cfc3f1e6ecb97b1404b48f70bd87e3905c2507d4c244dc5ee)),
             networks: new string[](0)
         });
         suites[4] = DeploySuite({
@@ -127,7 +127,7 @@ library LibConfigRegistryReleased {
             storedRuntimeCode: ConfigRegistry_0_1_25_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_25_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: "",
+            mechanismData: abi.encode(bytes32(0xb24595658094558cfc3f1e6ecb97b1404b48f70bd87e3905c2507d4c244dc5ee)),
             networks: new string[](0)
         });
         suites[5] = DeploySuite({
@@ -138,7 +138,7 @@ library LibConfigRegistryReleased {
             storedRuntimeCode: ConfigRegistry_0_1_26_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: abi.decode(ConfigRegistry_0_1_26_DEPENDENCIES, (DeployDependency[])),
-            mechanismData: "",
+            mechanismData: abi.encode(bytes32(0xb24595658094558cfc3f1e6ecb97b1404b48f70bd87e3905c2507d4c244dc5ee)),
             networks: new string[](0)
         });
         return suites;

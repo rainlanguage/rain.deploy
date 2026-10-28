@@ -10,6 +10,7 @@ import {
     RainDeploySuitesBase
 } from "./RainDeploySuitesBase.sol";
 import {LibRainDeployDeclaration} from "../lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../lib/LibRainDeployZoltuMechanism.sol";
 import {
     CREATION_CODE as CONFIG_REGISTRY_CREATION_CODE_CANDIDATE,
     RUNTIME_CODE as CONFIG_REGISTRY_RUNTIME_CODE_CANDIDATE
@@ -83,9 +84,11 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// release required only on `addressRegistryNetworks()`, and `registryCandidates()`.
     /// @return The declaration.
     function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
+        DeployDeclaration memory declared;
+        LibRainDeployZoltuMechanism.extend(declared);
         declared.released = registryReleasedSuites();
         declared.candidates = registryCandidates();
+        LibRainDeployDeclaration.extend(declared);
         return declared;
     }
 
@@ -192,7 +195,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
@@ -222,7 +225,7 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
                 storedRuntimeCode: MIGRATION_REGISTRY_RUNTIME_CODE_CANDIDATE,
                 artifactPath: "src/concrete/MigrationRegistry.sol:MigrationRegistry",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
