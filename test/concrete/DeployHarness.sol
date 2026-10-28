@@ -3,7 +3,6 @@
 pragma solidity =0.8.25;
 
 import {Deploy} from "../../script/Deploy.sol";
-import {DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
 
 /// @title DeployHarness
 /// @notice An external seam onto the declaration's `deployNetworks`, which
@@ -16,7 +15,6 @@ import {DeployDeclaration} from "../../src/abstract/RainDeploySuitesBase.sol";
 contract DeployHarness is Deploy {
     /// @return The networks a broadcast from this script would go to.
     function externalDeployNetworks() external view returns (string[] memory) {
-        DeployDeclaration memory d = declaration();
-        return d.deployNetworks(d);
+        return declaration().deployNetworks;
     }
 }

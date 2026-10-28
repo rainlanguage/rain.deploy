@@ -32,13 +32,8 @@ contract ExampleDeploySingleNetwork is ExampleDeployScript {
         LibRainDeployDeclaration.extend(d);
         LibRainDeployZoltuMechanism.extend(d);
         addExample(d);
-        d.deployNetworks = arbitrumOnly;
+        d.deployNetworks = new string[](1);
+        d.deployNetworks[0] = LibRainDeploy.ARBITRUM_ONE;
         return d;
-    }
-
-    function arbitrumOnly(DeployDeclaration memory) internal pure returns (string[] memory) {
-        string[] memory networks = new string[](1);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        return networks;
     }
 }
