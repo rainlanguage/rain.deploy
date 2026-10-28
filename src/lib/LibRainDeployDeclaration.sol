@@ -248,6 +248,58 @@ library LibRainDeployDeclaration {
         return (candidate, found);
     }
 
+    /// The mechanism id a suite's `mechanismData` declares: its first word. Refuses `MechanismUnclaimed` for data
+    /// shorter than a word.
+    /// @param suite The suite.
+    /// @return The id.
+    function mechanismIdOf(DeploySuite memory suite) internal pure returns (bytes32) {
+        bytes memory data = suite.mechanismData;
+        if (data.length < 0x20) {
+            revert MechanismUnclaimed(suite.suite);
+        }
+        bytes32 id;
+        assembly ("memory-safe") {
+            id := mload(add(data, 0x20))
+        }
+        return id;
+    }
+
+    /// @param d The declaration.
+    /// @param suite The suite.
+    /// @return The handler of the mechanism its data declares.
+    function mechanismOf(DeployDeclaration memory d, DeploySuite memory suite)
+        internal
+        pure
+        returns (DeployMechanismHandler memory)
+    {
+        return mechanismById(d, mechanismIdOf(suite), suite.suite);
+    }
+
+    function addUnrecordedNetworks(
+        DeployDeclaration memory d,
+        DeploySuite memory suite,
+        DeploySuite memory candidate,
+        uint256[] memory chainIds
+    ) internal view {
+        mechanismOf(d, suite).addUnrecordedNetworks(d, suite, candidate, chainIds);
+    }
+
+    /// Adds to `suite` the networks among `chainIds` its candidate takes it to, the candidate being a copy of `suite`
+    /// when its key names none.
+    /// @param d The declaration.
+    /// @param suite The suite, mutated.
+    /// @param chainIds The chain ids in play.
+    function addCandidateNetworks(DeployDeclaration memory d, DeploySuite memory suite, uint256[] memory chainIds)
+        internal
+        view
+    {
+        (DeploySuite memory candidate, bool found) = candidateOf(d, suite.suite);
+        if (!found) {
+            candidate = abi.decode(abi.encode(suite), (DeploySuite));
+        }
+        addUnrecordedNetworks(d, suite, candidate, chainIds);
+    }
+
     /// @param suites The suites to search.
     /// @param requested The key to select.
     /// @return The index in `suites` of the suite `requested` selects, `suites.length` if none.

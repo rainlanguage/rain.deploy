@@ -378,11 +378,7 @@ abstract contract RainDeploySuitesBase {
         internal
         view
     {
-        (DeploySuite memory candidate, bool found) = candidateOf(d, suite.suite);
-        if (!found) {
-            candidate = abi.decode(abi.encode(suite), (DeploySuite));
-        }
-        addUnrecordedNetworks(d, suite, candidate, chainIds);
+        LibRainDeployDeclaration.addCandidateNetworks(d, suite, chainIds);
     }
 
     /// The mechanism id a suite's `mechanismData` declares: its first word. Refuses `MechanismUnclaimed` for data
@@ -390,15 +386,7 @@ abstract contract RainDeploySuitesBase {
     /// @param suite The suite.
     /// @return The id.
     function mechanismIdOf(DeploySuite memory suite) internal pure returns (bytes32) {
-        bytes memory data = suite.mechanismData;
-        if (data.length < 0x20) {
-            revert MechanismUnclaimed(suite.suite);
-        }
-        bytes32 id;
-        assembly ("memory-safe") {
-            id := mload(add(data, 0x20))
-        }
-        return id;
+        return LibRainDeployDeclaration.mechanismIdOf(suite);
     }
 
     /// @param suite The suite.
@@ -408,7 +396,7 @@ abstract contract RainDeploySuitesBase {
         pure
         returns (DeployMechanismHandler memory)
     {
-        return LibRainDeployDeclaration.mechanismById(d, mechanismIdOf(suite), suite.suite);
+        return LibRainDeployDeclaration.mechanismOf(d, suite);
     }
 
     function deployedAddress(DeployDeclaration memory d, DeploySuite memory suite, uint256 chainId)
@@ -460,7 +448,7 @@ abstract contract RainDeploySuitesBase {
         DeploySuite memory candidate,
         uint256[] memory chainIds
     ) internal view {
-        mechanismOf(d, suite).addUnrecordedNetworks(d, suite, candidate, chainIds);
+        LibRainDeployDeclaration.addUnrecordedNetworks(d, suite, candidate, chainIds);
     }
 
     function addRecordedNetworks(DeployDeclaration memory d, DeploySuite memory suite) internal view {
