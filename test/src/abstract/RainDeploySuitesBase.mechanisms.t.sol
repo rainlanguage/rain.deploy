@@ -4,7 +4,6 @@ pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {
-    DeployCandidate,
     DeployDeclaration,
     DeployMechanismHandler,
     DeploySuite,
@@ -23,27 +22,12 @@ import {
 import {LibMockSaltMechanism, MOCK_SALT_MECHANISM_ID} from "../../lib/LibMockSaltMechanism.sol";
 import {NoZoltuDeploy} from "../../concrete/NoZoltuDeploy.sol";
 import {ReversedMechanismsDeploy} from "../../concrete/ReversedMechanismsDeploy.sol";
+import {ReversedSuitesDeploy} from "../../concrete/ReversedSuitesDeploy.sol";
 import {TwoMechanismDeploy} from "../../concrete/TwoMechanismDeploy.sol";
 import {ExternalDeploySuites} from "../../abstract/ExternalDeploySuites.sol";
-import {TWO_MECHANISM_SALT, TwoMechanismDeploySuites} from "../../abstract/TwoMechanismDeploySuites.sol";
+import {TWO_MECHANISM_SALT} from "../../abstract/TwoMechanismDeploySuites.sol";
 import {MockDeployable} from "../../concrete/MockDeployable.sol";
 import {MockDeployableV2} from "../../concrete/MockDeployableV2.sol";
-
-/// The two mock candidates declared salt first, create2 second.
-contract ReversedSuitesDeploy is TwoMechanismDeploySuites, ExternalDeploySuites {
-    function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory d;
-        LibRainDeployDeclaration.extend(d);
-        LibMockSaltMechanism.extend(d);
-        LibMockCreate2Mechanism.extend(d);
-        LibRainDeployZoltuMechanism.extend(d);
-        DeployCandidate[] memory candidates = new DeployCandidate[](2);
-        candidates[0] = DeployCandidate({snapshot: saltCandidate(), unanchorableReason: ""});
-        candidates[1] = DeployCandidate({snapshot: create2Candidate(), unanchorableReason: ""});
-        LibRainDeployDeclaration.addCandidates(d, candidates);
-        return d;
-    }
-}
 
 /// @title RainDeploySuitesBaseMechanismsTest
 /// @notice Every suite and every record resolves to the one mechanism whose id it carries, whatever the order of
