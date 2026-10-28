@@ -3,11 +3,9 @@
 pragma solidity ^0.8.25;
 
 import {Script} from "forge-std-1.17.0/src/Script.sol";
-import {RAIN_COPYRIGHT_TEXT, RAIN_SPDX_LICENSE_IDENTIFIER} from "rain-sol-codegen-0.1.39/src/lib/LibCodeGen.sol";
 import {DeploySuite, RainDeploySuitesBase} from "./RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../lib/LibRainDeploy.sol";
 import {LibRainDeployConfig} from "../lib/LibRainDeployConfig.sol";
-import {ChainDeploy, LibRainDeployExtendedNetworks} from "../lib/LibRainDeployExtendedNetworks.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// @title BuildScript
@@ -68,8 +66,7 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
     ///
     /// Overridable so a `cutRelease()` can be exercised against a record other
     /// than the repo's own, which is append-only and cannot hold a test's
-    /// release. Independent of `extendedNetworksRoot()`, which such a build
-    /// overrides too.
+    /// release.
     /// @return The record root.
     function recordRoot() internal view virtual returns (string memory) {
         return LibRainDeploySnapshot.LIB_FS_ROOT;
@@ -106,58 +103,6 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         );
     }
 
-    /// The SPDX licence identifier the generated extended networks records declare. Defaults to
-    /// `RAIN_SPDX_LICENSE_IDENTIFIER`, for a repo this org owns.
-    /// @return The SPDX licence identifier.
-    function extendedNetworksSpdxLicenseIdentifier() internal view virtual returns (string memory) {
-        return RAIN_SPDX_LICENSE_IDENTIFIER;
-    }
-
-    /// The copyright text the generated extended networks records declare. Defaults to `RAIN_COPYRIGHT_TEXT`, for a
-    /// repo this org owns.
-    /// @return The copyright text.
-    function extendedNetworksCopyrightText() internal view virtual returns (string memory) {
-        return RAIN_COPYRIGHT_TEXT;
-    }
-
-    /// Rewrites each release's extended networks record under `extendedNetworksRoot()` from `extendedNetworks`, which
-    /// reads it, after refusing one the broadcast and the chain group would refuse, as `appendExtendedNetworks` does.
-    function regenerateExtendedNetworks() internal {
-        DeploySuite[] memory released = releasedSuites();
-        string memory root = extendedNetworksRoot();
-        string memory spdxLicenseIdentifier = extendedNetworksSpdxLicenseIdentifier();
-        string memory copyrightText = extendedNetworksCopyrightText();
-        for (uint256 i = 0; i < released.length; i++) {
-            ChainDeploy[] memory declared = extendedNetworks(released[i].suite);
-            appendExtendedNetworks(released[i], declared);
-            LibRainDeployExtendedNetworks.writeExtendedNetworks(
-                vm, root, released[i].suite, declared, spdxLicenseIdentifier, copyrightText
-            );
-        }
-    }
-
-    /// Every extended networks record `regenerateExtendedNetworks` writes.
-    /// @return The paths.
-    function extendedNetworksPaths() internal view returns (string[] memory) {
-        DeploySuite[] memory released = releasedSuites();
-        string memory root = extendedNetworksRoot();
-        string[] memory written = new string[](released.length);
-        uint256 count = 0;
-        for (uint256 i = 0; i < released.length; i++) {
-            (, string memory path) = LibRainDeployExtendedNetworks.writtenExtendedNetworksPath(
-                root, released[i].suite, extendedNetworks(released[i].suite)
-            );
-            if (bytes(path).length > 0) {
-                written[count++] = path;
-            }
-        }
-        string[] memory paths = new string[](count);
-        for (uint256 i = 0; i < count; i++) {
-            paths[i] = written[i];
-        }
-        return paths;
-    }
-
     /// The directory `regenerateLibs` writes every generated lib into, and the
     /// one `generatedPaths()` declares them under.
     ///
@@ -180,15 +125,13 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         return new string[](0);
     }
 
-    /// Every path `run()` must rewrite, the installed staged config and the
-    /// extended networks records included.
+    /// Every path `run()` must rewrite, the installed staged config included.
     /// @return The paths.
     function generatedPaths() internal view returns (string[] memory) {
         string[] memory base =
             LibRainDeploySnapshot.generatedPaths(libDir(), recordRoot(), releaseRecordNames(), snapshotContractNames());
         string[] memory own = buildGeneratedPaths();
-        string[] memory extended = extendedNetworksPaths();
-        string[] memory paths = new string[](base.length + 2 + own.length + extended.length);
+        string[] memory paths = new string[](base.length + 2 + own.length);
         for (uint256 i = 0; i < base.length; i++) {
             paths[i] = base[i];
         }
@@ -196,9 +139,6 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         paths[base.length + 1] = LibRainDeployConfig.ENV_EXAMPLE_NAME;
         for (uint256 i = 0; i < own.length; i++) {
             paths[base.length + 2 + i] = own[i];
-        }
-        for (uint256 i = 0; i < extended.length; i++) {
-            paths[base.length + 2 + own.length + i] = extended[i];
         }
         return paths;
     }
@@ -215,7 +155,6 @@ abstract contract BuildScript is RainDeploySuitesBase, Script {
         regenerateConfig();
         regenerateSnapshots();
         regenerateLibs();
-        regenerateExtendedNetworks();
     }
 
     /// @notice Regenerate the rolling snapshots, freeze them as this release's
