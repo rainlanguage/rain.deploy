@@ -3,6 +3,7 @@
 pragma solidity ^0.8.25;
 
 import {
+    DeployCandidate,
     DeployDeclaration,
     DeployMechanismHandler,
     DeploySuite,
@@ -13,19 +14,40 @@ import {LibRainDeploy} from "./LibRainDeploy.sol";
 /// @title LibRainDeployDeclaration
 /// @notice The core layer of a declaration, and what every layer composes with.
 library LibRainDeployDeclaration {
-    /// Sets `d.networks` to every one of Rain's networks when it names none, then gives every suite in `d` naming no
-    /// networks `d.networks`.
+    /// Sets `d.networks` to every one of Rain's networks.
     /// @param d The declaration, mutated.
     function extend(DeployDeclaration memory d) internal pure {
-        if (d.networks.length == 0) {
-            d.networks = LibRainDeploy.supportedNetworks();
-        }
+        d.networks = LibRainDeploy.supportedNetworks();
+    }
+
+    /// Appends `suites` to `d.released`, giving each naming no networks a copy of `d.networks`.
+    /// @param d The declaration, mutated.
+    /// @param suites The released suites, each mutated by that fill.
+    function addReleased(DeployDeclaration memory d, DeploySuite[] memory suites) internal pure {
+        DeploySuite[] memory released = new DeploySuite[](d.released.length + suites.length);
         for (uint256 i = 0; i < d.released.length; i++) {
-            fillNetworks(d.released[i], d.networks);
+            released[i] = d.released[i];
         }
+        for (uint256 i = 0; i < suites.length; i++) {
+            fillNetworks(suites[i], d.networks);
+            released[d.released.length + i] = suites[i];
+        }
+        d.released = released;
+    }
+
+    /// Appends `candidates` to `d.candidates`, giving each snapshot naming no networks a copy of `d.networks`.
+    /// @param d The declaration, mutated.
+    /// @param candidates The candidates, each mutated by that fill.
+    function addCandidates(DeployDeclaration memory d, DeployCandidate[] memory candidates) internal pure {
+        DeployCandidate[] memory all = new DeployCandidate[](d.candidates.length + candidates.length);
         for (uint256 i = 0; i < d.candidates.length; i++) {
-            fillNetworks(d.candidates[i].snapshot, d.networks);
+            all[i] = d.candidates[i];
         }
+        for (uint256 i = 0; i < candidates.length; i++) {
+            fillNetworks(candidates[i].snapshot, d.networks);
+            all[d.candidates.length + i] = candidates[i];
+        }
+        d.candidates = all;
     }
 
     function fillNetworks(DeploySuite memory suite, string[] memory networks) private pure {

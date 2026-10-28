@@ -85,10 +85,10 @@ abstract contract RegistryDeploySuites is RainDeploySuitesBase {
     /// @return The declaration.
     function declaration() internal pure override returns (DeployDeclaration memory) {
         DeployDeclaration memory declared;
-        LibRainDeployZoltuMechanism.extend(declared);
-        declared.released = registryReleasedSuites();
-        declared.candidates = registryCandidates();
         LibRainDeployDeclaration.extend(declared);
+        LibRainDeployZoltuMechanism.extend(declared);
+        LibRainDeployDeclaration.addReleased(declared, registryReleasedSuites());
+        LibRainDeployDeclaration.addCandidates(declared, registryCandidates());
         return declared;
     }
 
