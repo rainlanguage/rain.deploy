@@ -287,6 +287,7 @@ struct DeployCandidate {
 /// as the first word of their `mechanismData`. The `add*` steps mutate the suite they are given.
 struct DeployMechanismHandler {
     bytes32 id;
+    bytes config;
     function(DeploySuite memory, uint256) internal view returns (address) deployedAddress;
     function(DeploySuite memory, uint256) internal view returns (address) recordedAddress;
     function(DeploySuite memory, uint256) internal view returns (bytes memory) deployStepData;

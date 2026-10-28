@@ -122,6 +122,7 @@ library LibRainDeployDeclaration {
         DeployMechanismHandler memory h = handlers[found];
         return DeployMechanismHandler(
             h.id,
+            h.config,
             h.deployedAddress,
             h.recordedAddress,
             h.deployStepData,

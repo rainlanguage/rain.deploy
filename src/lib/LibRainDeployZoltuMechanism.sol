@@ -27,6 +27,7 @@ library LibRainDeployZoltuMechanism {
     function handler() internal pure returns (DeployMechanismHandler memory) {
         return DeployMechanismHandler({
             id: ZOLTU_MECHANISM_ID,
+            config: "",
             deployedAddress: deployedAddress,
             recordedAddress: recordedAddress,
             deployStepData: deployStepData,
