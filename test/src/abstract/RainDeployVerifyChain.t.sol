@@ -418,11 +418,15 @@ contract RainDeployVerifyChainTest is ExampleDeploySuites, RainDeployVerifyChain
     function testChainGroupForksThroughTheVm() external {
         SupportedNetwork[] memory networks = new SupportedNetwork[](1);
         networks[0] = SupportedNetwork({name: "no-such-alias", chainId: 1, explorerUrl: "", defaultRpcUrl: ""});
+        DeploySuite[] memory suites = new DeploySuite[](1);
+        suites[0] = declaration().released[0];
+        suites[0].networks = new string[](1);
+        suites[0].networks[0] = "no-such-alias";
 
         vm.expectRevert(
             abi.encodeWithSignature("CheatcodeError(string)", "vm.createFork: invalid rpc url: no-such-alias")
         );
-        this.externalCheckDeployedOnNetworks(networks, declaration().released);
+        this.externalCheckDeployedOnNetworks(networks, suites);
     }
 
     /// PROPERTY: a declared chain id that is not the reported one fails hard,
