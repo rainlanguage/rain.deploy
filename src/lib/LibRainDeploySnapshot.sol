@@ -1651,11 +1651,7 @@ library LibRainDeploySnapshot {
     /// @param path The record file the lines were read from.
     /// @param lines Its `recordLines`.
     /// @return True if the record declares it.
-    function recordedDescribedByMeta(Vm vm, string memory path, string[] memory lines)
-        internal
-        pure
-        returns (bool)
-    {
+    function recordedDescribedByMeta(Vm vm, string memory path, string[] memory lines) internal pure returns (bool) {
         uint256 declarations = 0;
         for (uint256 i = 0; i < lines.length; i++) {
             if (vm.indexOf(lines[i], DESCRIBED_BY_META_DECLARATION) == 0) {
@@ -1784,11 +1780,7 @@ library LibRainDeploySnapshot {
     /// @param path A record file, as `frozenSnapshotPaths` returns it.
     /// @param facts `recordedFacts` of `path`.
     /// @return The import statement, and the blank line after it.
-    function releasedImport(Vm vm, string memory path, RecordFacts memory facts)
-        internal
-        pure
-        returns (string memory)
-    {
+    function releasedImport(Vm vm, string memory path, RecordFacts memory facts) internal pure returns (string memory) {
         string memory prefix = releasedConstantPrefix(vm, path);
         return string.concat(
             facts.perNetwork
@@ -1887,8 +1879,9 @@ library LibRainDeploySnapshot {
         string memory imports = string.concat(
             "import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n"
         );
-        imports =
-            string.concat(imports, distinctConcat(mechanismImports(paths, facts, importRoot(suitesImportPath), d)), "\n");
+        imports = string.concat(
+            imports, distinctConcat(mechanismImports(paths, facts, importRoot(suitesImportPath), d)), "\n"
+        );
         for (uint256 i = 0; i < paths.length; i++) {
             imports = string.concat(imports, releasedImport(vm, paths[i], facts[i]));
         }
@@ -1909,7 +1902,8 @@ library LibRainDeploySnapshot {
     ) internal pure returns (string[] memory) {
         string[] memory imports = new string[](paths.length);
         for (uint256 i = 0; i < paths.length; i++) {
-            imports[i] = LibRainDeployDeclaration.mechanismById(d, facts[i].mechanismId, paths[i]).releasedImport(d, root);
+            imports[i] =
+                LibRainDeployDeclaration.mechanismById(d, facts[i].mechanismId, paths[i]).releasedImport(d, root);
         }
         return imports;
     }
@@ -2048,9 +2042,7 @@ library LibRainDeploySnapshot {
         DeploySuite memory template,
         DeployDeclaration memory d
     ) internal view returns (string memory) {
-        return releasedLibraryBlock(
-            vm, libraryName, contractName, paths, recordedFacts(d, vm, paths), template, d
-        );
+        return releasedLibraryBlock(vm, libraryName, contractName, paths, recordedFacts(d, vm, paths), template, d);
     }
 
     /// `releasedLibraryBlock` over the records' already-read `recordedFacts`.
