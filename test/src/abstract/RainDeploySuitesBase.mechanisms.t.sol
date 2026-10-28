@@ -240,8 +240,9 @@ contract RainDeploySuitesBaseMechanismsTest is Test {
 
     function testZoltuIdIsUnclaimedWithoutZoltu() external {
         NoZoltuDeploy noZoltu = new NoZoltuDeploy();
+        DeploySuite memory suite = zoltuSuite();
         vm.expectRevert(abi.encodeWithSelector(MechanismUnclaimed.selector, "mock-salt"));
-        noZoltu.externalDeployedAddress(zoltuSuite(), 42161);
+        noZoltu.externalDeployedAddress(suite, 42161);
     }
 
     /// A record declaring `MECHANISM_DATA` resolves by its leading word; one without resolves to Zoltu, and without
