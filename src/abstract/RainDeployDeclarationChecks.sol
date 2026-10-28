@@ -280,7 +280,7 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
     }
 
     /// Every candidate's runtime code MUST fit EIP-170.
-    function checkCandidateRuntimeCodeFitsEip170(DeployDeclaration memory d) internal view {
+    function checkCandidateRuntimeCodeFitsEip170(DeployDeclaration memory d) internal pure {
         DeployCandidate[] memory candidates = checkedCandidateSuites(d);
         for (uint256 i = 0; i < candidates.length; i++) {
             uint256 length = candidates[i].snapshot.storedRuntimeCode.length;

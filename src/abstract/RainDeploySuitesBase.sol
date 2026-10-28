@@ -327,7 +327,7 @@ abstract contract RainDeploySuitesBase {
     /// @return Whether there is one.
     function candidateOf(DeployDeclaration memory d, string memory suite)
         internal
-        view
+        pure
         returns (DeploySuite memory, bool)
     {
         bytes32 name = keccak256(bytes(suiteKeyName(suite)));
@@ -713,7 +713,7 @@ abstract contract RainDeploySuitesBase {
     /// unreadable key collides with nothing, and two keys can be spelled
     /// perfectly and still be the same key.
     /// @return Every declared suite.
-    function allSuites(DeployDeclaration memory d) internal view returns (DeploySuite[] memory) {
+    function allSuites(DeployDeclaration memory d) internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory released = d.released;
         DeployCandidate[] memory candidates = checkedCandidateSuites(d);
 
@@ -743,7 +743,7 @@ abstract contract RainDeploySuitesBase {
     /// because the alphabet `allSuites` holds them to carries neither of those
     /// two characters anywhere but between two keys.
     /// @return The declared keys.
-    function suiteNames(DeployDeclaration memory d) internal view returns (string memory) {
+    function suiteNames(DeployDeclaration memory d) internal pure returns (string memory) {
         DeploySuite[] memory suites = allSuites(d);
         string memory names;
         for (uint256 i = 0; i < suites.length; i++) {
