@@ -49,7 +49,16 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
     ) internal {
         // Nothing to check is not a reason to touch every RPC endpoint.
         if (suites.length == 0) {
-            return;
+            bool configured = false;
+            for (uint256 k = 0; k < d.mechanisms.length; k++) {
+                if (d.mechanisms[k].config.length > 0) {
+                    configured = true;
+                    break;
+                }
+            }
+            if (!configured) {
+                return;
+            }
         }
         // With no networks every suite is required nowhere, which would name a suite for what is a fault of the
         // roster.
@@ -97,6 +106,9 @@ abstract contract RainDeployVerifyChain is RainDeployVerifyBase {
         for (uint256 i = 0; i < networks.length; i++) {
             forkVm.selectFork(forkIds[i]);
             LibRainDeploy.checkNetworkChainId(networks[i]);
+            for (uint256 k = 0; k < d.mechanisms.length; k++) {
+                d.mechanisms[k].checkNetwork(d, networks[i].name, networks[i].chainId);
+            }
             for (uint256 j = 0; j < suites.length; j++) {
                 if (!requiresSuiteOn(suites[j], networks[i].name)) {
                     console2.log("Not required on network:", derived[j].suite, networks[i].name);
