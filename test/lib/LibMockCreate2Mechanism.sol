@@ -4,7 +4,12 @@ pragma solidity ^0.8.25;
 
 import {StdConstants} from "forge-std-1.17.0/src/StdConstants.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
-import {DeployDeclaration, DeployMechanismHandler, DeploySuite} from "../../src/abstract/RainDeploySuitesBase.sol";
+import {
+    DeployDeclaration,
+    DeployMechanismHandler,
+    DeploySuite,
+    SnapshotFile
+} from "../../src/abstract/RainDeploySuitesBase.sol";
 import {ChainDeploy, LibRainDeployExtendedNetworks} from "../../src/lib/LibRainDeployExtendedNetworks.sol";
 import {LibRainDeploy, SupportedNetwork} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
@@ -313,17 +318,19 @@ library LibMockCreate2Mechanism {
         emit MockCreate2Verification(networks, suite.suite, deployed);
     }
 
-    function writeSuiteSnapshot(
-        Vm vm,
-        string memory root,
-        string memory dir,
-        string memory contractName,
-        string memory spdxLicenseIdentifier,
-        string memory copyrightText,
-        DeploySuite memory suite
-    ) internal returns (string memory) {
+    function writeSuiteSnapshot(Vm vm, SnapshotFile memory file, DeploySuite memory suite)
+        internal
+        returns (string memory)
+    {
         string memory path = LibRainDeploySnapshot.writeSnapshot(
-            vm, root, dir, contractName, spdxLicenseIdentifier, copyrightText, suite.creationCode, suite.dependencies
+            vm,
+            file.root,
+            file.dir,
+            file.contractName,
+            file.spdxLicenseIdentifier,
+            file.copyrightText,
+            suite.creationCode,
+            suite.dependencies
         );
         vm.writeLine(
             path,
