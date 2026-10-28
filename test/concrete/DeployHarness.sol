@@ -14,7 +14,7 @@ import {Deploy} from "../../script/Deploy.sol";
 /// testable would add an entry point to a contract that deploys real money.
 contract DeployHarness is Deploy {
     /// @return The networks a broadcast from this script would go to.
-    function externalDeployNetworks() external view returns (string[] memory) {
+    function externalDeployNetworks() external pure returns (string[] memory) {
         return declaration().deployNetworks;
     }
 }
