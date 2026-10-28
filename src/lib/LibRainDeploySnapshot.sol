@@ -1766,8 +1766,8 @@ library LibRainDeploySnapshot {
     /// record.
     /// @param contractName The contract the released lib is written for.
     /// @param template The suite the released entries take their key and
-    /// @param releasedMechanismData The expression each entry gives `mechanismData`, from its record and prefix.
     /// artifact path from.
+    /// @param releasedMechanismData The expression each entry gives `mechanismData`, from its record and prefix.
     /// @param suitesImportPath The path the emitted lib reaches the suite types by.
     /// @return The path written.
     function writeReleasedSuitesLib(
@@ -1835,8 +1835,8 @@ library LibRainDeploySnapshot {
     /// record.
     /// @param contractName The contract the released lib is written for.
     /// @param template The suite the released entries take their key and
-    /// @param releasedMechanismData The expression each entry gives `mechanismData`, from its record and prefix.
     /// artifact path from.
+    /// @param releasedMechanismData The expression each entry gives `mechanismData`, from its record and prefix.
     /// @return The path written.
     function writeReleasedSuitesLib(
         Vm vm,
