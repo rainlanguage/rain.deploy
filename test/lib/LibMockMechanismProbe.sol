@@ -24,6 +24,8 @@ interface IMockMechanismProbe {
     function checkNetwork(bytes32 mechanismId, string memory network, uint256 chainId, uint256 forkChainId)
         external
         view;
+
+    function legacyRecordId(bytes32 mechanismId, string memory path) external view returns (bytes32);
 }
 
 /// @title LibMockMechanismProbe
@@ -55,7 +57,13 @@ library LibMockMechanismProbe {
         probe(abi.encodeCall(IMockMechanismProbe.declaredConfig, (mechanismId, config)));
     }
 
-    function probe(bytes memory data) private view {
+    /// @return The probe's answer, 0 until a test sets one with `vm.mockCall`.
+    function legacyRecordId(bytes32 mechanismId, string memory path) internal view returns (bytes32) {
+        bytes memory returned = probe(abi.encodeCall(IMockMechanismProbe.legacyRecordId, (mechanismId, path)));
+        return returned.length == 0 ? bytes32(0) : abi.decode(returned, (bytes32));
+    }
+
+    function probe(bytes memory data) private view returns (bytes memory) {
         (bool success, bytes memory returned) = MOCK_MECHANISM_PROBE.staticcall(data);
         // A test makes a hook refuse with `vm.mockCallRevert` on the probe.
         if (!success) {
@@ -63,5 +71,6 @@ library LibMockMechanismProbe {
                 revert(add(returned, 0x20), mload(returned))
             }
         }
+        return returned;
     }
 }

@@ -44,7 +44,8 @@ library LibMockSaltMechanism {
             logVerification: logVerification,
             writeSuiteSnapshot: writeSuiteSnapshot,
             releasedMechanismData: releasedMechanismData,
-            releasedImport: releasedImport
+            releasedImport: releasedImport,
+            legacyRecordId: legacyRecordId
         });
     }
 
@@ -193,5 +194,9 @@ library LibMockSaltMechanism {
 
     function releasedImport(DeployDeclaration memory, string memory) internal pure returns (string memory) {
         return "";
+    }
+
+    function legacyRecordId(DeployDeclaration memory, Vm, string memory path) internal view returns (bytes32) {
+        return LibMockMechanismProbe.legacyRecordId(MOCK_SALT_MECHANISM_ID, path);
     }
 }
