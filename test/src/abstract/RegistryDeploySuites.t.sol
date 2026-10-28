@@ -3,7 +3,7 @@
 pragma solidity =0.8.25;
 
 import {Test} from "forge-std-1.17.0/src/Test.sol";
-import {DeployCandidate, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
+import {DeployCandidate, DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RegistryDeploySuites} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
 
@@ -50,7 +50,7 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     /// code — and it fails at dispatch, per network, after the fork, where
     /// nothing in this suite is watching.
     function testCandidatesDeclareNoDependencies() external view {
-        DeployCandidate[] memory candidates = checkedCandidateSuites();
+        DeployCandidate[] memory candidates = checkedCandidateSuites(declaration());
         for (uint256 i = 0; i < candidates.length; i++) {
             assertEq(
                 candidates[i].snapshot.dependencies.length,
@@ -84,7 +84,7 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     function testCandidatesRecordTheGeneratedConstants() external view {
         string memory json = vm.readFile(DECLARATION_ARTIFACT);
         string[] memory candidates = candidateLiteralPaths(json);
-        assertEq(candidates.length, checkedCandidateSuites().length, "a declared candidate has no struct literal");
+        assertEq(candidates.length, checkedCandidateSuites(declaration()).length, "a declared candidate has no struct literal");
 
         uint256[] memory creationIds = importedConstantIds(json, "CREATION_CODE");
         uint256[] memory runtimeIds = importedConstantIds(json, "RUNTIME_CODE");
@@ -299,7 +299,7 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
     /// a candidate missing from the options cannot be deployed at all. Nothing
     /// else reads either list against the other.
     function testCandidateKeysAreTheDispatchOptions() external view {
-        DeployCandidate[] memory candidates = candidateSuites();
+        DeployCandidate[] memory candidates = declaration().candidates;
         assertEq(candidates.length, 2);
         assertEq(candidates[0].snapshot.suite, "config-registry");
         assertEq(candidates[1].snapshot.suite, "migration-registry");
@@ -309,15 +309,6 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
             options = string.concat(options, "          - ", candidates[i].snapshot.suite, "\n");
         }
         assertTrue(vm.contains(vm.readFile(MANUAL_DEPLOY_WORKFLOW), string.concat(options, "jobs:\n")));
-    }
-
-    /// A suite with only its key set, for `registryRequiresSuiteOn`.
-    /// @param key The suite key.
-    /// @return The suite.
-    function keyedSuite(string memory key) internal pure returns (DeploySuite memory) {
-        DeploySuite memory suite;
-        suite.suite = key;
-        return suite;
     }
 
     /// The retired releases are frozen to every network supported at
@@ -336,23 +327,30 @@ contract RegistryDeploySuitesTest is RegistryDeploySuites, Test {
         assertEq(networks[8], "robinhood");
     }
 
-    /// A retired release is required on every network it was live on at
-    /// retirement.
-    function testRequiresRetiredReleaseOnItsNetworks() external pure {
-        string[] memory networks = addressRegistryNetworks();
-        for (uint256 i = 0; i < networks.length; i++) {
-            assertTrue(registryRequiresSuiteOn(keyedSuite("address-registry@0_1_18"), networks[i]));
-            assertTrue(registryRequiresSuiteOn(keyedSuite("address-registry@0_1_7"), networks[i]));
+    function assertNetworks(DeploySuite memory suite, string[] memory expected) internal pure {
+        assertEq(suite.networks.length, expected.length, suite.suite);
+        for (uint256 i = 0; i < expected.length; i++) {
+            assertEq(suite.networks[i], expected[i], suite.suite);
         }
     }
 
-    /// A retired release is not required on a network added after it was
-    /// retired, and the narrowing is keyed to the exact name half.
-    function testRetiredReleaseNotRequiredOnANewNetwork() external pure {
-        assertFalse(registryRequiresSuiteOn(keyedSuite("address-registry@0_1_18"), "new_network"));
-        assertFalse(registryRequiresSuiteOn(keyedSuite("address-registry"), "new_network"));
-        assertTrue(registryRequiresSuiteOn(keyedSuite("address-registry-v2@0_1_18"), "new_network"));
-        assertTrue(registryRequiresSuiteOn(keyedSuite("config-registry@0_1_19"), "new_network"));
-        assertTrue(registryRequiresSuiteOn(keyedSuite("migration-registry"), "new_network"));
+    /// Every retired address registry release is required on exactly the
+    /// networks it was live on at retirement; every other suite on every
+    /// declared network.
+    function testOnlyRetiredAddressRegistryReleasesAreNarrowed() external pure {
+        DeployDeclaration memory d = declaration();
+        DeploySuite[] memory suites = allSuites(d);
+        uint256 retired = 0;
+        for (uint256 i = 0; i < suites.length; i++) {
+            if (keccak256(bytes(suiteKeyName(suites[i].suite))) == keccak256(bytes(ADDRESS_REGISTRY_SUITE))) {
+                retired++;
+                assertNetworks(suites[i], addressRegistryNetworks());
+            } else {
+                assertNetworks(suites[i], d.networks);
+            }
+        }
+        assertEq(suiteByName(d, "address-registry@0_1_18").networks.length, 9);
+        assertEq(suiteByName(d, "address-registry@0_1_7").networks.length, 9);
+        assertGt(retired, 1);
     }
 }
