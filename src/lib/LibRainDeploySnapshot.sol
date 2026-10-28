@@ -1684,45 +1684,57 @@ library LibRainDeploySnapshot {
         string memory imports = string.concat(
             "import {DeployDependency, DeploySuite} from \"", suitesImportPath, "\";\n"
         );
-        string memory root = importRoot(suitesImportPath);
-        bytes32[] memory seen = new bytes32[](paths.length);
-        uint256 seenLength = 0;
-        for (uint256 i = 0; i < paths.length; i++) {
-            (imports, seenLength) = appendImport(
-                imports,
-                seen,
-                seenLength,
-                LibRainDeployDeclaration.mechanismById(d, ids[i], paths[i]).releasedImport(d, root)
-            );
-        }
-        imports = string.concat(imports, "\n");
+        imports = string.concat(
+            imports, distinctConcat(mechanismImports(paths, ids, importRoot(suitesImportPath), d)), "\n"
+        );
         for (uint256 i = 0; i < paths.length; i++) {
             imports = string.concat(imports, releasedImport(vm, paths[i]));
         }
         return imports;
     }
 
-    /// `imports` with `mechanismImport` appended unless `seen` already holds its hash.
-    /// @param imports The import block so far.
-    /// @param seen The hashes of the imports already appended, in its first `seenLength` slots.
-    /// @param seenLength The number of hashes in `seen`.
-    /// @param mechanismImport The import to append.
-    /// @return The import block.
-    /// @return The new `seenLength`.
-    function appendImport(
-        string memory imports,
-        bytes32[] memory seen,
-        uint256 seenLength,
-        string memory mechanismImport
-    ) internal pure returns (string memory, uint256) {
-        bytes32 hash = keccak256(bytes(mechanismImport));
-        for (uint256 j = 0; j < seenLength; j++) {
-            if (seen[j] == hash) {
-                return (imports, seenLength);
+    /// The import each record's mechanism in `d` gives its `releasedMechanismData`.
+    /// @param paths The record's files.
+    /// @param ids `recordedMechanismIds` of `paths`.
+    /// @param root `importRoot` of the emitted lib's `suitesImportPath`.
+    /// @param d The declaration whose mechanism for each record gives the import.
+    /// @return The imports, index-aligned with `paths`.
+    function mechanismImports(
+        string[] memory paths,
+        bytes32[] memory ids,
+        string memory root,
+        DeployDeclaration memory d
+    ) internal view returns (string[] memory) {
+        string[] memory imports = new string[](paths.length);
+        for (uint256 i = 0; i < paths.length; i++) {
+            imports[i] = LibRainDeployDeclaration.mechanismById(d, ids[i], paths[i]).releasedImport(d, root);
+        }
+        return imports;
+    }
+
+    /// `parts` concatenated in order, each distinct part once at its first occurrence.
+    /// @param parts The parts.
+    /// @return The concatenation.
+    function distinctConcat(string[] memory parts) internal pure returns (string memory) {
+        string memory out = "";
+        bytes32[] memory seen = new bytes32[](parts.length);
+        uint256 seenLength = 0;
+        for (uint256 i = 0; i < parts.length; i++) {
+            bytes32 hash = keccak256(bytes(parts[i]));
+            bool duplicate = false;
+            for (uint256 j = 0; j < seenLength; j++) {
+                if (seen[j] == hash) {
+                    duplicate = true;
+                    break;
+                }
+            }
+            if (!duplicate) {
+                seen[seenLength] = hash;
+                seenLength++;
+                out = string.concat(out, parts[i]);
             }
         }
-        seen[seenLength] = hash;
-        return (string.concat(imports, mechanismImport), seenLength + 1);
+        return out;
     }
 
     /// `releasedImportBlock` applied to this repo's own `suitesImportPathInThisRepo`.
