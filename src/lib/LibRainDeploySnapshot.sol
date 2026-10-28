@@ -12,6 +12,7 @@ import {
 import {GENERATED_DIR, LibFs} from "rain-sol-codegen-0.1.39/src/lib/LibFs.sol";
 import {DeploySuite} from "../abstract/RainDeploySuitesBase.sol";
 import {DeployDependency, LibRainDeploy} from "./LibRainDeploy.sol";
+import {ZOLTU_MECHANISM_ID} from "./LibRainDeployZoltuMechanism.sol";
 
 /// Thrown when `[external.package].version` is not strict `X.Y.Z`. A version
 /// like `0.1.7-rc1` maps to the directory `0_1_7-rc1`, which the append-only
@@ -1555,7 +1556,7 @@ library LibRainDeploySnapshot {
         return mechanismData;
     }
 
-    /// The mechanism id a record declares: `bytes32(0)` without `MECHANISM_DATA`, else its leading word. Refuses
+    /// The mechanism id a record declares: `ZOLTU_MECHANISM_ID` without `MECHANISM_DATA`, else its leading word. Refuses
     /// `FrozenSnapshotUnreadable` for a `MECHANISM_DATA` not a `hex"..."` literal of at least a word, with
     /// `recordedMechanismShape`'s refusals.
     /// @param vm The Vm instance for file and string operations.
@@ -1563,7 +1564,7 @@ library LibRainDeploySnapshot {
     /// @return The id.
     function recordedMechanismId(Vm vm, string memory path) internal view returns (bytes32) {
         if (!recordDeclaresMechanismData(vm, path)) {
-            return bytes32(0);
+            return ZOLTU_MECHANISM_ID;
         }
         string[] memory lines = recordLines(vm, path, vm.readFile(path));
         uint256 line = 0;
