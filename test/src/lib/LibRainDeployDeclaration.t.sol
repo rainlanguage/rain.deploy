@@ -74,6 +74,51 @@ contract LibRainDeployDeclarationTest is Test {
         assertEq(d.mechanisms.length, 0);
     }
 
+    function testSetNetworksGivesBothListsTheirOwnCopy() external pure {
+        DeployDeclaration memory d;
+        string[] memory networks = twoNetworks();
+        LibRainDeployDeclaration.setNetworks(d, networks);
+        assertNetworks(d.networks, twoNetworks(), "networks");
+        assertNetworks(d.deployNetworks, twoNetworks(), "deployNetworks");
+        assertNetworks(networks, twoNetworks(), "caller's list");
+
+        networks[0] = "caller";
+        assertEq(d.networks[0], "alpha", "networks aliases the caller's list");
+        assertEq(d.deployNetworks[0], "alpha", "deployNetworks aliases the caller's list");
+
+        d.networks[1] = "networks";
+        assertEq(d.deployNetworks[1], "beta", "deployNetworks aliases networks");
+        d.deployNetworks[0] = "deployNetworks";
+        assertEq(d.networks[0], "alpha", "networks aliases deployNetworks");
+        assertEq(networks[1], "beta", "caller's list aliases networks");
+    }
+
+    function testSetDeployNetworksSetsOnlyAnOwnCopyOfDeployNetworks() external pure {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.setNetworks(d, twoNetworks());
+        string[] memory deployNetworks = oneNetwork("beta");
+        LibRainDeployDeclaration.setDeployNetworks(d, deployNetworks);
+        assertNetworks(d.networks, twoNetworks(), "networks");
+        assertNetworks(d.deployNetworks, oneNetwork("beta"), "deployNetworks");
+        assertNetworks(deployNetworks, oneNetwork("beta"), "caller's list");
+        assertEq(d.released.length, 0);
+        assertEq(d.candidates.length, 0);
+        assertEq(d.mechanisms.length, 0);
+        assertEq(d.dispatchWorkflow, "");
+
+        deployNetworks[0] = "caller";
+        assertEq(d.deployNetworks[0], "beta", "deployNetworks aliases the caller's list");
+    }
+
+    function testNarrowingThroughSetNetworksLeavesNoStaleDeployNetworks() external pure {
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployDeclaration.setNetworks(d, oneNetwork(LibRainDeploy.BASE));
+        assertNetworks(d.networks, oneNetwork(LibRainDeploy.BASE), "networks");
+        assertNetworks(d.deployNetworks, oneNetwork(LibRainDeploy.BASE), "deployNetworks");
+        assertEq(d.dispatchWorkflow, LibRainDeployDeclaration.DISPATCH_WORKFLOW);
+    }
+
     function testAddReleasedFillsUnsetNetworksWithAFreshCopy() external pure {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.setNetworks(d, twoNetworks());
