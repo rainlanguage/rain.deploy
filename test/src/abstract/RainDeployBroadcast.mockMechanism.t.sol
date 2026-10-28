@@ -174,4 +174,12 @@ contract RainDeployBroadcastMockMechanismTest is Test {
         assertEq(networkAddress(42161, suite.creationCode).code.length, 0);
         assertEq(networkAddress(137, suite.creationCode).code.length, 0);
     }
+
+    function testSeatCheckDeploysOnlyTheChainsOwnNetworkPerChain() external {
+        DeploySuite memory suite = originOwnedOnSuite(1);
+        vm.expectCall(MOCK_CREATE2_FACTORY, abi.encodeWithSelector(MockCreate2Factory.deploy.selector), 2);
+        sDeploy.externalCheckSeatsNoDeployKey(
+            suite, names(LibRainDeploy.ARBITRUM_ONE, LibRainDeploy.POLYGON), vm.addr(1)
+        );
+    }
 }
