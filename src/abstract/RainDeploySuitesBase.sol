@@ -376,7 +376,7 @@ abstract contract RainDeploySuitesBase {
     /// @return The handler of the mechanism its data declares.
     function mechanismOf(DeployDeclaration memory d, DeploySuite memory suite)
         internal
-        view
+        pure
         returns (DeployMechanismHandler memory)
     {
         return LibRainDeployDeclaration.mechanismById(d, mechanismIdOf(suite), suite.suite);
@@ -563,7 +563,7 @@ abstract contract RainDeploySuitesBase {
     /// the reader that got the second spelling wrong is the one that silently
     /// stops asserting.
     /// @return The candidates.
-    function checkedCandidateSuites(DeployDeclaration memory d) internal view returns (DeployCandidate[] memory) {
+    function checkedCandidateSuites(DeployDeclaration memory d) internal pure returns (DeployCandidate[] memory) {
         DeployCandidate[] memory candidates = d.candidates;
         if (candidates.length == 0) {
             revert NoDeployCandidates();
