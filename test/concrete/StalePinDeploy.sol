@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {RainDeployBroadcast} from "../../src/abstract/RainDeployBroadcast.sol";
 import {
     DeployCandidate,
@@ -33,12 +34,13 @@ address constant STALE_PIN_ADDRESS = address(0xdead);
 /// it.
 contract StalePinDeploy is RainDeployBroadcast {
     function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
-        declared.released = declaredReleased();
-        declared.candidates = declaredCandidates();
-        return declared;
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
     }
-
 
     function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);
@@ -57,7 +59,7 @@ contract StalePinDeploy is RainDeployBroadcast {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });

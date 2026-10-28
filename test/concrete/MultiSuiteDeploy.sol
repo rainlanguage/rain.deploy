@@ -12,6 +12,7 @@ import {
 } from "../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {MockDeployable} from "./MockDeployable.sol";
 import {MockDeployableV2} from "./MockDeployableV2.sol";
 
@@ -33,18 +34,14 @@ import {MockDeployableV2} from "./MockDeployableV2.sol";
 /// the reason `StalePinDeploy` gives.
 contract MultiSuiteDeploy is RainDeployBroadcast {
     function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
-        declared.released = declaredReleased();
-        declared.candidates = declaredCandidates();
-        return declared;
-    }
-
-
-    /// @inheritdoc RainDeployBroadcast
-    function deployNetworks() internal pure override returns (string[] memory) {
-        string[] memory networks = new string[](1);
-        networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        return networks;
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        d.networks = new string[](1);
+        d.networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
     }
 
     function declaredReleased() internal pure returns (DeploySuite[] memory) {
@@ -64,7 +61,7 @@ contract MultiSuiteDeploy is RainDeployBroadcast {
                 storedRuntimeCode: type(MockDeployableV2).runtimeCode,
                 artifactPath: "test/concrete/MockDeployableV2.sol:MockDeployableV2",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
@@ -78,7 +75,7 @@ contract MultiSuiteDeploy is RainDeployBroadcast {
                 storedRuntimeCode: type(MockDeployable).runtimeCode,
                 artifactPath: "test/concrete/MockDeployable.sol:MockDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });

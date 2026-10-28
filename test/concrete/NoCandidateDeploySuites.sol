@@ -3,6 +3,7 @@
 pragma solidity =0.8.25;
 
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {
     DeployCandidate,
     DeployDependency,
@@ -28,12 +29,13 @@ import {
 /// candidate is present and correct.
 contract NoCandidateDeploySuites is ExternalDeploySuites {
     function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
-        declared.released = declaredReleased();
-        declared.candidates = declaredCandidates();
-        return declared;
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
     }
-
 
     function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](1);
@@ -46,7 +48,7 @@ contract NoCandidateDeploySuites is ExternalDeploySuites {
             storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
             artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
             dependencies: new DeployDependency[](0),
-            mechanismData: ""
+            mechanismData: LibRainDeployZoltuMechanism.mechanismData()
         });
         return suites;
     }

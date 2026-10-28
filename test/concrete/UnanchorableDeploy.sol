@@ -18,6 +18,7 @@ import {
 } from "../../src/generated/candidate/ConfigRegistry.sol";
 import {LibRainDeploy} from "../../src/lib/LibRainDeploy.sol";
 import {LibRainDeployDeclaration} from "../../src/lib/LibRainDeployDeclaration.sol";
+import {LibRainDeployZoltuMechanism} from "../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {ExternalDeploySuites} from "../abstract/ExternalDeploySuites.sol";
 
 /// @dev Creation code no compiler here produces: `PUSH1 0 PUSH1 0 RETURN`,
@@ -50,12 +51,13 @@ bytes constant ASSEMBLED_CREATION_CODE = hex"600160005360016000f3";
 /// repo actually has rather than one where nothing is anchored.
 contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
     function declaration() internal pure override returns (DeployDeclaration memory) {
-        DeployDeclaration memory declared = LibRainDeployDeclaration.zoltu();
-        declared.released = declaredReleased();
-        declared.candidates = declaredCandidates();
-        return declared;
+        DeployDeclaration memory d;
+        LibRainDeployDeclaration.extend(d);
+        LibRainDeployZoltuMechanism.extend(d);
+        LibRainDeployDeclaration.addReleased(d, declaredReleased());
+        LibRainDeployDeclaration.addCandidates(d, declaredCandidates());
+        return d;
     }
-
 
     function declaredReleased() internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory suites = new DeploySuite[](0);
@@ -74,7 +76,7 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 storedRuntimeCode: CONFIG_REGISTRY_RUNTIME_CODE,
                 artifactPath: "src/concrete/ConfigRegistry.sol:ConfigRegistry",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: ""
         });
@@ -90,7 +92,7 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 // resolves to no artifact.
                 artifactPath: "test/concrete/VendoredDeployable.sol:VendoredDeployable",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: "Vendored third party deployment: the pinned creation code is the source."
         });
@@ -106,7 +108,7 @@ contract UnanchorableDeploy is ExternalDeploySuites, RainDeployBroadcast {
                 // file the tables would be compiled from, and there is none.
                 artifactPath: "test/concrete/AssembledTables.sol:AssembledTables",
                 dependencies: new DeployDependency[](0),
-                mechanismData: ""
+                mechanismData: LibRainDeployZoltuMechanism.mechanismData()
             }),
             unanchorableReason: "Assembled from generated tables: there is no source file to compile."
         });

@@ -15,6 +15,6 @@ import {Deploy} from "../../script/Deploy.sol";
 contract DeployHarness is Deploy {
     /// @return The networks a broadcast from this script would go to.
     function externalDeployNetworks() external view returns (string[] memory) {
-        return deployNetworks();
+        return deployNetworks(declaration());
     }
 }
