@@ -361,7 +361,8 @@ abstract contract RainDeploySuitesBase {
         returns (DeploySuite memory, bool)
     {
         bytes32 name = keccak256(bytes(suiteKeyName(suite)));
-        DeployCandidate[] memory candidates = checkedCandidateSuites(d);
+        checkCandidates(d);
+        DeployCandidate[] memory candidates = d.candidates;
         uint256 i = 0;
         while (i < candidates.length && keccak256(bytes(candidates[i].snapshot.suite)) != name) {
             i++;
@@ -595,8 +596,7 @@ abstract contract RainDeploySuitesBase {
     /// Guarding each reader separately would be two spellings of one rule, and
     /// the reader that got the second spelling wrong is the one that silently
     /// stops asserting.
-    /// @return `d.candidates` itself, not a copy.
-    function checkedCandidateSuites(DeployDeclaration memory d) internal pure returns (DeployCandidate[] memory) {
+    function checkCandidates(DeployDeclaration memory d) internal pure {
         DeployCandidate[] memory candidates = d.candidates;
         if (candidates.length == 0) {
             revert NoDeployCandidates();
@@ -622,7 +622,12 @@ abstract contract RainDeploySuitesBase {
                 revert UnqualifiedCandidateArtifactPath(i, candidates[i].snapshot.artifactPath);
             }
         }
-        return candidates;
+    }
+
+    /// @return A copy of the checked `d.candidates`.
+    function checkedCandidateSuites(DeployDeclaration memory d) internal pure returns (DeployCandidate[] memory) {
+        checkCandidates(d);
+        return abi.decode(abi.encode(d.candidates), (DeployCandidate[]));
     }
 
     /// EVERY candidate MUST record the creation code the contract it NAMES
@@ -665,7 +670,8 @@ abstract contract RainDeploySuitesBase {
     /// declaration that there is no second operand to make one with, refused
     /// wherever `vm.getCode` can make one.
     function checkCandidatesAnchoredToSource(DeployDeclaration memory d) internal view {
-        DeployCandidate[] memory candidates = checkedCandidateSuites(d);
+        checkCandidates(d);
+        DeployCandidate[] memory candidates = d.candidates;
         for (uint256 i = 0; i < candidates.length; i++) {
             if (bytes(candidates[i].unanchorableReason).length != 0) {
                 // `vm.getCode` reverts rather than answering, so reading the
@@ -748,14 +754,15 @@ abstract contract RainDeploySuitesBase {
     /// @return A fresh array of the declared suites themselves, not copies.
     function allSuites(DeployDeclaration memory d) internal pure returns (DeploySuite[] memory) {
         DeploySuite[] memory released = d.released;
-        DeployCandidate[] memory candidates = checkedCandidateSuites(d);
+        checkCandidates(d);
+        DeployCandidate[] memory candidates = d.candidates;
 
         DeploySuite[] memory suites = new DeploySuite[](released.length + candidates.length);
         for (uint256 i = 0; i < released.length; i++) {
             suites[i] = released[i];
         }
         for (uint256 i = 0; i < candidates.length; i++) {
-            suites[released.length + i] = candidates[i].snapshot;
+            suites[released.length + i] = abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite));
         }
 
         for (uint256 i = 0; i < suites.length; i++) {

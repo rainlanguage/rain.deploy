@@ -163,7 +163,8 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
 
     /// Every anchored candidate's artifact path MUST compile to the source its key names.
     function checkCandidateArtifactPathsAreSource(DeployDeclaration memory d) internal view {
-        DeployCandidate[] memory candidates = checkedCandidateSuites(d);
+        checkCandidates(d);
+        DeployCandidate[] memory candidates = d.candidates;
         for (uint256 i = 0; i < candidates.length; i++) {
             if (bytes(candidates[i].unanchorableReason).length != 0) {
                 continue;
@@ -264,7 +265,8 @@ abstract contract RainDeployDeclarationChecks is RainDeploySuitesBase, Test {
 
     /// Every candidate's runtime code MUST fit EIP-170.
     function checkCandidateRuntimeCodeFitsEip170(DeployDeclaration memory d) internal pure {
-        DeployCandidate[] memory candidates = checkedCandidateSuites(d);
+        checkCandidates(d);
+        DeployCandidate[] memory candidates = d.candidates;
         for (uint256 i = 0; i < candidates.length; i++) {
             uint256 length = candidates[i].snapshot.storedRuntimeCode.length;
             if (length > EIP170_MAX_RUNTIME_CODE_SIZE) {
