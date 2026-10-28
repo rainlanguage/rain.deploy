@@ -135,7 +135,7 @@ contract LibRainDeploySnapshotTest is Test {
         external
         returns (string memory)
     {
-        return LibRainDeployZoltuMechanism.writeSuiteSnapshot(declaration(), vm, file, suite);
+        return LibRainDeployZoltuMechanism.writeSuiteSnapshot(zoltuDeclaration(), vm, file, suite);
     }
 
     function clearFixtureTree(string memory root) internal {
