@@ -4,7 +4,6 @@ pragma solidity =0.8.25;
 
 import {DeployDeclaration, DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {RainDeployVerify} from "../../../src/abstract/RainDeployVerify.sol";
-import {RainDeployVerifySnapshotBase} from "../../../src/abstract/RainDeployVerifySnapshotBase.sol";
 import {RegistryDeploySuites, ParameterisedContract} from "../../../src/abstract/RegistryDeploySuites.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
 import {LibRainDeploySnapshot} from "../../../src/lib/LibRainDeploySnapshot.sol";
@@ -29,12 +28,9 @@ error FrozenCodeRecordDeploysOtherCode(string path, bytes32 recorded, bytes32 de
 /// contract reaches every consumer that has bumped, and one that does not reach
 /// it never shipped.
 ///
-/// Everything is inherited but one override, which is the point:
-/// `RegistryDeploySuites` says which registries and which releases exist and
-/// `RainDeployVerify` says what is true of them. The first names the
-/// code records a release freezes beside the suites' — the parameterised
-/// contracts — so the frozen-record walk reads them as code and not as deploys.
-/// Its own tests deploy each frozen code record's creation code with its
+/// Everything is inherited, which is the point: `RegistryDeploySuites` says
+/// which registries and which releases exist and `RainDeployVerify` says what
+/// is true of them. Its own tests deploy each frozen code record's creation code with its
 /// declaration's reference arguments, which only this repo's declaration
 /// carries, and pin against fixtures that the check walks every code record
 /// under its root and refuses a record whose creation code deploys other code.
@@ -72,11 +68,6 @@ contract RegistryDeployVerifyTest is RegistryDeploySuites, RainDeployVerify {
     /// Where the two-declaration fixture is written. Its own tree, apart from
     /// the other fixtures, because forge runs them in parallel.
     string constant TWO_DECLARED_FIXTURE_ROOT = "test/generated-deploy-verify-two";
-
-    /// @inheritdoc RainDeployVerifySnapshotBase
-    function frozenCodeRecordNames() internal pure override returns (string[] memory) {
-        return parameterisedContractNames();
-    }
 
     /// Reverts unless every frozen code record under `recordRoot` that
     /// `declared` names deploys its `CREATION_CODE`, with that declaration's
