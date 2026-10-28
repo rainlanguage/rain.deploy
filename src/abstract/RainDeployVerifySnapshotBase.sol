@@ -4,7 +4,6 @@ pragma solidity ^0.8.25;
 
 import {DerivedDeploy, RainDeployVerifyBase} from "./RainDeployVerifyBase.sol";
 import {DeploySuite} from "./RainDeploySuitesBase.sol";
-import {LibRainDeployMechanism} from "../lib/LibRainDeployMechanism.sol";
 import {LibRainDeploySnapshot} from "../lib/LibRainDeploySnapshot.sol";
 
 /// Thrown when the deploy address recorded for a version is not the address its own mechanism
@@ -78,7 +77,7 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
     function checkInternallyConsistent(DeploySuite memory suite) internal {
         DerivedDeploy memory derived = deriveDeployment(suite);
 
-        address[] memory recorded = LibRainDeployMechanism.recordedAddresses(suite);
+        address[] memory recorded = recordedAddresses(suite);
         for (uint256 i = 0; i < recorded.length; i++) {
             if (recorded[i] != derived.deployedAddresses[i]) {
                 revert StoredAddressMismatch(suite.suite, recorded[i], derived.deployedAddresses[i]);
@@ -107,8 +106,8 @@ abstract contract RainDeployVerifySnapshotBase is RainDeployVerifyBase {
         for (uint256 j = 0; j < released.length; j++) {
             releasedIdentities[j] = keccak256(
                 abi.encode(
-                    LibRainDeployMechanism.addressChainIds(released[j]),
-                    LibRainDeployMechanism.deployedAddresses(released[j])
+                    addressChainIds(released[j]),
+                    deployedAddresses(released[j])
                 )
             );
         }
