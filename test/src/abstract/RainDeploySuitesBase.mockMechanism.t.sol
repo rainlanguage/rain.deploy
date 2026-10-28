@@ -6,7 +6,7 @@ import {Test} from "forge-std-1.17.0/src/Test.sol";
 import {Vm} from "forge-std-1.17.0/src/Vm.sol";
 import {DeploySuite} from "../../../src/abstract/RainDeploySuitesBase.sol";
 import {LibRainDeploy} from "../../../src/lib/LibRainDeploy.sol";
-import {ChainDeploy, LibRainDeployExtendedNetworks} from "../../../src/lib/LibRainDeployExtendedNetworks.sol";
+import {LibMockNetworkRecord, MockNetworkDeploy} from "../../lib/LibMockNetworkRecord.sol";
 import {LibRainDeployZoltuMechanism, ZOLTU_MECHANISM_ID} from "../../../src/lib/LibRainDeployZoltuMechanism.sol";
 import {
     LibMockCreate2Mechanism,
@@ -52,12 +52,12 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         return create2Address(keccak256(abi.encode(MOCK_CREATE2_SALT, abi.encode(chainId))));
     }
 
-    function network(uint256 chainId, address recorded) internal pure returns (ChainDeploy memory) {
-        return ChainDeploy({chainId: chainId, data: abi.encode(chainId), deployedAddress: recorded});
+    function network(uint256 chainId, address recorded) internal pure returns (MockNetworkDeploy memory) {
+        return MockNetworkDeploy({chainId: chainId, data: abi.encode(chainId), deployedAddress: recorded});
     }
 
     /// `suite` on exactly `networks`, both in its payload and in `suite.networks`.
-    function withNetworks(DeploySuite memory suite, ChainDeploy[] memory networks)
+    function withNetworks(DeploySuite memory suite, MockNetworkDeploy[] memory networks)
         internal
         pure
         returns (DeploySuite memory)
@@ -75,7 +75,7 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         DeploySuite memory suite = sDeploy.externalMockRelease();
         MockCreate2Mechanism memory mechanism = LibMockCreate2Mechanism.decode(suite);
         mechanism.perNetwork = false;
-        mechanism.networks = new ChainDeploy[](0);
+        mechanism.networks = new MockNetworkDeploy[](0);
         suite.mechanismData = LibMockCreate2Mechanism.encode(mechanism);
         suite.storedDeployedAddress = create2Address(MOCK_CREATE2_SALT);
         return suite;
@@ -117,7 +117,7 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
     /// `deployedAddresses` and `recordedAddresses` are one entry per `suite.networks` entry, in its order, each read
     /// through its own hook.
     function testAddressListsFollowTheSuitesNetworkOrder() external view {
-        ChainDeploy[] memory networks = new ChainDeploy[](3);
+        MockNetworkDeploy[] memory networks = new MockNetworkDeploy[](3);
         networks[0] = network(137, address(0xa1));
         networks[1] = network(8453, address(0xa2));
         networks[2] = network(42161, address(0xa3));
@@ -147,7 +147,7 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
     }
 
     function testRecordedAddressIsTheMechanismsPerNetwork() external view {
-        ChainDeploy[] memory networks = new ChainDeploy[](1);
+        MockNetworkDeploy[] memory networks = new MockNetworkDeploy[](1);
         networks[0] = network(42161, address(0xc1));
         DeploySuite memory suite = withNetworks(sDeploy.externalMockRelease(), networks);
         assertEq(sDeploy.externalRecordedAddress(suite, 42161), address(0xc1));
@@ -227,12 +227,12 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
         string memory root = "test/generated-snapshot/mock-create2-recorded";
         //forge-lint: disable-next-line(unsafe-cheatcode)
         try vm.removeDir(root, true) {} catch {}
-        ChainDeploy[] memory recorded = new ChainDeploy[](2);
+        MockNetworkDeploy[] memory recorded = new MockNetworkDeploy[](2);
         recorded[0] = network(8453, networkAddress(8453));
         recorded[1] = network(56, networkAddress(56));
         sDeploy.setMockRecordRoot(root);
         DeploySuite memory release = sDeploy.externalMockRelease();
-        LibRainDeployExtendedNetworks.writeExtendedNetworks(vm, root, release.suite, recorded);
+        LibMockNetworkRecord.write(vm, root, release.suite, recorded);
         vm.expectCall(
             MOCK_MECHANISM_PROBE,
             abi.encodeCall(IMockMechanismProbe.addRecordedNetworks, (MOCK_CREATE2_MECHANISM_ID, release.suite)),
@@ -294,7 +294,7 @@ contract RainDeploySuitesBaseMockMechanismTest is Test {
     /// `checkNetworksFrozen` checks each broadcast network the suite lists, at its recorded address.
     function testCheckNetworksFrozenNamesTheUnfrozenNetworksRecordedAddress() external {
         DeploySuite memory release = sDeploy.externalMockRelease();
-        ChainDeploy[] memory networks = new ChainDeploy[](3);
+        MockNetworkDeploy[] memory networks = new MockNetworkDeploy[](3);
         networks[0] = network(42161, networkAddress(42161));
         networks[1] = network(137, networkAddress(137));
         networks[2] = network(8453, address(0xf1));
