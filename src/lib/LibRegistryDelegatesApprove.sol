@@ -64,6 +64,10 @@ library LibRegistryDelegatesApprove {
     /// Thrown when a run is given no scope.
     error NoScopes();
 
+    /// Thrown when a run is given the same scope twice.
+    /// @param scope The repeated scope.
+    error DuplicateScope(string scope);
+
     /// Thrown when a network's registry does not hold the expected approval.
     /// @param network The network read.
     /// @param authority The account the approval was read under.
@@ -95,8 +99,8 @@ library LibRegistryDelegatesApprove {
         }
     }
 
-    /// The hash of each scope, refused unless there is at least one and each is
-    /// canonical.
+    /// The hash of each scope, refused unless there is at least one, each is
+    /// canonical and none repeats.
     /// @param scopes The scopes as a consumer writes them.
     /// @return The hashed scopes, in order.
     function hashScopes(string[] memory scopes) internal pure returns (bytes32[] memory) {
@@ -106,6 +110,11 @@ library LibRegistryDelegatesApprove {
         bytes32[] memory hashed = new bytes32[](scopes.length);
         for (uint256 i = 0; i < scopes.length; i++) {
             hashed[i] = LibConfigRegistryRegister.nameHash(scopes[i]);
+            for (uint256 j = 0; j < i; j++) {
+                if (hashed[j] == hashed[i]) {
+                    revert DuplicateScope(scopes[i]);
+                }
+            }
         }
         return hashed;
     }

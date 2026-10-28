@@ -214,6 +214,8 @@ contract LibConfigRegistryApproveTest is Test {
         this.externalCheckInputs(none, AUTHORITY, none, DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "A"));
         this.externalCheckInputs(none, AUTHORITY, list("a.b", "A"), DELEGATE);
+        vm.expectRevert(abi.encodeWithSelector(LibRegistryDelegatesApprove.DuplicateScope.selector, "a.b"));
+        this.externalCheckInputs(none, AUTHORITY, list("a.b", "a.b"), DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalCheckInputs(none, AUTHORITY, one("a.b"), DELEGATE);
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
@@ -566,6 +568,8 @@ contract LibConfigRegistryApproveTest is Test {
         this.externalCheckApprovalOnNetworks(forkVm, new string[](0), AUTHORITY, new string[](0), true);
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NonCanonicalName.selector, "A"));
         this.externalCheckApprovalOnNetworks(forkVm, new string[](0), AUTHORITY, list("a.b", "A"), true);
+        vm.expectRevert(abi.encodeWithSelector(LibRegistryDelegatesApprove.DuplicateScope.selector, "a.b"));
+        this.externalCheckApprovalOnNetworks(forkVm, new string[](0), AUTHORITY, list("a.b", "a.b"), true);
         vm.expectRevert(abi.encodeWithSelector(LibRainDeploy.NoNetworks.selector));
         this.externalCheckApprovalOnNetworks(forkVm, new string[](0), AUTHORITY, one("a.b"), true);
         vm.expectRevert(abi.encodeWithSelector(LibConfigRegistryRegister.NetworkNotDeclared.selector, "nowhere"));
