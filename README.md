@@ -651,16 +651,16 @@ them differs.
 
 ### Approving a delegate
 
-`script/ApproveConfigDelegate.sol` approves a delegate for one name under the
-root authority, or revokes it, on every declared network by default. `approveV4`
-and `revokeV4` act under their caller, so the signer is the root authority, and
-the run refuses any other `--sender` (`SenderNotAuthority`) before forking. It
-takes its own variables, so nothing exported for `RegisterConfig` carries over.
-The Trezor setup is "Before the first run" above, with the authority as the
-signer.
+`script/ApproveConfigDelegate.sol` approves a delegate for a list of names under
+the root authority, or revokes it, on every declared network by default, in one
+`multicall` transaction per network. `approveV4` and `revokeV4` act under their
+caller, so the signer is the root authority, and the run refuses any other
+`--sender` (`SenderNotAuthority`) before forking. It takes its own variables, so
+nothing exported for `RegisterConfig` carries over. The Trezor setup is "Before
+the first run" above, with the authority as the signer.
 
 ```sh
-export CONFIG_DELEGATE_SCOPE=st0x.token-owner-safe
+export CONFIG_DELEGATE_SCOPES=st0x.vault-beacon.v1,st0x.rbac.us.v1 # comma-separated
 export CONFIG_DELEGATE_ADDRESS=0x... # the delegate, such as the Safe
 # Optional: false revokes. Unset approves.
 # export CONFIG_DELEGATE_APPROVED=false
@@ -672,7 +672,7 @@ nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelega
   --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy
 
 # 2. The same command with --broadcast. The device asks once per network the
-#    dry run marked APPROVE or REVOKE.
+#    dry run gave a Calldata: line.
 nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelegate \
   --sender 0x0b300013CD54a8F1aC40981f80FaaA18b8Cc1E4c --trezor --legacy --broadcast
 
@@ -684,16 +684,20 @@ nix develop -c forge script script/ApproveConfigDelegate.sol:ApproveConfigDelega
 Before anything is signed the run refuses a signer that is not the authority, a
 zero delegate, and every name, network, chain id and registry refusal of
 `RegisterConfig`. A network already in the target state is `SKIP`, so a run that
-stopped partway is fixed by running it again. An approval covers that one name;
-each name the delegate binds is a run of its own.
+stopped partway is fixed by running it again. Each approval covers its one name;
+every name the run is given goes into that network's one transaction.
 
-The dry run prints the name, its hash, the authority, the delegate, the target,
-the registry address and the exact calldata, then for each network its chain id,
-the size of the code at the delegate (`none` where the delegate has no code
-there: a Safe not yet deployed on that network), whether it is approved now, and
-`APPROVE`, `REVOKE` or `SKIP`. The device shows the registry as recipient,
-amount 0, the network, and the `Calldata:` line as data: `approveV4`'s selector
-`0xeb34d125` or `revokeV4`'s `0x8f02e4a5`, then the name hash and the delegate.
+The dry run prints each name and its hash, the authority, the delegate, the
+target and the registry address, then for each network its chain id, the size of
+the code at the delegate (`none` where the delegate has no code there: a Safe
+not yet deployed on that network), each name's current approval with `APPROVE`,
+`REVOKE` or `SKIP`, and, where any name is not `SKIP`, the exact `Calldata:` of
+that network's transaction. The transaction is `multicall` (selector
+`0xac9650d8`) over one `approveV4` (`0xeb34d125`) or `revokeV4` (`0x8f02e4a5`)
+per name not `SKIP`, each with the name hash and the delegate. The device shows
+the registry as recipient, amount 0, the network, and that calldata as opaque
+data, so it may need blind signing enabled: compare the data on the device with
+the network's `Calldata:` line before confirming.
 
 A Safe delegate then binds by executing
 `registerV4(authority, keccak256("<org>.<name>"), valueType, value, meta)` on
@@ -950,8 +954,8 @@ the record atomic with the migration it describes.
 
 ## Managing the migration registry
 
-`script/ApproveMigrationDelegate.sol` approves a delegate to write one
-namespace's line under the root authority, or revokes it, on every declared
+`script/ApproveMigrationDelegate.sol` approves a delegate to write a list of
+namespaces' lines under the root authority, or revokes it, on every declared
 network by default. `approveV4` and `revokeV4` act under their caller, so the
 signer is the root authority, and the run refuses any other `--sender`
 (`SenderNotAuthority`) before forking. The namespace is the string the consumer
@@ -960,7 +964,7 @@ Trezor setup, the refusals, the dry run's record and `SKIP` — is "Approving a
 delegate" above, with the migration registry as the recipient.
 
 ```sh
-export MIGRATION_DELEGATE_SCOPE=st0x.deploy
+export MIGRATION_DELEGATE_SCOPES=st0x.deploy # comma-separated
 export MIGRATION_DELEGATE_ADDRESS=0x... # the delegate, such as a Safe or timelock
 # Optional: false revokes. Unset approves.
 # export MIGRATION_DELEGATE_APPROVED=false
@@ -979,9 +983,8 @@ nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigration
 nix develop -c forge script script/ApproveMigrationDelegate.sol:ApproveMigrationDelegate --sig "verify()"
 ```
 
-The device shows `approveV4`'s selector `0xeb34d125` or `revokeV4`'s
-`0x8f02e4a5`, then the namespace hash and the delegate. An approval covers that
-one namespace; each delegate is a run of its own.
+The device shows the same `multicall` as above, per namespace hash. Each
+approval covers its one namespace; each delegate is a run of its own.
 
 ## Deploying, and then releasing
 
