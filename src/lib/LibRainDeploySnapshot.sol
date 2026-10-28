@@ -1688,27 +1688,41 @@ library LibRainDeploySnapshot {
         bytes32[] memory seen = new bytes32[](paths.length);
         uint256 seenLength = 0;
         for (uint256 i = 0; i < paths.length; i++) {
-            string memory mechanismImport =
-                LibRainDeployDeclaration.mechanismById(d, ids[i], paths[i]).releasedImport(d, root);
-            bytes32 hash = keccak256(bytes(mechanismImport));
-            bool duplicate = false;
-            for (uint256 j = 0; j < seenLength; j++) {
-                if (seen[j] == hash) {
-                    duplicate = true;
-                    break;
-                }
-            }
-            if (!duplicate) {
-                seen[seenLength] = hash;
-                seenLength++;
-                imports = string.concat(imports, mechanismImport);
-            }
+            (imports, seenLength) = appendImport(
+                imports,
+                seen,
+                seenLength,
+                LibRainDeployDeclaration.mechanismById(d, ids[i], paths[i]).releasedImport(d, root)
+            );
         }
         imports = string.concat(imports, "\n");
         for (uint256 i = 0; i < paths.length; i++) {
             imports = string.concat(imports, releasedImport(vm, paths[i]));
         }
         return imports;
+    }
+
+    /// `imports` with `mechanismImport` appended unless `seen` already holds its hash.
+    /// @param imports The import block so far.
+    /// @param seen The hashes of the imports already appended, in its first `seenLength` slots.
+    /// @param seenLength The number of hashes in `seen`.
+    /// @param mechanismImport The import to append.
+    /// @return The import block.
+    /// @return The new `seenLength`.
+    function appendImport(
+        string memory imports,
+        bytes32[] memory seen,
+        uint256 seenLength,
+        string memory mechanismImport
+    ) internal pure returns (string memory, uint256) {
+        bytes32 hash = keccak256(bytes(mechanismImport));
+        for (uint256 j = 0; j < seenLength; j++) {
+            if (seen[j] == hash) {
+                return (imports, seenLength);
+            }
+        }
+        seen[seenLength] = hash;
+        return (string.concat(imports, mechanismImport), seenLength + 1);
     }
 
     /// `releasedImportBlock` applied to this repo's own `suitesImportPathInThisRepo`.
