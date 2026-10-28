@@ -369,7 +369,7 @@ abstract contract RainDeploySuitesBase {
         bool found = i < candidates.length;
         DeploySuite memory candidate;
         if (found) {
-            candidate = candidates[i].snapshot;
+            candidate = abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite));
         }
         return (candidate, found);
     }
@@ -595,9 +595,9 @@ abstract contract RainDeploySuitesBase {
     /// Guarding each reader separately would be two spellings of one rule, and
     /// the reader that got the second spelling wrong is the one that silently
     /// stops asserting.
-    /// @return The candidates.
+    /// @return `d.candidates` itself, not a copy.
     function checkedCandidateSuites(DeployDeclaration memory d) internal pure returns (DeployCandidate[] memory) {
-        DeployCandidate[] memory candidates = abi.decode(abi.encode(d.candidates), (DeployCandidate[]));
+        DeployCandidate[] memory candidates = d.candidates;
         if (candidates.length == 0) {
             revert NoDeployCandidates();
         }
@@ -745,9 +745,9 @@ abstract contract RainDeploySuitesBase {
     /// Unique AND in the alphabet, because neither implies the other: a lone
     /// unreadable key collides with nothing, and two keys can be spelled
     /// perfectly and still be the same key.
-    /// @return Every declared suite.
+    /// @return A fresh array of the declared suites themselves, not copies.
     function allSuites(DeployDeclaration memory d) internal pure returns (DeploySuite[] memory) {
-        DeploySuite[] memory released = abi.decode(abi.encode(d.released), (DeploySuite[]));
+        DeploySuite[] memory released = d.released;
         DeployCandidate[] memory candidates = checkedCandidateSuites(d);
 
         DeploySuite[] memory suites = new DeploySuite[](released.length + candidates.length);
@@ -792,7 +792,7 @@ abstract contract RainDeploySuitesBase {
     /// reports follows from the same array rather than from a string somebody
     /// remembered to update.
     /// @param requested The key to select, from `DEPLOYMENT_SUITE`.
-    /// @return The selected suite.
+    /// @return A copy of the selected suite.
     function suiteByName(DeployDeclaration memory d, string memory requested)
         internal
         pure
@@ -803,7 +803,7 @@ abstract contract RainDeploySuitesBase {
         if (index == suites.length) {
             revert UnknownDeploymentSuite(requested, suiteNames(d));
         }
-        return suites[index];
+        return abi.decode(abi.encode(suites[index]), (DeploySuite));
     }
 
     /// @param suites The suites to search.
