@@ -241,7 +241,8 @@ library LibRainDeployDeclaration {
         while (i < candidates.length && keccak256(bytes(candidates[i].snapshot.suite)) != name) {
             i++;
         }
-        if (i == candidates.length) {
+        bool found = i < candidates.length;
+        if (!found) {
             return (
                 DeploySuite({
                     suite: "",
@@ -254,10 +255,10 @@ library LibRainDeployDeclaration {
                     mechanismData: "",
                     networks: new string[](0)
                 }),
-                false
+                found
             );
         }
-        return (abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite)), true);
+        return (abi.decode(abi.encode(candidates[i].snapshot), (DeploySuite)), found);
     }
 
     /// The mechanism id a suite's `mechanismData` declares: its first word. Refuses `MechanismUnclaimed` for data
