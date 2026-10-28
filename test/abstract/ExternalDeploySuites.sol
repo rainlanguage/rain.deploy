@@ -169,7 +169,6 @@ abstract contract ExternalDeploySuites is RainDeploySuitesBase {
 
     function externalCheckOnChain(DeploySuite memory suite, string memory network, uint256 chainId, address deployed)
         external
-        view
     {
         checkOnChain(declaration(), suite, network, chainId, deployed);
     }
