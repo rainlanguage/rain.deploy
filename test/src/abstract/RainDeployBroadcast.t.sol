@@ -34,7 +34,6 @@ import {MockRawOwner} from "../../concrete/MockRawOwner.sol";
 import {ArbitrumSupportedBeaconOwnerDeploy} from "../../concrete/ArbitrumSupportedBeaconOwnerDeploy.sol";
 import {MockChainGatedCall} from "../../concrete/MockChainGatedCall.sol";
 import {SingleNetworkBeaconOwnerDeploy} from "../../concrete/SingleNetworkBeaconOwnerDeploy.sol";
-import {UpgradeableBeacon} from "@openzeppelin-contracts-5.7.0/proxy/beacon/UpgradeableBeacon.sol";
 import {LibBeaconTest} from "../../lib/LibBeaconTest.sol";
 
 /// @title RainDeployBroadcastTest
