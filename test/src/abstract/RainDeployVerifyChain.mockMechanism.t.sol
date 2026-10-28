@@ -32,9 +32,10 @@ contract RainDeployVerifyChainMockMechanismTest is MockCreate2DeploySuites, Rain
     function declaration() internal view override returns (DeployDeclaration memory) {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
-        d.networks = new string[](2);
-        d.networks[0] = LibRainDeploy.ARBITRUM_ONE;
-        d.networks[1] = LibRainDeploy.POLYGON;
+        string[] memory networks = new string[](2);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        networks[1] = LibRainDeploy.POLYGON;
+        LibRainDeployDeclaration.setNetworks(d, networks);
         LibMockCreate2Mechanism.extend(d);
         DeployCandidate[] memory candidates = new DeployCandidate[](1);
         candidates[0] = DeployCandidate({snapshot: mockCandidate(), unanchorableReason: ""});
