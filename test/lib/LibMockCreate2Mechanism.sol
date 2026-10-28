@@ -226,7 +226,8 @@ library LibMockCreate2Mechanism {
         return create2DeployStep;
     }
 
-    /// @return One address per each of its `networks`; a single-address suite is deployed once.
+    /// @return One address per each of its `networks`; a single-address suite is deployed once. A per-network suite
+    /// returns `address(0)` for, and deploys nothing on, a network its payload records nothing on.
     function deployLocally(DeployDeclaration memory d, Vm vm, DeploySuite memory suite)
         internal
         returns (address[] memory)
@@ -234,8 +235,15 @@ library LibMockCreate2Mechanism {
         etchFactory(vm, suite);
         uint256[] memory chainIds = LibRainDeploy.networkChainIds(LibRainDeploy.declaredNetworkConfigs(suite.networks));
         address[] memory deployed = new address[](chainIds.length);
-        bool perNetwork = decode(suite).perNetwork;
+        MockCreate2Mechanism memory mechanism = decode(suite);
+        bool perNetwork = mechanism.perNetwork;
         for (uint256 i = 0; i < deployed.length; i++) {
+            if (perNetwork) {
+                (bool recorded,) = networkIndex(mechanism, chainIds[i]);
+                if (!recorded) {
+                    continue;
+                }
+            }
             deployed[i] = deployedAddress(d, suite, chainIds[i]);
             if (perNetwork || i == 0) {
                 deployAt(vm, suite, salt(suite, chainIds[i]), deployed[i]);
