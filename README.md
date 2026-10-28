@@ -661,6 +661,9 @@ the first run" above, with the authority as the signer.
 
 ```sh
 export CONFIG_DELEGATE_SCOPES=st0x.vault-beacon.v1,st0x.rbac.us.v1 # comma-separated
+# Optional: true also approves the delegate unscoped, for every name present
+# and future. SCOPES may then be left unset.
+# export CONFIG_DELEGATE_UNSCOPED=true
 export CONFIG_DELEGATE_ADDRESS=0x... # the delegate, such as the Safe
 # Optional: false revokes. Unset approves.
 # export CONFIG_DELEGATE_APPROVED=false
@@ -692,12 +695,15 @@ target and the registry address, then for each network its chain id, the size of
 the code at the delegate (`none` where the delegate has no code there: a Safe
 not yet deployed on that network), each name's current approval with `APPROVE`,
 `REVOKE` or `SKIP`, and, where any name is not `SKIP`, the exact `Calldata:` of
-that network's transaction. The transaction is `multicall` (selector
-`0xac9650d8`) over one `approveV5` (`0x50c453c7`) or `revokeV5` (`0x42213144`)
-per name not `SKIP`, each with the name hash and the delegate. The device shows
-the registry as recipient, amount 0, the network, and that calldata as opaque
-data, so it may need blind signing enabled: compare the data on the device with
-the network's `Calldata:` line before confirming.
+that network's transaction. With one call to make, the transaction is that call,
+which the device decodes. With more, it is `multicall` (selector `0xac9650d8`)
+over one `approveV5` (`0x50c453c7`) or `revokeV5` (`0x42213144`) per name not
+`SKIP`, each with the name hash and the delegate, then, with `UNSCOPED=true` and
+the unscoped line not `SKIP`, one `approveUnscopedV5` (`0xf2f0514c`) or
+`revokeUnscopedV5` (`0x9547ac1b`) with the delegate. For a `multicall` the
+device shows the registry as recipient, amount 0, the network, and that calldata
+as opaque data, so it may need blind signing enabled: compare the data on the
+device with the network's `Calldata:` line before confirming.
 
 A Safe delegate then binds by executing
 `registerV5(authority, keccak256("<org>.<name>"), valueType, value, meta)` on
@@ -965,6 +971,8 @@ delegate" above, with the migration registry as the recipient.
 
 ```sh
 export MIGRATION_DELEGATE_SCOPES=st0x.deploy # comma-separated
+# Optional: true also approves the delegate unscoped, for every namespace.
+# export MIGRATION_DELEGATE_UNSCOPED=true
 export MIGRATION_DELEGATE_ADDRESS=0x... # the delegate, such as a Safe or timelock
 # Optional: false revokes. Unset approves.
 # export MIGRATION_DELEGATE_APPROVED=false

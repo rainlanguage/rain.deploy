@@ -170,6 +170,18 @@ abstract contract ApproveRegistryDelegateWiringTest is Test {
         assertTrue(registry.approvedV5(authority, hashed, delegate));
         assertTrue(registry.approvedV5(authority, secondHashed, delegate));
         script.verify();
+
+        // `UNSCOPED=true` sets the unscoped approval too, and `verify()` reads it.
+        vm.setEnv(e("UNSCOPED"), "true");
+        vm.expectRevert(
+            abi.encodeWithSelector(
+                LibRegistryDelegatesApprove.UnexpectedUnscopedApproval.selector, network, authority, delegate, true
+            )
+        );
+        script.verify();
+        script.runAsItself();
+        assertTrue(registry.approvedUnscopedV5(authority, delegate));
+        script.verify();
     }
 
     /// `run()` stops on forge's own refusal to parse `variable` as an address.
