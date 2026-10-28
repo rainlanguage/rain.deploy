@@ -15,8 +15,9 @@ contract RegistryDeploySuitesRetiredNetworksTest is Test, RegistryDeploySuites {
     function testRetiredAddressRegistryReleasesKeepTheirNetworksUnderANarrowerDeclaration() external pure {
         DeployDeclaration memory d;
         LibRainDeployDeclaration.extend(d);
-        d.networks = new string[](1);
-        d.networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        string[] memory networks = new string[](1);
+        networks[0] = LibRainDeploy.ARBITRUM_ONE;
+        LibRainDeployDeclaration.setNetworks(d, networks);
         LibRainDeployDeclaration.addReleased(d, registryReleasedSuites());
         string[] memory retiredNetworks = addressRegistryNetworks();
         uint256 retired = 0;
